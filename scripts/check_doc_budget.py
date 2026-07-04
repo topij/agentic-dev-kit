@@ -43,9 +43,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-from devmodel_config import get, load_config  # noqa: E402
+from devmodel_config import _repo_root, get, load_config  # noqa: E402
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+# Discover the repo root by walking up for a `.git` marker (via devmodel_config)
+# rather than assuming a fixed `scripts/<script>.py` depth — so this keeps working
+# when the kit is vendored under a nested dir (e.g. scripts/devkit/).
+REPO_ROOT = _repo_root()
 
 
 @dataclass(frozen=True)

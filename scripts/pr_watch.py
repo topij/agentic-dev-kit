@@ -66,7 +66,17 @@ import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+def _find_repo_root(start: Path) -> Path:
+    """Nearest ancestor with a ``.git`` marker (so this keeps working when the kit
+    is vendored under a nested dir, e.g. scripts/devkit/); falls back to the
+    script's grandparent if no marker is found. Inlined — pr_watch stays stdlib-only."""
+    for candidate in (start, *start.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return start.parent.parent
+
+
+REPO_ROOT = _find_repo_root(Path(__file__).resolve())
 # Honor the DEVKIT_STATE_ROOT sandbox (parallel dev sessions — see
 # scripts/dev_session.sh) so a session's per-PR seen-set doesn't land in the
 # main checkout's state/. Inlined rather than via a shared state-paths helper

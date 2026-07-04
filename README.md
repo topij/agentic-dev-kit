@@ -97,6 +97,32 @@ cp -r /path/to/agentic-dev-kit/. .
 Ten minutes, start to finish. For a full worked example of a first session — from
 adoption through `/wrap-up` — see **[`docs/getting-started.md`](docs/getting-started.md)**.
 
+## Adopting into an existing repo
+
+The quickstart above assumes a fresh or near-empty repo. Dropping the kit into a
+**mature** project — one that already has a `.claude/`, its own `config/`, a plan
+doc, and CI — needs a lighter touch: a blind `cp -r` would clobber files. Adopt
+selectively instead.
+
+- **Install only what you lack.** If the repo already practices a piece — a living
+  plan, its own wrap-up skill — keep its version and skip the kit's. Each principle
+  stands alone.
+- **Point the config at what's already there.** Already have a `ROADMAP.md` or similar
+  plan? Set `paths.handoff` to it in `config/dev-model.yaml` rather than adding a
+  second plan file — or rename it to `handoff.md` if you prefer the kit's name.
+- **Don't overwrite existing skills.** If `.claude/commands/<skill>.md` already exists
+  (a `wrap-up` of your own, say), keep it — copy in only the skills you don't have.
+- **Namespace the scripts if `scripts/` is organized.** If the repo keeps `scripts/`
+  in subdirs, vendor the kit's under `scripts/devkit/` (or similar) and update the
+  `scripts/…` references in the skills to match. The engine scripts discover the repo
+  root by walking up for `.git`, so they work at any depth.
+- **Check your CI/lint scope.** The `state_paths` tests use bare `assert` (they're
+  pytest tests) — make sure a repo-wide lint scopes away from the kit's dir or ignores
+  `S101` there.
+
+> This path was walked for real: a pilot into a live, mature repo, whose adoption
+> friction became several of the fixes in this version.
+
 ## What's inside
 
 Each piece maps to one or more of the ten principles in
