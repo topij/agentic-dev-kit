@@ -46,7 +46,10 @@ header to the source markdown.
 > - `scripts/finalize_triage.py` — graduation-marker prepend + inbox-sweep-by-
 >   frozen-list into the archive (`--frozen-inbox`) + branch/commit/push/draft-PR
 >   (Session B only).
-> - your tracker's client library or MCP — for filing approved proposals.
+> - your tracker's client library or MCP — for filing approved proposals. By backend:
+>   `github-issues` → `gh issue create --title "…" --body "…" --label <tracker.label_name>`
+>   (the id in the output is the ticket ref); `linear` → the Linear MCP / client with
+>   `tracker.team_id` + `project_id`; other trackers → their own CLI or API.
 > - your notify library / MCP — synchronous DM to the operator.
 
 ______________________________________________________________________

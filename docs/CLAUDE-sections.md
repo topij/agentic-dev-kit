@@ -1,6 +1,8 @@
-# CLAUDE.md sections — ready to paste
+# Agent-guide sections (CLAUDE.md / AGENTS.md) — ready to paste
 
-Paste these into your repo's CLAUDE.md, adjust to taste. Each section implements one or
+Paste these into your repo's agent guide — `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, or
+whatever file your agent loads every session — adjust to taste. (Below they say
+"CLAUDE.md"; read that as *your always-loaded agent guide*.) Each section implements one or
 more of the ten principles in [`PRINCIPLES.md`](../PRINCIPLES.md). Where a value is
 project-specific, it's written as a `config/dev-model.yaml` key (see
 [`../config/dev-model.yaml`](../config/dev-model.yaml)) rather than a literal, so you can
