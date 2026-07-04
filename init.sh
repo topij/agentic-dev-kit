@@ -1,5 +1,5 @@
 #!/bin/sh
-# init.sh — bootstrap for the dev-model-starter kit.
+# init.sh — bootstrap for the agentic-dev-kit.
 #
 # Run once from the root of the repo you copied this kit into. Idempotent:
 # re-running re-prompts (showing the current value as the default) and only
@@ -16,7 +16,7 @@ usage() {
   cat <<'EOF'
 Usage: ./init.sh [--help]
 
-Bootstraps the dev-model-starter kit in the current repo:
+Bootstraps the agentic-dev-kit in the current repo:
 
   1. Prompts for project.name, tracker.backend (+ project name and, for
      Linear, team/project ids), vcs.protected_branch, notify.user_key, and
@@ -286,7 +286,7 @@ add_ignore_line ".devkit_state_root"
 # ── done ───────────────────────────────────────────────────────────────
 
 echo ""
-echo "dev-model-starter is bootstrapped."
+echo "agentic-dev-kit is bootstrapped."
 echo "Review config/dev-model.yaml for any remaining values (paths, doc_budgets,"
 echo "models, tracker.url, review.fallback_command) and edit to taste."
 echo ""

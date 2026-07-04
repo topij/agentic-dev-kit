@@ -1,4 +1,4 @@
-# dev-model-starter
+# agentic-dev-kit
 
 A portable development model for codebases built with the help of AI coding
 agents — interactive and unattended alike. It packages ten doctrine principles
@@ -36,7 +36,7 @@ the hard part stops being *generating* code. It becomes keeping the work
 - **Rules a fresh agent "should have known" don't bind it** — because they live in
   a doc nobody re-reads instead of in the launch prompt, a hook, or a CI check.
 
-`dev-model-starter` is a small, opinionated answer to those failure modes: ten
+`agentic-dev-kit` is a small, opinionated answer to those failure modes: ten
 doctrine principles plus the minimum set of files — narrative docs, skills, hooks,
 scripts — that make each one *stick* rather than stay a good intention. It assumes
 a single operator, agents working on branches behind pull requests, and review
@@ -82,7 +82,7 @@ patterns to rules).
 ```sh
 # Click "Use this template" on GitHub and clone the result — or, into an
 # existing repo, copy the kit's contents in from the root:
-cp -r /path/to/dev-model-starter/. .
+cp -r /path/to/agentic-dev-kit/. .
 ./init.sh
 # Answer the prompts (or accept the shown defaults), then:
 #   -> open config/dev-model.yaml and fill in anything you skipped

@@ -18,7 +18,7 @@ Click **Use this template** on GitHub and clone the result, or copy the kit's
 contents into an existing repo's root:
 
 ```sh
-cp -r /path/to/dev-model-starter/. .
+cp -r /path/to/agentic-dev-kit/. .
 ./init.sh
 ```
 

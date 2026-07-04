@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# dev-model.yaml — the single config surface for the portable dev-model kit.
+# dev-model.yaml — the single config surface for agentic-dev-kit.
 #
 # `init.sh` stamps your project's values here once at adoption; every kit skill
 # and engine script reads this file instead of hardcoding a value. If you ever
