@@ -104,6 +104,12 @@ The quickstart above assumes a fresh or near-empty repo. Dropping the kit into a
 doc, and CI — needs a lighter touch: a blind `cp -r` would clobber files. Adopt
 selectively instead.
 
+**The [`/adopt`](.claude/commands/adopt.md) skill automates this.** Copy
+`.claude/commands/adopt.md` into your repo, run `/adopt`, and it inspects the repo,
+proposes a selective plan (what to install vs. skip vs. point the config at), and
+executes it non-destructively on a branch — then seeds the friction log with whatever
+the adoption surfaced. The principles it applies:
+
 - **Install only what you lack.** If the repo already practices a piece — a living
   plan, its own wrap-up skill — keep its version and skip the kit's. Each principle
   stands alone.
@@ -133,7 +139,7 @@ Each piece maps to one or more of the ten principles in
 | `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan — read at session start, updated at session end. Older sessions sweep to the history file once it crosses a line budget. |
 | `docs/friction-log.md` + `docs/friction-log-archive.md` | #2 Friction flywheel | Append-only inbox for bugs and rough edges, triaged on a cadence: single incidents route down to your tracker, real patterns graduate up into a rule. |
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
-| `.claude/commands/*.md` (six skills) | #1, #2, #3, #5 | `session-start`, `wrap-up`, `parallel`, `pr-watch`, `triage-friction-log`, `post-merge-systemize` — the operational surface that reads and writes the narrative files and runs the review loop. |
+| `.claude/commands/*.md` (skills) | #1, #2, #3, #5 | `session-start`, `wrap-up`, `parallel`, `pr-watch`, `triage-friction-log`, `post-merge-systemize` — the operational surface that reads and writes the narrative files and runs the review loop. Plus `adopt` — the bootstrap for selective adoption into an existing repo. |
 | `docs/CLAUDE-sections.md` | #4 Merge classes, #5 PR follow-through | Ready-to-paste CLAUDE.md sections: risk-based PR splitting, the mandatory watch-to-green loop, execution rules, the rules-layout convention. |
 | `docs/autonomous-session-playbook.md` | #4, #5, #7 | The full operating contract for operator-requested autonomous sessions — branch hygiene, sequencing, local gate, draft→ready, watch-and-fix to merge, self-merge policy. |
 | `.claude/rules/safety-critical-changes.md` | #6 Safety-critical doctrine | The review doctrine for send-gates, destructive operations, and kill/recovery paths — deterministic gate over matcher, multi-lens review, human sign-off only. |
