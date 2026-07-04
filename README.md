@@ -12,6 +12,71 @@ upstream dependency at runtime. Edit the config, rename things, delete a skill
 you don't need. A future packaged version (a plugin plus an installable engine)
 waits until the template has proven itself across a few real projects.
 
+## Why this exists
+
+When you build software with AI coding agents — especially several at once, some
+running unattended, with a single human operator who isn't watching every step —
+the hard part stops being *generating* code. It becomes keeping the work
+**coherent**. The recurring failure modes:
+
+- **Context evaporates between sessions.** A fresh session (yours or an agent's)
+  reconstructs "where were we?" from memory or scrollback, and silently redoes or
+  regresses the last one's work.
+- **Parallel agents step on each other** — two lanes writing the same scratch
+  state or the same plan file corrupt each other's output or collide at merge.
+- **Rough edges get forgotten** — the annoyance you hit an hour ago is gone by the
+  next session, so nobody fixes it. Or the opposite: every one-off incident gets
+  promoted into a standing rule until the rules are noise nobody reads.
+- **Risky changes get rubber-stamped** — a send-gate or a destructive operation
+  slips through bundled with cosmetic diffs, or a PR is opened and abandoned
+  mid-CI with no one watching it to green.
+- **The wrong effort goes to the wrong step** — top-tier reasoning burned on a
+  mechanical rename, or a cheap pass on the one decision that was expensive to get
+  wrong.
+- **Rules a fresh agent "should have known" don't bind it** — because they live in
+  a doc nobody re-reads instead of in the launch prompt, a hook, or a CI check.
+
+`dev-model-starter` is a small, opinionated answer to those failure modes: ten
+doctrine principles plus the minimum set of files — narrative docs, skills, hooks,
+scripts — that make each one *stick* rather than stay a good intention. It assumes
+a single operator, agents working on branches behind pull requests, and review
+before merge. Adopt the pieces incrementally; each stands on its own.
+
+## How it fits together
+
+One session runs the inner loop — **session-start → work → pr-watch → wrap-up** —
+while the **friction flywheel** turns underneath it, feeding tickets and new rules
+back into the next session's briefing.
+
+```mermaid
+flowchart TD
+    A([session start]) --> B["/session-start<br/>reads handoff + friction-log<br/>+ tracker + open PRs + CI"]
+    B --> C{"pick next work<br/>by urgency"}
+    C -->|self-contained| D["/parallel<br/>isolated worktree lanes<br/>· cheaper model tier"]
+    C -->|judgment / interactive| E["cockpit<br/>work inline"]
+    D --> F["open PR"]
+    E --> F
+    F --> G["/pr-watch<br/>poll · fix · reply<br/>until green and clean"]
+    G --> H{"risky change?<br/>send-gate · destructive · kill-path"}
+    H -->|yes| I["safety-critical review<br/>deterministic gate · dual-lens<br/>· operator sign-off"]
+    H -->|no| J["merge"]
+    I --> J
+    J --> K["/wrap-up<br/>update handoff + log friction"]
+    K --> L([session end])
+
+    K -. friction accrues .-> M[(friction-log)]
+    M -. weekly .-> N["/triage-friction-log<br/>single incident → tracker"]
+    M -. weekly .-> O["/post-merge-systemize<br/>2+ occurrences → a rule"]
+    N -. tickets .-> P[(tracker + handoff)]
+    O -. new rule .-> Q[(CLAUDE.md rules)]
+    P -. seeds next session .-> B
+    Q -. binds next session .-> B
+```
+
+Solid arrows are one session's flow; dotted arrows are the asynchronous flywheel
+(**down** by default — incidents to the tracker — and **up** only on repetition —
+patterns to rules).
+
 ## Quickstart
 
 ```sh
@@ -24,8 +89,8 @@ cp -r /path/to/dev-model-starter/. .
 #   -> start your agent session and run /session-start
 ```
 
-Ten minutes, start to finish: copy in, run the bootstrap, fill any config gaps,
-get your first briefing.
+Ten minutes, start to finish. For a full worked example of a first session — from
+adoption through `/wrap-up` — see **[`docs/getting-started.md`](docs/getting-started.md)**.
 
 ## What's inside
 
