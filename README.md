@@ -123,6 +123,23 @@ triage and pattern-finding mechanism, but their deterministic engines (a tracker
 client, a notify channel, and a merged-PR fetcher) are project-specific and left
 for you to wire — see the banner atop each of those two skill files.
 
+## Parallel dev sessions
+
+When you want several agent sessions running at once, the kit keeps them from
+clobbering each other: one **cockpit** session owns the narrative files and the
+merges, while each unit of work runs in an isolated **lane** — its own git worktree,
+branch, and `DEVKIT_STATE_ROOT` state sandbox. The rule that makes it safe is
+**disjoint file footprints**: two lanes may run together only when no source file is
+edited by both (the sandbox prevents *state* collisions, not *source* merge conflicts).
+
+The flow: `/parallel plan` clusters candidate work by footprint → launch a lane per
+disjoint cluster (`scripts/dev_session.sh new`) → each lane works to a draft-green PR →
+the cockpit reconciles every lane and merges. Each lane gets an effort tier and a merge
+class (self-merge vs operator-merge) assigned at plan time.
+
+Full walkthrough — the lane contract, the live board, reconciliation, and a worked
+example — in **[`docs/parallel-dev.md`](docs/parallel-dev.md)**.
+
 ## Adapting it
 
 Once you've adopted the kit, it's yours. `config/dev-model.yaml` is the single
