@@ -12,6 +12,11 @@ upstream dependency at runtime. Edit the config, rename things, delete a skill
 you don't need. A future packaged version (a plugin plus an installable engine)
 waits until the template has proven itself across a few real projects.
 
+> **A personal note.** I built this for my own development work with AI coding agents.
+> The principles and choices here reflect my own preferences and workflows — not a
+> universal best practice. Take what's useful, change what isn't, and shape it to fit
+> how you like to work.
+
 ## Why this exists
 
 When you build software with AI coding agents — especially several at once, some
