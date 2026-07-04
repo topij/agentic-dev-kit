@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# The per-lane state sandbox (see scripts/lib/state_paths/). init.sh also
+# appends these to an adopting repo's .gitignore.
+state/
+.devkit_state_root

@@ -1,0 +1,82 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# dev-model.yaml — the single config surface for the portable dev-model kit.
+#
+# `init.sh` stamps your project's values here once at adoption; every kit skill
+# and engine script reads this file instead of hardcoding a value. If you ever
+# find yourself editing a literal inside a skill or script, that literal belongs
+# here instead (Principle #10 — "No hardcoding").
+#
+# The values below are placeholders. Run `./init.sh` to be prompted through them,
+# or edit this file directly.
+# ─────────────────────────────────────────────────────────────────────────────
+
+project:
+  # Human-readable project name, used in skill prompts and doc headers.
+  name: my-project
+
+paths:
+  # The two canonical narrative files (Principles #1 and #2). The kit ships these
+  # as docs/handoff.md and docs/friction-log.md; repoint them if your repo already
+  # keeps a plan / inbox under different names.
+  handoff: docs/handoff.md                       # the living plan / session handoff
+  handoff_history: docs/handoff-history.md        # swept older session blocks
+  friction_log: docs/friction-log.md              # the friction inbox
+  friction_log_archive: docs/friction-log-archive.md
+  playbook: docs/autonomous-session-playbook.md   # the autonomous operating contract
+
+doc_budgets:
+  # Warn-only line-count tripwires (the archival mechanism of Principle #1). A file
+  # over budget is a housekeeping nudge, never a hard block. Read by
+  # scripts/check_doc_budget.py.
+  - path: docs/handoff.md
+    budget: 400
+    archive: docs/handoff-history.md
+    remedy: "run /wrap-up to sweep old session blocks into the history file"
+  - path: docs/friction-log.md
+    budget: 150
+    archive: docs/friction-log-archive.md
+    remedy: "run /triage-friction-log to graduate the inbox to the tracker"
+
+vcs:
+  forge: github                  # github | gitlab | other — some skills branch on this
+  protected_branch: main         # never committed to directly; PRs target this
+  dev_branch_prefix: dev         # cockpit lane branches: <prefix>/<scope>
+  # {date} expands to today's ISO date at skill runtime.
+  triage_branch_pattern: "chore/triage-{date}"
+  systemize_branch_pattern: "chore/systemize-{date}"
+
+tracker:
+  backend: linear                # linear | github-issues | jira | none
+  project_name: "My Project Dev"
+  url: ""                        # board URL shown in the friction-log header
+  # Backend-specific ids (Linear). Leave blank for other backends.
+  linear:
+    team_id: ""
+    project_id: ""
+    label_name: ""
+
+review:
+  # Independent review present on this repo (Principle #5). `fallback_command` is the
+  # substitute pass to run when the bot is unavailable — a down bot is not a review
+  # waiver, it's a trigger to run the substitute.
+  bots: [coderabbit]
+  fallback_command: "/code-review"
+
+notify:
+  backend: slack                 # slack | none — where skills DM the operator
+  user_key: ""                   # a key into your project's own notify config
+
+models:
+  # The three-tier vocabulary (Principle #7). Names are illustrative — map them to
+  # whatever tiers your agent runtime exposes. Skills tag each step cheap/default/expensive
+  # and the tier travels with a delegated task.
+  cheap: haiku
+  default: sonnet
+  expensive: opus
+
+state:
+  # The per-lane state sandbox (Principle #3) is driven by FIXED, project-neutral env
+  # vars (DEVKIT_STATE_ROOT / DEVKIT_ROOT) and a `.devkit_state_root` marker file —
+  # see scripts/lib/state_paths/. Those are kit constants, not adopter config; listed
+  # here only so the convention is discoverable. `dirname` is the top-level state dir.
+  dirname: state

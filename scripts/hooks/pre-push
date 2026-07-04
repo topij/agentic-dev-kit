@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+#
+# Pre-push guard — the dev/* narrative-file guard (Principle #1/#2: the
+# living handoff + friction-log files are cockpit-owned; a dev/* lane branch
+# must never edit them directly).
+#
+# A lane branch (created by `scripts/dev_session.sh new`, namespaced
+# `<dev_branch_prefix>/<scope>`) is told in its kickoff prompt / lane contract
+# never to edit the shared narrative files — this hook turns that convention
+# into a mechanism. Cockpit branches (`chore/*`, `feat/*`, hand-named PRs, …)
+# are unaffected — the cockpit's own "chore: update handoff" PRs legitimately
+# edit these files.
+#
+# Fail-open when the diff can't be computed (no local `origin/main`, e.g. an
+# offline/shallow clone) — this is a lane-hygiene guard, not a security gate,
+# so an inability to verify must never block an otherwise-legitimate push.
+#
+# NOTE — this hook is deliberately narrow. If your project also wants a
+# protected-integration-branch guard or a secrets-baseline check, add them as
+# separate, independently-testable checks rather than folding them in here.
+#
+# Defaults below are read from config/dev-model.yaml (`paths.handoff` /
+# `paths.friction_log` / `vcs.dev_branch_prefix`) when python3 + PyYAML are
+# available; otherwise the hardcoded fallback constants apply. Edit the
+# fallbacks directly if you'd rather not depend on a Python config read in a
+# git hook.
+#
+# Hook source lives under scripts/hooks/ and is installed into .git/hooks/
+# (e.g. via a `make install-hooks` target, or `cp scripts/hooks/pre-push
+# .git/hooks/pre-push && chmod +x .git/hooks/pre-push`).
+#
+# Real bypass: `git push --no-verify`.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+CONFIG_PATH="$REPO_ROOT/config/dev-model.yaml"
+
+# Fallback constants — used when config/dev-model.yaml can't be read (missing,
+# or no python3/PyYAML). Keep these in sync with config/dev-model.yaml's
+# `paths.handoff` / `paths.friction_log` / `vcs.dev_branch_prefix` if you edit
+# one without the other.
+NARRATIVE_FILES=("docs/handoff.md" "docs/friction-log.md")
+DEV_BRANCH_PREFIX="dev"
+
+if command -v python3 >/dev/null 2>&1 && [ -f "$CONFIG_PATH" ]; then
+    _config_read="$(python3 - "$CONFIG_PATH" <<'PY' 2>/dev/null || true
+import sys
+try:
+    import yaml
+except ImportError:
+    sys.exit(0)
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        data = yaml.safe_load(fh) or {}
+except OSError:
+    sys.exit(0)
+paths = data.get("paths") if isinstance(data.get("paths"), dict) else {}
+vcs = data.get("vcs") if isinstance(data.get("vcs"), dict) else {}
+handoff = paths.get("handoff")
+friction = paths.get("friction_log")
+prefix = vcs.get("dev_branch_prefix")
+if handoff and friction:
+    print(handoff)
+    print(friction)
+if prefix:
+    print("PREFIX:" + str(prefix))
+PY
+)"
+    if [ -n "${_config_read:-}" ]; then
+        _configured_files=()
+        while IFS= read -r _line; do
+            case "$_line" in
+                PREFIX:*) DEV_BRANCH_PREFIX="${_line#PREFIX:}" ;;
+                *) [ -n "$_line" ] && _configured_files+=("$_line") ;;
+            esac
+        done <<< "$_config_read"
+        [ "${#_configured_files[@]}" -ge 2 ] && NARRATIVE_FILES=("${_configured_files[@]}")
+    fi
+fi
+
+ZERO="0000000000000000000000000000000000000000"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # Deletions have no content to scan; a non-lane ref (cockpit branches) is
+  # untouched by this check entirely.
+  if [ "${local_sha:-$ZERO}" != "$ZERO" ] && [[ "${remote_ref:-}" == refs/heads/"$DEV_BRANCH_PREFIX"/* ]]; then
+    base="$(git merge-base origin/main "$local_sha" 2>/dev/null || true)"
+    if [ -n "$base" ]; then
+      touched="$(git diff --name-only "$base" "$local_sha" -- "${NARRATIVE_FILES[@]}" 2>/dev/null || true)"
+      if [ -n "$touched" ]; then
+        cat >&2 <<EOF
+
+✗ Refusing to push ${remote_ref#refs/heads/} — a ${DEV_BRANCH_PREFIX}/* lane
+  branch may not touch the cockpit-owned narrative file(s):
+
+$(printf '    %s\n' "$touched")
+
+  ${NARRATIVE_FILES[*]} are shared narrative files the cockpit alone edits, at
+  session wrap-up. Put this lane's handoff (what shipped, lessons, deferrals)
+  in the PR body instead.
+
+  Bypass (only if you know this push is legitimate): git push --no-verify
+
+EOF
+        exit 1
+      fi
+    fi
+    # base empty (no local origin/main — offline/shallow clone) → fail-open:
+    # a lane-hygiene guard must never block a push it can't verify.
+  fi
+done
+
+exit 0
