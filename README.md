@@ -175,7 +175,9 @@ the cockpit reconciles every lane and merges. Each lane gets an effort tier and 
 class (self-merge vs operator-merge) assigned at plan time.
 
 Full walkthrough — the lane contract, the live board, reconciliation, and a worked
-example — in **[`docs/parallel-dev.md`](docs/parallel-dev.md)**.
+example — in **[`docs/parallel-dev.md`](docs/parallel-dev.md)**. For step-by-step
+recipes per use case (and what actually happens when you run each `/parallel` verb),
+see **[`docs/parallel-howto.md`](docs/parallel-howto.md)**.
 
 ## Adapting it
 
