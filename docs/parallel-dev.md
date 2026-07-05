@@ -164,6 +164,8 @@ update `docs/handoff.md` with what shipped — from the cockpit, once.
 
 ## See also
 
+- [`parallel-howto.md`](parallel-howto.md) — the task-oriented companion: step-by-step
+  recipes per use case, and *what actually happens* when you run each `/parallel` verb.
 - [`PRINCIPLES.md`](../PRINCIPLES.md) #3 (cockpit + isolated lanes), #4 (merge classes),
   #7 (effort tiering).
 - [`.claude/commands/parallel.md`](../.claude/commands/parallel.md) — the full skill.
