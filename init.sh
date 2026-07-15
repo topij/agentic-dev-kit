@@ -137,6 +137,105 @@ set_field() {
   ' "$CONFIG_FILE" > "$tmpfile" && mv "$tmpfile" "$CONFIG_FILE"
 }
 
+# Insert a block immediately before a top-level section. Used only for schema
+# additions introduced after the first template release; existing values are
+# preserved rather than guessed over.
+insert_before_section() {
+  anchor="$1"
+  block="$2"
+  tmpfile="${CONFIG_FILE}.tmp.$$"
+  blockfile="${tmpfile}.block"
+  printf '%s\n' "$block" > "$blockfile"
+  awk -v anchor="$anchor" -v blockfile="$blockfile" '
+    function emit( line) {
+      while ((getline line < blockfile) > 0) print line
+      close(blockfile)
+    }
+    index($0, anchor) == 1 && $0 ~ /^[A-Za-z_]/ && !inserted { emit(); inserted = 1 }
+    { print }
+    END { if (!inserted) emit() }
+  ' "$CONFIG_FILE" > "$tmpfile" && mv "$tmpfile" "$CONFIG_FILE"
+  rm -f "$blockfile"
+}
+
+# Append a block to a named top-level section, immediately before the next one.
+append_to_section() {
+  section="$1"
+  block="$2"
+  tmpfile="${CONFIG_FILE}.tmp.$$"
+  blockfile="${tmpfile}.block"
+  printf '%s\n' "$block" > "$blockfile"
+  awk -v section="$section" -v blockfile="$blockfile" '
+    function emit( line) {
+      while ((getline line < blockfile) > 0) print line
+      close(blockfile)
+    }
+    $0 == section { inside = 1 }
+    inside && $0 != section && $0 ~ /^[A-Za-z_][A-Za-z0-9_]*:/ && !inserted {
+      emit()
+      inserted = 1
+      inside = 0
+    }
+    { print }
+    END { if (inside && !inserted) emit() }
+  ' "$CONFIG_FILE" > "$tmpfile" && mv "$tmpfile" "$CONFIG_FILE"
+  rm -f "$blockfile"
+}
+
+# Migrate the original single-runtime schema in place. Re-running init.sh is
+# documented as idempotent; silently leaving an old config without these keys
+# would make the new runtime-aware launchers appear bootstrapped while falling
+# back to the wrong behavior.
+migrate_runtime_schema() {
+  if ! grep -q '^  engines:' "$CONFIG_FILE"; then
+    append_to_section "paths:" '  # Directory containing the deterministic kit engines.
+  engines: scripts'
+    echo "added paths.engines to config/dev-model.yaml"
+  fi
+
+  if ! grep -q '^runtime:' "$CONFIG_FILE"; then
+    insert_before_section "doc_budgets:" 'runtime:
+  default: claude
+  launchers:
+    claude: claude
+    codex: codex
+'
+    echo "added runtime mappings to config/dev-model.yaml"
+  fi
+
+  if ! grep -q '^  fallback_commands:' "$CONFIG_FILE"; then
+    old_fallback=$(get_field "review:" "" "^  fallback_command:")
+    [ -n "$old_fallback" ] || old_fallback="/code-review"
+    append_to_section "review:" "  fallback_commands:
+    claude: $old_fallback
+    codex: \"/review\""
+    echo "added runtime review fallbacks to config/dev-model.yaml"
+  fi
+
+  if ! grep -q '^  tiers:' "$CONFIG_FILE"; then
+    old_cheap=$(get_field "models:" "" "^  cheap:")
+    old_default=$(get_field "models:" "" "^  default:")
+    old_expensive=$(get_field "models:" "" "^  expensive:")
+    [ -n "$old_cheap" ] || old_cheap="haiku"
+    [ -n "$old_default" ] || old_default="sonnet"
+    [ -n "$old_expensive" ] || old_expensive="opus"
+    append_to_section "models:" "  tiers:
+    cheap: mechanical
+    default: standard
+    expensive: judgment
+  runtime_mappings:
+    claude:
+      cheap: $old_cheap
+      default: $old_default
+      expensive: $old_expensive
+    codex:
+      cheap: low
+      default: medium
+      expensive: high"
+    echo "added runtime model mappings to config/dev-model.yaml"
+  fi
+}
+
 # ask <prompt> <default> -> prints the answer (default kept on empty input
 # or when stdin isn't a terminal, e.g. running init.sh from a non-interactive
 # script).
@@ -159,6 +258,8 @@ ask() {
 if [ ! -t 0 ]; then
   echo "note: no terminal attached — keeping all current config/dev-model.yaml values." >&2
 fi
+
+migrate_runtime_schema
 
 # ── prompts ──────────────────────────────────────────────────────────────
 

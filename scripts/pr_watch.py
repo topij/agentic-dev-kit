@@ -9,14 +9,15 @@ The shared `pr-watch` workflow (and the "PR follow-through" policy in your proje
 agent instructions)
 call this once per round: it asks `gh` for the PR's check rollup + every
 comment surface (issue comments, review submissions, inline review comments),
-filters out known auto-noise (a review bot's billing notice, its walkthrough /
-pre-merge-check summaries), diffs against a per-PR seen-set so only *new
-actionable* comments surface, and reports whether the PR is `done` (all checks
-green AND nothing new to address).
+filters out known auto-noise (while surfacing reviewer-unavailability notices),
+diffs against a per-PR seen-set so only *new actionable* comments surface, and
+reports whether the PR is `done` (checks green, nothing new, merge-ready, and
+independently reviewed at the current head).
 
 The caller loops: run this -> if not done, fix the failures / address or reply
 to the new comments -> `--mark-seen` -> wait -> run again. `done` flips true
-once CI is green and every review-bot finding has been handled.
+once CI is green, every finding has been handled, and an explicitly recorded
+independent-review receipt covers the current head.
 
 `--mark-seen` NEVER re-polls `gh`. Every plain poll (any invocation without
 `--mark-seen`) persists the exact ``all_seen_keys`` it just reported into a
@@ -37,6 +38,7 @@ Usage:
     uv run scripts/pr_watch.py                 # current branch's PR, human summary
     uv run scripts/pr_watch.py 916 --json       # explicit PR, machine-readable
     uv run scripts/pr_watch.py --mark-seen      # ack exactly what the last poll reported
+    uv run scripts/pr_watch.py 916 --record-review "fallback:codex" --head <polled-sha>
     uv run scripts/pr_watch.py 916 --assert-draft  # correct a drifted draft bit after `gh pr create --draft`
     uv run scripts/pr_watch.py 916 --assert-ready  # correct a drifted draft bit before `gh pr merge`
 
@@ -59,6 +61,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -66,6 +69,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
 
 def _find_repo_root(start: Path) -> Path:
     """Nearest ancestor with a ``.git`` marker (so this keeps working when the kit
@@ -86,7 +90,11 @@ REPO_ROOT = _find_repo_root(Path(__file__).resolve())
 # override else repo-root state/ (a relative override falls back rather than
 # raising — never crash the loop).
 _STATE_ENV = os.environ.get("DEVKIT_STATE_ROOT")
-_STATE_ROOT = Path(_STATE_ENV) if _STATE_ENV and os.path.isabs(_STATE_ENV) else REPO_ROOT / "state"
+_STATE_ROOT = (
+    Path(_STATE_ENV)
+    if _STATE_ENV and os.path.isabs(_STATE_ENV)
+    else REPO_ROOT / "state"
+)
 STATE_DIR = _STATE_ROOT / "pr-watch"
 
 # A comment is auto-noise (not a finding to act on) if its body matches any of
@@ -103,6 +111,19 @@ _NOISE_MARKERS = (
     "actionable comments posted: 0",  # CodeRabbit "nothing to change" review
     "review skipped",  # CodeRabbit draft-detected / skip notices
     "<!-- linear-linkback -->",  # a tracker's auto issue-mirror comment (not a finding)
+)
+
+# Review unavailability is actionable even when the surrounding comment also
+# carries a generic walkthrough/noise marker. Surfacing it is what triggers the
+# configured independent fallback; hiding it would turn a down reviewer into a
+# silent review waiver.
+_REVIEW_UNAVAILABLE_MARKERS = (
+    "bugbot needs on-demand usage enabled",
+    "review limit reached",
+    "rate limited by coderabbit",
+    "couldn't start this review",
+    "review skipped",
+    "no review credits",
 )
 
 # Status contexts that are advisory only — they must NEVER block "done". A
@@ -124,14 +145,21 @@ def _gh(args: list[str], *, timeout: int = 60) -> str:
     cmd = ["gh", *args]
     try:
         result = subprocess.run(  # noqa: S603
-            cmd, capture_output=True, text=True, check=False, cwd=str(REPO_ROOT), timeout=timeout
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=str(REPO_ROOT),
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
         # A hung gh call must not wedge the watch loop — surface it as an error
         # the caller already handles (main catches RuntimeError → exit 2).
         raise RuntimeError(f"gh {' '.join(args)} timed out after {timeout}s") from exc
     if result.returncode != 0:
-        raise RuntimeError(f"gh {' '.join(args)} failed (exit {result.returncode}): {result.stderr.strip()}")
+        raise RuntimeError(
+            f"gh {' '.join(args)} failed (exit {result.returncode}): {result.stderr.strip()}"
+        )
     return result.stdout
 
 
@@ -217,14 +245,23 @@ def summarize_checks(rollup: list[dict]) -> dict:
     (non-informational) check.
     """
     terminal_ok = {"SUCCESS", "NEUTRAL", "SKIPPED"}
-    bad = {"FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"}
-    success = pending = informational = 0
+    bad = {
+        "FAILURE",
+        "ERROR",
+        "CANCELLED",
+        "TIMED_OUT",
+        "ACTION_REQUIRED",
+        "STARTUP_FAILURE",
+    }
+    success = pending = informational = informational_non_green = 0
     failing: list[dict] = []
     for c in rollup:
         status = (c.get("conclusion") or c.get("state") or "").upper()
         name = c.get("name") or c.get("context") or "check"
         if name.strip().lower() in _INFORMATIONAL_CHECK_NAMES:
             informational += 1
+            if status not in terminal_ok:
+                informational_non_green += 1
             continue  # advisory only — never blocks "done"
         if status in terminal_ok:
             success += 1
@@ -238,6 +275,7 @@ def summarize_checks(rollup: list[dict]) -> dict:
         "success": success,
         "pending": pending,
         "informational": informational,
+        "informational_non_green": informational_non_green,
         "failing": failing,
         "all_green": not failing and pending == 0 and blocking_total > 0,
     }
@@ -279,8 +317,17 @@ def _author(raw: dict) -> str:
     return str(a)
 
 
+def review_unavailable_reason(body: str) -> str | None:
+    low = (body or "").lower()
+    return next(
+        (marker for marker in _REVIEW_UNAVAILABLE_MARKERS if marker in low), None
+    )
+
+
 def is_noise(body: str) -> bool:
     low = (body or "").lower()
+    if review_unavailable_reason(body) is not None:
+        return False
     return any(marker in low for marker in _NOISE_MARKERS)
 
 
@@ -294,6 +341,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
     out: list[dict] = []
     for raw in view.get("comments") or []:
         body = raw.get("body") or ""
+        unavailable = review_unavailable_reason(body)
         out.append(
             {
                 "key": _comment_key("issue", raw),
@@ -303,6 +351,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
                 "path": None,
                 "line": None,
                 "body": body,
+                "review_unavailable_reason": unavailable,
             }
         )
     for raw in view.get("reviews") or []:
@@ -318,6 +367,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
                 "path": None,
                 "line": None,
                 "body": body,
+                "review_unavailable_reason": review_unavailable_reason(body),
             }
         )
     for raw in inline or []:
@@ -331,6 +381,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
                 "path": raw.get("path"),
                 "line": raw.get("line") or raw.get("original_line"),
                 "body": body,
+                "review_unavailable_reason": review_unavailable_reason(body),
             }
         )
     return out
@@ -344,18 +395,37 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
     finding under a fresh id (or an edit that bumps ``updated_at`` / re-homes
     the line) is recognized as already handled instead of read twice.
     """
-    return [c for c in comments if c["key"] not in seen and c["content_key"] not in seen and not is_noise(c["body"])]
+    return [
+        c
+        for c in comments
+        if c["key"] not in seen
+        and c["content_key"] not in seen
+        and not is_noise(c["body"])
+    ]
 
 
-def decide_done(checks: dict, new_items: list[dict], *, settling: bool = False) -> bool:
-    """Done = checks all green AND nothing new to act on AND not mid-settle.
+def decide_done(
+    checks: dict,
+    new_items: list[dict],
+    *,
+    merge_blockers: list[str] | None = None,
+    review_evidence: bool = False,
+    settling: bool = False,
+) -> bool:
+    """Done = green, independently reviewed, merge-ready, and not mid-settle.
 
     ``settling`` is set right after a push (the PR head SHA moved, or the rollup
     is smaller than the largest seen for this head — new checks not yet
     registered), so a poll can't false-settle on the *stale pre-push* rollup
     (an all-green old commit) before the new commit's CI even starts.
     """
-    return checks["all_green"] and not new_items and not settling
+    return (
+        checks["all_green"]
+        and not new_items
+        and not merge_blockers
+        and review_evidence
+        and not settling
+    )
 
 
 # ------------------------------------------------------------------ state I/O
@@ -385,7 +455,9 @@ def load_state(pr: int) -> dict:
 
 def save_state(pr: int, state: dict) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    _seen_path(pr).write_text(json.dumps(state, indent=1, sort_keys=True), encoding="utf-8")
+    _seen_path(pr).write_text(
+        json.dumps(state, indent=1, sort_keys=True), encoding="utf-8"
+    )
 
 
 def load_seen(pr: int) -> set[str]:
@@ -435,6 +507,40 @@ def mark_seen(pr: int) -> dict:
     return {"pr": pr, "marked_seen": True, "marked_seen_keys": sorted(pending)}
 
 
+def record_review(pr: int, source: str, expected_head: str) -> dict:
+    """Persist independent-review evidence bound to the PR's current head SHA.
+
+    The caller runs this only after an independent reviewer (the configured bot,
+    or the configured fallback when that bot is unavailable) has completed and
+    every finding has been handled. A later push changes ``headRefOid`` and
+    automatically invalidates the receipt.
+    """
+    source = source.strip()
+    if not source:
+        raise ValueError("review source must not be empty")
+    expected_head = expected_head.strip()
+    if not expected_head:
+        raise ValueError("expected reviewed head must not be empty")
+    snapshot = _gh_json(["pr", "view", str(pr), "--json", "number,headRefOid"])
+    current_head = snapshot.get("headRefOid")
+    if not current_head:
+        raise ValueError("PR has no headRefOid; cannot bind review evidence")
+    if current_head != expected_head:
+        raise ValueError(
+            f"PR head changed during review (expected {expected_head}, current {current_head}); "
+            "review the new head before recording evidence"
+        )
+    receipt = {
+        "head": expected_head,
+        "source": source,
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+    }
+    state = load_state(pr)
+    state["review_receipt"] = receipt
+    save_state(pr, state)
+    return {"pr": pr, "recorded_review": True, "review_receipt": receipt}
+
+
 # ----------------------------------------------------------------------- main
 
 
@@ -450,12 +556,14 @@ def build_report(
     *,
     prior_head: str | None = None,
     prior_max_total: int = 0,
+    review_receipt: dict | None = None,
 ) -> dict:
     """Assemble the JSON-serializable watch report for one PR snapshot.
 
     Returns a dict with:
 
-    - ``pr`` / ``url`` / ``is_draft`` / ``merge_state`` — PR identity + state.
+    - ``pr`` / ``url`` / ``state`` / ``is_draft`` / ``base`` / ``merge_state`` /
+      ``review_decision`` — PR identity + merge/review state.
     - ``head`` — the PR head SHA (``headRefOid``); ``head_changed`` — true when it
       moved since ``prior_head``; ``max_total`` — the largest check count seen for
       this head (persisted across runs); ``settling`` — true while a just-pushed
@@ -472,8 +580,13 @@ def build_report(
     - ``all_seen_keys`` — the persistence set ``--mark-seen`` writes: BOTH the
       id key AND the content key of every current comment, so a later re-post
       under a new id stays handled.
-    - ``done`` — :func:`decide_done`: all checks green AND no fresh comments AND
-      not ``settling``.
+    - ``review_evidence`` — whether a persisted independent-review receipt is
+      bound to this exact head SHA.
+    - ``merge_blockers`` — deterministic reasons the PR is not currently safe to
+      merge (draft, blocked/unknown merge state, requested changes, non-open PR,
+      or missing current-head review evidence).
+    - ``done`` — :func:`decide_done`: all checks green, current-head review
+      evidence, no fresh comments, no merge blockers, and not ``settling``.
     """
     checks = summarize_checks(view.get("statusCheckRollup") or [])
     comments = collect_comments(view, inline)
@@ -489,14 +602,54 @@ def build_report(
     head_changed = bool(prior_head) and head is not None and head != prior_head
     # On a head change, reset the baseline to the new commit's current count;
     # otherwise remember the largest count ever seen for this head.
-    max_total = checks["total"] if head_changed else max(prior_max_total, checks["total"])
+    max_total = (
+        checks["total"] if head_changed else max(prior_max_total, checks["total"])
+    )
     settling = head_changed or checks["total"] < max_total
 
-    return {
+    pr_state = (view.get("state") or "UNKNOWN").upper()
+    base = view.get("baseRefName")
+    merge_state = (view.get("mergeStateStatus") or "UNKNOWN").upper()
+    review_decision = (view.get("reviewDecision") or "").upper()
+    receipt_head = (
+        review_receipt.get("head") if isinstance(review_receipt, dict) else None
+    )
+    review_evidence = {
+        "valid": bool(head) and receipt_head == head,
+        "source": (
+            review_receipt.get("source")
+            if isinstance(review_receipt, dict) and receipt_head == head
+            else None
+        ),
+        "head": receipt_head,
+    }
+    merge_blockers: list[str] = []
+    if pr_state != "OPEN":
+        merge_blockers.append(f"PR state is {pr_state}")
+    if bool(view.get("isDraft")):
+        merge_blockers.append("PR is draft")
+    informational_only_unstable = (
+        merge_state == "UNSTABLE"
+        and checks["all_green"]
+        and checks["informational_non_green"] > 0
+    )
+    if merge_state not in {"CLEAN", "HAS_HOOKS"} and not informational_only_unstable:
+        merge_blockers.append(f"merge state is {merge_state}")
+    if review_decision == "CHANGES_REQUESTED":
+        merge_blockers.append("review decision is CHANGES_REQUESTED")
+    if not review_evidence["valid"]:
+        merge_blockers.append("independent review evidence is missing for current head")
+
+    report = {
         "pr": view.get("number"),
         "url": view.get("url"),
+        "state": pr_state,
         "is_draft": view.get("isDraft"),
-        "merge_state": view.get("mergeStateStatus"),
+        "base": base,
+        "merge_state": merge_state,
+        "review_decision": review_decision,
+        "review_evidence": review_evidence,
+        "merge_blockers": merge_blockers,
         "head": head,
         "head_changed": head_changed,
         "settling": settling,
@@ -509,6 +662,7 @@ def build_report(
                 "path": c["path"],
                 "line": c["line"],
                 "excerpt": _excerpt(c["body"]),
+                "review_unavailable_reason": c.get("review_unavailable_reason"),
                 # Full body too: handling a finding no longer needs a second
                 # `gh api .../pulls/N/comments` fetch for the suggested diff.
                 "body": c["body"],
@@ -518,9 +672,18 @@ def build_report(
         "all_comment_keys": [c["key"] for c in comments],
         # Persistence set for --mark-seen: BOTH id and content keys, so a later
         # re-post under a new id is matched on content and stays handled.
-        "all_seen_keys": sorted({k for c in comments for k in (c["key"], c["content_key"])}),
-        "done": decide_done(checks, fresh, settling=settling),
+        "all_seen_keys": sorted(
+            {k for c in comments for k in (c["key"], c["content_key"])}
+        ),
     }
+    report["done"] = decide_done(
+        checks,
+        fresh,
+        merge_blockers=merge_blockers,
+        review_evidence=review_evidence["valid"],
+        settling=settling,
+    )
+    return report
 
 
 def render(report: dict) -> str:
@@ -538,19 +701,37 @@ def render(report: dict) -> str:
     )
     for f in ck["failing"]:
         lines.append(f"  ✗ {f['name']} ({f['status']})")
+    for blocker in report.get("merge_blockers") or []:
+        lines.append(f"  ✗ merge blocker: {blocker}")
     if report["new_comments"]:
         lines.append(f"new comments to address ({len(report['new_comments'])}):")
         for c in report["new_comments"]:
             loc = f" {c['path']}:{c['line']}" if c["path"] else ""
-            lines.append(f"  • [{c['kind']}] @{c['author']}{loc}: {c['excerpt']}")
+            if c.get("review_unavailable_reason"):
+                lines.append(
+                    f"  • [review unavailable] @{c['author']}{loc}: "
+                    f"{c['review_unavailable_reason']} — run the configured fallback review"
+                )
+            else:
+                lines.append(f"  • [{c['kind']}] @{c['author']}{loc}: {c['excerpt']}")
     return "\n".join(lines)
+
+
+def render_record_review(report: dict) -> str:
+    receipt = report["review_receipt"]
+    return (
+        f"PR #{report['pr']} — recorded independent review from "
+        f"{receipt['source']} for head {receipt['head']}"
+    )
 
 
 def render_mark_seen(report: dict) -> str:
     pr = report.get("pr")
     keys = report.get("marked_seen_keys") or []
     if keys:
-        return f"PR #{pr} — acked {len(keys)} comment key(s) from the last reported poll"
+        return (
+            f"PR #{pr} — acked {len(keys)} comment key(s) from the last reported poll"
+        )
     return f"PR #{pr} — {report.get('note', 'nothing to acknowledge')}"
 
 
@@ -584,14 +765,28 @@ def persist_poll(pr: int, report: dict, seen: set[str]) -> dict:
         "max_total": report["max_total"],
         "pending_seen": report["all_seen_keys"],
     }
+    previous = load_state(pr)
+    if isinstance(previous.get("review_receipt"), dict):
+        new_state["review_receipt"] = previous["review_receipt"]
     save_state(pr, new_state)
     return new_state
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("pr", nargs="?", type=int, default=None, help="PR number (default: current branch's PR)")
+    parser.add_argument(
+        "pr",
+        nargs="?",
+        type=int,
+        default=None,
+        help="PR number (default: current branch's PR)",
+    )
     parser.add_argument("--json", action="store_true", help="machine-readable output")
+    parser.add_argument(
+        "--head",
+        metavar="EXPECTED_SHA",
+        help="exact head SHA reviewed; required with --record-review",
+    )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--mark-seen",
@@ -599,6 +794,14 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "promote the PENDING set from the last reported poll into seen — acks exactly "
             "what that poll showed (no fresh gh re-poll); call after addressing a round"
+        ),
+    )
+    mode_group.add_argument(
+        "--record-review",
+        metavar="SOURCE",
+        help=(
+            "after an independent review and all fixes, persist a receipt bound to "
+            "the PR's current head (for example fallback:codex)"
         ),
     )
     mode_group.add_argument(
@@ -618,6 +821,10 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
+    if args.record_review is not None and not args.head:
+        parser.error("--record-review requires --head <polled-sha>")
+    if args.head and args.record_review is None:
+        parser.error("--head is only valid with --record-review")
 
     try:
         pr = resolve_pr(args.pr)
@@ -634,6 +841,18 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(mark_report, ensure_ascii=False))
         else:
             print(render_mark_seen(mark_report))
+        return 0
+
+    if args.record_review is not None:
+        try:
+            review_report = record_review(pr, args.record_review, args.head)
+        except (RuntimeError, KeyError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(review_report, ensure_ascii=False))
+        else:
+            print(render_record_review(review_report))
         return 0
 
     if args.assert_draft or args.assert_ready:
@@ -655,10 +874,12 @@ def main(argv: list[str] | None = None) -> int:
                 "view",
                 str(pr),
                 "--json",
-                "number,title,url,isDraft,mergeStateStatus,headRefOid,statusCheckRollup,reviews,comments",
+                "number,title,url,state,isDraft,baseRefName,mergeStateStatus,reviewDecision,headRefOid,statusCheckRollup,reviews,comments",
             ]
         )
-        inline = _gh_json(["api", f"repos/{{owner}}/{{repo}}/pulls/{pr}/comments", "--paginate"])
+        inline = _gh_json(
+            ["api", f"repos/{{owner}}/{{repo}}/pulls/{pr}/comments", "--paginate"]
+        )
     except (RuntimeError, KeyError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -666,7 +887,12 @@ def main(argv: list[str] | None = None) -> int:
     state = load_state(pr)
     seen = set(state.get("seen", []))
     report = build_report(
-        view, inline, seen, prior_head=state.get("head"), prior_max_total=int(state.get("max_total") or 0)
+        view,
+        inline,
+        seen,
+        prior_head=state.get("head"),
+        prior_max_total=int(state.get("max_total") or 0),
+        review_receipt=state.get("review_receipt"),
     )
 
     persist_poll(pr, report, seen)

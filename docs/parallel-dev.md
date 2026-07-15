@@ -86,14 +86,17 @@ Don't spin up lanes ticket-by-ticket. Compose the batch deliberately:
 ### 2 · Launch each lane — `dev_session.sh new`
 
 ```bash
-scripts/dev_session.sh new <scope> [--base main] [--prefix dev] [--headless] [--runtime <name>] [--launcher <command>]
+scripts/dev_session.sh new <scope> --merge-class <self|operator> [--base <branch>] [--prefix <prefix>] [--headless] [--runtime <name>] [--launcher <command>]
 ```
 
-Each `new` creates the worktree + branch + sandbox and prints a copy-paste line that
-drops you into the lane. `--headless` instead writes the sticky
+The configured `vcs.protected_branch` and `vcs.dev_branch_prefix` supply the default
+base and prefix. Each `new` creates the worktree + branch + sandbox, persists the
+merge class, and prints a copy-paste line that drops you into the lane. Omitting
+`--merge-class` fails safe to `operator`. `--headless` instead writes the sticky
 `<worktree>/.devkit_state_root` marker so an unattended agent's tool calls resolve the
-sandbox from disk (they don't share a shell). Interactive `new` and your CI/cron
-runner never set the marker — behavior there is unchanged.
+sandbox from disk (they don't share a shell). Its JSON descriptor also contains an
+`env` map; a launcher must replace inherited lane-root variables with that map before
+starting the process. Interactive `new` and your CI/cron runner never set the marker.
 
 ### 3 · Each lane works to a draft-green PR
 
@@ -125,11 +128,22 @@ Before the cockpit writes anything to the shared handoff, drive **every** launch
 to a terminal state — **merged**, **parked-with-reason**, or **still-open** — with
 `scripts/reconcile_sessions.sh`. An aggregate "everything's done" is *not* evidence a
 specific lane actually shipped; reconcile per lane. Then review and merge each per its
-pre-assigned merge class, and remove the worktree:
+pre-assigned merge class. Self-merging lanes use the deterministic wrapper, which
+re-polls CI/review/merge readiness at act time and refuses missing or operator
+metadata. Operator lanes are merged only after explicit cockpit sign-off. Remove the
+worktree afterward:
 
 ```bash
+scripts/dev_session.sh pr-watch <scope> --json
+scripts/dev_session.sh pr-watch <scope> --mark-seen
+scripts/dev_session.sh pr-watch <scope> --record-review <source> --head <polled-sha>
+scripts/dev_session.sh merge <scope>       # self class only; refuses otherwise
 scripts/dev_session.sh rm <scope>          # tear down the worktree (branch kept if unmerged)
 ```
+
+The cockpit uses the scope-aware watcher so review state lives in the same lane
+sandbox the merge gate reads. `<polled-sha>` is the `head` from the exact independently
+reviewed poll; recording refuses if it changed.
 
 ## Model / effort tiering per lane
 
@@ -154,15 +168,16 @@ Two of them share `auth/` (cluster A) — so you run **one** of them now and def
 other. You launch three disjoint lanes:
 
 ```bash
-scripts/dev_session.sh new auth-ratelimit   --headless   # cluster A · top tier · operator-merge
-scripts/dev_session.sh new metrics-rename    --headless   # cluster B · cheap tier · self-merge
-scripts/dev_session.sh new cli-help-typo     --headless   # cluster C · cheap tier · self-merge
+scripts/dev_session.sh new auth-ratelimit --headless --merge-class operator  # cluster A · top tier
+scripts/dev_session.sh new metrics-rename --headless --merge-class self      # cluster B · cheap tier
+scripts/dev_session.sh new cli-help-typo --headless --merge-class self       # cluster C · cheap tier
 ```
 
 Each lane works to a draft-green PR while you watch `list --watch` from the cockpit.
-The two cheap self-merge lanes land themselves; the auth rate-limit lane (security-
-adjacent) hands back for your review. You reconcile all three, merge, and only then
-update `docs/handoff.md` with what shipped — from the cockpit, once.
+The two cheap self-merge lanes land through `dev_session.sh merge`; the auth rate-limit
+lane (security-adjacent) hands back for operator review. You reconcile all three,
+merge, and only then update `docs/handoff.md` with what shipped — from the cockpit,
+once.
 
 ## See also
 

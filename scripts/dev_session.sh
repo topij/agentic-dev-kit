@@ -13,9 +13,11 @@
 # runs in zero sessions until something sets it. `new` is what finally sets it.
 #
 # Usage:
-#   scripts/dev_session.sh new <scope> [--base main] [--prefix dev] [--branch <full>] [--force] [--headless] [--runtime <name>] [--launcher <command>]
+#   scripts/dev_session.sh new <scope> [--base <protected>] [--prefix <configured>] [--branch <full>] [--merge-class self|operator] [--force] [--headless] [--runtime <name>] [--launcher <command>]
 #   scripts/dev_session.sh list [--watch [interval]]
 #   scripts/dev_session.sh path <scope>
+#   scripts/dev_session.sh pr-watch <scope> [pr-watch options]
+#   scripts/dev_session.sh merge <scope>
 #   scripts/dev_session.sh rm <scope> [--force] [--keep-branch]
 #   scripts/dev_session.sh print-contract
 #
@@ -35,10 +37,12 @@
 # worktree and its state/ writes isolate via the marker, no env export needed.
 # Diagnostics go to stderr in this mode so stdout is clean JSON. The
 # descriptor also carries `prompt_preamble` — the canonical lane-contract text
-# a launcher MUST prepend verbatim to the lane's prompt — and an `env` map
-# (currently `DEVKIT_REFUSE_UNSANDBOXED_STATE: "1"`) the launcher MUST export
-# into the lane's process so a marker-resolution failure refuses rather than
-# silently falling back to prod `state/`. The same env var is also baked into
+# a launcher MUST prepend verbatim to the lane's prompt — a persisted
+# `merge_class`, and an `env` map the launcher MUST use to replace inherited
+# lane-root values. This prevents an already-sandboxed cockpit's environment
+# from overriding the new lane's marker; the fail-closed guard also refuses a
+# marker-resolution failure rather than silently falling back to prod `state/`.
+# The same guard is baked into
 # the worktree's `activate` snippet for the interactive fallback (`source
 # <session>/activate`). Interactive `new` (no `--headless`) and cron are
 # byte-identical — neither sets this flag.
@@ -62,15 +66,28 @@ REPO_ROOT="$(devkit_find_repo_root "$SCRIPT_DIR")" || {
     exit 1
 }
 ENGINE_DIR_REL="${SCRIPT_DIR#"$REPO_ROOT"/}"
+CONFIG_FILE="$REPO_ROOT/config/dev-model.yaml"
+
+# Configuration owns the integration branch and lane namespace. Environment
+# overrides remain available for unusual launchers; missing legacy keys fall
+# back to the historical defaults.
+CONFIGURED_PROTECTED_BRANCH="$(devkit_config_scalar "$CONFIG_FILE" vcs "" protected_branch || true)"
+[[ -n "$CONFIGURED_PROTECTED_BRANCH" ]] || {
+    echo "[dev-session] error: config must define vcs.protected_branch" >&2
+    exit 1
+}
+git check-ref-format --branch "$CONFIGURED_PROTECTED_BRANCH" >/dev/null 2>&1 || {
+    echo "[dev-session] error: invalid vcs.protected_branch '$CONFIGURED_PROTECTED_BRANCH'" >&2
+    exit 1
+}
+PROTECTED_BRANCH="$CONFIGURED_PROTECTED_BRANCH"
+DEFAULT_BASE="${DEV_SESSION_BASE:-$PROTECTED_BRANCH}"
+CONFIGURED_PREFIX="$(devkit_config_scalar "$CONFIG_FILE" vcs "" dev_branch_prefix || true)"
+DEFAULT_PREFIX="${DEV_SESSION_PREFIX:-${CONFIGURED_PREFIX:-dev}}"
 
 # Sessions container (sibling of the repo by default). Each session is one
 # subdir holding wt/ (worktree) + state/ (sandbox) + activate (env snippet).
 SESSIONS_DIR="${DEVKIT_SESSIONS_DIR:-$(dirname "$REPO_ROOT")/dev-model-sessions}"
-
-# Parallel-session branches get their own namespace so they can't collide with
-# hand-named feature branches. Default "dev" — keep this in sync with
-# `vcs.dev_branch_prefix` in config/dev-model.yaml if you change it there.
-DEFAULT_PREFIX="${DEV_SESSION_PREFIX:-dev}"
 
 # Sticky sandbox marker written at the worktree root by `new --headless`. MUST
 # match scripts/lib/state_paths's STATE_ROOT_MARKER — the resolver reads it to
@@ -156,35 +173,8 @@ _slug_ok() {
     [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]]
 }
 
-# Read one scalar from the kit's deliberately simple, hand-authored YAML config.
-# This avoids adding a YAML dependency to the shell launcher. It supports exactly
-# the top-level/subsection/scalar shape used by runtime.default and
-# runtime.launchers.<name>.
 _config_scalar() {
-    local section="$1" subsection="$2" key="$3"
-    [[ -n "$subsection" ]] && subsection="$subsection:"
-    awk -v want_section="$section:" -v want_subsection="$subsection" -v want_key="$key:" '
-        function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
-        /^[A-Za-z_][A-Za-z0-9_]*:[[:space:]]*$/ {
-            current_section = trim($0); current_subsection = ""; next
-        }
-        /^  [A-Za-z_][A-Za-z0-9_]*:[[:space:]]*$/ {
-            current_subsection = trim($0); next
-        }
-        current_section == want_section && current_subsection == want_subsection {
-            line = $0
-            stripped = line
-            sub(/^[[:space:]]+/, "", stripped)
-            if (index(stripped, want_key) == 1) {
-                value = substr(stripped, length(want_key) + 1)
-                sub(/[[:space:]]+#.*/, "", value)
-                value = trim(value)
-                gsub(/^"|"$/, "", value)
-                print value
-                exit
-            }
-        }
-    ' "$REPO_ROOT/config/dev-model.yaml" 2>/dev/null
+    devkit_config_scalar "$CONFIG_FILE" "$1" "$2" "$3"
 }
 
 _sed_replacement() {
@@ -217,11 +207,11 @@ _resolve_launcher() {
 _is_protected_branch() {
     local b="$1" base="$2"
     # allow-hardcoded — main/master are the universal protected mainlines by definition
-    [[ "$b" == "$base" || "$b" == "main" || "$b" == "master" ]]
+    [[ "$b" == "$base" || "$b" == "$PROTECTED_BRANCH" || "$b" == "main" || "$b" == "master" ]]
 }
 
 cmd_new() {
-    local scope="" base="main" prefix="$DEFAULT_PREFIX" branch="" force=0
+    local scope="" base="$DEFAULT_BASE" prefix="$DEFAULT_PREFIX" branch="" merge_class="operator" force=0
     local requested_runtime="" requested_launcher="" runtime="" launcher=""
     HEADLESS=0
     while [[ $# -gt 0 ]]; do
@@ -229,6 +219,7 @@ cmd_new() {
             --base) [[ $# -ge 2 ]] || _die "--base needs a value"; base="$2"; shift 2 ;;
             --prefix) [[ $# -ge 2 ]] || _die "--prefix needs a value"; prefix="$2"; shift 2 ;;
             --branch) [[ $# -ge 2 ]] || _die "--branch needs a value"; branch="$2"; shift 2 ;;
+            --merge-class) [[ $# -ge 2 ]] || _die "--merge-class needs self or operator"; merge_class="$2"; shift 2 ;;
             --force) force=1; shift ;;
             --headless) HEADLESS=1; shift ;;
             --runtime) [[ $# -ge 2 ]] || _die "--runtime needs a value"; requested_runtime="$2"; shift 2 ;;
@@ -237,8 +228,10 @@ cmd_new() {
             *) [[ -z "$scope" ]] && scope="$1" && shift || _die "unexpected arg: $1" ;;
         esac
     done
-    [[ -n "$scope" ]] || _die "usage: dev_session.sh new <scope> [--base main] [--prefix dev] [--branch <full>] [--force] [--headless] [--runtime <name>] [--launcher <command>]"
+    [[ -n "$scope" ]] || _die "usage: dev_session.sh new <scope> [--base <protected>] [--prefix <configured>] [--branch <full>] [--merge-class self|operator] [--force] [--headless] [--runtime <name>] [--launcher <command>]"
     _slug_ok "$scope" || _die "scope must be a lowercase slug ([a-z0-9-]): got '$scope'"
+    [[ "$merge_class" == "self" || "$merge_class" == "operator" ]] \
+        || _die "merge class must be 'self' or 'operator' (got '$merge_class')"
     [[ -z "$branch" ]] && branch="${prefix}/${scope}"
     IFS=$'\t' read -r runtime launcher <<< "$(_resolve_launcher "$requested_runtime" "$requested_launcher")"
 
@@ -331,6 +324,7 @@ ACTIVATE
     # is never committed. Written for both the interactive and --headless paths.
     printf '%s\n' "$branch" > "$session_dir/branch"
     printf '%s\n' "$base" > "$session_dir/base"
+    printf '%s\n' "$merge_class" > "$session_dir/merge_class"
 
     if [[ "$HEADLESS" -eq 1 ]]; then
         # Resolve to ABSOLUTE paths before writing the marker/descriptor. $sandbox
@@ -358,14 +352,16 @@ ACTIVATE
         # Written to fd 3 (the saved real stdout) so it is the sole thing on
         # the caller's stdout. `prompt_preamble` is the canonical lane-contract
         # text the launcher MUST prepend verbatim to the lane's prompt; `env`
-        # is the map of env vars the launcher MUST export into the lane's
-        # process — currently just the fail-closed sandbox guard.
+        # is the map of env vars the launcher MUST REPLACE in the lane process.
+        # Explicit lane roots are load-bearing: an inherited cockpit
+        # DEVKIT_STATE_ROOT otherwise outranks this lane's marker and collapses
+        # multiple headless lanes into one shared state directory.
         python3 - "$scope" "$branch" "$worktree_abs" "$sandbox_abs" "$repo_root_abs" "$base" \
-            "$(_lane_contract)" "$REFUSE_UNSANDBOXED_ENV_VALUE" "$runtime" "$launcher" >&3 <<'PY'
+            "$merge_class" "$(_lane_contract)" "$REFUSE_UNSANDBOXED_ENV_VALUE" "$runtime" "$launcher" >&3 <<'PY'
 import json
 import sys
 
-scope, branch, worktree, state_root, repo_root, base, prompt_preamble, refuse_unsandboxed, runtime, launcher = sys.argv[1:11]
+scope, branch, worktree, state_root, repo_root, base, merge_class, prompt_preamble, refuse_unsandboxed, runtime, launcher = sys.argv[1:12]
 print(
     json.dumps(
         {
@@ -375,8 +371,13 @@ print(
             "state_root": state_root,
             "repo_root": repo_root,
             "base": base,
+            "merge_class": merge_class,
             "prompt_preamble": prompt_preamble,
-            "env": {"DEVKIT_REFUSE_UNSANDBOXED_STATE": refuse_unsandboxed},
+            "env": {
+                "DEVKIT_STATE_ROOT": state_root,
+                "DEVKIT_ROOT": repo_root,
+                "DEVKIT_REFUSE_UNSANDBOXED_STATE": refuse_unsandboxed,
+            },
             "runtime": runtime,
             "launcher": launcher or None,
         }
@@ -387,7 +388,7 @@ PY
     fi
 
     echo
-    echo "✓ session '$scope' ready."
+    echo "✓ session '$scope' ready (merge class: $merge_class)."
     echo
     if [[ -n "$launcher" ]]; then
         echo "  Start it with $runtime (copy-paste):"
@@ -647,6 +648,121 @@ cmd_print_contract() {
     _lane_contract
 }
 
+# Resolve exactly one same-repository open PR for a recorded lane branch/base.
+# Prints `<repo-nwo> TAB <pr-number>`; every caller then invokes gh/pr-watch in
+# that same repository and the lane's own state sandbox.
+_resolve_lane_pr() {
+    local branch="$1" base="$2"
+    local repo_json repo_nwo repo_owner pr_json pr_meta
+    local pr listed_base listed_branch listed_head listed_owner
+
+    # GH_REPO overrides local checkout discovery. Unset it for identity
+    # resolution, then explicitly pin that resolved repository everywhere else.
+    repo_json="$(cd "$REPO_ROOT" && env -u GH_REPO gh repo view --json nameWithOwner)" \
+        || _die "could not resolve the GitHub repository for $REPO_ROOT"
+    repo_nwo="$(printf '%s' "$repo_json" | python3 -c '
+import json, sys
+print(json.load(sys.stdin).get("nameWithOwner") or "")
+')"
+    [[ "$repo_nwo" == */* ]] || _die "GitHub returned an invalid repository identity"
+    repo_owner="${repo_nwo%%/*}"
+
+    pr_json="$(cd "$REPO_ROOT" && GH_REPO="$repo_nwo" gh pr list --repo "$repo_nwo" --head "$branch" --state open \
+        --json number,baseRefName,headRefName,headRefOid,headRepositoryOwner --limit 2)" \
+        || _die "could not resolve an open PR for '$branch'"
+    pr_meta="$(printf '%s' "$pr_json" | python3 -c '
+import json, sys
+rows = json.load(sys.stdin)
+if len(rows) != 1:
+    raise SystemExit(2)
+row = rows[0]
+owner = row.get("headRepositoryOwner") or {}
+if isinstance(owner, dict):
+    owner = owner.get("login") or owner.get("name") or ""
+print("\t".join(str(row.get(k) or "") for k in ("number", "baseRefName", "headRefName", "headRefOid")) + "\t" + str(owner))
+')" || _die "expected exactly one open PR for '$branch'"
+    IFS=$'\t' read -r pr listed_base listed_branch listed_head listed_owner <<< "$pr_meta"
+    [[ -n "$pr" ]] || _die "open PR metadata for '$branch' has no number"
+    [[ "$listed_base" == "$base" ]] \
+        || _die "PR #$pr targets '$listed_base', not recorded base '$base'"
+    [[ "$listed_branch" == "$branch" ]] \
+        || _die "PR #$pr head '$listed_branch' does not match recorded branch '$branch'"
+    [[ "$listed_owner" == "$repo_owner" ]] \
+        || _die "PR #$pr head owner '$listed_owner' does not match repository owner '$repo_owner'"
+    [[ -n "$listed_head" ]] || _die "PR #$pr has no head commit"
+    printf '%s\t%s\n' "$repo_nwo" "$pr"
+}
+
+# Scope-aware front door for the PR watcher. Cockpit review happens outside the
+# lane process, so this wrapper is what keeps its polls, acknowledgments, and
+# head-bound review receipt in the same lane sandbox that cmd_merge re-checks.
+cmd_pr_watch() {
+    local scope="${1:-}"
+    [[ -n "$scope" ]] || _die "usage: dev_session.sh pr-watch <scope> [pr-watch options]"
+    shift
+    _slug_ok "$scope" || _die "scope must be a lowercase slug ([a-z0-9-]): got '$scope'"
+    local session_dir="$SESSIONS_DIR/$scope" branch="" base="$DEFAULT_BASE" resolved repo_nwo pr
+    [[ -d "$session_dir" ]] || _die "no session '$scope' at $session_dir"
+    [[ -s "$session_dir/branch" ]] && branch="$(cat "$session_dir/branch")"
+    [[ -s "$session_dir/base" ]] && base="$(cat "$session_dir/base")"
+    [[ -n "$branch" ]] || _die "session '$scope' has no recorded branch"
+    _is_protected_branch "$branch" "$base" \
+        && _die "refusing to watch protected branch '$branch' as a lane"
+    resolved="$(_resolve_lane_pr "$branch" "$base")" || return
+    IFS=$'\t' read -r repo_nwo pr <<< "$resolved"
+    [[ -n "$repo_nwo" && -n "$pr" ]] || _die "could not resolve lane PR identity"
+    GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" \
+        uv run "$SCRIPT_DIR/pr_watch.py" "$pr" "$@"
+}
+
+# Autonomous/headless self-merges must pass through this wrapper. The merge
+# class is a deterministic artifact written at lane creation, and pr-watch is
+# re-polled at act time so stale green state cannot authorize a merge.
+cmd_merge() {
+    local scope="${1:-}"
+    [[ -n "$scope" ]] || _die "usage: dev_session.sh merge <scope>"
+    _slug_ok "$scope" || _die "scope must be a lowercase slug ([a-z0-9-]): got '$scope'"
+    local session_dir="$SESSIONS_DIR/$scope"
+    [[ -d "$session_dir" ]] || _die "no session '$scope' at $session_dir"
+
+    local merge_class="operator" branch="" base="$DEFAULT_BASE"
+    local resolved repo_nwo pr
+    local report done validated_pr validated_base validated_head
+    [[ -s "$session_dir/merge_class" ]] && merge_class="$(cat "$session_dir/merge_class")"
+    [[ "$merge_class" == "self" ]] \
+        || _die "lane '$scope' is operator-merge (or missing metadata); autonomous merge refused"
+    [[ -s "$session_dir/branch" ]] && branch="$(cat "$session_dir/branch")"
+    [[ -s "$session_dir/base" ]] && base="$(cat "$session_dir/base")"
+    [[ -n "$branch" ]] || _die "session '$scope' has no recorded branch"
+    if _is_protected_branch "$branch" "$base"; then
+        _die "refusing to merge protected branch '$branch' as a lane"
+    fi
+
+    resolved="$(_resolve_lane_pr "$branch" "$base")" || return
+    IFS=$'\t' read -r repo_nwo pr <<< "$resolved"
+    [[ -n "$repo_nwo" && -n "$pr" ]] || _die "could not resolve lane PR identity"
+
+    report="$(GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" \
+        uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json)" \
+        || _die "pr-watch failed for PR #$pr"
+    IFS=$'\t' read -r done validated_pr validated_base validated_head <<< "$(printf '%s' "$report" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print("\t".join(("true" if d.get("done") is True else "false", str(d.get("pr") or ""), str(d.get("base") or ""), str(d.get("head") or ""))))
+')"
+    [[ "$done" == "true" ]] \
+        || _die "PR #$pr is not green, review-clean, and merge-ready; run pr-watch to convergence first"
+    [[ "$validated_pr" == "$pr" ]] \
+        || _die "pr-watch validated PR #$validated_pr, not resolved PR #$pr"
+    [[ "$validated_base" == "$base" ]] \
+        || _die "validated PR #$pr targets '$validated_base', not recorded base '$base'"
+    [[ -n "$validated_head" ]] || _die "pr-watch returned no validated head for PR #$pr"
+
+    (cd "$REPO_ROOT" && GH_REPO="$repo_nwo" gh pr merge --repo "$repo_nwo" "$pr" --squash --delete-branch \
+        --match-head-commit "$validated_head") \
+        || _die "GitHub merge failed for PR #$pr"
+}
+
 cmd_rm() {
     local scope="" force=0 keep_branch=0
     while [[ $# -gt 0 ]]; do
@@ -663,10 +779,10 @@ cmd_rm() {
     local worktree="$session_dir/wt"
     [[ -d "$worktree" ]] || _die "no session '$scope' at $worktree"
 
-    # Resolve the session's OWN base first (recorded by `new`; default main) so the
+    # Resolve the session's OWN base first (recorded by `new`; configured default) so the
     # protected-branch guard below knows the real integration ref.
     local expected_branch base dirty
-    base="main"  # allow-hardcoded — default base; the session's real base is recorded by `new`
+    base="$DEFAULT_BASE"
     [[ -s "$session_dir/base" ]] && base="$(cat "$session_dir/base")"
 
     # Resolve the branch THIS session OWNS — the name `new` recorded, else the
@@ -752,12 +868,14 @@ main() {
         new) cmd_new "$@" ;;
         list|ls) cmd_list "$@" ;;
         path) cmd_path "$@" ;;
+        pr-watch) cmd_pr_watch "$@" ;;
+        merge) cmd_merge "$@" ;;
         rm|remove) cmd_rm "$@" ;;
         print-contract) cmd_print_contract "$@" ;;
         ""|-h|--help|help)
             sed -n '2,52p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
             ;;
-        *) _die "unknown subcommand '$sub' (try: new | list | path | rm | print-contract)" ;;
+        *) _die "unknown subcommand '$sub' (try: new | list | path | pr-watch | merge | rm | print-contract)" ;;
     esac
 }
 
