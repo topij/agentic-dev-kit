@@ -5,6 +5,10 @@ page explains the **model** — cockpit + isolated lanes, disjoint file footprin
 it's safe. This one is the **recipe book**: for each thing you actually want to do,
 the exact commands and *what happens when you run them*.
 
+Examples use the template default `paths.engines: scripts`. If you adopted the kit
+under `scripts/devkit`, substitute that configured directory. Invoke the shared
+workflow as `/parallel` in Claude Code or `$parallel` in Codex.
+
 If you read only one section, read the next one — it's the point almost everyone
 trips on the first time.
 
@@ -12,26 +16,26 @@ trips on the first time.
 
 Starting a parallel session involves three things that are easy to conflate:
 
-1. **This session** — the agent session you're already in. When it runs a `/parallel`
+1. **This session** — the agent session you're already in. When it runs a `parallel`
    verb it acts as a *launcher / coordinator*. It **does not** turn into the new
    session, and it **does not** touch your current branch, checkout, or scratch state.
 2. **The artifacts on disk** — a git **worktree**, a **branch**, and a **state
    sandbox** that `dev_session.sh new` creates. Inert until someone opens them.
-3. **The new session** — a *separate* agent process (a fresh `claude`) that you start
+3. **The new session** — a *separate* process for the configured agent runtime that you start
    in a **new terminal**. This is the one that actually does work in the new worktree.
 
 The single most common surprise:
 
-> **A slash command cannot open the new session for you.**
+> **An in-agent workflow cannot open a new interactive terminal for you.**
 
-A `/parallel` skill runs *inside* your current agent process — it can't `cd` your
+A `parallel` skill runs *inside* your current agent process — it can't `cd` your
 terminal into a new directory or spawn a fresh REPL there. So for an interactive lane,
 `new` does all the setup and then hands you a **copy-paste line**; *you* paste it into
 a new terminal to actually start the session. (Headless lanes are the exception — see
 [Use case 4](#use-case-4--launch-an-unattended-headless-lane) — because there is no
 human terminal to hand the line to.)
 
-So "what is `/parallel new` for, if I still have to open the terminal myself?" — it
+So "what is `parallel new` for, if I still have to open the terminal myself?" — it
 does everything *except* the one step that fundamentally needs your shell: it creates
 the worktree, branch, and sandbox correctly, and emits the exact line to launch into
 them. The manual paste is a two-second hand-off, not the work.
@@ -42,9 +46,9 @@ Keep that three-way split in mind and every verb below makes sense.
 
 | You run | What happens | Touches your current branch? | Read-only? |
 |---|---|---|---|
-| `/parallel` &nbsp;or&nbsp; `… list` | Prints the board of active lanes | No | Yes |
-| `/parallel list --watch` | Same board, auto-refreshing | No | Yes |
-| `/parallel plan` | Proposes a disjoint batch to launch | No | Yes (until you confirm) |
+| `parallel` &nbsp;or&nbsp; `… list` | Prints the board of active lanes | No | Yes |
+| `parallel list --watch` | Same board, auto-refreshing | No | Yes |
+| `parallel plan` | Proposes a disjoint batch to launch | No | Yes (until you confirm) |
 | `dev_session.sh new <scope>` | Creates worktree + branch + sandbox, prints a launch line | No | No — writes to disk, but **not** to your checkout |
 | *(you paste the launch line)* | Starts the new session in a **new terminal** | No | — |
 
@@ -60,7 +64,7 @@ You just want to know what lanes exist and where they stand. This is the safe,
 read-only default.
 
 ```bash
-scripts/dev_session.sh list          # or just run /parallel with no argument
+scripts/dev_session.sh list          # or just run parallel with no argument
 ```
 
 You get one row per lane: `SCOPE · BRANCH · PR · CI (✓/✗/…) · DIRTY (uncommitted
@@ -106,11 +110,11 @@ What this does:
 4. Prints a **copy-paste line** and stops:
 
    ```text
-   cd <worktree> && export DEVKIT_STATE_ROOT=<sandbox> && export DEVKIT_ROOT=<repo> && claude
+   cd <worktree> && export DEVKIT_STATE_ROOT=<sandbox> && export DEVKIT_ROOT=<repo> && <configured-launcher>
    ```
 
-**Then you** open a new terminal and paste that line. That — not the slash command —
-is what starts the new `claude`. Your current session keeps running, unchanged, on its
+**Then you** open a new terminal and paste that line. That — not the workflow —
+is what starts the new agent process. Your current session keeps running, unchanged, on its
 own branch.
 
 Useful options:
@@ -120,6 +124,9 @@ Useful options:
   current one).
 - `--prefix <p>` — branch namespace (default `dev`, giving `dev/<scope>`).
 - `--branch <full>` — override the whole branch name.
+- `--runtime <name>` — select a key from `runtime.launchers` for this lane.
+- `--launcher <command>` — override the configured command for this lane; use
+  `--launcher none` to print activation-only guidance.
 
 > **Do I even need `new` for a throwaway?** If you only want to read or experiment with
 > **no** branch and **no** state isolation, a plain `git worktree add ../scratch main`
@@ -135,7 +142,7 @@ the batch so no two lanes edit the same source file (the sandbox prevents *state
 collisions, not *source* merge conflicts). Start from the planner:
 
 ```text
-/parallel plan            # or: /parallel plan <focus-area-or-ticket-list>
+parallel plan            # or: parallel plan <focus-area-or-ticket-list>
 ```
 
 It gathers candidate work, **clusters it by file footprint**, drops stale-premise
@@ -219,13 +226,13 @@ worktree (`new`). Your current session stays on its own branch the whole time.
 No — off `origin/main` by default, so it starts clean. Pass `--base <branch>` if you
 specifically want it based on something else (including your current branch).
 
-**Why can't `/parallel new` just open the new session for me?**
-Because a slash command runs inside your current agent process. It can't move your
-terminal into a new directory or start a fresh `claude` there — that needs your shell.
+**Why can't `parallel new` just open the new session for me?**
+Because an in-agent workflow runs inside your current agent process. It can't move your
+terminal into a new directory or start a fresh agent process there — that needs your shell.
 So it does everything up to that point and hands you the launch line. Headless lanes
 skip the hand-off because there's no terminal involved.
 
-**Is running `/parallel` (no argument) ever destructive?**
+**Is running `parallel` (no argument) ever destructive?**
 No. With no argument it just prints the board and stops. It's the `git status` of your
 lane fleet.
 
@@ -233,6 +240,6 @@ lane fleet.
 
 - [`parallel-dev.md`](parallel-dev.md) — the concept: cockpit + isolated lanes,
   disjoint footprints, the batch workflow, the worked example.
-- [`.claude/commands/parallel.md`](../.claude/commands/parallel.md) — the full skill.
+- [`agentic-dev-kit/workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md) — the shared workflow.
 - [`PRINCIPLES.md`](../PRINCIPLES.md) #3 (cockpit + isolated lanes), #7 (effort
   tiering).

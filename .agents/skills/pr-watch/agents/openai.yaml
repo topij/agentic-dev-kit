@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR Watch"
+  short_description: "Drive a pull request to green"
+  default_prompt: "Use $pr-watch to monitor a pull request, address findings, and continue until it is green and clean."

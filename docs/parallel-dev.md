@@ -10,7 +10,9 @@ end-to-end workflow.
 Engine: [`scripts/dev_session.sh`](../scripts/dev_session.sh) (launch/list/remove
 lanes) and [`scripts/reconcile_sessions.sh`](../scripts/reconcile_sessions.sh)
 (drive every lane to a terminal state). The in-session front-end is the
-[`/parallel`](../.claude/commands/parallel.md) skill.
+shared [`parallel`](agentic-dev-kit/workflows/parallel.md) workflow. These links use
+the template default `paths.engines: scripts`; a namespaced adopter substitutes its
+configured directory, such as `scripts/devkit`.
 
 ## What a lane is
 
@@ -48,7 +50,7 @@ shared module, schema, or config in the same lane and run it sequentially.
 
 ```mermaid
 flowchart TD
-    CP["cockpit<br/>owns handoff · friction-log · merges"] --> Plan["/parallel plan<br/>cluster candidates by file footprint<br/>· at most one per disjoint cluster"]
+    CP["cockpit<br/>owns handoff · friction-log · merges"] --> Plan["parallel plan<br/>cluster candidates by file footprint<br/>· at most one per disjoint cluster"]
     Plan --> L1["lane A<br/>worktree + branch + sandbox"]
     Plan --> L2["lane B<br/>worktree + branch + sandbox"]
     Plan --> L3["lane C<br/>worktree + branch + sandbox"]
@@ -61,7 +63,7 @@ flowchart TD
     R --> M["review + merge<br/>self-merge or operator-merge<br/>per lane's pre-assigned class"]
 ```
 
-### 1 · Plan the batch — `/parallel plan`
+### 1 · Plan the batch — `parallel plan`
 
 Don't spin up lanes ticket-by-ticket. Compose the batch deliberately:
 
@@ -84,7 +86,7 @@ Don't spin up lanes ticket-by-ticket. Compose the batch deliberately:
 ### 2 · Launch each lane — `dev_session.sh new`
 
 ```bash
-scripts/dev_session.sh new <scope> [--base main] [--prefix dev] [--headless]
+scripts/dev_session.sh new <scope> [--base main] [--prefix dev] [--headless] [--runtime <name>] [--launcher <command>]
 ```
 
 Each `new` creates the worktree + branch + sandbox and prints a copy-paste line that
@@ -165,8 +167,8 @@ update `docs/handoff.md` with what shipped — from the cockpit, once.
 ## See also
 
 - [`parallel-howto.md`](parallel-howto.md) — the task-oriented companion: step-by-step
-  recipes per use case, and *what actually happens* when you run each `/parallel` verb.
+  recipes per use case, and *what actually happens* when you run each `parallel` verb.
 - [`PRINCIPLES.md`](../PRINCIPLES.md) #3 (cockpit + isolated lanes), #4 (merge classes),
   #7 (effort tiering).
-- [`.claude/commands/parallel.md`](../.claude/commands/parallel.md) — the full skill.
+- [`agentic-dev-kit/workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md) — the shared workflow.
 - [`docs/getting-started.md`](getting-started.md) — the single-session loop this sits on top of.

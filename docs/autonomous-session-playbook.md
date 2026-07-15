@@ -70,7 +70,7 @@ Follow this top to bottom, per ticket.
   bot's last review rather than waiting indefinitely for a re-review that may not come.
   Fix real findings (commit + push → re-watch); reply-with-reason to nitpicks you keep. If
   every configured bot is unavailable (rate-limited, no credits, skipped the PR), run
-  `review.fallback_command` as the substitute independent pass — a blocked bot is not a
+  the current runtime's `review.fallback_commands` value as the substitute independent pass — a blocked bot is not a
   waiver on review.
 
 ### Merge + close out

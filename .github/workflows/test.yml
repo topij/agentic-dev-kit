@@ -1,0 +1,20 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  toolkit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install pytest pyyaml
+      - name: Check shell syntax
+        run: bash -n init.sh scripts/dev_session.sh scripts/reconcile_sessions.sh scripts/lib/repo_root.sh scripts/hooks/pre-push
+      - name: Run state and portability tests
+        run: python -m pytest scripts/lib/state_paths/tests scripts/tests -q

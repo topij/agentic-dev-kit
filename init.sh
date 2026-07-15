@@ -18,7 +18,7 @@ Usage: ./init.sh [--help]
 
 Bootstraps the agentic-dev-kit in the current repo:
 
-  1. Prompts for project.name, tracker.backend (+ project name and, for
+  1. Prompts for project.name, runtime.default, tracker.backend (+ project name and, for
      Linear, team/project ids), vcs.protected_branch, notify.user_key, and
      review.bots — each showing the current value in config/dev-model.yaml
      as the default. Press Enter to keep the default.
@@ -27,7 +27,7 @@ Bootstraps the agentic-dev-kit in the current repo:
      skeletons, but ONLY if those files don't already exist.
   4. Appends the kit's state-sandbox paths to .gitignore if they're
      missing (never duplicates a line on re-run).
-  5. Prints the next step: run /session-start.
+  5. Prints the runtime-specific session-start invocation.
 
 Safe to re-run at any time. Run it from the repo root (the directory that
 contains config/dev-model.yaml).
@@ -166,6 +166,10 @@ cur_name=$(get_field "project:" "" "^  name:")
 name=$(ask "Project name" "$cur_name")
 set_field "project:" "" "^  name:" "$name"
 
+cur_runtime=$(get_field "runtime:" "" "^  default:")
+runtime=$(ask "Agent runtime (claude | codex | none)" "$cur_runtime")
+set_field "runtime:" "" "^  default:" "$runtime"
+
 cur_backend=$(get_field "tracker:" "" "^  backend:")
 backend=$(ask "Tracker backend (linear | github-issues | jira | none)" "$cur_backend")
 set_field "tracker:" "" "^  backend:" "$backend"
@@ -212,7 +216,7 @@ if [ ! -f docs/handoff.md ]; then
 # ${name} — Living Plan (Handoff)
 
 > **Forward-looking handoff (Principle #1).** Read this at the start of every session
-> (\`/session-start\`); update it at the end (\`/wrap-up\`). This file — not an agent's
+> (\`session-start\`); update it at the end (\`wrap-up\`). This file — not an agent's
 > memory, not a scratch note — is the single source of truth for what's done, in
 > progress, and next.
 >
@@ -230,7 +234,7 @@ Last updated: YYYY-MM-DD — <one-line theme of the most recent session>
 - <what was decided>
 - <what was learned>
 
-▶ Next: <the single clearest next step — what the next \`/session-start\` should pick up.>
+▶ Next: <the single clearest next step — what the next \`session-start\` should pick up.>
 
 ______________________________________________________________________
 
@@ -288,6 +292,10 @@ add_ignore_line ".devkit_state_root"
 echo ""
 echo "agentic-dev-kit is bootstrapped."
 echo "Review config/dev-model.yaml for any remaining values (paths, doc_budgets,"
-echo "models, tracker.url, review.fallback_command) and edit to taste."
+echo "models, tracker.url, review.fallback_commands) and edit to taste."
 echo ""
-echo "You're set — run /session-start next."
+case "$runtime" in
+  codex) echo "You're set — invoke \$session-start next." ;;
+  claude) echo "You're set — run /session-start next." ;;
+  *) echo "You're set — invoke the session-start workflow in your agent runtime next." ;;
+esac

@@ -55,25 +55,25 @@ back into the next session's briefing.
 
 ```mermaid
 flowchart TD
-    A([session start]) --> B["/session-start<br/>reads handoff + friction-log<br/>+ tracker + open PRs + CI"]
+    A([session start]) --> B["session-start<br/>reads handoff + friction-log<br/>+ tracker + open PRs + CI"]
     B --> C{"pick next work<br/>by urgency"}
-    C -->|self-contained| D["/parallel<br/>isolated worktree lanes<br/>· cheaper model tier"]
+    C -->|self-contained| D["parallel<br/>isolated worktree lanes<br/>· cheaper model tier"]
     C -->|judgment / interactive| E["cockpit<br/>work inline"]
     D --> F["open PR"]
     E --> F
-    F --> G["/pr-watch<br/>poll · fix · reply<br/>until green and clean"]
+    F --> G["pr-watch<br/>poll · fix · reply<br/>until green and clean"]
     G --> H{"risky change?<br/>send-gate · destructive · kill-path"}
     H -->|yes| I["safety-critical review<br/>deterministic gate · dual-lens<br/>· operator sign-off"]
     H -->|no| J["merge"]
     I --> J
-    J --> K["/wrap-up<br/>update handoff + log friction"]
+    J --> K["wrap-up<br/>update handoff + log friction"]
     K --> L([session end])
 
     K -. friction accrues .-> M[(friction-log)]
     M -. weekly .-> N["/triage-friction-log<br/>single incident → tracker"]
     M -. weekly .-> O["/post-merge-systemize<br/>2+ occurrences → a rule"]
     N -. tickets .-> P[(tracker + handoff)]
-    O -. new rule .-> Q[(CLAUDE.md rules)]
+    O -. new rule .-> Q[(agent rules)]
     P -. seeds next session .-> B
     Q -. binds next session .-> B
 ```
@@ -91,17 +91,32 @@ cp -r /path/to/agentic-dev-kit/. .
 ./init.sh
 # Answer the prompts (or accept the shown defaults), then:
 #   -> open config/dev-model.yaml and fill in anything you skipped
-#   -> start your agent session and run /session-start
+#   -> start your agent session and invoke session-start
 ```
 
 Ten minutes, start to finish. For a full worked example of a first session — from
-adoption through `/wrap-up` — see **[`docs/getting-started.md`](docs/getting-started.md)**.
+adoption through `wrap-up` — see **[`docs/getting-started.md`](docs/getting-started.md)**.
+
+### Agent runtime adapters
+
+The workflow definitions under `docs/agentic-dev-kit/workflows/` are shared. The
+runtime adapters are intentionally thin:
+
+| Runtime | Repository adapter | Invocation |
+|---|---|---|
+| Claude Code | `.claude/commands/<name>.md` | `/session-start`, `/wrap-up`, `/pr-watch`, `/parallel` |
+| Codex | `.agents/skills/<name>/SKILL.md` | `$session-start`, `$wrap-up`, `$pr-watch`, `$parallel` |
+
+Set `runtime.default` in `config/dev-model.yaml`. The lane launcher reads its command
+from `runtime.launchers`; shared workflows use the runtime-neutral
+`cheap`/`default`/`expensive` tiers and translate them through
+`models.runtime_mappings` only when the runtime exposes that control.
 
 ## Adopting into an existing repo
 
 The quickstart above assumes a fresh or near-empty repo. Dropping the kit into a
-**mature** project — one that already has a `.claude/`, its own `config/`, a plan
-doc, and CI — needs a lighter touch: a blind `cp -r` would clobber files. Adopt
+**mature** project — one that already has agent configuration, its own `config/`, a
+plan doc, and CI — needs a lighter touch: a blind `cp -r` would clobber files. Adopt
 selectively instead.
 
 **The [`/adopt`](.claude/commands/adopt.md) skill automates this.** Copy
@@ -116,12 +131,13 @@ the adoption surfaced. The principles it applies:
 - **Point the config at what's already there.** Already have a `ROADMAP.md` or similar
   plan? Set `paths.handoff` to it in `config/dev-model.yaml` rather than adding a
   second plan file — or rename it to `handoff.md` if you prefer the kit's name.
-- **Don't overwrite existing skills.** If `.claude/commands/<skill>.md` already exists
-  (a `wrap-up` of your own, say), keep it — copy in only the skills you don't have.
+- **Don't overwrite existing skills.** Check both `.claude/commands/<skill>.md` and
+  `.agents/skills/<skill>/SKILL.md`. Keep an adopter's existing workflow and install
+  only the missing adapters.
 - **Namespace the scripts if `scripts/` is organized.** If the repo keeps `scripts/`
-  in subdirs, vendor the kit's under `scripts/devkit/` (or similar) and update the
-  `scripts/…` references in the skills to match. The engine scripts discover the repo
-  root by walking up for `.git`, so they work at any depth.
+  in subdirs, vendor the kit under `scripts/devkit/` (or similar) and set
+  `paths.engines` accordingly. Every engine discovers the repo root by walking up for
+  `.git`, so it works at any depth without prompt rewrites.
 - **Check your CI/lint scope.** The `state_paths` tests use bare `assert` (they're
   pytest tests) — make sure a repo-wide lint scopes away from the kit's dir or ignores
   `S101` there.
@@ -139,13 +155,15 @@ Each piece maps to one or more of the ten principles in
 | `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan — read at session start, updated at session end. Older sessions sweep to the history file once it crosses a line budget. |
 | `docs/friction-log.md` + `docs/friction-log-archive.md` | #2 Friction flywheel | Append-only inbox for bugs and rough edges, triaged on a cadence: single incidents route down to your tracker, real patterns graduate up into a rule. |
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
-| `.claude/commands/*.md` (skills) | #1, #2, #3, #5 | `session-start`, `wrap-up`, `parallel`, `pr-watch`, `triage-friction-log`, `post-merge-systemize` — the operational surface that reads and writes the narrative files and runs the review loop. Plus `adopt` — the bootstrap for selective adoption into an existing repo. |
+| `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, and `pr-watch`. |
+| `.claude/commands/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows. Claude also ships the project-specific `triage-friction-log`, `post-merge-systemize`, and `adopt` commands. |
+| `docs/AGENTS-sections.md` | #4, #5, #6 | Ready-to-merge persistent instructions for Codex adopters. |
 | `docs/CLAUDE-sections.md` | #4 Merge classes, #5 PR follow-through | Ready-to-paste CLAUDE.md sections: risk-based PR splitting, the mandatory watch-to-green loop, execution rules, the rules-layout convention. |
 | `docs/autonomous-session-playbook.md` | #4, #5, #7 | The full operating contract for operator-requested autonomous sessions — branch hygiene, sequencing, local gate, draft→ready, watch-and-fix to merge, self-merge policy. |
-| `.claude/rules/safety-critical-changes.md` | #6 Safety-critical doctrine | The review doctrine for send-gates, destructive operations, and kill/recovery paths — deterministic gate over matcher, multi-lens review, human sign-off only. |
+| `docs/agentic-dev-kit/safety-critical-changes.md` | #6 Safety-critical doctrine | Shared doctrine for send-gates, destructive operations, and kill/recovery paths; bound through the Claude rule and the suggested `AGENTS.md` section. |
 | `config/dev-model.yaml` | #10 No hardcoding | The single config surface every skill and script reads instead of hardcoding a value. |
 | `scripts/check_doc_budget.py`, `scripts/archive_plan_sessions.py` | #1 | The tripwire and sweep that keep the handoff file from ballooning. |
-| `scripts/pr_watch.py` | #5 | The poll-fix-ack engine behind `/pr-watch`. |
+| `scripts/pr_watch.py` | #5 | The poll-fix-ack engine behind `pr-watch`. |
 | `scripts/dev_session.sh`, `scripts/reconcile_sessions.sh` | #3 | Worktree/lane launcher and reconciler. |
 | `scripts/hooks/pre-push` | #8 Mechanism over memory | A hook, not a memory — refuses a push that would corrupt the narrative files. |
 
@@ -153,9 +171,10 @@ Principles #7 (model/effort tiering) and #9 (deterministic scaffolding around
 LLM steps) are doctrine woven into the skills and scripts above rather than a
 standalone file — read `PRINCIPLES.md` for both.
 
-**Four skills ship wired; two ship as doctrine.** `session-start`, `wrap-up`,
-`parallel`, and `pr-watch` come with their engine scripts and run out of the
-box. `triage-friction-log` and `post-merge-systemize` document the flywheel's
+**Four workflows ship wired for Claude and Codex; two ship as Claude-side doctrine.**
+`session-start`, `wrap-up`, `parallel`, and `pr-watch` come with their engine scripts
+and both runtime adapters. `triage-friction-log` and `post-merge-systemize` document
+the flywheel's
 triage and pattern-finding mechanism, but their deterministic engines (a tracker
 client, a notify channel, and a merged-PR fetcher) are project-specific and left
 for you to wire — see the banner atop each of those two skill files.
@@ -169,14 +188,14 @@ branch, and `DEVKIT_STATE_ROOT` state sandbox. The rule that makes it safe is
 **disjoint file footprints**: two lanes may run together only when no source file is
 edited by both (the sandbox prevents *state* collisions, not *source* merge conflicts).
 
-The flow: `/parallel plan` clusters candidate work by footprint → launch a lane per
+The flow: `parallel plan` clusters candidate work by footprint → launch a lane per
 disjoint cluster (`scripts/dev_session.sh new`) → each lane works to a draft-green PR →
 the cockpit reconciles every lane and merges. Each lane gets an effort tier and a merge
 class (self-merge vs operator-merge) assigned at plan time.
 
 Full walkthrough — the lane contract, the live board, reconciliation, and a worked
 example — in **[`docs/parallel-dev.md`](docs/parallel-dev.md)**. For step-by-step
-recipes per use case (and what actually happens when you run each `/parallel` verb),
+recipes per use case (and what actually happens when you run each `parallel` verb),
 see **[`docs/parallel-howto.md`](docs/parallel-howto.md)**.
 
 ## Adapting it
@@ -185,8 +204,8 @@ Once you've adopted the kit, it's yours. `config/dev-model.yaml` is the single
 place to point the skills and scripts at your project's paths, tracker, review
 bots, and model tiers — start there. Beyond config, edit the skills and scripts
 freely: they're prompts and small stdlib scripts, meant to be read and changed.
-The one module with a real test suite is `scripts/lib/state_paths/` — run its
-tests (`python -m pytest scripts/lib/state_paths/tests/`) if you modify it.
+Run the state-sandbox and portability suites after modifying the engines:
+`python -m pytest scripts/lib/state_paths/tests/ scripts/tests/`.
 
 Improvements that would help other adopters are welcome back here.
 

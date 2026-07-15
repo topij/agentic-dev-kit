@@ -5,7 +5,8 @@
 # ///
 """Poll a PR's CI checks + new review comments — the engine for the watch-and-fix loop.
 
-`/pr-watch` (and the "PR follow-through" policy in your project's CLAUDE.md)
+The shared `pr-watch` workflow (and the "PR follow-through" policy in your project's
+agent instructions)
 call this once per round: it asks `gh` for the PR's check rollup + every
 comment surface (issue comments, review submissions, inline review comments),
 filters out known auto-noise (a review bot's billing notice, its walkthrough /

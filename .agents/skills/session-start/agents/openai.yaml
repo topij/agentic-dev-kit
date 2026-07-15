@@ -1,0 +1,4 @@
+interface:
+  display_name: "Session Start"
+  short_description: "Brief the next development session"
+  default_prompt: "Use $session-start to inspect the repository and recommend the highest-priority next task."
