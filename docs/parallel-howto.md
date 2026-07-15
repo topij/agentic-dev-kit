@@ -49,7 +49,8 @@ Keep that three-way split in mind and every verb below makes sense.
 | `parallel` &nbsp;or&nbsp; `… list` | Prints the board of active lanes | No | Yes |
 | `parallel list --watch` | Same board, auto-refreshing | No | Yes |
 | `parallel plan` | Proposes a disjoint batch to launch | No | Yes (until you confirm) |
-| `dev_session.sh new <scope>` | Creates worktree + branch + sandbox, prints a launch line | No | No — writes to disk, but **not** to your checkout |
+| `dev_session.sh new <scope> --merge-class <class>` | Creates worktree + branch + sandbox, persists merge policy, prints a launch line | No | No — writes to disk, but **not** to your checkout |
+| `dev_session.sh merge <scope>` | Re-polls and merges an eligible self-merge lane; refuses operator/missing metadata | No | No |
 | *(you paste the launch line)* | Starts the new session in a **new terminal** | No | — |
 
 Even `new` doesn't touch *your* working tree: the worktree it creates is a separate
@@ -91,7 +92,7 @@ This is the "I want a fresh session that isn't tied to what I'm working on right
 case. One command sets it up:
 
 ```bash
-scripts/dev_session.sh new <scope>
+scripts/dev_session.sh new <scope> --merge-class <self|operator>
 ```
 
 Substitute a lowercase slug for `<scope>` (e.g. `add-rate-limit`, `fix-cli-help`).
@@ -102,9 +103,10 @@ What this does:
 
 1. Creates a git **worktree** in the sibling `<project>-sessions/` directory (a linked
    worktree sharing this repo's objects — not a full clone).
-2. Creates a fresh branch **`dev/<scope>`**, branched off **`origin/main`** by default
-   — **not** off your current branch. That's what makes the new session independent:
-   it starts from a clean base, so it can't inherit or disturb your in-progress work.
+2. Creates a fresh branch using `vcs.dev_branch_prefix`, branched off the configured
+   `origin/<vcs.protected_branch>` by default — **not** off your current branch. That's
+   what makes the new session independent: it starts from a clean base, so it can't
+   inherit or disturb your in-progress work.
 3. Sets up an isolated state sandbox (`DEVKIT_STATE_ROOT`) so the new session's
    scratch-state writes never collide with yours.
 4. Prints a **copy-paste line** and stops:
@@ -119,11 +121,13 @@ own branch.
 
 Useful options:
 
-- `--base <branch>` — branch off something other than `main`. Use this if you
+- `--base <branch>` — override `vcs.protected_branch`. Use this if you
   *deliberately* want the new session to build on another branch (including your
   current one).
-- `--prefix <p>` — branch namespace (default `dev`, giving `dev/<scope>`).
+- `--prefix <p>` — override `vcs.dev_branch_prefix` for the branch namespace.
 - `--branch <full>` — override the whole branch name.
+- `--merge-class self|operator` — persist who may perform the terminal merge. If
+  omitted, the lane fails safe to `operator`.
 - `--runtime <name>` — select a key from `runtime.launchers` for this lane.
 - `--launcher <command>` — override the configured command for this lane; use
   `--launcher none` to print activation-only guidance.
@@ -165,15 +169,16 @@ A headless lane has **no human terminal** to hand a launch line to, so `new` beh
 differently:
 
 ```bash
-scripts/dev_session.sh new <scope> --headless
+scripts/dev_session.sh new <scope> --headless --merge-class <self|operator>
 ```
 
 Instead of printing a copy-paste line, `--headless` writes a sticky
 `<worktree>/.devkit_state_root` marker file so the agent's tool calls resolve the
 sandbox from disk (they don't inherit a shell), and emits a machine-readable descriptor
-whose `prompt_preamble` carries the **lane contract** — draft PR, actively poll your
-own CI to green, never touch the narrative files, check `git branch --show-current`
-before every commit. See the exact contract text with:
+whose `prompt_preamble` carries the **lane contract** and whose `env` map contains the
+lane-specific roots. The launcher must replace any inherited cockpit root variables
+with this map. The contract covers draft PR, active CI polling, narrative ownership,
+and branch checks. See the exact contract text with:
 
 ```bash
 scripts/dev_session.sh print-contract
@@ -203,6 +208,21 @@ shipped:
 scripts/reconcile_sessions.sh <scope-1> <scope-2> …   # merged / parked / open, per lane
 ```
 
+**Merge an eligible self-merge lane** through the safety wrapper. It reads the
+persisted class and branch, resolves the open PR, re-polls `pr-watch`, and merges only
+when every gate is currently clean. Operator-class or missing metadata is refused:
+
+```bash
+scripts/dev_session.sh pr-watch <scope> --json
+scripts/dev_session.sh pr-watch <scope> --mark-seen
+scripts/dev_session.sh pr-watch <scope> --record-review <source> --head <polled-sha>
+scripts/dev_session.sh merge <scope>
+```
+
+Use the `head` field from the exact independently reviewed poll. The scope-aware
+wrapper keeps the cockpit's acknowledgments and head-bound receipt in the lane state
+sandbox; recording refuses if a push landed between the review and receipt.
+
 **Remove the worktree** once you're done with it:
 
 ```bash
@@ -223,8 +243,9 @@ No. Every verb either reads state (`list`, `plan`, `path`) or creates a *separat
 worktree (`new`). Your current session stays on its own branch the whole time.
 
 **Does the new session branch off my current branch?**
-No — off `origin/main` by default, so it starts clean. Pass `--base <branch>` if you
-specifically want it based on something else (including your current branch).
+No — off the configured `origin/<vcs.protected_branch>` by default, so it starts
+clean. Pass `--base <branch>` if you specifically want it based on something else
+(including your current branch).
 
 **Why can't `parallel new` just open the new session for me?**
 Because an in-agent workflow runs inside your current agent process. It can't move your

@@ -37,9 +37,12 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
+
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from devmodel_config import _repo_root, load_config, resolve_path  # noqa: E402
@@ -63,14 +66,17 @@ _DATED_SESSION_RE = re.compile(rf"^## (?:{_MONTHS}) \d{{1,2}}\b")
 DEFAULT_KEEP = 6
 RECENT_SESSIONS_HEADING = "## Recent sessions"
 HISTORY_SECTION_HEADINGS = ("## Session log", "## Recent sessions (archived)")
+_RECENT_SESSION_RE = re.compile(r"^### \d{4}-\d{2}-\d{2}\b")
 
-POINTER = [
-    "> Older session entries (below the live blocks above) live in [`handoff-history.md`](handoff-history.md).\n",
-    '> Active open items from them are folded into the "Open for next session" lists above.\n',
-    "\n",
-    SEP,
-    "\n",
-]
+
+def history_pointer(link: str, label: str) -> list[str]:
+    return [
+        f"> Older session entries (below the live blocks above) live in [`{label}`]({link}).\n",
+        '> Active open items from them are folded into the "Open for next session" lists above.\n',
+        "\n",
+        SEP,
+        "\n",
+    ]
 
 
 def configured_paths(
@@ -100,7 +106,9 @@ def split_plan(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
     session blocks plus any inter-block separators and the existing pointer;
     ``tail`` is the first non-session ``##`` heading (standing sections) onward.
     """
-    sess_start = next((i for i, ln in enumerate(lines) if _is_session_heading(ln)), None)
+    sess_start = next(
+        (i for i, ln in enumerate(lines) if _is_session_heading(ln)), None
+    )
     if sess_start is not None:
         standing = next(
             (
@@ -115,11 +123,7 @@ def split_plan(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
         return lines[:sess_start], lines[sess_start:standing], lines[standing:]
 
     recent_start = next(
-        (
-            i
-            for i, ln in enumerate(lines)
-            if ln.rstrip("\n") == RECENT_SESSIONS_HEADING
-        ),
+        (i for i, ln in enumerate(lines) if ln.rstrip("\n") == RECENT_SESSIONS_HEADING),
         None,
     )
     if recent_start is None:
@@ -127,16 +131,16 @@ def split_plan(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
             "no session blocks or '## Recent sessions' section found in handoff doc"
         )
     standing = next(
-        (
-            i
-            for i, ln in enumerate(lines)
-            if i > recent_start and ln.startswith("## ")
-        ),
+        (i for i, ln in enumerate(lines) if i > recent_start and ln.startswith("## ")),
         len(lines),
     )
     # Keep the section heading in the head; parse_blocks handles its ``###``
     # entries and rebuild_plan preserves this layout without adding a pointer.
-    return lines[: recent_start + 1], lines[recent_start + 1 : standing], lines[standing:]
+    return (
+        lines[: recent_start + 1],
+        lines[recent_start + 1 : standing],
+        lines[standing:],
+    )
 
 
 def parse_blocks(region: list[str]) -> list[list[str]]:
@@ -150,7 +154,7 @@ def parse_blocks(region: list[str]) -> list[list[str]]:
 
     def is_block_heading(line: str) -> bool:
         if uses_recent_sections:
-            return line.startswith("### ")
+            return bool(_RECENT_SESSION_RE.match(line))
         return _is_session_heading(line)
 
     cur: list[str] | None = None
@@ -164,7 +168,9 @@ def parse_blocks(region: list[str]) -> list[list[str]]:
     if cur is not None:
         blocks.append(cur)
     for block in blocks:
-        while block and (block[-1].strip() == "" or _is_sep(block[-1]) or block[-1].startswith(">")):
+        while block and (
+            block[-1].strip() == "" or _is_sep(block[-1]) or block[-1].startswith(">")
+        ):
             block.pop()
     return blocks
 
@@ -202,7 +208,15 @@ def trim_megaline(head: list[str], keep: int) -> list[str]:
     return out
 
 
-def rebuild_plan(head: list[str], keep_blocks: list[list[str]], tail: list[str], keep: int) -> list[str]:
+def rebuild_plan(
+    head: list[str],
+    keep_blocks: list[list[str]],
+    tail: list[str],
+    keep: int,
+    *,
+    history_link: str = "handoff-history.md",
+    history_label: str = "handoff-history.md",
+) -> list[str]:
     """Reassemble the handoff doc from the trimmed head, kept blocks, fresh pointer, and tail."""
     if head and head[-1].rstrip("\n") == RECENT_SESSIONS_HEADING:
         body: list[str] = ["\n"]
@@ -214,7 +228,7 @@ def rebuild_plan(head: list[str], keep_blocks: list[list[str]], tail: list[str],
     body: list[str] = []
     for block in keep_blocks:
         body += block + ["\n", SEP, "\n"]
-    body += POINTER
+    body += history_pointer(history_link, history_label)
     return head + body + tail
 
 
@@ -245,15 +259,42 @@ def main(argv: list[str] | None = None) -> int:
     Returns 0 on success / no-op / dry-run, 2 on usage error, unparseable handoff
     structure, or a failed write (the handoff doc is rolled back in that case).
     """
-    default_plan, default_history = configured_paths()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--keep", type=int, default=DEFAULT_KEEP, help="live blocks to keep")
-    parser.add_argument("--plan", type=Path, default=default_plan, help="living handoff doc")
     parser.add_argument(
-        "--history", type=Path, default=default_history, help="handoff history/archive doc"
+        "--keep", type=int, default=DEFAULT_KEEP, help="live blocks to keep"
     )
-    parser.add_argument("--dry-run", action="store_true", help="report only, write nothing")
+    parser.add_argument("--plan", type=Path, default=None, help="living handoff doc")
+    parser.add_argument(
+        "--history", type=Path, default=None, help="handoff history/archive doc"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="report only, write nothing"
+    )
     args = parser.parse_args(argv)
+
+    if args.plan is None or args.history is None:
+        try:
+            default_plan, default_history = configured_paths()
+        except (
+            FileNotFoundError,
+            KeyError,
+            OSError,
+            TypeError,
+            ValueError,
+            yaml.YAMLError,
+        ) as exc:
+            print(
+                f"error: could not resolve configured handoff paths ({exc})",
+                file=sys.stderr,
+            )
+            return 2
+        args.plan = args.plan or default_plan
+        args.history = args.history or default_history
+
+    args.plan = args.plan if args.plan.is_absolute() else Path.cwd() / args.plan
+    args.history = (
+        args.history if args.history.is_absolute() else Path.cwd() / args.history
+    )
 
     if args.keep < 1:
         print("error: --keep must be >= 1", file=sys.stderr)
@@ -278,7 +319,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     keep_blocks, moved = blocks[: args.keep], blocks[args.keep :]
-    new_plan = rebuild_plan(head, keep_blocks, tail, args.keep)
+    history_link = os.path.relpath(args.history, start=args.plan.parent).replace(
+        os.sep, "/"
+    )
+    new_plan = rebuild_plan(
+        head,
+        keep_blocks,
+        tail,
+        args.keep,
+        history_link=history_link,
+        history_label=args.history.name,
+    )
     try:
         new_history = insert_into_history(history, moved)
     except ValueError as exc:

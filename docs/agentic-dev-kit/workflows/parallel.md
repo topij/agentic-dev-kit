@@ -102,8 +102,8 @@ deliberately:
    not at merge time, stops a batch stalling on ad-hoc "can I merge this?" calls and
    tells each lane whether it may self-merge or must hand back.
 
-1. **Launch each + relay a kickoff.** Run `<engine-dir>/dev_session.sh new <scope>` per
-   chosen ticket (see below) and relay each copy-paste line **with a kickoff prompt**
+1. **Launch each + relay a kickoff.** Run `<engine-dir>/dev_session.sh new <scope>
+   --merge-class <self|operator>` per chosen ticket (see below) and relay each copy-paste line **with a kickoff prompt**
    the operator pastes as the session's first message:
 
    > Read tracker ticket `<ID>` (+ any recipe in `<handoff>`). Pre-flight its
@@ -156,15 +156,23 @@ decision (and so an autonomous batch knows what it may close itself):
 | **Mechanical** / **Standard**  | **self-merge** *(autonomous/headless batches only)* | the lane (or cockpit), once green-and-clean with one independent review pass |
 | **High-stakes**                | **operator-merge**                                  | always the operator — never self-merged, even when green                     |
 
-Operator-merge is the floor for anything in your project's high-risk classes:
+The class is persisted in the session metadata and headless JSON descriptor;
+missing/unknown metadata defaults to **operator**. Operator-merge is the floor for anything in your project's high-risk classes:
 data-shape / fetcher / config-semantics changes, shared primitives, a **guard / gate /
 verifier / send-path / kill-path** (see
    `docs/agentic-dev-kit/safety-critical-changes.md`), security, PII,
 or anything touching production cron/CI or shared `state/`. Normal **interactive**
 sessions leave *all* merges to the operator regardless of class — self-merge is an
-autonomous-session behavior (see
-   the configured autonomous-session playbook (`paths.playbook`).
+autonomous-session behavior (see the configured autonomous-session playbook at
+`paths.playbook`).
 When unsure, classify **operator-merge**.
+
+For an autonomous self-merge, run `<engine-dir>/dev_session.sh merge <scope>`.
+That deterministic wrapper re-polls `pr-watch` at act time, requires current-head
+independent-review evidence, validates the exact repository/branch/base, and pins the
+merge to the reviewed head commit. It refuses any lane whose persisted class is not
+`self`. Operator-class lanes intentionally cannot use the wrapper; the operator lands
+those directly after the required review and sign-off.
 
 **How the tier reaches the lane.** It depends on the launch mechanism:
 
@@ -257,7 +265,7 @@ in-agent workflow cannot `cd` the operator into a new worktree and open a fresh
 terminal there). When asked to prepare one, run:
 
 ```bash
-<engine-dir>/dev_session.sh new <scope>
+<engine-dir>/dev_session.sh new <scope> --merge-class <self|operator>
 ```
 
 substituting a lowercase slug for `<scope>` (e.g. `feat-graduation-flow`). Pass
@@ -266,9 +274,11 @@ override it for this lane. The script
 prints a copy-paste line — `cd <worktree> && export DEVKIT_STATE_ROOT=… && export
 DEVKIT_ROOT=… && <your agent CLI>`. **Relay that line to the operator** and tell them
 to run it in a new terminal; don't try to start the session yourself. Options:
-`--base <branch>` (default `main`), `--prefix <p>` (default `dev` — parallel-session
+`--base <branch>` (default `vcs.protected_branch`), `--prefix <p>` (default
+`vcs.dev_branch_prefix` — parallel-session
 branches get their own namespace to avoid colliding with hand-named feature branches),
-`--branch <full>` to override the whole name.
+`--branch <full>` to override the whole name. Omitting `--merge-class` fails safe to
+`operator`.
 
 ### Unattended / headless launch — `new --headless`
 
@@ -278,7 +288,7 @@ rule above says *don't start the session yourself*). That's the wrong shape for 
 *sandboxed* lane without a human in the loop. `--headless` is for exactly that:
 
 ```bash
-<engine-dir>/dev_session.sh new --headless <scope>
+<engine-dir>/dev_session.sh new --headless <scope> --merge-class <self|operator>
 ```
 
 It creates the worktree + sandbox exactly as `new` does, but instead of the human
@@ -294,10 +304,13 @@ block it:
    it's unaffected.)
 1. **Prints a JSON descriptor to stdout** (diagnostics go to stderr, so stdout is
    clean JSON): `{"scope","branch","worktree","state_root","repo_root","base",
-   "prompt_preamble","env","runtime","launcher"}`. `prompt_preamble` is the canonical lane-contract text
+   "merge_class","prompt_preamble","env","runtime","launcher"}`. `prompt_preamble` is the canonical lane-contract text
    below — the launcher **MUST** prepend it verbatim to the lane's task prompt. `env`
-   (currently `{"DEVKIT_REFUSE_UNSANDBOXED_STATE": "1"}`) flips the unsandboxed-write
-   guard from *warn* to *refuse*, by default, for every headless lane — so a lane
+   carries lane-specific `DEVKIT_STATE_ROOT`, `DEVKIT_ROOT`, and
+   `DEVKIT_REFUSE_UNSANDBOXED_STATE=1`. The launcher **MUST replace inherited values
+   with this map**: the resolver gives an explicit env root precedence over the marker,
+   so inheriting the cockpit's root would collapse every child lane into one sandbox.
+   The refusal flag flips the unsandboxed-write guard from *warn* to *refuse* — so a lane
    whose marker resolution somehow fails (deleted marker, cwd escaped the worktree)
    hard-errors on a `state/` write instead of silently landing in prod. Interactive
    `new` and cron/CI never set either field.
@@ -324,14 +337,14 @@ every lane prompt**; runtime capability changes how tiers are applied, not wheth
 the safety contract binds.
 
 **Preferred when available — a workflow launcher with a real effort dial.** Run
-`new --headless <scope>` once per chosen scope, collect each one's JSON descriptor
+`new --headless <scope> --merge-class <class>` once per chosen scope, collect each one's JSON descriptor
 into a list (attaching the per-lane `effort`/`model` tier from the plan's risk read),
 then drive the lanes from a *single* fan-out that gives each sub-agent its own
 `{effort, model}` — the one path on which the tier's `effort` half actually takes
 effect. Pseudocode:
 
 ```js
-// args.lanes = [{scope, worktree, branch, ticket, effort, model, prompt_preamble}, …]
+// args.lanes = [{scope, worktree, branch, ticket, effort, model, merge_class, prompt_preamble, env}, …]
 // — one per `new --headless` descriptor (prompt_preamble copied straight off it).
 // effort ∈ low|medium|high|max (omit ⇒ inherit cockpit effort); model ∈ cheap|default|expensive (omit ⇒ inherit).
 runInParallel(args.lanes.map(lane => () =>
@@ -339,30 +352,28 @@ runInParallel(args.lanes.map(lane => () =>
     `${lane.prompt_preamble}\n\n` +
     `Work in worktree ${lane.worktree} on branch ${lane.branch} (cd there first — its state sandbox is active via the on-disk marker, so your state/ writes isolate automatically). ` +
     `Read tracker ticket ${lane.ticket}, pre-flight its premise against the live code, implement, draft PR on first push, drive it to green-and-clean, then hand off per the contract above.`,
-    { label: lane.scope, effort: lane.effort, model: lane.model } // omit effort/model to inherit (default-safe)
+    { label: lane.scope, effort: lane.effort, model: lane.model, env: lane.env }
   )
 ))
 ```
 
-Four things to keep right: **(1)** `lane.prompt_preamble` is prepended verbatim,
+Five things to keep right: **(1)** `lane.prompt_preamble` is prepended verbatim,
 ahead of everything else, on every lane — never abbreviated to "follow the usual
 contract" (that's exactly the prose-reference that failed to bind a lane before).
 **(2)** do **not** open a second worktree on top of `--headless` — it already owns the
 worktree+sandbox, so a second one would have no marker and lose isolation. **(3)** A
 lane with no assigned tier omits `effort`/`model` and inherits the cockpit's — the
-same default-safe fallback as everywhere else. **(4)** Check what compute budget your
+same default-safe fallback as everywhere else. **(4)** replace the spawned process's
+environment roots with `lane.env`; do not merge them over inherited cockpit roots.
+**(5)** Check what compute budget your
 fan-out mechanism draws from before running a large batch, and monitor it via
 whatever live-progress view your runtime exposes, plus `list --watch` on the lanes'
 branches/PRs.
 
-Note on the `env` field: if your fan-out or background-agent tool doesn't expose a
-parameter to inject env vars into the spawned lane's process, `DEVKIT_REFUSE_
-UNSANDBOXED_STATE` cannot be force-set through that launch path the way
-`prompt_preamble` can be force-injected into the prompt text. In the normal case this
-is moot: the marker already resolves the sandbox, so the guard never fires. The `env`
-field exists for launchers that DO control the spawned process's environment (a
-custom subprocess-based batch driver) — read it and export it there. Treat this as a
-documented, conservative gap, not a silent one.
+The `env` field is mandatory for unattended launches. If a fan-out/background-agent
+tool cannot replace the spawned process's environment, do not use it for a headless
+state-writing lane; use an env-capable subprocess/fresh terminal or keep the work
+attended. Prompt injection cannot override an inherited `DEVKIT_STATE_ROOT`.
 
 **Fallback — a single background sub-agent per lane (model-only).** Parse the
 descriptor and spawn a background sub-agent whose prompt is **the `prompt_preamble`
@@ -392,7 +403,25 @@ interactive paths are unaffected.
 
 ## Finishing a session
 
-After its PR has merged:
+From the cockpit, drive a lane's review loop through the scope-aware wrapper so its
+seen-set and receipt land in the same sandbox the merge gate reads:
+
+```bash
+<engine-dir>/dev_session.sh pr-watch <scope> --json
+<engine-dir>/dev_session.sh pr-watch <scope> --mark-seen
+<engine-dir>/dev_session.sh pr-watch <scope> --record-review <source> --head <polled-sha>
+```
+
+The receipt command uses the `head` from the exact poll whose diff was independently
+reviewed and refuses if a push landed before recording. For a `self` lane, once this
+scope-aware `pr-watch` has converged, merge through the deterministic class gate:
+
+```bash
+<engine-dir>/dev_session.sh merge <scope>
+```
+
+For an `operator` lane, the wrapper refuses; the operator performs the reviewed,
+signed-off merge directly. After its PR has merged:
 
 ```bash
 <engine-dir>/dev_session.sh rm <scope>

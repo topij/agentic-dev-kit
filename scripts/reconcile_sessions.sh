@@ -26,7 +26,7 @@
 # prints before writing its block.
 #
 # Usage:
-#   scripts/reconcile_sessions.sh <scope|branch> [...] [--prefix dev] [--base main]
+#   scripts/reconcile_sessions.sh <scope|branch> [...] [--prefix <configured>] [--base <configured>]
 #   scripts/reconcile_sessions.sh --match '<glob>' [--match '<glob>'] ...
 #   scripts/reconcile_sessions.sh                      # discover in-flight lanes
 #
@@ -54,11 +54,23 @@ REPO_ROOT="$(devkit_find_repo_root "$SCRIPT_DIR")" || {
     echo "[reconcile] error: no .git repository found above $SCRIPT_DIR" >&2
     exit 64
 }
+CONFIG_FILE="$REPO_ROOT/config/dev-model.yaml"
+CONFIGURED_PROTECTED_BRANCH="$(devkit_config_scalar "$CONFIG_FILE" vcs "" protected_branch || true)"
+[[ -n "$CONFIGURED_PROTECTED_BRANCH" ]] || {
+  echo "[reconcile] error: config must define vcs.protected_branch" >&2
+  exit 1
+}
+git check-ref-format --branch "$CONFIGURED_PROTECTED_BRANCH" >/dev/null 2>&1 || {
+  echo "[reconcile] error: invalid vcs.protected_branch '$CONFIGURED_PROTECTED_BRANCH'" >&2
+  exit 1
+}
+DEFAULT_BASE="${DEV_SESSION_BASE:-$CONFIGURED_PROTECTED_BRANCH}"
+CONFIGURED_PREFIX="$(devkit_config_scalar "$CONFIG_FILE" vcs "" dev_branch_prefix || true)"
 
 # Sessions container — mirror dev_session.sh so no-arg discovery lines up with
 # the sibling that created the sessions.
 SESSIONS_DIR="${DEVKIT_SESSIONS_DIR:-$(dirname "$REPO_ROOT")/dev-model-sessions}"
-DEFAULT_PREFIX="${DEV_SESSION_PREFIX:-dev}"
+DEFAULT_PREFIX="${DEV_SESSION_PREFIX:-${CONFIGURED_PREFIX:-dev}}"
 
 _die() {
     echo "[reconcile] error: $*" >&2
@@ -155,7 +167,7 @@ _add_lane() {
 }
 
 cmd_reconcile() {
-    local prefix="$DEFAULT_PREFIX" base="main"
+    local prefix="$DEFAULT_PREFIX" base="$DEFAULT_BASE"
     local scopes=() match_globs=()
     while [[ $# -gt 0 ]]; do
         case "$1" in

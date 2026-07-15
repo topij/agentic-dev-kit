@@ -189,9 +189,10 @@ branch, and `DEVKIT_STATE_ROOT` state sandbox. The rule that makes it safe is
 edited by both (the sandbox prevents *state* collisions, not *source* merge conflicts).
 
 The flow: `parallel plan` clusters candidate work by footprint → launch a lane per
-disjoint cluster (`scripts/dev_session.sh new`) → each lane works to a draft-green PR →
-the cockpit reconciles every lane and merges. Each lane gets an effort tier and a merge
-class (self-merge vs operator-merge) assigned at plan time.
+disjoint cluster (`scripts/dev_session.sh new … --merge-class self|operator`) → each
+lane works to a draft-green PR → the cockpit reconciles every lane and completes the
+recorded merge path. A self-merge must go through `scripts/dev_session.sh merge`; an
+operator-merge remains an explicit cockpit decision.
 
 Full walkthrough — the lane contract, the live board, reconciliation, and a worked
 example — in **[`docs/parallel-dev.md`](docs/parallel-dev.md)**. For step-by-step

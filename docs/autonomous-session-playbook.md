@@ -70,13 +70,21 @@ Follow this top to bottom, per ticket.
   bot's last review rather than waiting indefinitely for a re-review that may not come.
   Fix real findings (commit + push → re-watch); reply-with-reason to nitpicks you keep. If
   every configured bot is unavailable (rate-limited, no credits, skipped the PR), run
-  the current runtime's `review.fallback_commands` value as the substitute independent pass — a blocked bot is not a
-  waiver on review.
+  the current runtime's `review.fallback_commands` value as the substitute independent
+  pass, handle its findings, then bind that evidence to the current head with
+  `uv run <engine-dir>/pr_watch.py <PR#> --record-review "fallback:<runtime>" --head
+  <polled-sha>` (use the `head` from the exact reviewed poll; a lane uses the
+  scope-aware `dev_session.sh pr-watch` wrapper) — a blocked bot is not a waiver on
+  review.
 
 ### Merge + close out
 
 - Merge only once checks are green, the PR is mergeable, and every finding has been fixed
-  or explicitly addressed:
+  or explicitly addressed. A lane created by `dev_session.sh` must honor its persisted
+  merge class at act time: `self` lanes merge through
+  `<engine-dir>/dev_session.sh merge <scope>` (which re-polls `pr-watch`); missing,
+  unknown, or `operator` metadata refuses autonomous merge and requires operator
+  sign-off. For non-lane/operator merges:
   ```sh
   gh pr merge <PR#> --squash --delete-branch
   git checkout <protected_branch> && git pull --ff-only origin <protected_branch>
