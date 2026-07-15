@@ -3,12 +3,13 @@
 # requires-python = ">=3.12"
 # dependencies = ["pyyaml"]
 # ///
-"""Sweep old session blocks out of ``docs/handoff.md`` into ``docs/handoff-history.md``.
+"""Sweep old session blocks out of the live handoff into its history document.
 
 The living handoff doc keeps only the most-recent handful of session blocks —
-whether written as ``## Latest session`` / ``## Earlier session`` or as a bare
-dated ``## June 5 Fri (cont.) — …`` heading; everything older belongs in the
-append-only ``handoff-history.md`` Session log. Doing this by hand is
+whether written as ``## Latest session`` / ``## Earlier session``, as a bare
+dated ``## June 5 Fri (cont.) — …`` heading, or as ``###`` entries below a
+``## Recent sessions`` section; everything older belongs in the append-only
+handoff history. Doing this by hand is
 error-prone (an unswept handoff doc balloons over time, making every session
 start more expensive), so this script makes it a **deterministic, idempotent**
 operation: keep the newest ``--keep`` blocks live, move the rest verbatim into
@@ -60,6 +61,8 @@ _MONTHS = (
 )
 _DATED_SESSION_RE = re.compile(rf"^## (?:{_MONTHS}) \d{{1,2}}\b")
 DEFAULT_KEEP = 6
+RECENT_SESSIONS_HEADING = "## Recent sessions"
+HISTORY_SECTION_HEADINGS = ("## Session log", "## Recent sessions (archived)")
 
 POINTER = [
     "> Older session entries (below the live blocks above) live in [`handoff-history.md`](handoff-history.md).\n",
@@ -86,7 +89,8 @@ def _is_session_heading(line: str) -> bool:
 
 
 def _is_sep(line: str) -> bool:
-    return line.strip().startswith("_") and set(line.strip()) == {"_"}
+    stripped = line.strip()
+    return len(stripped) >= 3 and set(stripped) in ({"_"}, {"-"})
 
 
 def split_plan(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
@@ -96,15 +100,43 @@ def split_plan(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
     session blocks plus any inter-block separators and the existing pointer;
     ``tail`` is the first non-session ``##`` heading (standing sections) onward.
     """
-    try:
-        sess_start = next(i for i, ln in enumerate(lines) if _is_session_heading(ln))
-    except StopIteration as exc:  # pragma: no cover - defensive
-        raise ValueError("no '## Latest/Earlier session' block found in handoff doc") from exc
+    sess_start = next((i for i, ln in enumerate(lines) if _is_session_heading(ln)), None)
+    if sess_start is not None:
+        standing = next(
+            (
+                i
+                for i, ln in enumerate(lines)
+                if i > sess_start
+                and ln.startswith("## ")
+                and not _is_session_heading(ln)
+            ),
+            len(lines),
+        )
+        return lines[:sess_start], lines[sess_start:standing], lines[standing:]
+
+    recent_start = next(
+        (
+            i
+            for i, ln in enumerate(lines)
+            if ln.rstrip("\n") == RECENT_SESSIONS_HEADING
+        ),
+        None,
+    )
+    if recent_start is None:
+        raise ValueError(
+            "no session blocks or '## Recent sessions' section found in handoff doc"
+        )
     standing = next(
-        (i for i, ln in enumerate(lines) if i > sess_start and ln.startswith("## ") and not _is_session_heading(ln)),
+        (
+            i
+            for i, ln in enumerate(lines)
+            if i > recent_start and ln.startswith("## ")
+        ),
         len(lines),
     )
-    return lines[:sess_start], lines[sess_start:standing], lines[standing:]
+    # Keep the section heading in the head; parse_blocks handles its ``###``
+    # entries and rebuild_plan preserves this layout without adding a pointer.
+    return lines[: recent_start + 1], lines[recent_start + 1 : standing], lines[standing:]
 
 
 def parse_blocks(region: list[str]) -> list[list[str]]:
@@ -114,9 +146,16 @@ def parse_blocks(region: list[str]) -> list[list[str]]:
     so the pointer the previous run wrote never gets absorbed into a block.
     """
     blocks: list[list[str]] = []
+    uses_recent_sections = not any(_is_session_heading(line) for line in region)
+
+    def is_block_heading(line: str) -> bool:
+        if uses_recent_sections:
+            return line.startswith("### ")
+        return _is_session_heading(line)
+
     cur: list[str] | None = None
     for line in region:
-        if _is_session_heading(line):
+        if is_block_heading(line):
             if cur is not None:
                 blocks.append(cur)
             cur = [line]
@@ -165,6 +204,12 @@ def trim_megaline(head: list[str], keep: int) -> list[str]:
 
 def rebuild_plan(head: list[str], keep_blocks: list[list[str]], tail: list[str], keep: int) -> list[str]:
     """Reassemble the handoff doc from the trimmed head, kept blocks, fresh pointer, and tail."""
+    if head and head[-1].rstrip("\n") == RECENT_SESSIONS_HEADING:
+        body: list[str] = ["\n"]
+        for block in keep_blocks:
+            body += block + ["\n", "---\n", "\n"]
+        return head + body + tail
+
     head = trim_megaline(head, keep)
     body: list[str] = []
     for block in keep_blocks:
@@ -174,11 +219,16 @@ def rebuild_plan(head: list[str], keep_blocks: list[list[str]], tail: list[str],
 
 
 def insert_into_history(history: list[str], moved: list[list[str]]) -> list[str]:
-    """Insert demoted blocks at the top of the history doc's Session log."""
+    """Insert demoted blocks at the top of a recognized history session section."""
     try:
-        sl = next(i for i, ln in enumerate(history) if ln.rstrip("\n") == "## Session log")
+        sl = next(
+            i
+            for i, ln in enumerate(history)
+            if ln.rstrip("\n") in HISTORY_SECTION_HEADINGS
+        )
     except StopIteration as exc:
-        raise ValueError("history doc has no '## Session log' section") from exc
+        expected = "' or '".join(HISTORY_SECTION_HEADINGS)
+        raise ValueError(f"history doc has no '{expected}' section") from exc
     # skip the blank line after the header, insert before the first entry
     insert_at = sl + 1
     while insert_at < len(history) and history[insert_at].strip() == "":

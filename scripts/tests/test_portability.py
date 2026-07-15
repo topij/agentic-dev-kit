@@ -131,6 +131,73 @@ def test_archive_defaults_follow_configured_paths(tmp_path: Path) -> None:
     assert history == repo / "saved" / "handoff-history.md"
 
 
+def test_archive_supports_recent_sessions_layout(tmp_path: Path) -> None:
+    archive = _load_module(
+        "archive_recent_sessions", ENGINE_DIR / "archive_plan_sessions.py"
+    )
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    plan.write_text(
+        """# Handoff
+
+## Last updated
+
+Current state.
+
+## Recent sessions
+
+### 2026-07-03 — Newest
+
+Newest body.
+
+---
+
+### 2026-07-02 — Middle
+
+Middle body.
+
+---
+
+### 2026-07-01 — Oldest
+
+Oldest body.
+
+---
+
+## Strategic direction
+
+Standing content.
+""",
+        encoding="utf-8",
+    )
+    history.write_text(
+        """# Handoff history
+
+## Recent sessions (archived)
+
+### 2026-06-30 — Existing
+
+Existing body.
+""",
+        encoding="utf-8",
+    )
+
+    result = archive.main(
+        ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result == 0
+    updated_plan = plan.read_text(encoding="utf-8")
+    updated_history = history.read_text(encoding="utf-8")
+    assert "### 2026-07-03 — Newest" in updated_plan
+    assert "### 2026-07-02 — Middle" in updated_plan
+    assert "### 2026-07-01 — Oldest" not in updated_plan
+    assert "## Strategic direction\n\nStanding content." in updated_plan
+    assert updated_history.index("### 2026-07-01 — Oldest") < updated_history.index(
+        "### 2026-06-30 — Existing"
+    )
+
+
 def test_python_engine_root_walk_supports_namespacing(tmp_path: Path) -> None:
     repo = tmp_path / "project"
     nested_script = repo / "scripts" / "devkit" / "pr_watch.py"
