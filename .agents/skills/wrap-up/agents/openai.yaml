@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wrap Up"
+  short_description: "Close a session and preserve context"
+  default_prompt: "Use $wrap-up to record what shipped, capture friction, and leave a clear next step."

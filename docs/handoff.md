@@ -1,7 +1,7 @@
 # my-project — Living Plan (Handoff)
 
 > **Forward-looking handoff (Principle #1).** Read this at the start of every session
-> (`/session-start`); update it at the end (`/wrap-up`). This file — not an agent's
+> (`session-start`); update it at the end (`wrap-up`). This file — not an agent's
 > memory, not a scratch note — is the single source of truth for what's done, in
 > progress, and next.
 >
@@ -19,7 +19,7 @@ Last updated: YYYY-MM-DD — <one-line theme of the most recent session>
 - <what was decided>
 - <what was learned>
 
-▶ Next: <the single clearest next step — what the next `/session-start` should pick up.>
+▶ Next: <the single clearest next step — what the next `session-start` should pick up.>
 
 ______________________________________________________________________
 

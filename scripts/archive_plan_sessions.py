@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
-# dependencies = []
+# dependencies = ["pyyaml"]
 # ///
 """Sweep old session blocks out of ``docs/handoff.md`` into ``docs/handoff-history.md``.
 
@@ -23,10 +23,10 @@ nothing to move is a clean no-op.
 
 Usage:
 
-    python3 scripts/archive_plan_sessions.py                 # keep 6, apply
-    python3 scripts/archive_plan_sessions.py --keep 5
-    python3 scripts/archive_plan_sessions.py --dry-run        # report only
-    python3 scripts/archive_plan_sessions.py --plan docs/handoff.md --history docs/handoff-history.md
+    uv run scripts/archive_plan_sessions.py                  # keep 6, apply
+    uv run scripts/archive_plan_sessions.py --keep 5
+    uv run scripts/archive_plan_sessions.py --dry-run         # report only
+    uv run scripts/archive_plan_sessions.py --plan docs/handoff.md --history docs/handoff-history.md
 
 Exit codes:
     0 — applied (or nothing to do, or dry-run)
@@ -40,17 +40,10 @@ import re
 import sys
 from pathlib import Path
 
-def _find_repo_root(start: Path) -> Path:
-    """Nearest ancestor with a ``.git`` marker (so this keeps working when the kit
-    is vendored under a nested dir, e.g. scripts/devkit/); falls back to the
-    script's grandparent if no marker is found."""
-    for candidate in (start, *start.parents):
-        if (candidate / ".git").exists():
-            return candidate
-    return start.parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from devmodel_config import _repo_root, load_config, resolve_path  # noqa: E402
 
-
-REPO_ROOT = _find_repo_root(Path(__file__).resolve())
+REPO_ROOT = _repo_root()
 SEP = "______________________________________________________________________\n"
 SESSION_PREFIXES = ("## Latest session", "## Earlier session", "## Session — ")
 # Recent sessions may write *dated* headings (`## June 5 Fri (cont.) — …`) or a
@@ -75,6 +68,17 @@ POINTER = [
     SEP,
     "\n",
 ]
+
+
+def configured_paths(
+    root: Path = REPO_ROOT, config_path: Path | None = None
+) -> tuple[Path, Path]:
+    """Resolve the live handoff and history paths from ``dev-model.yaml``."""
+    config = load_config(config_path or root / "config" / "dev-model.yaml")
+    return (
+        resolve_path(config, "paths.handoff", root=root),
+        resolve_path(config, "paths.handoff_history", root=root),
+    )
 
 
 def _is_session_heading(line: str) -> bool:
@@ -191,11 +195,12 @@ def main(argv: list[str] | None = None) -> int:
     Returns 0 on success / no-op / dry-run, 2 on usage error, unparseable handoff
     structure, or a failed write (the handoff doc is rolled back in that case).
     """
+    default_plan, default_history = configured_paths()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--keep", type=int, default=DEFAULT_KEEP, help="live blocks to keep")
-    parser.add_argument("--plan", type=Path, default=REPO_ROOT / "docs/handoff.md", help="living handoff doc")
+    parser.add_argument("--plan", type=Path, default=default_plan, help="living handoff doc")
     parser.add_argument(
-        "--history", type=Path, default=REPO_ROOT / "docs/handoff-history.md", help="handoff history/archive doc"
+        "--history", type=Path, default=default_history, help="handoff history/archive doc"
     )
     parser.add_argument("--dry-run", action="store_true", help="report only, write nothing")
     args = parser.parse_args(argv)

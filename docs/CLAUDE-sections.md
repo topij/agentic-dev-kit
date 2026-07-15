@@ -65,7 +65,7 @@ infra failure) — then report the specific blocker and ask.
 
 **A review bot being unavailable is not a reason to skip review.** When a configured bot
 can't review an otherwise-ready PR — rate-limited, out of credits, or it silently skipped
-the PR — run `review.fallback_command` as the independent review pass and triage its
+the PR — run `review.fallback_commands.claude` as the independent review pass and triage its
 findings the same way (fix if confident and small, reply-with-reason otherwise). A blocked
 review bot is **not** a waiver: the "clean" bar still requires one independent review
 pass — bot *or* the fallback command.

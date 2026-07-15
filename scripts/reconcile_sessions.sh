@@ -48,7 +48,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=scripts/lib/repo_root.sh
+source "$SCRIPT_DIR/lib/repo_root.sh"
+REPO_ROOT="$(devkit_find_repo_root "$SCRIPT_DIR")" || {
+    echo "[reconcile] error: no .git repository found above $SCRIPT_DIR" >&2
+    exit 64
+}
 
 # Sessions container — mirror dev_session.sh so no-arg discovery lines up with
 # the sibling that created the sessions.

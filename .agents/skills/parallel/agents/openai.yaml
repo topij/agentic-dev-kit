@@ -1,0 +1,4 @@
+interface:
+  display_name: "Parallel Development"
+  short_description: "Plan and coordinate isolated work lanes"
+  default_prompt: "Use $parallel to plan or coordinate isolated development lanes with disjoint file ownership."

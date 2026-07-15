@@ -3,7 +3,7 @@ the repo lacks, point the config at conventions it already has, and never clobbe
 file. The counterpart to `init.sh` (which assumes a fresh/near-empty repo). Runs
 non-destructively on a branch; the operator confirms the plan before anything is written.
 
-> **Why a skill, not `cp -r`.** A blind copy-in clobbers an existing `.claude/`, config,
+> **Why a skill, not `cp -r`.** A blind copy-in clobbers existing agent adapters, config,
 > plan doc, and CI. Adopting into a mature repo is a *judgment* pass — which pieces are
 > already present, where the scripts should live, what the config should point at — so
 > it's a guided skill, not a script.
@@ -25,7 +25,8 @@ of it from the target repo's root.
 Run these probes and record the answers — they drive the plan:
 
 - **Living plan?** `ls ROADMAP.md PLAN.md docs/plan.md docs/handoff.md handoff.md 2>/dev/null`. If one exists, the repo already practices Principle #1 — you'll point the kit at it, not add a second plan.
-- **Skill collisions?** `ls .claude/commands/ 2>/dev/null` — which of the kit's skills (`session-start`, `wrap-up`, `parallel`, `pr-watch`, `triage-friction-log`, `post-merge-systemize`) already exist? Keep theirs; install only the rest.
+- **Skill collisions?** Inspect `.claude/commands/` and `.agents/skills/`. Which of the kit's workflows already exist for either runtime? Keep the adopter's implementation and install only the missing adapters.
+- **Persistent agent rules?** Read `AGENTS.md` and `CLAUDE.md` when present. Merge the relevant snippets; never replace either file.
 - **Config dir?** `ls -d config 2>/dev/null` — where `config/dev-model.yaml` goes (repo root if there's no `config/`).
 - **`scripts/` layout?** `ls scripts 2>/dev/null` — if it's organized into subdirs, or has files that collide with the kit's script names, vendor the kit's under `scripts/devkit/`; otherwise `scripts/` is fine.
 - **Tracker?** `gh issue list -L1 2>/dev/null` succeeds → GitHub Issues; else look for a Linear/Jira setup. Sets `tracker.backend`.
@@ -40,6 +41,7 @@ Present a table the operator confirms **before any write**:
 |---|---|---|
 | Living plan (#1) | e.g. has `ROADMAP.md` | **config-point** `paths.handoff` → it; keep it (or offer to rename → `handoff.md`) |
 | `wrap-up` skill | has its own | **skip** |
+| Codex adapters | none | **install** under `.agents/skills/` |
 | friction-log (#2) | none | **install** |
 | parallel + `state_paths` (#3) | none | **install** (under `scripts/devkit/` if `scripts/` is organized) |
 | `pr-watch` (#5), safety rule (#6) | none | **install** |
@@ -57,20 +59,21 @@ git checkout -b chore/adopt-agentic-dev-kit
 
 For each piece, **copy only if the target doesn't already exist**:
 
-- **Skills** → `.claude/commands/` (skip any that collide with an existing one).
-- **Engine scripts** → `scripts/devkit/` (or `scripts/` if clean). If you namespaced them, rewrite the `scripts/…` references in the copied skills to match (`sed -i '' 's#scripts/#scripts/devkit/#g' .claude/commands/<skill>.md`). The scripts find the repo root by walking up for `.git`, so they work at any depth.
-- **`.claude/rules/safety-critical-changes.md`** (skip if present).
-- **`config/dev-model.yaml`** — stamp the Step-1 values: `paths.handoff` → the existing plan (and `paths.handoff_history` / the `doc_budgets` entry to match), `tracker`, `review`, `models`.
+- **Shared workflows** → `docs/agentic-dev-kit/workflows/`.
+- **Runtime adapters** → `.claude/commands/` and `.agents/skills/` (skip any target that collides with an existing workflow).
+- **Engine scripts** → `scripts/devkit/` (or `scripts/` if clean). Set `paths.engines` to that directory; do not rewrite prompt files. The scripts find the repo root by walking up for `.git`, so they work at any depth.
+- **Safety doctrine** → `docs/agentic-dev-kit/safety-critical-changes.md`; install the thin `.claude/rules/safety-critical-changes.md` adapter when absent and merge `docs/AGENTS-sections.md` into an existing `AGENTS.md` when applicable.
+- **`config/dev-model.yaml`** — stamp the Step-1 values: `paths.handoff` → the existing plan (and `paths.handoff_history` / the `doc_budgets` entry to match), `paths.engines`, `runtime`, `tracker`, `review`, and `models`.
 - **`friction-log.md`** (seed only if absent).
 - Append `state/` and `.devkit_state_root` to `.gitignore` if missing.
-- Copy `PRINCIPLES.md` + `docs/parallel-dev.md` under `docs/agentic-dev-kit/` for reference.
+- Copy `PRINCIPLES.md`, `docs/parallel-dev.md`, and the shared workflow/safety docs under `docs/agentic-dev-kit/` for reference.
 
 **Never overwrite an existing file.** If something you didn't anticipate collides, stop
 and ask the operator.
 
 ## Step 4 — Verify
 
-- `state_paths` tests: `cd scripts/devkit/lib && python -m pytest state_paths/tests/ -q` — all pass (proves the sandbox resolves from the new location).
+- Portability tests: run `python -m pytest scripts/devkit/lib/state_paths/tests/ scripts/devkit/tests/ -q` (adjust the prefix when engines live directly under `scripts/`).
 - `check_doc_budget`: run it — it should read the configured plan via `config/dev-model.yaml`.
 - Confirm the repo's CI/lint scope **skips** the kit files (or add a kit-dir exclude if lint is repo-wide).
 
@@ -84,5 +87,6 @@ issue upstream. This first entry *is* Principle #2 in action.
 ## Step 6 — Summarize + hand off
 
 Report what was **installed / skipped / config-pointed**, open a **draft PR**, and
-suggest the operator's first `/session-start`. Leave the merge to the operator — an
+suggest the operator's first `/session-start` (Claude) or `$session-start` (Codex).
+Leave the merge to the operator — an
 adoption touches a lot of the repo and deserves a human review pass.

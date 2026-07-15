@@ -13,7 +13,7 @@
 # runs in zero sessions until something sets it. `new` is what finally sets it.
 #
 # Usage:
-#   scripts/dev_session.sh new <scope> [--base main] [--prefix dev] [--branch <full>] [--force] [--headless]
+#   scripts/dev_session.sh new <scope> [--base main] [--prefix dev] [--branch <full>] [--force] [--headless] [--runtime <name>] [--launcher <command>]
 #   scripts/dev_session.sh list [--watch [interval]]
 #   scripts/dev_session.sh path <scope>
 #   scripts/dev_session.sh rm <scope> [--force] [--keep-branch]
@@ -26,11 +26,12 @@
 # before.
 #
 # `new` prints a copy-paste line that cd's into the worktree, exports the
-# sandbox, and launches claude — or `source <session>/activate` in any shell.
+# sandbox, and prints a runtime-configured launch command — or `source
+# <session>/activate` in any shell.
 #
 # `new --headless` instead writes a sticky `<worktree>/.devkit_state_root`
 # marker (the sandbox path) and prints a JSON descriptor to stdout — so an
-# unattended launcher (background Agent / Claude web) can point an agent at the
+# unattended launcher (background agent / cloud runtime) can point an agent at the
 # worktree and its state/ writes isolate via the marker, no env export needed.
 # Diagnostics go to stderr in this mode so stdout is clean JSON. The
 # descriptor also carries `prompt_preamble` — the canonical lane-contract text
@@ -44,7 +45,7 @@
 #
 # `print-contract` prints ONLY the lane-contract text (no JSON, no worktree
 # side effects) — for a launcher that wants the raw preamble once and reuses it
-# across many lanes (e.g. a `/parallel`-style Workflow fan-out path), or for
+# across many lanes (e.g. a parallel-workflow fan-out path), or for
 # eyeballing the current contract.
 #
 # Sessions live outside the repo (a sibling `dev-model-sessions/` dir by
@@ -54,7 +55,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=scripts/lib/repo_root.sh
+source "$SCRIPT_DIR/lib/repo_root.sh"
+REPO_ROOT="$(devkit_find_repo_root "$SCRIPT_DIR")" || {
+    echo "[dev-session] error: no .git repository found above $SCRIPT_DIR" >&2
+    exit 1
+}
+ENGINE_DIR_REL="${SCRIPT_DIR#"$REPO_ROOT"/}"
 
 # Sessions container (sibling of the repo by default). Each session is one
 # subdir holding wt/ (worktree) + state/ (sandbox) + activate (env snippet).
@@ -90,16 +97,29 @@ HEADLESS=0
 # bind a freshly spawned lane. Keep this the SINGLE source of the contract
 # text — any doc that quotes it should quote it, not restate it independently.
 _lane_contract() {
-    cat <<'CONTRACT'
+    local handoff friction protected
+    local escaped_engine_dir escaped_handoff escaped_friction escaped_protected
+    handoff="$(_config_scalar paths "" handoff)"
+    friction="$(_config_scalar paths "" friction_log)"
+    protected="$(_config_scalar vcs "" protected_branch)"
+    escaped_engine_dir="$(_sed_replacement "$ENGINE_DIR_REL")"
+    escaped_handoff="$(_sed_replacement "${handoff:-<configured handoff>}")"
+    escaped_friction="$(_sed_replacement "${friction:-<configured friction log>}")"
+    escaped_protected="$(_sed_replacement "${protected:-the protected branch}")"
+    sed \
+        -e "s|@ENGINE_DIR@|$escaped_engine_dir|g" \
+        -e "s|@HANDOFF@|$escaped_handoff|g" \
+        -e "s|@FRICTION_LOG@|$escaped_friction|g" \
+        -e "s|@PROTECTED_BRANCH@|$escaped_protected|g" <<'CONTRACT'
 LANE CONTRACT (binding):
 - Actively poll your PR's CI at a bounded cadence (e.g. `gh pr checks <PR#>` every few minutes, capped around 30 min) until it is fully green. Never stop to idly wait on a "monitor", a timer, or someone else's watcher — you are the one polling.
 - Your run ends ONLY at the terminal state. Never stop early to wait for a watcher, monitor, or timer of any kind — if you need to wait on anything, poll it yourself with a bounded until-loop.
 - Stop at draft-PR-green and hand off. Open your PR as a DRAFT on first push and leave it in draft. Do not mark it ready, do not merge — the cockpit owns ready-for-review, the review pass, and the terminal merge.
-- `gh`'s draft bit is flaky: after `gh pr create --draft`, run `uv run scripts/pr_watch.py <pr> --assert-draft` — a create that silently lands non-draft triggers premature bot review.
-- Report every finding, decision, and open question in your FINAL TEXT response — that is the only channel back to the cockpit. Never rely on a peer SendMessage to another agent to deliver results.
-- If you spawn sub-agents of your own, hold them to the same rule: they return findings in their final text, never via SendMessage to a peer — peer messaging by type-name is unreachable from a spawned sub-agent.
-- Never edit docs/handoff.md or docs/friction-log.md — those are cockpit-owned shared narrative files. Put your handoff (what shipped, lessons, deferrals) in the PR body instead.
-- Run `git branch --show-current` before every commit to confirm you are on your own lane branch, never main.
+- `gh`'s draft bit is flaky: after `gh pr create --draft`, run `uv run @ENGINE_DIR@/pr_watch.py <pr> --assert-draft` — a create that silently lands non-draft triggers premature bot review.
+- Report every finding, decision, and open question in your FINAL TEXT response — that is the durable channel back to the cockpit. Never rely exclusively on a runtime-specific peer-message mechanism.
+- If you spawn sub-agents of your own, hold them to the same rule: they return findings in their final text rather than relying exclusively on peer messages.
+- Never edit @HANDOFF@ or @FRICTION_LOG@ — those are cockpit-owned shared narrative files. Put your handoff (what shipped, lessons, deferrals) in the PR body instead.
+- Run `git branch --show-current` before every commit to confirm you are on your own lane branch, never @PROTECTED_BRANCH@.
 CONTRACT
 }
 
@@ -136,6 +156,57 @@ _slug_ok() {
     [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]]
 }
 
+# Read one scalar from the kit's deliberately simple, hand-authored YAML config.
+# This avoids adding a YAML dependency to the shell launcher. It supports exactly
+# the top-level/subsection/scalar shape used by runtime.default and
+# runtime.launchers.<name>.
+_config_scalar() {
+    local section="$1" subsection="$2" key="$3"
+    [[ -n "$subsection" ]] && subsection="$subsection:"
+    awk -v want_section="$section:" -v want_subsection="$subsection" -v want_key="$key:" '
+        function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
+        /^[A-Za-z_][A-Za-z0-9_]*:[[:space:]]*$/ {
+            current_section = trim($0); current_subsection = ""; next
+        }
+        /^  [A-Za-z_][A-Za-z0-9_]*:[[:space:]]*$/ {
+            current_subsection = trim($0); next
+        }
+        current_section == want_section && current_subsection == want_subsection {
+            line = $0
+            stripped = line
+            sub(/^[[:space:]]+/, "", stripped)
+            if (index(stripped, want_key) == 1) {
+                value = substr(stripped, length(want_key) + 1)
+                sub(/[[:space:]]+#.*/, "", value)
+                value = trim(value)
+                gsub(/^"|"$/, "", value)
+                print value
+                exit
+            }
+        }
+    ' "$REPO_ROOT/config/dev-model.yaml" 2>/dev/null
+}
+
+_sed_replacement() {
+    local value="$1"
+    value="${value//\\/\\\\}"
+    value="${value//&/\\&}"
+    value="${value//|/\\|}"
+    printf '%s' "$value"
+}
+
+_resolve_launcher() {
+    local requested_runtime="$1" requested_launcher="$2"
+    local runtime launcher
+    runtime="${requested_runtime:-${DEVKIT_RUNTIME:-$(_config_scalar runtime "" default)}}"
+    launcher="${requested_launcher:-${DEVKIT_AGENT_LAUNCHER:-}}"
+    if [[ -z "$launcher" && -n "$runtime" && "$runtime" != "none" ]]; then
+        launcher="$(_config_scalar runtime launchers "$runtime")"
+    fi
+    [[ "$launcher" == "none" ]] && launcher=""
+    printf '%s\t%s\n' "${runtime:-none}" "$launcher"
+}
+
 # True when $1 is a branch `rm` must never delete, regardless of merged status:
 # the session's base branch, or the universal mainlines main/master. The last
 # line of defense against a worktree HEAD that wandered onto main after a
@@ -151,6 +222,7 @@ _is_protected_branch() {
 
 cmd_new() {
     local scope="" base="main" prefix="$DEFAULT_PREFIX" branch="" force=0
+    local requested_runtime="" requested_launcher="" runtime="" launcher=""
     HEADLESS=0
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -159,13 +231,16 @@ cmd_new() {
             --branch) [[ $# -ge 2 ]] || _die "--branch needs a value"; branch="$2"; shift 2 ;;
             --force) force=1; shift ;;
             --headless) HEADLESS=1; shift ;;
+            --runtime) [[ $# -ge 2 ]] || _die "--runtime needs a value"; requested_runtime="$2"; shift 2 ;;
+            --launcher) [[ $# -ge 2 ]] || _die "--launcher needs a value"; requested_launcher="$2"; shift 2 ;;
             -*) _die "unknown flag: $1" ;;
             *) [[ -z "$scope" ]] && scope="$1" && shift || _die "unexpected arg: $1" ;;
         esac
     done
-    [[ -n "$scope" ]] || _die "usage: dev_session.sh new <scope> [--base main] [--prefix dev] [--branch <full>] [--force] [--headless]"
+    [[ -n "$scope" ]] || _die "usage: dev_session.sh new <scope> [--base main] [--prefix dev] [--branch <full>] [--force] [--headless] [--runtime <name>] [--launcher <command>]"
     _slug_ok "$scope" || _die "scope must be a lowercase slug ([a-z0-9-]): got '$scope'"
     [[ -z "$branch" ]] && branch="${prefix}/${scope}"
+    IFS=$'\t' read -r runtime launcher <<< "$(_resolve_launcher "$requested_runtime" "$requested_launcher")"
 
     # Refuse a protected branch as the session branch BEFORE any side effect. `--branch`
     # is unvalidated, so `new x --branch main --force` would otherwise tear the existing
@@ -286,11 +361,11 @@ ACTIVATE
         # is the map of env vars the launcher MUST export into the lane's
         # process — currently just the fail-closed sandbox guard.
         python3 - "$scope" "$branch" "$worktree_abs" "$sandbox_abs" "$repo_root_abs" "$base" \
-            "$(_lane_contract)" "$REFUSE_UNSANDBOXED_ENV_VALUE" >&3 <<'PY'
+            "$(_lane_contract)" "$REFUSE_UNSANDBOXED_ENV_VALUE" "$runtime" "$launcher" >&3 <<'PY'
 import json
 import sys
 
-scope, branch, worktree, state_root, repo_root, base, prompt_preamble, refuse_unsandboxed = sys.argv[1:9]
+scope, branch, worktree, state_root, repo_root, base, prompt_preamble, refuse_unsandboxed, runtime, launcher = sys.argv[1:11]
 print(
     json.dumps(
         {
@@ -302,6 +377,8 @@ print(
             "base": base,
             "prompt_preamble": prompt_preamble,
             "env": {"DEVKIT_REFUSE_UNSANDBOXED_STATE": refuse_unsandboxed},
+            "runtime": runtime,
+            "launcher": launcher or None,
         }
     )
 )
@@ -312,11 +389,16 @@ PY
     echo
     echo "✓ session '$scope' ready."
     echo
-    echo "  Start it (copy-paste):"
-    echo "    cd \"$worktree\" && export DEVKIT_STATE_ROOT=\"$sandbox\" && export DEVKIT_ROOT=\"$REPO_ROOT\" && claude"
+    if [[ -n "$launcher" ]]; then
+        echo "  Start it with $runtime (copy-paste):"
+        echo "    cd \"$worktree\" && export DEVKIT_STATE_ROOT=\"$sandbox\" && export DEVKIT_ROOT=\"$REPO_ROOT\" && $launcher"
+    else
+        echo "  Activate it, then start your agent runtime:"
+        echo "    source \"$session_dir/activate\""
+    fi
     echo
     echo "  …or in any shell:  source \"$session_dir/activate\""
-    echo "  When done:         scripts/dev_session.sh rm $scope"
+    echo "  When done:         \"${BASH_SOURCE[0]}\" rm $scope"
 }
 
 # Gather one TAB-separated record per active session, the shared data behind both
@@ -344,7 +426,7 @@ _collect_board() {
             pr_ok=1
             # CI rollup → one glyph. The failing/pending vocabularies mirror
             # scripts/pr_watch.py:summarize_checks (the other cockpit CI surface) so
-            # the board and /pr-watch agree — notably TIMED_OUT/ACTION_REQUIRED render
+            # the board and pr-watch agree — notably TIMED_OUT/ACTION_REQUIRED render
             # ✗, not a misleading ✓, and EXPECTED/QUEUED render … (pending).
             parsed="$(printf '%s' "$pr_json" | python3 -c '
 import sys, json
@@ -559,7 +641,7 @@ cmd_path() {
 
 # Print ONLY the canonical lane-contract text (no JSON, no side effects) — for
 # a launcher that wants the raw preamble once and reuses it across every lane
-# in a batch (e.g. a /parallel-style Workflow fan-out path), rather than
+# in a batch (e.g. a parallel-workflow fan-out path), rather than
 # parsing it back out of each --headless JSON descriptor.
 cmd_print_contract() {
     _lane_contract
