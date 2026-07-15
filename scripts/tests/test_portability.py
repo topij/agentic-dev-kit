@@ -9,7 +9,17 @@ from types import ModuleType
 import yaml
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+ENGINE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _find_repo_root(start: Path) -> Path:
+    for candidate in (start, *start.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    raise RuntimeError(f"no repository root above {start}")
+
+
+REPO_ROOT = _find_repo_root(ENGINE_DIR)
 
 
 def _load_module(name: str, path: Path) -> ModuleType:
@@ -24,14 +34,14 @@ def _install_nested_shell_engines(repo: Path) -> Path:
     engine_dir = repo / "scripts" / "devkit"
     (engine_dir / "lib").mkdir(parents=True)
     shutil.copy2(
-        REPO_ROOT / "scripts" / "dev_session.sh", engine_dir / "dev_session.sh"
+        ENGINE_DIR / "dev_session.sh", engine_dir / "dev_session.sh"
     )
     shutil.copy2(
-        REPO_ROOT / "scripts" / "reconcile_sessions.sh",
+        ENGINE_DIR / "reconcile_sessions.sh",
         engine_dir / "reconcile_sessions.sh",
     )
     shutil.copy2(
-        REPO_ROOT / "scripts" / "lib" / "repo_root.sh",
+        ENGINE_DIR / "lib" / "repo_root.sh",
         engine_dir / "lib" / "repo_root.sh",
     )
     (repo / ".git").mkdir()
@@ -112,7 +122,7 @@ def test_archive_defaults_follow_configured_paths(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     archive = _load_module(
-        "archive_plan_sessions", REPO_ROOT / "scripts" / "archive_plan_sessions.py"
+        "archive_plan_sessions", ENGINE_DIR / "archive_plan_sessions.py"
     )
 
     plan, history = archive.configured_paths(root=repo, config_path=config_path)
@@ -126,7 +136,7 @@ def test_python_engine_root_walk_supports_namespacing(tmp_path: Path) -> None:
     nested_script = repo / "scripts" / "devkit" / "pr_watch.py"
     nested_script.parent.mkdir(parents=True)
     (repo / ".git").mkdir()
-    pr_watch = _load_module("pr_watch", REPO_ROOT / "scripts" / "pr_watch.py")
+    pr_watch = _load_module("pr_watch", ENGINE_DIR / "pr_watch.py")
 
     assert pr_watch._find_repo_root(nested_script) == repo
 
@@ -156,7 +166,7 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
 
 
 def test_shared_lane_contract_has_no_runtime_specific_peer_api() -> None:
-    script = (REPO_ROOT / "scripts" / "dev_session.sh").read_text(encoding="utf-8")
+    script = (ENGINE_DIR / "dev_session.sh").read_text(encoding="utf-8")
 
     assert "SendMessage" not in script
     assert "&& claude" not in script
