@@ -184,22 +184,33 @@ Each piece maps to one or more of the ten principles in
 |---|---|---|
 | `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan — read at session start, updated at session end. Older sessions sweep to the history file once it crosses a line budget. |
 | `docs/friction-log.md` + `docs/friction-log-archive.md` | #2 Friction flywheel | Append-only inbox for bugs and rough edges, triaged on a cadence: single incidents route down to your tracker, real patterns graduate up into a rule. |
+| `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above on adopt or upgrade — never overwrites one already in use. |
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
 | `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, and `pr-watch`. |
+| `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the `--headless` JSON descriptor, the lane-contract preamble, the fan-out recipe. |
 | `.claude/commands/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows. Claude also ships the project-specific `triage-friction-log`, `post-merge-systemize`, and `adopt` commands. |
 | `docs/AGENTS-sections.md` | #4, #5, #6 | Ready-to-merge persistent instructions for Codex adopters. |
 | `docs/CLAUDE-sections.md` | #4 Merge classes, #5 PR follow-through | Ready-to-paste CLAUDE.md sections: risk-based PR splitting, the mandatory watch-to-green loop, execution rules, the rules-layout convention. |
 | `docs/autonomous-session-playbook.md` | #4, #5, #7 | The full operating contract for operator-requested autonomous sessions — branch hygiene, sequencing, local gate, draft→ready, watch-and-fix to merge, self-merge policy. |
 | `docs/agentic-dev-kit/safety-critical-changes.md` | #6 Safety-critical doctrine | Shared doctrine for send-gates, destructive operations, and kill/recovery paths; bound through the Claude rule and the suggested `AGENTS.md` section. |
 | `config/dev-model.yaml` | #10 No hardcoding | The single config surface every skill and script reads instead of hardcoding a value. |
+| `scripts/lib/kitconfig.py` | #10 No hardcoding | Stdlib-only reader for `config/dev-model.yaml`, used where an engine must stay dependency-free (`pr_watch.py` declares zero third-party deps). |
 | `scripts/check_doc_budget.py`, `scripts/archive_plan_sessions.py` | #1 | The tripwire and sweep that keep the handoff file from ballooning. |
 | `scripts/pr_watch.py` | #5 | The poll-fix-ack engine behind `pr-watch`. |
 | `scripts/dev_session.sh`, `scripts/reconcile_sessions.sh` | #3 | Worktree/lane launcher and reconciler. |
 | `scripts/hooks/pre-push` | #8 Mechanism over memory | A hook, not a memory — refuses a push that would corrupt the narrative files. |
 
-Principles #7 (model/effort tiering) and #9 (deterministic scaffolding around
-LLM steps) are doctrine woven into the skills and scripts above rather than a
-standalone file — read `PRINCIPLES.md` for both.
+Principle #7 (model/effort tiering) is doctrine actually woven into the pieces
+above, not just described by them: the tier table lives in `config/dev-model.yaml`
+and travels with each lane through `parallel`. **Principle #9 (deterministic
+scaffolding around LLM steps) is only partly real in the shipped kit.**
+`scripts/pr_watch.py`'s seen-set is the one durable intermediate state the kit
+actually ships. The rest of #9's artifacts — a heartbeat, an input cap, resumability,
+map-reduce batching — are *specified* in `.claude/commands/post-merge-systemize.md`,
+but that skill's engine (a tracker client, a merged-PR fetcher, `heartbeat_cli.py`)
+is not shipped, so the doctrine there is aspirational until it's vendored.
+[Issue #7](https://github.com/topij/agentic-dev-kit/issues/7) tracks vendoring those
+engines. Read `PRINCIPLES.md` for both principles' full statement.
 
 **Four workflows ship wired for Claude and Codex; two ship as Claude-side doctrine.**
 `session-start`, `wrap-up`, `parallel`, and `pr-watch` come with their engine scripts
