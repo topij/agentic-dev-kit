@@ -106,16 +106,15 @@ deliberately:
    --merge-class <self|operator>` per chosen ticket (see below) and relay each copy-paste line **with a kickoff prompt**
    the operator pastes as the session's first message:
 
-   > Read tracker ticket `<ID>` (+ any recipe in `<handoff>`). Pre-flight its
-   > premise against the live code before coding. Branch `dev/<scope>` is ready.
-   > **Suggested effort: `<tier>`** (`<one-line risk reason>`) — set your session's
-   > model (and reasoning effort, if your client exposes that control) accordingly
-   > before starting. Draft PR on first push → mark ready when done → `pr-watch` to
-   > green. Heads-up: a parallel session owns `<other-area>` — if you need to touch
-   > `<shared-file>`, flag it before committing. **Do not edit `<handoff>` or
-   > `<friction-log>`** — those are cockpit-owned; put your handoff (what
-   > shipped, lessons, deferrals) in the **PR body** so the joint wrap-up can
-   > aggregate it.
+   > Obtain the lane contract with `<engine-dir>/dev_session.sh print-contract` and
+   > follow it for this session — don't infer it from this kickoff, which is
+   > task-specific, not the contract itself. Read tracker ticket `<ID>` (+ any recipe
+   > in `<handoff>`). Pre-flight its premise against the live code before coding.
+   > Branch `dev/<scope>` is ready. **Suggested effort: `<tier>`**
+   > (`<one-line risk reason>`) — set your session's model (and reasoning effort, if
+   > your client exposes that control) accordingly before starting. Heads-up: a
+   > parallel session owns `<other-area>` — if you need to touch `<shared-file>`,
+   > flag it before committing.
 
    Interactive `new` prints the configured agent CLI command for the **operator's own
    shell**, so it can only *suggest* the tier — the operator applies it (model and

@@ -100,17 +100,12 @@ starting the process. Interactive `new` and your CI/cron runner never set the ma
 
 ### 3 · Each lane works to a draft-green PR
 
-A lane's job ends at **draft-PR-green**, not at merge. The **lane contract** (injected
-into every headless launch; `dev_session.sh print-contract` shows it):
-
-- Open the PR as a **draft** on first push and leave it in draft — the cockpit owns
-  ready-for-review, the review pass, and the merge.
-- **Actively poll** your own PR's CI to green on a bounded cadence — never idle on a
-  "monitor" or someone else's watcher; *you* are the one polling.
-- **Never touch** `docs/handoff.md` / `docs/friction-log.md` — carry your handoff in
-  the PR description.
-- Run `git branch --show-current` before every commit to confirm you're on your lane
-  branch, never the protected branch.
+A lane's job ends at **draft-PR-green**, not at merge — bound by the same **lane
+contract** every launch mechanism injects verbatim into the lane's prompt (draft PR,
+active CI polling, never touching the narrative files, branch hygiene). Fetch it
+yourself with `dev_session.sh print-contract`, or read it in
+[`workflows/parallel-headless.md`](agentic-dev-kit/workflows/parallel-headless.md#the-lane-contract-preamble-inject-this-verbatim)
+— this doc intentionally doesn't restate it, so the two copies can't drift apart.
 
 ### 4 · Watch the board — `list --watch`
 
