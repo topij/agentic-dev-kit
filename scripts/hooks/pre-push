@@ -23,14 +23,20 @@
 # separate, independently-testable checks rather than folding them in here.
 #
 # Defaults below are read from config/dev-model.yaml (`paths.handoff` /
-# `paths.friction_log` / `vcs.dev_branch_prefix` / `vcs.protected_branch`) when
-# python3 + PyYAML are available; otherwise the hardcoded fallback constants
-# apply. Edit the fallbacks directly if you'd rather not depend on a Python
-# config read in a git hook.
+# `paths.friction_log` / `vcs.dev_branch_prefix` / `vcs.protected_branch`) via
+# the kit's stdlib-only reader, scripts/lib/kitconfig.py — no third-party
+# import, so the read actually happens on a stock python3 instead of quietly
+# degrading to the fallback constants below on any interpreter without PyYAML.
+# That mattered: a config read that fails soft is indistinguishable from one
+# that succeeded, so an inert read here made the whole guard inert too.
 #
-# Hook source lives under scripts/hooks/ and is installed into .git/hooks/
-# (e.g. via a `make install-hooks` target, or `cp scripts/hooks/pre-push
-# .git/hooks/pre-push && chmod +x .git/hooks/pre-push`).
+# `./init.sh` installs .git/hooks/pre-push (or $(core.hooksPath)/pre-push) as a
+# SHIM that `exec`s this file at its source location — deliberately, so the hook
+# stays current when the engine is updated. That is also what makes the config
+# read work without knowing `paths.engines`: `$0` is <root>/<engines>/hooks/pre-push,
+# and kitconfig.py sits at a fixed path relative to it (../lib/kitconfig.py).
+# Installing by COPYING this file into .git/hooks/ instead breaks that relative
+# path (and freezes the hook body) — the read then falls back to the constants.
 #
 # Real bypass: `git push --no-verify`.
 
@@ -39,39 +45,51 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 CONFIG_PATH="$REPO_ROOT/config/dev-model.yaml"
 
-# Fallback constants — used when config/dev-model.yaml can't be read (missing,
-# or no python3/PyYAML). Keep these in sync with config/dev-model.yaml's
-# `paths.handoff` / `paths.friction_log` / `vcs.dev_branch_prefix` /
-# `vcs.protected_branch` if you edit one without the other.
+# Fallback constants — used when the config read can't run at all (no config
+# file, no python3, or no kitconfig.py beside this hook). Keep these in sync with
+# config/dev-model.yaml's `paths.handoff` / `paths.friction_log` /
+# `vcs.dev_branch_prefix` / `vcs.protected_branch` if you edit one without the
+# other.
 NARRATIVE_FILES=("docs/handoff.md" "docs/friction-log.md")
 DEV_BRANCH_PREFIX="dev"
 PROTECTED_BRANCH="main"
 
-if command -v python3 >/dev/null 2>&1 && [ -f "$CONFIG_PATH" ]; then
-    _config_read="$(python3 - "$CONFIG_PATH" <<'PY' 2>/dev/null || true
+# This hook's own directory, so the config reader can be found at a path fixed
+# relative to the ENGINE file (see the shim note in the header) rather than at a
+# path that would itself have to be read from config.
+HOOK_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd -P || true)"
+KIT_LIB="${HOOK_DIR:+$HOOK_DIR/../lib}"
+
+if command -v python3 >/dev/null 2>&1 && [ -f "$CONFIG_PATH" ] &&
+   [ -n "${KIT_LIB:-}" ] && [ -f "$KIT_LIB/kitconfig.py" ]; then
+    _config_read="$(python3 - "$CONFIG_PATH" "$KIT_LIB" <<'PY' 2>/dev/null || true
 import sys
+
+sys.path.insert(0, sys.argv[2])
 try:
-    import yaml
+    from kitconfig import get, loads
 except ImportError:
     sys.exit(0)
 try:
     with open(sys.argv[1], encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
+        data = loads(fh.read())
 except OSError:
     sys.exit(0)
-paths = data.get("paths") if isinstance(data.get("paths"), dict) else {}
-vcs = data.get("vcs") if isinstance(data.get("vcs"), dict) else {}
-handoff = paths.get("handoff")
-friction = paths.get("friction_log")
-prefix = vcs.get("dev_branch_prefix")
-protected = vcs.get("protected_branch")
+handoff = get(data, "paths.handoff", None)
+friction = get(data, "paths.friction_log", None)
+prefix = get(data, "vcs.dev_branch_prefix", None)
+protected = get(data, "vcs.protected_branch", None)
+# Build the whole payload before emitting any of it: a partial read would leave
+# the hook applying a mix of configured and fallback values.
+out = []
 if handoff and friction:
-    print(handoff)
-    print(friction)
+    out.append(str(handoff))
+    out.append(str(friction))
 if prefix:
-    print("PREFIX:" + str(prefix))
+    out.append("PREFIX:" + str(prefix))
 if protected:
-    print("BRANCH:" + str(protected))
+    out.append("BRANCH:" + str(protected))
+print("\n".join(out))
 PY
 )"
     if [ -n "${_config_read:-}" ]; then
