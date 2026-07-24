@@ -97,13 +97,25 @@ _STATE_ROOT = (
 )
 STATE_DIR = _STATE_ROOT / "pr-watch"
 
-# A comment is auto-noise (not a finding to act on) if its body matches any of
-# these. Keep this list tight — over-filtering would hide a real review.
+# ------------------------------------------------------- review-bot knowledge
 #
-# These defaults target a GitHub + CodeRabbit + Bugbot review setup — edit this
-# tuple to match whatever review-bot mix your own repo runs (a different org's
-# bot(s) will emit different marker strings).
-_NOISE_MARKERS = (
+# Which comment bodies are auto-noise, which signal a *down* reviewer, and which
+# status checks are advisory is **adopter knowledge, not engine logic** — it
+# depends entirely on the review-bot mix a given org runs. It therefore lives in
+# `config/dev-model.yaml` under `review.*`; the tuples below are only the
+# fallbacks used when that config is missing or unreadable.
+#
+# This is the difference between an engine you can update and one you can't: the
+# previous version told adopters to edit these literals in place, which forks the
+# engine and makes every later kit update a merge conflict (Principle #10).
+#
+# Read via `scripts/lib/kitconfig.py` — the kit's stdlib-only config reader —
+# specifically so this module keeps `dependencies = []` and never drags PyYAML
+# into the hot watch-and-fix loop.
+
+# Keep this list tight — over-filtering would hide a real review. Defaults target
+# a GitHub + CodeRabbit + Bugbot setup.
+_DEFAULT_NOISE_MARKERS = (
     "bugbot needs on-demand usage enabled",  # Cursor billing notice
     "<!-- this is an auto-generated comment: summarize by coderabbit",  # walkthrough
     "<!-- this is an auto-generated comment: review in progress",  # CodeRabbit "processing…" placeholder
@@ -117,7 +129,7 @@ _NOISE_MARKERS = (
 # carries a generic walkthrough/noise marker. Surfacing it is what triggers the
 # configured independent fallback; hiding it would turn a down reviewer into a
 # silent review waiver.
-_REVIEW_UNAVAILABLE_MARKERS = (
+_DEFAULT_REVIEW_UNAVAILABLE_MARKERS = (
     "bugbot needs on-demand usage enabled",
     "review limit reached",
     "rate limited by coderabbit",
@@ -132,10 +144,101 @@ _REVIEW_UNAVAILABLE_MARKERS = (
 # otherwise wedge the loop forever even though every real CI job is green. Its
 # actual findings surface as review comments (which DO block via
 # new_comments). Matched case-insensitively against the check name/context.
-#
-# Default targets CodeRabbit's status-check name — edit for your own
-# review-bot mix.
-_INFORMATIONAL_CHECK_NAMES = frozenset({"coderabbit"})
+_DEFAULT_INFORMATIONAL_CHECK_NAMES = ("coderabbit",)
+
+# Whether a PR must carry at least one real (non-informational) check before it
+# can read as green. True is the safe default — see :func:`summarize_checks`.
+_DEFAULT_REQUIRE_CI = True
+
+# Same pattern as check_doc_budget.py: the reader ships beside the engines, so
+# deriving its directory from THIS file keeps working when the kit is vendored
+# under a nested dir (scripts/devkit/).
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+
+
+def _load_review_config(
+    config_path: str | Path | None = None,
+) -> tuple[tuple[str, ...], tuple[str, ...], frozenset[str], bool]:
+    """Resolve the ``review.*`` knobs from config, falling back to the defaults.
+
+    ``config_path`` overrides the default ``config/dev-model.yaml`` lookup (used
+    by the tests to exercise a real adopter config without touching this repo's).
+
+    Returns ``(noise_markers, unavailable_markers, informational_checks,
+    require_ci)``. Marker strings are lower-cased here because every call site
+    matches them case-insensitively against a lower-cased body/name — so a
+    config author may write them in any case.
+
+    **Never raises.** A missing config file, an absent ``scripts/lib/``, a
+    parse failure, a wrong-typed value: all fall back to the in-module defaults,
+    because a config problem must not wedge or crash the watch loop. A config
+    that *exists* but could not be read warns on stderr, so a silently-ignored
+    config is still visible; a merely absent one is normal (the engine runs
+    standalone) and stays quiet.
+
+    Distinctions worth knowing:
+
+    - key absent / ``key:`` with no value -> the default list applies.
+    - key set to an explicit empty list (``noise_markers: []``) -> honored as
+      "filter nothing". Deliberate: an adopter with no review bots wants no
+      filtering, and over-filtering hides real findings.
+    - ``require_ci`` accepts only a real boolean; anything else (a stray
+      ``yes``, a typo) keeps the default. The unsafe direction here is reading
+      as *False* by accident, which would let a zero-check PR report green.
+    """
+    defaults = (
+        _DEFAULT_NOISE_MARKERS,
+        _DEFAULT_REVIEW_UNAVAILABLE_MARKERS,
+        frozenset(_DEFAULT_INFORMATIONAL_CHECK_NAMES),
+        _DEFAULT_REQUIRE_CI,
+    )
+    try:
+        from kitconfig import get, get_str_list, load_config
+
+        config = load_config() if config_path is None else load_config(config_path)
+        noise = get_str_list(config, "review.noise_markers", list(_DEFAULT_NOISE_MARKERS))
+        unavailable = get_str_list(
+            config,
+            "review.unavailable_markers",
+            list(_DEFAULT_REVIEW_UNAVAILABLE_MARKERS),
+        )
+        informational = get_str_list(
+            config,
+            "review.informational_checks",
+            list(_DEFAULT_INFORMATIONAL_CHECK_NAMES),
+        )
+        require_ci = get(config, "review.require_ci", _DEFAULT_REQUIRE_CI)
+        if not isinstance(require_ci, bool):
+            require_ci = _DEFAULT_REQUIRE_CI
+    except FileNotFoundError:
+        # `load_config` raises this for an absent config file — a standalone
+        # engine run. Defaults are exactly right; stay quiet.
+        return defaults
+    except Exception as exc:  # noqa: BLE001 — a config read must never break the loop
+        # Anything else means the config (or the reader beside it) IS there and
+        # could not be used: an unreadable file, a construct the parser rejects,
+        # a vendored copy missing scripts/lib/. Fall back, but say so — a
+        # silently-ignored config is how an adopter's settings become a no-op.
+        print(
+            f"warning: could not read review config ({exc}); "
+            "using pr_watch's built-in defaults",
+            file=sys.stderr,
+        )
+        return defaults
+    return (
+        tuple(marker.lower() for marker in noise),
+        tuple(marker.lower() for marker in unavailable),
+        frozenset(name.strip().lower() for name in informational if name.strip()),
+        require_ci,
+    )
+
+
+(
+    _NOISE_MARKERS,
+    _REVIEW_UNAVAILABLE_MARKERS,
+    _INFORMATIONAL_CHECK_NAMES,
+    _REQUIRE_CI,
+) = _load_review_config()
 
 
 # --------------------------------------------------------------------------- gh
