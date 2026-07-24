@@ -10,6 +10,15 @@
 # or edit this file directly.
 # ─────────────────────────────────────────────────────────────────────────────
 
+kit:
+  # Which generation of the kit's config schema this repo is on. `init.sh` stamps
+  # it and migrates an older config forward in place, so re-running `./init.sh`
+  # after pulling a kit update is the supported upgrade path. Never edit by hand:
+  # lowering it re-runs migrations that are already applied.
+  #   1 — original single-runtime schema (no `runtime:`, no `models.tiers`)
+  #   2 — runtime adapters + capability tiers + engine-facing review/CI config
+  version: 2
+
 project:
   # Human-readable project name, used in skill prompts and doc headers.
   name: my-project
@@ -73,6 +82,43 @@ review:
   fallback_commands:
     claude: "/code-review"
     codex: "/review"
+  # Everything below is read by scripts/pr_watch.py. It used to live as literals
+  # inside that engine, which meant adopting the kit required *editing the
+  # engine* — and an edited engine can never be replaced by a kit update. Keeping
+  # it here is what makes engines kit-owned and upgradable (Principle #10).
+  #
+  # Comment bodies matching any of these are auto-noise, not findings to act on.
+  # Matched case-insensitively as substrings. Keep the list tight — over-filtering
+  # hides a real review.
+  noise_markers:
+    - "<!-- this is an auto-generated comment: summarize by coderabbit"
+    - "<!-- this is an auto-generated comment: review in progress"
+    - "<!-- walkthrough_start -->"
+    - "actionable comments posted: 0"
+    - "<!-- linear-linkback -->"
+  # Bodies signalling the reviewer could not run. Deliberately NOT noise: these
+  # surface and block `done`, because a blocked bot is an action signal (run the
+  # configured fallback), never a silent review waiver.
+  unavailable_markers:
+    - "bugbot needs on-demand usage enabled"
+    - "review limit reached"
+    - "rate limited by coderabbit"
+    - "couldn't start this review"
+    - "review skipped"
+    - "no review credits"
+  # Status checks that are advisory only and must never block `done`. A review
+  # bot's check can sit PENDING forever after a trivial follow-up commit; its real
+  # findings arrive as comments (which DO block). Matched case-insensitively
+  # against the check name.
+  informational_checks: [coderabbit]
+  # Whether a PR must have at least one real (non-informational) CI check before
+  # pr_watch will report `done`. True is the safe default: it stops an autonomous
+  # merge on a PR whose CI never ran. Set false for a repo with no CI at all —
+  # otherwise pr-watch can never converge and `dev_session.sh merge` always
+  # refuses. With false, `done` additionally requires current-head review evidence
+  # (it already does) — that receipt becomes the only quality gate, so set this
+  # deliberately.
+  require_ci: true
 
 notify:
   backend: slack                 # slack | none — where skills DM the operator
@@ -102,3 +148,10 @@ state:
   # see scripts/lib/state_paths/. Those are kit constants, not adopter config; listed
   # here only so the convention is discoverable. `dirname` is the top-level state dir.
   dirname: state
+  # The unsandboxed-write guard skips a legitimate scheduled/CI writer, detected by
+  # env var. state_paths stays import-free (it must work from a git hook), so this is
+  # an ENV contract, not a value it reads from here — documented here for
+  # discoverability only:
+  #   DEVKIT_CI_ENV_VARS  comma-separated var names whose presence means "cron/CI".
+  #                       Default: JOB_NAME,CI,GITHUB_ACTIONS,GITLAB_CI,BUILDKITE
+  # Set it in your runner if your scheduler exports something else.

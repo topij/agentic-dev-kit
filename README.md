@@ -84,6 +84,11 @@ patterns to rules).
 
 ## Quickstart
 
+**Prerequisites.** `init.sh` itself needs only POSIX `sh`, `awk`, and `git`. The
+engines need [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file
+scripts), `git`, and — for `pr-watch` / `parallel` — the GitHub CLI `gh`,
+authenticated. No PyYAML: the config reader is stdlib-only.
+
 ```sh
 # Click "Use this template" on GitHub and clone the result — or, into an
 # existing repo, copy the kit's contents in from the root:
@@ -94,8 +99,33 @@ cp -r /path/to/agentic-dev-kit/. .
 #   -> start your agent session and invoke session-start
 ```
 
+`init.sh` stamps your answers into `config/dev-model.yaml`, renders the narrative
+docs from `docs/templates/`, installs the pre-push hook, and adds the state
+sandbox to `.gitignore`. It never overwrites a narrative doc that is already in
+use — only one still carrying the shipped `devkit-template: unrendered` marker.
+
 Ten minutes, start to finish. For a full worked example of a first session — from
 adoption through `wrap-up` — see **[`docs/getting-started.md`](docs/getting-started.md)**.
+
+## Upgrading an already-adopted repo
+
+**Pull the new kit files, then re-run `./init.sh`.** That is the supported upgrade
+path, and it is safe to run any number of times:
+
+- **Config** — `init.sh` migrates an older schema forward *in place*, only ever
+  adding missing keys. Your existing values are never guessed over. `kit.version`
+  records which generation you're on.
+- **`paths.engines`** — probed from where your engines actually are, so a repo that
+  vendored them under `scripts/devkit/` is migrated to that path rather than a
+  wrong default.
+- **Narrative docs** — a handoff or friction log you're actually using is left
+  byte-identical; only an unrendered skeleton is (re-)rendered.
+- **Hooks** — reinstalled as a shim that execs the engine, so a hook stays current
+  with the engine rather than going stale as a copy.
+- **Engines** — replace the files. Engines are **kit-owned**: everything
+  project-specific (review-bot markers, informational checks, CI policy, paths)
+  lives in `config/dev-model.yaml`, so you should never need to edit an engine to
+  adopt it. If you have, that's a bug — please report it.
 
 ### Agent runtime adapters
 
