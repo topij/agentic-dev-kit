@@ -82,18 +82,78 @@ def _find_repo_root(start: Path) -> Path:
 
 
 REPO_ROOT = _find_repo_root(Path(__file__).resolve())
-# Honor the DEVKIT_STATE_ROOT sandbox (parallel dev sessions — see
-# scripts/dev_session.sh) so a session's per-PR seen-set doesn't land in the
-# main checkout's state/. Inlined rather than via a shared state-paths helper
-# on purpose: pr_watch is deliberately stdlib-only (dependencies = []) for the
-# hot watch-and-fix loop. Own-dir state => no read-cascade; an absolute env
-# override else repo-root state/ (a relative override falls back rather than
-# raising — never crash the loop).
-_STATE_ENV = os.environ.get("DEVKIT_STATE_ROOT")
-_STATE_ROOT = (
-    Path(_STATE_ENV)
-    if _STATE_ENV and os.path.isabs(_STATE_ENV)
-    else REPO_ROOT / "state"
+
+# Sticky on-disk sandbox marker, written at the worktree root by a headless-lane
+# launcher (see scripts/lib/state_paths/). Same name/semantics as state_paths —
+# the two must agree or a lane's state splits in half (see below).
+STATE_ROOT_MARKER = ".devkit_state_root"
+
+
+def _marker_state_root(start: Path) -> Path | None:
+    """Sandbox root from a ``.devkit_state_root`` marker, walked up from ``start``.
+
+    Mirrors ``state_paths.resolver._marker_state_root``: walk up checking for the
+    marker, ceilinged at the first directory carrying a ``.git`` entry (checked
+    *after* the marker, so a marker sitting beside ``.git`` is still found), and
+    accept only an absolute path from inside it.
+
+    Deliberate divergence: state_paths *raises* on a relative/garbage marker,
+    while this returns ``None`` and lets the caller fall back. pr_watch runs in
+    the hot watch-and-fix loop, where the file's standing rule is "never crash
+    the loop" — the same reason a relative ``DEVKIT_STATE_ROOT`` falls back here
+    instead of raising.
+
+    ``start`` is this engine file's own directory rather than ``Path.cwd()``
+    (which is what state_paths uses): the marker lives at the worktree root and
+    the engine file lives *inside* that worktree, whereas the caller's cwd is
+    arbitrary — ``dev_session.sh`` invokes this engine from wherever the operator
+    happened to be.
+    """
+    for candidate in (start, *start.parents):
+        marker = candidate / STATE_ROOT_MARKER
+        try:
+            if marker.is_file():
+                raw = marker.read_text(encoding="utf-8").strip()
+                # Empty or relative -> ignore (fall back), never a silent redirect.
+                return Path(raw) if raw and os.path.isabs(raw) else None
+        except OSError:
+            return None  # unreadable marker -> fall back rather than crash
+        if (candidate / ".git").exists():
+            break  # worktree root: don't climb into an unintended ancestor
+    return None
+
+
+def _resolve_state_root(start: Path, repo_root: Path, state_root_env: str | None) -> Path:
+    """Absolute dir this engine's per-PR watch state lives under.
+
+    ``$DEVKIT_STATE_ROOT`` -> ``.devkit_state_root`` marker -> ``<repo>/state``,
+    the same precedence (and the same marker-only-when-the-env-var-is-unset rule)
+    as ``state_paths.resolver.state_root``. Honoring the marker is what keeps
+    ``dev_session.sh pr-watch <scope>`` — which exports the env var — and a bare
+    ``uv run pr_watch.py`` inside a marker-driven headless lane reading the SAME
+    per-PR file: while only the env var was honored, the two used different state,
+    so a ``--mark-seen`` through one path was invisible to the other and the merge
+    gate could re-surface already-acked findings.
+
+    Inlined rather than importing state_paths on purpose: pr_watch is deliberately
+    stdlib-only (``dependencies = []``) for the hot loop. Own-dir state, so no
+    read-cascade is needed — only the write root.
+    """
+    if state_root_env:
+        # A relative override falls back to the repo-root default rather than
+        # raising (never crash the loop), and does NOT consult the marker — an
+        # explicit env var, even a bad one, means the caller chose the root.
+        return (
+            Path(state_root_env)
+            if os.path.isabs(state_root_env)
+            else repo_root / "state"
+        )
+    marker = _marker_state_root(start)
+    return marker if marker is not None else repo_root / "state"
+
+
+_STATE_ROOT = _resolve_state_root(
+    Path(__file__).resolve().parent, REPO_ROOT, os.environ.get("DEVKIT_STATE_ROOT")
 )
 STATE_DIR = _STATE_ROOT / "pr-watch"
 

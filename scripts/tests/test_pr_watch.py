@@ -236,6 +236,125 @@ def test_record_review_persists_only_expected_current_head(
 
 
 # --------------------------------------------------------------------------- #
+# state root resolution: env -> .devkit_state_root marker -> repo-root default
+# --------------------------------------------------------------------------- #
+
+
+def _lane_worktree(tmp_path: Path, *, marker: str | None) -> Path:
+    """A linked worktree (``.git`` is a FILE, as `git worktree add` writes) with
+    an engine dir inside it, optionally carrying a sandbox marker at its root."""
+    wt = tmp_path / "wt"
+    (wt / "scripts").mkdir(parents=True)
+    (wt / ".git").write_text("gitdir: /elsewhere/.git/worktrees/wt\n", encoding="utf-8")
+    if marker is not None:
+        (wt / ".devkit_state_root").write_text(marker, encoding="utf-8")
+    return wt
+
+
+def test_marker_sandbox_is_honored_when_env_is_unset(tmp_path: Path) -> None:
+    """The headless-lane mechanism: a background agent's Bash calls don't share a
+    shell, so an exported env var doesn't survive — the marker file is all that
+    does. Without this, `dev_session.sh pr-watch <scope>` (env) and a bare
+    `uv run pr_watch.py` (no env) in the same lane read DIFFERENT state files, so
+    a --mark-seen through one is invisible to the other."""
+    pr_watch = _load_pr_watch()
+    sandbox = tmp_path / "sandbox-state"
+    wt = _lane_worktree(tmp_path, marker=f"{sandbox}\n")
+
+    resolved = pr_watch._resolve_state_root(wt / "scripts", wt, None)
+
+    assert resolved == sandbox
+
+
+def test_env_sandbox_still_wins_over_the_marker(tmp_path: Path) -> None:
+    pr_watch = _load_pr_watch()
+    wt = _lane_worktree(tmp_path, marker=str(tmp_path / "from-marker"))
+    explicit = tmp_path / "from-env"
+
+    assert pr_watch._resolve_state_root(wt / "scripts", wt, str(explicit)) == explicit
+
+
+def test_relative_env_override_falls_back_and_ignores_the_marker(
+    tmp_path: Path,
+) -> None:
+    """Mirrors state_paths' "marker only when the env var is unset" precedence,
+    but falls back instead of raising — this engine must never crash the loop."""
+    pr_watch = _load_pr_watch()
+    wt = _lane_worktree(tmp_path, marker=str(tmp_path / "from-marker"))
+
+    assert pr_watch._resolve_state_root(wt / "scripts", wt, "relative/state") == (
+        wt / "state"
+    )
+
+
+def test_no_marker_keeps_the_repo_root_default(tmp_path: Path) -> None:
+    """Cron/CI and normal checkouts carry no marker — byte-identical to before."""
+    pr_watch = _load_pr_watch()
+    wt = _lane_worktree(tmp_path, marker=None)
+
+    assert pr_watch._resolve_state_root(wt / "scripts", wt, None) == wt / "state"
+
+
+@pytest.mark.parametrize("content", ["", "   \n", "relative/state", "~/state"])
+def test_unusable_marker_content_falls_back_instead_of_raising(
+    tmp_path: Path, content: str
+) -> None:
+    """Empty, blank, relative, or unexpanded — never a silent redirect, never a
+    crash. state_paths raises here; pr_watch deliberately falls back."""
+    pr_watch = _load_pr_watch()
+    wt = _lane_worktree(tmp_path, marker=content)
+
+    assert pr_watch._resolve_state_root(wt / "scripts", wt, None) == wt / "state"
+
+
+def test_unreadable_marker_falls_back_instead_of_raising(tmp_path: Path) -> None:
+    pr_watch = _load_pr_watch()
+    wt = _lane_worktree(tmp_path, marker=str(tmp_path / "sandbox"))
+    marker = wt / ".devkit_state_root"
+    marker.chmod(0o000)
+    try:
+        marker.read_text(encoding="utf-8")
+    except OSError:
+        pass
+    else:  # pragma: no cover - only when tests run as root
+        pytest.skip("cannot make a file unreadable (running as root?)")
+
+    assert pr_watch._resolve_state_root(wt / "scripts", wt, None) == wt / "state"
+
+
+def test_marker_walk_is_ceilinged_at_the_worktree_root(tmp_path: Path) -> None:
+    """A stray marker ABOVE the .git level must not redirect this checkout — the
+    walk stops at the worktree root, same ceiling as state_paths."""
+    pr_watch = _load_pr_watch()
+    wt = _lane_worktree(tmp_path, marker=None)
+    (tmp_path / ".devkit_state_root").write_text(
+        str(tmp_path / "stray"), encoding="utf-8"
+    )
+
+    assert pr_watch._resolve_state_root(wt / "scripts", wt, None) == wt / "state"
+
+
+def test_marker_is_found_from_a_vendored_engine_dir(tmp_path: Path) -> None:
+    """The walk starts at the engine file's own dir, so a kit vendored at
+    scripts/devkit/ still finds the marker at the worktree root."""
+    pr_watch = _load_pr_watch()
+    sandbox = tmp_path / "sandbox-state"
+    wt = _lane_worktree(tmp_path, marker=str(sandbox))
+    vendored = wt / "scripts" / "devkit"
+    vendored.mkdir()
+
+    assert pr_watch._resolve_state_root(vendored, wt, None) == sandbox
+
+
+def test_state_dir_is_the_pr_watch_subdir_of_the_resolved_root() -> None:
+    """Pin the wiring: whatever the root resolves to, state lands in pr-watch/."""
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch.STATE_DIR == pr_watch._STATE_ROOT / "pr-watch"
+    assert pr_watch.STATE_DIR.is_absolute()
+
+
+# --------------------------------------------------------------------------- #
 # review.require_ci — convergence on a repo with no CI
 # --------------------------------------------------------------------------- #
 
