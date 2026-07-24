@@ -188,6 +188,11 @@ This is the path a `Workflow`- or `Agent`-driven fan-out uses to start lanes its
 operator paste involved. Interactive `new` and your CI/cron runner never set the marker,
 so their behavior is unchanged.
 
+For the full JSON descriptor field list, the verbatim-injection rule, and the
+workflow-fan-out pseudocode a multi-lane launcher needs, see
+[`agentic-dev-kit/workflows/parallel-headless.md`](agentic-dev-kit/workflows/parallel-headless.md)
+— load it only when you're actually building or driving that launcher.
+
 ---
 
 ## Use case 5 — Wind a session down
@@ -261,6 +266,9 @@ lane fleet.
 
 - [`parallel-dev.md`](parallel-dev.md) — the concept: cockpit + isolated lanes,
   disjoint footprints, the batch workflow, the worked example.
-- [`agentic-dev-kit/workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md) — the shared workflow.
+- [`agentic-dev-kit/workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md) — the
+  shared workflow, and
+  [`agentic-dev-kit/workflows/parallel-headless.md`](agentic-dev-kit/workflows/parallel-headless.md)
+  for the headless launch mechanics referenced in use case 4.
 - [`PRINCIPLES.md`](../PRINCIPLES.md) #3 (cockpit + isolated lanes), #7 (effort
   tiering).

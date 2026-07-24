@@ -83,20 +83,22 @@ Don't spin up lanes ticket-by-ticket. Compose the batch deliberately:
    or must **hand back for operator sign-off**. Deciding the merge boundary at plan
    time stops a batch stalling on ad-hoc "can I merge this?" calls.
 
+The exact per-step commands, plus the effort-tier and merge-class tables, are in
+[`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#planning-a-batch--parallel-plan-focus)
+— this doc keeps only the reasoning behind each step.
+
 ### 2 · Launch each lane — `dev_session.sh new`
 
-```bash
-scripts/dev_session.sh new <scope> --merge-class <self|operator> [--base <branch>] [--prefix <prefix>] [--headless] [--runtime <name>] [--launcher <command>]
-```
-
-The configured `vcs.protected_branch` and `vcs.dev_branch_prefix` supply the default
-base and prefix. Each `new` creates the worktree + branch + sandbox, persists the
-merge class, and prints a copy-paste line that drops you into the lane. Omitting
-`--merge-class` fails safe to `operator`. `--headless` instead writes the sticky
-`<worktree>/.devkit_state_root` marker so an unattended agent's tool calls resolve the
-sandbox from disk (they don't share a shell). Its JSON descriptor also contains an
-`env` map; a launcher must replace inherited lane-root variables with that map before
-starting the process. Interactive `new` and your CI/cron runner never set the marker.
+Each `new` creates the worktree + branch + sandbox, persists the merge class, and
+hands off to the lane: a copy-paste line for an interactive operator, or (`--headless`)
+a sticky on-disk marker plus a JSON descriptor for an unattended launcher — the
+mechanism a background sub-agent's stateless tool calls need to find their sandbox
+without a surviving shell export. Omitting `--merge-class` fails safe to `operator`.
+The exact command, every flag, and the headless JSON descriptor are in
+[`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#starting-a-new-session)
+(interactive) and
+[`workflows/parallel-headless.md`](agentic-dev-kit/workflows/parallel-headless.md)
+(unattended); for task-oriented recipes, see [`parallel-howto.md`](parallel-howto.md).
 
 ### 3 · Each lane works to a draft-green PR
 
@@ -113,9 +115,11 @@ yourself with `dev_session.sh print-contract`, or read it in
 scripts/dev_session.sh list --watch        # re-render every 30s
 ```
 
-The live board shows every lane's `SCOPE · BRANCH · PR · CI · DIRTY · SANDBOX`, marks
-rows that changed since the last frame with a leading `*`, and surfaces a silently-dead
-lane that stops moving. Use it as the cockpit's ambient board while a batch runs.
+The live board marks every row that changed since the last frame with a leading `*` —
+a CI flip, a new commit, the DIRTY count moving, a PR-state change — and surfaces a
+silently-dead lane that stops moving. Use it as the cockpit's ambient board while a
+batch runs; full behavior (piped output, `--max-iters`, per-call timeouts) is in
+[`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#live-board--parallel-list---watch-interval).
 
 ### 5 · Reconcile, then merge — `reconcile_sessions.sh`
 
@@ -123,22 +127,13 @@ Before the cockpit writes anything to the shared handoff, drive **every** launch
 to a terminal state — **merged**, **parked-with-reason**, or **still-open** — with
 `scripts/reconcile_sessions.sh`. An aggregate "everything's done" is *not* evidence a
 specific lane actually shipped; reconcile per lane. Then review and merge each per its
-pre-assigned merge class. Self-merging lanes use the deterministic wrapper, which
-re-polls CI/review/merge readiness at act time and refuses missing or operator
-metadata. Operator lanes are merged only after explicit cockpit sign-off. Remove the
-worktree afterward:
-
-```bash
-scripts/dev_session.sh pr-watch <scope> --json
-scripts/dev_session.sh pr-watch <scope> --mark-seen
-scripts/dev_session.sh pr-watch <scope> --record-review <source> --head <polled-sha>
-scripts/dev_session.sh merge <scope>       # self class only; refuses otherwise
-scripts/dev_session.sh rm <scope>          # tear down the worktree (branch kept if unmerged)
-```
-
-The cockpit uses the scope-aware watcher so review state lives in the same lane
-sandbox the merge gate reads. `<polled-sha>` is the `head` from the exact independently
-reviewed poll; recording refuses if it changed.
+pre-assigned merge class: a self-merge lane goes through the deterministic wrapper
+(re-polls CI/review/merge readiness at act time and refuses missing or operator
+metadata); an operator lane is merged only after explicit cockpit sign-off. The exact
+`pr-watch` / `merge` / `rm` command sequence lives in
+[`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#finishing-a-session)
+and [`parallel-howto.md`](parallel-howto.md#use-case-5--wind-a-session-down) — this doc
+keeps only the reconcile-before-merge reasoning.
 
 ## Model / effort tiering per lane
 
@@ -180,5 +175,7 @@ once.
   recipes per use case, and *what actually happens* when you run each `parallel` verb.
 - [`PRINCIPLES.md`](../PRINCIPLES.md) #3 (cockpit + isolated lanes), #4 (merge classes),
   #7 (effort tiering).
-- [`agentic-dev-kit/workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md) — the shared workflow.
+- [`agentic-dev-kit/workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md) — the shared workflow, and
+  [`agentic-dev-kit/workflows/parallel-headless.md`](agentic-dev-kit/workflows/parallel-headless.md)
+  for unattended-lane launch mechanics.
 - [`docs/getting-started.md`](getting-started.md) — the single-session loop this sits on top of.
