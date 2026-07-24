@@ -186,11 +186,30 @@ append_to_section() {
 # documented as idempotent; silently leaving an old config without these keys
 # would make the new runtime-aware launchers appear bootstrapped while falling
 # back to the wrong behavior.
+# Where this repo's engines actually live. Probing beats defaulting: an adopter
+# who vendored the kit under scripts/devkit/ (the documented namespaced layout)
+# would otherwise be migrated to `engines: scripts`, and every workflow's
+# `<engine-dir>/…` reference would resolve to a path with no engines in it —
+# silently, since nothing validates the value. Falls back to `scripts` only when
+# no engine is found anywhere.
+detect_engines_dir() {
+  for candidate in scripts scripts/devkit scripts/kit scripts/agentic-dev-kit tools/devkit bin/devkit; do
+    for probe in check_doc_budget.py pr_watch.py dev_session.sh; do
+      if [ -f "$candidate/$probe" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+      fi
+    done
+  done
+  printf 'scripts\n'
+}
+
 migrate_runtime_schema() {
   if ! grep -q '^  engines:' "$CONFIG_FILE"; then
-    append_to_section "paths:" '  # Directory containing the deterministic kit engines.
-  engines: scripts'
-    echo "added paths.engines to config/dev-model.yaml"
+    detected_engines="$(detect_engines_dir)"
+    append_to_section "paths:" "  # Directory containing the deterministic kit engines.
+  engines: $detected_engines"
+    echo "added paths.engines: $detected_engines to config/dev-model.yaml"
   fi
 
   if ! grep -q '^runtime:' "$CONFIG_FILE"; then
@@ -236,6 +255,139 @@ migrate_runtime_schema() {
   fi
 }
 
+# Schema additions introduced after the v2 template release. Same idempotent
+# shape as migrate_runtime_schema: only ever ADD a missing block, never guess
+# over an existing value — re-running init.sh is the supported upgrade path, so
+# a migration must be safe to apply to a config that already has it.
+migrate_kit_schema() {
+  if ! grep -q '^kit:' "$CONFIG_FILE"; then
+    # Prepend, so the version stamp reads first. There is no earlier section to
+    # anchor before, so insert_before_section targets the first one that exists.
+    insert_before_section "project:" 'kit:
+  # Which generation of the kit'"'"'s config schema this repo is on. `init.sh` stamps
+  # it and migrates an older config forward in place, so re-running `./init.sh`
+  # after pulling a kit update is the supported upgrade path.
+  version: 2
+'
+    echo "stamped kit.version=2 in config/dev-model.yaml"
+  fi
+
+  if ! grep -q '^  noise_markers:' "$CONFIG_FILE"; then
+    append_to_section "review:" '  # Read by pr_watch.py. These used to be literals inside the engine, which meant
+  # adopting required EDITING the engine — and an edited engine can never be
+  # replaced by a kit update (Principle #10).
+  noise_markers:
+    - "<!-- this is an auto-generated comment: summarize by coderabbit"
+    - "<!-- this is an auto-generated comment: review in progress"
+    - "<!-- walkthrough_start -->"
+    - "actionable comments posted: 0"
+    - "review skipped"
+    - "<!-- linear-linkback -->"
+  unavailable_markers:
+    - "bugbot needs on-demand usage enabled"
+    - "review limit reached"
+    - "rate limited by coderabbit"
+    - "couldn'"'"'t start this review"
+    - "review skipped"
+    - "no review credits"
+  informational_checks: [coderabbit]
+  # False only for a repo with NO CI at all — otherwise pr-watch never converges.
+  require_ci: true'
+    echo "added review marker/CI config to config/dev-model.yaml"
+  fi
+}
+
+# ── narrative-doc templates ──────────────────────────────────────────────
+# The kit SHIPS docs/handoff.md and docs/friction-log.md, so a `cp -r` or a
+# "Use this template" clone always lands them before init.sh runs — which used
+# to make the "seed only if absent" guard permanently false, and every adopter
+# started with an unrendered skeleton. The marker below is what distinguishes
+# "the pristine file the kit shipped" from "a handoff someone is actually
+# using": a rendered/edited file has no marker and is never touched.
+TEMPLATE_MARKER="devkit-template: unrendered"
+
+# _render <template> <target> — substitute the {{TOKENS}} and write.
+# awk (not sed) so a value containing /, &, or \ — a tracker URL, most obviously —
+# is substituted literally rather than reinterpreted as replacement syntax.
+_render() {
+  _tmpl="$1"
+  _out="$2"
+  awk -v project="$name" -v today="$(date +%Y-%m-%d)" \
+      -v tracker="$render_tracker_url" -v enginedir="$render_engine_dir" '
+    function subst(s, tok, val,   i, acc) {
+      acc = ""
+      while ((i = index(s, tok)) > 0) {
+        acc = acc substr(s, 1, i - 1) val
+        s = substr(s, i + length(tok))
+      }
+      return acc s
+    }
+    {
+      line = $0
+      line = subst(line, "{{PROJECT_NAME}}", project)
+      line = subst(line, "{{DATE}}", today)
+      line = subst(line, "{{TRACKER_URL}}", tracker)
+      line = subst(line, "{{ENGINE_DIR}}", enginedir)
+      print line
+    }
+  ' "$_tmpl" > "${_out}.tmp.$$" && mv "${_out}.tmp.$$" "$_out"
+}
+
+# seed_doc <template-basename> <target-path>
+seed_doc() {
+  _name="$1"
+  _target="$2"
+  _tmpl="docs/templates/${_name}.md.tmpl"
+  [ -n "$_target" ] || return 0
+  if [ ! -f "$_tmpl" ]; then
+    echo "note: template $_tmpl missing — skipped $_target" >&2
+    return 0
+  fi
+  if [ -f "$_target" ] && ! grep -q "$TEMPLATE_MARKER" "$_target" 2>/dev/null; then
+    echo "$_target already in use — left untouched"
+    return 0
+  fi
+  mkdir -p "$(dirname "$_target")"
+  _render "$_tmpl" "$_target"
+  echo "seeded $_target"
+}
+
+# ── git hooks ────────────────────────────────────────────────────────────
+# "A rule that lives only in a doc is a wish" (Principle #8) applies to the kit
+# itself: shipping scripts/hooks/pre-push without installing it made the kit's
+# own mechanism-over-memory exemplar inert in every adopting repo. Install a
+# shim rather than copying the hook body, so the hook stays current when the
+# engine is updated, and rather than a relative symlink, so it survives the
+# engines dir being vendored at any depth.
+install_hooks() {
+  if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo "note: not a git repo yet — run 'git init' then re-run ./init.sh to install hooks" >&2
+    return 0
+  fi
+  hookdir="$(git rev-parse --git-path hooks 2>/dev/null || echo .git/hooks)"
+  mkdir -p "$hookdir"
+  for hook in pre-push; do
+    src="${engines_dir}/hooks/${hook}"
+    if [ ! -f "$src" ]; then
+      continue
+    fi
+    chmod +x "$src" 2>/dev/null || true
+    if [ -e "$hookdir/$hook" ] && ! grep -q 'devkit-hook-shim' "$hookdir/$hook" 2>/dev/null; then
+      echo "note: existing $hookdir/$hook left untouched (not a kit shim) — chain it to $src by hand" >&2
+      continue
+    fi
+    cat > "$hookdir/$hook" <<SHIM
+#!/bin/sh
+# devkit-hook-shim — regenerated by ./init.sh; edit $src, not this file.
+root="\$(git rev-parse --show-toplevel)" || exit 0
+[ -x "\$root/$src" ] || exit 0
+exec "\$root/$src" "\$@"
+SHIM
+    chmod +x "$hookdir/$hook"
+    echo "installed $hookdir/$hook -> $src"
+  done
+}
+
 # ask <prompt> <default> -> prints the answer (default kept on empty input
 # or when stdin isn't a terminal, e.g. running init.sh from a non-interactive
 # script).
@@ -260,6 +412,7 @@ if [ ! -t 0 ]; then
 fi
 
 migrate_runtime_schema
+migrate_kit_schema
 
 # ── prompts ──────────────────────────────────────────────────────────────
 
@@ -289,6 +442,10 @@ if [ "$backend" = "linear" ]; then
   set_field "tracker:" "linear:" "^    project_id:" "\"$project_id\""
 fi
 
+cur_tracker_url=$(get_field "tracker:" "" "^  url:")
+tracker_url=$(ask "Tracker board URL (shown in the friction-log header; blank is fine)" "$cur_tracker_url")
+set_field "tracker:" "" "^  url:" "\"$tracker_url\""
+
 cur_branch=$(get_field "vcs:" "" "^  protected_branch:")
 branch=$(ask "Protected branch (PRs target this, never commit to it directly)" "$cur_branch")
 set_field "vcs:" "" "^  protected_branch:" "$branch"
@@ -309,71 +466,34 @@ else
 fi
 set_field "review:" "" "^  bots:" "$bots_value"
 
-# ── seed narrative docs (never clobber) ──────────────────────────────────
+# ── seed narrative docs from templates ───────────────────────────────────
+# Rendered when the target is MISSING or still carries the unrendered marker.
+# The old "seed only if absent" guard could never fire: the kit ships these
+# files, so a copy-in / template-clone always landed them first and every
+# adopter was left with an unrendered skeleton.
 
-if [ ! -f docs/handoff.md ]; then
-  mkdir -p docs
-  cat > docs/handoff.md <<EOF
-# ${name} — Living Plan (Handoff)
-
-> **Forward-looking handoff (Principle #1).** Read this at the start of every session
-> (\`session-start\`); update it at the end (\`wrap-up\`). This file — not an agent's
-> memory, not a scratch note — is the single source of truth for what's done, in
-> progress, and next.
->
-> Older session blocks graduate to [\`handoff-history.md\`](handoff-history.md) once this
-> file crosses its line budget (a warn-only tripwire — \`scripts/check_doc_budget.py\`).
-> Session-scoped scratch plans are exactly that: scratch. This is the handoff.
-
-Last updated: YYYY-MM-DD — <one-line theme of the most recent session>
-
-## Latest session — YYYY-MM-DD
-
-**Theme —** <what this session was about, in a line or two.>
-
-- <what shipped>
-- <what was decided>
-- <what was learned>
-
-▶ Next: <the single clearest next step — what the next \`session-start\` should pick up.>
-
-______________________________________________________________________
-
-> Older session entries live in [\`handoff-history.md\`](handoff-history.md).
-EOF
-  echo "seeded docs/handoff.md"
+render_engine_dir="$(get_field "paths:" "" "^  engines:")"
+[ -n "$render_engine_dir" ] || render_engine_dir="scripts"
+engines_dir="$render_engine_dir"
+if [ -n "$tracker_url" ]; then
+  render_tracker_url="$tracker_url"
 else
-  echo "docs/handoff.md already exists — left untouched"
+  render_tracker_url="set \`tracker.url\` in \`$CONFIG_FILE\`"
 fi
 
-if [ ! -f docs/friction-log.md ]; then
-  mkdir -p docs
-  cat > docs/friction-log.md <<'EOF'
-# Friction Log
+handoff_path="$(get_field "paths:" "" "^  handoff:")"
+[ -n "$handoff_path" ] || handoff_path="docs/handoff.md"
+handoff_history_path="$(get_field "paths:" "" "^  handoff_history:")"
+[ -n "$handoff_history_path" ] || handoff_history_path="docs/handoff-history.md"
+friction_path="$(get_field "paths:" "" "^  friction_log:")"
+[ -n "$friction_path" ] || friction_path="docs/friction-log.md"
+friction_archive_path="$(get_field "paths:" "" "^  friction_log_archive:")"
+[ -n "$friction_archive_path" ] || friction_archive_path="docs/friction-log-archive.md"
 
-> **Lean inbox (Principle #2 — the friction flywheel).** Friction surfaced during real
-> use — a bug, an awkward workflow, a recurring annoyance — recorded the moment it's
-> fresh, at session end. A periodic triage (`/triage-friction-log`) reads new entries and
-> routes each one: single incidents go **down** to the tracker; a genuine, multi-occurrence
-> **pattern** graduates **up** into a rule or skill change. Route down by default, up only
-> on repetition — so the flywheel self-regulates instead of ratcheting every week.
->
-> Each entry: the observed issue, the date surfaced, a rough severity (**H**igh / **M**edium
-> / **L**ow), and a proposed fix or next step. Link related PRs, commits, or tracker items
-> when available. Graduated entries are swept to
-> [`friction-log-archive.md`](friction-log-archive.md) so this file stays just the current
-> inbox plus the most-recent graduation marker.
->
-> Tracker board: set `tracker.url` in `config/dev-model.yaml`.
-
-## YYYY-MM-DD — inbox
-
-- **<one-line issue> (severity: <H/M/L>).** <what happened, and a proposed fix or next step.>
-EOF
-  echo "seeded docs/friction-log.md"
-else
-  echo "docs/friction-log.md already exists — left untouched"
-fi
+seed_doc "handoff" "$handoff_path"
+seed_doc "handoff-history" "$handoff_history_path"
+seed_doc "friction-log" "$friction_path"
+seed_doc "friction-log-archive" "$friction_archive_path"
 
 # ── .gitignore: state sandbox paths ───────────────────────────────────────
 
@@ -387,13 +507,29 @@ add_ignore_line() {
 }
 add_ignore_line "state/"
 add_ignore_line ".devkit_state_root"
+# dev_session.sh copies a repo-root .mcp.json into each lane worktree so lanes
+# inherit MCP access. If yours holds literal credentials rather than ${ENV}
+# references, that copy must never be committable from a lane.
+if [ -f .mcp.json ] && grep -qE '"(.*_)?(TOKEN|SECRET|KEY|PASSWORD|AUTHORIZATION)" *: *"[^$]' .mcp.json 2>/dev/null; then
+  add_ignore_line ".mcp.json"
+  echo "note: .mcp.json appears to hold literal credentials — added to .gitignore." >&2
+  echo "      Prefer \${ENV_VAR} references so it can stay tracked." >&2
+fi
+
+# ── git hooks ────────────────────────────────────────────────────────────
+
+install_hooks
 
 # ── done ───────────────────────────────────────────────────────────────
 
 echo ""
-echo "agentic-dev-kit is bootstrapped."
+echo "agentic-dev-kit is bootstrapped (kit schema v2)."
 echo "Review config/dev-model.yaml for any remaining values (paths, doc_budgets,"
-echo "models, tracker.url, review.fallback_commands) and edit to taste."
+echo "models, review.fallback_commands) and edit to taste."
+echo ""
+echo "Upgrading later: pull the new kit files, then re-run ./init.sh — it"
+echo "migrates an older config forward in place and never touches a narrative"
+echo "doc that is actually in use."
 echo ""
 case "$runtime" in
   codex) echo "You're set — invoke \$session-start next." ;;

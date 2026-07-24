@@ -1,6 +1,4 @@
-<!-- devkit-template: unrendered — ./init.sh renders this from docs/templates/. Delete this line to claim the file as yours. -->
-
-# my-project — Living Plan (Handoff)
+# {{PROJECT_NAME}} — Living Plan (Handoff)
 
 > **Forward-looking handoff (Principle #1).** Read this at the start of every session
 > (`session-start`); update it at the end (`wrap-up`). This file — not an agent's
@@ -8,12 +6,12 @@
 > progress, and next.
 >
 > Older session blocks graduate to [`handoff-history.md`](handoff-history.md) once this
-> file crosses its line budget (a warn-only tripwire — `scripts/check_doc_budget.py`).
+> file crosses its line budget (a warn-only tripwire — `{{ENGINE_DIR}}/check_doc_budget.py`).
 > Session-scoped scratch plans are exactly that: scratch. This is the handoff.
 
-Last updated: YYYY-MM-DD — <one-line theme of the most recent session>
+Last updated: {{DATE}} — <one-line theme of the most recent session>
 
-## Latest session — YYYY-MM-DD
+## Latest session — {{DATE}}
 
 **Theme —** <what this session was about, in a line or two.>
 
