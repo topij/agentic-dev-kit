@@ -122,10 +122,36 @@ def _indent_of(line: str) -> int:
 
 def loads(text: str) -> dict[str, Any]:
     """Parse the supported subset of a config document into nested dicts/lists."""
-    # Each frame is (indent, container). A mapping frame collects keys; a list
-    # frame collects items. Dedenting pops frames until the indent matches.
+    # Each frame is (indent, container, kind). Dedenting pops frames until the
+    # indent matches — but a LIST frame pops on a different rule than a mapping
+    # frame, because YAML lets a block list sit at the SAME indent as its key:
+    #
+    #     doc_budgets:          doc_budgets:
+    #     - path: a       vs      - path: a
+    #       budget: 1               budget: 1
+    #
+    # Both are valid and both appear in the wild (formatters emit the left one).
+    # A single `indent <= frame_indent` rule handles only the right one and
+    # silently corrupts the left — the list is never created, its dashes are
+    # dropped, and its nested keys land in the PARENT mapping.
     root: dict[str, Any] = {}
-    stack: list[tuple[int, Any]] = [(-1, root)]
+    stack: list[tuple[int, Any, str]] = [(-1, root, "map")]
+
+    def pop_to(indent: int, *, for_dash: bool) -> None:
+        # A mapping frame closes when a line is at or left of its indent. A list
+        # frame closes at or left of its DASH indent for a key-line, but a dash
+        # at exactly that indent is the next sibling item, so it must not close.
+        while len(stack) > 1:
+            frame_indent, _, kind = stack[-1]
+            if kind == "list" and for_dash:
+                if indent < frame_indent:
+                    stack.pop()
+                    continue
+                break
+            if indent <= frame_indent:
+                stack.pop()
+                continue
+            break
 
     lines = text.splitlines()
     index = 0
@@ -136,14 +162,14 @@ def loads(text: str) -> dict[str, Any]:
         if not stripped or stripped.startswith("#"):
             continue
         indent = _indent_of(raw_line)
+        is_dash = stripped.startswith("- ") or stripped == "-"
 
-        while len(stack) > 1 and indent <= stack[-1][0]:
-            stack.pop()
+        pop_to(indent, for_dash=is_dash)
         container = stack[-1][1]
 
         # ---- list item ----------------------------------------------------
-        if stripped.startswith("- "):
-            item_body = stripped[2:].strip()
+        if is_dash:
+            item_body = stripped[2:].strip() if stripped != "-" else ""
             if not isinstance(container, list):
                 continue  # a stray dash with no owning key — skip, never guess
             if ":" in item_body and not item_body.startswith(("[", '"', "'")):
@@ -153,8 +179,8 @@ def loads(text: str) -> dict[str, Any]:
                 container.append(item)
                 key, _, value = item_body.partition(":")
                 item[key.strip()] = _coerce(value)
-                # The mapping's own indent is the dash column + 2 ("- " width).
-                stack.append((indent + 1, item))
+                # Keys of this item sit right of the dash column.
+                stack.append((indent + 1, item, "map"))
             else:
                 container.append(_coerce(item_body))
             continue
@@ -184,15 +210,20 @@ def loads(text: str) -> dict[str, Any]:
                 ),
                 None,
             )
-            if nxt is not None and _indent_of(nxt) > indent and nxt.strip().startswith("- "):
-                child: Any = []
-            elif nxt is not None and _indent_of(nxt) > indent:
-                child = {}
+            nxt_indent = _indent_of(nxt) if nxt is not None else -1
+            nxt_is_dash = nxt is not None and (
+                nxt.strip().startswith("- ") or nxt.strip() == "-"
+            )
+            if nxt_is_dash and nxt_indent >= indent:
+                # A block list may sit at or right of its key's indent.
+                # The frame records the DASH indent so sibling items survive.
+                container[key] = []
+                stack.append((nxt_indent, container[key], "list"))
+            elif nxt is not None and nxt_indent > indent:
+                container[key] = {}
+                stack.append((indent, container[key], "map"))
             else:
-                child = None  # `key:` with nothing under it
-            container[key] = child
-            if child is not None:
-                stack.append((indent, child))
+                container[key] = None  # `key:` with nothing under it
     return root
 
 

@@ -104,6 +104,36 @@ after: sentinel
     assert parsed["after"] == "sentinel"
 
 
+@pytest.mark.parametrize(
+    ("style", "text"),
+    [
+        # Indented under the key — the style the kit's own config uses.
+        ("indented", "a:\n  - k: 1\n    j: 2\n  - k: 3\nb: 9\n"),
+        # At the SAME indent as the key. Equally valid YAML, and what most
+        # formatters emit. This used to parse to {'a': None, 'j': 2, 'b': 9} —
+        # the list dropped and its nested keys leaked into the parent mapping,
+        # silently, with no error. Worst possible failure for a config reader.
+        ("flush", "a:\n- k: 1\n  j: 2\n- k: 3\nb: 9\n"),
+        # Flush list nested inside a mapping, with a sibling key after it.
+        ("flush-nested", "top:\n  a:\n  - k: 1\n    j: 2\n  b: 9\nz: 1\n"),
+    ],
+)
+def test_block_list_indent_styles(style, text):
+    parsed = kitconfig.loads(text)
+    owner = parsed["top"] if style == "flush-nested" else parsed
+    assert owner["a"] == [{"k": 1, "j": 2}, {"k": 3}] or owner["a"] == [{"k": 1, "j": 2}]
+    assert owner["b"] == 9
+    if style == "flush-nested":
+        assert parsed["z"] == 1
+        assert "j" not in parsed and "j" not in owner  # no key leakage
+
+
+def test_flush_list_of_scalars():
+    parsed = kitconfig.loads("markers:\n- first\n- second\nafter: 1\n")
+    assert parsed["markers"] == ["first", "second"]
+    assert parsed["after"] == 1
+
+
 def test_comments_are_stripped_but_not_inside_values():
     parsed = kitconfig.loads(
         """
