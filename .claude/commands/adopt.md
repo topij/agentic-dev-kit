@@ -1,3 +1,7 @@
+---
+description: Selectively adopt agentic-dev-kit into an existing repo — inspect what's already present, propose an install plan the operator confirms, then install only the missing pieces without clobbering existing files. Use when integrating the kit into a mature repository rather than a fresh one.
+---
+
 Selectively adopt agentic-dev-kit into an **existing** repo — install only the pieces
 the repo lacks, point the config at conventions it already has, and never clobber a
 file. The counterpart to `init.sh` (which assumes a fresh/near-empty repo). Runs
