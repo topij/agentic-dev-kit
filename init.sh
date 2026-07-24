@@ -343,7 +343,7 @@ seed_doc() {
     echo "note: template $_tmpl missing — skipped $_target" >&2
     return 0
   fi
-  if [ -f "$_target" ] && ! grep -q "$TEMPLATE_MARKER" "$_target" 2>/dev/null; then
+  if [ -f "$_target" ] && ! grep -qF "$TEMPLATE_MARKER" "$_target" 2>/dev/null; then
     echo "$_target already in use — left untouched"
     return 0
   fi
@@ -364,7 +364,14 @@ install_hooks() {
     echo "note: not a git repo yet — run 'git init' then re-run ./init.sh to install hooks" >&2
     return 0
   fi
-  hookdir="$(git rev-parse --git-path hooks 2>/dev/null || echo .git/hooks)"
+  # core.hooksPath wins over $GIT_DIR/hooks when set (pre-commit and several
+  # monorepo setups do set it). `rev-parse --git-path hooks` does NOT honor it,
+  # so installing there would put the shim somewhere git never reads — an
+  # inert hook, which is the exact failure this whole change exists to remove.
+  hookdir="$(git config --get core.hooksPath 2>/dev/null || true)"
+  if [ -z "$hookdir" ]; then
+    hookdir="$(git rev-parse --git-path hooks 2>/dev/null || echo .git/hooks)"
+  fi
   mkdir -p "$hookdir"
   for hook in pre-push; do
     src="${engines_dir}/hooks/${hook}"
