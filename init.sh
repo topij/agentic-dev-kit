@@ -1,10 +1,12 @@
 #!/bin/sh
 # init.sh — bootstrap for the agentic-dev-kit.
 #
-# Run once from the root of the repo you copied this kit into. Idempotent:
-# re-running re-prompts (showing the current value as the default) and only
-# ever adds missing lines — it never clobbers docs/handoff.md,
-# docs/friction-log.md, or duplicates .gitignore entries.
+# Run from the root of the repo you copied this kit into — at adoption, and
+# again after pulling a kit update (that is the supported upgrade path).
+# Idempotent: re-running re-prompts (showing the current value as the default),
+# migrates an older config schema forward without guessing over existing
+# values, and never clobbers a narrative doc that is already in use — only one
+# still carrying the shipped `devkit-template: unrendered` marker.
 #
 # Requires: sh, awk, grep, mv. No non-stdlib dependencies.
 
@@ -23,11 +25,15 @@ Bootstraps the agentic-dev-kit in the current repo:
      review.bots — each showing the current value in config/dev-model.yaml
      as the default. Press Enter to keep the default.
   2. Stamps the answers into config/dev-model.yaml in place.
-  3. Seeds docs/handoff.md and docs/friction-log.md from the kit's
-     skeletons, but ONLY if those files don't already exist.
-  4. Appends the kit's state-sandbox paths to .gitignore if they're
+  3. Migrates an older config schema forward in place (kit.version) and
+     stamps the current generation.
+  4. Renders the four narrative docs from docs/templates/ — but only when a
+     target is missing or still carries the unrendered marker, so a handoff
+     you are actually using is left byte-identical.
+  5. Appends the kit's state-sandbox paths to .gitignore if they're
      missing (never duplicates a line on re-run).
-  5. Prints the runtime-specific session-start invocation.
+  6. Installs the pre-push hook as a shim (honoring core.hooksPath).
+  7. Prints the runtime-specific session-start invocation.
 
 Safe to re-run at any time. Run it from the repo root (the directory that
 contains config/dev-model.yaml).
@@ -281,7 +287,6 @@ migrate_kit_schema() {
     - "<!-- this is an auto-generated comment: review in progress"
     - "<!-- walkthrough_start -->"
     - "actionable comments posted: 0"
-    - "review skipped"
     - "<!-- linear-linkback -->"
   unavailable_markers:
     - "bugbot needs on-demand usage enabled"
@@ -313,7 +318,9 @@ _render() {
   _tmpl="$1"
   _out="$2"
   awk -v project="$name" -v today="$(date +%Y-%m-%d)" \
-      -v tracker="$render_tracker_url" -v enginedir="$render_engine_dir" '
+      -v tracker="$render_tracker_url" -v enginedir="$render_engine_dir" \
+      -v handoff="$render_handoff_link" -v handoffhist="$render_handoff_history_link" \
+      -v frictionarch="$render_friction_archive_link" '
     function subst(s, tok, val,   i, acc) {
       acc = ""
       while ((i = index(s, tok)) > 0) {
@@ -328,6 +335,9 @@ _render() {
       line = subst(line, "{{DATE}}", today)
       line = subst(line, "{{TRACKER_URL}}", tracker)
       line = subst(line, "{{ENGINE_DIR}}", enginedir)
+      line = subst(line, "{{HANDOFF_HISTORY}}", handoffhist)
+      line = subst(line, "{{FRICTION_ARCHIVE}}", frictionarch)
+      line = subst(line, "{{HANDOFF}}", handoff)
       print line
     }
   ' "$_tmpl" > "${_out}.tmp.$$" && mv "${_out}.tmp.$$" "$_out"
@@ -496,6 +506,23 @@ friction_path="$(get_field "paths:" "" "^  friction_log:")"
 [ -n "$friction_path" ] || friction_path="docs/friction-log.md"
 friction_archive_path="$(get_field "paths:" "" "^  friction_log_archive:")"
 [ -n "$friction_archive_path" ] || friction_archive_path="docs/friction-log-archive.md"
+
+# Cross-links inside the rendered docs must point at the CONFIGURED paths, not
+# the kit's default filenames — an adopter who repointed paths.handoff_history
+# would otherwise ship a doc whose "older entries live in …" link 404s. When the
+# two docs are siblings (the common case) a bare filename is the correct relative
+# link; otherwise fall back to the repo-relative path.
+_doc_link() {
+  # _doc_link <from-path> <to-path>
+  if [ "$(dirname "$1")" = "$(dirname "$2")" ]; then
+    basename "$2"
+  else
+    printf '%s\n' "$2"
+  fi
+}
+render_handoff_history_link="$(_doc_link "$handoff_path" "$handoff_history_path")"
+render_handoff_link="$(_doc_link "$handoff_history_path" "$handoff_path")"
+render_friction_archive_link="$(_doc_link "$friction_path" "$friction_archive_path")"
 
 seed_doc "handoff" "$handoff_path"
 seed_doc "handoff-history" "$handoff_history_path"

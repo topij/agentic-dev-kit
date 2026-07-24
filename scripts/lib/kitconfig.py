@@ -32,10 +32,18 @@ Usage:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 DEFAULT_CONFIG_PATH = "config/dev-model.yaml"
+
+# A dash item opens a MAPPING only when it really looks like `key: value` —
+# YAML requires the colon be followed by whitespace or end-of-line. Testing for
+# a bare `":" in body` instead turns `- https://example.com` into
+# {"https": "//example.com"}: a silent guess, which this module's contract
+# explicitly forbids in favour of skipping.
+_DASH_MAPPING_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*:(?:\s|$)")
 
 # Sentinel so `get()` can distinguish "no default supplied" from a legitimate
 # default of None.
@@ -172,9 +180,10 @@ def loads(text: str) -> dict[str, Any]:
             item_body = stripped[2:].strip() if stripped != "-" else ""
             if not isinstance(container, list):
                 continue  # a stray dash with no owning key — skip, never guess
-            if ":" in item_body and not item_body.startswith(("[", '"', "'")):
+            if _DASH_MAPPING_KEY.match(item_body):
                 # `- path: docs/handoff.md` opens a mapping item whose remaining
-                # keys are indented further on the following lines.
+                # keys are indented further on the following lines. A scalar that
+                # merely contains a colon (`- https://host/p`) does not.
                 item: dict[str, Any] = {}
                 container.append(item)
                 key, _, value = item_body.partition(":")

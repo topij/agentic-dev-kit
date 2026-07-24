@@ -95,7 +95,6 @@ review:
     - "<!-- this is an auto-generated comment: review in progress"
     - "<!-- walkthrough_start -->"
     - "actionable comments posted: 0"
-    - "review skipped"
     - "<!-- linear-linkback -->"
   # Bodies signalling the reviewer could not run. Deliberately NOT noise: these
   # surface and block `done`, because a blocked bot is an action signal (run the

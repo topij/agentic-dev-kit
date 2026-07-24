@@ -13,6 +13,7 @@ Two things are pinned here:
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -154,7 +155,7 @@ def test_get_is_fail_loud_without_a_default():
     assert kitconfig.get(config, "a.b") == 1
     assert kitconfig.get(config, "a.missing", "fallback") == "fallback"
     assert kitconfig.get(config, "nope.deep", None) is None
-    with pytest.raises(KeyError, match="a.missing"):
+    with pytest.raises(KeyError, match=re.escape("a.missing")):
         kitconfig.get(config, "a.missing")
 
 
@@ -195,3 +196,32 @@ def test_shipped_skeletons_carry_the_unrendered_marker():
     for key in ("paths.handoff", "paths.friction_log"):
         doc = REPO_ROOT / kitconfig.get(config, key)
         assert "devkit-template: unrendered" in doc.read_text(encoding="utf-8"), doc
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # A scalar containing ':' is NOT a mapping — YAML requires the colon be
+        # followed by whitespace or end-of-line. Testing for a bare ':' in the
+        # body turned `- https://host/p` into {"https": "//host/p"}: a silent
+        # guess, which this module's contract forbids in favour of skipping.
+        ("a:\n  - https://example.com/path\n", ["https://example.com/path"]),
+        ("a:\n  - http://h:8080/x\n", ["http://h:8080/x"]),
+        ("a:\n  - 12:30 standup\n", ["12:30 standup"]),
+        # A genuine `key: value` item still opens a mapping.
+        ("a:\n  - k: v\n", [{"k": "v"}]),
+    ],
+)
+def test_dash_item_colon_is_not_always_a_mapping(text, expected):
+    assert kitconfig.loads(text)["a"] == expected
+
+
+def test_review_skipped_lives_only_in_unavailable_markers():
+    """`is_noise()` checks unavailability FIRST and returns False, so a marker in
+    both lists is dead weight in `noise_markers` and reads as a precedence
+    ambiguity. Keep it in exactly one place."""
+    config = kitconfig.load_config(SHIPPED_CONFIG)
+    noise = kitconfig.get_str_list(config, "review.noise_markers", [])
+    unavailable = kitconfig.get_str_list(config, "review.unavailable_markers", [])
+    assert "review skipped" in unavailable
+    assert not (set(noise) & set(unavailable)), "markers must not appear in both lists"
