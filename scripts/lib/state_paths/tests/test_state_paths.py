@@ -16,6 +16,8 @@ import pytest
 import state_paths.resolver as _sp
 from state_paths.paths import PathTraversalError
 from state_paths.resolver import (
+    CI_ENV_VARS_ENV,
+    DEFAULT_CI_ENV_VARS,
     JOB_NAME_ENV,
     REFUSE_UNSANDBOXED_ENV,
     ROOT_ENV,
@@ -24,6 +26,7 @@ from state_paths.resolver import (
     StateRootError,
     UnsandboxedStateWriteError,
     _marker_state_root,
+    ci_env_vars,
     glob_state,
     glob_state_cache,
     repo_state_root,
@@ -36,11 +39,18 @@ from state_paths.resolver import (
 @pytest.fixture(autouse=True)
 def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Start each test with all sandbox/cron env signals unset so the resolution
-    chain (and the unsandboxed-lane guard) is explicit, and reset the warn-once flag."""
+    chain (and the unsandboxed-lane guard) is explicit, and reset the warn-once flag.
+
+    Every cron/CI marker var must be cleared, not just ``JOB_NAME``: this suite
+    runs *in* GitHub Actions, which exports ``CI`` / ``GITHUB_ACTIONS``, so a
+    leaked value would silently exempt every guard test from the very guard it
+    asserts on."""
     monkeypatch.delenv(STATE_ROOT_ENV, raising=False)
     monkeypatch.delenv(ROOT_ENV, raising=False)
-    monkeypatch.delenv(JOB_NAME_ENV, raising=False)
     monkeypatch.delenv(REFUSE_UNSANDBOXED_ENV, raising=False)
+    monkeypatch.delenv(CI_ENV_VARS_ENV, raising=False)
+    for name in DEFAULT_CI_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
     _sp._unsandboxed_warned = False
 
 
@@ -529,6 +539,94 @@ def test_guard_silent_for_cron_job_name(
     with caplog.at_level(logging.WARNING, logger=GUARD_LOGGER):
         resolve_write_path("cache/x.json")
     assert not _guard_warned(caplog)
+
+
+@pytest.mark.parametrize("var", DEFAULT_CI_ENV_VARS)
+def test_guard_silent_for_every_default_ci_signal(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    var: str,
+) -> None:
+    """Any default cron/CI marker exempts the write. `CI` / `GITHUB_ACTIONS` are
+    the ones that matter most: GitHub Actions exports those and no JOB_NAME, so
+    with the old Jenkins-only check the guard misfired on every CI write."""
+    wt = _make_lane_worktree(tmp_path)
+    monkeypatch.chdir(wt)
+    monkeypatch.setenv(var, "true")
+    with caplog.at_level(logging.WARNING, logger=GUARD_LOGGER):
+        resolve_write_path("cache/x.json")
+    assert not _guard_warned(caplog)
+
+
+def test_guard_warns_for_blank_ci_signal(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A whitespace-only marker is not "set" — the exemption needs a real value."""
+    wt = _make_lane_worktree(tmp_path)
+    monkeypatch.chdir(wt)
+    monkeypatch.setenv("CI", "   ")
+    with caplog.at_level(logging.WARNING, logger=GUARD_LOGGER):
+        resolve_write_path("cache/x.json")
+    assert _guard_warned(caplog)
+
+
+def test_ci_env_vars_override_replaces_the_default_list(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """DEVKIT_CI_ENV_VARS replaces rather than extends, so it can also NARROW the
+    exemption — a runner that must stay guarded despite exporting CI."""
+    wt = _make_lane_worktree(tmp_path)
+    monkeypatch.chdir(wt)
+    monkeypatch.setenv(CI_ENV_VARS_ENV, " MY_RUNNER , OTHER_RUNNER ")
+    assert ci_env_vars() == ("MY_RUNNER", "OTHER_RUNNER")
+
+    monkeypatch.setenv("CI", "true")  # no longer in the list
+    with caplog.at_level(logging.WARNING, logger=GUARD_LOGGER):
+        resolve_write_path("cache/x.json")
+    assert _guard_warned(caplog)
+
+    _sp._unsandboxed_warned = False
+    caplog.clear()
+    monkeypatch.setenv("OTHER_RUNNER", "job-17")
+    with caplog.at_level(logging.WARNING, logger=GUARD_LOGGER):
+        resolve_write_path("cache/y.json")
+    assert not _guard_warned(caplog)
+
+
+def test_blank_ci_env_vars_override_keeps_the_defaults(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`export DEVKIT_CI_ENV_VARS=` (or a list of only separators) must not
+    silently drop the exemption — fail open to the documented defaults."""
+    wt = _make_lane_worktree(tmp_path)
+    monkeypatch.chdir(wt)
+    for blank in ("", "   ", " , , "):
+        monkeypatch.setenv(CI_ENV_VARS_ENV, blank)
+        assert ci_env_vars() == DEFAULT_CI_ENV_VARS, repr(blank)
+
+    monkeypatch.setenv(CI_ENV_VARS_ENV, "")
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    with caplog.at_level(logging.WARNING, logger=GUARD_LOGGER):
+        resolve_write_path("cache/x.json")
+    assert not _guard_warned(caplog)
+
+
+def test_ci_signal_does_not_defeat_the_opt_in_refusal(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Precedence is unchanged: the CI exemption is checked BEFORE the refusal, so
+    a genuine CI writer is exempt even with REFUSE set — and a lane with no CI
+    signal still hard-fails."""
+    wt = _make_lane_worktree(tmp_path)
+    monkeypatch.chdir(wt)
+    monkeypatch.setenv(REFUSE_UNSANDBOXED_ENV, "1")
+
+    with pytest.raises(UnsandboxedStateWriteError):
+        resolve_write_path("cache/a.json")
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    assert resolve_write_path("cache/b.json") == wt.resolve() / "state" / "cache" / "b.json"
 
 
 def test_guard_silent_for_env_sandbox(
