@@ -236,6 +236,123 @@ def test_record_review_persists_only_expected_current_head(
 
 
 # --------------------------------------------------------------------------- #
+# review.require_ci — convergence on a repo with no CI
+# --------------------------------------------------------------------------- #
+
+
+def test_zero_check_pr_can_never_be_green_while_require_ci_holds() -> None:
+    """The safe default: no real check ran, so nothing may report green — this is
+    what stops an autonomous merge on a PR whose CI never started."""
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch.summarize_checks([], require_ci=True)["all_green"] is False
+    # An informational-only rollup has no *blocking* check either.
+    informational_only = pr_watch.summarize_checks(
+        [{"context": "CodeRabbit", "state": "PENDING"}], require_ci=True
+    )
+    assert informational_only["all_green"] is False
+    assert informational_only["informational"] == 1
+
+
+def test_zero_check_pr_is_green_when_require_ci_is_false() -> None:
+    """A repo with no CI at all: without this, `blocking_total > 0` makes `done`
+    unreachable forever — the watch loop never terminates and merge always refuses."""
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch.summarize_checks([], require_ci=False)["all_green"] is True
+    assert (
+        pr_watch.summarize_checks(
+            [{"context": "CodeRabbit", "state": "PENDING"}], require_ci=False
+        )["all_green"]
+        is True
+    )
+
+
+def test_require_ci_defaults_to_the_configured_value() -> None:
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch._REQUIRE_CI is True  # this repo's config
+    assert pr_watch.summarize_checks([])["all_green"] is False
+
+
+@pytest.mark.parametrize("require_ci", [True, False])
+def test_real_checks_are_classified_identically_under_both_settings(
+    require_ci: bool,
+) -> None:
+    """`require_ci` may ONLY change the zero-blocking-check verdict. With real
+    checks present, every tally and verdict is byte-identical to today."""
+    pr_watch = _load_pr_watch()
+    green = [{"name": "tests", "conclusion": "SUCCESS"}]
+    pending = [{"name": "tests", "conclusion": None, "status": "IN_PROGRESS"}]
+    failing = [{"name": "tests", "conclusion": "FAILURE"}]
+    mixed = [
+        {"name": "tests", "conclusion": "SUCCESS"},
+        {"name": "lint", "conclusion": "ERROR"},
+        {"context": "CodeRabbit", "state": "PENDING"},
+    ]
+
+    assert pr_watch.summarize_checks(green, require_ci=require_ci) == {
+        "total": 1,
+        "success": 1,
+        "pending": 0,
+        "informational": 0,
+        "informational_non_green": 0,
+        "failing": [],
+        "all_green": True,
+    }
+    assert pr_watch.summarize_checks(pending, require_ci=require_ci)["all_green"] is False
+    assert pr_watch.summarize_checks(failing, require_ci=require_ci)["all_green"] is False
+    mixed_summary = pr_watch.summarize_checks(mixed, require_ci=require_ci)
+    assert mixed_summary["all_green"] is False
+    assert mixed_summary["failing"] == [{"name": "lint", "status": "ERROR"}]
+    assert mixed_summary["informational"] == 1
+    assert mixed_summary["informational_non_green"] == 1
+
+
+def test_zero_check_pr_still_needs_current_head_review_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`require_ci: false` is not a merge waiver — the receipt becomes THE gate."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_REQUIRE_CI", False)
+    view = _green_view(statusCheckRollup=[])
+
+    without_receipt = pr_watch.build_report(view, [], set())
+    stale_receipt = pr_watch.build_report(
+        view, [], set(), review_receipt={"head": "older", "source": "fallback:codex"}
+    )
+    with_receipt = pr_watch.build_report(
+        view, [], set(), review_receipt={"head": "abc123", "source": "fallback:codex"}
+    )
+
+    assert without_receipt["checks"]["all_green"] is True
+    assert without_receipt["done"] is False
+    assert (
+        "independent review evidence is missing for current head"
+        in without_receipt["merge_blockers"]
+    )
+    assert stale_receipt["done"] is False
+    assert with_receipt["done"] is True
+
+
+def test_zero_check_pr_never_settles_done_while_require_ci_holds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_REQUIRE_CI", True)
+
+    report = pr_watch.build_report(
+        _green_view(statusCheckRollup=[]),
+        [],
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:codex"},
+    )
+
+    assert report["checks"]["all_green"] is False
+    assert report["done"] is False
+
+
+# --------------------------------------------------------------------------- #
 # review-bot knowledge comes from config, not from engine literals
 # --------------------------------------------------------------------------- #
 

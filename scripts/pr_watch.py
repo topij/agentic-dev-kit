@@ -339,14 +339,31 @@ def assert_draft_state(
 # ------------------------------------------------------------------- pure logic
 
 
-def summarize_checks(rollup: list[dict]) -> dict:
+def summarize_checks(rollup: list[dict], *, require_ci: bool | None = None) -> dict:
     """Collapse a statusCheckRollup into counts + the list of failing checks.
 
     Informational status contexts (``_INFORMATIONAL_CHECK_NAMES``, e.g.
     CodeRabbit) are excluded from the blocking tally — they never count toward
-    ``pending`` / ``failing`` and ``all_green`` requires at least one real
-    (non-informational) check.
+    ``pending`` / ``failing``.
+
+    ``require_ci`` (default: ``review.require_ci`` from config, itself default
+    ``True``) decides whether ``all_green`` additionally demands at least one
+    real, non-informational check:
+
+    - ``True`` — a PR with zero blocking checks is **not** green. This is the
+      safe default: it stops an autonomous merge on a PR whose CI never ran.
+    - ``False`` — a zero-check PR can be green. Needed for a repo with no CI at
+      all, where the ``blocking_total > 0`` clause otherwise makes ``done``
+      unreachable forever, so the watch loop never terminates and
+      ``dev_session.sh merge`` always refuses.
+
+    ``False`` does not remove the quality gate: :func:`decide_done` separately
+    requires an independent-review receipt bound to the *current* head, so on a
+    CI-less repo that receipt becomes the only gate — which is why the flag is
+    opt-in per repo rather than inferred from an empty rollup.
     """
+    if require_ci is None:
+        require_ci = _REQUIRE_CI
     terminal_ok = {"SUCCESS", "NEUTRAL", "SKIPPED"}
     bad = {
         "FAILURE",
@@ -380,7 +397,11 @@ def summarize_checks(rollup: list[dict]) -> dict:
         "informational": informational,
         "informational_non_green": informational_non_green,
         "failing": failing,
-        "all_green": not failing and pending == 0 and blocking_total > 0,
+        "all_green": (
+            not failing
+            and pending == 0
+            and (blocking_total > 0 or not require_ci)
+        ),
     }
 
 
