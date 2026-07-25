@@ -1009,7 +1009,8 @@ def summarize_review_bots(
     - **unavailable** — an ``unavailable_markers`` hit on either surface: a
       comment body (already detected today) *or* a bot check's description (#23,
       the surface that was invisible). Never blocks anything. It is an action
-      signal: run the configured fallback review.
+      signal: run the fallback review panel
+      (docs/agentic-dev-kit/fallback-review-panel.md).
 
       Only a **check**-surface hit suppresses the pending block below. A check
       describes the bot's state now; a comment describes the past, and
@@ -1530,21 +1531,24 @@ def record_review(
         # what it says" counted as two lenses. This is the one part of the
         # claim that IS checkable: the lens roster is configuration, not
         # something the caller invents at record time.
+        # Count only lenses the config DECLARES, but do not forbid extras.
+        # Requiring every name to be in the roster made "two disjoint lenses is
+        # the floor, not the ceiling" false: a genuine third ad-hoc lens was
+        # refused, and the error pushed the operator to UNDER-claim a three-lens
+        # review. Counting roster hits still blocks the forgery this replaced,
+        # where `,` is punctuation rather than a separator ("correctness, i.e.
+        # does it do what it says" names one roster lens).
         if _PANEL_LENS_NAMES:
-            unknown = sorted(distinct - _PANEL_LENS_NAMES)
-            if unknown:
-                raise ValueError(
-                    f"--lenses named {', '.join(unknown)}, which is not in "
-                    f"review.fallback_panel.lenses ({', '.join(sorted(_PANEL_LENS_NAMES))}). "
-                    "Name the configured lenses, or record under a single-lens source"
-                )
+            distinct &= _PANEL_LENS_NAMES
         if len(distinct) < 2:
             raise ValueError(
                 f"a {source!r} receipt asserts two independent lenses, but "
-                f"--lenses named {len(distinct)} distinct ({', '.join(named_lenses) or 'none'}). "
-                "Run the second lens, or record what actually ran under a "
-                "single-lens source (e.g. fallback:codex) — see "
-                "docs/agentic-dev-kit/fallback-review-panel.md"
+                f"--lenses named {len(distinct)} of the configured roster "
+                f"({', '.join(sorted(_PANEL_LENS_NAMES)) or 'none declared'}); "
+                f"you gave {', '.join(named_lenses) or 'none'}. Run the second "
+                "lens, add it to review.fallback_panel.lenses if it is new, or "
+                "record what actually ran under a single-lens source (e.g. "
+                "fallback:codex) — see docs/agentic-dev-kit/fallback-review-panel.md"
             )
     if named_lenses:
         receipt["lenses"] = named_lenses
@@ -1588,7 +1592,7 @@ def _flat(text: object, n: int = 120) -> str:
     line in two and leaves the first half reading as a completed panel:
 
         review evidence: fallback:panel — 2 lenses (adversarial, correctness)
-        (recorded) — ⚠ lenses not stated
+        (recorded) — ⚠ claims a panel but states no lenses
 
     `_excerpt` already established this convention for comment bodies; the
     receipt fields skipped it.
@@ -1884,7 +1888,7 @@ def render(report: dict) -> str:
             lines.append(
                 f"  ⚠ review bot {entry['bot']} check {entry['check']} still pending after "
                 f"{entry['age_minutes']}m (past the {grace:g}m grace) — "
-                "treated as not coming; run the configured fallback review"
+                "treated as not coming; run the fallback review panel (docs/agentic-dev-kit/fallback-review-panel.md)"
             )
     # What the current-head receipt actually stands for. The gate cannot judge
     # this — `source` is free text an agent chooses — so the honest move is to

@@ -10,8 +10,8 @@ This closes the gap where the kit only had prose asking the agent to run `/pr-wa
 unasked (Principle #8: "a rule that lives only in a doc is a wish").
 
 Generalized from a project-specific version: the reminder names whichever review
-bot(s) and the fallback PANEL (or, with none configured, the single fallback
-command) this repo actually configures, read from
+bot(s) and the fallback PANEL (or, when fewer than two lenses are configured,
+the single fallback command) this repo actually configures, read from
 `config/dev-model.yaml` via `scripts/lib/kitconfig.py` — never a hardcoded bot name
 (Principle #10, "No hardcoding"). `paths.engines` resolves where `pr_watch.py` lives
 so the reminder's poll command is correct even when the kit is vendored under a

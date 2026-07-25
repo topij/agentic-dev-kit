@@ -2515,14 +2515,19 @@ def test_a_case_variant_panel_source_cannot_evade_the_lens_requirement(
             _record(monkeypatch, pr_watch, source=variant, lenses="adversarial")
 
 
-def test_an_invented_lens_name_is_refused_for_a_panel_receipt(
+def test_an_invented_lens_name_does_not_count_toward_the_panel_floor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The lens roster is configuration, not something a caller invents at
-    record time — which is the one part of the panel claim that IS checkable."""
+    record time — which is the one part of the panel claim that IS checkable.
+
+    Names outside the roster are recorded but not counted. Forbidding them
+    outright broke "two disjoint lenses is the floor, not the ceiling": a
+    genuine third ad-hoc lens was refused.
+    """
     pr_watch = _load_pr_watch()
 
-    with pytest.raises(ValueError, match="not in review.fallback_panel.lenses"):
+    with pytest.raises(ValueError, match="of the configured roster"):
         _record(monkeypatch, pr_watch,
                 lenses="correctness, i.e. does it do what it says")
 
@@ -2559,3 +2564,65 @@ def test_a_hand_edited_bots_behind_head_cannot_break_the_receipt_render() -> Non
             {"pr": 9, "review_receipt": {"head": "abc", "source": "s",
                                          "bots_behind_head": junk}}
         )
+
+
+def test_every_unavailability_line_points_at_the_panel_not_the_degraded_mode() -> None:
+    """This PR redefines `review.fallback_commands` as the DEGRADED mode, so
+    "the configured fallback" now names the wrong thing.
+
+    The strings were changed at two of three sites and pinned by none — the
+    existing assertions matched the `review unavailable` prefix, never the
+    pointer, so reverting the change passed the whole suite. That is the
+    "named by a test and pinned by nothing" class this PR ships doctrine about.
+    """
+    pr_watch = _load_pr_watch()
+
+    outage_comment = pr_watch.build_report(
+        _green_view(
+            comments=[{"id": "c1", "author": {"login": "coderabbitai"},
+                       "body": "Review limit reached."}]
+        ),
+        [], set(), now=NOW,
+    )
+    outage_check = pr_watch.build_report(
+        _green_view(), [], set(),
+        check_details=[_bot_check(description="Review rate limited")], now=NOW,
+    )
+    aged_out = pr_watch.build_report(
+        _green_view(), [], set(),
+        check_details=[
+            _bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(600))
+        ],
+        now=NOW,
+    )
+
+    for label, report in (
+        ("comment surface", outage_comment),
+        ("check surface", outage_check),
+        ("grace-cancelled", aged_out),
+    ):
+        rendered = pr_watch.render(report)
+        assert "fallback review panel" in rendered, label
+        assert "configured fallback review" not in rendered, label
+
+
+def test_the_panel_gate_counts_roster_lenses_and_allows_extras(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """See `test_two_lenses_is_the_floor_not_the_ceiling` for why."""
+    pr_watch = _load_pr_watch()
+
+    # Two roster lenses, plus a genuine third: accepted, and all three recorded.
+    receipt, _ = _record(
+        monkeypatch, pr_watch, lenses="adversarial,correctness,security"
+    )
+    assert receipt["lenses"] == ["adversarial", "correctness", "security"]
+
+    # One roster lens plus punctuation is still one lens.
+    with pytest.raises(ValueError, match="of the configured roster"):
+        _record(monkeypatch, pr_watch,
+                lenses="correctness, i.e. does it do what it says")
+
+    # Two invented names cannot fake a panel.
+    with pytest.raises(ValueError, match="of the configured roster"):
+        _record(monkeypatch, pr_watch, lenses="security,performance")

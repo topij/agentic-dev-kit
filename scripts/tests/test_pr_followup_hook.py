@@ -104,7 +104,7 @@ def test_exits_zero_on_malformed_or_unexpected_stdin(monkeypatch, capsys, stdin_
     assert out == ""
 
 
-def test_reminder_names_configured_bots_not_a_hardcoded_bot(monkeypatch):
+def test_reminder_names_configured_bots_not_a_hardcoded_bot():
     """The reminder must be sourced from config (review.bots / fallback_panel),
     never a hardcoded bot literal — this is the whole point of generalizing the
     reference implementation (Principle #10, "No hardcoding")."""

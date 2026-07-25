@@ -26,19 +26,18 @@ of it.
 
 ## The lenses
 
-Configured in `review.fallback_panel.lenses`. The kit ships two, because they
-are the two the doctrine names:
+Configured in `review.fallback_panel.lenses` — **that is where each lens's
+brief lives**, as its `focus`, and it is what you hand the reviewer. Restating
+the briefs here would give the kit two copies to drift apart, so this section
+describes only what the two shipped lenses are *for*:
 
-- **adversarial** — assume the change is wrong and try to prove it. Bypasses,
-  fail-open paths, wedges, inputs the author did not consider, and *whether the
-  new guard actually guards*.
-- **correctness** — assume the change works and ask what it *says*. Stale
-  comments and docstrings, claims that overstate what is verified, tests whose
-  names promise more than their bodies check, drift between the diff and its PR
-  body.
+- **adversarial** — starts from "this is wrong" and tries to prove it.
+- **correctness** — starts from "this works" and asks what it *says*.
 
-Add or replace lenses for your own risk profile (a data-migration lens, a
-performance lens). Two disjoint lenses is the floor, not the ceiling.
+They are the two the doctrine names, and they are chosen to overlap as little
+as possible. Add or replace lenses for your own risk profile (a data-migration
+lens, a performance lens): two disjoint lenses is the floor, not the ceiling,
+and `--record-review` counts roster lenses without forbidding extras.
 
 ## The contract every lens gets
 
@@ -62,7 +61,21 @@ author re-reading their own diff.
    suite.
 6. **Report, do not fix.** A lens that edits loses the disjointness: it starts
    defending its own changes on the next round.
-7. **State what was verified clean, and how.** Absence of findings is only
+7. **Mutate in an isolated copy, never the shared tree.** Mutation testing needs
+   temporary writes, and lenses run concurrently. Discovered the hard way on the
+   PR that added this file: one lens's mutations appeared to the other as an
+   external process corrupting the repo, and it "restored" them mid-run — so one
+   lens's results were unreliable and the other nearly destroyed live work. Give
+   each lens a scratch copy or its own git worktree, and require it to leave the
+   shared tree byte-identical.
+7. **Mutate in an isolated copy, never the shared tree.** Mutation testing needs
+   temporary writes, and lenses run concurrently. Discovered the hard way on the
+   PR that added this file: one lens's mutations appeared to the other as an
+   external process corrupting the repo, and it "restored" them mid-run — so one
+   lens's results were unreliable and the other nearly destroyed live work. Give
+   each lens a scratch copy or its own git worktree, and require it to leave the
+   shared tree byte-identical.
+8. **State what was verified clean, and how.** Absence of findings is only
    evidence if you know what was actually checked.
 
 ## Running it
@@ -92,7 +105,8 @@ author re-reading their own diff.
    just another string.
 
    The defence that does not depend on the label is the **poll render**, which
-   states the recorded lens count every time the PR is polled:
+   states the recorded lens count on every poll once a current-head receipt
+   exists (no receipt, or one bound to an older head, prints nothing):
 
    ```text
    review evidence: fallback:codex — ⚠ ONE lens (correctness) — not a dual-lens pass
