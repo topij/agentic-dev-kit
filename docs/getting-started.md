@@ -15,6 +15,11 @@ The loop you're setting up:
 
 See the [README diagram](../README.md#how-it-fits-together) for the whole picture.
 
+**Prerequisites.** `init.sh` itself needs only POSIX `sh`, `awk`, and `git`. The
+engines additionally need [`uv`](https://docs.astral.sh/uv/) (they're PEP-723
+single-file scripts) and, for `pr-watch` / `parallel`, the GitHub CLI `gh`,
+authenticated (`gh auth status`). No PyYAML — the config reader is stdlib-only.
+
 ## 1 · Adopt the kit
 
 Click **Use this template** on GitHub and clone the result, or copy the kit's
@@ -24,6 +29,11 @@ contents into an existing repo's root:
 cp -r /path/to/agentic-dev-kit/. .
 ./init.sh
 ```
+
+> Already adopted the kit in this repo before? Don't repeat this from scratch —
+> pull the new kit files and re-run `./init.sh`. See the README's
+> [Upgrading an already-adopted repo](../README.md#upgrading-an-already-adopted-repo)
+> section for what that does and doesn't touch.
 
 `init.sh` prompts you for a handful of values — project name, agent runtime, tracker, the
 protected branch, your review bot — and stamps them into `config/dev-model.yaml`.
