@@ -24,6 +24,11 @@ jobs:
         run: test -x init.sh
       - name: Run state and portability tests
         run: python -m pytest scripts/lib/state_paths/tests scripts/tests -q
+      - name: kit-manifest.json must be in sync
+        # A stale manifest silently degrades every adopter's drift report to
+        # "unknown-version", so the self-check is a gate, not a convenience.
+        # Stdlib-only by design, so no uv needed here.
+        run: python scripts/kit_doctor.py
       - name: Engines must work without PyYAML
         # The stdlib config reader exists so engines carry no third-party
         # dependency. Prove it in an env where PyYAML genuinely is not installed.

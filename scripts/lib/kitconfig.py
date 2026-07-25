@@ -273,6 +273,19 @@ def get(config: dict[str, Any], dotted_key: str, default: Any = _MISSING) -> Any
     return node
 
 
+def resolve_path(config: dict[str, Any], dotted_key: str, *, root: Path | None = None) -> Path:
+    """Resolve a config path value (``"paths.handoff"``) to an absolute ``Path``.
+
+    A relative value resolves against the repo root (or ``root`` if given); an
+    already-absolute value passes through unchanged.
+    """
+    value = get(config, dotted_key)
+    candidate = Path(str(value))
+    if candidate.is_absolute():
+        return candidate
+    return (root or repo_root()) / candidate
+
+
 def get_str_list(config: dict[str, Any], dotted_key: str, default: list[str]) -> list[str]:
     """``get`` narrowed to a list of strings, tolerating a single scalar.
 

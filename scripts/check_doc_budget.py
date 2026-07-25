@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["pyyaml"]
+# dependencies = []
 # ///
 """Warn-only tripwire: nudge an archive sweep when a handoff doc grows too large.
 
@@ -18,7 +18,7 @@ exit 1 when over budget (e.g. if you ever want it as a soft CI signal).
 
 The tracked docs + their budgets come from ``config/dev-model.yaml``'s
 ``doc_budgets`` list (``{path, budget, archive, remedy}``) — see
-``scripts/lib/devmodel_config.py``. Adjust the budgets there, not here.
+``scripts/lib/kitconfig.py``. Adjust the budgets there, not here.
 
 Usage:
 
@@ -43,12 +43,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-from devmodel_config import _repo_root, get, load_config  # noqa: E402
+from kitconfig import get, load_config, repo_root  # noqa: E402
 
 # Discover the repo root by walking up for a `.git` marker (via devmodel_config)
 # rather than assuming a fixed `scripts/<script>.py` depth — so this keeps working
 # when the kit is vendored under a nested dir (e.g. scripts/devkit/).
-REPO_ROOT = _repo_root()
+REPO_ROOT = repo_root()
 
 
 @dataclass(frozen=True)
