@@ -22,12 +22,19 @@ are now separate, and the schema change that separates them is purely additive.
 **Theme —** Made the Phase 3 sequencing decision, and it changed under scrutiny — twice.
 Both times the correction came from asking what a *stale reader* of the mechanism would do.
 
+> **What "Phase 3" and "the cs-toolkit back-port" mean.** cs-toolkit
+> (`/Users/topi/Coding/in-parallel/cs-toolkit`, a separate private repo) is where this kit's
+> mechanisms originated; the kit generalized them, and the back-port is returning the
+> improved versions. Phase 3 is the review-receipt + merge-gate slice of that. The vocabulary
+> has never been written down outside this handoff, which made the claim below unverifiable
+> from inside this repo — recorded here so the next session doesn't have to reconstruct it.
+
 - **The blocking problem was not the porting order.** `decide_done` conflated "is there
   more for me to fix?" with "is this authorized to merge?", because `cmd_merge` had no
   other hook — it re-polls `pr_watch --json` and gates on `done`. That conflation, not the
-  sequence of ports, is what would have wedged cs-toolkit's nightly fixer (its Step 6.2
-  watches to green-and-clean and records no receipt). Fixing it removed a whole phase from
-  the plan.
+  sequence of ports, is what would have wedged cs-toolkit's nightly fixer — its per-lane
+  review step (`.claude/commands/nightly-fixer.md` Step 6.2 in that repo) watches to
+  green-and-clean and records no receipt. Fixing it removed a whole phase from the plan.
 - **#22 merged.** `converged` (watch loop) and `mergeable` (merge gate) are now distinct;
   `dev_session.sh merge` gates on `mergeable`. Tests 196 → 202.
 - **The first cut of #22 failed open, and was rejected in review.** It redefined `done` to
@@ -44,8 +51,8 @@ Both times the correction came from asking what a *stale reader* of the mechanis
 
 **Decided**
 
-- Enforce at the merge point, not at `done`. A watch loop asking "anything left to fix?"
-  should never be answered "no" only once a review receipt exists.
+- Enforce at the merge point, never at `converged`. A watch loop asking "anything left to
+  fix?" should never be answered "no" only once a review receipt exists.
 - A field that a safety gate reads may be added to, never redefined.
 - #19 and #23 get designed together — they are the same ambiguity on two surfaces, and
   both run into the informational-check exclusion being load-bearing against wedging.
@@ -60,8 +67,15 @@ Both times the correction came from asking what a *stale reader* of the mechanis
   rate-limit arrived as a status-check *description* on a check classified informational,
   so nothing surfaced it (#23). The doctrine's "a blocked bot is an action signal" rule can
   only fire if the outage is detected.
-- Reviewing one's own PR satisfies the doctrine's floor, not its intent — recorded in the
-  friction log rather than treated as a solved problem.
+- **#22 merged without satisfying review rules 2 or 3, and that should be recorded as a
+  violation rather than a compromise.** The doctrine has no "floor" the author's own pass
+  can meet: rule 2 says a single-lens verdict is "not a green light", and rule 3 wants
+  re-review until a pass finds nothing new — but the fallback's approve was written in the
+  same pass that produced `32f3e4f`, so the final commit was reviewed by nothing.
+  CodeRabbit's only review was bound to the first commit, before the redesign.
+- **A cold-context subagent reviewer found what three self-review passes missed** — a stale
+  comment on the merge gate itself, describing the design that was rejected. Authorship
+  anchoring, not capability, is what self-review cannot escape.
 
 ▶ Next: fix **#19 + #23 together** (Phase 3b) — the queued-vs-unavailable ambiguity, on
 both the comment and status-check surfaces. Design constraint: the informational-check
@@ -126,7 +140,7 @@ written down rules it was itself violating.**
   required. Corrected in #21: marking ready is the lane's, landing it is the cockpit's.
   **The lesson isn't "check for drift" — it's that finding two sources doesn't tell you
   which one is right, and I picked by proximity rather than by testing either against the
-  baseline."
+  baseline.**
 - **A guard that fails open must be loud.** Three separate silent-no-op bugs this session
   (`origin/main`, the uninstalled hook, `paths.engines`). Silence is indistinguishable from
   "checked and clean".
@@ -136,9 +150,10 @@ written down rules it was itself violating.**
   queued, and its four valid findings landed after the merge. `decide_done` can't tell the
   two apart.
 
-✔ Resolved in the session above. The proposed order (merge gate → receipts behind a flag →
-wire the fixer → flip) was replaced: the flag existed to defer a breakage caused by `done`
-conflating two predicates, so splitting them removed the need for it.
+▶ Next: superseded by the 2026-07-25 Phase 3a session (PR #22). The proposed order (merge
+gate → receipts behind a flag → wire the fixer → flip) was replaced: the flag existed to
+defer a breakage caused by `done` conflating two predicates, so splitting them removed the
+need for it.
 
 ______________________________________________________________________
 

@@ -746,10 +746,12 @@ cmd_merge() {
     report="$(GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" \
         uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json)" \
         || _die "pr-watch failed for PR #$pr"
-    # Gate on `mergeable`, NOT `done`. `done` is the watch-loop predicate
-    # ("anything left to fix?") and is deliberately true on a green, comment-clean
-    # PR that carries no review receipt. `mergeable` is the merge-gate predicate:
-    # done AND no deterministic merge blocker AND a receipt bound to this head.
+    # Gate on `mergeable`: converged AND no deterministic merge blocker AND a
+    # review receipt bound to this head. The report's `done` is an unchanged
+    # alias of `mergeable`, so either key would be correct today; `mergeable` is
+    # named because it says what this gate means. The key that must NEVER gate a
+    # merge is `converged` — the watch-loop predicate ("anything left to fix?"),
+    # which is deliberately true on a green, comment-clean PR carrying no receipt.
     # Read the flag pr_watch computes — never re-derive it here, or this gate
     # becomes a second copy of the contract that can drift from the engine's.
     IFS=$'\t' read -r mergeable validated_pr validated_base validated_head <<< "$(printf '%s' "$report" | python3 -c '

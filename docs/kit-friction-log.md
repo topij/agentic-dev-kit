@@ -13,25 +13,32 @@
 
 ## 2026-07-25 — inbox
 
-- **The fallback review pass has no independence when the cockpit authored the PR (severity: M).**
+- **The fallback review pass has no independence when the cockpit authored the PR (severity: H).**
   On #22 CodeRabbit was rate-limited, so `review.fallback_commands` ran — but the agent
-  running it was the same one that wrote the diff. It did find three real issues, so the
-  floor held; what it cannot provide is the *adversarial disjointness* the dual-lens rule in
-  `safety-critical-changes.md` is built on ("an adversarial pass and a general-correctness
-  pass routinely find **disjoint** holes"). Self-review collapses both lenses into one
-  perspective, on the exact code that perspective just produced. Not issue-shaped yet
-  because the fix is unclear — options include requiring a fresh-context reviewer for the
-  fallback, or blocking the merge until the primary bot recovers when the change is
-  safety-critical class. Worth watching for a second occurrence before deciding.
+  running it was the same one that wrote the diff. It found three real issues, yet
+  `safety-critical-changes.md` rule 2 is explicit that this is not a pass: "A single-lens
+  'converged' verdict is an incomplete review, not a green light." Rule 3 also went unmet —
+  the fallback's own approve was written in the same pass that produced the final commit, so
+  nothing reviewed `32f3e4f`. **Proposed fix:** make `review.fallback_commands` a *panel*
+  spec rather than an inline command — one fresh-context subagent per lens
+  (adversarial/bypass-focused + general-correctness, the two the doctrine says find
+  **disjoint** holes), each handed the raw diff with no framing from the author, and a
+  distinct receipt source (`fallback:panel`) so the audit trail does not read as a primary
+  review. Demonstrated the same day: a cold subagent on #24 found a stale merge-gate comment
+  that three self-review passes had walked past. Severity raised from M — this is a
+  documented rule being violated, not a soft gap.
 
-- **A safety-critical PR merged without the primary reviewer ever seeing the final design (severity: M).**
-  Also #22: CodeRabbit's only completed review covered the first commit, and the design then
-  changed materially (the fail-open rework). The rate limit never lifted, so the merged code
-  carries one review — of a version that no longer exists. The receipt mechanism records
-  *that a review happened at this head*, which was satisfied by the fallback; it has no
-  notion of "the primary reviewer reviewed an earlier, materially different design." Related
-  to #23 but distinct: #23 is about detecting the outage, this is about what a receipt should
-  mean when the outage persists across a redesign.
+- **A safety-critical PR merged without any review of its final design (severity: H).**
+  Also #22: CodeRabbit's only completed review was bound to the first commit; the design then
+  changed materially (the fail-open rework), and the rate limit never lifted. The receipt
+  mechanism records *that a review happened at this head* — satisfied by the fallback — with
+  no notion of "the primary reviewer saw an earlier, materially different design."
+  **Proposed fix:** invalidate a receipt when the diff changes *shape* rather than only when
+  the head moves — e.g. require a fresh receipt when a later push touches a file the recorded
+  review never saw. Cheaper interim: have `pr_watch` surface the primary bot's last-reviewed
+  SHA next to the current head, so the gap is visible at merge time instead of reconstructible
+  only from the PR thread. Related to #23 but distinct: #23 is about detecting the outage,
+  this is about what a receipt should mean when the outage outlasts a redesign.
 
 - **The `cp -r` quickstart can't distinguish kit-owned from adopter-owned files (severity: M).**
   Any file the kit tracks lands in an adopter's repo, which is why this repo's own narrative
