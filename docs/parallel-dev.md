@@ -54,13 +54,13 @@ flowchart TD
     Plan --> L1["lane A<br/>worktree + branch + sandbox"]
     Plan --> L2["lane B<br/>worktree + branch + sandbox"]
     Plan --> L3["lane C<br/>worktree + branch + sandbox"]
-    L1 --> D1["draft PR · green"]
-    L2 --> D2["draft PR · green"]
-    L3 --> D3["draft PR · green"]
+    L1 --> D1["green · marked ready"]
+    L2 --> D2["green · marked ready"]
+    L3 --> D3["green · marked ready"]
     D1 --> R["cockpit reconciles<br/>list --watch + reconcile_sessions.sh"]
     D2 --> R
     D3 --> R
-    R --> M["review + merge<br/>self-merge or operator-merge<br/>per lane's pre-assigned class"]
+    R --> M["cockpit merges<br/>via dev_session.sh merge (self class)<br/>or operator sign-off (operator class)"]
 ```
 
 ### 1 · Plan the batch — `parallel plan`
@@ -100,12 +100,16 @@ The exact command, every flag, and the headless JSON descriptor are in
 [`workflows/parallel-headless.md`](agentic-dev-kit/workflows/parallel-headless.md)
 (unattended); for task-oriented recipes, see [`parallel-howto.md`](parallel-howto.md).
 
-### 3 · Each lane works to a draft-green PR
+### 3 · Each lane works to a green, ready-for-review PR
 
-A lane's job ends at **draft-PR-green**, not at merge — bound by the same **lane
-contract** every launch mechanism injects verbatim into the lane's prompt (draft PR,
-active CI polling, never touching the narrative files, branch hygiene). Fetch it
-yourself with `dev_session.sh print-contract`, or read it in
+A lane's job ends at **green-and-ready**, not at merge — bound by the same **lane
+contract** every launch mechanism injects verbatim into the lane's prompt (mark ready the
+moment the branch is complete, active CI polling, never touching the narrative files,
+branch hygiene, never merging). Draft is only for the window while commits are still
+landing: a finished PR left in draft never triggers the review bots, so it starves itself
+of the independent pass the merge gate then demands. **Marking ready is the lane's; landing
+it is the cockpit's.** Fetch the contract yourself with `dev_session.sh print-contract`, or
+read it in
 [`workflows/parallel-headless.md`](agentic-dev-kit/workflows/parallel-headless.md#the-lane-contract-preamble-inject-this-verbatim)
 — this doc intentionally doesn't restate it, so the two copies can't drift apart.
 
@@ -163,7 +167,9 @@ scripts/dev_session.sh new metrics-rename --headless --merge-class self      # c
 scripts/dev_session.sh new cli-help-typo --headless --merge-class self       # cluster C · cheap tier
 ```
 
-Each lane works to a draft-green PR while you watch `list --watch` from the cockpit.
+Each lane works to a green, ready-for-review PR while you watch `list --watch` from the
+cockpit — each flipping its own PR ready as it finishes, so the review bots pick them up
+staggered rather than all at once.
 The two cheap self-merge lanes land through `dev_session.sh merge`; the auth rate-limit
 lane (security-adjacent) hands back for operator review. You reconcile all three,
 merge, and only then update `docs/handoff.md` with what shipped — from the cockpit,
