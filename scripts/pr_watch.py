@@ -924,16 +924,20 @@ def bot_review_coverage(
         # to be tolerant of.
         if not isinstance(sha, str) or not sha:
             continue
-        # `str()`: a non-string timestamp reaching the `>=` below raises
-        # TypeError against a sibling review's string.
-        submitted = str(raw.get("submittedAt") or "")
+        # Type-checked, NOT coerced. `str(...)` is equally crash-proof and
+        # actively wrong: it renders garbage as a string that sorts ABOVE every
+        # real timestamp (`"20260725" > "2026-07-25T…"`, `"{'x': 1}" >`
+        # anything), so a malformed review at the head displaces the real dated
+        # one and sets `covers_head` — suppressing the very warning this exists
+        # to raise. Unusable timestamps must sort to the BOTTOM, exactly like
+        # the missing ones below.
+        submitted = raw.get("submittedAt")
+        submitted = submitted if isinstance(submitted, str) else ""
         if bot not in latest or submitted >= latest[bot]["submitted_at"]:
             latest[bot] = {
                 "bot": bot,
                 "sha": sha,
                 "submitted_at": submitted,
-                # `sha` is a non-empty str by here, so a falsy `head` already
-                # compares False — the guard is intent, not arithmetic.
                 "covers_head": sha == head,
             }
     return sorted(latest.values(), key=lambda e: e["submitted_at"], reverse=True)
@@ -948,7 +952,8 @@ def summarize_review_bots(
     grace_minutes: float | None = None,
     pending_since: dict | None = None,
     signal: str = "ok",
-    coverage: list[dict] | None = None,
+    reviews: list[dict] | None = None,
+    head: str | None = None,
 ) -> dict:
     """Resolve each configured review bot to *unavailable*, *pending*, or neither.
 
@@ -1004,8 +1009,9 @@ def summarize_review_bots(
     The map is scoped to a head: a push means a fresh review, so the caller
     resets it.
 
-    Returns ``{grace_minutes, signal, unavailable, pending, blockers,
-    pending_since}``. ``blockers`` are ready-made ``merge_blockers`` strings;
+    Returns ``{grace_minutes, signal, coverage, unavailable, pending, blockers,
+    pending_since}``. ``coverage`` is :func:`bot_review_coverage` over
+    ``reviews``/``head`` — which commit each bot's last review actually saw. ``blockers`` are ready-made ``merge_blockers`` strings;
     ``pending_since`` is the updated map for the caller to persist.
 
     ``unavailable[].bot`` is ``None`` when a comment matched a marker but its
@@ -1147,9 +1153,12 @@ def summarize_review_bots(
     return {
         "grace_minutes": grace_minutes,
         "signal": "skipped" if not bots else signal,
-        # Per-bot last-reviewed SHA — see :func:`bot_review_coverage`. Reported,
-        # never gating.
-        "coverage": coverage or [],
+        # Per-bot last-reviewed SHA — see :func:`bot_review_coverage`. Computed
+        # here rather than passed in, so every caller gets it: as a parameter it
+        # arrived EMPTY on the `record_review` path, where "no data" and "every
+        # bot is current" were indistinguishable — on the one path whose whole
+        # subject is what a receipt covers. Reported, never gating.
+        "coverage": bot_review_coverage(reviews or [], head, bots=bots),
         "unavailable": unavailable,
         "pending": pending,
         "blockers": blockers,
@@ -1395,7 +1404,9 @@ def record_review(
     expected_head = expected_head.strip()
     if not expected_head:
         raise ValueError("expected reviewed head must not be empty")
-    snapshot = _gh_json(["pr", "view", str(pr), "--json", "number,headRefOid"])
+    snapshot = _gh_json(
+        ["pr", "view", str(pr), "--json", "number,headRefOid,reviews"]
+    )
     current_head = snapshot.get("headRefOid")
     if not current_head:
         raise ValueError("PR has no headRefOid; cannot bind review evidence")
@@ -1409,6 +1420,7 @@ def record_review(
     # Stays "ok" under an explicit override: `override` already records that the
     # bot state was deliberately not consulted, so a second key would be noise.
     bot_signal = "ok"
+    behind: list[dict] = []
     if not allow_pending_bot:
         # Checks only. Comments cannot cancel a pending block (see
         # :func:`summarize_review_bots`), so fetching them here would cost a
@@ -1421,8 +1433,11 @@ def record_review(
             now=now,
             pending_since=read_pending_since(state, current_head),
             signal=details.signal,
+            reviews=snapshot.get("reviews") or [],
+            head=current_head,
         )
         bot_signal = bot_status["signal"]
+        behind = [e for e in bot_status["coverage"] if not e["covers_head"]]
         if bot_status["blockers"]:
             # Persist the first sighting BEFORE refusing. Without this, a cold
             # `--record-review` (no poll loop running) restarts the grace clock
@@ -1459,6 +1474,12 @@ def record_review(
         # was unreadable and there was no guard to run, so flagging it would put
         # a permanent false warning on every receipt a bot-less adopter takes.
         receipt["bot_signal"] = bot_signal
+    if behind:
+        # The sibling of `override` and `bot_signal`: all three record what this
+        # receipt does NOT stand for. Its own message says "a receipt taken now
+        # does not mean it saw this design" — which was printing everywhere
+        # except where a receipt is taken.
+        receipt["bots_behind_head"] = {e["bot"]: e["sha"] for e in behind}
     state["review_receipt"] = receipt
     save_state(pr, state)
     return {"pr": pr, "recorded_review": True, "review_receipt": receipt}
@@ -1512,7 +1533,10 @@ def build_report(
       bot resolved to *unavailable* (an outage announced on either the comment
       or the check-description surface — an action signal, never a blocker) or
       *pending* (a verdict still coming, which blocks the merge gate until it
-      ages past the grace window). Advisory to ``converged`` by construction.
+      ages past the grace window). Also carries ``coverage`` (which commit each
+      bot's last review saw) and ``signal`` (whether that state could be read at
+      all) — both reported, neither gating. Advisory to ``converged`` by
+      construction.
     - ``merge_blockers`` — deterministic reasons the PR is not currently safe to
       merge (draft, blocked/unknown merge state, requested changes, non-open PR,
       missing current-head review evidence, or a configured review bot whose own
@@ -1543,9 +1567,8 @@ def build_report(
         now=now or datetime.now(timezone.utc),
         pending_since=prior_pending_since or {},
         signal=details.signal,
-        coverage=bot_review_coverage(
-            view.get("reviews") or [], view.get("headRefOid")
-        ),
+        reviews=view.get("reviews") or [],
+        head=view.get("headRefOid"),
     )
 
     # False-settle guard: right after a push, `gh` can still report the OLD
@@ -1685,12 +1708,18 @@ def render(report: dict) -> str:
             "  ⚠ review-bot state could not be read — a queued or rate-limited "
             "reviewer will NOT be detected on this poll (see stderr)"
         )
+    # A bot mid-review of a just-pushed head is behind it BY CONSTRUCTION, and
+    # the pending line above already says a verdict is coming. Warning there too
+    # would fire on every poll of the healthy window and train the operator to
+    # skim past the case this exists for: a reviewer that went away commits ago.
+    reviewing = {e["bot"] for e in bots.get("pending") or []}
     for entry in bots.get("coverage") or []:
-        if not entry["covers_head"]:
+        if not entry.get("covers_head") and entry["bot"] not in reviewing:
             lines.append(
                 f"  ⚠ review coverage: {entry['bot']}'s last review was of "
                 f"{entry['sha'][:7]}, not the current head — a receipt taken now "
-                "does not mean it saw this design"
+                "would not stand for its review of this design; re-request it, or "
+                "say so explicitly"
             )
     for entry in bots.get("unavailable") or []:
         lines.append(
@@ -1740,6 +1769,11 @@ def render_record_review(report: dict) -> str:
         lines.append(
             f"  ⚠ review-bot state was unreadable ({receipt['bot_signal']}) when this "
             "receipt was taken — the queued-reviewer guard did not run"
+        )
+    for bot, sha in (receipt.get("bots_behind_head") or {}).items():
+        lines.append(
+            f"  ⚠ {bot}'s last review was of {sha[:7]}, not this head — this receipt "
+            "does not stand for its review of this design"
         )
     return "\n".join(lines)
 

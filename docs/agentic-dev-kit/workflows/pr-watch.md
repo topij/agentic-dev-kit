@@ -172,7 +172,7 @@ Self-pace on a bounded cadence — don't busy-wait:
 
   None of this reaches `converged`. That is deliberate and load-bearing: the watch
   loop must be able to finish while a bot that never reports sits pending forever.
-  Every signal here feeds the merge gate only.
+  Every signal *above* feeds the merge gate only.
 
   It also reports **`review_bots.coverage`** — the commit each bot's *last*
   review actually saw. A receipt binds to the head and a push invalidates it,
@@ -183,13 +183,22 @@ Self-pace on a bounded cadence — don't busy-wait:
 
   ```
   ⚠ review coverage: coderabbit's last review was of 954b93f, not the current
-    head — a receipt taken now does not mean it saw this design
+    head — a receipt taken now would not stand for its review of this design;
+    re-request it, or say so explicitly
   ```
+
+  It defers to a bot that is currently *pending*: one mid-review of a just-pushed
+  head is behind it by construction, and the pending line already says a verdict
+  is coming. Warning in that window too would fire on every poll of the healthy
+  case and train you to skim past the one this exists for.
+
+  `--record-review` records the same thing on the receipt as `bots_behind_head`,
+  alongside `override` and `bot_signal` — all three say what the receipt does
+  *not* stand for.
 
   Reported, never gating — deliberately the cheap half of the problem, because
   invalidating a receipt on a shape change risks wedging a repo whose bot is
-  permanently unavailable. Treat it as the prompt to re-request a review, or to
-  say plainly what the receipt does and does not cover.
+  permanently unavailable.
 
   **Known gaps, so you don't mistake them for coverage:**
   - `coverage` reports only bots that have reviewed *and* whose review carried a

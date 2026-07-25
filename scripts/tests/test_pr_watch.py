@@ -1782,6 +1782,112 @@ def test_coverage_tolerates_a_missing_or_malformed_commit_field() -> None:
     assert orphan[0]["covers_head"] is False
 
 
+def test_the_coverage_warning_is_silent_when_the_bot_is_current() -> None:
+    """Selectivity is the entire value of this warning, and it was the one thing
+    left unpinned after a dedicated mutation pass.
+
+    Two mutants survived on the same hole: rendering the line unconditionally,
+    and wiring the WRONG head into the coverage call. Both are invisible unless
+    a test drives `build_report` -> `render` with a bot whose last review IS at
+    the head and asserts silence — unit-level `covers_head is True` does not.
+    """
+    pr_watch = _load_pr_watch()
+    at_head = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+    behind = _green_view(
+        reviews=[_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")]
+    )
+
+    assert "review coverage" not in pr_watch.render(
+        pr_watch.build_report(at_head, [], set())
+    )
+    assert "review coverage" in pr_watch.render(
+        pr_watch.build_report(behind, [], set())
+    )
+
+
+def test_the_coverage_warning_defers_to_a_bot_that_is_mid_review() -> None:
+    """A bot reviewing a just-pushed head is behind it by construction.
+
+    The pending line already says a verdict is coming, so warning as well would
+    fire on every poll of the healthy window — training the operator to skim
+    past the case this exists for, a reviewer that went away commits ago.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")]
+    )
+    mid_review = [
+        _bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))
+    ]
+
+    quiet = pr_watch.render(
+        pr_watch.build_report(view, [], set(), check_details=mid_review, now=NOW)
+    )
+    loud = pr_watch.render(pr_watch.build_report(view, [], set(), now=NOW))
+
+    assert "review coverage" not in quiet
+    assert "has not reported yet" in quiet  # the pending line still says it
+    assert "review coverage" in loud
+
+
+def test_a_receipt_records_which_bots_were_behind_the_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The message says "a receipt taken now does not mean it saw this design" —
+    and it was printing everywhere except where a receipt is taken.
+
+    `override` and `bot_signal` both record what a receipt does NOT stand for.
+    This is their sibling, and it was absent from the one path whose entire
+    subject is what the receipt covers.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh_json",
+        lambda args: {
+            "number": 9,
+            "headRefOid": "abc123",
+            "reviews": [_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")],
+        },
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    recorded: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+
+    report = pr_watch.record_review(9, "fallback:panel", "abc123", now=NOW)
+
+    assert recorded[0]["review_receipt"]["bots_behind_head"] == {"coderabbit": "0ldc0de"}
+    assert "does not stand for its review" in pr_watch.render_record_review(report)
+
+
+def test_an_unusable_timestamp_sorts_to_the_bottom_not_the_top() -> None:
+    """`str()` coercion is crash-proof and actively wrong.
+
+    It renders garbage as a string sorting ABOVE every real timestamp
+    (`"20260725" > "2026-07-25T…"`), so a malformed review at the head displaces
+    the real dated one and sets `covers_head` — suppressing the warning. The
+    neighbouring crash test fed exactly this input and asserted only that it did
+    not raise, walking straight over the hole.
+    """
+    pr_watch = _load_pr_watch()
+    dated = _review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")
+
+    for junk in (20260725, {"x": 1}, ["a"], 3.5):
+        at_head = {
+            "author": {"login": "coderabbitai"},
+            "commit": {"oid": "current"},
+            "submittedAt": junk,
+        }
+        covered = pr_watch.bot_review_coverage([dated, at_head], "current")
+        assert covered[0]["sha"] == "0ldc0de", junk
+        assert covered[0]["covers_head"] is False, junk
+
+
 def test_a_lookalike_login_cannot_claim_the_bot_reviewed_this_head() -> None:
     """The one property here with an actual adversary.
 
