@@ -61,13 +61,40 @@ silent failure mode:
 "older kit version" from "hand-edited". The report narrows it by schema version; you
 confirm with an actual diff in Step 3.
 
-## Step 2 — Migrate the config (idempotent)
+## Step 2 — Branch, refresh the migrator, then migrate
+
+**Branch first.** Everything from here mutates the repo — config, hooks, rendered
+docs — so the "runs on a branch" guarantee has to be established *before* the first
+mutation, not before the file copies in Step 3:
 
 ```bash
+git checkout -b chore/kit-upgrade
+```
+
+**Then refresh `init.sh` itself before running it.** This is the step that is easy to get
+backwards: the repo's existing `init.sh` is the *old* one, and it does not contain the new
+schema migrations — so running it would report success while silently applying nothing new.
+Take the fetched kit's copy first:
+
+```bash
+cp /tmp/agentic-dev-kit/init.sh ./init.sh
+chmod +x init.sh                                  # the kit ships it 100755; a copy can lose the bit
+mkdir -p docs/templates && cp /tmp/agentic-dev-kit/docs/templates/*.tmpl docs/templates/
 ./init.sh
 ```
 
-This is the supported config upgrade path, and it is safe to re-run any number of times.
+The templates have to land **before** `init.sh` runs, not with the other file copies in Step
+4: `init.sh` resolves `docs/templates/*.tmpl` relative to the working directory, so without
+them it prints `note: template … missing — skipped` and seeds nothing. For a repo whose
+narrative docs are already in use that is merely noise (they would have been left untouched
+anyway), but a **partially-adopted** repo missing one of the four docs would silently not get
+it seeded.
+
+Note this is also why running `/tmp/agentic-dev-kit/init.sh` in place of the copy is *not*
+equivalent: every path it reads — the config, the templates — resolves against the working
+directory, not against its own location, so it still needs the templates present here.
+
+`init.sh` is the supported config upgrade path, and it is safe to re-run any number of times.
 It only ever **adds** missing keys, never guesses over an existing value; it probes
 `paths.engines` from where engines actually are rather than defaulting; it stamps
 `kit.version`; it installs the pre-push hook as a shim (honoring `core.hooksPath`); and
@@ -79,11 +106,9 @@ Press Enter through every prompt to keep current values. Then re-read the diff o
 
 ## Step 3 — Refresh engines, by state
 
-Work through `kit_doctor`'s file list. **Branch first:**
-
-```bash
-git checkout -b chore/kit-upgrade
-```
+Work through `kit_doctor`'s file list. You are already on the branch from Step 2 —
+`init.sh` refreshed itself and migrated the config there, so those changes are captured
+too. Confirm with `git branch --show-current` before the first copy.
 
 - **`unchanged`** → copy the new version straight in. It is provably untouched, so there
   is nothing to lose.

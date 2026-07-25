@@ -147,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         statuses = evaluate(args.root, args.config)
-    except (FileNotFoundError, ValueError) as exc:
+    except (FileNotFoundError, KeyError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

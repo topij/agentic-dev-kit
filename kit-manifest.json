@@ -51,7 +51,7 @@
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
-      "sha256": "a402424a12278e6a2ba55f90692aef9e44e9f030932529b5e85208590fc4e6dd"
+      "sha256": "b56e93c8f2584d3086d3773dabcdaf440028af46546412a8bf704187079f4f48"
     },
     "scripts/dev_session.sh": {
       "role": "engine",

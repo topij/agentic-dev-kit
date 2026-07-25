@@ -225,3 +225,24 @@ def test_review_skipped_lives_only_in_unavailable_markers():
     unavailable = kitconfig.get_str_list(config, "review.unavailable_markers", [])
     assert "review skipped" in unavailable
     assert not (set(noise) & set(unavailable)), "markers must not appear in both lists"
+
+
+def test_check_doc_budget_handles_a_config_without_doc_budgets(tmp_path):
+    """The config reader is fail-loud by design (KeyError with no default), so
+    every engine that calls it must catch that too — otherwise a config missing
+    an optional-looking section crashes with a traceback instead of the intended
+    one-line error and exit 2. Caught post-merge on #16; the gap predated the
+    switch to kitconfig (devmodel_config.get was equally fail-loud)."""
+    import subprocess
+
+    cfg = tmp_path / "dev-model.yaml"
+    cfg.write_text("kit:\n  version: 2\npaths:\n  handoff: docs/handoff.md\n", encoding="utf-8")
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, str(REPO_ROOT / "scripts" / "check_doc_budget.py"), "--config", str(cfg)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2, result.stderr
+    assert "Traceback" not in result.stderr, result.stderr
+    assert "doc_budgets" in result.stderr
