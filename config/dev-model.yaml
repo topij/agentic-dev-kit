@@ -121,8 +121,8 @@ review:
   # pr_watch will report `done`. True is the safe default: it stops an autonomous
   # merge on a PR whose CI never ran. Set false for a repo with no CI at all —
   # otherwise pr-watch can never converge and `dev_session.sh merge` always
-  # refuses. With false, `done` additionally requires current-head review evidence
-  # (it already does) — that receipt becomes the only quality gate, so set this
+  # refuses. With false, `mergeable` still requires a current-head review receipt
+  # (it always does) — that receipt becomes the only quality gate, so set this
   # deliberately.
   require_ci: true
 
