@@ -14,10 +14,63 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-25 — first full assessment-and-remediation pass; the kit now fixes
-its own adoption path, and can diagnose an installed copy.
+Last updated: 2026-07-25 — Phase 3a shipped: the watch-loop predicate and the merge gate
+are now separate, and the schema change that separates them is purely additive.
 
 ## Latest session — 2026-07-25
+
+**Theme —** Made the Phase 3 sequencing decision, and it changed under scrutiny — twice.
+Both times the correction came from asking what a *stale reader* of the mechanism would do.
+
+- **The blocking problem was not the porting order.** `decide_done` conflated "is there
+  more for me to fix?" with "is this authorized to merge?", because `cmd_merge` had no
+  other hook — it re-polls `pr_watch --json` and gates on `done`. That conflation, not the
+  sequence of ports, is what would have wedged cs-toolkit's nightly fixer (its Step 6.2
+  watches to green-and-clean and records no receipt). Fixing it removed a whole phase from
+  the plan.
+- **#22 merged.** `converged` (watch loop) and `mergeable` (merge gate) are now distinct;
+  `dev_session.sh merge` gates on `mergeable`. Tests 196 → 202.
+- **The first cut of #22 failed open, and was rejected in review.** It redefined `done` to
+  mean watch-convergence. Because `/upgrade` refreshes engines **per file** (`missing` is a
+  supported state — a sized-down adoption installs some engines on purpose), a new
+  `pr_watch.py` can run against an older `dev_session.sh` whose gate reads `done` — which
+  would then have authorized merges on PRs with no review receipt at all.
+- **So the schema only grows.** `done` stays an unchanged alias of `mergeable`. Both skew
+  directions fail closed; the equivalence is pinned across the whole boolean input space
+  rather than by example.
+- **CodeRabbit was rate-limited**, so the configured fallback pass ran instead. It found
+  three further issues, including a docstring that claimed a compatibility guarantee the
+  *function* doesn't provide — the report **key** does.
+
+**Decided**
+
+- Enforce at the merge point, not at `done`. A watch loop asking "anything left to fix?"
+  should never be answered "no" only once a review receipt exists.
+- A field that a safety gate reads may be added to, never redefined.
+- #19 and #23 get designed together — they are the same ambiguity on two surfaces, and
+  both run into the informational-check exclusion being load-bearing against wedging.
+
+**Learned**
+
+- **Documentation does not reach a stale reader.** Redefining `done` was safe by every
+  local reading of the new code and unsafe in fact, because the component that would have
+  been wrong is the one that never sees the new docs. Version skew is not hypothetical
+  here: per-file engine upgrades are a supported, documented workflow.
+- **An unavailable reviewer can be indistinguishable from a clean one.** CodeRabbit's
+  rate-limit arrived as a status-check *description* on a check classified informational,
+  so nothing surfaced it (#23). The doctrine's "a blocked bot is an action signal" rule can
+  only fire if the outage is detected.
+- Reviewing one's own PR satisfies the doctrine's floor, not its intent — recorded in the
+  friction log rather than treated as a solved problem.
+
+▶ Next: fix **#19 + #23 together** (Phase 3b) — the queued-vs-unavailable ambiguity, on
+both the comment and status-check surfaces. Design constraint: the informational-check
+exclusion must keep preventing a wedge on a bot that never reports, so neither can be fixed
+by simply letting that check block. Wants CodeRabbit actually available for review.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-25
 
 **Theme —** Assessed the kit against its own ten principles, then fixed what the
 assessment found. Six PRs merged; tests 83 → 188. The recurring shape: **the kit had
@@ -83,11 +136,9 @@ written down rules it was itself violating.**
   queued, and its four valid findings landed after the merge. `decide_done` can't tell the
   two apart.
 
-▶ Next: decide the **Phase 3 sequencing** for the cs-toolkit back-port — porting the review
-receipts as-is would break the nightly fixer (nothing there records a receipt, so
-`decide_done` would report `done=False` forever on every PR it opens). Proposed order:
-additive merge gate first → receipts behind a flag → wire the fixer's own `/code-review`
-step to record → flip the flag.
+✔ Resolved in the session above. The proposed order (merge gate → receipts behind a flag →
+wire the fixer → flip) was replaced: the flag existed to defer a breakage caused by `done`
+conflating two predicates, so splitting them removed the need for it.
 
 ______________________________________________________________________
 

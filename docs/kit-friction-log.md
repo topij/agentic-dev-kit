@@ -13,6 +13,26 @@
 
 ## 2026-07-25 — inbox
 
+- **The fallback review pass has no independence when the cockpit authored the PR (severity: M).**
+  On #22 CodeRabbit was rate-limited, so `review.fallback_commands` ran — but the agent
+  running it was the same one that wrote the diff. It did find three real issues, so the
+  floor held; what it cannot provide is the *adversarial disjointness* the dual-lens rule in
+  `safety-critical-changes.md` is built on ("an adversarial pass and a general-correctness
+  pass routinely find **disjoint** holes"). Self-review collapses both lenses into one
+  perspective, on the exact code that perspective just produced. Not issue-shaped yet
+  because the fix is unclear — options include requiring a fresh-context reviewer for the
+  fallback, or blocking the merge until the primary bot recovers when the change is
+  safety-critical class. Worth watching for a second occurrence before deciding.
+
+- **A safety-critical PR merged without the primary reviewer ever seeing the final design (severity: M).**
+  Also #22: CodeRabbit's only completed review covered the first commit, and the design then
+  changed materially (the fail-open rework). The rate limit never lifted, so the merged code
+  carries one review — of a version that no longer exists. The receipt mechanism records
+  *that a review happened at this head*, which was satisfied by the fallback; it has no
+  notion of "the primary reviewer reviewed an earlier, materially different design." Related
+  to #23 but distinct: #23 is about detecting the outage, this is about what a receipt should
+  mean when the outage persists across a redesign.
+
 - **The `cp -r` quickstart can't distinguish kit-owned from adopter-owned files (severity: M).**
   Any file the kit tracks lands in an adopter's repo, which is why this repo's own narrative
   docs had to be renamed `kit-*.md` rather than simply filled in. `kit-manifest.json` now
