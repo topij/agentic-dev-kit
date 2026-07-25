@@ -82,28 +82,100 @@ def _find_repo_root(start: Path) -> Path:
 
 
 REPO_ROOT = _find_repo_root(Path(__file__).resolve())
-# Honor the DEVKIT_STATE_ROOT sandbox (parallel dev sessions — see
-# scripts/dev_session.sh) so a session's per-PR seen-set doesn't land in the
-# main checkout's state/. Inlined rather than via a shared state-paths helper
-# on purpose: pr_watch is deliberately stdlib-only (dependencies = []) for the
-# hot watch-and-fix loop. Own-dir state => no read-cascade; an absolute env
-# override else repo-root state/ (a relative override falls back rather than
-# raising — never crash the loop).
-_STATE_ENV = os.environ.get("DEVKIT_STATE_ROOT")
-_STATE_ROOT = (
-    Path(_STATE_ENV)
-    if _STATE_ENV and os.path.isabs(_STATE_ENV)
-    else REPO_ROOT / "state"
+
+# Sticky on-disk sandbox marker, written at the worktree root by a headless-lane
+# launcher (see scripts/lib/state_paths/). Same name/semantics as state_paths —
+# the two must agree or a lane's state splits in half (see below).
+STATE_ROOT_MARKER = ".devkit_state_root"
+
+
+def _marker_state_root(start: Path) -> Path | None:
+    """Sandbox root from a ``.devkit_state_root`` marker, walked up from ``start``.
+
+    Mirrors ``state_paths.resolver._marker_state_root``: walk up checking for the
+    marker, ceilinged at the first directory carrying a ``.git`` entry (checked
+    *after* the marker, so a marker sitting beside ``.git`` is still found), and
+    accept only an absolute path from inside it.
+
+    Deliberate divergence: state_paths *raises* on a relative/garbage marker,
+    while this returns ``None`` and lets the caller fall back. pr_watch runs in
+    the hot watch-and-fix loop, where the file's standing rule is "never crash
+    the loop" — the same reason a relative ``DEVKIT_STATE_ROOT`` falls back here
+    instead of raising.
+
+    ``start`` is this engine file's own directory rather than ``Path.cwd()``
+    (which is what state_paths uses): the marker lives at the worktree root and
+    the engine file lives *inside* that worktree, whereas the caller's cwd is
+    arbitrary — ``dev_session.sh`` invokes this engine from wherever the operator
+    happened to be.
+    """
+    for candidate in (start, *start.parents):
+        marker = candidate / STATE_ROOT_MARKER
+        try:
+            if marker.is_file():
+                raw = marker.read_text(encoding="utf-8").strip()
+                # Empty or relative -> ignore (fall back), never a silent redirect.
+                return Path(raw) if raw and os.path.isabs(raw) else None
+        except OSError:
+            return None  # unreadable marker -> fall back rather than crash
+        if (candidate / ".git").exists():
+            break  # worktree root: don't climb into an unintended ancestor
+    return None
+
+
+def _resolve_state_root(start: Path, repo_root: Path, state_root_env: str | None) -> Path:
+    """Absolute dir this engine's per-PR watch state lives under.
+
+    ``$DEVKIT_STATE_ROOT`` -> ``.devkit_state_root`` marker -> ``<repo>/state``,
+    the same precedence (and the same marker-only-when-the-env-var-is-unset rule)
+    as ``state_paths.resolver.state_root``. Honoring the marker is what keeps
+    ``dev_session.sh pr-watch <scope>`` — which exports the env var — and a bare
+    ``uv run pr_watch.py`` inside a marker-driven headless lane reading the SAME
+    per-PR file: while only the env var was honored, the two used different state,
+    so a ``--mark-seen`` through one path was invisible to the other and the merge
+    gate could re-surface already-acked findings.
+
+    Inlined rather than importing state_paths on purpose: pr_watch is deliberately
+    stdlib-only (``dependencies = []``) for the hot loop. Own-dir state, so no
+    read-cascade is needed — only the write root.
+    """
+    if state_root_env:
+        # A relative override falls back to the repo-root default rather than
+        # raising (never crash the loop), and does NOT consult the marker — an
+        # explicit env var, even a bad one, means the caller chose the root.
+        return (
+            Path(state_root_env)
+            if os.path.isabs(state_root_env)
+            else repo_root / "state"
+        )
+    marker = _marker_state_root(start)
+    return marker if marker is not None else repo_root / "state"
+
+
+_STATE_ROOT = _resolve_state_root(
+    Path(__file__).resolve().parent, REPO_ROOT, os.environ.get("DEVKIT_STATE_ROOT")
 )
 STATE_DIR = _STATE_ROOT / "pr-watch"
 
-# A comment is auto-noise (not a finding to act on) if its body matches any of
-# these. Keep this list tight — over-filtering would hide a real review.
+# ------------------------------------------------------- review-bot knowledge
 #
-# These defaults target a GitHub + CodeRabbit + Bugbot review setup — edit this
-# tuple to match whatever review-bot mix your own repo runs (a different org's
-# bot(s) will emit different marker strings).
-_NOISE_MARKERS = (
+# Which comment bodies are auto-noise, which signal a *down* reviewer, and which
+# status checks are advisory is **adopter knowledge, not engine logic** — it
+# depends entirely on the review-bot mix a given org runs. It therefore lives in
+# `config/dev-model.yaml` under `review.*`; the tuples below are only the
+# fallbacks used when that config is missing or unreadable.
+#
+# This is the difference between an engine you can update and one you can't: the
+# previous version told adopters to edit these literals in place, which forks the
+# engine and makes every later kit update a merge conflict (Principle #10).
+#
+# Read via `scripts/lib/kitconfig.py` — the kit's stdlib-only config reader —
+# specifically so this module keeps `dependencies = []` and never drags PyYAML
+# into the hot watch-and-fix loop.
+
+# Keep this list tight — over-filtering would hide a real review. Defaults target
+# a GitHub + CodeRabbit + Bugbot setup.
+_DEFAULT_NOISE_MARKERS = (
     "bugbot needs on-demand usage enabled",  # Cursor billing notice
     "<!-- this is an auto-generated comment: summarize by coderabbit",  # walkthrough
     "<!-- this is an auto-generated comment: review in progress",  # CodeRabbit "processing…" placeholder
@@ -117,7 +189,7 @@ _NOISE_MARKERS = (
 # carries a generic walkthrough/noise marker. Surfacing it is what triggers the
 # configured independent fallback; hiding it would turn a down reviewer into a
 # silent review waiver.
-_REVIEW_UNAVAILABLE_MARKERS = (
+_DEFAULT_REVIEW_UNAVAILABLE_MARKERS = (
     "bugbot needs on-demand usage enabled",
     "review limit reached",
     "rate limited by coderabbit",
@@ -132,10 +204,101 @@ _REVIEW_UNAVAILABLE_MARKERS = (
 # otherwise wedge the loop forever even though every real CI job is green. Its
 # actual findings surface as review comments (which DO block via
 # new_comments). Matched case-insensitively against the check name/context.
-#
-# Default targets CodeRabbit's status-check name — edit for your own
-# review-bot mix.
-_INFORMATIONAL_CHECK_NAMES = frozenset({"coderabbit"})
+_DEFAULT_INFORMATIONAL_CHECK_NAMES = ("coderabbit",)
+
+# Whether a PR must carry at least one real (non-informational) check before it
+# can read as green. True is the safe default — see :func:`summarize_checks`.
+_DEFAULT_REQUIRE_CI = True
+
+# Same pattern as check_doc_budget.py: the reader ships beside the engines, so
+# deriving its directory from THIS file keeps working when the kit is vendored
+# under a nested dir (scripts/devkit/).
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+
+
+def _load_review_config(
+    config_path: str | Path | None = None,
+) -> tuple[tuple[str, ...], tuple[str, ...], frozenset[str], bool]:
+    """Resolve the ``review.*`` knobs from config, falling back to the defaults.
+
+    ``config_path`` overrides the default ``config/dev-model.yaml`` lookup (used
+    by the tests to exercise a real adopter config without touching this repo's).
+
+    Returns ``(noise_markers, unavailable_markers, informational_checks,
+    require_ci)``. Marker strings are lower-cased here because every call site
+    matches them case-insensitively against a lower-cased body/name — so a
+    config author may write them in any case.
+
+    **Never raises.** A missing config file, an absent ``scripts/lib/``, a
+    parse failure, a wrong-typed value: all fall back to the in-module defaults,
+    because a config problem must not wedge or crash the watch loop. A config
+    that *exists* but could not be read warns on stderr, so a silently-ignored
+    config is still visible; a merely absent one is normal (the engine runs
+    standalone) and stays quiet.
+
+    Distinctions worth knowing:
+
+    - key absent / ``key:`` with no value -> the default list applies.
+    - key set to an explicit empty list (``noise_markers: []``) -> honored as
+      "filter nothing". Deliberate: an adopter with no review bots wants no
+      filtering, and over-filtering hides real findings.
+    - ``require_ci`` accepts only a real boolean; anything else (a stray
+      ``yes``, a typo) keeps the default. The unsafe direction here is reading
+      as *False* by accident, which would let a zero-check PR report green.
+    """
+    defaults = (
+        _DEFAULT_NOISE_MARKERS,
+        _DEFAULT_REVIEW_UNAVAILABLE_MARKERS,
+        frozenset(_DEFAULT_INFORMATIONAL_CHECK_NAMES),
+        _DEFAULT_REQUIRE_CI,
+    )
+    try:
+        from kitconfig import get, get_str_list, load_config
+
+        config = load_config() if config_path is None else load_config(config_path)
+        noise = get_str_list(config, "review.noise_markers", list(_DEFAULT_NOISE_MARKERS))
+        unavailable = get_str_list(
+            config,
+            "review.unavailable_markers",
+            list(_DEFAULT_REVIEW_UNAVAILABLE_MARKERS),
+        )
+        informational = get_str_list(
+            config,
+            "review.informational_checks",
+            list(_DEFAULT_INFORMATIONAL_CHECK_NAMES),
+        )
+        require_ci = get(config, "review.require_ci", _DEFAULT_REQUIRE_CI)
+        if not isinstance(require_ci, bool):
+            require_ci = _DEFAULT_REQUIRE_CI
+    except FileNotFoundError:
+        # `load_config` raises this for an absent config file — a standalone
+        # engine run. Defaults are exactly right; stay quiet.
+        return defaults
+    except Exception as exc:  # noqa: BLE001 — a config read must never break the loop
+        # Anything else means the config (or the reader beside it) IS there and
+        # could not be used: an unreadable file, a construct the parser rejects,
+        # a vendored copy missing scripts/lib/. Fall back, but say so — a
+        # silently-ignored config is how an adopter's settings become a no-op.
+        print(
+            f"warning: could not read review config ({exc}); "
+            "using pr_watch's built-in defaults",
+            file=sys.stderr,
+        )
+        return defaults
+    return (
+        tuple(marker.lower() for marker in noise),
+        tuple(marker.lower() for marker in unavailable),
+        frozenset(name.strip().lower() for name in informational if name.strip()),
+        require_ci,
+    )
+
+
+(
+    _NOISE_MARKERS,
+    _REVIEW_UNAVAILABLE_MARKERS,
+    _INFORMATIONAL_CHECK_NAMES,
+    _REQUIRE_CI,
+) = _load_review_config()
 
 
 # --------------------------------------------------------------------------- gh
@@ -236,14 +399,31 @@ def assert_draft_state(
 # ------------------------------------------------------------------- pure logic
 
 
-def summarize_checks(rollup: list[dict]) -> dict:
+def summarize_checks(rollup: list[dict], *, require_ci: bool | None = None) -> dict:
     """Collapse a statusCheckRollup into counts + the list of failing checks.
 
     Informational status contexts (``_INFORMATIONAL_CHECK_NAMES``, e.g.
     CodeRabbit) are excluded from the blocking tally — they never count toward
-    ``pending`` / ``failing`` and ``all_green`` requires at least one real
-    (non-informational) check.
+    ``pending`` / ``failing``.
+
+    ``require_ci`` (default: ``review.require_ci`` from config, itself default
+    ``True``) decides whether ``all_green`` additionally demands at least one
+    real, non-informational check:
+
+    - ``True`` — a PR with zero blocking checks is **not** green. This is the
+      safe default: it stops an autonomous merge on a PR whose CI never ran.
+    - ``False`` — a zero-check PR can be green. Needed for a repo with no CI at
+      all, where the ``blocking_total > 0`` clause otherwise makes ``done``
+      unreachable forever, so the watch loop never terminates and
+      ``dev_session.sh merge`` always refuses.
+
+    ``False`` does not remove the quality gate: :func:`decide_done` separately
+    requires an independent-review receipt bound to the *current* head, so on a
+    CI-less repo that receipt becomes the only gate — which is why the flag is
+    opt-in per repo rather than inferred from an empty rollup.
     """
+    if require_ci is None:
+        require_ci = _REQUIRE_CI
     terminal_ok = {"SUCCESS", "NEUTRAL", "SKIPPED"}
     bad = {
         "FAILURE",
@@ -277,7 +457,11 @@ def summarize_checks(rollup: list[dict]) -> dict:
         "informational": informational,
         "informational_non_green": informational_non_green,
         "failing": failing,
-        "all_green": not failing and pending == 0 and blocking_total > 0,
+        "all_green": (
+            not failing
+            and pending == 0
+            and (blocking_total > 0 or not require_ci)
+        ),
     }
 
 

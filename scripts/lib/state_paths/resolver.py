@@ -70,9 +70,26 @@ STATE_DIRNAME = "state"
 # root, holding the absolute sandbox path. Walked up from cwd when
 # DEVKIT_STATE_ROOT is unset — see :func:`_marker_state_root`.
 STATE_ROOT_MARKER = ".devkit_state_root"
-# Your cron/CI runner's job-name env var — exported for every scheduled /
-# automated invocation. Its presence marks a legitimate no-sandbox repo-root
-# ``state/`` writer, so the unsandboxed-lane guard skips it.
+# Env vars whose presence marks a legitimate no-sandbox repo-root ``state/``
+# writer: a scheduled/automated invocation. Any ONE of them being set to a
+# non-blank value makes the unsandboxed-lane guard skip.
+#
+# ``JOB_NAME`` alone was a Jenkins-ism: GitHub Actions — the CI this very kit
+# ships — exports ``CI`` / ``GITHUB_ACTIONS`` and no ``JOB_NAME``, so the
+# exemption never applied there and the guard misfired on every CI write.
+#
+# Override with a comma-separated ``DEVKIT_CI_ENV_VARS`` if your runner exports
+# something else; the override REPLACES this list rather than extending it, so it
+# can also narrow the exemption. A blank/unset override keeps these defaults (an
+# accidental ``export DEVKIT_CI_ENV_VARS=`` must not silently change behavior) —
+# to disable the exemption entirely, name a var you never set.
+#
+# ``state_paths`` stays import-free by design (it runs from a git hook), so this
+# is an ENV contract, not something read from config/dev-model.yaml.
+DEFAULT_CI_ENV_VARS = ("JOB_NAME", "CI", "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE")
+CI_ENV_VARS_ENV = "DEVKIT_CI_ENV_VARS"
+# Back-compat: the original single-var name. Kept exported because callers (and
+# the test suite) import it; ``DEFAULT_CI_ENV_VARS[0]`` is the same var.
 JOB_NAME_ENV = "JOB_NAME"
 # Opt-in: make the unsandboxed-lane guard a hard error instead of a warning
 # (teeth for an autonomous-batch launcher). Default = warn only, so cron/CI
@@ -210,6 +227,26 @@ def _is_truthy_env(name: str) -> bool:
     return bool(val and val.strip())
 
 
+def ci_env_vars() -> tuple[str, ...]:
+    """The env var names that mark a legitimate cron/CI no-sandbox writer.
+
+    ``$DEVKIT_CI_ENV_VARS`` (comma-separated) replaces
+    :data:`DEFAULT_CI_ENV_VARS`; a blank/unset value — or one that names no
+    usable var at all — keeps the defaults, so a stray ``export
+    DEVKIT_CI_ENV_VARS=`` can't silently drop the exemption.
+    """
+    raw = os.environ.get(CI_ENV_VARS_ENV)
+    if not raw or not raw.strip():
+        return DEFAULT_CI_ENV_VARS
+    names = tuple(part.strip() for part in raw.split(",") if part.strip())
+    return names or DEFAULT_CI_ENV_VARS
+
+
+def _detected_ci_env_var() -> str | None:
+    """Name of the first set (non-blank) cron/CI marker var, else ``None``."""
+    return next((name for name in ci_env_vars() if _is_truthy_env(name)), None)
+
+
 def _guard_unsandboxed_write() -> None:
     """Warn (or, opt-in, refuse) when a ``state/`` write would land in
     repo-root ``state/`` from an **unsandboxed parallel/background lane**.
@@ -223,8 +260,10 @@ def _guard_unsandboxed_write() -> None:
 
     - **no sandbox** — ``DEVKIT_STATE_ROOT`` unset/blank AND no
       ``.devkit_state_root`` marker walking up from cwd; **and**
-    - **not cron/CI** — ``JOB_NAME`` unset/blank (your cron/CI runner's
-      job-name env var, exported for every scheduled invocation); **and**
+    - **not cron/CI** — every var in :func:`ci_env_vars` unset/blank (the
+      runner's own signal, exported for every scheduled/automated invocation:
+      ``JOB_NAME``, ``CI``, ``GITHUB_ACTIONS``, … — overridable via
+      ``DEVKIT_CI_ENV_VARS``); **and**
     - **a linked worktree** — the discovered repo root's ``.git`` is a *file*
       (``git worktree add`` writes a gitdir pointer file), which the main
       checkout (a ``.git`` directory) is not.
@@ -245,7 +284,7 @@ def _guard_unsandboxed_write() -> None:
     # warn about an unsandboxed write that won't happen.
     if os.environ.get(STATE_ROOT_ENV):
         return  # explicit sandbox configured (state_root resolves/validates it)
-    if _is_truthy_env(JOB_NAME_ENV):
+    if _detected_ci_env_var() is not None:
         return  # cron/CI — a legitimate no-sandbox writer
     try:
         if _marker_state_root() is not None:
@@ -257,7 +296,8 @@ def _guard_unsandboxed_write() -> None:
         return  # main checkout (.git dir) or no marker → normal dev, not a lane
     msg = (
         f"writing repo-root state/ from an unsandboxed parallel lane — no "
-        f"${STATE_ROOT_ENV}, no {STATE_ROOT_MARKER} marker, ${JOB_NAME_ENV} unset, "
+        f"${STATE_ROOT_ENV}, no {STATE_ROOT_MARKER} marker, no cron/CI signal "
+        f"({', '.join('$' + name for name in ci_env_vars())} all unset), "
         f"in a linked worktree ({repo}). A parallel or background-agent lane that "
         f"writes state/cache/ should run sandboxed so it can't clobber production "
         f"state: launch it via a sandboxed worktree launcher, or export "

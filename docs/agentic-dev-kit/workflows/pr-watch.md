@@ -126,8 +126,21 @@ Self-pace on a bounded cadence — don't busy-wait:
   summaries) is filtered out by the engine. Reviewer-unavailable notices are
   deliberately *not* noise: they surface and block `done`; acknowledging one still
   leaves the current-head review-evidence blocker until the configured fallback runs
-  and records its receipt. Edit the marker lists in `<engine-dir>/pr_watch.py` for
-  your own bot mix.
+  and records its receipt.
+- **Tune this for your own bot mix in `config/dev-model.yaml`, never in the engine.**
+  `review.noise_markers`, `review.unavailable_markers` and
+  `review.informational_checks` are read from config; the engine only carries them
+  as fallbacks for a missing config. Editing the literals inside
+  `<engine-dir>/pr_watch.py` forks the engine and turns every later kit update into
+  a merge conflict. A key you omit keeps the kit default; an explicit empty list
+  (`noise_markers: []`) means "filter nothing".
+- `review.require_ci` (default `true`) is whether a PR must have at least one real,
+  non-informational check before it can report green. Leave it `true` unless the repo
+  genuinely has no CI — with no checks and `require_ci: true`, `done` can never flip
+  and `dev_session.sh merge` will always refuse. Setting it `false` does **not**
+  weaken the review gate: `done` still requires a current-head independent-review
+  receipt, which then becomes the only quality gate — so set it deliberately.
 - This is interactive-only. A scheduled job that opens its own PRs should be excluded
-  from this loop by your cron/CI runner's job-name signal, so an automated open never
-  silently enters an unattended watch loop.
+  from this loop by your cron/CI runner's env signal (any of `DEVKIT_CI_ENV_VARS`,
+  default `JOB_NAME,CI,GITHUB_ACTIONS,GITLAB_CI,BUILDKITE`), so an automated open
+  never silently enters an unattended watch loop.
