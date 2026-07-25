@@ -1011,8 +1011,9 @@ def summarize_review_bots(
 
     Returns ``{grace_minutes, signal, coverage, unavailable, pending, blockers,
     pending_since}``. ``coverage`` is :func:`bot_review_coverage` over
-    ``reviews``/``head`` — which commit each bot's last review actually saw. ``blockers`` are ready-made ``merge_blockers`` strings;
-    ``pending_since`` is the updated map for the caller to persist.
+    ``reviews``/``head`` — which commit each bot's last review actually saw.
+    ``blockers`` are ready-made ``merge_blockers`` strings; ``pending_since`` is
+    the updated map for the caller to persist.
 
     ``unavailable[].bot`` is ``None`` when a comment matched a marker but its
     author matches no configured bot — a human writing "review skipped" in a PR
@@ -1420,7 +1421,16 @@ def record_review(
     # Stays "ok" under an explicit override: `override` already records that the
     # bot state was deliberately not consulted, so a second key would be noise.
     bot_signal = "ok"
-    behind: list[dict] = []
+    # Computed BEFORE the override branch, and independently of the check fetch:
+    # it comes from the `pr view` snapshot. Populating it inside
+    # `if not allow_pending_bot` made the receipt silent on exactly the path this
+    # exists for — the override IS the #22/#25 scenario, a bot queued or
+    # rate-limited through a redesign and merged on a fallback receipt.
+    behind = [
+        e
+        for e in bot_review_coverage(snapshot.get("reviews") or [], current_head)
+        if not e["covers_head"]
+    ]
     if not allow_pending_bot:
         # Checks only. Comments cannot cancel a pending block (see
         # :func:`summarize_review_bots`), so fetching them here would cost a
@@ -1437,7 +1447,6 @@ def record_review(
             head=current_head,
         )
         bot_signal = bot_status["signal"]
-        behind = [e for e in bot_status["coverage"] if not e["covers_head"]]
         if bot_status["blockers"]:
             # Persist the first sighting BEFORE refusing. Without this, a cold
             # `--record-review` (no poll loop running) restarts the grace clock
@@ -1711,10 +1720,19 @@ def render(report: dict) -> str:
     # A bot mid-review of a just-pushed head is behind it BY CONSTRUCTION, and
     # the pending line above already says a verdict is coming. Warning there too
     # would fire on every poll of the healthy window and train the operator to
-    # skim past the case this exists for: a reviewer that went away commits ago.
-    reviewing = {e["bot"] for e in bots.get("pending") or []}
+    # skim past the case this exists for.
+    #
+    # Only a BLOCKING pending entry defers, though. A pending check that has aged
+    # past the grace window, or been cancelled by an announced outage, is the
+    # engine saying "this verdict is not coming" — which is precisely the
+    # reviewer-went-away case, so suppressing coverage there silenced the warning
+    # in the one situation it was written for.
+    reviewing = {e["bot"] for e in bots.get("pending") or [] if e.get("blocking")}
     for entry in bots.get("coverage") or []:
-        if not entry.get("covers_head") and entry["bot"] not in reviewing:
+        if not entry["covers_head"] and entry["bot"] not in reviewing:
+            # Direct indexing, not `.get`: bot_review_coverage always emits all
+            # four keys, so a `.get` here would only imply a partial entry is
+            # expected while the very next lookup would KeyError on one.
             lines.append(
                 f"  ⚠ review coverage: {entry['bot']}'s last review was of "
                 f"{entry['sha'][:7]}, not the current head — a receipt taken now "

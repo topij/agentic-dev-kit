@@ -187,14 +187,18 @@ Self-pace on a bounded cadence — don't busy-wait:
     re-request it, or say so explicitly
   ```
 
-  It defers to a bot that is currently *pending*: one mid-review of a just-pushed
+  It defers to a bot that is *actively* pending — one mid-review of a just-pushed
   head is behind it by construction, and the pending line already says a verdict
-  is coming. Warning in that window too would fire on every poll of the healthy
-  case and train you to skim past the one this exists for.
+  is coming. It does **not** defer once that check ages past the grace window or
+  is cancelled by an announced outage: that is the engine saying the verdict is
+  not coming, which is the reviewer-went-away case this exists for.
 
-  `--record-review` records the same thing on the receipt as `bots_behind_head`,
-  alongside `override` and `bot_signal` — all three say what the receipt does
-  *not* stand for.
+  `--record-review` records the same gap on the receipt as `bots_behind_head`,
+  next to `override` and `bot_signal` — all three say what the receipt does *not*
+  stand for. It is recorded even under `--allow-pending-bot-review`, since that
+  override is itself the #22/#25 scenario. (Unlike the poll render, the receipt
+  does not defer to a pending bot: recording a receipt is the moment the gap
+  matters most.)
 
   Reported, never gating — deliberately the cheap half of the problem, because
   invalidating a receipt on a shape change risks wedging a repo whose bot is

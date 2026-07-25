@@ -1865,6 +1865,109 @@ def test_a_receipt_records_which_bots_were_behind_the_head(
     assert "does not stand for its review" in pr_watch.render_record_review(report)
 
 
+def test_the_override_path_still_records_which_bots_were_behind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`--allow-pending-bot-review` IS the #22/#25 scenario.
+
+    A bot queued or rate-limited through a redesign, merged on a fallback
+    receipt — the exact case this feature was written for. Computing `behind`
+    inside `if not allow_pending_bot` made the receipt silent precisely there,
+    and combined with the pending-deference below it was a total blind spot:
+    neither the poll nor the receipt said the reviewer's last review was old.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh_json",
+        lambda args: {
+            "number": 9,
+            "headRefOid": "abc123",
+            "reviews": [_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")],
+        },
+    )
+    recorded: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+
+    report = pr_watch.record_review(
+        9, "fallback:panel", "abc123", allow_pending_bot=True, now=NOW
+    )
+    receipt = recorded[0]["review_receipt"]
+
+    assert receipt["override"] == "pending-bot"
+    assert receipt["bots_behind_head"] == {"coderabbit": "0ldc0de"}
+    rendered = pr_watch.render_record_review(report)
+    assert "recorded over an active override" in rendered
+    assert "does not stand for its review" in rendered
+
+
+def test_only_a_blocking_pending_bot_silences_the_coverage_warning() -> None:
+    """The deference must not swallow the case it claims to protect.
+
+    A pending check that has aged past the grace window, or been cancelled by an
+    announced outage, is the engine saying "this verdict is not coming" — the
+    reviewer-went-away case. Deferring to *any* pending entry suppressed the
+    coverage warning in exactly that situation, reachable after ~15 minutes of
+    polling any stuck bot, and on the #22 two-check outage shape.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")]
+    )
+
+    def _render(details):
+        return pr_watch.render(
+            pr_watch.build_report(view, [], set(), check_details=details, now=NOW)
+        )
+
+    # Actively blocking (mid-review) — deferred, as designed.
+    assert "review coverage" not in _render(
+        [_bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))]
+    )
+    # Aged past grace — "treated as not coming", so coverage MUST speak up.
+    assert "review coverage" in _render(
+        [_bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(600))]
+    )
+    # Cancelled by an announced outage — the #22 shape. Same.
+    assert "review coverage" in _render(
+        [
+            _bot_check(description="Review rate limited"),
+            _bot_check(
+                name="CodeRabbit / incremental",
+                state="PENDING",
+                bucket="pending",
+                startedAt=_minutes_ago(1),
+            ),
+        ]
+    )
+
+
+def test_coverage_honours_a_non_default_review_bots_list() -> None:
+    """`bots=bots` threading was correct and pinned by nothing — dropping it
+    passed the whole suite, because every other test uses the default list where
+    scoped and unscoped are identical."""
+    pr_watch = _load_pr_watch()
+    reviews = [
+        _review("otherbot", "0ldc0de", "2026-07-25T12:00:00Z"),
+        _review("coderabbitai", "abc123", "2026-07-25T13:00:00Z"),
+    ]
+
+    scoped = pr_watch.summarize_review_bots(
+        [], [], now=NOW, bots=("otherbot",), reviews=reviews, head="abc123"
+    )
+
+    assert [e["bot"] for e in scoped["coverage"]] == ["otherbot"]
+    assert scoped["coverage"][0]["covers_head"] is False
+    # …and a repo with no bots configured gets no coverage at all.
+    assert (
+        pr_watch.summarize_review_bots(
+            [], [], now=NOW, bots=(), reviews=reviews, head="abc123"
+        )["coverage"]
+        == []
+    )
+
+
 def test_an_unusable_timestamp_sorts_to_the_bottom_not_the_top() -> None:
     """`str()` coercion is crash-proof and actively wrong.
 
