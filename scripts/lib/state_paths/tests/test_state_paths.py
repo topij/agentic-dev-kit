@@ -59,7 +59,17 @@ def _clear_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     starting state instead of an accident of where pytest was invoked. Tests
     that care about cwd still ``monkeypatch.chdir`` themselves afterwards, which
     overrides this — so the fixture makes the default safe without taking the
-    control away from the tests that use it.
+    control away from the tests that use it. Only two tests were ever
+    cwd-sensitive without setting their own (the two that failed); the change is
+    also strictly *stricter*, since three others used to pass by accidentally
+    discovering the real repo root.
+
+    Not hermetic, and deliberately so: ``tmp_path`` is marker-free because of
+    where ``TMPDIR`` points, so pointing ``TMPDIR`` inside a marker-carrying
+    worktree still fails. Closing that would need a ``.git`` ceiling sentinel
+    inside ``tmp_path``, which the "no ``.git`` anywhere up → raise" tests
+    require the *absence* of. The lane case this fixes is the one that actually
+    happens.
     """
     monkeypatch.delenv(STATE_ROOT_ENV, raising=False)
     monkeypatch.delenv(ROOT_ENV, raising=False)

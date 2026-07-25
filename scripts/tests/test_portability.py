@@ -1246,14 +1246,27 @@ def test_state_paths_suite_passes_from_inside_a_lane_worktree(tmp_path: Path) ->
     )
 
     result = subprocess.run(
+        # ENGINE_DIR, not REPO_ROOT/"scripts": `paths.engines` is configurable,
+        # so a vendored layout (scripts/devkit/) keeps this pointing at the
+        # engines that are actually installed.
         [
             sys.executable, "-m", "pytest",
-            str(REPO_ROOT / "scripts" / "lib" / "state_paths" / "tests"),
+            str(ENGINE_DIR / "lib" / "state_paths" / "tests"),
             "-q",
         ],
         cwd=lane,
         capture_output=True,
         text=True,
+        timeout=300,
     )
 
-    assert result.returncode == 0, result.stdout[-3000:]
+    # stderr, not just stdout: pytest reports a bad path or a collection error
+    # there, while stdout says only "no tests ran". Without it, a drift in this
+    # path would turn the gate red with no reason given — which is the exact
+    # unexplained-red-gate failure this test exists to prevent.
+    detail = f"stdout:\n{result.stdout[-2000:]}\nstderr:\n{result.stderr[-2000:]}"
+    assert result.returncode == 0, detail
+    # A wrong path exits non-zero (4 = not found, 5 = nothing collected), so this
+    # cannot pass vacuously — but assert on the count anyway, so the test fails
+    # loudly rather than thinning out if the suite is ever moved.
+    assert re.search(r"\b6\d+ passed", result.stdout), detail
