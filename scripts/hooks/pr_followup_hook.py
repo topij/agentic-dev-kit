@@ -127,9 +127,10 @@ def _fallback_instruction(
     wrong habit every time.
     """
     # Two DISTINCT lenses is the panel's floor (see fallback-review-panel.md).
-    # A one-lens `fallback_panel` would otherwise have this hook advertise a
-    # command that `record_review` refuses every single time — so a sub-floor
-    # config degrades to the single-command wording instead.
+    # A one-lens `fallback_panel` is not a panel, so advertising one would tell
+    # the operator to claim coverage they cannot have. (The engine no longer
+    # refuses such a receipt — that check was deleted as unverifiable, see
+    # issue #32 — which makes the wording here the only thing steering it.)
     if len({lens.casefold() for lens in lenses}) >= 2:
         return (
             "If a review bot is unavailable, run the fallback review PANEL — one "

@@ -86,9 +86,11 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
+import unicodedata
 from pathlib import Path
 from typing import NamedTuple
 
@@ -1513,6 +1515,22 @@ def record_review(
 # ----------------------------------------------------------------------- main
 
 
+# A lens NAME, not a sentence: letters, digits, and the usual separators.
+# `--lenses` splits on `,`, which is also ordinary punctuation — so
+# "adversarial, focused on the new merge gate" arrived as two entries and
+# rendered as a two-lens panel, suppressing the one-lens warning that is the
+# whole remaining value of the field. That is an HONEST input misreported, not
+# only a forgery. Counting only entries that look like names fixes both without
+# a roster and without a gate: prose is still recorded verbatim, it just does
+# not count toward "how many lenses ran".
+_LENS_NAME_RE = re.compile(r"^[\w.+-]{1,40}$")
+
+
+def _countable_lenses(names: list[str]) -> set[str]:
+    """Case-folded lens names from ``names``, ignoring prose."""
+    return {n.casefold() for n in names if _LENS_NAME_RE.match(n)}
+
+
 def _flat(text: object, n: int = 120) -> str:
     """One line, bounded. For any receipt/config value entering a render.
 
@@ -1526,12 +1544,29 @@ def _flat(text: object, n: int = 120) -> str:
     `_excerpt` already established this convention for comment bodies; the
     receipt fields skipped it.
     """
-    flat = " ".join(str(text).split())
+    # Strip C0/C1 control characters BEFORE collapsing whitespace. `split()`
+    # normalizes whitespace but `\x1b` is not whitespace, so ANSI cursor
+    # control survived — and that is strictly worse than the newline this
+    # function was written for: `\x1b[1A\x1b[2K` *erases* lines that exist
+    # rather than appending ones that don't, so a receipt could delete the
+    # merge blockers printed above it.
+    cleaned = "".join(" " if unicodedata.category(c) == "Cc" else c for c in str(text))
+    flat = " ".join(cleaned.split())
     return flat if len(flat) <= n else flat[: n - 1] + "…"
 
 
 def _excerpt(body: str, n: int = 140) -> str:
-    flat = " ".join((body or "").split())
+    # Same control-character strip as :func:`_flat`, and for a stronger reason:
+    # this renders a COMMENT BODY, which on a public repo any account can write.
+    # It also renders last, so cursor-up sequences here walk over every merge
+    # blocker above them. Pre-existing on main; fixed here because `_flat`'s
+    # docstring cites this function as the convention it copies, and copying a
+    # defect forward is how the convention stops being one.
+    flat = " ".join(
+        "".join(
+            " " if unicodedata.category(c) == "Cc" else c for c in (body or "")
+        ).split()
+    )
     return flat if len(flat) <= n else flat[: n - 1] + "…"
 
 
@@ -1837,7 +1872,7 @@ def render(report: dict) -> str:
         # claim, and let a reader judge it. Verifying it needs each lens to
         # record its own receipt from its own context — see issue #32.
         named = [_flat(lens, 40) for lens in evidence.get("lenses") or []]
-        distinct = len({lens.casefold() for lens in named})
+        distinct = len(_countable_lenses(named))
         source = _flat(evidence.get("source"))
         if distinct >= 2:
             detail = f"{distinct} lenses claimed ({', '.join(named)})"
@@ -1901,7 +1936,7 @@ def render_record_review(report: dict) -> str:
         else []
     )
     named = [_flat(lens, 40) for lens in named]
-    if len({lens.casefold() for lens in named}) == 1:
+    if len(_countable_lenses(named)) == 1:
         lines.append(
             f"  ⚠ one lens only ({named[0]}) — `safety-critical-changes.md` rule 2 "
             "holds that a single-lens verdict is not a green light"

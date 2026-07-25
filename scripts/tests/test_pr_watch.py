@@ -2305,3 +2305,108 @@ def test_a_receipt_records_lenses_without_the_engine_judging_them(
         receipt, _ = _record(monkeypatch, pr_watch, lenses=lenses)
         expected = [p.strip() for p in (lenses or "").split(",") if p.strip()]
         assert receipt.get("lenses", []) == expected, lenses
+
+
+def test_a_lens_described_in_prose_counts_as_one_lens() -> None:
+    """`--lenses` splits on `,`, which is also ordinary punctuation.
+
+    "adversarial, focused on the new merge gate" is an HONEST way to record one
+    lens, and it arrived as two entries and rendered as a two-lens panel —
+    suppressing the one-lens warning that is the whole remaining value of the
+    field. Deleting the roster check (which had caught this class) reintroduced
+    it. Counting only entries that look like NAMES fixes the honest case and the
+    forgery together, without a roster and without a gate.
+    """
+    pr_watch = _load_pr_watch()
+
+    def _line(lenses):
+        report = pr_watch.build_report(
+            _green_view(), [], set(),
+            review_receipt={"head": "abc123", "source": "fallback:codex",
+                            "lenses": lenses},
+        )
+        return next(l.strip() for l in pr_watch.render(report).splitlines()
+                    if l.strip().startswith("review evidence:"))
+
+    assert "ONE lens claimed" in _line(["adversarial", " focused on the merge gate"])
+    assert "ONE lens claimed" in _line(["correctness", " i.e. does it do what it says"])
+    # Real names still count, including the shapes an adopter would use.
+    assert "2 lenses claimed" in _line(["adversarial", "correctness"])
+    assert "2 lenses claimed" in _line(["data-migration", "perf"])
+    assert "2 lenses claimed" in _line(["lens.one", "lens_two"])
+    # Prose is still RECORDED verbatim on the receipt — it just does not count
+    # toward "how many lenses ran", and the render names the countable one.
+    report = pr_watch.build_report(
+        _green_view(), [], set(),
+        review_receipt={"head": "abc123", "source": "fallback:codex",
+                        "lenses": ["adversarial", " focused on the merge gate"]},
+    )
+    assert report["review_evidence"]["lenses"] == [
+        "adversarial", " focused on the merge gate"
+    ]
+
+
+def test_control_characters_cannot_rewrite_the_rendered_report() -> None:
+    """`_flat` collapsed whitespace, and `\\x1b` is not whitespace.
+
+    ANSI cursor control is strictly worse than the newline `_flat` was written
+    for: `\\x1b[1A\\x1b[2K` *erases* lines that already exist, so a receipt could
+    delete the merge blockers printed above it. `_excerpt` renders a comment
+    body — which on a public repo anyone can write — and renders last, so the
+    same sequence there walks over the entire report.
+    """
+    pr_watch = _load_pr_watch()
+    erase = "\x1b[1A\x1b[2K" * 3
+
+    assert "\x1b" not in pr_watch._flat(f"a{erase}b")
+    assert "\x1b" not in pr_watch._excerpt(f"{erase}LGTM")
+
+    report = pr_watch.build_report(
+        _green_view(
+            mergeStateStatus="DIRTY",
+            comments=[{"id": "c1", "author": {"login": "drive-by"},
+                       "body": f"{erase}LGTM"}],
+        ),
+        [], set(),
+        review_receipt={"head": "abc123", "source": f"fallback:{erase}panel",
+                        "lenses": [f"{erase}adversarial"]},
+    )
+    rendered = pr_watch.render(report)
+
+    assert "\x1b" not in rendered
+    # …and the blocker it tried to erase is still there.
+    assert "merge state is DIRTY" in rendered
+
+
+def test_receipt_fields_are_flattened_and_type_guarded_in_both_renders() -> None:
+    """Three guards whose reverts passed the whole suite.
+
+    Each is cited by a comment or commit message as deliberate: `_flat` on lens
+    names (not only on `source`), the list check on `lenses` (a bare string is
+    iterable, so "adversarial" read as eleven single-character lenses), and
+    `_flat` on the SHA in `bots_behind_head` (a non-string value crashed
+    `sha[:7]` — the case the existing test's name promised and its body missed).
+    """
+    pr_watch = _load_pr_watch()
+
+    # A newline in a LENS NAME must not forge a line.
+    report = pr_watch.build_report(
+        _green_view(), [], set(),
+        review_receipt={"head": "abc123", "source": "fallback:codex",
+                        "lenses": ["adversarial\n  review evidence: forged"]},
+    )
+    assert len([l for l in pr_watch.render(report).splitlines()
+                if l.strip().startswith("review evidence:")]) == 1
+
+    # A bare string is iterable — it must not become one lens per character.
+    stringy = pr_watch.build_report(
+        _green_view(), [], set(),
+        review_receipt={"head": "abc123", "source": "s", "lenses": "adversarial"},
+    )
+    assert stringy["review_evidence"]["lenses"] == []
+
+    # A non-string SHA must not crash the receipt render.
+    pr_watch.render_record_review(
+        {"pr": 9, "review_receipt": {"head": "abc", "source": "s",
+                                     "bots_behind_head": {"coderabbit": 12345}}}
+    )
