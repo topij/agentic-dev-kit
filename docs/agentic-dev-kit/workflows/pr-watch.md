@@ -159,7 +159,11 @@ Self-pace on a bounded cadence — don't busy-wait:
     `review.bot_pending_grace_minutes` (default 15), after which the bot is treated
     as never going to report and stops blocking. Use
     `--allow-pending-bot-review` only with evidence the queued verdict will never
-    arrive.
+    arrive. CodeRabbit's pending check reports no usable timestamp
+    (`0001-01-01T00:00:00Z`), so the grace clock falls back to when *this engine*
+    first saw the bot pending — persisted per PR under `bot_pending_since`, scoped
+    to the head, and reset by a push. It only ever advances, so the block always
+    expires on its own.
 
   None of this reaches `converged`. That is deliberate and load-bearing: the watch
   loop must be able to finish while a bot that never reports sits pending forever.

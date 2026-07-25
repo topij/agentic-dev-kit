@@ -770,7 +770,9 @@ def _age_minutes(timestamp: str | None, now: datetime) -> float | None:
 
     GitHub stamps an unstarted check with the zero time (``0001-01-01T…``), which
     parses fine but means "no time recorded" — treated as unknown, not as an age
-    of two millennia.
+    of two millennia. That is not an edge case: CodeRabbit's pending status
+    context reports exactly that, so the caller must always have a fallback
+    clock (see ``pending_since`` in :func:`summarize_review_bots`).
     """
     if not timestamp:
         return None
@@ -792,6 +794,7 @@ def summarize_review_bots(
     now: datetime,
     bots: tuple[str, ...] | None = None,
     grace_minutes: float | None = None,
+    pending_since: dict | None = None,
 ) -> dict:
     """Resolve each configured review bot to *unavailable*, *pending*, or neither.
 
@@ -824,18 +827,31 @@ def summarize_review_bots(
       wedging.
     - **neither** — terminal and unmarked: the bot reviewed. Nothing to add.
 
-    An unknown check age (no usable timestamp) fails **open**: it does not block,
-    and it is reported as ``age_unknown`` so the render can say so out loud. The
-    alternative — blocking on an age we cannot measure — is indistinguishable
-    from a wedge, which is the one failure this whole design is built to avoid.
+    **The grace clock cannot come from the check alone.** CodeRabbit's pending
+    status context reports ``startedAt: 0001-01-01T00:00:00Z`` — the zero time,
+    i.e. no timestamp — so an implementation that only reads the check has no
+    age to compare and quietly stops guarding the one bot it was written for.
+    (Observed on this very PR: the first cut of this function printed "age
+    unmeasurable, NOT blocking" against a live CodeRabbit review-in-progress.)
 
-    Returns ``{grace_minutes, unavailable, pending, blockers}``. ``blockers`` are
-    ready-made ``merge_blockers`` strings.
+    ``pending_since`` is the fallback clock: a ``{bot: iso8601}`` map of when
+    THIS engine first saw that bot pending at the current head, threaded through
+    per-PR state by the caller. An unseen bot is recorded at ``now`` and so
+    starts at age 0 — blocking, and ageing normally from there. Because the
+    clock is ours and only ever advances, every pending bot reaches the grace
+    bound and stops blocking; there is no unmeasurable case left to fail open on.
+    The map is scoped to a head: a push means a fresh review, so the caller
+    resets it.
+
+    Returns ``{grace_minutes, unavailable, pending, blockers, pending_since}``.
+    ``blockers`` are ready-made ``merge_blockers`` strings; ``pending_since`` is
+    the updated map for the caller to persist.
     """
     if bots is None:
         bots = _REVIEW_BOTS
     if grace_minutes is None:
         grace_minutes = _BOT_PENDING_GRACE_MINUTES
+    observed: dict[str, str] = dict(pending_since or {})
 
     unavailable: list[dict] = []
     unavailable_bots: set[str] = set()
@@ -884,14 +900,23 @@ def summarize_review_bots(
         if not _check_is_pending(detail):
             continue
         age = _age_minutes(detail.get("startedAt"), now)
+        since = detail.get("startedAt")
+        source = "check"
+        if age is None:
+            # No usable stamp on the check — fall back to our own first-sighting
+            # clock, recording one now if this is the first sighting.
+            since = observed.get(bot) or now.isoformat()
+            observed[bot] = since
+            age = _age_minutes(since, now) or 0.0
+            source = "observed"
         pending.append(
             {
                 "bot": bot,
                 "check": name,
                 "state": (detail.get("state") or "").upper(),
-                "since": detail.get("startedAt"),
-                "age_minutes": None if age is None else round(age, 1),
-                "age_unknown": age is None,
+                "since": since,
+                "age_source": source,
+                "age_minutes": round(age, 1),
                 # Filled in below, once every surface has been read: an
                 # unavailability announced in a *comment* must be able to cancel
                 # a pending *check*, and the comment loop already ran.
@@ -903,8 +928,8 @@ def summarize_review_bots(
     for entry in pending:
         if entry["bot"] in unavailable_bots:
             continue  # announced as not reviewing — waiting on it is a wedge
-        if entry["age_unknown"] or entry["age_minutes"] >= grace_minutes:
-            continue  # unmeasurable or aged out — fail open, never wedge
+        if entry["age_minutes"] >= grace_minutes:
+            continue  # aged out — treated as never going to report
         entry["blocking"] = True
         blockers.append(
             f"review bot {entry['bot']} has not reported yet "
@@ -917,6 +942,11 @@ def summarize_review_bots(
         "unavailable": unavailable,
         "pending": pending,
         "blockers": blockers,
+        # Only the bots still pending: an entry for a bot that has since
+        # reported would otherwise keep a stale clock alive across polls.
+        "pending_since": {
+            bot: at for bot, at in observed.items() if any(e["bot"] == bot for e in pending)
+        },
     }
 
 
@@ -1010,11 +1040,40 @@ def _seen_path(pr: int) -> Path:
     return STATE_DIR / f"{pr}.json"
 
 
+def read_pending_since(state: dict, head: str | None) -> dict:
+    """The persisted grace clock, but only if it belongs to ``head``.
+
+    Stored as ``{"head": sha, "bots": {bot: iso}}`` — self-describing rather than
+    scoped by the sibling ``state["head"]``. That field is the false-settle
+    guard's input, written by :func:`persist_poll` on every poll; making a second
+    writer (:func:`record_review`) maintain it just to scope this clock would put
+    two different intents on one key, and the guard it feeds decides whether a
+    just-pushed commit can settle. A push means a fresh review, so a clock from
+    another head is discarded, not aged.
+    """
+    stored = state.get("bot_pending_since")
+    if not isinstance(stored, dict) or not head or stored.get("head") != head:
+        return {}
+    bots = stored.get("bots")
+    return bots if isinstance(bots, dict) else {}
+
+
+def write_pending_since(state: dict, head: str | None, bots: dict) -> dict:
+    """Set the head-scoped grace clock on ``state`` (dropping an empty one)."""
+    if bots and head:
+        state["bot_pending_since"] = {"head": head, "bots": bots}
+    else:
+        state.pop("bot_pending_since", None)
+    return state
+
+
 def load_state(pr: int) -> dict:
     """Full per-PR watch state (missing/corrupt → {}).
 
     Keys: ``seen`` (acked comment keys), ``head`` / ``max_total`` (false-settle
-    guard, see :func:`build_report`), and ``pending_seen`` — the ``all_seen_keys``
+    guard, see :func:`build_report`), ``bot_pending_since`` (the head-scoped
+    fallback grace clock for a review bot whose check carries no usable
+    timestamp, see :func:`read_pending_since`), and ``pending_seen`` — the ``all_seen_keys``
     of the most recently *reported* plain poll, present only between a poll and
     the ``--mark-seen`` that consumes it (see :func:`mark_seen`).
     """
@@ -1130,6 +1189,7 @@ def record_review(
             "review the new head before recording evidence"
         )
     now = now or datetime.now(timezone.utc)
+    state = load_state(pr)
     if not allow_pending_bot:
         # Comments are fetched alongside the head so an outage announced in a
         # COMMENT can still cancel a pending CHECK. Without them, the documented
@@ -1139,8 +1199,15 @@ def record_review(
             fetch_check_details(pr),
             collect_comments(snapshot, []),
             now=now,
+            pending_since=read_pending_since(state, current_head),
         )
         if bot_status["blockers"]:
+            # Persist the first sighting BEFORE refusing. Without this, a cold
+            # `--record-review` (no poll loop running) restarts the grace clock
+            # at zero on every retry, so the refusal could never expire and the
+            # override would be the only way through — a wedge dressed as a guard.
+            write_pending_since(state, current_head, bot_status["pending_since"])
+            save_state(pr, state)
             raise ValueError(
                 "; ".join(bot_status["blockers"])
                 + ". A receipt recorded now would bind to a review that has not happened "
@@ -1152,7 +1219,6 @@ def record_review(
         "source": source,
         "recorded_at": now.isoformat(),
     }
-    state = load_state(pr)
     state["review_receipt"] = receipt
     save_state(pr, state)
     return {"pr": pr, "recorded_review": True, "review_receipt": receipt}
@@ -1176,6 +1242,7 @@ def build_report(
     review_receipt: dict | None = None,
     check_details: list[dict] | None = None,
     now: datetime | None = None,
+    prior_pending_since: dict | None = None,  # already head-scoped by the caller
 ) -> dict:
     """Assemble the JSON-serializable watch report for one PR snapshot.
 
@@ -1227,6 +1294,7 @@ def build_report(
         check_details or [],
         comments,
         now=now or datetime.now(timezone.utc),
+        pending_since=prior_pending_since or {},
     )
 
     # False-settle guard: right after a push, `gh` can still report the OLD
@@ -1367,13 +1435,7 @@ def render(report: dict) -> str:
             f"{entry['reason']} — run the configured fallback review"
         )
     for entry in bots.get("pending") or []:
-        if entry.get("age_unknown"):
-            lines.append(
-                f"  ⚠ review bot {entry['bot']} check {entry['check']} is pending with no "
-                "usable timestamp — age unmeasurable, so it is NOT blocking the merge gate; "
-                "confirm the review landed before recording a receipt"
-            )
-        elif not entry.get("blocking"):
+        if not entry.get("blocking"):
             lines.append(
                 f"  ⚠ review bot {entry['bot']} check {entry['check']} still pending after "
                 f"{entry['age_minutes']}m (past the {bots.get('grace_minutes')}m grace) — "
@@ -1443,6 +1505,13 @@ def persist_poll(pr: int, report: dict, seen: set[str]) -> dict:
         "max_total": report["max_total"],
         "pending_seen": report["all_seen_keys"],
     }
+    # The fallback grace clock for a bot whose check carries no usable timestamp.
+    # Persisted rather than derived per poll, because a clock that restarts on
+    # every poll never advances — and a guard that never advances is a permanent
+    # block, the exact wedge this design avoids.
+    write_pending_since(
+        new_state, report["head"], report["review_bots"]["pending_since"]
+    )
     previous = load_state(pr)
     if isinstance(previous.get("review_receipt"), dict):
         new_state["review_receipt"] = previous["review_receipt"]
@@ -1591,6 +1660,7 @@ def main(argv: list[str] | None = None) -> int:
         prior_max_total=int(state.get("max_total") or 0),
         review_receipt=state.get("review_receipt"),
         check_details=check_details,
+        prior_pending_since=read_pending_since(state, view.get("headRefOid")),
     )
 
     persist_poll(pr, report, seen)

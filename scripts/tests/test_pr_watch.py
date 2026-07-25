@@ -795,40 +795,117 @@ def test_an_announced_outage_cancels_the_pending_block_on_the_same_bot() -> None
     assert via_check["blockers"] == []
 
 
-def test_an_unmeasurable_pending_age_fails_open_and_says_so() -> None:
-    """No usable timestamp means we cannot tell "queued 10 seconds ago" from
-    "queued last Tuesday".
+def test_a_check_with_no_usable_timestamp_falls_back_to_an_observed_clock() -> None:
+    """The grace clock cannot come from the check alone — found by running this.
 
-    Blocking on an age we cannot measure is indistinguishable from a wedge, so it
-    fails open — and a guard that fails open must be loud (three silent-no-op
-    bugs in one session is what taught this repo that).
+    CodeRabbit's pending status context reports `startedAt: 0001-01-01T00:00:00Z`
+    (the zero time). An implementation that reads only the check therefore has no
+    age for the one bot the guard exists for, and quietly stops guarding it. The
+    first cut of this feature did exactly that, and printed "age unmeasurable,
+    NOT blocking" against a live review-in-progress on PR #25.
     """
+    pr_watch = _load_pr_watch()
+    zero_time = [
+        _bot_check(state="PENDING", bucket="pending", startedAt="0001-01-01T00:00:00Z")
+    ]
+
+    first = pr_watch.summarize_review_bots(zero_time, [], now=NOW)
+
+    assert first["blockers"] != []  # unseen ⇒ age 0 ⇒ blocking, not waved through
+    assert first["pending"][0]["age_source"] == "observed"
+    assert first["pending_since"] == {"coderabbit": NOW.isoformat()}
+
+    # …and OUR clock advances, so it always reaches the bound. This is what makes
+    # the fallback safe: the block expires on its own, with no wedge to escape.
+    later = pr_watch.summarize_review_bots(
+        zero_time,
+        [],
+        now=NOW + timedelta(minutes=20),
+        pending_since=first["pending_since"],
+    )
+    assert later["blockers"] == []
+    assert later["pending"][0]["age_minutes"] == 20.0
+
+
+def test_the_observed_clock_is_head_scoped_and_self_describing() -> None:
+    """A clock that restarts every poll never advances, and a guard that never
+    advances is a permanent block rather than a bounded one.
+
+    It is stored as `{"head": sha, "bots": {...}}` rather than scoped by the
+    sibling `state["head"]` — that field is the false-settle guard's input, and
+    putting two intents on one key would mean a second writer maintaining the
+    field that decides whether a just-pushed commit may settle.
+    """
+    pr_watch = _load_pr_watch()
+    clock = {"coderabbit": NOW.isoformat()}
+    state = pr_watch.write_pending_since({}, "abc123", clock)
+
+    assert state["bot_pending_since"] == {"head": "abc123", "bots": clock}
+    assert pr_watch.read_pending_since(state, "abc123") == clock
+    # A push means a fresh review: the clock is discarded, not aged.
+    assert pr_watch.read_pending_since(state, "def456") == {}
+    # Corrupt / legacy / absent state degrades to "no clock", never to a crash.
+    for bad in ({}, {"bot_pending_since": "nonsense"}, {"bot_pending_since": {}}):
+        assert pr_watch.read_pending_since(bad, "abc123") == {}
+    # An empty clock is dropped rather than persisted as a husk.
+    assert "bot_pending_since" not in pr_watch.write_pending_since({}, "abc123", {})
+
+
+def test_persist_poll_carries_the_clock_so_a_later_poll_can_age_it_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The round trip through the REAL persistence writer.
+
+    `persist_poll` is the single source of truth for what a poll stores. A test
+    that rebuilt that shape by hand could pass while the engine silently dropped
+    the clock — and a dropped clock reads as "first sighting" forever, which is a
+    permanent block rather than a bounded one.
+    """
+    pr_watch = _load_pr_watch()
+    zero_time = [
+        _bot_check(state="PENDING", bucket="pending", startedAt="0001-01-01T00:00:00Z")
+    ]
+    store: dict = {}
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: store.update(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: dict(store))
+
+    first = pr_watch.build_report(
+        _green_view(), [], set(), check_details=zero_time, now=NOW
+    )
+    pr_watch.persist_poll(7, first, set())
+
+    assert store["bot_pending_since"] == {
+        "head": "abc123",
+        "bots": {"coderabbit": NOW.isoformat()},
+    }
+    assert first["review_bots"]["blockers"] != []
+
+    aged = pr_watch.build_report(
+        _green_view(),
+        [],
+        set(),
+        check_details=zero_time,
+        now=NOW + timedelta(minutes=20),
+        prior_head=store["head"],
+        prior_pending_since=pr_watch.read_pending_since(store, "abc123"),
+    )
+    assert aged["review_bots"]["blockers"] == []
+
+
+def test_a_reported_bot_drops_out_of_the_persisted_clock() -> None:
+    """Otherwise a stale entry outlives the pending state it timed, and a later
+    re-review inherits an already-expired clock instead of a fresh window."""
     pr_watch = _load_pr_watch()
 
     status = pr_watch.summarize_review_bots(
-        [
-            _bot_check(state="PENDING", bucket="pending", startedAt=None),
-            _bot_check(
-                name="CodeRabbit-2", state="PENDING", bucket="pending",
-                startedAt="0001-01-01T00:00:00Z",
-            ),
-        ],
+        [_bot_check()],  # terminal — the bot reported
         [],
         now=NOW,
+        pending_since={"coderabbit": (NOW - timedelta(minutes=5)).isoformat()},
     )
 
-    assert status["blockers"] == []
-    assert [e["age_unknown"] for e in status["pending"]] == [True, True]
-
-    rendered = pr_watch.render(
-        {
-            "pr": 1, "url": "u", "converged": True, "mergeable": False,
-            "checks": {"success": 1, "total": 1, "pending": 0, "failing": []},
-            "new_comments": [], "merge_blockers": [], "review_bots": status,
-        }
-    )
-    assert "age unmeasurable" in rendered
-    assert "NOT blocking" in rendered
+    assert status["pending"] == []
+    assert status["pending_since"] == {}
 
 
 def test_an_outage_stays_visible_after_the_notice_comment_is_acked() -> None:
@@ -952,13 +1029,66 @@ def test_record_review_refuses_while_the_bot_is_still_queued(
 
     with pytest.raises(ValueError, match="has not reported yet"):
         pr_watch.record_review(16, "fallback:codex", "abc123", now=NOW)
-    assert recorded == []  # refused BEFORE persisting anything
+    # No receipt was persisted. The grace clock IS written on the refusal path —
+    # without it a cold `--record-review` restarts the clock at zero on every
+    # retry, so the refusal could never expire.
+    assert all("review_receipt" not in state for state in recorded)
 
     # The documented override is the only way past it, and it is explicit.
     pr_watch.record_review(
         16, "fallback:codex", "abc123", allow_pending_bot=True, now=NOW
     )
-    assert recorded[0]["review_receipt"]["source"] == "fallback:codex"
+    assert recorded[-1]["review_receipt"]["source"] == "fallback:codex"
+
+
+def test_a_cold_record_review_refusal_expires_instead_of_wedging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`--record-review` outside a poll loop must still see a clock that advances.
+
+    The bot here reports no usable timestamp (CodeRabbit's real behaviour), so
+    the clock is the engine's own first sighting. If the refusal path did not
+    persist it, every retry would restart at zero and the only way past would be
+    the override — a wedge dressed as a guard.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh_json",
+        lambda args: {"number": 16, "headRefOid": "abc123", "comments": [], "reviews": []},
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_check_details",
+        lambda pr, **kw: [
+            _bot_check(
+                state="PENDING", bucket="pending", startedAt="0001-01-01T00:00:00Z"
+            )
+        ],
+    )
+    store: dict = {}
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: store.update(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: dict(store))
+
+    with pytest.raises(ValueError, match="has not reported yet"):
+        pr_watch.record_review(16, "fallback:codex", "abc123", now=NOW)
+    assert store["bot_pending_since"] == {
+        "head": "abc123",
+        "bots": {"coderabbit": NOW.isoformat()},
+    }
+
+    # Retrying still refuses, and — the point — does NOT reset the clock.
+    with pytest.raises(ValueError, match="has not reported yet"):
+        pr_watch.record_review(
+            16, "fallback:codex", "abc123", now=NOW + timedelta(minutes=1)
+        )
+    assert store["bot_pending_since"]["bots"] == {"coderabbit": NOW.isoformat()}
+
+    # …so past the grace window it goes through on its own, with no override.
+    pr_watch.record_review(
+        16, "fallback:codex", "abc123", now=NOW + timedelta(minutes=20)
+    )
+    assert store["review_receipt"]["source"] == "fallback:codex"
 
 
 def test_record_review_allows_the_fallback_when_the_bot_is_unavailable(
@@ -1020,6 +1150,7 @@ def test_bot_state_never_reaches_the_watch_loop_predicate() -> None:
         [_bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))],
         [_bot_check(description="Review rate limited")],
         [_bot_check(state="PENDING", bucket="pending", startedAt=None)],
+        [_bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(999))],
     ):
         report = pr_watch.build_report(
             view, [], set(), check_details=details, now=NOW
