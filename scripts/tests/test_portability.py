@@ -1122,26 +1122,79 @@ def test_migration_adds_every_review_key_exactly_once(tmp_path: Path) -> None:
     assert yaml.safe_load(text)["review"]["unavailable_markers"] == ["mine"]
 
 
-def test_migration_says_so_when_it_cannot_act(tmp_path: Path) -> None:
-    """A migration that silently no-ops is indistinguishable from one that ran.
+@pytest.mark.parametrize(
+    ("style", "config", "wanted", "unwanted"),
+    [
+        # Block list — a `- ` item is the right thing to add.
+        (
+            "block",
+            'review:\n  unavailable_markers:\n    - "mine"\n',
+            '- "review rate limited"',
+            "brackets",
+        ),
+        # Inline flow list — telling them to add a `- ` item would hang a block
+        # item off a flow scalar, i.e. walk them into corrupting their config.
+        (
+            "flow",
+            'review:\n  unavailable_markers: ["mine"]\n',
+            "brackets",
+            '- "review rate limited"',
+        ),
+        # Flow list whose VALUE is on the next line. A key-line bracket test
+        # sees no `[` here and hands out the block-item advice.
+        (
+            "flow_next_line",
+            'review:\n  unavailable_markers:\n    ["mine", "other"]\n',
+            "brackets",
+            '- "review rate limited"',
+        ),
+    ],
+)
+def test_the_instruction_matches_the_list_style(
+    tmp_path: Path, style: str, config: str, wanted: str, unwanted: str
+) -> None:
+    """The advice must be correct for the shape the adopter actually has.
 
-    The marker can't be inserted safely into every list shape, so it isn't
-    inserted at all — the adopter is told exactly what to add instead.
+    Without a per-style assertion the whole branch is dead-codeable: hardwiring
+    the style test to a constant still passes a suite that only ever checks the
+    block-list direction.
     """
+    _, proc = _run_init(tmp_path, f"instructs_{style}", config)
+
+    assert "ACTION NEEDED" in proc.stderr
+    assert wanted in proc.stderr
+    assert unwanted not in proc.stderr
+
+
+@pytest.mark.parametrize(
+    ("case", "config"),
+    [
+        # Already present — nothing to ask for.
+        ("block", 'review:\n  unavailable_markers:\n    - "mine"\n    - "review rate limited"\n'),
+        ("flow", 'review:\n  unavailable_markers: ["mine", "review rate limited"]\n'),
+        # A key with no value falls back to the engine defaults, which already
+        # contain the marker — so asking for it would be noise.
+        ("empty_key", "review:\n  unavailable_markers:\n"),
+        # Absent entirely: `ensure_review_key` writes the full default list.
+        ("absent", "review:\n  bots: [bugbot]\n"),
+    ],
+)
+def test_the_instruction_stays_quiet_when_there_is_nothing_to_add(
+    tmp_path: Path, case: str, config: str
+) -> None:
+    _, proc = _run_init(tmp_path, f"quiet_{case}", config)
+
+    assert "ACTION NEEDED" not in proc.stderr
+
+
+def test_a_marker_named_only_in_a_comment_does_not_count(tmp_path: Path) -> None:
+    """The kit's own shipped config carries a trailing comment on that very
+    line, so a raw-line grep is satisfied by a config whose LIST lacks it."""
     _, proc = _run_init(
         tmp_path,
-        "instructs",
-        'review:\n  bots: [bugbot]\n  unavailable_markers:\n    - "mine"\n',
+        "comment_only",
+        'review:\n  unavailable_markers:\n'
+        '    - "mine"   # unlike review rate limited, this one is ours\n',
     )
 
     assert "ACTION NEEDED" in proc.stderr
-    assert '- "review rate limited"' in proc.stderr
-
-    # …and stays quiet once the adopter has added it.
-    _, quiet = _run_init(
-        tmp_path,
-        "quiet",
-        'review:\n  bots: [bugbot]\n  unavailable_markers:\n'
-        '    - "mine"\n    - "review rate limited"\n',
-    )
-    assert "ACTION NEEDED" not in quiet.stderr

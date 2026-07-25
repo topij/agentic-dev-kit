@@ -111,7 +111,6 @@ def test_decimal_scalars_match_pyyaml_except_the_documented_forms():
 
     for token, why in _KNOWN_PYYAML_DIVERGENCES.items():
         doc = f"v: {token}\n"
-        assert kitconfig.loads(doc)["v"] == token, f"{token} should stay a string ({why})"
         assert kitconfig.loads(doc) != yaml.safe_load(doc), (
             f"{token} now agrees with PyYAML — good, but remove it from "
             f"_KNOWN_PYYAML_DIVERGENCES and from _coerce's docstring ({why})"
@@ -129,20 +128,29 @@ _EXPECTED_TYPES = {
     "1.0e3": str, "1.0E3": str, "1.5e3": str, "-.5e+3": str,  # unsigned
     "1_0.5": float, "._5": str,      # `_` separates digits, cannot lead
     "nan": str, "inf": str, "1e5": str, "1.2.3": str,
+    # The four forms where this reader deliberately departs from PyYAML — see
+    # _KNOWN_PYYAML_DIVERGENCES. All stay strings here.
+    ".nan": str, ".inf": str, "-.inf": str, "1:30.0": str,
 }
 
 
 def test_every_float_edge_case_has_a_declared_type():
-    """The no-PyYAML assertions must cover the SAME set as the parity check.
+    """The no-PyYAML assertions must cover every token the parity check does.
 
-    Without this, adding a token to `_FLOAT_EDGE_CASES` silently leaves it
-    untested in the one environment the reader exists for — a bare env with no
-    PyYAML, where the parity test skips.
+    The parity test walks TWO collections — the edge cases and the known
+    divergences — so checking set-equality against only the first leaves the
+    four divergent tokens with no coverage at all in a bare env. Those are the
+    highest-risk ones: they are precisely where the implementation deliberately
+    departs from PyYAML, so an accidental change there looks like a fix.
     """
-    assert set(_EXPECTED_TYPES) == set(_FLOAT_EDGE_CASES)
+    assert set(_EXPECTED_TYPES) == set(_FLOAT_EDGE_CASES) | set(
+        _KNOWN_PYYAML_DIVERGENCES
+    )
 
 
-@pytest.mark.parametrize("token", _FLOAT_EDGE_CASES)
+@pytest.mark.parametrize(
+    "token", (*_FLOAT_EDGE_CASES, *_KNOWN_PYYAML_DIVERGENCES)
+)
 def test_decimal_scalars_keep_their_python_types_without_pyyaml(token: str):
     """The engines run with no PyYAML, so the parity test above skips in exactly
     the environment that matters most. This one never skips."""
@@ -150,6 +158,10 @@ def test_decimal_scalars_keep_their_python_types_without_pyyaml(token: str):
 
     assert isinstance(value, _EXPECTED_TYPES[token]), (token, value)
     assert not isinstance(value, bool)  # `15` must not arrive as True
+    if token in _KNOWN_PYYAML_DIVERGENCES:
+        # The divergent forms stay verbatim strings — assertable without PyYAML,
+        # so it does not belong behind the parity test's importorskip.
+        assert value == token
 
 
 def test_inline_and_block_lists():

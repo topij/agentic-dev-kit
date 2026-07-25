@@ -413,20 +413,40 @@ migrate_kit_schema() {
     in_list == 1 && $0 !~ /^[[:space:]]*[a-zA-Z_]+:/ { print; next }
     in_list == 1 { exit }
   ')
-  if [ -n "$markers" ] && ! printf '%s\n' "$markers" | grep -qi 'review rate limited'; then
-    echo "ACTION NEEDED: add \"review rate limited\" to review.unavailable_markers" >&2
-    echo "  in $CONFIG_FILE." >&2
+  # Match the marker in the VALUES only. The kit's own shipped config carries a
+  # trailing `# the status-check wording of …` comment on that very line, so a
+  # raw-line grep would also be satisfied by an adopter who has the phrase in a
+  # comment and not in the list.
+  marker_values=$(printf '%s\n' "$markers" | sed 's/[[:space:]]*#.*$//')
+  if [ -n "$markers" ] && ! printf '%s\n' "$marker_values" | grep -qi 'review rate limited'; then
     # The instruction has to match the list style the adopter actually uses.
     # Telling someone with an inline list to add a `- ` item would have them
     # hang a block item off a flow scalar — this step is read-only, but it would
     # still be walking them into the same corruption the surgery used to cause.
-    if printf '%s\n' "$markers" | head -n 1 | grep -qE ':[[:space:]]*\['; then
-      echo '  Yours is written as an inline list — add the string inside the brackets.' >&2
+    #
+    # Presence of `- ` items is the discriminator, not a `[` on the key line: a
+    # flow list may put its value on the FOLLOWING line, where a key-line test
+    # sees no bracket and hands out the corrupting advice.
+    if printf '%s\n' "$markers" | grep -qE '^[[:space:]]*- '; then
+      style=block
+    elif printf '%s\n' "$markers" | grep -q '\['; then
+      style=flow
     else
-      echo '    - "review rate limited"' >&2
+      # A key with no value at all: the reader falls back to the engine
+      # defaults, which already contain the marker. Nothing to ask for.
+      style=none
     fi
-    echo "  Without it, a review bot that reports a rate limit ONLY as a status-check" >&2
-    echo "  description (CodeRabbit does this) reads as a clean review. See issue #23." >&2
+    if [ "$style" != none ]; then
+      echo "ACTION NEEDED: add \"review rate limited\" to review.unavailable_markers" >&2
+      echo "  in $CONFIG_FILE." >&2
+      if [ "$style" = flow ]; then
+        echo '  Yours is written as an inline list — add the string inside the brackets.' >&2
+      else
+        echo '    - "review rate limited"' >&2
+      fi
+      echo "  Without it, a review bot that reports a rate limit ONLY as a status-check" >&2
+      echo "  description (CodeRabbit does this) reads as a clean review. See issue #23." >&2
+    fi
   fi
 
 }
