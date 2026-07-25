@@ -255,12 +255,6 @@ _DEFAULT_REVIEW_BOTS = ("coderabbit",)
 # the anti-wedge property that `_DEFAULT_INFORMATIONAL_CHECK_NAMES` exists for.
 _DEFAULT_BOT_PENDING_GRACE_MINUTES = 15.0
 
-# The receipt source a full panel records under. Adopter-configurable
-# (`review.fallback_panel.receipt_source`) because the whole point of the key is
-# that a panel receipt is DISTINGUISHABLE from a single-lens one — an adopter who
-# renames it must still get that property, and the validation below must follow
-# their name rather than a literal.
-_DEFAULT_PANEL_RECEIPT_SOURCE = "fallback:panel"
 
 # Whether a PR must carry at least one real (non-informational) check before it
 # can read as green. True is the safe default — see :func:`summarize_checks`.
@@ -288,8 +282,6 @@ class ReviewConfig(NamedTuple):
     require_ci: bool
     bots: tuple[str, ...]
     bot_pending_grace_minutes: float
-    panel_receipt_source: str
-    panel_lens_names: frozenset[str]
 
 
 def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
@@ -335,8 +327,6 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         require_ci=_DEFAULT_REQUIRE_CI,
         bots=_DEFAULT_REVIEW_BOTS,
         bot_pending_grace_minutes=_DEFAULT_BOT_PENDING_GRACE_MINUTES,
-        panel_receipt_source=_DEFAULT_PANEL_RECEIPT_SOURCE,
-        panel_lens_names=frozenset(),
     )
     try:
         from kitconfig import get, get_str_list, load_config
@@ -364,25 +354,6 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         )
         if isinstance(grace, bool) or not isinstance(grace, (int, float)) or grace < 0:
             grace = _DEFAULT_BOT_PENDING_GRACE_MINUTES
-        panel_source = get(
-            config,
-            "review.fallback_panel.receipt_source",
-            _DEFAULT_PANEL_RECEIPT_SOURCE,
-        )
-        if not isinstance(panel_source, str) or not panel_source.strip():
-            panel_source = _DEFAULT_PANEL_RECEIPT_SOURCE
-        declared = get(config, "review.fallback_panel.lenses", [])
-        panel_lenses = (
-            frozenset(
-                lens["name"].strip().casefold()
-                for lens in declared
-                if isinstance(lens, dict)
-                and isinstance(lens.get("name"), str)
-                and lens["name"].strip()
-            )
-            if isinstance(declared, list)
-            else frozenset()
-        )
     except FileNotFoundError:
         # `load_config` raises this for an absent config file — a standalone
         # engine run. Defaults are exactly right; stay quiet.
@@ -407,8 +378,6 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         require_ci=require_ci,
         bots=tuple(bot.strip().lower() for bot in bots if bot.strip()),
         bot_pending_grace_minutes=float(grace),
-        panel_receipt_source=panel_source.strip(),
-        panel_lens_names=panel_lenses,
     )
 
 
@@ -419,8 +388,6 @@ _INFORMATIONAL_CHECK_NAMES = _REVIEW_CONFIG.informational_checks
 _REQUIRE_CI = _REVIEW_CONFIG.require_ci
 _REVIEW_BOTS = _REVIEW_CONFIG.bots
 _BOT_PENDING_GRACE_MINUTES = _REVIEW_CONFIG.bot_pending_grace_minutes
-_PANEL_RECEIPT_SOURCE = _REVIEW_CONFIG.panel_receipt_source
-_PANEL_LENS_NAMES = _REVIEW_CONFIG.panel_lens_names
 
 
 # --------------------------------------------------------------------------- gh
@@ -1512,44 +1479,6 @@ def record_review(
         "recorded_at": now.isoformat(),
     }
     named_lenses = [part.strip() for part in (lenses or "").split(",") if part.strip()]
-    # A cheap guard against the ACCIDENTAL mislabel, and no more than that.
-    # `source` is free text an agent picks, so this can only catch a receipt
-    # that names the configured panel source exactly; `fallback:panel (2 lenses)`
-    # sails past it. That is why the real defence is not here but in the poll
-    # render, which states the recorded lens count at merge time whatever the
-    # receipt is called — a deterministic artifact rather than a matcher over a
-    # label (`safety-critical-changes.md` rule 1).
-    # Both sides case-folded. Folding the lens names to defeat
-    # `adversarial,Adversarial` while comparing the SOURCE case-sensitively left
-    # `Fallback:Panel` bypassing the gate entirely — and producing a receipt that
-    # reads as a panel with no single-lens warning at all, i.e. worse than before
-    # this check existed.
-    if source.casefold() == _PANEL_RECEIPT_SOURCE.casefold():
-        distinct = {lens.casefold() for lens in named_lenses}
-        # Names must be ones the config declares. Free text made `,` both the
-        # separator and ordinary punctuation, so "correctness, i.e. does it do
-        # what it says" counted as two lenses. This is the one part of the
-        # claim that IS checkable: the lens roster is configuration, not
-        # something the caller invents at record time.
-        # Count only lenses the config DECLARES, but do not forbid extras.
-        # Requiring every name to be in the roster made "two disjoint lenses is
-        # the floor, not the ceiling" false: a genuine third ad-hoc lens was
-        # refused, and the error pushed the operator to UNDER-claim a three-lens
-        # review. Counting roster hits still blocks the forgery this replaced,
-        # where `,` is punctuation rather than a separator ("correctness, i.e.
-        # does it do what it says" names one roster lens).
-        if _PANEL_LENS_NAMES:
-            distinct &= _PANEL_LENS_NAMES
-        if len(distinct) < 2:
-            raise ValueError(
-                f"a {source!r} receipt asserts two independent lenses, but "
-                f"--lenses named {len(distinct)} of the configured roster "
-                f"({', '.join(sorted(_PANEL_LENS_NAMES)) or 'none declared'}); "
-                f"you gave {', '.join(named_lenses) or 'none'}. Run the second "
-                "lens, add it to review.fallback_panel.lenses if it is new, or "
-                "record what actually ran under a single-lens source (e.g. "
-                "fallback:codex) — see docs/agentic-dev-kit/fallback-review-panel.md"
-            )
     if named_lenses:
         receipt["lenses"] = named_lenses
     if allow_pending_bot:
@@ -1897,27 +1826,25 @@ def render(report: dict) -> str:
     # regardless of what it is called.
     evidence = report.get("review_evidence") or {}
     if evidence.get("valid"):
+        # SELF-REPORTED, and labelled as such. Whoever ran `--record-review`
+        # wrote both the source and the lens names in one invocation, with
+        # nothing binding either to a review that happened — so this engine
+        # cannot verify coverage, and four rounds of trying to (matching the
+        # source, then the lens names, then a configured roster) produced a
+        # check defeated by one extra character while the render affirmed the
+        # forgery. `safety-critical-changes.md` rule 1: treat "we tightened the
+        # matcher" as a stopgap, not a fix. So: report the claim, name it a
+        # claim, and let a reader judge it. Verifying it needs each lens to
+        # record its own receipt from its own context — see issue #32.
         named = [_flat(lens, 40) for lens in evidence.get("lenses") or []]
-        # Counted case-folded and deduped, like the record-time gate. Counting
-        # raw list length let `adversarial,adversarial` — and an honest one-lens
-        # note written as "correctness, i.e. …", where the comma is punctuation
-        # rather than a separator — render as a full panel.
         distinct = len({lens.casefold() for lens in named})
         source = _flat(evidence.get("source"))
-        claims_panel = source.casefold().startswith(_PANEL_RECEIPT_SOURCE.casefold())
         if distinct >= 2:
-            detail = f"{distinct} lenses ({', '.join(named)})"
+            detail = f"{distinct} lenses claimed ({', '.join(named)})"
         elif named:
-            detail = f"⚠ ONE lens ({named[0]}) — not a dual-lens pass"
-        elif claims_panel:
-            # Only a receipt CLAIMING to be a panel owes a lens list. Warning on
-            # every lens-free receipt made the dishonest line byte-identical to
-            # the ordinary bot receipt — so it exposed nothing, and it repeated
-            # the mistake this file avoids for `bot_signal: skipped`: a
-            # permanent false warning on a correct receipt.
-            detail = "⚠ claims a panel but states no lenses"
+            detail = f"⚠ ONE lens claimed ({named[0]}) — not a dual-lens pass"
         else:
-            detail = "no lens list (not a panel receipt)"
+            detail = "no lenses recorded"
         lines.append(f"  review evidence: {source} — {detail}")
         # The same argument that moved `lenses` to the poll render applies to
         # its siblings: a caveat printed only on the stdout of the
@@ -1984,7 +1911,7 @@ def render_record_review(report: dict) -> str:
     behind_map = receipt.get("bots_behind_head")
     for bot, sha in (behind_map if isinstance(behind_map, dict) else {}).items():
         lines.append(
-            f"  ⚠ {bot}'s last review was of {sha[:7]}, not this head — this receipt "
+            f"  ⚠ {bot}'s last review was of {_flat(sha, 12)}, not this head — this receipt "
             "does not stand for its review of this design"
         )
     return "\n".join(lines)

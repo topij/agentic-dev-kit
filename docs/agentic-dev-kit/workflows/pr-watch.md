@@ -83,8 +83,8 @@ Repeat until the report says **converged**:
      ```
 
      `--lenses` names what actually ran, so a degraded one-lens pass is
-     distinguishable from a panel in the audit trail — and a panel-sourced
-     receipt naming fewer than two distinct lenses is **refused**. If your
+     distinguishable from a panel in the audit trail. It is **self-reported** —
+     the engine records it and shows it at merge time, but cannot verify it. If your
      runtime cannot isolate a reviewer, run `review.fallback_commands` instead
      and record it as `fallback:<runtime>` with the single lens named. For a
      lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same flags.

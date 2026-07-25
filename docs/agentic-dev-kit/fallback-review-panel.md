@@ -36,8 +36,7 @@ describes only what the two shipped lenses are *for*:
 
 They are the two the doctrine names, and they are chosen to overlap as little
 as possible. Add or replace lenses for your own risk profile (a data-migration
-lens, a performance lens): two disjoint lenses is the floor, not the ceiling,
-and `--record-review` counts roster lenses without forbidding extras.
+lens, a performance lens): two disjoint lenses is the floor, not the ceiling.
 
 ## The contract every lens gets
 
@@ -68,13 +67,6 @@ author re-reading their own diff.
    lens's results were unreliable and the other nearly destroyed live work. Give
    each lens a scratch copy or its own git worktree, and require it to leave the
    shared tree byte-identical.
-7. **Mutate in an isolated copy, never the shared tree.** Mutation testing needs
-   temporary writes, and lenses run concurrently. Discovered the hard way on the
-   PR that added this file: one lens's mutations appeared to the other as an
-   external process corrupting the repo, and it "restored" them mid-run — so one
-   lens's results were unreliable and the other nearly destroyed live work. Give
-   each lens a scratch copy or its own git worktree, and require it to leave the
-   shared tree byte-identical.
 8. **State what was verified clean, and how.** Absence of findings is only
    evidence if you know what was actually checked.
 
@@ -98,22 +90,26 @@ author re-reading their own diff.
      --head <polled-sha>
    ```
 
-   `--record-review` **refuses** a receipt whose source is the configured
-   `receipt_source` (compared case-insensitively, after stripping) unless `--lenses` names two distinct lenses. Know
-   what that is and is not: `source` is free text, so the check catches an
-   accidental mislabel, not a determined one — `fallback:panel (2 lenses)` is
-   just another string.
+   **`--lenses` is self-reported, and the engine does not verify it.** You write
+   the source and the lens names in one invocation; nothing binds either to a
+   review that happened. Four rounds of this PR tried to verify it from the
+   engine — matching the source, then the lens names, then a configured roster —
+   and each was defeated, the last by a single extra character in the source,
+   after which the render cheerfully affirmed the forgery.
+   `safety-critical-changes.md` rule 1 calls that a stopgap, not a fix.
 
-   The defence that does not depend on the label is the **poll render**, which
-   states the recorded lens count on every poll once a current-head receipt
-   exists (no receipt, or one bound to an older head, prints nothing):
+   So what you get is an **audit trail, not a gate**. The poll render states the
+   claim, labelled as a claim, on every poll once a current-head receipt exists
+   (no receipt, or one bound to an older head, prints nothing):
 
    ```text
-   review evidence: fallback:codex — ⚠ ONE lens (correctness) — not a dual-lens pass
+   review evidence: fallback:codex — ⚠ ONE lens claimed (correctness) — not a dual-lens pass
    ```
 
-   So a one-lens pass reads as one lens at merge time whatever it was called,
-   and `--lenses` is what determines that — not the source string.
+   That is genuinely useful — a one-lens pass is visible at merge time instead of
+   buried in the record command's stdout — and it is worth exactly what an honest
+   operator puts into it. Verifying coverage needs each lens to record its own
+   receipt from its own context: issue #32, not this.
 
 ## Re-running, and when to stop
 
@@ -144,9 +140,8 @@ If the runtime cannot run isolated reviewers, fall back to
 better than nothing and it is **not** a panel:
 
 - record it as `fallback:<runtime>`, never the panel's `receipt_source`. The
-  engine refuses a panel-sourced receipt naming fewer than two distinct lenses,
-  so the shortest path through it is to record what actually ran — but it cannot
-  tell whether a panel really ran, only what you named. The honesty is yours
+  engine will not stop you doing otherwise — it cannot tell what ran. The
+  honesty is entirely yours, which is the reason to write it down
 - pass `--lenses` naming what actually ran, so the audit trail shows one lens
 - for anything under `safety-critical-changes.md`, say plainly in the PR that
   rule 2 was not satisfied
