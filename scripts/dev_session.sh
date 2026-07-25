@@ -728,7 +728,7 @@ cmd_merge() {
 
     local merge_class="operator" branch="" base="$DEFAULT_BASE"
     local resolved repo_nwo pr
-    local report done validated_pr validated_base validated_head
+    local report mergeable validated_pr validated_base validated_head
     [[ -s "$session_dir/merge_class" ]] && merge_class="$(cat "$session_dir/merge_class")"
     [[ "$merge_class" == "self" ]] \
         || _die "lane '$scope' is operator-merge (or missing metadata); autonomous merge refused"

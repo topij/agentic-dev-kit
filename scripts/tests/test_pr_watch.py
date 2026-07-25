@@ -181,8 +181,13 @@ def test_unknown_or_non_open_pr_state_never_settles_done() -> None:
         _green_view(state="MERGED", mergeStateStatus="UNKNOWN"), [], set()
     )
 
+    # Both are green and comment-clean, so the watch loop converged; only the
+    # merge is refused. Asserting `converged` here too keeps the two predicates
+    # independently pinned, so a regression that re-couples them fails.
+    assert unknown["converged"] is True
     assert unknown["mergeable"] is False
     assert "merge state is UNKNOWN" in unknown["merge_blockers"]
+    assert merged["converged"] is True
     assert merged["mergeable"] is False
     assert "PR state is MERGED" in merged["merge_blockers"]
 
@@ -225,6 +230,11 @@ def test_unstable_is_allowed_only_when_remaining_check_is_informational() -> Non
         set(),
         review_receipt=receipt,
     )
+
+    # All three converged — an informational check never blocks the watch loop.
+    # Only mergeability varies, and only on the merge-state blocker.
+    for report in (informational_only, unexplained_unstable, successful_informational):
+        assert report["converged"] is True
 
     assert informational_only["mergeable"] is True
     assert "merge state is UNSTABLE" not in informational_only["merge_blockers"]
@@ -304,7 +314,9 @@ def test_review_receipt_must_match_current_head() -> None:
 
     # All three are green and comment-clean, so the watch loop has converged for
     # each; only the receipt bound to the CURRENT head authorizes the merge.
-    assert missing["converged"] is True
+    for report in (missing, stale, current):
+        assert report["converged"] is True
+
     assert missing["mergeable"] is False
     assert stale["mergeable"] is False
     assert current["mergeable"] is True
@@ -559,6 +571,11 @@ def test_zero_check_pr_still_needs_current_head_review_evidence(
     )
 
     assert without_receipt["checks"]["all_green"] is True
+    # With require_ci false a zero-check PR converges; the receipt is then the
+    # ONLY thing standing between convergence and merge authorization.
+    for report in (without_receipt, stale_receipt, with_receipt):
+        assert report["converged"] is True
+
     assert without_receipt["mergeable"] is False
     assert (
         "independent review evidence is missing for current head"
