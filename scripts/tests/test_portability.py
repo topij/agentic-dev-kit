@@ -916,6 +916,17 @@ state:
     assert config["runtime"]["default"] == "claude"
     assert config["runtime"]["launchers"]["codex"] == "codex"
     assert config["review"]["fallback_commands"]["codex"] == "/review"
+    # The panel is what the fallback actually IS now; deleting its whole
+    # migration block from init.sh previously passed the entire suite.
+    panel = config["review"]["fallback_panel"]
+    assert panel["receipt_source"] == "fallback:panel"
+    assert [lens["name"] for lens in panel["lenses"]] == ["adversarial", "correctness"]
+    # The migrated focus text must match what a fresh install ships, or an
+    # upgrading adopter runs a materially weaker lens prompt than a new one.
+    shipped = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )["review"]["fallback_panel"]
+    assert panel["lenses"] == shipped["lenses"]
     assert config["models"]["runtime_mappings"]["claude"] == {
         "cheap": "tiny",
         "default": "normal",

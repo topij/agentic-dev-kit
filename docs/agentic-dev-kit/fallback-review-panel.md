@@ -85,11 +85,21 @@ author re-reading their own diff.
      --head <polled-sha>
    ```
 
-   `--record-review` **refuses** a panel-sourced receipt naming fewer than two
-   distinct lenses. That is deliberate: the claim "a panel reviewed this" is
-   the one thing a receipt should not be able to assert on trust. The way past
-   it is to run the second lens, or to record what actually ran under a
-   single-lens source.
+   `--record-review` **refuses** a receipt whose source is exactly the
+   configured `receipt_source` unless `--lenses` names two distinct lenses. Know
+   what that is and is not: `source` is free text, so the check catches an
+   accidental mislabel, not a determined one — `fallback:panel (2 lenses)` is
+   just another string.
+
+   The defence that does not depend on the label is the **poll render**, which
+   states the recorded lens count every time the PR is polled:
+
+   ```text
+   review evidence: fallback:codex — ⚠ ONE lens (correctness) — not a dual-lens pass
+   ```
+
+   So a one-lens pass reads as one lens at merge time whatever it was called,
+   and `--lenses` is what determines that — not the source string.
 
 ## Re-running, and when to stop
 
@@ -118,9 +128,10 @@ If the runtime cannot run isolated reviewers, fall back to
 `review.fallback_commands.<runtime>` — one lens, in the author's context. It is
 better than nothing and it is **not** a panel:
 
-- record it as `fallback:<runtime>`, never the panel's `receipt_source` — the
-  engine enforces this, so recording it honestly is also the only thing that
-  works
+- record it as `fallback:<runtime>`, never the panel's `receipt_source`. The
+  engine refuses a panel-sourced receipt naming fewer than two distinct lenses,
+  so the shortest path through it is to record what actually ran — but it cannot
+  tell whether a panel really ran, only what you named. The honesty is yours
 - pass `--lenses` naming what actually ran, so the audit trail shows one lens
 - for anything under `safety-critical-changes.md`, say plainly in the PR that
   rule 2 was not satisfied

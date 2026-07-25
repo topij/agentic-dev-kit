@@ -13,6 +13,10 @@
     ".gitignore"
   ],
   "files": {
+    "docs/agentic-dev-kit/fallback-review-panel.md": {
+      "role": "doctrine",
+      "sha256": "02d9dd45c06a641f8822dc50c52f513e3f3860c3a144841d50f95a6ef93c1cf3"
+    },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
       "sha256": "b889d9dddb9c3b5b7441162406094530532288a996af232120ca2b22c822d312"
@@ -67,7 +71,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "d2e4fcaf3e4814a340b1c0ac499e3a79a977122004d593629cbb562a9213bbd0"
+      "sha256": "7268ec94aa5b4c44311a57e34447f92b09a64eba34bf7b0e9fecf2e099a68f9f"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
@@ -99,7 +103,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "c472f3768bc453f158d5a226b3e0fcc6add1beea9eb9ea188147a3961a8aafea"
+      "sha256": "e90ca1a3eb03673d810f14046b9cce52c5d41c7c8bdf68ccbaf874d941cb5036"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",

@@ -135,21 +135,68 @@ def test_reminder_points_at_the_panel_not_the_degraded_one_lens_mode(monkeypatch
     assert "/code-review" not in reminder
 
 
-def test_the_reminder_uses_the_configured_receipt_source_not_a_literal():
+def test_the_reminder_reads_the_receipt_source_from_config(monkeypatch):
     """`review.fallback_panel.receipt_source` exists so an adopter can rename it.
 
-    Prescribing the literal in the instruction would hand them a command that
-    writes a differently-labelled receipt than their own config declares —
-    adding a config key and then ignoring it (Principle #10).
+    Driven through `load_config`, not through a positional argument: passing the
+    value in only proves the formatter interpolates it. A mutation that made the
+    loader ignore config entirely and return the default survived the whole
+    suite — which is adding a config key and then not reading it (Principle #10),
+    the exact failure the docstring claims to guard.
     """
     hook = _load_hook()
+    hook._load_review_config()  # prime the kitconfig import
+    import kitconfig  # noqa: PLC0415
 
-    renamed = hook._fallback_instruction(
-        "/x", ["adversarial", "correctness"], "fallback:my-panel"
+    monkeypatch.setattr(
+        kitconfig,
+        "load_config",
+        lambda *a, **k: {
+            "review": {
+                "bots": ["somebot"],
+                "fallback_panel": {
+                    "receipt_source": "fallback:my-panel",
+                    "lenses": [{"name": "adversarial"}, {"name": "correctness"}],
+                },
+            }
+        },
     )
 
-    assert '"fallback:my-panel"' in renamed
-    assert "fallback:panel" not in renamed
+    reminder = hook.build_reminder()
+
+    assert '"fallback:my-panel"' in reminder
+    assert "fallback:panel" not in reminder
+
+
+def test_a_one_lens_panel_config_degrades_instead_of_advertising_a_refusal(
+    monkeypatch,
+):
+    """Two distinct lenses is the panel's floor, and `record_review` enforces it.
+
+    An adopter who configures one lens would otherwise be told to run "the
+    PANEL" and record it with a command the engine refuses every single time.
+    """
+    hook = _load_hook()
+    hook._load_review_config()
+    import kitconfig  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        kitconfig,
+        "load_config",
+        lambda *a, **k: {
+            "review": {
+                "bots": ["somebot"],
+                "fallback_commands": {"claude": "/solo-review"},
+                "fallback_panel": {"lenses": [{"name": "adversarial"}]},
+            }
+        },
+    )
+
+    reminder = hook.build_reminder()
+
+    assert "PANEL" not in reminder
+    assert "/solo-review" in reminder
+    assert "review waiver" in reminder
 
 
 def test_blank_lens_names_are_discarded_rather_than_advertised(monkeypatch):

@@ -94,6 +94,11 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("docs/agentic-dev-kit/workflows/pr-watch.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/parallel.md", "workflow"),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
+    # Tracked because safety-critical-changes.md — which IS refreshed by
+    # /upgrade — links to it from rules 2 and 3. An untracked target means an
+    # upgrading adopter gets doctrine pointing at a file they do not have, and
+    # kit_doctor cannot report it missing because it is not tracked.
+    ("docs/agentic-dev-kit/fallback-review-panel.md", "doctrine"),
     # narrative-doc templates (the rendered outputs are adopter-owned)
     ("docs/templates/handoff.md.tmpl", "template"),
     ("docs/templates/handoff-history.md.tmpl", "template"),

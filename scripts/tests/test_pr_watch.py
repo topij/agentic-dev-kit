@@ -361,6 +361,7 @@ def test_review_receipt_must_match_current_head() -> None:
     assert stale["mergeable"] is False
     assert current["mergeable"] is True
     assert current["review_evidence"] == {
+        "lenses": [],
         "valid": True,
         "source": "fallback:codex",
         "head": "abc123",
@@ -2193,7 +2194,74 @@ def test_the_shipped_config_ships_two_disjoint_lenses() -> None:
     assert panel["receipt_source"] not in set(
         kitconfig.get(config, "review.fallback_commands", {}).values()
     )
-    assert pr_watch is not None
+    # "Disjoint" means the FOCUS differs, not just the label — two lenses with
+    # the same brief are one lens run twice.
+    focuses = [lens["focus"] for lens in panel["lenses"]]
+    assert len(set(focuses)) == len(focuses)
+    # …and the engine must have read this file, not its own default.
+    assert pr_watch._PANEL_RECEIPT_SOURCE == panel["receipt_source"]
+
+
+def test_the_panel_receipt_source_is_read_from_config_not_the_engine_default(
+    tmp_path: Path,
+) -> None:
+    """A mutation making `_load_review_config` ignore the key entirely survived
+    the suite — a config key added and then not read (Principle #10)."""
+    pr_watch = _load_pr_watch()
+
+    resolved = pr_watch._load_review_config(
+        _write_config(
+            tmp_path,
+            'review:\n  fallback_panel:\n    receipt_source: "fallback:my-panel"\n',
+        )
+    )
+
+    assert resolved.panel_receipt_source == "fallback:my-panel"
+
+    # Blank / wrong-typed values keep the default rather than disabling the gate
+    # by making the source unmatchable.
+    for bad in ('""', '"   "', "[]", "true"):
+        degraded = pr_watch._load_review_config(
+            _write_config(
+                tmp_path / bad.strip('"[]'),
+                f"review:\n  fallback_panel:\n    receipt_source: {bad}\n",
+            )
+        )
+        assert degraded.panel_receipt_source == pr_watch._DEFAULT_PANEL_RECEIPT_SOURCE, bad
+
+
+def test_the_cli_threads_lenses_through_to_the_receipt(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The seam, not just the unit.
+
+    Dropping `lenses=args.lenses` in `main()` passed every test — the flag
+    parsed, the function accepted it, and nothing checked they were connected.
+    Also pins that `--lenses` without `--record-review` is a usage error.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    monkeypatch.setattr(
+        pr_watch, "_gh_json", lambda args: {"number": 9, "headRefOid": "abc123"}
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    saved: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: saved.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+
+    exit_code = pr_watch.main(
+        ["9", "--record-review", "fallback:panel",
+         "--lenses", "adversarial,correctness", "--head", "abc123"]
+    )
+
+    assert exit_code == 0
+    assert saved[0]["review_receipt"]["lenses"] == ["adversarial", "correctness"]
+
+    with pytest.raises(SystemExit):
+        pr_watch.main(["9", "--lenses", "adversarial"])
+    assert "--lenses is only valid with --record-review" in capsys.readouterr().err
 
 
 def test_a_panel_receipt_is_refused_without_two_distinct_lenses(
@@ -2242,3 +2310,108 @@ def test_the_panel_gate_follows_a_renamed_receipt_source(
         monkeypatch, pr_watch, source="fallback:panel", lenses="one"
     )
     assert receipt["lenses"] == ["one"]
+
+
+def test_the_poll_render_states_what_the_receipt_covers() -> None:
+    """The one-lens warning used to print exactly once — on the stdout of the
+    `--record-review` call the agent itself chose to make — and never again at
+    the moment a merge is authorized.
+
+    `source` is free text an agent picks, so no matcher over it can be
+    trustworthy: `fallback:panel (adversarial + correctness)` sails past an
+    equality check. The defence that does not depend on the label is showing the
+    recorded LENS COUNT every poll. A relabelled receipt then reads as what it
+    actually is, and the quietest receipt is no longer the dishonest one.
+    """
+    pr_watch = _load_pr_watch()
+
+    def _evidence_line(receipt):
+        report = pr_watch.build_report(
+            _green_view(), [], set(), review_receipt=receipt
+        )
+        return next(
+            (l for l in pr_watch.render(report).splitlines() if "review evidence" in l),
+            "",
+        )
+
+    panel = _evidence_line(
+        {"head": "abc123", "source": "fallback:panel",
+         "lenses": ["adversarial", "correctness"]}
+    )
+    single = _evidence_line(
+        {"head": "abc123", "source": "fallback:codex", "lenses": ["correctness"]}
+    )
+    relabelled = _evidence_line(
+        {"head": "abc123", "source": "fallback:panel (adversarial + correctness)"}
+    )
+
+    assert "2 lenses (adversarial, correctness)" in panel and "⚠" not in panel
+    assert "ONE lens (correctness)" in single
+    # The bypass no longer buys silence — it reads as unstated coverage.
+    assert "lenses not stated" in relabelled
+
+
+def test_a_stale_receipt_reports_no_coverage_at_all() -> None:
+    """Evidence bound to an older head is not evidence for this one, so the
+    render must not describe its lenses as covering the current design."""
+    pr_watch = _load_pr_watch()
+
+    report = pr_watch.build_report(
+        _green_view(),
+        [],
+        set(),
+        review_receipt={"head": "0ldc0de", "source": "fallback:panel",
+                        "lenses": ["adversarial", "correctness"]},
+    )
+    rendered = pr_watch.render(report)
+
+    assert report["review_evidence"]["lenses"] == []
+    # The blocker line legitimately contains the phrase, so match the render's
+    # own coverage prefix rather than a substring that appears in both.
+    assert not any(l.strip().startswith("review evidence:") for l in rendered.splitlines())
+    assert report["mergeable"] is False
+
+
+def test_a_hand_edited_receipt_cannot_break_either_render() -> None:
+    """The state file is plain JSON on disk and anything that can run this
+    engine can edit it. The sibling receipt fields are type-guarded; this one
+    skipped it."""
+    pr_watch = _load_pr_watch()
+
+    for junk in ("adversarial", 5, {"a": 1}, [None], [""], [1, 2]):
+        receipt = {"head": "abc123", "source": "fallback:panel", "lenses": junk}
+        report = pr_watch.build_report(
+            _green_view(), [], set(), review_receipt=receipt
+        )
+        assert report["review_evidence"]["lenses"] == [], junk
+        pr_watch.render(report)  # must not raise
+        pr_watch.render_record_review({"pr": 9, "review_receipt": receipt})
+
+
+def test_a_blank_or_wrong_typed_receipt_source_keeps_the_gate_armed(
+    tmp_path: Path,
+) -> None:
+    """Both validation branches on `receipt_source` were unpinned, and both fail
+    in the direction that switches the gate OFF: an unmatchable source (a list,
+    a blank string) or an unstripped one silently accepts a lens-free panel
+    receipt."""
+    pr_watch = _load_pr_watch()
+
+    for bad in ('""', '"   "', "[]", "true", "12"):
+        resolved = pr_watch._load_review_config(
+            _write_config(
+                tmp_path / f"c{abs(hash(bad))}",
+                f"review:\n  fallback_panel:\n    receipt_source: {bad}\n",
+            )
+        )
+        assert resolved.panel_receipt_source == pr_watch._DEFAULT_PANEL_RECEIPT_SOURCE, bad
+
+    # Surrounding whitespace is stripped, so the configured source still matches
+    # the (already stripped) source a caller passes in.
+    padded = pr_watch._load_review_config(
+        _write_config(
+            tmp_path / "padded",
+            'review:\n  fallback_panel:\n    receipt_source: "  fallback:panel  "\n',
+        )
+    )
+    assert padded.panel_receipt_source == "fallback:panel"

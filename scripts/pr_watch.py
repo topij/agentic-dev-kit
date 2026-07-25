@@ -1495,13 +1495,19 @@ def record_review(
         "recorded_at": now.isoformat(),
     }
     named_lenses = [part.strip() for part in (lenses or "").split(",") if part.strip()]
-    # A panel receipt asserts two INDEPENDENT lenses. Left as prose, that claim
-    # was checkable by nobody: `--lenses adversarial,adversarial` rendered as
-    # multi-lens coverage, and omitting `--lenses` entirely still produced a
-    # receipt labelled `fallback:panel`. Principle: a deterministic gate beats a
-    # documented expectation. The escape is not a flag — it is recording the
-    # truth, under a single-lens source.
-    if source == _PANEL_RECEIPT_SOURCE:
+    # A cheap guard against the ACCIDENTAL mislabel, and no more than that.
+    # `source` is free text an agent picks, so this can only catch a receipt
+    # that names the configured panel source exactly; `fallback:panel (2 lenses)`
+    # sails past it. That is why the real defence is not here but in the poll
+    # render, which states the recorded lens count at merge time whatever the
+    # receipt is called — a deterministic artifact rather than a matcher over a
+    # label (`safety-critical-changes.md` rule 1).
+    # Both sides case-folded. Folding the lens names to defeat
+    # `adversarial,Adversarial` while comparing the SOURCE case-sensitively left
+    # `Fallback:Panel` bypassing the gate entirely — and producing a receipt that
+    # reads as a panel with no single-lens warning at all, i.e. worse than before
+    # this check existed.
+    if source.casefold() == _PANEL_RECEIPT_SOURCE.casefold():
         distinct = {lens.casefold() for lens in named_lenses}
         if len(distinct) < 2:
             raise ValueError(
@@ -1658,6 +1664,24 @@ def build_report(
             else None
         ),
         "head": receipt_head,
+        # Carried into the report so the poll render can state what the receipt
+        # stands for. Previously the one-lens warning printed exactly once — on
+        # the stdout of the `--record-review` call the agent itself chose to
+        # make — and never again at the moment a merge is authorized.
+        # `isinstance(..., list)` first: a bare string is iterable, so a
+        # hand-edited `"lenses": "adversarial"` would otherwise be read as
+        # eleven single-character lenses and render as ample coverage.
+        "lenses": (
+            [
+                lens
+                for lens in review_receipt["lenses"]
+                if isinstance(lens, str) and lens.strip()
+            ]
+            if isinstance(review_receipt, dict)
+            and receipt_head == head
+            and isinstance(review_receipt.get("lenses"), list)
+            else []
+        ),
     }
     merge_blockers: list[str] = []
     if pr_state != "OPEN":
@@ -1806,6 +1830,21 @@ def render(report: dict) -> str:
                 f"{entry['age_minutes']}m (past the {grace:g}m grace) — "
                 "treated as not coming; run the configured fallback review"
             )
+    # What the current-head receipt actually stands for. The gate cannot judge
+    # this — `source` is free text an agent chooses — so the honest move is to
+    # SHOW it at the moment a merge is considered, rather than to pattern-match
+    # a label and hope. A relabelled one-lens receipt now reads as one lens
+    # regardless of what it is called.
+    evidence = report.get("review_evidence") or {}
+    if evidence.get("valid"):
+        named = evidence.get("lenses") or []
+        if len(named) >= 2:
+            detail = f"{len(named)} lenses ({', '.join(named)})"
+        elif named:
+            detail = f"⚠ ONE lens ({named[0]}) — not a dual-lens pass"
+        else:
+            detail = "⚠ lenses not stated"
+        lines.append(f"  review evidence: {evidence.get('source')} — {detail}")
     for blocker in report.get("merge_blockers") or []:
         lines.append(f"  ✗ merge blocker: {blocker}")
     if report["new_comments"]:
@@ -1838,7 +1877,15 @@ def render_record_review(report: dict) -> str:
             f"  ⚠ review-bot state was unreadable ({receipt['bot_signal']}) when this "
             "receipt was taken — the queued-reviewer guard did not run"
         )
-    named = receipt.get("lenses") or []
+    # Type-guarded like the sibling receipt fields: the state file is plain
+    # JSON on disk and anything that can run this engine can edit it, so a
+    # non-list or a list of non-strings must not crash the render.
+    raw_lenses = receipt.get("lenses")
+    named = (
+        [lens for lens in raw_lenses if isinstance(lens, str) and lens.strip()]
+        if isinstance(raw_lenses, list)
+        else []
+    )
     if len(named) == 1:
         lines.append(
             f"  ⚠ one lens only ({named[0]}) — `safety-critical-changes.md` rule 2 "

@@ -10,7 +10,8 @@ This closes the gap where the kit only had prose asking the agent to run `/pr-wa
 unasked (Principle #8: "a rule that lives only in a doc is a wish").
 
 Generalized from a project-specific version: the reminder names whichever review
-bot(s) and fallback command this repo actually configures, read from
+bot(s) and the fallback PANEL (or, with none configured, the single fallback
+command) this repo actually configures, read from
 `config/dev-model.yaml` via `scripts/lib/kitconfig.py` — never a hardcoded bot name
 (Principle #10, "No hardcoding"). `paths.engines` resolves where `pr_watch.py` lives
 so the reminder's poll command is correct even when the kit is vendored under a
@@ -120,13 +121,17 @@ def _fallback_instruction(
     the fallback policy in the kit; pointing it at the degraded mode taught the
     wrong habit every time.
     """
-    if lenses:
+    # Two DISTINCT lenses is the panel's floor (see fallback-review-panel.md).
+    # A one-lens `fallback_panel` would otherwise have this hook advertise a
+    # command that `record_review` refuses every single time — so a sub-floor
+    # config degrades to the single-command wording instead.
+    if len({lens.casefold() for lens in lenses}) >= 2:
         return (
             "If a review bot is unavailable, run the fallback review PANEL — one "
             f"isolated, fresh-context reviewer per lens ({', '.join(lenses)}), per "
             "docs/agentic-dev-kit/fallback-review-panel.md — and record it with "
-            f'`--record-review "{panel_source}" --lenses <names>`. Never treat the '
-            "outage as a review waiver."
+            f'`--record-review "{panel_source}" --lenses <names> --head <polled-sha>`. '
+            "Never treat the outage as a review waiver."
         )
     return (
         f"If a review bot is unavailable, run the configured fallback "
