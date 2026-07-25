@@ -118,7 +118,7 @@ review:
   # against the check name.
   informational_checks: [coderabbit]
   # Whether a PR must have at least one real (non-informational) CI check before
-  # pr_watch will report `done`. True is the safe default: it stops an autonomous
+  # pr_watch will report green. True is the safe default: it stops an autonomous
   # merge on a PR whose CI never ran. Set false for a repo with no CI at all —
   # otherwise pr-watch can never converge and `dev_session.sh merge` always
   # refuses. With false, `mergeable` still requires a current-head review receipt

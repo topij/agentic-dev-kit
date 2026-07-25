@@ -27,28 +27,31 @@ that `dev_session.sh merge <scope>` re-checks.
 
 ## Loop
 
-Repeat until the report says **done**:
+Repeat until the report says **converged**:
 
 1. **Poll.** `uv run <engine-dir>/pr_watch.py <PR#> --json` (omit `<PR#>` for the current
-   branch). Read `done`, `mergeable`, `checks` (`all_green`, `failing[]`, `pending`),
+   branch). Read `converged`, `mergeable`, `checks` (`all_green`, `failing[]`, `pending`),
    `merge_blockers[]`, `review_evidence`, and `new_comments[]`.
 
    The two predicates answer different questions and you need both:
 
-   - **`done`** — "is there more for me to fix?" Green, nothing new, not settling.
-     This is what ends *this* loop.
-   - **`mergeable`** — "is this authorized to merge?" `done` **plus** no
+   - **`converged`** — "is there more for me to fix?" Green, nothing new, not
+     settling. This is what ends *this* loop.
+   - **`mergeable`** — "is this authorized to merge?" `converged` **plus** no
      `merge_blockers[]` **plus** an independent-review receipt bound to the current
      head. This is what `dev_session.sh merge` re-checks.
 
-   A PR can be `done` and not `mergeable` — most commonly because no review receipt
-   has been recorded yet. That is the normal, expected state at the end of the loop,
-   not a failure.
+   A PR can be `converged` and not `mergeable` — most commonly because no review
+   receipt has been recorded yet. That is the normal, expected state at the end of
+   the loop, not a failure.
 
-1. **If `done`:** stop the loop and report — PR #, the green check count, and "no
-   outstanding review findings." Then record the independent review (see below) so
-   the PR becomes `mergeable`; if `mergeable` is already true, say so. Never treat
-   `done` on its own as clearance to merge.
+   `done` also appears in the report. It is a **legacy alias for `mergeable`**, kept
+   so that an older `dev_session.sh` still gates on merge authorization. Prefer
+   `converged` / `mergeable`; never assume `done` means "the loop finished."
+
+1. **If `converged`:** stop the loop and report — PR #, the green check count, and
+   "no outstanding review findings." Then record the independent review (see below)
+   so the PR becomes `mergeable`; if `mergeable` is already true, say so.
 
 1. **If checks are still `pending` and there are no new comments:** nothing to do yet
    — wait and re-poll (see Pacing). CI can take 20–30 min; that's expected, keep
@@ -121,8 +124,8 @@ Self-pace on a bounded cadence — don't busy-wait:
 
 ## Stop conditions
 
-- **Done** — `done: true` (green + clean). Report and finish. This is the goal of the
-  loop. Check `mergeable` too and state it: `done` alone is not merge clearance.
+- **Converged** — `converged: true` (green + clean). Report and finish. This is the
+  goal of the loop. State `mergeable` too: convergence is not merge clearance.
 - **Stuck / needs a decision** — a check fails for a reason you can't resolve (a
   flaky-infra failure that won't clear on re-run; an external dependency; a finding
   that needs an operator product/design call). Stop, report the specific blocker, and
@@ -136,9 +139,10 @@ Self-pace on a bounded cadence — don't busy-wait:
   re-running on a different PR starts fresh.
 - Known auto-noise from your review bots (walkthrough / "no actionable comments"
   summaries) is filtered out by the engine. Reviewer-unavailable notices are
-  deliberately *not* noise: they surface as new comments and so block `done`;
-  acknowledging one clears `done` but still leaves the current-head review-evidence
-  blocker on `mergeable` until the configured fallback runs and records its receipt.
+  deliberately *not* noise: they surface as new comments and so block `converged`;
+  acknowledging one clears `converged` but still leaves the current-head
+  review-evidence blocker on `mergeable` until the configured fallback runs and
+  records its receipt.
 - **Tune this for your own bot mix in `config/dev-model.yaml`, never in the engine.**
   `review.noise_markers`, `review.unavailable_markers` and
   `review.informational_checks` are read from config; the engine only carries them
@@ -148,7 +152,7 @@ Self-pace on a bounded cadence — don't busy-wait:
   (`noise_markers: []`) means "filter nothing".
 - `review.require_ci` (default `true`) is whether a PR must have at least one real,
   non-informational check before it can report green. Leave it `true` unless the repo
-  genuinely has no CI — with no checks and `require_ci: true`, `done` can never flip
+  genuinely has no CI — with no checks and `require_ci: true`, `converged` can never flip
   and `dev_session.sh merge` will always refuse. Setting it `false` does **not**
   weaken the review gate: `mergeable` still requires a current-head
   independent-review receipt, which then becomes the only quality gate — so set it

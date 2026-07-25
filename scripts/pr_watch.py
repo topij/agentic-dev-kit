@@ -13,20 +13,25 @@ filters out known auto-noise (while surfacing reviewer-unavailability notices),
 diffs against a per-PR seen-set so only *new actionable* comments surface, and
 reports two distinct predicates:
 
-- `done` — checks green, nothing new to act on, not mid-settle. The WATCH-LOOP
-  predicate: "is there more for me to fix?"
-- `mergeable` — `done` AND no deterministic merge blocker AND an
+- `converged` — checks green, nothing new to act on, not mid-settle. The
+  WATCH-LOOP predicate: "is there more for me to fix?"
+- `mergeable` — `converged` AND no deterministic merge blocker AND an
   independent-review receipt bound to the current head. The MERGE-GATE
   predicate, re-checked by `dev_session.sh merge` at act time.
 
-A `done` PR is not necessarily `mergeable`. Keeping them separate is what lets a
-caller watch to convergence without being forced to record a review receipt just
-to terminate the loop (see `decide_done`).
+A `converged` PR is not necessarily `mergeable`. Keeping them separate is what
+lets a caller watch to convergence without being forced to record a review
+receipt just to terminate the loop (see `decide_converged`).
 
-The caller loops: run this -> if not done, fix the failures / address or reply
-to the new comments -> `--mark-seen` -> wait -> run again. `done` flips true
-once CI is green and every finding has been handled; `mergeable` additionally
-waits on `--record-review`.
+`done` is a LEGACY alias, always equal to `mergeable`. Its meaning is unchanged
+and must stay that way: engine upgrades are per-file, so a new `pr_watch.py` can
+run against an older `dev_session.sh` that gates merges on `done` — repurposing
+the key would silently authorize merges on unreviewed PRs.
+
+The caller loops: run this -> if not converged, fix the failures / address or
+reply to the new comments -> `--mark-seen` -> wait -> run again. `converged`
+flips true once CI is green and every finding has been handled; `mergeable`
+additionally waits on `--record-review`.
 
 `--mark-seen` NEVER re-polls `gh`. Every plain poll (any invocation without
 `--mark-seen`) persists the exact ``all_seen_keys`` it just reported into a
@@ -422,7 +427,7 @@ def summarize_checks(rollup: list[dict], *, require_ci: bool | None = None) -> d
     - ``True`` — a PR with zero blocking checks is **not** green. This is the
       safe default: it stops an autonomous merge on a PR whose CI never ran.
     - ``False`` — a zero-check PR can be green. Needed for a repo with no CI at
-      all, where the ``blocking_total > 0`` clause otherwise makes ``done``
+      all, where the ``blocking_total > 0`` clause otherwise makes ``converged``
       unreachable forever, so the watch loop never terminates and
       ``dev_session.sh merge`` always refuses.
 
@@ -597,25 +602,24 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
     ]
 
 
-def decide_done(
+def decide_converged(
     checks: dict,
     new_items: list[dict],
     *,
     settling: bool = False,
 ) -> bool:
-    """Done = green, nothing left to act on, and not mid-settle.
+    """Converged = green, nothing left to act on, and not mid-settle.
 
-    This is the **watch-loop** predicate and nothing more: it answers "is there
-    more for me to fix?", which is the only question the poll/fix/mark-seen loop
-    needs. It deliberately does NOT mean "safe to merge" — see
-    :func:`decide_mergeable` for that.
+    The **watch-loop** predicate: it answers "is there more for me to fix?",
+    which is the only question the poll/fix/mark-seen loop needs. It deliberately
+    does NOT mean "safe to merge" — see :func:`decide_mergeable`.
 
-    Keeping the two separate is load-bearing. Folding merge authorization into
-    ``done`` makes a watch loop that has genuinely finished report ``done:
-    false`` forever until someone records a review receipt, which (a) wedges any
-    caller that watches to convergence without recording one, and (b) pressures
-    the operator into recording a receipt early just to terminate the loop —
-    exactly the premature-receipt failure tracked in issue #19.
+    This exists because merge authorization used to be the *only* thing a caller
+    could ask for. A loop that has genuinely finished still reported not-done
+    until someone recorded a review receipt, which (a) wedges any caller that
+    watches to convergence without recording one, and (b) pressures the operator
+    into recording a receipt early just to terminate the loop — exactly the
+    premature-receipt failure tracked in issue #19.
 
     ``settling`` is set right after a push (the PR head SHA moved, or the rollup
     is smaller than the largest seen for this head — new checks not yet
@@ -626,22 +630,54 @@ def decide_done(
 
 
 def decide_mergeable(
-    done: bool,
+    converged: bool,
     *,
     merge_blockers: list[str] | None = None,
     review_evidence: bool = False,
 ) -> bool:
     """Mergeable = the watch loop converged AND the merge is authorized.
 
-    Strictly stronger than :func:`decide_done`: a PR must first have nothing
+    Strictly stronger than :func:`decide_converged`: a PR must first have nothing
     left to act on, and additionally carry no deterministic merge blocker (draft,
     non-open, blocked merge state, changes requested) and an independent-review
     receipt bound to the *current* head.
 
-    This — not ``done`` — is what an autonomous self-merge gates on
-    (``dev_session.sh merge``).
+    This is what an autonomous self-merge gates on (``dev_session.sh merge``).
     """
-    return done and not merge_blockers and review_evidence
+    return converged and not merge_blockers and review_evidence
+
+
+def decide_done(
+    checks: dict,
+    new_items: list[dict],
+    *,
+    merge_blockers: list[str] | None = None,
+    review_evidence: bool = False,
+    settling: bool = False,
+) -> bool:
+    """Legacy name for :func:`decide_mergeable`. Semantics UNCHANGED.
+
+    ``done`` predates the split of the watch-loop predicate from the merge-gate
+    predicate, and has always meant "green, independently reviewed, merge-ready,
+    and not mid-settle". It keeps that meaning exactly, and the report keeps
+    emitting a ``done`` key equal to ``mergeable``.
+
+    **This is deliberate, and it is a safety property, not politeness.** Engine
+    upgrades are per-file (a sized-down adoption may install only some engines),
+    so a repo can end up running a new ``pr_watch.py`` against an older
+    ``dev_session.sh`` whose merge gate reads ``done``. Had ``done`` been
+    redefined to mean mere watch-convergence, that combination would have
+    authorized merges on PRs with **no review receipt at all** — a silent
+    fail-open on the merge gate. Making the schema change purely additive is what
+    removes that hazard.
+
+    Prefer :func:`decide_converged` / :func:`decide_mergeable` in new code.
+    """
+    return decide_mergeable(
+        decide_converged(checks, new_items, settling=settling),
+        merge_blockers=merge_blockers,
+        review_evidence=review_evidence,
+    )
 
 
 # ------------------------------------------------------------------ state I/O
@@ -801,12 +837,15 @@ def build_report(
     - ``merge_blockers`` — deterministic reasons the PR is not currently safe to
       merge (draft, blocked/unknown merge state, requested changes, non-open PR,
       or missing current-head review evidence).
-    - ``done`` — :func:`decide_done`: all checks green, no fresh comments, and
-      not ``settling``. The **watch-loop** predicate: "is there more to fix?"
-      A ``done`` PR is NOT necessarily safe to merge.
-    - ``mergeable`` — :func:`decide_mergeable`: ``done`` AND no
+    - ``converged`` — :func:`decide_converged`: all checks green, no fresh
+      comments, and not ``settling``. The **watch-loop** predicate: "is there
+      more to fix?" A converged PR is NOT necessarily safe to merge.
+    - ``mergeable`` — :func:`decide_mergeable`: ``converged`` AND no
       ``merge_blockers`` AND current-head review evidence. The **merge-gate**
       predicate, and what ``dev_session.sh merge`` re-checks at act time.
+    - ``done`` — legacy alias, always equal to ``mergeable``. Kept so an older
+      ``dev_session.sh`` reading ``done`` still gates on merge authorization
+      rather than falling open; see :func:`decide_done`.
     """
     checks = summarize_checks(view.get("statusCheckRollup") or [])
     comments = collect_comments(view, inline)
@@ -896,28 +935,31 @@ def build_report(
             {k for c in comments for k in (c["key"], c["content_key"])}
         ),
     }
-    report["done"] = decide_done(checks, fresh, settling=settling)
+    report["converged"] = decide_converged(checks, fresh, settling=settling)
     report["mergeable"] = decide_mergeable(
-        report["done"],
+        report["converged"],
         merge_blockers=merge_blockers,
         review_evidence=review_evidence["valid"],
     )
+    # Legacy alias, identical to `mergeable` — see :func:`decide_done` for why
+    # this key must never be repurposed to mean watch-convergence.
+    report["done"] = report["mergeable"]
     return report
 
 
 def render(report: dict) -> str:
     ck = report["checks"]
     lines = [f"PR #{report['pr']} — {report['url']}"]
-    # `done` answers "anything left to fix?"; `mergeable` answers "safe to
-    # merge?". Rendering only the former would let "✅ DONE" be misread as merge
-    # authorization — the exact conflation this split exists to remove — so a
-    # converged-but-unauthorized PR says so on the same line.
-    if not report["done"]:
-        state = "⏳ not done"
+    # `converged` answers "anything left to fix?"; `mergeable` answers "safe to
+    # merge?". Naming the converged-but-unauthorized state explicitly is the
+    # point: it is the normal end of a watch loop, not a failure, and it must not
+    # read as merge clearance.
+    if not report.get("converged"):
+        state = "⏳ not converged"
     elif report.get("mergeable"):
-        state = "✅ DONE — green + clean · mergeable"
+        state = "✅ DONE — green, reviewed, merge-ready"
     else:
-        state = "✅ DONE — green + clean · NOT mergeable (see merge blockers below)"
+        state = "✅ converged — green + clean · NOT mergeable (see merge blockers below)"
     if report.get("settling"):
         state += " (settling — new commit pushed; waiting for its checks to register)"
     lines.append(state)

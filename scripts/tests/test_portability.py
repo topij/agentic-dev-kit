@@ -488,18 +488,19 @@ def test_self_merge_refuses_wrong_base_and_binds_gh_to_repo(tmp_path: Path) -> N
 def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
     tmp_path: Path,
 ) -> None:
-    """`done` alone must never authorize a merge — the gate reads `mergeable`.
+    """The gate reads `mergeable`, and fails CLOSED when it is false or absent.
 
-    Two failures at once, both fail-CLOSED by design:
+    Two cases, deliberately pinned together:
 
-    - the normal case — a green, comment-clean PR with no review receipt is
-      legitimately ``done`` while ``mergeable`` is false;
-    - the compatibility case — an OLDER or foreign ``pr_watch`` that predates the
-      split emits ``done`` and no ``mergeable`` key at all, which must read as
-      "not authorized" rather than silently merging on the old semantics.
+    - **`mergeable: false` alongside `done: true`.** These are equal in any report
+      the engine actually produces, so this input is intentionally inconsistent:
+      it proves the gate reads `mergeable` and does not quietly fall back to
+      `done` if the two ever diverge.
+    - **`mergeable` absent entirely.** An OLDER or foreign ``pr_watch`` predating
+      the field emits only ``done``. The gate must read that as "not authorized"
+      rather than merging on an assumption about the missing key.
 
-    A gate that failed open here would merge unreviewed work, so the missing-key
-    path is pinned as deliberately as the false one.
+    A gate that failed open in either case would merge unreviewed work.
     """
     _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
     _prepare_self_merge_session(sessions)
