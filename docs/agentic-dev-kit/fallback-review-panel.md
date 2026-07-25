@@ -58,6 +58,14 @@ author re-reading their own diff.
    confirm a test fails. Repeatedly, properties were *named* by a test and
    pinned by nothing — hardwiring a branch to a constant still passed the whole
    suite.
+
+   **Beware false kills.** If your repo has a checksum/drift test over the files
+   you are mutating (this kit has one: `kit_doctor`'s self-check), *every*
+   mutation fails it regardless of behaviour, and a whole run can report 100%
+   killed while nothing behavioural caught anything. One lens's first pass here
+   reported 17/17 killed; re-run with that test excluded, 7 had survived.
+   Exclude the drift test — or regenerate the manifest after each mutation —
+   before believing a kill.
 6. **Report, do not fix.** A lens that edits loses the disjointness: it starts
    defending its own changes on the next round.
 7. **Mutate in an isolated copy, never the shared tree.** Mutation testing needs
@@ -93,7 +101,8 @@ author re-reading their own diff.
    **`--lenses` is self-reported, and the engine does not verify it.** You write
    the source and the lens names in one invocation; nothing binds either to a
    review that happened. Four rounds of this PR tried to verify it from the
-   engine — matching the source, then the lens names, then a configured roster —
+   engine — matching the source, then the lens names, then a required roster,
+   then a counted one —
    and each was defeated, the last by a single extra character in the source,
    after which the render cheerfully affirmed the forgery.
    `safety-critical-changes.md` rule 1 calls that a stopgap, not a fix.

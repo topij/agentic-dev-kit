@@ -1538,8 +1538,8 @@ def _flat(text: object, n: int = 120) -> str:
     `--record-review`. Interpolated raw, a single newline splits the coverage
     line in two and leaves the first half reading as a completed panel:
 
-        review evidence: fallback:panel — 2 lenses (adversarial, correctness)
-        (recorded) — ⚠ claims a panel but states no lenses
+        review evidence: fallback:panel — 2 lenses claimed (adversarial,
+        correctness) (recorded) — ⚠ ONE lens claimed …
 
     `_excerpt` already established this convention for comment bodies; the
     receipt fields skipped it.

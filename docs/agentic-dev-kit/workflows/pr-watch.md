@@ -156,8 +156,8 @@ Self-pace on a bounded cadence — don't busy-wait:
   summaries) is filtered out by the engine. Reviewer-unavailable notices are
   deliberately *not* noise: they surface as new comments and so block `converged`;
   acknowledging one clears `converged` but still leaves the current-head
-  review-evidence blocker on `mergeable` until the configured fallback runs and
-  records its receipt.
+  review-evidence blocker on `mergeable` until the panel runs and records its
+  receipt.
 - **A bot's outage is detected on both surfaces, and a queued bot is not a finished
   one.** `review.unavailable_markers` are matched against comment bodies *and*
   against the status-check description of any check belonging to a configured
@@ -218,6 +218,20 @@ Self-pace on a bounded cadence — don't busy-wait:
   Reported, never gating — deliberately the cheap half of the problem, because
   invalidating a receipt on a shape change risks wedging a repo whose bot is
   permanently unavailable.
+
+  Once a current-head receipt exists, every poll also prints what that receipt
+  **claims** to cover:
+
+  ```
+  review evidence: fallback:panel — 2 lenses claimed (adversarial, correctness)
+  review evidence: fallback:codex — ⚠ ONE lens claimed (correctness) — not a dual-lens pass
+  ```
+
+  Self-reported: `--lenses` is written by whoever ran `--record-review`, and the
+  engine records it without verifying it (issue #32). It is shown here so a
+  one-lens pass is visible when a merge is considered rather than only in the
+  record command's output. Entries that read as prose rather than a lens name
+  are recorded but not counted.
 
   **Known gaps, so you don't mistake them for coverage:**
   - `coverage` reports only bots that have reviewed *and* whose review carried a

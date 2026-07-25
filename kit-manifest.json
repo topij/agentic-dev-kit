@@ -15,7 +15,7 @@
   "files": {
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "421e5eed191375aed8a463a4b1d9a2ce8b52d9a6ea77e81ef026432f6eafaf2c"
+      "sha256": "cf460b82d9c0e4f55691ca23a77f0a46911af3282d9f317da46b51e81b9227d2"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -27,7 +27,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "9d19949ec94d47b2efbdd9d5258fb8a32cc17b48d9cc39faab3202d202a859e7"
+      "sha256": "c91857aae5525be9cc234fd73c0c3eb8cfd63f74c6dd56e854da63f79262870b"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -103,7 +103,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "e9d3e1cd01ba6ccc081e3241a787226789fb0d03b7aebd26ad321885bb944fb1"
+      "sha256": "b8ee2baf65375d9422e2bbfce7ba4ce5de965a4f331a3b82ef948606fcc3a670"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",

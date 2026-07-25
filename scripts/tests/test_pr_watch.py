@@ -2410,3 +2410,85 @@ def test_receipt_fields_are_flattened_and_type_guarded_in_both_renders() -> None
         {"pr": 9, "review_receipt": {"head": "abc", "source": "s",
                                      "bots_behind_head": {"coderabbit": 12345}}}
     )
+
+
+def test_the_cli_threads_lenses_through_to_the_receipt(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The seam, not just the unit — restored after being deleted with the gate.
+
+    This test never covered the gate; it covered the CLI wiring, and removing it
+    left `--lenses` — this change's entire engine surface — unpinned end to end.
+    Measured: `lenses=args.lenses` → `lenses=None` in `main()` passed all 314
+    tests, and so did deleting the usage guard.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    monkeypatch.setattr(
+        pr_watch, "_gh_json", lambda args: {"number": 9, "headRefOid": "abc123"}
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    saved: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: saved.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+
+    assert pr_watch.main(
+        ["9", "--record-review", "fallback:panel",
+         "--lenses", "adversarial,correctness", "--head", "abc123"]
+    ) == 0
+    assert saved[0]["review_receipt"]["lenses"] == ["adversarial", "correctness"]
+
+    with pytest.raises(SystemExit):
+        pr_watch.main(["9", "--lenses", "adversarial"])
+    assert "--lenses is only valid with --record-review" in capsys.readouterr().err
+
+
+def test_a_hand_edited_receipt_cannot_break_or_inflate_either_render() -> None:
+    """Restored: this pinned three live type-guards, not the deleted gate.
+
+    Each could be removed with the whole suite passing. They are load-bearing —
+    without the `isinstance(..., list)` check a hand-edited `"lenses":
+    "adversarial"` renders as `8 lenses claimed (a, d, v, e, r, s, a, r, i, a,
+    l)`, which is the forgery the guard was added for.
+    """
+    pr_watch = _load_pr_watch()
+
+    for junk in ("adversarial", 5, {"a": 1}, [None], [""], [1, 2], None):
+        receipt = {"head": "abc123", "source": "fallback:panel", "lenses": junk}
+        report = pr_watch.build_report(
+            _green_view(), [], set(), review_receipt=receipt
+        )
+        assert report["review_evidence"]["lenses"] == [], junk
+        assert "lenses claimed" not in pr_watch.render(report), junk
+        pr_watch.render_record_review({"pr": 9, "review_receipt": receipt})
+
+    # …and the sibling field, at the VALUE level — the case the previous test's
+    # name promised and its body missed, and the one that actually crashed.
+    for bad_map in ("coderabbit", ["coderabbit"], 5, None, {"coderabbit": 12345}):
+        pr_watch.render_record_review(
+            {"pr": 9, "review_receipt": {"head": "abc", "source": "s",
+                                         "bots_behind_head": bad_map}}
+        )
+
+
+def test_a_stale_receipt_exposes_no_lenses_in_the_report_json() -> None:
+    """Restored at REPORT level, not just render level.
+
+    `review_evidence` is in the `--json` payload, so a consumer could read
+    lenses off a receipt bound to an older head. The render-level replacement
+    did not cover that.
+    """
+    pr_watch = _load_pr_watch()
+
+    stale = pr_watch.build_report(
+        _green_view(), [], set(),
+        review_receipt={"head": "0ldc0de", "source": "fallback:panel",
+                        "lenses": ["adversarial", "correctness"]},
+    )
+
+    assert stale["review_evidence"]["valid"] is False
+    assert stale["review_evidence"]["lenses"] == []
+    assert stale["review_evidence"]["source"] is None
+    assert stale["mergeable"] is False

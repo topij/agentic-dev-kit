@@ -94,9 +94,9 @@ def _load_review_config() -> tuple[list[str], str, str, list[str], str]:
             _DEFAULT_ENGINES_DIR,
             # NO default lens roster, deliberately: this path means the config
             # could not be read, so nothing has confirmed a panel exists. A
-            # non-empty default here would have the hook advertise a panel —
-            # and a `--record-review` command the engine then refuses — on the
-            # strength of a config it just failed to load.
+            # non-empty default here would have the hook tell the operator to
+            # claim panel coverage on the strength of a config it just failed to
+            # load — and nothing downstream would catch that (issue #32).
             [],
             _DEFAULT_PANEL_RECEIPT_SOURCE,
         )
@@ -128,9 +128,9 @@ def _fallback_instruction(
     """
     # Two DISTINCT lenses is the panel's floor (see fallback-review-panel.md).
     # A one-lens `fallback_panel` is not a panel, so advertising one would tell
-    # the operator to claim coverage they cannot have. (The engine no longer
-    # refuses such a receipt — that check was deleted as unverifiable, see
-    # issue #32 — which makes the wording here the only thing steering it.)
+    # the operator to claim coverage they cannot have. Nothing downstream will
+    # stop them: the engine records `--lenses` without verifying it (issue #32),
+    # so this wording is the only thing steering it.
     if len({lens.casefold() for lens in lenses}) >= 2:
         return (
             "If a review bot is unavailable, run the fallback review PANEL — one "
