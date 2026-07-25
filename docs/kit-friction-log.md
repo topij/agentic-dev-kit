@@ -13,6 +13,40 @@
 
 ## 2026-07-25 — inbox
 
+- **The fallback review pass has no independence when the cockpit authored the PR (severity: H).**
+  On #22 CodeRabbit was rate-limited, so `review.fallback_commands` ran — but the agent
+  running it was the same one that wrote the diff. It found three real issues, yet
+  `safety-critical-changes.md` rule 2 is explicit that this is not a pass: "A single-lens
+  'converged' verdict is an incomplete review, not a green light." Rule 3 also went unmet —
+  the fallback's own approve was written in the same pass that produced the final commit, so
+  no *independent* pass ever covered `32f3e4f` — the fallback did see that code (it posted
+  seconds after the commit, naming it), but a self-review re-reading its own fixes is not a
+  rule-3 re-review. **Proposed fix:** make `review.fallback_commands` a *panel*
+  spec rather than an inline command — one fresh-context subagent per lens
+  (adversarial/bypass-focused + general-correctness, the two the doctrine says find
+  **disjoint** holes), each handed the raw diff with no framing from the author, and a
+  distinct receipt source (`fallback:panel`) so the audit trail does not read as a primary
+  review. **Evidence, with the conflict of interest stated:** the panel was trialled on the
+  wrap-up PR that carries this entry (#24), so this is self-reported. What it produced is
+  checkable in that PR's diff — a correctness lens found a merge-gate comment in
+  `dev_session.sh` describing the *rejected* design, shipped to `main` in #22 and missed by
+  the author's three passes over it; a second adversarial lens then found nine further
+  issues in the wrap-up, overlapping the first on none of them. Filed at **H** rather than
+  the M this would have got before that trial: a documented rule is being violated, not a
+  soft gap.
+
+- **A safety-critical PR merged without any review of its final design (severity: H).**
+  Also #22: CodeRabbit's only completed review was bound to the first commit; the design then
+  changed materially (the fail-open rework), and the rate limit never lifted. The receipt
+  mechanism records *that a review happened at this head* — satisfied by the fallback — with
+  no notion of "the primary reviewer saw an earlier, materially different design."
+  **Proposed fix:** invalidate a receipt when the diff changes *shape* rather than only when
+  the head moves — e.g. require a fresh receipt when a later push touches a file the recorded
+  review never saw. Cheaper interim: have `pr_watch` surface the primary bot's last-reviewed
+  SHA next to the current head, so the gap is visible at merge time instead of reconstructible
+  only from the PR thread. Related to #23 but distinct: #23 is about detecting the outage,
+  this is about what a receipt should mean when the outage outlasts a redesign.
+
 - **The `cp -r` quickstart can't distinguish kit-owned from adopter-owned files (severity: M).**
   Any file the kit tracks lands in an adopter's repo, which is why this repo's own narrative
   docs had to be renamed `kit-*.md` rather than simply filled in. `kit-manifest.json` now

@@ -97,17 +97,32 @@ def test_done_keeps_its_original_merge_authorization_semantics() -> None:
 
 
 def test_report_done_is_always_identical_to_mergeable() -> None:
-    """The alias must never drift from the field it aliases."""
-    pr_watch = _load_pr_watch()
-    receipt = {"head": "abc123", "source": "fallback:codex"}
+    """The alias must never drift from the field it aliases.
 
-    for report in (
-        pr_watch.build_report(_green_view(), [], set()),
-        pr_watch.build_report(_green_view(), [], set(), review_receipt=receipt),
-        pr_watch.build_report(_green_view(isDraft=True), [], set()),
-        pr_watch.build_report(_green_view(state="MERGED"), [], set()),
-    ):
-        assert report["done"] is report["mergeable"]
+    The report **key** — not :func:`decide_done`, which has no in-engine caller —
+    is what keeps an older `dev_session.sh` gating on merge authorization. So it
+    is the key that needs the coverage: walk a matrix of report shapes spanning
+    converged/not, blocked/clean, and receipt/none, rather than a few examples.
+    """
+    pr_watch = _load_pr_watch()
+    current = {"head": "abc123", "source": "fallback:codex"}
+    stale = {"head": "older", "source": "fallback:codex"}
+    comment = {"id": "c1", "author": {"login": "someone"}, "body": "please fix"}
+
+    views = (
+        _green_view(),
+        _green_view(isDraft=True),
+        _green_view(state="MERGED"),
+        _green_view(mergeStateStatus="BLOCKED"),
+        _green_view(reviewDecision="CHANGES_REQUESTED"),
+        _green_view(statusCheckRollup=[{"name": "t", "conclusion": "FAILURE"}]),
+        _green_view(statusCheckRollup=[]),
+        _green_view(comments=[comment]),
+    )
+    for view in views:
+        for receipt in (None, current, stale):
+            report = pr_watch.build_report(view, [], set(), review_receipt=receipt)
+            assert report["done"] is report["mergeable"], (view, receipt)
 
 
 def test_predicates_are_strictly_bool_typed() -> None:
