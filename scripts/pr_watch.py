@@ -66,8 +66,8 @@ confirm — call the former right after `gh pr create --draft`, the latter
 right before `gh pr merge`.
 
 Exit codes:
-    0 — reported (regardless of done/not-done; check `done` in the output),
-        or the draft-bit assertion held/was corrected successfully
+    0 — reported (regardless of the verdict; check `converged` / `mergeable` in
+        the output), or the draft-bit assertion held/was corrected successfully
     2 — usage error (no PR found, gh failure), or a draft-bit assertion that
         failed to correct (`ok: false`)
 """
