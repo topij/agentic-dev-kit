@@ -73,7 +73,10 @@ failure — closed by PR #28).
   config missing an optional section; and `kitconfig` silently resolves a next-line flow
   list to `{}`. **Candidate graduation:** the review-panel prompt (#26) should require
   the lens to *execute* the changed paths and to mutation-test new branches — mutation
-  is what proved two properties on #29 were unpinned despite tests that named them.
+  is what proved **five** properties across the session were unpinned despite tests that
+  named them (on #29: anchored author matching, newest-review-per-bot, the `bots=`
+  threading; on #25: the `init.sh` list-style branch and `grep -qi`'s
+  case-insensitivity). Three of those five are #29's.
 
 - **Narrative surfaces drift from the diff, and nobody re-reads them (severity: M).**
   #25's PR body needed three corrections (a stale test count, and two descriptions of a
