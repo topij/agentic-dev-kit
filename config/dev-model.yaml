@@ -84,6 +84,11 @@ tracker:
 review:
   # Independent review present on this repo (Principle #5). A down bot is not a
   # review waiver; select the current runtime's substitute pass instead.
+  # Also read by pr_watch.py to identify which status checks and comment authors
+  # belong to a reviewer, so its outage/pending state can reach the merge gate.
+  # Matched as a case-insensitive SUBSTRING of a check name or comment author —
+  # `coderabbit` covers the check `CodeRabbit` and the author `coderabbitai` —
+  # so keep entries specific enough not to collide with a CI job name.
   bots: [coderabbit]
   fallback_commands:
     claude: "/code-review"
@@ -102,13 +107,17 @@ review:
     - "<!-- walkthrough_start -->"
     - "actionable comments posted: 0"
     - "<!-- linear-linkback -->"
-  # Bodies signalling the reviewer could not run. Deliberately NOT noise: these
+  # Text signalling the reviewer could not run. Deliberately NOT noise: these
   # surface and block `converged`, because a blocked bot is an action signal (run
-  # the configured fallback), never a silent review waiver.
+  # the configured fallback), never a silent review waiver. Matched against both
+  # comment bodies AND a configured bot's status-check description — the same
+  # outage is worded differently on the two surfaces, and matching only comments
+  # made detection depend on which one the bot happened to use (issue #23).
   unavailable_markers:
     - "bugbot needs on-demand usage enabled"
     - "review limit reached"
     - "rate limited by coderabbit"
+    - "review rate limited"       # the status-check wording of "review limit reached"
     - "couldn't start this review"
     - "review skipped"
     - "no review credits"
@@ -117,7 +126,22 @@ review:
   # a trivial follow-up commit, and the watch loop must still be able to finish.
   # Its real findings arrive as comments (which DO block). Matched
   # case-insensitively against the check name.
+  #
+  # Note the deliberate overlap with `bots` above: SAME value, DIFFERENT purpose.
+  # This list is a blocking policy ("this check never blocks the watch loop");
+  # `bots` is an identity ("this check belongs to a reviewer whose state the
+  # merge gate cares about"). Splitting them is what lets a bot's check stay
+  # non-blocking for `converged` while its pending/unavailable state still
+  # reaches `mergeable`.
   informational_checks: [coderabbit]
+  # How long a configured review bot's own check may sit pending before the merge
+  # gate stops waiting for it. BELOW this, a pending bot blocks `mergeable`: a
+  # review is genuinely coming, and a receipt recorded now would bind to a review
+  # that has not happened (issue #19 — a receipt taken against a merely queued
+  # bot let four valid findings land post-merge). ABOVE it, the bot is treated as
+  # never going to report and stops blocking, which is what keeps a dead bot from
+  # wedging the merge gate. Never affects `converged`.
+  bot_pending_grace_minutes: 15
   # Whether a PR must have at least one real (non-informational) CI check before
   # pr_watch will report green. True is the safe default: it stops an autonomous
   # merge on a PR whose CI never ran. Set false for a repo with no CI at all —

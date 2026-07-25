@@ -23,6 +23,13 @@ A `converged` PR is not necessarily `mergeable`. Keeping them separate is what
 lets a caller watch to convergence without being forced to record a review
 receipt just to terminate the loop (see `decide_converged`).
 
+It also resolves each configured review bot (`review.bots`) to *unavailable* or
+*pending* (`summarize_review_bots`). A bot's own status check is excluded from
+the blocking tally so a bot that never reports cannot wedge the loop — but that
+exclusion used to make an outage indistinguishable from a clean review, and a
+merely-queued bot indistinguishable from a finished one. Both signals now feed
+the MERGE GATE only, never `converged`, so the anti-wedge property is untouched.
+
 `done` is a LEGACY alias, always equal to `mergeable`. Its meaning is unchanged
 and must stay that way: engine upgrades are per-file, so a new `pr_watch.py` can
 run against an older `dev_session.sh` that gates merges on `done` — repurposing
@@ -83,6 +90,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 
 def _find_repo_root(start: Path) -> Path:
@@ -210,6 +218,12 @@ _DEFAULT_REVIEW_UNAVAILABLE_MARKERS = (
     "couldn't start this review",
     "review skipped",
     "no review credits",
+    # The status-check phrasing of the same outage. Same bot, same rate limit, an
+    # hour apart on #22 vs #24, but a different wording on a different surface —
+    # the comment said "review limit reached", the check description said "Review
+    # rate limited". Matching only the comment wording is what made detection
+    # depend on which surface the bot happened to use (#23).
+    "review rate limited",
 )
 
 # Status contexts that are advisory only — they must NEVER block "done". A
@@ -219,6 +233,26 @@ _DEFAULT_REVIEW_UNAVAILABLE_MARKERS = (
 # actual findings surface as review comments (which DO block via
 # new_comments). Matched case-insensitively against the check name/context.
 _DEFAULT_INFORMATIONAL_CHECK_NAMES = ("coderabbit",)
+
+# The configured independent review bots (`review.bots`). Distinct in PURPOSE
+# from `_DEFAULT_INFORMATIONAL_CHECK_NAMES` even though the shipped values
+# coincide: that list is a *blocking policy* ("this check never blocks"), this
+# one is an *identity* ("these checks belong to a reviewer whose state we care
+# about"). Keeping them separate is what lets a bot's check stay non-blocking
+# for `converged` while its state still informs the merge gate — the exact
+# split issues #19 and #23 need. Matched as a case-insensitive SUBSTRING of a
+# check name or comment author, so `coderabbit` covers the check `CodeRabbit`
+# and the author `coderabbitai`; keep entries specific enough not to collide
+# with a CI job name.
+_DEFAULT_REVIEW_BOTS = ("coderabbit",)
+
+# How long a configured review bot's own check may sit non-terminal before the
+# merge gate stops waiting for it. Below the bound, a pending bot is "a review
+# is coming" and blocks `mergeable` (issue #19 — a receipt recorded against a
+# merely *slow* bot let four post-merge findings through). Above it, the bot is
+# treated as never going to report and stops blocking — which is what preserves
+# the anti-wedge property that `_DEFAULT_INFORMATIONAL_CHECK_NAMES` exists for.
+_DEFAULT_BOT_PENDING_GRACE_MINUTES = 15.0
 
 # Whether a PR must carry at least one real (non-informational) check before it
 # can read as green. True is the safe default — see :func:`summarize_checks`.
@@ -230,18 +264,33 @@ _DEFAULT_REQUIRE_CI = True
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 
 
-def _load_review_config(
-    config_path: str | Path | None = None,
-) -> tuple[tuple[str, ...], tuple[str, ...], frozenset[str], bool]:
+class ReviewConfig(NamedTuple):
+    """The resolved ``review.*`` knobs.
+
+    A NamedTuple rather than a bare tuple because this shape GREW — it carried
+    four fields until #19/#23 needed the reviewer's identity and a pending
+    bound. Positional unpacking makes every future addition a breaking change
+    for every reader; named fields make it additive, which is the same property
+    the report schema is held to.
+    """
+
+    noise_markers: tuple[str, ...]
+    unavailable_markers: tuple[str, ...]
+    informational_checks: frozenset[str]
+    require_ci: bool
+    bots: tuple[str, ...]
+    bot_pending_grace_minutes: float
+
+
+def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
     """Resolve the ``review.*`` knobs from config, falling back to the defaults.
 
     ``config_path`` overrides the default ``config/dev-model.yaml`` lookup (used
     by the tests to exercise a real adopter config without touching this repo's).
 
-    Returns ``(noise_markers, unavailable_markers, informational_checks,
-    require_ci)``. Marker strings are lower-cased here because every call site
-    matches them case-insensitively against a lower-cased body/name — so a
-    config author may write them in any case.
+    Returns a :class:`ReviewConfig`. Marker strings are lower-cased here because
+    every call site matches them case-insensitively against a lower-cased
+    body/name — so a config author may write them in any case.
 
     **Never raises.** A missing config file, an absent ``scripts/lib/``, a
     parse failure, a wrong-typed value: all fall back to the in-module defaults,
@@ -259,12 +308,19 @@ def _load_review_config(
     - ``require_ci`` accepts only a real boolean; anything else (a stray
       ``yes``, a typo) keeps the default. The unsafe direction here is reading
       as *False* by accident, which would let a zero-check PR report green.
+    - ``bot_pending_grace_minutes`` accepts a non-negative number (``bool`` is
+      rejected despite being an ``int`` subclass). The unsafe direction is a
+      huge value, which would let a dead bot block the merge gate for hours —
+      but that direction fails *closed* (merges wait), so a typo is annoying
+      rather than dangerous, and the default applies to anything non-numeric.
     """
-    defaults = (
-        _DEFAULT_NOISE_MARKERS,
-        _DEFAULT_REVIEW_UNAVAILABLE_MARKERS,
-        frozenset(_DEFAULT_INFORMATIONAL_CHECK_NAMES),
-        _DEFAULT_REQUIRE_CI,
+    defaults = ReviewConfig(
+        noise_markers=_DEFAULT_NOISE_MARKERS,
+        unavailable_markers=_DEFAULT_REVIEW_UNAVAILABLE_MARKERS,
+        informational_checks=frozenset(_DEFAULT_INFORMATIONAL_CHECK_NAMES),
+        require_ci=_DEFAULT_REQUIRE_CI,
+        bots=_DEFAULT_REVIEW_BOTS,
+        bot_pending_grace_minutes=_DEFAULT_BOT_PENDING_GRACE_MINUTES,
     )
     try:
         from kitconfig import get, get_str_list, load_config
@@ -281,9 +337,17 @@ def _load_review_config(
             "review.informational_checks",
             list(_DEFAULT_INFORMATIONAL_CHECK_NAMES),
         )
+        bots = get_str_list(config, "review.bots", list(_DEFAULT_REVIEW_BOTS))
         require_ci = get(config, "review.require_ci", _DEFAULT_REQUIRE_CI)
         if not isinstance(require_ci, bool):
             require_ci = _DEFAULT_REQUIRE_CI
+        grace = get(
+            config,
+            "review.bot_pending_grace_minutes",
+            _DEFAULT_BOT_PENDING_GRACE_MINUTES,
+        )
+        if isinstance(grace, bool) or not isinstance(grace, (int, float)) or grace < 0:
+            grace = _DEFAULT_BOT_PENDING_GRACE_MINUTES
     except FileNotFoundError:
         # `load_config` raises this for an absent config file — a standalone
         # engine run. Defaults are exactly right; stay quiet.
@@ -299,20 +363,25 @@ def _load_review_config(
             file=sys.stderr,
         )
         return defaults
-    return (
-        tuple(marker.lower() for marker in noise),
-        tuple(marker.lower() for marker in unavailable),
-        frozenset(name.strip().lower() for name in informational if name.strip()),
-        require_ci,
+    return ReviewConfig(
+        noise_markers=tuple(marker.lower() for marker in noise),
+        unavailable_markers=tuple(marker.lower() for marker in unavailable),
+        informational_checks=frozenset(
+            name.strip().lower() for name in informational if name.strip()
+        ),
+        require_ci=require_ci,
+        bots=tuple(bot.strip().lower() for bot in bots if bot.strip()),
+        bot_pending_grace_minutes=float(grace),
     )
 
 
-(
-    _NOISE_MARKERS,
-    _REVIEW_UNAVAILABLE_MARKERS,
-    _INFORMATIONAL_CHECK_NAMES,
-    _REQUIRE_CI,
-) = _load_review_config()
+_REVIEW_CONFIG = _load_review_config()
+_NOISE_MARKERS = _REVIEW_CONFIG.noise_markers
+_REVIEW_UNAVAILABLE_MARKERS = _REVIEW_CONFIG.unavailable_markers
+_INFORMATIONAL_CHECK_NAMES = _REVIEW_CONFIG.informational_checks
+_REQUIRE_CI = _REVIEW_CONFIG.require_ci
+_REVIEW_BOTS = _REVIEW_CONFIG.bots
+_BOT_PENDING_GRACE_MINUTES = _REVIEW_CONFIG.bot_pending_grace_minutes
 
 
 # --------------------------------------------------------------------------- gh
@@ -342,6 +411,60 @@ def _gh(args: list[str], *, timeout: int = 60) -> str:
 
 def _gh_json(args: list[str]):
     return json.loads(_gh(args))
+
+
+def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> list[dict]:
+    """Per-check ``{name, state, bucket, description, startedAt}`` for one PR.
+
+    A SECOND ``gh`` call, and deliberately so. ``gh pr view --json
+    statusCheckRollup`` — the source :func:`summarize_checks` reads — returns a
+    fixed sub-shape with **no description field** on either a ``CheckRun`` or a
+    ``StatusContext``. That omission is the whole of issue #23: CodeRabbit
+    reported its rate limit *only* as a check description ("Review rate
+    limited") on an otherwise-``SUCCESS`` context, so nothing pr_watch could see
+    carried the outage. ``gh pr checks --json`` normalizes both check kinds and
+    does expose ``description``.
+
+    The two sources are kept in their own lanes on purpose: this one feeds ONLY
+    :func:`summarize_review_bots` (reviewer identity + state), never the
+    blocking tally. Letting a second fetch influence ``all_green`` would mean two
+    views of CI that can disagree between calls.
+
+    **Never raises, and never blocks the loop.** ``gh pr checks`` exits non-zero
+    for perfectly normal states (8 = some check pending, 1 = some check failing)
+    and errors outright on a PR with no checks at all, so the exit code is
+    ignored and only parseable JSON on stdout is used. Any failure degrades to
+    ``[]`` — which reads as "no bot signal", the same fail-open direction the
+    informational-check exclusion already takes.
+
+    Skips the call entirely when no review bots are configured: with nothing to
+    match, the result could only ever be discarded.
+    """
+    if bots is None:
+        bots = _REVIEW_BOTS
+    if not bots:
+        return []
+    cmd = [
+        "gh",
+        "pr",
+        "checks",
+        str(pr),
+        "--json",
+        "name,state,bucket,description,startedAt",
+    ]
+    try:
+        result = subprocess.run(  # noqa: S603
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=str(REPO_ROOT),
+            timeout=60,
+        )
+        parsed = json.loads(result.stdout)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return []
+    return [item for item in parsed if isinstance(item, dict)] if isinstance(parsed, list) else []
 
 
 def resolve_pr(explicit: int | None) -> int:
@@ -602,6 +725,201 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
     ]
 
 
+def _match_bot(text: str, bots: tuple[str, ...]) -> str | None:
+    """The configured review bot whose name appears in ``text``, if any.
+
+    Substring, case-insensitive: one bot key (``coderabbit``) has to cover both
+    the check name GitHub shows (``CodeRabbit``) and the comment author
+    (``coderabbitai``), which no exact match spans.
+    """
+    low = (text or "").strip().lower()
+    if not low:
+        return None
+    return next((bot for bot in bots if bot in low), None)
+
+
+# Check states that mean the reviewer has finished — anything else (PENDING,
+# QUEUED, IN_PROGRESS, EXPECTED, "") means a verdict may still be coming.
+_TERMINAL_CHECK_STATES = {
+    "SUCCESS",
+    "NEUTRAL",
+    "SKIPPED",
+    "FAILURE",
+    "ERROR",
+    "CANCELLED",
+    "TIMED_OUT",
+    "ACTION_REQUIRED",
+    "STARTUP_FAILURE",
+}
+
+
+def _check_is_pending(detail: dict) -> bool:
+    """Whether one ``gh pr checks`` row is still awaiting a verdict.
+
+    Prefers gh's own ``bucket`` (its normalization across ``CheckRun`` and
+    ``StatusContext``); falls back to the raw state when a gh version omits it.
+    """
+    bucket = (detail.get("bucket") or "").strip().lower()
+    if bucket:
+        return bucket == "pending"
+    return (detail.get("state") or "").strip().upper() not in _TERMINAL_CHECK_STATES
+
+
+def _age_minutes(timestamp: str | None, now: datetime) -> float | None:
+    """Minutes between ``timestamp`` (ISO 8601) and ``now``; ``None`` if unusable.
+
+    GitHub stamps an unstarted check with the zero time (``0001-01-01T…``), which
+    parses fine but means "no time recorded" — treated as unknown, not as an age
+    of two millennia.
+    """
+    if not timestamp:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    if parsed.year < 2000:
+        return None
+    return max(0.0, (now - parsed).total_seconds() / 60.0)
+
+
+def summarize_review_bots(
+    check_details: list[dict],
+    comments: list[dict],
+    *,
+    now: datetime,
+    bots: tuple[str, ...] | None = None,
+    grace_minutes: float | None = None,
+) -> dict:
+    """Resolve each configured review bot to *unavailable*, *pending*, or neither.
+
+    This is the single predicate issues #19 and #23 both needed. They are two
+    branches of one question — "has the independent reviewer had its say?" — and
+    the reason neither could be fixed alone is that the obvious local fix for
+    each ("let the bot's check block") is the one move the design forbids: that
+    check is excluded from the blocking tally precisely so a bot which never
+    reports cannot wedge the watch loop forever.
+
+    The way out is that **nothing here touches** :func:`decide_converged`. The
+    anti-wedge property lives entirely in that predicate, and it is left alone.
+    Everything below feeds only the merge gate, which already requires someone to
+    explicitly record a review receipt — so tightening it can delay a merge but
+    can never stall the poll/fix/ack loop.
+
+    The three outcomes:
+
+    - **unavailable** — an ``unavailable_markers`` hit on either surface: a
+      comment body (already detected today) *or* a bot check's description (#23,
+      the surface that was invisible). Never blocks anything. It is an action
+      signal: run the configured fallback review. It also SUPPRESSES the pending
+      block below — a bot that announced it is not reviewing is not "about to
+      report", so waiting on it would be waiting forever.
+    - **pending** — the bot's own check is non-terminal and no unavailability was
+      announced. A verdict is genuinely coming, so a receipt recorded now would
+      be premature (#19: exactly this, on #16, let four valid findings land after
+      the merge). Blocks the merge gate — but only while the check is younger
+      than ``grace_minutes``, so a permanently-stuck check ages out instead of
+      wedging.
+    - **neither** — terminal and unmarked: the bot reviewed. Nothing to add.
+
+    An unknown check age (no usable timestamp) fails **open**: it does not block,
+    and it is reported as ``age_unknown`` so the render can say so out loud. The
+    alternative — blocking on an age we cannot measure — is indistinguishable
+    from a wedge, which is the one failure this whole design is built to avoid.
+
+    Returns ``{grace_minutes, unavailable, pending, blockers}``. ``blockers`` are
+    ready-made ``merge_blockers`` strings.
+    """
+    if bots is None:
+        bots = _REVIEW_BOTS
+    if grace_minutes is None:
+        grace_minutes = _BOT_PENDING_GRACE_MINUTES
+
+    unavailable: list[dict] = []
+    unavailable_bots: set[str] = set()
+
+    # Surface 1 — comment bodies. Already detected today, but only ever per
+    # comment: once acked it vanished from `new_comments` and with it the fact
+    # that the primary reviewer never ran. Aggregating it here keeps the gap
+    # visible at merge time.
+    for comment in comments or []:
+        reason = comment.get("review_unavailable_reason")
+        if not reason:
+            continue
+        author = comment.get("author") or "?"
+        bot = _match_bot(author, bots)
+        unavailable.append(
+            {
+                "bot": bot,
+                "surface": "comment",
+                "where": f"@{author}",
+                "reason": reason,
+            }
+        )
+        if bot:
+            unavailable_bots.add(bot)
+
+    # Surface 2 — the bot's own check description. Issue #23: on PR #22 this was
+    # the ONLY place the rate limit appeared, and it read as a clean review.
+    pending: list[dict] = []
+    for detail in check_details or []:
+        name = detail.get("name") or detail.get("context") or ""
+        bot = _match_bot(name, bots)
+        if not bot:
+            continue
+        reason = review_unavailable_reason(detail.get("description") or "")
+        if reason:
+            unavailable.append(
+                {
+                    "bot": bot,
+                    "surface": "check",
+                    "where": name,
+                    "reason": reason,
+                }
+            )
+            unavailable_bots.add(bot)
+            continue
+        if not _check_is_pending(detail):
+            continue
+        age = _age_minutes(detail.get("startedAt"), now)
+        pending.append(
+            {
+                "bot": bot,
+                "check": name,
+                "state": (detail.get("state") or "").upper(),
+                "since": detail.get("startedAt"),
+                "age_minutes": None if age is None else round(age, 1),
+                "age_unknown": age is None,
+                # Filled in below, once every surface has been read: an
+                # unavailability announced in a *comment* must be able to cancel
+                # a pending *check*, and the comment loop already ran.
+                "blocking": False,
+            }
+        )
+
+    blockers: list[str] = []
+    for entry in pending:
+        if entry["bot"] in unavailable_bots:
+            continue  # announced as not reviewing — waiting on it is a wedge
+        if entry["age_unknown"] or entry["age_minutes"] >= grace_minutes:
+            continue  # unmeasurable or aged out — fail open, never wedge
+        entry["blocking"] = True
+        blockers.append(
+            f"review bot {entry['bot']} has not reported yet "
+            f"(check {entry['check']} pending {entry['age_minutes']}m "
+            f"< {grace_minutes:g}m grace)"
+        )
+
+    return {
+        "grace_minutes": grace_minutes,
+        "unavailable": unavailable,
+        "pending": pending,
+        "blockers": blockers,
+    }
+
+
 def decide_converged(
     checks: dict,
     new_items: list[dict],
@@ -764,13 +1082,35 @@ def mark_seen(pr: int) -> dict:
     return {"pr": pr, "marked_seen": True, "marked_seen_keys": sorted(pending)}
 
 
-def record_review(pr: int, source: str, expected_head: str) -> dict:
+def record_review(
+    pr: int,
+    source: str,
+    expected_head: str,
+    *,
+    allow_pending_bot: bool = False,
+    now: datetime | None = None,
+) -> dict:
     """Persist independent-review evidence bound to the PR's current head SHA.
 
     The caller runs this only after an independent reviewer (the configured bot,
     or the configured fallback when that bot is unavailable) has completed and
     every finding has been handled. A later push changes ``headRefOid`` and
     automatically invalidates the receipt.
+
+    **Refuses while a configured review bot's own verdict is still coming.** This
+    is the moment issue #19's failure happened: on #16 a fallback receipt was
+    recorded while CodeRabbit's check read ``PENDING — Review queued``, the merge
+    fired, and its four valid findings landed minutes later. Every input was
+    correct at that instant; the missing one was the reviewer's own state. The
+    judgment the doctrine asks for — *is this bot unavailable, or merely slow?* —
+    is made right here, so this is where it gets mechanized.
+
+    It refuses only for a bot that is genuinely mid-review: an announced outage
+    (either surface) means "not coming" and is allowed straight through to the
+    fallback, and a check pending past the grace window ages out of blocking. See
+    :func:`summarize_review_bots`. ``allow_pending_bot`` is the operator's
+    documented override for the remaining case — evidence the queued review will
+    never arrive that pr_watch cannot see.
     """
     source = source.strip()
     if not source:
@@ -778,7 +1118,9 @@ def record_review(pr: int, source: str, expected_head: str) -> dict:
     expected_head = expected_head.strip()
     if not expected_head:
         raise ValueError("expected reviewed head must not be empty")
-    snapshot = _gh_json(["pr", "view", str(pr), "--json", "number,headRefOid"])
+    snapshot = _gh_json(
+        ["pr", "view", str(pr), "--json", "number,headRefOid,comments,reviews"]
+    )
     current_head = snapshot.get("headRefOid")
     if not current_head:
         raise ValueError("PR has no headRefOid; cannot bind review evidence")
@@ -787,10 +1129,28 @@ def record_review(pr: int, source: str, expected_head: str) -> dict:
             f"PR head changed during review (expected {expected_head}, current {current_head}); "
             "review the new head before recording evidence"
         )
+    now = now or datetime.now(timezone.utc)
+    if not allow_pending_bot:
+        # Comments are fetched alongside the head so an outage announced in a
+        # COMMENT can still cancel a pending CHECK. Without them, the documented
+        # fallback path would be refused in exactly the case it exists for: a
+        # bot that says "rate limited" while its check never leaves pending.
+        bot_status = summarize_review_bots(
+            fetch_check_details(pr),
+            collect_comments(snapshot, []),
+            now=now,
+        )
+        if bot_status["blockers"]:
+            raise ValueError(
+                "; ".join(bot_status["blockers"])
+                + ". A receipt recorded now would bind to a review that has not happened "
+                "— wait for the bot, or pass --allow-pending-bot-review if you have "
+                "evidence its verdict will never arrive"
+            )
     receipt = {
         "head": expected_head,
         "source": source,
-        "recorded_at": datetime.now(timezone.utc).isoformat(),
+        "recorded_at": now.isoformat(),
     }
     state = load_state(pr)
     state["review_receipt"] = receipt
@@ -814,6 +1174,8 @@ def build_report(
     prior_head: str | None = None,
     prior_max_total: int = 0,
     review_receipt: dict | None = None,
+    check_details: list[dict] | None = None,
+    now: datetime | None = None,
 ) -> dict:
     """Assemble the JSON-serializable watch report for one PR snapshot.
 
@@ -839,9 +1201,15 @@ def build_report(
       under a new id stays handled.
     - ``review_evidence`` — whether a persisted independent-review receipt is
       bound to this exact head SHA.
+    - ``review_bots`` — :func:`summarize_review_bots`: each configured review
+      bot resolved to *unavailable* (an outage announced on either the comment
+      or the check-description surface — an action signal, never a blocker) or
+      *pending* (a verdict still coming, which blocks the merge gate until it
+      ages past the grace window). Advisory to ``converged`` by construction.
     - ``merge_blockers`` — deterministic reasons the PR is not currently safe to
       merge (draft, blocked/unknown merge state, requested changes, non-open PR,
-      or missing current-head review evidence).
+      missing current-head review evidence, or a configured review bot whose own
+      verdict has not landed yet).
     - ``converged`` — :func:`decide_converged`: all checks green, no fresh
       comments, and not ``settling``. The **watch-loop** predicate: "is there
       more to fix?" A converged PR is NOT necessarily safe to merge.
@@ -855,6 +1223,11 @@ def build_report(
     checks = summarize_checks(view.get("statusCheckRollup") or [])
     comments = collect_comments(view, inline)
     fresh = new_actionable(comments, seen)
+    review_bots = summarize_review_bots(
+        check_details or [],
+        comments,
+        now=now or datetime.now(timezone.utc),
+    )
 
     # False-settle guard: right after a push, `gh` can still report the OLD
     # commit's all-green rollup before the new commit's checks register — so a
@@ -903,6 +1276,10 @@ def build_report(
         merge_blockers.append("review decision is CHANGES_REQUESTED")
     if not review_evidence["valid"]:
         merge_blockers.append("independent review evidence is missing for current head")
+    # Additive to the merge gate only. `done` is an alias of `mergeable`, so
+    # these tighten `done` too — the safe skew direction: an older
+    # `dev_session.sh` reading `done` merges LESS, never more.
+    merge_blockers.extend(review_bots["blockers"])
 
     report = {
         "pr": view.get("number"),
@@ -913,6 +1290,7 @@ def build_report(
         "merge_state": merge_state,
         "review_decision": review_decision,
         "review_evidence": review_evidence,
+        "review_bots": review_bots,
         "merge_blockers": merge_blockers,
         "head": head,
         "head_changed": head_changed,
@@ -976,6 +1354,31 @@ def render(report: dict) -> str:
     )
     for f in ck["failing"]:
         lines.append(f"  ✗ {f['name']} ({f['status']})")
+    # The reviewer-outage action signal, hoisted out of the per-comment loop
+    # below. It has to survive `--mark-seen`: acking the notice comment used to
+    # be the last time anyone saw that the primary reviewer never ran, and the
+    # check-description surface never produced a comment to ack in the first
+    # place (#23). Printed even when the PR is otherwise clean — a clean report
+    # that hides an outage is the exact failure being fixed.
+    bots = report.get("review_bots") or {}
+    for entry in bots.get("unavailable") or []:
+        lines.append(
+            f"  ⚠ review unavailable [{entry['surface']}] {entry['where']}: "
+            f"{entry['reason']} — run the configured fallback review"
+        )
+    for entry in bots.get("pending") or []:
+        if entry.get("age_unknown"):
+            lines.append(
+                f"  ⚠ review bot {entry['bot']} check {entry['check']} is pending with no "
+                "usable timestamp — age unmeasurable, so it is NOT blocking the merge gate; "
+                "confirm the review landed before recording a receipt"
+            )
+        elif not entry.get("blocking"):
+            lines.append(
+                f"  ⚠ review bot {entry['bot']} check {entry['check']} still pending after "
+                f"{entry['age_minutes']}m (past the {bots.get('grace_minutes')}m grace) — "
+                "treated as not coming; run the configured fallback review"
+            )
     for blocker in report.get("merge_blockers") or []:
         lines.append(f"  ✗ merge blocker: {blocker}")
     if report["new_comments"]:
@@ -1062,6 +1465,15 @@ def main(argv: list[str] | None = None) -> int:
         metavar="EXPECTED_SHA",
         help="exact head SHA reviewed; required with --record-review",
     )
+    parser.add_argument(
+        "--allow-pending-bot-review",
+        action="store_true",
+        help=(
+            "with --record-review: record the receipt even though a configured review "
+            "bot's own check is still pending. Only when you have evidence its verdict "
+            "will never arrive — a queued bot is SLOW, not unavailable (issue #19)"
+        ),
+    )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--mark-seen",
@@ -1100,6 +1512,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--record-review requires --head <polled-sha>")
     if args.head and args.record_review is None:
         parser.error("--head is only valid with --record-review")
+    if args.allow_pending_bot_review and args.record_review is None:
+        parser.error("--allow-pending-bot-review is only valid with --record-review")
 
     try:
         pr = resolve_pr(args.pr)
@@ -1120,7 +1534,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.record_review is not None:
         try:
-            review_report = record_review(pr, args.record_review, args.head)
+            review_report = record_review(
+                pr,
+                args.record_review,
+                args.head,
+                allow_pending_bot=args.allow_pending_bot_review,
+            )
         except (RuntimeError, KeyError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
@@ -1158,6 +1577,9 @@ def main(argv: list[str] | None = None) -> int:
     except (RuntimeError, KeyError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    # Deliberately outside the try: this call never raises and never blocks the
+    # loop — see :func:`fetch_check_details`.
+    check_details = fetch_check_details(pr)
 
     state = load_state(pr)
     seen = set(state.get("seen", []))
@@ -1168,6 +1590,7 @@ def main(argv: list[str] | None = None) -> int:
         prior_head=state.get("head"),
         prior_max_total=int(state.get("max_total") or 0),
         review_receipt=state.get("review_receipt"),
+        check_details=check_details,
     )
 
     persist_poll(pr, report, seen)

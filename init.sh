@@ -292,6 +292,7 @@ migrate_kit_schema() {
     - "bugbot needs on-demand usage enabled"
     - "review limit reached"
     - "rate limited by coderabbit"
+    - "review rate limited"       # the status-check wording of "review limit reached"
     - "couldn'"'"'t start this review"
     - "review skipped"
     - "no review credits"
@@ -299,6 +300,57 @@ migrate_kit_schema() {
   # False only for a repo with NO CI at all — otherwise pr-watch never converges.
   require_ci: true'
     echo "added review marker/CI config to config/dev-model.yaml"
+  fi
+
+  # A config migrated BEFORE this key existed already has noise_markers, so the
+  # block above is skipped and this needs its own guard. Two separate additions,
+  # two separate guards — a single guard would silently skip whichever key the
+  # adopter's config happens not to have.
+  if ! grep -q '^  bot_pending_grace_minutes:' "$CONFIG_FILE"; then
+    append_to_section "review:" '  # How long a configured review bot'"'"'s own check may sit pending before the merge
+  # gate stops waiting for it. Below this, a pending bot blocks `mergeable` (a
+  # receipt recorded now would bind to a review that has not happened); above it,
+  # the bot is treated as never going to report, so a dead bot cannot wedge the
+  # gate. Never affects `converged`.
+  bot_pending_grace_minutes: 15'
+    echo "added review.bot_pending_grace_minutes to config/dev-model.yaml"
+  fi
+
+  # The status-check wording of the same rate-limit outage. Added separately for
+  # the same reason: an adopter migrated before it existed keeps their list.
+  # Anchored on the FIRST entry under unavailable_markers rather than on a
+  # specific marker text, which an adopter is free to have edited away. If the
+  # anchor is still missed, SAY SO — a migration that silently no-ops is
+  # indistinguishable from one that ran, and that class of failure has already
+  # cost this repo three bugs in one session.
+  if grep -q '^  unavailable_markers:' "$CONFIG_FILE" \
+     && ! grep -qi 'review rate limited' "$CONFIG_FILE"; then
+    awk '
+      inserted == 0 && in_list == 1 && $0 !~ /^    - / {
+        print "    - \"review rate limited\"       # status-check wording of \"review limit reached\""
+        inserted = 1
+        in_list = 0
+      }
+      /^  unavailable_markers:/ { in_list = 1 }
+      { print }
+      END {
+        if (inserted == 0 && in_list == 1)
+          print "    - \"review rate limited\"       # status-check wording of \"review limit reached\""
+      }
+    ' "$CONFIG_FILE" > "$CONFIG_FILE.tmp"
+    # Post-condition, not a trusted exit code: verify the marker actually landed
+    # before overwriting the adopter's config, and keep the original if it did
+    # not. A migration that silently no-ops is indistinguishable from one that
+    # ran — that class of failure has already cost this repo three bugs.
+    if grep -qi 'review rate limited' "$CONFIG_FILE.tmp"; then
+      mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+      echo "added the status-check rate-limit marker to config/dev-model.yaml"
+    else
+      rm -f "$CONFIG_FILE.tmp"
+      echo "WARNING: could not add the \"review rate limited\" marker to review.unavailable_markers" >&2
+      echo "         in $CONFIG_FILE — add it by hand, or a rate-limited review bot that reports" >&2
+      echo "         the outage only as a status-check description will read as a clean review." >&2
+    fi
   fi
 }
 

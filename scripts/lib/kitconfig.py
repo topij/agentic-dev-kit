@@ -97,7 +97,17 @@ def _coerce(raw: str) -> Any:
     try:
         return int(text)
     except ValueError:
-        return text
+        pass
+    # Floats, gated on an explicit decimal point. `float()` alone would accept
+    # `nan`, `inf` and `1e5`, none of which PyYAML's resolver treats as numbers —
+    # widening past the point would trade one divergence from the parity
+    # invariant for three others. A dot is what YAML 1.1 requires too.
+    if "." in text:
+        try:
+            return float(text)
+        except ValueError:
+            return text
+    return text
 
 
 def _parse_flow_list(text: str) -> list[Any]:

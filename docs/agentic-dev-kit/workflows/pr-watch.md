@@ -143,10 +143,38 @@ Self-pace on a bounded cadence — don't busy-wait:
   acknowledging one clears `converged` but still leaves the current-head
   review-evidence blocker on `mergeable` until the configured fallback runs and
   records its receipt.
+- **A bot's outage is detected on both surfaces, and a queued bot is not a finished
+  one.** `review.unavailable_markers` are matched against comment bodies *and*
+  against the status-check description of any check belonging to a configured
+  `review.bots` entry — the same rate limit is worded differently on the two
+  surfaces, and matching only comments made detection depend on which one the bot
+  happened to use. The report's `review_bots` block resolves each bot to:
+  - **unavailable** — an outage announced on either surface. Rendered as
+    `⚠ review unavailable …`, and it never blocks anything: it's the action signal
+    to run `review.fallback_commands`. It stays visible after you `--mark-seen` the
+    notice comment, so the gap is still readable at merge time.
+  - **pending** — the bot's own check is non-terminal and no outage was announced.
+    A verdict is genuinely coming, so this **blocks `mergeable`** (and makes
+    `--record-review` refuse) until the check ages past
+    `review.bot_pending_grace_minutes` (default 15), after which the bot is treated
+    as never going to report and stops blocking. Use
+    `--allow-pending-bot-review` only with evidence the queued verdict will never
+    arrive.
+
+  None of this reaches `converged`. That is deliberate and load-bearing: the watch
+  loop must be able to finish while a bot that never reports sits pending forever.
+  Every signal here feeds the merge gate only.
 - **Tune this for your own bot mix in `config/dev-model.yaml`, never in the engine.**
-  `review.noise_markers`, `review.unavailable_markers` and
-  `review.informational_checks` are read from config; the engine only carries them
-  as fallbacks for a missing config. Editing the literals inside
+  `review.bots`, `review.noise_markers`, `review.unavailable_markers`,
+  `review.informational_checks` and `review.bot_pending_grace_minutes` are read from
+  config; the engine only carries them as fallbacks for a missing config.
+  `review.bots` and `review.informational_checks` ship with the *same* value and
+  different jobs: the latter is a blocking policy ("this check never blocks the
+  watch loop"), the former an identity ("this check belongs to a reviewer whose
+  state the merge gate cares about"). Bot names match as a case-insensitive
+  substring of a check name or comment author, so `coderabbit` covers the check
+  `CodeRabbit` and the author `coderabbitai` — keep entries specific enough not to
+  collide with a CI job name. Editing the literals inside
   `<engine-dir>/pr_watch.py` forks the engine and turns every later kit update into
   a merge conflict. A key you omit keeps the kit default; an explicit empty list
   (`noise_markers: []`) means "filter nothing".

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
 
@@ -641,11 +642,427 @@ def test_zero_check_pr_never_settles_done_while_require_ci_holds(
 
 
 # --------------------------------------------------------------------------- #
+# review-bot state: queued vs. unavailable (issues #19 + #23)
+# --------------------------------------------------------------------------- #
+
+NOW = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
+
+
+def _bot_check(**overrides):
+    """One `gh pr checks --json` row for the configured review bot."""
+    detail = {
+        "name": "CodeRabbit",
+        "state": "SUCCESS",
+        "bucket": "pass",
+        "description": "",
+        "startedAt": "2026-07-25T11:50:00Z",
+    }
+    detail.update(overrides)
+    return detail
+
+
+def _minutes_ago(minutes: float) -> str:
+    return (NOW - timedelta(minutes=minutes)).isoformat().replace("+00:00", "Z")
+
+
+def test_rate_limit_in_a_check_description_is_detected(monkeypatch) -> None:
+    """Issue #23, the exact repro: PR #22 head 32f3e4f.
+
+    CodeRabbit was rate-limited and said so ONLY in its status-check
+    description, on a check whose conclusion was `SUCCESS` and whose name is
+    classified informational. Both mechanisms missed it — `unavailable_markers`
+    read comment bodies and there was no comment; the check that carried the
+    reason was excluded from the blocking tally. A rate-limited bot rendered
+    identically to one that reviewed and found nothing.
+    """
+    pr_watch = _load_pr_watch()
+
+    status = pr_watch.summarize_review_bots(
+        [
+            _bot_check(description="Review rate limited"),
+            {"name": "toolkit", "state": "SUCCESS", "bucket": "pass", "description": ""},
+        ],
+        [],
+        now=NOW,
+    )
+
+    assert [(e["bot"], e["surface"]) for e in status["unavailable"]] == [
+        ("coderabbit", "check")
+    ]
+    assert status["unavailable"][0]["reason"] == "review rate limited"
+    # An outage is an ACTION signal, never a gate: making it block would need the
+    # informational-check exclusion inverted, and that exclusion is what stops a
+    # bot which never reports from wedging the loop.
+    assert status["blockers"] == []
+
+
+def test_the_unavailable_marker_matches_both_surface_wordings() -> None:
+    """Same bot, same rate limit, ~1h apart on #22 vs #24 — different wording per
+    surface. Matching only the comment phrasing is what made detection depend on
+    which surface the bot happened to use that time.
+    """
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch.review_unavailable_reason("Review rate limited") is not None
+    assert pr_watch.review_unavailable_reason("review limit reached") is not None
+
+
+def test_a_queued_bot_blocks_the_merge_gate_but_never_convergence() -> None:
+    """Issue #19: on #16 a receipt was recorded while CodeRabbit's check read
+    `PENDING — Review queued`; the merge fired and its four valid findings landed
+    minutes later.
+
+    The fix has to hold BOTH halves at once, which is why #19 and #23 could not be
+    solved separately: the gate must wait for a queued bot, and the watch loop
+    must still be able to terminate while it waits.
+    """
+    pr_watch = _load_pr_watch()
+
+    report = pr_watch.build_report(
+        _green_view(),
+        [],
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:codex"},
+        check_details=[
+            _bot_check(
+                state="PENDING",
+                bucket="pending",
+                description="Review queued",
+                startedAt=_minutes_ago(3),
+            )
+        ],
+        now=NOW,
+    )
+
+    assert report["converged"] is True  # the loop can finish — no wedge
+    assert report["mergeable"] is False  # but the merge waits for the reviewer
+    assert report["done"] is report["mergeable"]  # legacy alias stays in lockstep
+    assert any("has not reported yet" in b for b in report["merge_blockers"])
+
+
+def test_a_pending_bot_past_the_grace_window_stops_blocking() -> None:
+    """The anti-wedge bound. A review bot's check can sit pending forever after a
+    trivial follow-up commit — the documented reason its check is informational
+    in the first place. Without a bound, the #19 fix would reintroduce exactly
+    the wedge that exclusion exists to prevent, at the merge gate instead of the
+    watch loop.
+    """
+    pr_watch = _load_pr_watch()
+
+    status = pr_watch.summarize_review_bots(
+        [_bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(120))],
+        [],
+        now=NOW,
+        grace_minutes=15,
+    )
+
+    assert status["blockers"] == []
+    assert status["pending"][0]["blocking"] is False
+
+
+def test_an_announced_outage_cancels_the_pending_block_on_the_same_bot() -> None:
+    """"Unavailable" and "pending" are mutually exclusive answers to one question.
+
+    A bot that has announced it is not reviewing will never move its check off
+    pending, so waiting for it is a wedge with extra steps. The outage wins, on
+    either surface — including a COMMENT cancelling a stuck CHECK, which is the
+    combination the fallback path actually needs.
+    """
+    pr_watch = _load_pr_watch()
+    stuck = [_bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))]
+
+    assert pr_watch.summarize_review_bots(stuck, [], now=NOW)["blockers"] != []
+
+    via_comment = pr_watch.summarize_review_bots(
+        stuck,
+        [{"author": "coderabbitai", "review_unavailable_reason": "review limit reached"}],
+        now=NOW,
+    )
+    via_check = pr_watch.summarize_review_bots(
+        [
+            _bot_check(
+                state="PENDING",
+                bucket="pending",
+                description="Review rate limited",
+                startedAt=_minutes_ago(1),
+            )
+        ],
+        [],
+        now=NOW,
+    )
+
+    assert via_comment["blockers"] == []
+    assert via_check["blockers"] == []
+
+
+def test_an_unmeasurable_pending_age_fails_open_and_says_so() -> None:
+    """No usable timestamp means we cannot tell "queued 10 seconds ago" from
+    "queued last Tuesday".
+
+    Blocking on an age we cannot measure is indistinguishable from a wedge, so it
+    fails open — and a guard that fails open must be loud (three silent-no-op
+    bugs in one session is what taught this repo that).
+    """
+    pr_watch = _load_pr_watch()
+
+    status = pr_watch.summarize_review_bots(
+        [
+            _bot_check(state="PENDING", bucket="pending", startedAt=None),
+            _bot_check(
+                name="CodeRabbit-2", state="PENDING", bucket="pending",
+                startedAt="0001-01-01T00:00:00Z",
+            ),
+        ],
+        [],
+        now=NOW,
+    )
+
+    assert status["blockers"] == []
+    assert [e["age_unknown"] for e in status["pending"]] == [True, True]
+
+    rendered = pr_watch.render(
+        {
+            "pr": 1, "url": "u", "converged": True, "mergeable": False,
+            "checks": {"success": 1, "total": 1, "pending": 0, "failing": []},
+            "new_comments": [], "merge_blockers": [], "review_bots": status,
+        }
+    )
+    assert "age unmeasurable" in rendered
+    assert "NOT blocking" in rendered
+
+
+def test_an_outage_stays_visible_after_the_notice_comment_is_acked() -> None:
+    """The comment surface used to be the ONLY record that the primary reviewer
+    never ran — and `--mark-seen` erases it from `new_comments`. Aggregating the
+    outage separately is what keeps the gap readable at merge time rather than
+    reconstructible only from the PR thread.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        comments=[
+            {
+                "id": "c1",
+                "author": {"login": "coderabbitai"},
+                "body": "Review limit reached — try again later.",
+            }
+        ]
+    )
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        # Every key of that comment already acked: it is gone from new_comments.
+        set(pr_watch.build_report(view, [], set(), now=NOW)["all_seen_keys"]),
+        review_receipt={"head": "abc123", "source": "fallback:codex"},
+        now=NOW,
+    )
+
+    assert report["new_comments"] == []
+    assert report["review_bots"]["unavailable"][0]["reason"] == "review limit reached"
+    assert "review unavailable" in pr_watch.render(report)
+
+
+def test_a_bot_that_never_posts_a_check_blocks_nothing() -> None:
+    """The repo with no review bot, and the bot that simply does not run on this
+    PR. Absent is not pending: an empty rollup must add no blocker at all.
+    """
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch.summarize_review_bots([], [], now=NOW)["blockers"] == []
+    assert (
+        pr_watch.summarize_review_bots(
+            [{"name": "toolkit", "state": "PENDING", "bucket": "pending"}], [], now=NOW
+        )["blockers"]
+        == []
+    )
+    assert (
+        pr_watch.summarize_review_bots(
+            [_bot_check(state="PENDING", bucket="pending")], [], now=NOW, bots=()
+        )["blockers"]
+        == []
+    )
+
+
+def test_check_detail_fetch_never_raises_and_degrades_to_no_signal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`gh pr checks` exits non-zero for ordinary states (8 = something pending,
+    1 = something failing) and errors outright on a PR with no checks. Trusting
+    the exit code would drop the bot signal on the most common polls; raising
+    would wedge the loop on a PR that has none.
+    """
+    pr_watch = _load_pr_watch()
+
+    class _Result:
+        def __init__(self, stdout: str, returncode: int) -> None:
+            self.stdout = stdout
+            self.returncode = returncode
+
+    monkeypatch.setattr(
+        pr_watch.subprocess,
+        "run",
+        lambda *a, **k: _Result('[{"name":"CodeRabbit","state":"PENDING"}]', 8),
+    )
+    assert pr_watch.fetch_check_details(1) == [
+        {"name": "CodeRabbit", "state": "PENDING"}
+    ]
+
+    monkeypatch.setattr(
+        pr_watch.subprocess, "run", lambda *a, **k: _Result("no checks reported", 1)
+    )
+    assert pr_watch.fetch_check_details(1) == []
+
+    def _boom(*a, **k):
+        raise OSError("gh is not installed")
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", _boom)
+    assert pr_watch.fetch_check_details(1) == []
+
+
+def test_record_review_refuses_while_the_bot_is_still_queued(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The #16 sequence, mechanized at the moment the judgment is made.
+
+    Every input `decide_done` could see was correct at that instant — CI green,
+    no unacked comments, a receipt bound to the exact head. The one thing that
+    was wrong was the reviewer's own state, which nothing consulted.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh_json",
+        lambda args: {"number": 16, "headRefOid": "abc123", "comments": [], "reviews": []},
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_check_details",
+        lambda pr, **kw: [
+            _bot_check(
+                state="PENDING",
+                bucket="pending",
+                description="Review queued",
+                startedAt=_minutes_ago(2),
+            )
+        ],
+    )
+    recorded: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+
+    with pytest.raises(ValueError, match="has not reported yet"):
+        pr_watch.record_review(16, "fallback:codex", "abc123", now=NOW)
+    assert recorded == []  # refused BEFORE persisting anything
+
+    # The documented override is the only way past it, and it is explicit.
+    pr_watch.record_review(
+        16, "fallback:codex", "abc123", allow_pending_bot=True, now=NOW
+    )
+    assert recorded[0]["review_receipt"]["source"] == "fallback:codex"
+
+
+def test_record_review_allows_the_fallback_when_the_bot_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The refusal must not block the path it exists to protect.
+
+    "A blocked bot is an action signal, run the fallback" is the doctrine — so a
+    bot that announced an outage in a COMMENT while its check sits stuck at
+    pending has to let the fallback receipt through. Reading only the check
+    would refuse exactly here.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh_json",
+        lambda args: {
+            "number": 22,
+            "headRefOid": "32f3e4f",
+            "comments": [
+                {
+                    "id": "c1",
+                    "author": {"login": "coderabbitai"},
+                    "body": "Review limit reached.",
+                }
+            ],
+            "reviews": [],
+        },
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_check_details",
+        lambda pr, **kw: [
+            _bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))
+        ],
+    )
+    recorded: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+
+    pr_watch.record_review(22, "fallback:panel", "32f3e4f", now=NOW)
+
+    assert recorded[0]["review_receipt"]["source"] == "fallback:panel"
+
+
+def test_bot_state_never_reaches_the_watch_loop_predicate() -> None:
+    """The load-bearing invariant, pinned directly rather than inferred.
+
+    Everything in this section feeds the merge gate. If any of it ever reached
+    `decide_converged`, a bot that never reports would wedge the poll/fix/ack
+    loop forever — the failure the informational-check exclusion exists to
+    prevent, and the constraint that made #19 and #23 unfixable in isolation.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view()
+
+    baseline = pr_watch.build_report(view, [], set(), now=NOW)
+    for details in (
+        [_bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))],
+        [_bot_check(description="Review rate limited")],
+        [_bot_check(state="PENDING", bucket="pending", startedAt=None)],
+    ):
+        report = pr_watch.build_report(
+            view, [], set(), check_details=details, now=NOW
+        )
+        assert report["converged"] is baseline["converged"] is True, details
+        assert report["checks"] == baseline["checks"], details
+
+
+def test_bot_blockers_only_ever_tighten_the_merge_gate() -> None:
+    """The skew direction that makes this safe to ship per-file.
+
+    Engine upgrades are per-file, so a new `pr_watch.py` can run against an older
+    `dev_session.sh` whose gate reads `done`. Adding a blocker can only make
+    `done` false where it was true — merges wait, never fire early. The reverse
+    would be a silent fail-open on an unreviewed PR.
+    """
+    pr_watch = _load_pr_watch()
+    args = dict(review_receipt={"head": "abc123", "source": "coderabbit"}, now=NOW)
+
+    without = pr_watch.build_report(_green_view(), [], set(), **args)
+    with_pending = pr_watch.build_report(
+        _green_view(),
+        [],
+        set(),
+        check_details=[
+            _bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))
+        ],
+        **args,
+    )
+
+    assert without["done"] is True
+    assert with_pending["done"] is False
+    # Strictly a superset — no pre-existing blocker was dropped to make room.
+    assert set(without["merge_blockers"]) <= set(with_pending["merge_blockers"])
+
+
+# --------------------------------------------------------------------------- #
 # review-bot knowledge comes from config, not from engine literals
 # --------------------------------------------------------------------------- #
 
 
 ADOPTER_CONFIG = """review:
+  bots: [OtherBot]
   noise_markers:
     - "<!-- Generated by OtherBot -->"
     - "NOTHING TO REPORT"
@@ -653,6 +1070,7 @@ ADOPTER_CONFIG = """review:
     - "OtherBot Is Out Of Credits"
   informational_checks: [OtherBot, " Advisory "]
   require_ci: false
+  bot_pending_grace_minutes: 30
 """
 
 
@@ -668,18 +1086,21 @@ def test_review_knowledge_is_read_from_config_not_engine_literals(
 ) -> None:
     pr_watch = _load_pr_watch()
 
-    noise, unavailable, informational, require_ci = pr_watch._load_review_config(
-        _write_config(tmp_path, ADOPTER_CONFIG)
-    )
+    resolved = pr_watch._load_review_config(_write_config(tmp_path, ADOPTER_CONFIG))
 
     # Lower-cased/stripped at load so every call site can keep matching
     # case-insensitively against a folded body / check name.
-    assert noise == ("<!-- generated by otherbot -->", "nothing to report")
-    assert unavailable == ("otherbot is out of credits",)
-    assert informational == frozenset({"otherbot", "advisory"})
-    assert require_ci is False
+    assert resolved.noise_markers == (
+        "<!-- generated by otherbot -->",
+        "nothing to report",
+    )
+    assert resolved.unavailable_markers == ("otherbot is out of credits",)
+    assert resolved.informational_checks == frozenset({"otherbot", "advisory"})
+    assert resolved.require_ci is False
+    assert resolved.bots == ("otherbot",)
+    assert resolved.bot_pending_grace_minutes == 30
     # None of the kit's own default markers leak in — config replaces, not extends.
-    assert "<!-- walkthrough_start -->" not in noise
+    assert "<!-- walkthrough_start -->" not in resolved.noise_markers
 
 
 def test_missing_config_falls_back_to_defaults_silently(
@@ -695,6 +1116,8 @@ def test_missing_config_falls_back_to_defaults_silently(
         pr_watch._DEFAULT_REVIEW_UNAVAILABLE_MARKERS,
         frozenset(pr_watch._DEFAULT_INFORMATIONAL_CHECK_NAMES),
         True,
+        pr_watch._DEFAULT_REVIEW_BOTS,
+        pr_watch._DEFAULT_BOT_PENDING_GRACE_MINUTES,
     )
     assert capsys.readouterr().err == ""
 
@@ -717,8 +1140,8 @@ def test_unreadable_config_warns_and_falls_back_without_crashing(
 
     resolved = pr_watch._load_review_config(path)
 
-    assert resolved[3] is True  # NOT the config's require_ci: false
-    assert resolved[0] == pr_watch._DEFAULT_NOISE_MARKERS
+    assert resolved.require_ci is True  # NOT the config's require_ci: false
+    assert resolved.noise_markers == pr_watch._DEFAULT_NOISE_MARKERS
     assert "could not read review config" in capsys.readouterr().err
 
 
@@ -736,8 +1159,8 @@ def test_explicit_empty_noise_list_is_honored_but_absent_key_is_not(
         _write_config(tmp_path / "b", "review:\n  bots: [coderabbit]\n")
     )
 
-    assert empty[0] == ()
-    assert absent[0] == pr_watch._DEFAULT_NOISE_MARKERS
+    assert empty.noise_markers == ()
+    assert absent.noise_markers == pr_watch._DEFAULT_NOISE_MARKERS
 
 
 def test_non_boolean_require_ci_keeps_the_safe_default(tmp_path: Path) -> None:
@@ -746,10 +1169,37 @@ def test_non_boolean_require_ci_keeps_the_safe_default(tmp_path: Path) -> None:
     pr_watch = _load_pr_watch()
 
     for value in ("yes", "0", '"false"'):
-        _, _, _, require_ci = pr_watch._load_review_config(
+        resolved = pr_watch._load_review_config(
             _write_config(tmp_path, f"review:\n  require_ci: {value}\n")
         )
-        assert require_ci is True, value
+        assert resolved.require_ci is True, value
+
+
+def test_non_numeric_or_negative_grace_keeps_the_default(tmp_path: Path) -> None:
+    """The pending-bot bound must survive a typo.
+
+    `true` is the interesting one: `bool` is an `int` subclass, so a naive
+    isinstance check would read it as a grace of 1 minute — turning the #19
+    guard off for every bot that takes longer than a minute to review, which is
+    all of them.
+    """
+    pr_watch = _load_pr_watch()
+
+    for value in ("soon", "true", "-5", '"15"'):
+        resolved = pr_watch._load_review_config(
+            _write_config(tmp_path, f"review:\n  bot_pending_grace_minutes: {value}\n")
+        )
+        assert (
+            resolved.bot_pending_grace_minutes
+            == pr_watch._DEFAULT_BOT_PENDING_GRACE_MINUTES
+        ), value
+
+    # …but a real number, including 0 ("never wait"), is honored.
+    for value, expected in (("0", 0.0), ("2.5", 2.5), ("60", 60.0)):
+        resolved = pr_watch._load_review_config(
+            _write_config(tmp_path, f"review:\n  bot_pending_grace_minutes: {value}\n")
+        )
+        assert resolved.bot_pending_grace_minutes == expected, value
 
 
 def test_configured_unavailable_marker_still_beats_configured_noise(
@@ -758,15 +1208,17 @@ def test_configured_unavailable_marker_still_beats_configured_noise(
     """The "a down reviewer is never auto-noise" invariant is a property of the
     engine, not of which list a marker happens to sit on in config."""
     pr_watch = _load_pr_watch()
-    noise, unavailable, _, _ = pr_watch._load_review_config(
+    resolved = pr_watch._load_review_config(
         _write_config(
             tmp_path,
             'review:\n  noise_markers: ["OtherBot Is Out Of Credits"]\n'
             '  unavailable_markers: ["OtherBot Is Out Of Credits"]\n',
         )
     )
-    monkeypatch.setattr(pr_watch, "_NOISE_MARKERS", noise)
-    monkeypatch.setattr(pr_watch, "_REVIEW_UNAVAILABLE_MARKERS", unavailable)
+    monkeypatch.setattr(pr_watch, "_NOISE_MARKERS", resolved.noise_markers)
+    monkeypatch.setattr(
+        pr_watch, "_REVIEW_UNAVAILABLE_MARKERS", resolved.unavailable_markers
+    )
 
     body = "OtherBot is out of credits for this repo."
 

@@ -64,6 +64,36 @@ top:
     assert parsed["top"]["nested"]["deeper"]["leaf"] == "found"
 
 
+def test_decimal_scalars_parse_as_floats_without_widening_past_pyyaml():
+    """A dotted number is a float; the things `float()` accepts and YAML doesn't
+    stay strings.
+
+    The gate matters more than the feature: `float()` alone would swallow `nan`,
+    `inf` and `1e5`, which PyYAML resolves as strings — so an unguarded version
+    would fix one divergence from the parity invariant and open three.
+    """
+    parsed = kitconfig.loads(
+        """
+review:
+  grace: 2.5
+  whole: 15
+  negative: -0.5
+  exponent: 1.0e+3
+  not_a_number: nan
+  bare_exponent: 1e5
+  version_ish: 1.2.3
+"""
+    )
+    assert parsed["review"]["grace"] == 2.5
+    assert parsed["review"]["whole"] == 15
+    assert isinstance(parsed["review"]["whole"], int)
+    assert parsed["review"]["negative"] == -0.5
+    assert parsed["review"]["exponent"] == 1000.0
+    assert parsed["review"]["not_a_number"] == "nan"
+    assert parsed["review"]["bare_exponent"] == "1e5"
+    assert parsed["review"]["version_ish"] == "1.2.3"
+
+
 def test_inline_and_block_lists():
     parsed = kitconfig.loads(
         """
