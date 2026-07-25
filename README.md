@@ -265,7 +265,7 @@ edited by both (the sandbox prevents *state* collisions, not *source* merge conf
 
 The flow: `parallel plan` clusters candidate work by footprint → launch a lane per
 disjoint cluster (`scripts/dev_session.sh new … --merge-class self|operator`) → each
-lane works to a draft-green PR → the cockpit reconciles every lane and completes the
+lane works to a green, ready-for-review PR → the cockpit reconciles every lane and completes the
 recorded merge path. A self-merge must go through `scripts/dev_session.sh merge`; an
 operator-merge remains an explicit cockpit decision.
 

@@ -62,8 +62,18 @@ written down rules it was itself violating.**
 
 - **The kit predicted its own bugs and shipped them anyway.** `dev_session.sh` states "any
   doc that quotes [the lane contract] should quote it, not restate it" — and `parallel.md`'s
-  kickoff prompt restated it, drifted, and told lanes to "mark ready when done" while the
-  binding contract said "do not mark it ready."
+  kickoff prompt restated it and drifted from it.
+- **I then resolved that drift toward the wrong source.** The kickoff said "mark ready when
+  done", the lane contract said "leave it in draft", and I treated the contract as
+  authoritative. It wasn't: `CLAUDE-sections.md` — the always-on baseline — says a finished
+  PR must *never* sit in draft, because ready-for-review is what triggers the review bots.
+  The lane contract was the outlier, and `pr_watch` proves it: `"PR is draft"` is a merge
+  blocker, so a `self` merge-class lane obeying the contract could never satisfy
+  `dev_session.sh merge`. The contract forbade the exact action its own merge class
+  required. Corrected in #21: marking ready is the lane's, landing it is the cockpit's.
+  **The lesson isn't "check for drift" — it's that finding two sources doesn't tell you
+  which one is right, and I picked by proximity rather than by testing either against the
+  baseline."
 - **A guard that fails open must be loud.** Three separate silent-no-op bugs this session
   (`origin/main`, the uninstalled hook, `paths.engines`). Silence is indistinguishable from
   "checked and clean".

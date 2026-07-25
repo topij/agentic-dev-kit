@@ -59,7 +59,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "80311d61d9210c633560cd493402724e64aba9ff95b0ab02a40c97fb130d22eb"
+      "sha256": "51626c216d361a3dd5e117eab0fdf443c8d3a0438fbd4bc3a8aec63c34d6dd50"
     },
     "scripts/hooks/pre-push": {
       "role": "hook",
