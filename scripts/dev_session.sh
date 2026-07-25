@@ -728,7 +728,7 @@ cmd_merge() {
 
     local merge_class="operator" branch="" base="$DEFAULT_BASE"
     local resolved repo_nwo pr
-    local report done validated_pr validated_base validated_head
+    local report mergeable validated_pr validated_base validated_head
     [[ -s "$session_dir/merge_class" ]] && merge_class="$(cat "$session_dir/merge_class")"
     [[ "$merge_class" == "self" ]] \
         || _die "lane '$scope' is operator-merge (or missing metadata); autonomous merge refused"
@@ -746,12 +746,18 @@ cmd_merge() {
     report="$(GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" \
         uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json)" \
         || _die "pr-watch failed for PR #$pr"
-    IFS=$'\t' read -r done validated_pr validated_base validated_head <<< "$(printf '%s' "$report" | python3 -c '
+    # Gate on `mergeable`, NOT `done`. `done` is the watch-loop predicate
+    # ("anything left to fix?") and is deliberately true on a green, comment-clean
+    # PR that carries no review receipt. `mergeable` is the merge-gate predicate:
+    # done AND no deterministic merge blocker AND a receipt bound to this head.
+    # Read the flag pr_watch computes — never re-derive it here, or this gate
+    # becomes a second copy of the contract that can drift from the engine's.
+    IFS=$'\t' read -r mergeable validated_pr validated_base validated_head <<< "$(printf '%s' "$report" | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
-print("\t".join(("true" if d.get("done") is True else "false", str(d.get("pr") or ""), str(d.get("base") or ""), str(d.get("head") or ""))))
+print("\t".join(("true" if d.get("mergeable") is True else "false", str(d.get("pr") or ""), str(d.get("base") or ""), str(d.get("head") or ""))))
 ')"
-    [[ "$done" == "true" ]] \
+    [[ "$mergeable" == "true" ]] \
         || _die "PR #$pr is not green, review-clean, and merge-ready; run pr-watch to convergence first"
     [[ "$validated_pr" == "$pr" ]] \
         || _die "pr-watch validated PR #$validated_pr, not resolved PR #$pr"

@@ -485,6 +485,66 @@ def test_self_merge_refuses_wrong_base_and_binds_gh_to_repo(tmp_path: Path) -> N
     assert f"{repo}|owner/project|pr list" in calls
 
 
+def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
+    tmp_path: Path,
+) -> None:
+    """The gate reads `mergeable`, and fails CLOSED when it is false or absent.
+
+    Two cases, deliberately pinned together:
+
+    - **`mergeable: false` alongside `done: true`.** These are equal in any report
+      the engine actually produces, so this input is intentionally inconsistent:
+      it proves the gate reads `mergeable` and does not quietly fall back to
+      `done` if the two ever diverge.
+    - **`mergeable` absent entirely.** An OLDER or foreign ``pr_watch`` predating
+      the field emits only ``done``. The gate must read that as "not authorized"
+      rather than merging on an assumption about the missing key.
+
+    A gate that failed open in either case would merge unreviewed work.
+    """
+    _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
+    _prepare_self_merge_session(sessions)
+    fake_bin, call_log, uv_log = _install_fake_merge_tools(tmp_path)
+    pr_json = json.dumps(
+        [
+            {
+                "number": 8,
+                "baseRefName": "trunk",
+                "headRefName": "lane/probe",
+                "headRefOid": "reviewed-head",
+                "headRepositoryOwner": {"login": "owner"},
+            }
+        ]
+    )
+    base_report = {"pr": 8, "base": "trunk", "head": "reviewed-head", "done": True}
+
+    for label, report in (
+        ("explicitly not mergeable", {**base_report, "mergeable": False}),
+        ("pre-split engine, key absent", base_report),
+    ):
+        result = subprocess.run(
+            ["bash", str(engine_dir / "dev_session.sh"), "merge", "probe"],
+            cwd=tmp_path,
+            env={
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "DEVKIT_SESSIONS_DIR": str(sessions),
+                "CALL_LOG": str(call_log),
+                "UV_LOG": str(uv_log),
+                "PR_JSON": pr_json,
+                "REPORT_JSON": json.dumps(report),
+                "GH_REPO": "attacker/other",
+            },
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode != 0, label
+        assert "not green, review-clean, and merge-ready" in result.stderr, label
+        assert "pr merge" not in call_log.read_text(encoding="utf-8"), label
+
+
 def test_self_merge_pins_validated_head_so_push_race_is_refused(tmp_path: Path) -> None:
     repo, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
     session = _prepare_self_merge_session(sessions)
@@ -507,7 +567,13 @@ def test_self_merge_pins_validated_head_so_push_race_is_refused(tmp_path: Path) 
             ]
         ),
         "REPORT_JSON": json.dumps(
-            {"pr": 8, "base": "trunk", "head": "reviewed-head", "done": True}
+            {
+                "pr": 8,
+                "base": "trunk",
+                "head": "reviewed-head",
+                "done": True,
+                "mergeable": True,
+            }
         ),
         # Simulate GitHub rejecting --match-head-commit because a new push won
         # the race after the act-time poll.
@@ -561,7 +627,13 @@ def test_scope_pr_watch_and_merge_share_lane_state_and_pinned_repo(
             ]
         ),
         "REPORT_JSON": json.dumps(
-            {"pr": 8, "base": "trunk", "head": "reviewed-head", "done": True}
+            {
+                "pr": 8,
+                "base": "trunk",
+                "head": "reviewed-head",
+                "done": True,
+                "mergeable": True,
+            }
         ),
         "GH_REPO": "attacker/other",
     }

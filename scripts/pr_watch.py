@@ -11,13 +11,27 @@ call this once per round: it asks `gh` for the PR's check rollup + every
 comment surface (issue comments, review submissions, inline review comments),
 filters out known auto-noise (while surfacing reviewer-unavailability notices),
 diffs against a per-PR seen-set so only *new actionable* comments surface, and
-reports whether the PR is `done` (checks green, nothing new, merge-ready, and
-independently reviewed at the current head).
+reports two distinct predicates:
 
-The caller loops: run this -> if not done, fix the failures / address or reply
-to the new comments -> `--mark-seen` -> wait -> run again. `done` flips true
-once CI is green, every finding has been handled, and an explicitly recorded
-independent-review receipt covers the current head.
+- `converged` — checks green, nothing new to act on, not mid-settle. The
+  WATCH-LOOP predicate: "is there more for me to fix?"
+- `mergeable` — `converged` AND no deterministic merge blocker AND an
+  independent-review receipt bound to the current head. The MERGE-GATE
+  predicate, re-checked by `dev_session.sh merge` at act time.
+
+A `converged` PR is not necessarily `mergeable`. Keeping them separate is what
+lets a caller watch to convergence without being forced to record a review
+receipt just to terminate the loop (see `decide_converged`).
+
+`done` is a LEGACY alias, always equal to `mergeable`. Its meaning is unchanged
+and must stay that way: engine upgrades are per-file, so a new `pr_watch.py` can
+run against an older `dev_session.sh` that gates merges on `done` — repurposing
+the key would silently authorize merges on unreviewed PRs.
+
+The caller loops: run this -> if not converged, fix the failures / address or
+reply to the new comments -> `--mark-seen` -> wait -> run again. `converged`
+flips true once CI is green and every finding has been handled; `mergeable`
+additionally waits on `--record-review`.
 
 `--mark-seen` NEVER re-polls `gh`. Every plain poll (any invocation without
 `--mark-seen`) persists the exact ``all_seen_keys`` it just reported into a
@@ -52,8 +66,8 @@ confirm — call the former right after `gh pr create --draft`, the latter
 right before `gh pr merge`.
 
 Exit codes:
-    0 — reported (regardless of done/not-done; check `done` in the output),
-        or the draft-bit assertion held/was corrected successfully
+    0 — reported (regardless of the verdict; check `converged` / `mergeable` in
+        the output), or the draft-bit assertion held/was corrected successfully
     2 — usage error (no PR found, gh failure), or a draft-bit assertion that
         failed to correct (`ok: false`)
 """
@@ -413,14 +427,14 @@ def summarize_checks(rollup: list[dict], *, require_ci: bool | None = None) -> d
     - ``True`` — a PR with zero blocking checks is **not** green. This is the
       safe default: it stops an autonomous merge on a PR whose CI never ran.
     - ``False`` — a zero-check PR can be green. Needed for a repo with no CI at
-      all, where the ``blocking_total > 0`` clause otherwise makes ``done``
+      all, where the ``blocking_total > 0`` clause otherwise makes ``converged``
       unreachable forever, so the watch loop never terminates and
       ``dev_session.sh merge`` always refuses.
 
-    ``False`` does not remove the quality gate: :func:`decide_done` separately
-    requires an independent-review receipt bound to the *current* head, so on a
-    CI-less repo that receipt becomes the only gate — which is why the flag is
-    opt-in per repo rather than inferred from an empty rollup.
+    ``False`` does not remove the quality gate: :func:`decide_mergeable`
+    separately requires an independent-review receipt bound to the *current*
+    head, so on a CI-less repo that receipt becomes the only gate — which is why
+    the flag is opt-in per repo rather than inferred from an empty rollup.
     """
     if require_ci is None:
         require_ci = _REQUIRE_CI
@@ -588,6 +602,58 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
     ]
 
 
+def decide_converged(
+    checks: dict,
+    new_items: list[dict],
+    *,
+    settling: bool = False,
+) -> bool:
+    """Converged = green, nothing left to act on, and not mid-settle.
+
+    The **watch-loop** predicate: it answers "is there more for me to fix?",
+    which is the only question the poll/fix/mark-seen loop needs. It deliberately
+    does NOT mean "safe to merge" — see :func:`decide_mergeable`.
+
+    This exists because merge authorization used to be the *only* thing a caller
+    could ask for. A loop that has genuinely finished still reported not-done
+    until someone recorded a review receipt, which (a) wedges any caller that
+    watches to convergence without recording one, and (b) pressures the operator
+    into recording a receipt early just to terminate the loop — exactly the
+    premature-receipt failure tracked in issue #19.
+
+    ``settling`` is set right after a push (the PR head SHA moved, or the rollup
+    is smaller than the largest seen for this head — new checks not yet
+    registered), so a poll can't false-settle on the *stale pre-push* rollup
+    (an all-green old commit) before the new commit's CI even starts.
+    """
+    return checks["all_green"] and not new_items and not settling
+
+
+def decide_mergeable(
+    converged: bool,
+    *,
+    merge_blockers: list[str] | None = None,
+    review_evidence: bool = False,
+) -> bool:
+    """Mergeable = the watch loop converged AND the merge is authorized.
+
+    Strictly stronger than :func:`decide_converged`: a PR must first have nothing
+    left to act on, and additionally carry no deterministic merge blocker (draft,
+    non-open, blocked merge state, changes requested) and an independent-review
+    receipt bound to the *current* head.
+
+    This is what an autonomous self-merge gates on (``dev_session.sh merge``).
+
+    The result is coerced to ``bool`` deliberately: a bare ``and`` chain returns
+    its last operand, so a truthy non-bool ``review_evidence`` would propagate
+    into the report — and ``dev_session.sh merge`` tests the JSON value with an
+    identity check (``is True``), which such a value fails *closed* but
+    confusingly. A safety gate should not depend on every caller passing a real
+    bool.
+    """
+    return bool(converged and not merge_blockers and review_evidence)
+
+
 def decide_done(
     checks: dict,
     new_items: list[dict],
@@ -596,19 +662,26 @@ def decide_done(
     review_evidence: bool = False,
     settling: bool = False,
 ) -> bool:
-    """Done = green, independently reviewed, merge-ready, and not mid-settle.
+    """Legacy name for :func:`decide_mergeable`. Semantics UNCHANGED.
 
-    ``settling`` is set right after a push (the PR head SHA moved, or the rollup
-    is smaller than the largest seen for this head — new checks not yet
-    registered), so a poll can't false-settle on the *stale pre-push* rollup
-    (an all-green old commit) before the new commit's CI even starts.
+    ``done`` predates the split of the watch-loop predicate from the merge-gate
+    predicate, and has always meant "green, independently reviewed, merge-ready,
+    and not mid-settle". This function keeps that meaning exactly, for any Python
+    caller that imported it.
+
+    **Do not read a compatibility guarantee into this function.** The thing that
+    protects an older ``dev_session.sh`` is the report's ``done`` **key** (see
+    the assignment in :func:`build_report`), because that gate shells out to
+    ``pr_watch.py --json`` and never imports this module. This function has no
+    in-engine caller. Deleting the key while keeping this function would remove
+    the protection entirely.
+
+    Prefer :func:`decide_converged` / :func:`decide_mergeable` in new code.
     """
-    return (
-        checks["all_green"]
-        and not new_items
-        and not merge_blockers
-        and review_evidence
-        and not settling
+    return decide_mergeable(
+        decide_converged(checks, new_items, settling=settling),
+        merge_blockers=merge_blockers,
+        review_evidence=review_evidence,
     )
 
 
@@ -752,7 +825,7 @@ def build_report(
       moved since ``prior_head``; ``max_total`` — the largest check count seen for
       this head (persisted across runs); ``settling`` — true while a just-pushed
       commit's checks are still registering (the false-settle guard; forces
-      ``done`` false). See :func:`decide_done`.
+      ``converged`` false). See :func:`decide_converged`.
     - ``checks`` — the :func:`summarize_checks` rollup (``total`` / ``success`` /
       ``pending`` / ``informational`` / ``failing`` / ``all_green``).
     - ``new_comments`` — only the *fresh, actionable* comments (not in ``seen``,
@@ -769,8 +842,15 @@ def build_report(
     - ``merge_blockers`` — deterministic reasons the PR is not currently safe to
       merge (draft, blocked/unknown merge state, requested changes, non-open PR,
       or missing current-head review evidence).
-    - ``done`` — :func:`decide_done`: all checks green, current-head review
-      evidence, no fresh comments, no merge blockers, and not ``settling``.
+    - ``converged`` — :func:`decide_converged`: all checks green, no fresh
+      comments, and not ``settling``. The **watch-loop** predicate: "is there
+      more to fix?" A converged PR is NOT necessarily safe to merge.
+    - ``mergeable`` — :func:`decide_mergeable`: ``converged`` AND no
+      ``merge_blockers`` AND current-head review evidence. The **merge-gate**
+      predicate, and what ``dev_session.sh merge`` re-checks at act time.
+    - ``done`` — legacy alias, always equal to ``mergeable``. Kept so an older
+      ``dev_session.sh`` reading ``done`` still gates on merge authorization
+      rather than falling open; see :func:`decide_done`.
     """
     checks = summarize_checks(view.get("statusCheckRollup") or [])
     comments = collect_comments(view, inline)
@@ -860,20 +940,31 @@ def build_report(
             {k for c in comments for k in (c["key"], c["content_key"])}
         ),
     }
-    report["done"] = decide_done(
-        checks,
-        fresh,
+    report["converged"] = decide_converged(checks, fresh, settling=settling)
+    report["mergeable"] = decide_mergeable(
+        report["converged"],
         merge_blockers=merge_blockers,
         review_evidence=review_evidence["valid"],
-        settling=settling,
     )
+    # Legacy alias, identical to `mergeable` — see :func:`decide_done` for why
+    # this key must never be repurposed to mean watch-convergence.
+    report["done"] = report["mergeable"]
     return report
 
 
 def render(report: dict) -> str:
     ck = report["checks"]
     lines = [f"PR #{report['pr']} — {report['url']}"]
-    state = "✅ DONE — green + clean" if report["done"] else "⏳ not done"
+    # `converged` answers "anything left to fix?"; `mergeable` answers "safe to
+    # merge?". Naming the converged-but-unauthorized state explicitly is the
+    # point: it is the normal end of a watch loop, not a failure, and it must not
+    # read as merge clearance.
+    if not report.get("converged"):
+        state = "⏳ not converged"
+    elif report.get("mergeable"):
+        state = "✅ DONE — green, reviewed, merge-ready"
+    else:
+        state = "✅ converged — green + clean · NOT mergeable (see merge blockers below)"
     if report.get("settling"):
         state += " (settling — new commit pushed; waiting for its checks to register)"
     lines.append(state)

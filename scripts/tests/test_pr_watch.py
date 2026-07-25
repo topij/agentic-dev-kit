@@ -40,6 +40,134 @@ def _green_view(**overrides):
     return view
 
 
+def test_done_keeps_its_original_merge_authorization_semantics() -> None:
+    """`done` must still mean exactly what it meant before `converged` existed.
+
+    This is the safety property that makes the schema change purely ADDITIVE.
+    Engine upgrades are per-file, so a new `pr_watch.py` can run against an older
+    `dev_session.sh` whose merge gate reads `done`. If `done` were repurposed to
+    mean watch-convergence, that pairing would authorize merges on PRs carrying
+    no review receipt at all — a silent fail-open on the merge gate.
+
+    Pinned over the whole boolean input space, not just a happy path.
+    """
+    pr_watch = _load_pr_watch()
+
+    def original_done(checks, new_items, merge_blockers, review_evidence, settling):
+        return (
+            checks["all_green"]
+            and not new_items
+            and not merge_blockers
+            and review_evidence
+            and not settling
+        )
+
+    comment = {"kind": "issue", "author": "a", "path": None, "line": None, "body": "x"}
+    for all_green in (True, False):
+        for new_items in ([], [comment]):
+            for blockers in ([], ["merge state is BLOCKED"]):
+                for evidence in (True, False):
+                    for settling in (True, False):
+                        checks = {"all_green": all_green}
+                        expected = original_done(
+                            checks, new_items, blockers, evidence, settling
+                        )
+                        assert (
+                            pr_watch.decide_done(
+                                checks,
+                                new_items,
+                                merge_blockers=blockers,
+                                review_evidence=evidence,
+                                settling=settling,
+                            )
+                            is expected
+                        )
+                        # ...and `mergeable` is that same predicate under its
+                        # clearer name, composed from `converged`.
+                        assert (
+                            pr_watch.decide_mergeable(
+                                pr_watch.decide_converged(
+                                    checks, new_items, settling=settling
+                                ),
+                                merge_blockers=blockers,
+                                review_evidence=evidence,
+                            )
+                            is expected
+                        )
+
+
+def test_report_done_is_always_identical_to_mergeable() -> None:
+    """The alias must never drift from the field it aliases."""
+    pr_watch = _load_pr_watch()
+    receipt = {"head": "abc123", "source": "fallback:codex"}
+
+    for report in (
+        pr_watch.build_report(_green_view(), [], set()),
+        pr_watch.build_report(_green_view(), [], set(), review_receipt=receipt),
+        pr_watch.build_report(_green_view(isDraft=True), [], set()),
+        pr_watch.build_report(_green_view(state="MERGED"), [], set()),
+    ):
+        assert report["done"] is report["mergeable"]
+
+
+def test_predicates_are_strictly_bool_typed() -> None:
+    """`dev_session.sh merge` tests the JSON value with `is True`.
+
+    A bare `and` chain returns its LAST operand, so a truthy non-bool reaching
+    the predicate would land a non-bool in the report. That fails the gate's
+    identity check — closed, but confusingly, and it would serialize as e.g.
+    `"mergeable": 1`. Pin the type rather than trusting every caller.
+    """
+    pr_watch = _load_pr_watch()
+
+    assert (
+        pr_watch.decide_mergeable(
+            True, merge_blockers=[], review_evidence=1  # truthy non-bool
+        )
+        is True
+    )
+    report = pr_watch.build_report(
+        _green_view(), [], set(), review_receipt={"head": "abc123", "source": "x"}
+    )
+    for key in ("converged", "mergeable", "done"):
+        assert isinstance(report[key], bool), key
+
+
+def test_converged_is_watch_progress_and_ignores_merge_authorization() -> None:
+    """The whole point of the split: a converged loop is not a merge clearance.
+
+    A green, comment-clean PR with NO review receipt is `converged` (nothing left
+    for the loop to fix) and NOT `mergeable`. Before `converged` existed a caller
+    had only `done`, so it kept looping — and the operator was pressured into
+    recording a receipt early just to terminate it (issue #19).
+    """
+    pr_watch = _load_pr_watch()
+
+    report = pr_watch.build_report(_green_view(), [], set())
+
+    assert report["converged"] is True
+    assert report["mergeable"] is False
+    assert report["done"] is False
+    assert (
+        "independent review evidence is missing for current head"
+        in report["merge_blockers"]
+    )
+
+
+def test_render_never_lets_convergence_read_as_merge_clearance() -> None:
+    pr_watch = _load_pr_watch()
+    receipt = {"head": "abc123", "source": "fallback:codex"}
+
+    converged = pr_watch.render(pr_watch.build_report(_green_view(), [], set()))
+    authorized = pr_watch.render(
+        pr_watch.build_report(_green_view(), [], set(), review_receipt=receipt)
+    )
+
+    assert "NOT mergeable" in converged
+    assert "DONE" not in converged
+    assert "DONE" in authorized and "NOT mergeable" not in authorized
+
+
 def test_changes_requested_and_blocked_merge_state_never_settle_done() -> None:
     pr_watch = _load_pr_watch()
     review = {
@@ -60,7 +188,10 @@ def test_changes_requested_and_blocked_merge_state_never_settle_done() -> None:
     report = pr_watch.build_report(view, [], seen)
 
     assert report["new_comments"] == []
-    assert report["done"] is False
+    # The findings were acked and CI is green, so the WATCH loop has converged...
+    assert report["converged"] is True
+    # ...but the merge is still refused: blockers are a merge-gate concern.
+    assert report["mergeable"] is False
     assert "merge state is BLOCKED" in report["merge_blockers"]
     assert "review decision is CHANGES_REQUESTED" in report["merge_blockers"]
 
@@ -73,9 +204,14 @@ def test_unknown_or_non_open_pr_state_never_settles_done() -> None:
         _green_view(state="MERGED", mergeStateStatus="UNKNOWN"), [], set()
     )
 
-    assert unknown["done"] is False
+    # Both are green and comment-clean, so the watch loop converged; only the
+    # merge is refused. Asserting `converged` here too keeps the two predicates
+    # independently pinned, so a regression that re-couples them fails.
+    assert unknown["converged"] is True
+    assert unknown["mergeable"] is False
     assert "merge state is UNKNOWN" in unknown["merge_blockers"]
-    assert merged["done"] is False
+    assert merged["converged"] is True
+    assert merged["mergeable"] is False
     assert "PR state is MERGED" in merged["merge_blockers"]
 
 
@@ -118,11 +254,16 @@ def test_unstable_is_allowed_only_when_remaining_check_is_informational() -> Non
         review_receipt=receipt,
     )
 
-    assert informational_only["done"] is True
+    # All three converged — an informational check never blocks the watch loop.
+    # Only mergeability varies, and only on the merge-state blocker.
+    for report in (informational_only, unexplained_unstable, successful_informational):
+        assert report["converged"] is True
+
+    assert informational_only["mergeable"] is True
     assert "merge state is UNSTABLE" not in informational_only["merge_blockers"]
-    assert unexplained_unstable["done"] is False
+    assert unexplained_unstable["mergeable"] is False
     assert "merge state is UNSTABLE" in unexplained_unstable["merge_blockers"]
-    assert successful_informational["done"] is False
+    assert successful_informational["mergeable"] is False
     assert "merge state is UNSTABLE" in successful_informational["merge_blockers"]
 
 
@@ -166,7 +307,10 @@ def test_acknowledged_unavailable_notice_still_needs_review_evidence() -> None:
     report = pr_watch.build_report(view, [], seen)
 
     assert report["new_comments"] == []
-    assert report["done"] is False
+    # Acking the unavailability notice ends the watch loop — there is genuinely
+    # nothing left to fix — but it must NOT buy merge clearance.
+    assert report["converged"] is True
+    assert report["mergeable"] is False
     assert (
         "independent review evidence is missing for current head"
         in report["merge_blockers"]
@@ -191,9 +335,14 @@ def test_review_receipt_must_match_current_head() -> None:
         review_receipt={"head": "abc123", "source": "fallback:codex"},
     )
 
-    assert missing["done"] is False
-    assert stale["done"] is False
-    assert current["done"] is True
+    # All three are green and comment-clean, so the watch loop has converged for
+    # each; only the receipt bound to the CURRENT head authorizes the merge.
+    for report in (missing, stale, current):
+        assert report["converged"] is True
+
+    assert missing["mergeable"] is False
+    assert stale["mergeable"] is False
+    assert current["mergeable"] is True
     assert current["review_evidence"] == {
         "valid": True,
         "source": "fallback:codex",
@@ -445,13 +594,18 @@ def test_zero_check_pr_still_needs_current_head_review_evidence(
     )
 
     assert without_receipt["checks"]["all_green"] is True
-    assert without_receipt["done"] is False
+    # With require_ci false a zero-check PR converges; the receipt is then the
+    # ONLY thing standing between convergence and merge authorization.
+    for report in (without_receipt, stale_receipt, with_receipt):
+        assert report["converged"] is True
+
+    assert without_receipt["mergeable"] is False
     assert (
         "independent review evidence is missing for current head"
         in without_receipt["merge_blockers"]
     )
-    assert stale_receipt["done"] is False
-    assert with_receipt["done"] is True
+    assert stale_receipt["mergeable"] is False
+    assert with_receipt["mergeable"] is True
 
 
 def test_zero_check_pr_never_settles_done_while_require_ci_holds(
