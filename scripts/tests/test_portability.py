@@ -1221,3 +1221,39 @@ def test_a_marker_named_only_in_a_comment_does_not_count(tmp_path: Path) -> None
     )
 
     assert "ACTION NEEDED" in proc.stderr
+
+
+def test_state_paths_suite_passes_from_inside_a_lane_worktree(tmp_path: Path) -> None:
+    """The local gate must not go red for reasons unrelated to the diff.
+
+    `_marker_state_root` discovers a sandbox by walking up from `Path.cwd()`, so
+    a `.devkit_state_root` marker at or above the invocation directory redirects
+    the resolver — and the state_paths suite's "no sandbox configured"
+    assertions fail. Its autouse fixture cleared every env signal but not the
+    cwd, so the failure looked environmental and unexplained.
+
+    It cannot be caught by running that suite the ordinary way: CI checks out a
+    marker-free tree and a developer runs from the main checkout. It appears
+    only when the suite runs from inside a headless lane worktree — exactly what
+    a lane agent does before pushing, and it happened to three lanes in one
+    session (issue #10). So the regression guard has to be the invocation
+    itself, from a directory that carries a marker.
+    """
+    lane = tmp_path / "worktree"
+    lane.mkdir()
+    (lane / ".devkit_state_root").write_text(
+        str(tmp_path / "sandbox-state"), encoding="utf-8"
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "pytest",
+            str(REPO_ROOT / "scripts" / "lib" / "state_paths" / "tests"),
+            "-q",
+        ],
+        cwd=lane,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout[-3000:]
