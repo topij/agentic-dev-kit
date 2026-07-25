@@ -362,6 +362,8 @@ def test_review_receipt_must_match_current_head() -> None:
     assert current["mergeable"] is True
     assert current["review_evidence"] == {
         "lenses": [],
+        "override": None,
+        "bot_signal": None,
         "valid": True,
         "source": "fallback:codex",
         "head": "abc123",
@@ -1547,6 +1549,7 @@ def test_missing_config_falls_back_to_defaults_silently(
         pr_watch._DEFAULT_REVIEW_BOTS,
         pr_watch._DEFAULT_BOT_PENDING_GRACE_MINUTES,
         pr_watch._DEFAULT_PANEL_RECEIPT_SOURCE,
+        frozenset(),
     )
     assert capsys.readouterr().err == ""
 
@@ -2198,8 +2201,13 @@ def test_the_shipped_config_ships_two_disjoint_lenses() -> None:
     # the same brief are one lens run twice.
     focuses = [lens["focus"] for lens in panel["lenses"]]
     assert len(set(focuses)) == len(focuses)
-    # …and the engine must have read this file, not its own default.
-    assert pr_watch._PANEL_RECEIPT_SOURCE == panel["receipt_source"]
+    # (That the engine READS this rather than using its default is pinned by
+    # test_the_panel_receipt_source_is_read_from_config_not_the_engine_default —
+    # asserting it here would be a tautology, since the shipped value and the
+    # engine default are deliberately the same string.)
+    assert pr_watch._PANEL_LENS_NAMES == {
+        lens["name"].casefold() for lens in panel["lenses"]
+    }
 
 
 def test_the_panel_receipt_source_is_read_from_config_not_the_engine_default(
@@ -2278,7 +2286,8 @@ def test_a_panel_receipt_is_refused_without_two_distinct_lenses(
     """
     pr_watch = _load_pr_watch()
 
-    for bad in (None, "", "adversarial", "adversarial,adversarial", "a, A , a"):
+    for bad in (None, "", "adversarial", "adversarial,adversarial",
+                "correctness, Correctness"):
         with pytest.raises(ValueError, match="two independent lenses"):
             _record(monkeypatch, pr_watch, lenses=bad)
 
@@ -2303,9 +2312,11 @@ def test_the_panel_gate_follows_a_renamed_receipt_source(
     monkeypatch.setattr(pr_watch, "_PANEL_RECEIPT_SOURCE", "fallback:my-panel")
 
     with pytest.raises(ValueError, match="two independent lenses"):
-        _record(monkeypatch, pr_watch, source="fallback:my-panel", lenses="one")
+        _record(monkeypatch, pr_watch, source="fallback:my-panel",
+                lenses="adversarial")
 
-    # The old literal is now just an ordinary single-lens source.
+    # The old literal is now just an ordinary single-lens source, so a free-text
+    # lens name is accepted there — the roster check is panel-only.
     receipt, _ = _record(
         monkeypatch, pr_watch, source="fallback:panel", lenses="one"
     )
@@ -2347,8 +2358,9 @@ def test_the_poll_render_states_what_the_receipt_covers() -> None:
 
     assert "2 lenses (adversarial, correctness)" in panel and "⚠" not in panel
     assert "ONE lens (correctness)" in single
-    # The bypass no longer buys silence — it reads as unstated coverage.
-    assert "lenses not stated" in relabelled
+    # The bypass no longer buys silence — and it is now the ONLY lens-free
+    # line that warns, so it no longer hides behind the healthy default.
+    assert "claims a panel but states no lenses" in relabelled
 
 
 def test_a_stale_receipt_reports_no_coverage_at_all() -> None:
@@ -2415,3 +2427,135 @@ def test_a_blank_or_wrong_typed_receipt_source_keeps_the_gate_armed(
         )
     )
     assert padded.panel_receipt_source == "fallback:panel"
+
+
+def test_the_coverage_line_is_quiet_on_receipts_that_owe_no_lens_list() -> None:
+    """A warning that fires on every healthy receipt exposes nothing.
+
+    Warning whenever `lenses` was absent made the ordinary bot receipt — which
+    no workflow tells you to record with `--lenses` — render identically to a
+    receipt relabelled to fake a panel. Measured against this repo's own stored
+    receipts, all 14 warned. It also repeated the mistake this engine
+    deliberately avoids for `bot_signal: "skipped"`: a permanent false warning
+    on a correct receipt.
+
+    Only a receipt CLAIMING to be a panel owes a lens list.
+    """
+    pr_watch = _load_pr_watch()
+
+    def _line(receipt):
+        report = pr_watch.build_report(
+            _green_view(), [], set(), review_receipt=receipt
+        )
+        return next(
+            l.strip()
+            for l in pr_watch.render(report).splitlines()
+            if "review evidence" in l
+        )
+
+    bot = _line({"head": "abc123", "source": "coderabbit"})
+    panel = _line({"head": "abc123", "source": "fallback:panel",
+                   "lenses": ["adversarial", "correctness"]})
+    one = _line({"head": "abc123", "source": "fallback:codex",
+                 "lenses": ["correctness"]})
+    relabelled = _line({"head": "abc123",
+                        "source": "fallback:panel (adversarial + correctness)"})
+
+    assert "⚠" not in bot and "not a panel receipt" in bot
+    assert "⚠" not in panel and "2 lenses" in panel
+    assert "ONE lens" in one
+    # The bypass is now the only lens-free line that warns.
+    assert "claims a panel but states no lenses" in relabelled
+
+
+def test_the_coverage_line_cannot_be_forged_with_a_newline_or_a_comma() -> None:
+    """Both fields are free text chosen by whoever ran `--record-review`.
+
+    A newline in `source` split the line in two and left the first half reading
+    as a completed panel; a comma inside a lens *description* ("correctness,
+    i.e. does it do what it says") counted as two lenses. Untrusted text is
+    flattened and the count is deduped case-folded.
+    """
+    pr_watch = _load_pr_watch()
+
+    def _lines(receipt):
+        report = pr_watch.build_report(
+            _green_view(), [], set(), review_receipt=receipt
+        )
+        return pr_watch.render(report).splitlines()
+
+    forged = _lines({
+        "head": "abc123",
+        "source": "fallback:panel — 2 lenses (adversarial, correctness)\n  (recorded)",
+    })
+    evidence = [l for l in forged if "review evidence" in l]
+    assert len(evidence) == 1
+    assert "claims a panel but states no lenses" in evidence[0]
+    # No orphaned continuation line masquerading as report output.
+    assert not any(l.strip().startswith("(recorded)") for l in forged)
+
+    duped = _lines({"head": "abc123", "source": "fallback:codex",
+                    "lenses": ["adversarial", "Adversarial"]})
+    assert "ONE lens" in next(l for l in duped if "review evidence" in l)
+
+
+def test_a_case_variant_panel_source_cannot_evade_the_lens_requirement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The source-side casefold survived three rounds unpinned.
+
+    Before it, `Fallback:Panel` skipped the check entirely — producing a receipt
+    that reads as a panel with no warning at all, which is worse than before the
+    check existed.
+    """
+    pr_watch = _load_pr_watch()
+
+    for variant in ("fallback:panel", "Fallback:Panel", "FALLBACK:PANEL"):
+        with pytest.raises(ValueError, match="two independent lenses"):
+            _record(monkeypatch, pr_watch, source=variant, lenses="adversarial")
+
+
+def test_an_invented_lens_name_is_refused_for_a_panel_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The lens roster is configuration, not something a caller invents at
+    record time — which is the one part of the panel claim that IS checkable."""
+    pr_watch = _load_pr_watch()
+
+    with pytest.raises(ValueError, match="not in review.fallback_panel.lenses"):
+        _record(monkeypatch, pr_watch,
+                lenses="correctness, i.e. does it do what it says")
+
+    receipt, _ = _record(monkeypatch, pr_watch, lenses="Adversarial, correctness")
+    assert receipt["lenses"] == ["Adversarial", "correctness"]
+
+
+def test_the_poll_render_surfaces_override_and_unreadable_bot_state() -> None:
+    """Same argument that moved `lenses` to the poll render applies to its
+    siblings: a caveat printed only at record time is not visible when a merge
+    is considered. `lenses` was the only one of the family that had moved."""
+    pr_watch = _load_pr_watch()
+
+    report = pr_watch.build_report(
+        _green_view(), [], set(),
+        review_receipt={"head": "abc123", "source": "fallback:codex",
+                        "lenses": ["correctness"], "override": "pending-bot",
+                        "bot_signal": "unavailable"},
+    )
+    rendered = pr_watch.render(report)
+
+    assert "recorded over an active override (pending-bot)" in rendered
+    assert "review-bot state was unreadable (unavailable)" in rendered
+
+
+def test_a_hand_edited_bots_behind_head_cannot_break_the_receipt_render() -> None:
+    """The commit that added the `lenses` guard claimed parity with "the sibling
+    receipt fields" — which were not guarded. This one raised AttributeError on
+    a string or a list."""
+    pr_watch = _load_pr_watch()
+
+    for junk in ("coderabbit", ["coderabbit"], 5, None):
+        pr_watch.render_record_review(
+            {"pr": 9, "review_receipt": {"head": "abc", "source": "s",
+                                         "bots_behind_head": junk}}
+        )

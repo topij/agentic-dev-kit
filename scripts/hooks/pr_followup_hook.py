@@ -111,6 +111,7 @@ def _fallback_instruction(
     fallback_command: str,
     lenses: list[str],
     panel_source: str = _DEFAULT_PANEL_RECEIPT_SOURCE,
+    engines_dir: str = _DEFAULT_ENGINES_DIR,
 ) -> str:
     """What to run when a bot is unavailable.
 
@@ -130,7 +131,8 @@ def _fallback_instruction(
             "If a review bot is unavailable, run the fallback review PANEL — one "
             f"isolated, fresh-context reviewer per lens ({', '.join(lenses)}), per "
             "docs/agentic-dev-kit/fallback-review-panel.md — and record it with "
-            f'`--record-review "{panel_source}" --lenses <names> --head <polled-sha>`. '
+            f"`uv run {engines_dir}/pr_watch.py <PR#> "
+            f'--record-review "{panel_source}" --lenses <names> --head <polled-sha>`. '
             "Never treat the outage as a review waiver."
         )
     return (
@@ -152,7 +154,7 @@ def build_reminder() -> str:
         "replied-to with a reason. Fix real findings, reply-with-reason to nitpicks "
         "you disagree with, `--mark-seen` each handled round, and keep polling (CI "
         "can take 20-30 min). "
-        + _fallback_instruction(fallback_command, lenses, panel_source)
+        + _fallback_instruction(fallback_command, lenses, panel_source, engines_dir)
         + " Only stop early if you hit something that genuinely needs an "
         "operator decision."
     )

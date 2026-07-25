@@ -104,7 +104,7 @@ def test_exits_zero_on_malformed_or_unexpected_stdin(monkeypatch, capsys, stdin_
     assert out == ""
 
 
-def test_reminder_names_configured_bots_and_fallback_not_a_hardcoded_bot(monkeypatch):
+def test_reminder_names_configured_bots_not_a_hardcoded_bot(monkeypatch):
     """The reminder must be sourced from config (review.bots / fallback_panel),
     never a hardcoded bot literal — this is the whole point of generalizing the
     reference implementation (Principle #10, "No hardcoding")."""
@@ -199,7 +199,7 @@ def test_a_one_lens_panel_config_degrades_instead_of_advertising_a_refusal(
     assert "review waiver" in reminder
 
 
-def test_blank_lens_names_are_discarded_rather_than_advertised(monkeypatch):
+def test_blank_lens_names_are_discarded_and_never_advertised(monkeypatch):
     """A whitespace-only `name` would have the hook advertise a panel with an
     unnameable lens — worse than advertising no panel at all."""
     hook = _load_hook()
@@ -222,6 +222,10 @@ def test_blank_lens_names_are_discarded_rather_than_advertised(monkeypatch):
     _bots, _fb, _eng, lenses, _src = hook._load_review_config()
 
     assert lenses == ["adversarial"]
+    # "never advertised" was the half the name promised and the body skipped:
+    # one usable lens is below the panel floor, so the reminder must not name
+    # a panel at all.
+    assert "PANEL" not in hook.build_reminder()
 
 
 def test_reminder_falls_back_to_the_single_command_with_no_panel_configured():
@@ -258,4 +262,6 @@ def test_load_review_config_degrades_gracefully_when_config_unreadable(monkeypat
     # naming lenses that were never read.
     assert lenses == []
     assert panel_source == "fallback:panel"
-    assert "PANEL" not in hook._fallback_instruction(fallback, lenses, panel_source)
+    assert "PANEL" not in hook._fallback_instruction(
+        fallback, lenses, panel_source, engines
+    )

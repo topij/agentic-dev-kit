@@ -289,6 +289,7 @@ class ReviewConfig(NamedTuple):
     bots: tuple[str, ...]
     bot_pending_grace_minutes: float
     panel_receipt_source: str
+    panel_lens_names: frozenset[str]
 
 
 def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
@@ -335,6 +336,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         bots=_DEFAULT_REVIEW_BOTS,
         bot_pending_grace_minutes=_DEFAULT_BOT_PENDING_GRACE_MINUTES,
         panel_receipt_source=_DEFAULT_PANEL_RECEIPT_SOURCE,
+        panel_lens_names=frozenset(),
     )
     try:
         from kitconfig import get, get_str_list, load_config
@@ -369,6 +371,18 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         )
         if not isinstance(panel_source, str) or not panel_source.strip():
             panel_source = _DEFAULT_PANEL_RECEIPT_SOURCE
+        declared = get(config, "review.fallback_panel.lenses", [])
+        panel_lenses = (
+            frozenset(
+                lens["name"].strip().casefold()
+                for lens in declared
+                if isinstance(lens, dict)
+                and isinstance(lens.get("name"), str)
+                and lens["name"].strip()
+            )
+            if isinstance(declared, list)
+            else frozenset()
+        )
     except FileNotFoundError:
         # `load_config` raises this for an absent config file — a standalone
         # engine run. Defaults are exactly right; stay quiet.
@@ -394,6 +408,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         bots=tuple(bot.strip().lower() for bot in bots if bot.strip()),
         bot_pending_grace_minutes=float(grace),
         panel_receipt_source=panel_source.strip(),
+        panel_lens_names=panel_lenses,
     )
 
 
@@ -405,6 +420,7 @@ _REQUIRE_CI = _REVIEW_CONFIG.require_ci
 _REVIEW_BOTS = _REVIEW_CONFIG.bots
 _BOT_PENDING_GRACE_MINUTES = _REVIEW_CONFIG.bot_pending_grace_minutes
 _PANEL_RECEIPT_SOURCE = _REVIEW_CONFIG.panel_receipt_source
+_PANEL_LENS_NAMES = _REVIEW_CONFIG.panel_lens_names
 
 
 # --------------------------------------------------------------------------- gh
@@ -1509,6 +1525,19 @@ def record_review(
     # this check existed.
     if source.casefold() == _PANEL_RECEIPT_SOURCE.casefold():
         distinct = {lens.casefold() for lens in named_lenses}
+        # Names must be ones the config declares. Free text made `,` both the
+        # separator and ordinary punctuation, so "correctness, i.e. does it do
+        # what it says" counted as two lenses. This is the one part of the
+        # claim that IS checkable: the lens roster is configuration, not
+        # something the caller invents at record time.
+        if _PANEL_LENS_NAMES:
+            unknown = sorted(distinct - _PANEL_LENS_NAMES)
+            if unknown:
+                raise ValueError(
+                    f"--lenses named {', '.join(unknown)}, which is not in "
+                    f"review.fallback_panel.lenses ({', '.join(sorted(_PANEL_LENS_NAMES))}). "
+                    "Name the configured lenses, or record under a single-lens source"
+                )
         if len(distinct) < 2:
             raise ValueError(
                 f"a {source!r} receipt asserts two independent lenses, but "
@@ -1549,6 +1578,23 @@ def record_review(
 
 
 # ----------------------------------------------------------------------- main
+
+
+def _flat(text: object, n: int = 120) -> str:
+    """One line, bounded. For any receipt/config value entering a render.
+
+    Both `source` and the lens names are free text chosen by whoever ran
+    `--record-review`. Interpolated raw, a single newline splits the coverage
+    line in two and leaves the first half reading as a completed panel:
+
+        review evidence: fallback:panel — 2 lenses (adversarial, correctness)
+        (recorded) — ⚠ lenses not stated
+
+    `_excerpt` already established this convention for comment bodies; the
+    receipt fields skipped it.
+    """
+    flat = " ".join(str(text).split())
+    return flat if len(flat) <= n else flat[: n - 1] + "…"
 
 
 def _excerpt(body: str, n: int = 140) -> str:
@@ -1681,6 +1727,16 @@ def build_report(
             and receipt_head == head
             and isinstance(review_receipt.get("lenses"), list)
             else []
+        ),
+        "override": (
+            review_receipt.get("override")
+            if isinstance(review_receipt, dict) and receipt_head == head
+            else None
+        ),
+        "bot_signal": (
+            review_receipt.get("bot_signal")
+            if isinstance(review_receipt, dict) and receipt_head == head
+            else None
         ),
     }
     merge_blockers: list[str] = []
@@ -1816,7 +1872,7 @@ def render(report: dict) -> str:
     for entry in bots.get("unavailable") or []:
         lines.append(
             f"  ⚠ review unavailable [{entry['surface']}] {entry['where']}: "
-            f"{entry['reason']} — run the configured fallback review"
+            f"{entry['reason']} — run the fallback review panel (docs/agentic-dev-kit/fallback-review-panel.md)"
         )
     grace = bots.get("grace_minutes")
     for entry in bots.get("pending") or []:
@@ -1837,14 +1893,41 @@ def render(report: dict) -> str:
     # regardless of what it is called.
     evidence = report.get("review_evidence") or {}
     if evidence.get("valid"):
-        named = evidence.get("lenses") or []
-        if len(named) >= 2:
-            detail = f"{len(named)} lenses ({', '.join(named)})"
+        named = [_flat(lens, 40) for lens in evidence.get("lenses") or []]
+        # Counted case-folded and deduped, like the record-time gate. Counting
+        # raw list length let `adversarial,adversarial` — and an honest one-lens
+        # note written as "correctness, i.e. …", where the comma is punctuation
+        # rather than a separator — render as a full panel.
+        distinct = len({lens.casefold() for lens in named})
+        source = _flat(evidence.get("source"))
+        claims_panel = source.casefold().startswith(_PANEL_RECEIPT_SOURCE.casefold())
+        if distinct >= 2:
+            detail = f"{distinct} lenses ({', '.join(named)})"
         elif named:
             detail = f"⚠ ONE lens ({named[0]}) — not a dual-lens pass"
+        elif claims_panel:
+            # Only a receipt CLAIMING to be a panel owes a lens list. Warning on
+            # every lens-free receipt made the dishonest line byte-identical to
+            # the ordinary bot receipt — so it exposed nothing, and it repeated
+            # the mistake this file avoids for `bot_signal: skipped`: a
+            # permanent false warning on a correct receipt.
+            detail = "⚠ claims a panel but states no lenses"
         else:
-            detail = "⚠ lenses not stated"
-        lines.append(f"  review evidence: {evidence.get('source')} — {detail}")
+            detail = "no lens list (not a panel receipt)"
+        lines.append(f"  review evidence: {source} — {detail}")
+        # The same argument that moved `lenses` to the poll render applies to
+        # its siblings: a caveat printed only on the stdout of the
+        # `--record-review` call the agent itself made is not visible at the
+        # moment a merge is considered.
+        if evidence.get("override"):
+            lines.append(
+                f"    ⚠ recorded over an active override ({_flat(evidence['override'])})"
+            )
+        if evidence.get("bot_signal"):
+            lines.append(
+                f"    ⚠ review-bot state was unreadable ({_flat(evidence['bot_signal'])}) "
+                "when this receipt was taken"
+            )
     for blocker in report.get("merge_blockers") or []:
         lines.append(f"  ✗ merge blocker: {blocker}")
     if report["new_comments"]:
@@ -1854,7 +1937,7 @@ def render(report: dict) -> str:
             if c.get("review_unavailable_reason"):
                 lines.append(
                     f"  • [review unavailable] @{c['author']}{loc}: "
-                    f"{c['review_unavailable_reason']} — run the configured fallback review"
+                    f"{c['review_unavailable_reason']} — run the fallback review panel (docs/agentic-dev-kit/fallback-review-panel.md)"
                 )
             else:
                 lines.append(f"  • [{c['kind']}] @{c['author']}{loc}: {c['excerpt']}")
@@ -1865,7 +1948,7 @@ def render_record_review(report: dict) -> str:
     receipt = report["review_receipt"]
     lines = [
         f"PR #{report['pr']} — recorded independent review from "
-        f"{receipt['source']} for head {receipt['head']}"
+        f"{_flat(receipt['source'])} for head {_flat(receipt['head'], 60)}"
     ]
     if receipt.get("override"):
         lines.append(
@@ -1886,14 +1969,16 @@ def render_record_review(report: dict) -> str:
         if isinstance(raw_lenses, list)
         else []
     )
-    if len(named) == 1:
+    named = [_flat(lens, 40) for lens in named]
+    if len({lens.casefold() for lens in named}) == 1:
         lines.append(
             f"  ⚠ one lens only ({named[0]}) — `safety-critical-changes.md` rule 2 "
             "holds that a single-lens verdict is not a green light"
         )
     elif named:
         lines.append(f"  lenses: {', '.join(named)}")
-    for bot, sha in (receipt.get("bots_behind_head") or {}).items():
+    behind_map = receipt.get("bots_behind_head")
+    for bot, sha in (behind_map if isinstance(behind_map, dict) else {}).items():
         lines.append(
             f"  ⚠ {bot}'s last review was of {sha[:7]}, not this head — this receipt "
             "does not stand for its review of this design"

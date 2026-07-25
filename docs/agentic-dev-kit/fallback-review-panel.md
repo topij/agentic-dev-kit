@@ -85,8 +85,8 @@ author re-reading their own diff.
      --head <polled-sha>
    ```
 
-   `--record-review` **refuses** a receipt whose source is exactly the
-   configured `receipt_source` unless `--lenses` names two distinct lenses. Know
+   `--record-review` **refuses** a receipt whose source is the configured
+   `receipt_source` (compared case-insensitively, after stripping) unless `--lenses` names two distinct lenses. Know
    what that is and is not: `source` is free text, so the check catches an
    accidental mislabel, not a determined one — `fallback:panel (2 lenses)` is
    just another string.
@@ -118,8 +118,9 @@ So the stopping criterion is **blast radius, not round count**:
   proportionate. Worst case is a wrong message.
 
 Say which one you applied **in the PR**, where a human reads it — the receipt
-carries what the review *did not* cover (lenses, `override`, `bot_signal`,
-`bots_behind_head`), not a prose rationale for stopping. "The last round found
+carries what the review did *not* cover (`override`, `bot_signal`,
+`bots_behind_head`) and what it did (`lenses`) — not a prose rationale for
+stopping. "The last round found
 nothing" is not available as a reason if it never happened.
 
 ## Degraded mode
