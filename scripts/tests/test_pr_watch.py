@@ -110,6 +110,29 @@ def test_report_done_is_always_identical_to_mergeable() -> None:
         assert report["done"] is report["mergeable"]
 
 
+def test_predicates_are_strictly_bool_typed() -> None:
+    """`dev_session.sh merge` tests the JSON value with `is True`.
+
+    A bare `and` chain returns its LAST operand, so a truthy non-bool reaching
+    the predicate would land a non-bool in the report. That fails the gate's
+    identity check — closed, but confusingly, and it would serialize as e.g.
+    `"mergeable": 1`. Pin the type rather than trusting every caller.
+    """
+    pr_watch = _load_pr_watch()
+
+    assert (
+        pr_watch.decide_mergeable(
+            True, merge_blockers=[], review_evidence=1  # truthy non-bool
+        )
+        is True
+    )
+    report = pr_watch.build_report(
+        _green_view(), [], set(), review_receipt={"head": "abc123", "source": "x"}
+    )
+    for key in ("converged", "mergeable", "done"):
+        assert isinstance(report[key], bool), key
+
+
 def test_converged_is_watch_progress_and_ignores_merge_authorization() -> None:
     """The whole point of the split: a converged loop is not a merge clearance.
 

@@ -643,8 +643,15 @@ def decide_mergeable(
     receipt bound to the *current* head.
 
     This is what an autonomous self-merge gates on (``dev_session.sh merge``).
+
+    The result is coerced to ``bool`` deliberately: a bare ``and`` chain returns
+    its last operand, so a truthy non-bool ``review_evidence`` would propagate
+    into the report — and ``dev_session.sh merge`` tests the JSON value with an
+    identity check (``is True``), which such a value fails *closed* but
+    confusingly. A safety gate should not depend on every caller passing a real
+    bool.
     """
-    return converged and not merge_blockers and review_evidence
+    return bool(converged and not merge_blockers and review_evidence)
 
 
 def decide_done(
@@ -659,17 +666,15 @@ def decide_done(
 
     ``done`` predates the split of the watch-loop predicate from the merge-gate
     predicate, and has always meant "green, independently reviewed, merge-ready,
-    and not mid-settle". It keeps that meaning exactly, and the report keeps
-    emitting a ``done`` key equal to ``mergeable``.
+    and not mid-settle". This function keeps that meaning exactly, for any Python
+    caller that imported it.
 
-    **This is deliberate, and it is a safety property, not politeness.** Engine
-    upgrades are per-file (a sized-down adoption may install only some engines),
-    so a repo can end up running a new ``pr_watch.py`` against an older
-    ``dev_session.sh`` whose merge gate reads ``done``. Had ``done`` been
-    redefined to mean mere watch-convergence, that combination would have
-    authorized merges on PRs with **no review receipt at all** — a silent
-    fail-open on the merge gate. Making the schema change purely additive is what
-    removes that hazard.
+    **Do not read a compatibility guarantee into this function.** The thing that
+    protects an older ``dev_session.sh`` is the report's ``done`` **key** (see
+    the assignment in :func:`build_report`), because that gate shells out to
+    ``pr_watch.py --json`` and never imports this module. This function has no
+    in-engine caller. Deleting the key while keeping this function would remove
+    the protection entirely.
 
     Prefer :func:`decide_converged` / :func:`decide_mergeable` in new code.
     """
@@ -820,7 +825,7 @@ def build_report(
       moved since ``prior_head``; ``max_total`` — the largest check count seen for
       this head (persisted across runs); ``settling`` — true while a just-pushed
       commit's checks are still registering (the false-settle guard; forces
-      ``done`` false). See :func:`decide_done`.
+      ``converged`` false). See :func:`decide_converged`.
     - ``checks`` — the :func:`summarize_checks` rollup (``total`` / ``success`` /
       ``pending`` / ``informational`` / ``failing`` / ``all_green``).
     - ``new_comments`` — only the *fresh, actionable* comments (not in ``seen``,
