@@ -416,8 +416,20 @@ migrate_kit_schema() {
   # Match the marker in the VALUES only. The kit's own shipped config carries a
   # trailing `# the status-check wording of …` comment on that very line, so a
   # raw-line grep would also be satisfied by an adopter who has the phrase in a
-  # comment and not in the list.
-  marker_values=$(printf '%s\n' "$markers" | sed 's/[[:space:]]*#.*$//')
+  # comment and not in the list. Quote-aware: a plain `s/#.*//` would also cut a
+  # marker containing an issue number (`- "tracked in #23: review rate limited"`)
+  # and then ask for a marker that is already there.
+  marker_values=$(printf '%s\n' "$markers" | awk '{
+    out = ""; qc = ""
+    for (i = 1; i <= length($0); i++) {
+      c = substr($0, i, 1)
+      if (qc == "" && (c == "\"" || c == "'\''")) { qc = c }
+      else if (qc != "" && c == qc) { qc = "" }
+      else if (qc == "" && c == "#") { break }
+      out = out c
+    }
+    print out
+  }')
   if [ -n "$markers" ] && ! printf '%s\n' "$marker_values" | grep -qi 'review rate limited'; then
     # The instruction has to match the list style the adopter actually uses.
     # Telling someone with an inline list to add a `- ` item would have them
@@ -429,14 +441,27 @@ migrate_kit_schema() {
     # sees no bracket and hands out the corrupting advice.
     if printf '%s\n' "$markers" | grep -qE '^[[:space:]]*- '; then
       style=block
-    elif printf '%s\n' "$markers" | grep -q '\['; then
+    elif printf '%s\n' "$markers" | head -n 1 | grep -qE ':[[:space:]]*\[.*\]'; then
       style=flow
+    elif printf '%s\n' "$markers" | grep -q '\['; then
+      # A flow list whose brackets are NOT closed on the key line. Valid YAML,
+      # but `scripts/lib/kitconfig.py` — the reader every engine uses — parses
+      # it to `{}` or `"["`, so the adopter's ENTIRE marker list is already
+      # being ignored. Asking them to add one more string to it would be
+      # confident, inert advice; the list not working at all is the bigger news.
+      style=unreadable
     else
       # A key with no value at all: the reader falls back to the engine
       # defaults, which already contain the marker. Nothing to ask for.
       style=none
     fi
-    if [ "$style" != none ]; then
+    if [ "$style" = unreadable ]; then
+      echo "ACTION NEEDED: review.unavailable_markers in $CONFIG_FILE is a flow list" >&2
+      echo "  spanning more than one line. The kit's config reader cannot parse that" >&2
+      echo "  spelling, so NONE of your markers are in effect. Put the whole list on the" >&2
+      echo "  key's own line (\`unavailable_markers: [\"a\", \"b\"]\`) or use a block list," >&2
+      echo '  and include "review rate limited" — see issue #23.' >&2
+    elif [ "$style" != none ]; then
       echo "ACTION NEEDED: add \"review rate limited\" to review.unavailable_markers" >&2
       echo "  in $CONFIG_FILE." >&2
       if [ "$style" = flow ]; then

@@ -1140,13 +1140,29 @@ def test_migration_adds_every_review_key_exactly_once(tmp_path: Path) -> None:
             "brackets",
             '- "review rate limited"',
         ),
-        # Flow list whose VALUE is on the next line. A key-line bracket test
-        # sees no `[` here and hands out the block-item advice.
+        # Flow list whose brackets do not close on the key line. Valid YAML, but
+        # `kitconfig` parses it to {} / "[" — so the adopter's WHOLE list is
+        # already inert, and "add it inside the brackets" would be confident,
+        # useless advice. Say what's actually wrong instead.
         (
             "flow_next_line",
             'review:\n  unavailable_markers:\n    ["mine", "other"]\n',
-            "brackets",
+            "cannot parse that",
             '- "review rate limited"',
+        ),
+        (
+            "flow_multi_line",
+            'review:\n  unavailable_markers: [\n    "mine",\n    "other"\n  ]\n',
+            "cannot parse that",
+            "add the string inside the brackets",
+        ),
+        # A marker containing a `#` must not be cut short by comment-stripping —
+        # doing so asks for a marker the adopter already has.
+        (
+            "hash_in_value",
+            'review:\n  unavailable_markers:\n    - "see #23 for why"\n',
+            '- "review rate limited"',
+            "brackets",
         ),
     ],
 )
@@ -1172,6 +1188,13 @@ def test_the_instruction_matches_the_list_style(
         # Already present — nothing to ask for.
         ("block", 'review:\n  unavailable_markers:\n    - "mine"\n    - "review rate limited"\n'),
         ("flow", 'review:\n  unavailable_markers: ["mine", "review rate limited"]\n'),
+        # Case-insensitively: an adopter may have written it capitalized.
+        ("block_mixed_case", 'review:\n  unavailable_markers:\n    - "Review Rate Limited"\n'),
+        # …and a marker whose text contains a `#` must still count as present.
+        (
+            "hash_in_value",
+            'review:\n  unavailable_markers:\n    - "tracked in #23: review rate limited"\n',
+        ),
         # A key with no value falls back to the engine defaults, which already
         # contain the marker — so asking for it would be noise.
         ("empty_key", "review:\n  unavailable_markers:\n"),
