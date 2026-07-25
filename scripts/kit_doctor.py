@@ -110,6 +110,11 @@ ADOPTER_OWNED: tuple[str, ...] = (
     "docs/handoff-history.md",
     "docs/friction-log.md",
     "docs/friction-log-archive.md",
+    # This repo's own narrative files (see the note in config/dev-model.yaml).
+    "docs/kit-handoff.md",
+    "docs/kit-handoff-history.md",
+    "docs/kit-friction-log.md",
+    "docs/kit-friction-log-archive.md",
     "README.md",
     ".gitignore",
 )

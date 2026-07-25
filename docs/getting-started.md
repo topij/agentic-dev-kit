@@ -35,10 +35,16 @@ cp -r /path/to/agentic-dev-kit/. .
 > [Upgrading an already-adopted repo](../README.md#upgrading-an-already-adopted-repo)
 > section for what that does and doesn't touch.
 
-`init.sh` prompts you for a handful of values — project name, agent runtime, tracker, the
-protected branch, your review bot — and stamps them into `config/dev-model.yaml`.
-It also seeds `docs/handoff.md` and `docs/friction-log.md` (only if they don't
-already exist) and adds the state sandbox to `.gitignore`.
+`init.sh` prompts you for a handful of values — project name, agent runtime, tracker board,
+the protected branch, your review bot — and stamps them into `config/dev-model.yaml`.
+It renders the four narrative docs from `docs/templates/`, installs the pre-push hook, and
+adds the state sandbox to `.gitignore`.
+
+It renders a narrative doc when the target is **missing or still carries the shipped
+`devkit-template: unrendered` marker** — so a handoff you are actually using is left
+byte-identical, which is what makes re-running it the supported upgrade path. (The older
+"only if it doesn't already exist" rule couldn't work: the kit *ships* those files, so a
+copy-in always landed them first and the seed step never fired.)
 
 Then open `config/dev-model.yaml` and fill in anything you skipped — especially
 the `tracker` and `models` blocks. That one file is where every skill and script

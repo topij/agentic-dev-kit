@@ -27,10 +27,16 @@ paths:
   # The two canonical narrative files (Principles #1 and #2). The kit ships these
   # as docs/handoff.md and docs/friction-log.md; repoint them if your repo already
   # keeps a plan / inbox under different names.
-  handoff: docs/handoff.md                       # the living plan / session handoff
-  handoff_history: docs/handoff-history.md        # swept older session blocks
-  friction_log: docs/friction-log.md              # the friction inbox
-  friction_log_archive: docs/friction-log-archive.md
+  # THIS repo is the kit's own workspace, so its narrative files are named
+  # kit-*.md. docs/handoff.md and docs/friction-log.md are the SKELETONS shipped
+  # to adopters (rendered from docs/templates/ by init.sh) — if the kit pointed
+  # its own plan at those, every session block would ship to adopters and the
+  # unrendered marker would be gone. An adopter's own config uses the plain
+  # names; only the template repo needs this indirection.
+  handoff: docs/kit-handoff.md                    # the living plan / session handoff
+  handoff_history: docs/kit-handoff-history.md    # swept older session blocks
+  friction_log: docs/kit-friction-log.md          # the friction inbox
+  friction_log_archive: docs/kit-friction-log-archive.md
   playbook: docs/autonomous-session-playbook.md   # the autonomous operating contract
   # Directory containing the deterministic kit engines. Mature repos can vendor
   # them under scripts/devkit without rewriting every workflow.
@@ -48,13 +54,13 @@ doc_budgets:
   # Warn-only line-count tripwires (the archival mechanism of Principle #1). A file
   # over budget is a housekeeping nudge, never a hard block. Read by
   # scripts/check_doc_budget.py.
-  - path: docs/handoff.md
+  - path: docs/kit-handoff.md
     budget: 400
-    archive: docs/handoff-history.md
+    archive: docs/kit-handoff-history.md
     remedy: "run the wrap-up workflow to sweep old session blocks into the history file"
-  - path: docs/friction-log.md
+  - path: docs/kit-friction-log.md
     budget: 150
-    archive: docs/friction-log-archive.md
+    archive: docs/kit-friction-log-archive.md
     remedy: "run the triage-friction-log workflow to graduate the inbox to the tracker"
 
 vcs:

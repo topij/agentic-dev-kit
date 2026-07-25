@@ -188,14 +188,32 @@ def test_narrative_templates_ship(name):
     assert (REPO_ROOT / "docs" / "templates" / name).is_file()
 
 
-def test_shipped_skeletons_carry_the_unrendered_marker():
+@pytest.mark.parametrize(
+    "skeleton",
+    ["handoff.md", "handoff-history.md", "friction-log.md", "friction-log-archive.md"],
+)
+def test_shipped_skeletons_carry_the_unrendered_marker(skeleton):
     """The marker is what lets init.sh tell 'the file the kit shipped' from 'a
     handoff someone is using'. Without it the seed step can never fire on a
-    copy-in, which is exactly how adopters ended up with `my-project` headers."""
+    copy-in, which is exactly how adopters ended up with `my-project` headers.
+
+    Asserted on the LITERAL adopter-facing filenames, deliberately not via
+    `paths.handoff`: this repo points its own config at `docs/kit-*.md` so its
+    session blocks never ship to adopters, so reading the config here would check
+    the kit's live plan (which must NOT carry the marker) instead of the skeleton."""
+    doc = REPO_ROOT / "docs" / skeleton
+    assert "devkit-template: unrendered" in doc.read_text(encoding="utf-8"), doc
+
+
+def test_kits_own_plan_is_real_not_a_skeleton():
+    """The flip side: this repo must actually practise Principle #1. A kit whose
+    own living plan is an unrendered template is not dogfooding it."""
     config = kitconfig.load_config(SHIPPED_CONFIG)
     for key in ("paths.handoff", "paths.friction_log"):
         doc = REPO_ROOT / kitconfig.get(config, key)
-        assert "devkit-template: unrendered" in doc.read_text(encoding="utf-8"), doc
+        text = doc.read_text(encoding="utf-8")
+        assert "devkit-template: unrendered" not in text, doc
+        assert "YYYY-MM-DD" not in text, f"{doc} still has placeholder dates"
 
 
 @pytest.mark.parametrize(
