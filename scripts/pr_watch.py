@@ -891,26 +891,50 @@ def bot_review_coverage(
     (invalidating a receipt when the diff changes shape) risks becoming a wedge
     on a repo whose bot is permanently unavailable.
 
-    Returns one entry per bot that has reviewed at all, newest first:
-    ``{bot, sha, submitted_at, covers_head}``.
+    Returns one entry per bot with at least one review carrying a usable commit
+    SHA, newest first: ``{bot, sha, submitted_at, covers_head}``. A bot whose
+    reviews all lack one is indistinguishable here from a bot that never
+    reviewed — the under-reporting direction, chosen because claiming coverage
+    of an unknown commit would be worse than claiming none.
+
+    Recency is a lexicographic compare on GitHub's ISO timestamps, which is
+    correct only because ``gh`` emits fixed-width ``Z``-suffixed UTC with no
+    fractional seconds (``2026-07-25T12:29:16Z``). An offset form or a
+    fractional second would sort wrong; neither is reachable from ``gh``. Ties
+    resolve to the later array element, matching gh's ascending submission
+    order — and an undated review can never displace a dated one, which is the
+    direction that matters: an undated review sitting at the head would
+    otherwise set ``covers_head`` and suppress the warning.
     """
     if bots is None:
         bots = _REVIEW_BOTS
     latest: dict[str, dict] = {}
     for raw in reviews or []:
+        # Anchored: a comment author is not the repo's to control, so a
+        # lookalike login (`xcoderabbit`) must not be able to claim that the
+        # reviewer covered this head.
         bot = _match_bot(_author(raw), bots, anchored=True)
         if not bot:
             continue
-        sha = (raw.get("commit") or {}).get("oid") if isinstance(raw.get("commit"), dict) else None
-        if not sha:
+        commit = raw.get("commit")
+        sha = commit.get("oid") if isinstance(commit, dict) else None
+        # Type-checked, not just truthy: a non-string `oid` survives an
+        # `isinstance(commit, dict)` guard and then kills `render` on
+        # `sha[:7]` — on the ordinary poll path, for a field this is supposed
+        # to be tolerant of.
+        if not isinstance(sha, str) or not sha:
             continue
-        submitted = raw.get("submittedAt") or ""
+        # `str()`: a non-string timestamp reaching the `>=` below raises
+        # TypeError against a sibling review's string.
+        submitted = str(raw.get("submittedAt") or "")
         if bot not in latest or submitted >= latest[bot]["submitted_at"]:
             latest[bot] = {
                 "bot": bot,
                 "sha": sha,
                 "submitted_at": submitted,
-                "covers_head": bool(head) and sha == head,
+                # `sha` is a non-empty str by here, so a falsy `head` already
+                # compares False — the guard is intent, not arithmetic.
+                "covers_head": sha == head,
             }
     return sorted(latest.values(), key=lambda e: e["submitted_at"], reverse=True)
 

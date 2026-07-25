@@ -192,6 +192,9 @@ Self-pace on a bounded cadence — don't busy-wait:
   say plainly what the receipt does and does not cover.
 
   **Known gaps, so you don't mistake them for coverage:**
+  - `coverage` reports only bots that have reviewed *and* whose review carried a
+    commit SHA. A bot that has never reviewed at all produces no entry and no
+    warning — that case is the pending/unavailable machinery's, not this one's.
   - The pending block only exists once the bot has *registered* a check. In the
     window between `gh pr ready` and the bot creating its check row, "the bot
     hasn't started yet" is indistinguishable from "this repo has no bot", so a

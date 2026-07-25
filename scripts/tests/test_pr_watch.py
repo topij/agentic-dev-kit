@@ -1780,3 +1780,106 @@ def test_coverage_tolerates_a_missing_or_malformed_commit_field() -> None:
         [_review("coderabbitai", "aaa", "2026-07-25T12:00:00Z")], None
     )
     assert orphan[0]["covers_head"] is False
+
+
+def test_a_lookalike_login_cannot_claim_the_bot_reviewed_this_head() -> None:
+    """The one property here with an actual adversary.
+
+    On a public repo any account can open a review, so `xcoderabbit` reviewing
+    the current head must not read as CodeRabbit having covered it — that would
+    suppress the very warning this feature exists to raise. Anchored matching
+    gives that; without a test, flipping `anchored=True` to `False` passes the
+    whole suite (verified by mutation).
+    """
+    pr_watch = _load_pr_watch()
+
+    for impostor in ("xcoderabbit", "my-coderabbit-fan", "notcoderabbit"):
+        assert (
+            pr_watch.bot_review_coverage(
+                [_review(impostor, "abc123", "2026-07-25T12:00:00Z")], "abc123"
+            )
+            == []
+        ), impostor
+
+    # The real logins still count, in both spellings GitHub uses.
+    for real in ("coderabbitai", "coderabbitai[bot]"):
+        covered = pr_watch.bot_review_coverage(
+            [_review(real, "abc123", "2026-07-25T12:00:00Z")], "abc123"
+        )
+        assert covered and covered[0]["covers_head"] is True, real
+
+
+def test_the_newest_review_wins_regardless_of_array_order() -> None:
+    """Pinned independently of array order.
+
+    The other fixture happens to list its reviews ascending, so "newest by
+    timestamp" and "last in the array" are indistinguishable there — replacing
+    the whole comparison with `if True:` passes the suite (verified by
+    mutation). This one lists them descending, so only the timestamp can be
+    right.
+    """
+    pr_watch = _load_pr_watch()
+    descending = [
+        _review("coderabbitai", "newest0", "2026-07-25T18:00:00Z"),
+        _review("coderabbitai", "middle0", "2026-07-25T15:00:00Z"),
+        _review("coderabbitai", "oldest0", "2026-07-25T12:00:00Z"),
+    ]
+
+    assert pr_watch.bot_review_coverage(descending, "zzz")[0]["sha"] == "newest0"
+    # …and the same set shuffled resolves identically.
+    shuffled = [descending[1], descending[2], descending[0]]
+    assert pr_watch.bot_review_coverage(shuffled, "zzz")[0]["sha"] == "newest0"
+
+
+def test_an_undated_review_never_displaces_a_dated_one() -> None:
+    """The safety-relevant direction of the tie-break.
+
+    An undated review that happened to sit at the head would otherwise set
+    `covers_head` and suppress the warning — reporting coverage the reviewer
+    never gave. Asserted in both array orders, since the comparison is
+    order-sensitive by construction.
+    """
+    pr_watch = _load_pr_watch()
+    dated = _review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")
+    undated = {"author": {"login": "coderabbitai"}, "commit": {"oid": "current"}}
+
+    for order in ([dated, undated], [undated, dated]):
+        covered = pr_watch.bot_review_coverage(order, "current")
+        assert covered[0]["sha"] == "0ldc0de", order
+        assert covered[0]["covers_head"] is False, order
+
+
+def test_a_non_string_sha_or_timestamp_cannot_break_the_poll() -> None:
+    """`isinstance(commit, dict)` validates the container, not the value.
+
+    A non-string `oid` passes that guard and then kills `render` on `sha[:7]` —
+    on the ordinary poll path, in the function whose stated job is tolerating
+    malformed input. A non-string timestamp raises TypeError against a sibling
+    review's string.
+    """
+    pr_watch = _load_pr_watch()
+
+    assert (
+        pr_watch.bot_review_coverage(
+            [{"author": {"login": "coderabbitai"}, "commit": {"oid": 12345}}], "abc"
+        )
+        == []
+    )
+    mixed = [
+        _review("coderabbitai", "aaaaaaa", "2026-07-25T12:00:00Z"),
+        {
+            "author": {"login": "coderabbitai"},
+            "commit": {"oid": "bbbbbbb"},
+            "submittedAt": 20260725,  # not a string
+        },
+    ]
+    assert pr_watch.bot_review_coverage(mixed, "zzz")  # does not raise
+
+    # …and the render survives whatever survives the filter.
+    report = pr_watch.build_report(
+        _green_view(reviews=[{"author": {"login": "coderabbitai"}, "commit": {"oid": 1}}]),
+        [],
+        set(),
+    )
+    assert report["review_bots"]["coverage"] == []
+    pr_watch.render(report)  # would raise on `sha[:7]` without the type check
