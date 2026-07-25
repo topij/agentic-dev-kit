@@ -748,10 +748,12 @@ cmd_merge() {
         || _die "pr-watch failed for PR #$pr"
     # Gate on `mergeable`: converged AND no deterministic merge blocker AND a
     # review receipt bound to this head. The report's `done` is an unchanged
-    # alias of `mergeable`, so either key would be correct today; `mergeable` is
-    # named because it says what this gate means. The key that must NEVER gate a
-    # merge is `converged` — the watch-loop predicate ("anything left to fix?"),
-    # which is deliberately true on a green, comment-clean PR carrying no receipt.
+    # alias of `mergeable` today, but read `mergeable`: it is absent from any
+    # pr_watch predating the split, so an engine/gate version skew fails CLOSED
+    # here, whereas `done` is the key an older or foreign engine might carry with
+    # different semantics. The key that must NEVER gate a merge is `converged` —
+    # the watch-loop predicate ("anything left to fix?"), which is deliberately
+    # true on a green, comment-clean PR carrying no receipt.
     # Read the flag pr_watch computes — never re-derive it here, or this gate
     # becomes a second copy of the contract that can drift from the engine's.
     IFS=$'\t' read -r mergeable validated_pr validated_base validated_head <<< "$(printf '%s' "$report" | python3 -c '

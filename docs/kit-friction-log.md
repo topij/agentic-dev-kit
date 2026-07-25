@@ -24,9 +24,14 @@
   (adversarial/bypass-focused + general-correctness, the two the doctrine says find
   **disjoint** holes), each handed the raw diff with no framing from the author, and a
   distinct receipt source (`fallback:panel`) so the audit trail does not read as a primary
-  review. Demonstrated the same day: a cold subagent on #24 found a stale merge-gate comment
-  that three self-review passes had walked past. Severity raised from M — this is a
-  documented rule being violated, not a soft gap.
+  review. **Evidence, with the conflict of interest stated:** the panel was trialled on the
+  wrap-up PR that carries this entry (#24), so this is self-reported. What it produced is
+  checkable in that PR's diff — a correctness lens found a merge-gate comment in
+  `dev_session.sh` describing the *rejected* design, shipped to `main` in #22 and missed by
+  the author's three passes over it; a second adversarial lens then found nine further
+  issues in the wrap-up, overlapping the first on none of them. Filed at **H** rather than
+  the M this would have got before that trial: a documented rule is being violated, not a
+  soft gap.
 
 - **A safety-critical PR merged without any review of its final design (severity: H).**
   Also #22: CodeRabbit's only completed review was bound to the first commit; the design then

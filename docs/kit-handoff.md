@@ -31,20 +31,26 @@ Both times the correction came from asking what a *stale reader* of the mechanis
 
 - **The blocking problem was not the porting order.** `decide_done` conflated "is there
   more for me to fix?" with "is this authorized to merge?", because `cmd_merge` had no
-  other hook — it re-polls `pr_watch --json` and gates on `done`. That conflation, not the
+  other hook — it re-polled `pr_watch --json` and gated on `done`. That conflation, not the
   sequence of ports, is what would have wedged cs-toolkit's nightly fixer — its per-lane
   review step (`.claude/commands/nightly-fixer.md` Step 6.2 in that repo) watches to
   green-and-clean and records no receipt. Fixing it removed a whole phase from the plan.
 - **#22 merged.** `converged` (watch loop) and `mergeable` (merge gate) are now distinct;
   `dev_session.sh merge` gates on `mergeable`. Tests 196 → 202.
-- **The first cut of #22 failed open, and was rejected in review.** It redefined `done` to
+- **The first cut of #22 failed open, and my own adversarial re-read caught it — not
+  CodeRabbit, whose pass on that commit raised only a `local`-declaration nit and a test
+  nitpick.** It redefined `done` to
   mean watch-convergence. Because `/upgrade` refreshes engines **per file** (`missing` is a
-  supported state — a sized-down adoption installs some engines on purpose), a new
+  supported state — "a sized-down adoption omits engines deliberately (one surveyed repo
+  installs 2 of 6 on purpose)"), a new
   `pr_watch.py` can run against an older `dev_session.sh` whose gate reads `done` — which
   would then have authorized merges on PRs with no review receipt at all.
-- **So the schema only grows.** `done` stays an unchanged alias of `mergeable`. Both skew
-  directions fail closed; the equivalence is pinned across the whole boolean input space
-  rather than by example.
+- **So the schema only grows.** `done` stays an unchanged alias of `mergeable`, and both
+  skew directions fail closed. Note what is pinned where: the *function* `decide_done` is
+  held to the pre-split expression across all 32 boolean inputs, but the thing that actually
+  protects an older `dev_session.sh` is the report **key**, and that is pinned by a matrix of
+  report shapes rather than exhaustively. Worth keeping straight — the same function-vs-key
+  confusion is the next bullet's finding.
 - **CodeRabbit was rate-limited**, so the configured fallback pass ran instead. It found
   three further issues, including a docstring that claimed a compatibility guarantee the
   *function* doesn't provide — the report **key** does.
@@ -74,8 +80,24 @@ Both times the correction came from asking what a *stale reader* of the mechanis
   same pass that produced `32f3e4f`, so the final commit was reviewed by nothing.
   CodeRabbit's only review was bound to the first commit, before the redesign.
 - **A cold-context subagent reviewer found what three self-review passes missed** — a stale
-  comment on the merge gate itself, describing the design that was rejected. Authorship
-  anchoring, not capability, is what self-review cannot escape.
+  comment on the merge gate itself (`dev_session.sh` `cmd_merge`), describing the design that
+  was rejected. It shipped to `main` in #22 and was fixed in the wrap-up PR (#24), so the
+  artifact is visible only in that diff. Authorship anchoring, not capability, is what
+  self-review cannot escape.
+- A second, adversarially-prompted subagent pass then found nine further issues in the
+  wrap-up itself — including this handoff misattributing a test-coverage claim, and the PR
+  description still carrying the "floor" framing the diff had already retracted. The two
+  lenses overlapped on nothing, which is the doctrine's disjointness claim holding up.
+
+**Open, and owned by nothing yet**
+
+- **#22's merged design has still never had an independent review.** CodeRabbit's only pass
+  covered the first commit; the request for a pass over the final design (posted on #22)
+  was refused for rate limits again. Re-request it — this is a safety-critical merge gate
+  running on a two-lens subagent panel and the author's own reads.
+- The two H-severity friction entries below (fallback independence; a receipt outliving the
+  design it reviewed) are unfiled. Both now carry a proposed fix, so they are issue-shaped —
+  `triage-friction-log` should graduate them rather than leaving them in the inbox.
 
 ▶ Next: fix **#19 + #23 together** (Phase 3b) — the queued-vs-unavailable ambiguity, on
 both the comment and status-check surfaces. Design constraint: the informational-check
@@ -150,7 +172,7 @@ written down rules it was itself violating.**
   queued, and its four valid findings landed after the merge. `decide_done` can't tell the
   two apart.
 
-▶ Next: superseded by the 2026-07-25 Phase 3a session (PR #22). The proposed order (merge
+✔ Superseded by the Phase 3a session (PR #22). The proposed order (merge
 gate → receipts behind a flag → wire the fixer → flip) was replaced: the flag existed to
 defer a breakage caused by `done` conflating two predicates, so splitting them removed the
 need for it.
