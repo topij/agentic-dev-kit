@@ -174,6 +174,23 @@ Self-pace on a bounded cadence — don't busy-wait:
   loop must be able to finish while a bot that never reports sits pending forever.
   Every signal here feeds the merge gate only.
 
+  It also reports **`review_bots.coverage`** — the commit each bot's *last*
+  review actually saw. A receipt binds to the head and a push invalidates it,
+  which answers "was this exact code reviewed" but not "by whom, and how much of
+  it did they see": a bot can review commit 1, go rate-limited through a
+  material redesign, and the merge proceed on a fallback receipt taken at commit
+  5. When a bot's last review is behind the head the render says so:
+
+  ```
+  ⚠ review coverage: coderabbit's last review was of 954b93f, not the current
+    head — a receipt taken now does not mean it saw this design
+  ```
+
+  Reported, never gating — deliberately the cheap half of the problem, because
+  invalidating a receipt on a shape change risks wedging a repo whose bot is
+  permanently unavailable. Treat it as the prompt to re-request a review, or to
+  say plainly what the receipt does and does not cover.
+
   **Known gaps, so you don't mistake them for coverage:**
   - The pending block only exists once the bot has *registered* a check. In the
     window between `gh pr ready` and the bot creating its check row, "the bot

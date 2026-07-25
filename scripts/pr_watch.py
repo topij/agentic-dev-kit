@@ -870,6 +870,51 @@ def _age_minutes(timestamp: str | None, now: datetime) -> float | None:
     return max(0.0, age)
 
 
+def bot_review_coverage(
+    reviews: list[dict],
+    head: str | None,
+    *,
+    bots: tuple[str, ...] | None = None,
+) -> list[dict]:
+    """Which commit each configured bot's LAST review actually covered.
+
+    A receipt binds to the current head and a push invalidates it, which answers
+    "was this exact code reviewed" — but not "by whom, and how much of it did
+    they see". A bot can review commit 1, go rate-limited through a material
+    redesign, and the merge still proceed on a fallback receipt taken at commit
+    5. That happened on #22 (a fail-open rework the primary reviewer never saw)
+    and again, smaller, on #25.
+
+    This does not gate anything. It makes the gap *visible at merge time*
+    instead of reconstructible only by reading the PR thread afterwards —
+    deliberately the cheap half of issue #27, because the expensive half
+    (invalidating a receipt when the diff changes shape) risks becoming a wedge
+    on a repo whose bot is permanently unavailable.
+
+    Returns one entry per bot that has reviewed at all, newest first:
+    ``{bot, sha, submitted_at, covers_head}``.
+    """
+    if bots is None:
+        bots = _REVIEW_BOTS
+    latest: dict[str, dict] = {}
+    for raw in reviews or []:
+        bot = _match_bot(_author(raw), bots, anchored=True)
+        if not bot:
+            continue
+        sha = (raw.get("commit") or {}).get("oid") if isinstance(raw.get("commit"), dict) else None
+        if not sha:
+            continue
+        submitted = raw.get("submittedAt") or ""
+        if bot not in latest or submitted >= latest[bot]["submitted_at"]:
+            latest[bot] = {
+                "bot": bot,
+                "sha": sha,
+                "submitted_at": submitted,
+                "covers_head": bool(head) and sha == head,
+            }
+    return sorted(latest.values(), key=lambda e: e["submitted_at"], reverse=True)
+
+
 def summarize_review_bots(
     check_details: list[dict],
     comments: list[dict],
@@ -879,6 +924,7 @@ def summarize_review_bots(
     grace_minutes: float | None = None,
     pending_since: dict | None = None,
     signal: str = "ok",
+    coverage: list[dict] | None = None,
 ) -> dict:
     """Resolve each configured review bot to *unavailable*, *pending*, or neither.
 
@@ -1077,6 +1123,9 @@ def summarize_review_bots(
     return {
         "grace_minutes": grace_minutes,
         "signal": "skipped" if not bots else signal,
+        # Per-bot last-reviewed SHA — see :func:`bot_review_coverage`. Reported,
+        # never gating.
+        "coverage": coverage or [],
         "unavailable": unavailable,
         "pending": pending,
         "blockers": blockers,
@@ -1470,6 +1519,9 @@ def build_report(
         now=now or datetime.now(timezone.utc),
         pending_since=prior_pending_since or {},
         signal=details.signal,
+        coverage=bot_review_coverage(
+            view.get("reviews") or [], view.get("headRefOid")
+        ),
     )
 
     # False-settle guard: right after a push, `gh` can still report the OLD
@@ -1609,6 +1661,13 @@ def render(report: dict) -> str:
             "  ⚠ review-bot state could not be read — a queued or rate-limited "
             "reviewer will NOT be detected on this poll (see stderr)"
         )
+    for entry in bots.get("coverage") or []:
+        if not entry["covers_head"]:
+            lines.append(
+                f"  ⚠ review coverage: {entry['bot']}'s last review was of "
+                f"{entry['sha'][:7]}, not the current head — a receipt taken now "
+                "does not mean it saw this design"
+            )
     for entry in bots.get("unavailable") or []:
         lines.append(
             f"  ⚠ review unavailable [{entry['surface']}] {entry['where']}: "

@@ -1697,3 +1697,86 @@ Summary only.
 
     assert report["new_comments"] == []
     assert report["done"] is True
+
+
+# --------------------------------------------------------------------------- #
+# review coverage: which commit the bot's last review actually saw (issue #27)
+# --------------------------------------------------------------------------- #
+
+
+def _review(login: str, sha: str, at: str) -> dict:
+    return {"author": {"login": login}, "commit": {"oid": sha}, "submittedAt": at}
+
+
+def test_a_bot_whose_last_review_predates_the_head_is_surfaced() -> None:
+    """The #22 shape, and #25's smaller repeat.
+
+    A receipt binds to the head and a push invalidates it — which answers "was
+    this exact code reviewed", not "by whom, and how much of it did they see".
+    A bot can review commit 1, go rate-limited through a material redesign, and
+    the merge proceeds on a fallback receipt taken at commit 5. Nothing said so.
+    """
+    pr_watch = _load_pr_watch()
+    reviews = [
+        _review("coderabbitai", "aaaaaaa1", "2026-07-25T12:00:00Z"),
+        _review("coderabbitai", "bbbbbbb2", "2026-07-25T13:00:00Z"),  # newest
+        _review("topij", "ccccccc3", "2026-07-25T14:00:00Z"),  # not a bot
+    ]
+
+    behind = pr_watch.bot_review_coverage(reviews, "zzzzzzz9")
+    current = pr_watch.bot_review_coverage(reviews, "bbbbbbb2")
+
+    # Newest review per bot wins, and a human's review is not a bot's coverage.
+    assert [e["bot"] for e in behind] == ["coderabbit"]
+    assert behind[0]["sha"] == "bbbbbbb2"
+    assert behind[0]["covers_head"] is False
+    assert current[0]["covers_head"] is True
+
+
+def test_review_coverage_is_reported_and_never_gates() -> None:
+    """Deliberately the cheap half of #27. Invalidating a receipt when the diff
+    changes *shape* is the faithful fix, but it risks becoming a wedge on a repo
+    whose bot is permanently unavailable — so this only makes the gap visible at
+    merge time instead of reconstructible from the PR thread afterwards.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")]
+    )
+
+    report = pr_watch.build_report(
+        view, [], set(), review_receipt={"head": "abc123", "source": "fallback:panel"}
+    )
+
+    assert report["review_bots"]["coverage"][0]["covers_head"] is False
+    assert "review coverage" in pr_watch.render(report)
+    assert "0ldc0de" in pr_watch.render(report)
+    # …and the merge gate is untouched by it.
+    assert report["mergeable"] is True
+    assert report["merge_blockers"] == []
+
+
+def test_coverage_tolerates_a_missing_or_malformed_commit_field() -> None:
+    """`gh` shapes drift and a review can predate the field. Anything unusable
+    is dropped rather than reported as coverage of an unknown commit — and it
+    must never raise, since this feeds the ordinary poll path."""
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch.bot_review_coverage([], "abc") == []
+    assert pr_watch.bot_review_coverage(None, "abc") == []
+    assert (
+        pr_watch.bot_review_coverage(
+            [
+                {"author": {"login": "coderabbitai"}, "submittedAt": "x"},  # no commit
+                {"author": {"login": "coderabbitai"}, "commit": "oops"},  # not a dict
+                {"author": {"login": "coderabbitai"}, "commit": {}},  # no oid
+            ],
+            "abc",
+        )
+        == []
+    )
+    # No head to compare against: reported, but never claimed to cover it.
+    orphan = pr_watch.bot_review_coverage(
+        [_review("coderabbitai", "aaa", "2026-07-25T12:00:00Z")], None
+    )
+    assert orphan[0]["covers_head"] is False
