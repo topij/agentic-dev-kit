@@ -14,10 +14,94 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-25 — Phase 3a shipped: the watch-loop predicate and the merge gate
-are now separate, and the schema change that separates them is purely additive.
+Last updated: 2026-07-25 — Phase 3b shipped: the queued-vs-unavailable ambiguity is
+closed on both surfaces, and the receipt now says what it does *not* cover.
 
-## Latest session — 2026-07-25
+## Latest session — 2026-07-25 (Phase 3b)
+
+**Theme —** Fixed #19 + #23 together, and then spent most of the session discovering
+that **the fix rounds were more dangerous than the original diff**. Seven review rounds
+on one PR; every one found something real; three of them found a defect introduced by
+the previous round's fix.
+
+- **#25 merged — #19 and #23 closed.** `summarize_review_bots` resolves each configured
+  bot to *unavailable* (outage announced on a comment body **or** a status-check
+  description — the surface that was invisible) or *pending* (a verdict still coming).
+  Pending blocks the merge gate until it ages past `review.bot_pending_grace_minutes`;
+  unavailable never blocks and is the action signal. **Nothing reaches `converged`** —
+  that is the whole design, and it is what let both be fixed at once.
+- **#28 merged — #10 closed.** The state_paths suite failed from inside a lane worktree
+  because its fixture cleared every sandbox *env* signal and not the *cwd* one. The
+  issue predicted a per-test audit would be needed; it wasn't — every cwd-sensitive test
+  already chdirs itself. A mutation pass showed the fix makes the suite *stricter*:
+  three tests had been passing by accidentally discovering the real repo root.
+- **#29 merged — half of #27.** `review_bots.coverage` reports which commit each bot's
+  last review actually saw, and `--record-review` records it as `bots_behind_head`.
+  Verified against the real #25, where it reproduces the gap I had had to work out by
+  hand an hour earlier. #27 stays open for the shape-change half.
+- **#26 and #27 filed** from the friction-log inbox, both with concrete sketches.
+
+**Decided**
+
+- The anti-wedge property lives in `converged` alone. Every new signal feeds the merge
+  gate, which already needs an explicit receipt — so a gate can wait, but the poll/fix/ack
+  loop can always finish.
+- **Report, never gate.** All three new fields (`signal`, `bot_signal`/`override`,
+  `coverage`) make an omission legible at merge time and block nothing. The faithful
+  version of each risks wedging a repo whose bot is permanently unavailable.
+- **Stop patching a mechanism that keeps corrupting.** The `init.sh` marker migration
+  produced four distinct config corruptions across four rounds, each while its own
+  post-conditions passed and it printed success. It was deleted, not fixed a fifth time;
+  `init.sh` now detects the gap and prints what to add.
+
+**Learned**
+
+- **A fix round on gate logic is where the next bug comes from.** Across #25 and #29,
+  **eleven review rounds, ten with findings** — and five of those findings were defects
+  introduced by the *previous round's fix*, twice at HIGH. #25 never produced a clean
+  pass; #29 produced one on the fourth attempt. `safety-critical-changes.md` rule 3
+  already says to treat "the last round found nothing" as provisional; this is the first
+  session with enough rounds to show it is not a caution but the base rate.
+- **Stopping has to be calibrated to the blast radius, not the round count.** #25 was a
+  merge gate — worst case, an unreviewed PR lands. #29 is a reported-never-gating display
+  field — worst case, a wrong warning. Same review doctrine, different stopping points,
+  and saying which one applies is part of the merge decision. The `never gates` property
+  is what made that judgment available, and it was proved (126 report pairs, zero drift
+  in `converged`/`mergeable`/`done`), not assumed.
+- **Reading is not running.** Three defects were invisible to careful reading and obvious
+  on execution — most sharply, CodeRabbit's pending check reports the zero timestamp, so
+  the "unmeasurable age fails open" branch was not an edge case but the *only* path that
+  bot ever took. The #19 guard was dead code for its own target, and only polling the
+  live PR showed it.
+- **Mutation testing found what test names asserted and test bodies didn't.** Two
+  properties on #29 — anchored author matching, and newest-review-per-bot — were named in
+  tests, claimed in the PR body, and pinned by nothing.
+- **Every whole-file `grep '^  key:'` in a config migration is a bug in two directions**
+  — it misses the key at another indent *and* matches a same-named key under an unrelated
+  section. This change shipped one of each.
+- **Removing a dangerous mechanism does not make its replacement safe.** After deleting
+  the list surgery, the replacement *message* still told inline-list adopters to add a
+  block item — walking them into the same corruption by hand.
+
+**Open, and owned by nothing yet**
+
+- **#27's other half** — invalidating a receipt when the diff changes *shape*, not just
+  when the head moves. The cheap half (visibility) shipped; the faithful half runs into
+  the same wedge tension as #19/#23.
+- **#26** — the fallback panel. This session ran it manually five times and it carried the
+  entire review load while CodeRabbit was rate-limited for most of the day. It is the
+  highest-value unbuilt thing in the tracker.
+
+▶ Next: **#26** (make the fallback a panel spec). CodeRabbit was rate-limited on nearly
+every head all day, so the panel carried the entire review load — and it is still five
+manual subagent launches per round. Two things this session learned belong in its prompt:
+require the lens to **execute** the changed paths (three defects were invisible to
+reading and obvious on running), and to **mutation-test** new branches (that is what
+proved four separate properties were named by tests and pinned by nothing).
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-25 (Phase 3a)
 
 **Theme —** Made the Phase 3 sequencing decision, and it changed under scrutiny — twice.
 Both times the correction came from asking what a *stale reader* of the mechanism would do.
@@ -101,10 +185,8 @@ Both times the correction came from asking what a *stale reader* of the mechanis
   proposed fix, so they are issue-shaped — `triage-friction-log` should graduate them rather
   than leaving them in the inbox.
 
-▶ Next: fix **#19 + #23 together** (Phase 3b) — the queued-vs-unavailable ambiguity, on
-both the comment and status-check surfaces. Design constraint: the informational-check
-exclusion must keep preventing a wedge on a bot that never reports, so neither can be fixed
-by simply letting that check block. Wants CodeRabbit actually available for review.
+✔ Done — shipped as PR #25 (see the Phase 3b block above). The design constraint held:
+neither surface's fix touches `converged`.
 
 ______________________________________________________________________
 

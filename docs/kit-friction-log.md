@@ -11,41 +11,14 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-07-25 — Backlog migrated to GitHub Issues
+
+The two H-severity entries above this line graduated to issues [#26](https://github.com/topij/agentic-dev-kit/issues/26)
+(fallback review needs to be a *panel*) and [#27](https://github.com/topij/agentic-dev-kit/issues/27)
+(a receipt survives a redesign its reviewer never saw). #27's cheap half shipped
+in PR #29; the issue stays open for the shape-change half.
+
 ## 2026-07-25 — inbox
-
-- **The fallback review pass has no independence when the cockpit authored the PR (severity: H).**
-  On #22 CodeRabbit was rate-limited, so `review.fallback_commands` ran — but the agent
-  running it was the same one that wrote the diff. It found three real issues, yet
-  `safety-critical-changes.md` rule 2 is explicit that this is not a pass: "A single-lens
-  'converged' verdict is an incomplete review, not a green light." Rule 3 also went unmet —
-  the fallback's own approve was written in the same pass that produced the final commit, so
-  no *independent* pass ever covered `32f3e4f` — the fallback did see that code (it posted
-  seconds after the commit, naming it), but a self-review re-reading its own fixes is not a
-  rule-3 re-review. **Proposed fix:** make `review.fallback_commands` a *panel*
-  spec rather than an inline command — one fresh-context subagent per lens
-  (adversarial/bypass-focused + general-correctness, the two the doctrine says find
-  **disjoint** holes), each handed the raw diff with no framing from the author, and a
-  distinct receipt source (`fallback:panel`) so the audit trail does not read as a primary
-  review. **Evidence, with the conflict of interest stated:** the panel was trialled on the
-  wrap-up PR that carries this entry (#24), so this is self-reported. What it produced is
-  checkable in that PR's diff — a correctness lens found a merge-gate comment in
-  `dev_session.sh` describing the *rejected* design, shipped to `main` in #22 and missed by
-  the author's three passes over it; a second adversarial lens then found nine further
-  issues in the wrap-up, overlapping the first on none of them. Filed at **H** rather than
-  the M this would have got before that trial: a documented rule is being violated, not a
-  soft gap.
-
-- **A safety-critical PR merged without any review of its final design (severity: H).**
-  Also #22: CodeRabbit's only completed review was bound to the first commit; the design then
-  changed materially (the fail-open rework), and the rate limit never lifted. The receipt
-  mechanism records *that a review happened at this head* — satisfied by the fallback — with
-  no notion of "the primary reviewer saw an earlier, materially different design."
-  **Proposed fix:** invalidate a receipt when the diff changes *shape* rather than only when
-  the head moves — e.g. require a fresh receipt when a later push touches a file the recorded
-  review never saw. Cheaper interim: have `pr_watch` surface the primary bot's last-reviewed
-  SHA next to the current head, so the gap is visible at merge time instead of reconstructible
-  only from the PR thread. Related to #23 but distinct: #23 is about detecting the outage,
-  this is about what a receipt should mean when the outage outlasts a redesign.
 
 - **The `cp -r` quickstart can't distinguish kit-owned from adopter-owned files (severity: M).**
   Any file the kit tracks lands in an adopter's repo, which is why this repo's own narrative
@@ -67,3 +40,43 @@
   reasons teaches agents to ignore a red gate. Already filed as issue #10 — raising severity
   here because three independent occurrences in one session makes it a pattern, not an
   incident.
+
+- **A fix round on gate logic is where the next bug comes from — every time (severity: M, pattern).**
+  Seven review rounds on PR #25. Every one found something real, and rounds 3, 4 and 6
+  each found a defect **introduced by the previous round's fix**: an incomplete
+  poison-clock fix that still wedged on a *parseable* future date; a section-scoping fix
+  applied to 1 of 3 guards in the same function; a replacement warning message that
+  walked inline-list adopters into the corruption the deleted mechanism used to cause.
+  `safety-critical-changes.md` rule 3 already says "treat 'the last round found nothing'
+  as provisional" — this is the first session with enough rounds to show *how strongly*
+  it holds. **Candidate graduation:** the rule currently reads as advice; it could state
+  a floor (re-review every fix round on a gate file, no exceptions) and note that fix
+  rounds are higher-risk than the original diff, not lower.
+
+- **Reading the code is not the same as running it, and the gap is not small (severity: M).**
+  Three defects this session were invisible to careful reading and obvious on execution:
+  CodeRabbit's pending check reports `startedAt: 0001-01-01T00:00:00Z`, so an
+  "unmeasurable age fails open" branch was not an edge case but the *only* path that bot
+  ever took (the #19 guard was dead code for its own target); making `append_to_section`
+  return non-zero looked plainly correct and aborted `init.sh` under `set -eu` on any
+  config missing an optional section; and `kitconfig` silently resolves a next-line flow
+  list to `{}`. **Candidate graduation:** the review-panel prompt (#26) should require
+  the lens to *execute* the changed paths and to mutation-test new branches — mutation
+  is what proved two properties on #29 were unpinned despite tests that named them.
+
+- **The kit's own PR body drifted from its diff three times in one PR (severity: L).**
+  On #25 the body twice described a design the diff had already replaced, and twice
+  carried a stale test count; on #29 it asserted an anchored-match property that no test
+  pinned. Each was caught by a review pass rather than by the author. Same root as the
+  stale-comment class the kit already knows about, but on a surface nobody re-reads.
+  Cheap mitigation: have `wrap-up`/`pr-watch` re-read the PR body against `git log` before
+  recording the review receipt.
+
+- **The cockpit bundled wrap-up narrative edits into a lane branch, and only the hook caught it (severity: L, but the guard worked).**
+  While waiting on CI for PR #29 I updated `kit-handoff.md` and `kit-friction-log.md`, then
+  `git add -A` swept them into the lane commit. `pre-push` refused, named both files, and
+  said where the lane's handoff belongs instead. Recording it because it is the **positive**
+  case this log rarely captures: a fail-closed guard firing on its author, with a message
+  that made the fix obvious. Worth keeping in mind when weighing whether a guard is worth
+  its friction — this one cost ten seconds and prevented a narrative-file conflict with the
+  wrap-up PR. No change proposed.
