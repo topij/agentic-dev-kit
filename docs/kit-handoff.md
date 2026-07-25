@@ -14,10 +14,76 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-25 — Phase 3b shipped: the queued-vs-unavailable ambiguity is
-closed on both surfaces, and the receipt now says what it does *not* cover.
+Last updated: 2026-07-26 — the fallback review is a panel, and the attempt to make
+its claim machine-verifiable was built four times and then deleted.
 
-## Latest session — 2026-07-25 (Phase 3b)
+## Latest session — 2026-07-26 (#26, overnight)
+
+**Theme —** Built `review.fallback_panel`, then spent four rounds trying to make the
+receipt's coverage claim verifiable *by the engine*, then deleted all of it. The
+deletion is the result, not the failure.
+
+- **#31 merged, closing #26.** `review.fallback_panel` is the primary substitute when
+  a bot can't review: one isolated, fresh-context reviewer per lens.
+  `fallback_commands` stays as the explicitly degraded one-lens mode. The lens
+  *contract* — fresh context, raw diff, no author framing, execute rather than only
+  read, mutation-test, report-don't-fix — is the part worth having written down, and
+  lives in the new kit-owned `docs/agentic-dev-kit/fallback-review-panel.md`.
+- **`pr_followup_hook` now names the panel.** It fires on every `gh pr create`/`ready`,
+  which made it the most-read statement of fallback policy in the kit — and it was
+  advertising the degraded mode.
+- **#32 filed** — the design that would actually verify coverage (each lens recording
+  its own receipt from its own context), with all four defeats written up.
+
+**Decided**
+
+- **Four tightenings of a matcher is the signal to delete it.** `safety-critical-
+  changes.md` rule 1 says treat "we tightened the matcher" as a stopgap. I tightened
+  it four times — source equality, lens names, a required roster, a counted roster —
+  and each was defeated by the next round, the last by one decorated character in a
+  field the caller writes themselves. What ships records the claim and labels it a
+  claim.
+- **Report, never gate — now for a third field.** `--lenses` joins `signal`,
+  `bot_signal` and `coverage`. All four make an omission legible; none blocks.
+
+**Learned**
+
+- **Mutation testing this repo reports FALSE KILLS.** `kit_doctor`'s self-check
+  rehashes every kit-owned file, so any byte change fails it — a run can report 100%
+  killed while nothing behavioural caught anything. One lens's first pass reported
+  17/17; excluded, 7 had survived. Verified directly. **This invalidates mutation
+  results from earlier rounds this session**, including some I cited as evidence.
+  Contract item 5 now warns about it; anything relying on "N mutants died" from
+  2026-07-25 should be re-checked.
+- **Two review lenses in one working tree corrupt each other.** One mutates files to
+  test them; the other reads that as external corruption and `git checkout --`s it.
+  Stopping one left a live mutant behind that silently disabled a guard. Contract
+  item 7: isolated worktrees.
+- **Deleting a check can reintroduce a bug it was masking.** The roster check was the
+  only thing catching comma-as-punctuation in `--lenses`; removing it brought back the
+  exact forgery the commit before it claimed to block, plus an honest input
+  misrendering.
+- **A silent `str.replace()` no-op let me assert a fix that never landed** — twice.
+  Every substitution in this session's later rounds reports MISS rather than passing
+  quietly.
+
+**Open, and owned by nothing yet**
+
+- **#32** — verifying lens coverage rather than self-reporting it. The honest version
+  of what #31 tried.
+- **Adopter upgrades are written but not run.** `~/Documents/openkitchen-devkit-upgrade.md`
+  and `~/Documents/cs-toolkit-devkit-adoption.md`. Held at the operator's request until
+  #31 landed — it has now landed, so both are unblocked.
+
+▶ Next: **run the OpenKitchen upgrade** (`~/Documents/openkitchen-devkit-upgrade.md`).
+It is a real adopter on a pre-#8 install that cannot migrate its own config until
+`init.sh` and `kitconfig.py` are copied in, and its pre-push hook is not installed.
+cs-toolkit is the larger job — an *adoption*, not an upgrade, plus a fixer change from
+`done` to `converged` that will otherwise wedge an unattended nightly loop.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-25 (Phase 3b)
 
 **Theme —** Fixed #19 + #23 together, and then spent most of the session discovering
 that **the fix rounds were more dangerous than the original diff**. Seven review rounds
