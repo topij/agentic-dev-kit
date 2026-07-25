@@ -86,9 +86,12 @@ review:
   # review waiver; select the current runtime's substitute pass instead.
   # Also read by pr_watch.py to identify which status checks and comment authors
   # belong to a reviewer, so its outage/pending state can reach the merge gate.
-  # Matched as a case-insensitive SUBSTRING of a check name or comment author —
-  # `coderabbit` covers the check `CodeRabbit` and the author `coderabbitai` —
-  # so keep entries specific enough not to collide with a CI job name.
+  # Matched case-insensitively: as a SUBSTRING of a check name (your own CI and
+  # bot config, so `Review / CodeRabbit` still matches), and as a PREFIX of a
+  # comment author (anyone may comment on a public PR, and `xcoderabbit` must
+  # not be able to speak for the reviewer). `coderabbit` covers the check
+  # `CodeRabbit` and the author `coderabbitai` either way. Keep entries specific
+  # enough not to collide with a CI job name.
   bots: [coderabbit]
   fallback_commands:
     claude: "/code-review"

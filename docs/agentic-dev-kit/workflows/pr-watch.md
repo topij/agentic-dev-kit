@@ -166,8 +166,9 @@ Self-pace on a bounded cadence — don't busy-wait:
     arrive. CodeRabbit's pending check reports no usable timestamp
     (`0001-01-01T00:00:00Z`), so the grace clock falls back to when *this engine*
     first saw the bot pending — persisted per PR under `bot_pending_since`, scoped
-    to the head, and reset by a push. It only ever advances, so the block always
-    expires on its own.
+    to the head, and reset by a push. A stored value the engine cannot read — or
+    one dated in the future — is replaced rather than trusted, so the window stays
+    bounded whatever wrote the state file.
 
   None of this reaches `converged`. That is deliberate and load-bearing: the watch
   loop must be able to finish while a bot that never reports sits pending forever.
@@ -181,8 +182,10 @@ Self-pace on a bounded cadence — don't busy-wait:
     a poll or two before recording one.
   - `review_bots.signal` is `ok` / `skipped` (no bots configured) / `unavailable`
     (the check read failed — e.g. a `gh` too old for the requested `--json`
-    fields). On `unavailable` **both guards are off**; it's reported rather than
-    blocking, because an environment problem shouldn't become a wedge.
+    fields, or a PR with no checks at all). On `unavailable` **both guards are
+    off**; it's reported rather than blocking, because an environment problem
+    shouldn't become a wedge — and a receipt recorded in that state carries a
+    `bot_signal` key so the audit trail shows the guard didn't run.
   - An *older* `pr_watch.py` polling the same PR drops the persisted grace clock,
     restarting the window. Merges wait longer; nothing fails open.
 - **Tune this for your own bot mix in `config/dev-model.yaml`, never in the engine.**
@@ -192,10 +195,12 @@ Self-pace on a bounded cadence — don't busy-wait:
   `review.bots` and `review.informational_checks` ship with the *same* value and
   different jobs: the latter is a blocking policy ("this check never blocks the
   watch loop"), the former an identity ("this check belongs to a reviewer whose
-  state the merge gate cares about"). Bot names match as a case-insensitive
-  substring of a check name or comment author, so `coderabbit` covers the check
-  `CodeRabbit` and the author `coderabbitai` — keep entries specific enough not to
-  collide with a CI job name. Editing the literals inside
+  state the merge gate cares about"). Bot names match case-insensitively: as a
+  **substring** of a check name (your own CI and bot config) and as a **prefix**
+  of a comment author (anyone may comment on a public PR, so `xcoderabbit` must
+  not be able to speak for the reviewer). `coderabbit` covers the check
+  `CodeRabbit` and the author `coderabbitai` either way — keep entries specific
+  enough not to collide with a CI job name. Editing the literals inside
   `<engine-dir>/pr_watch.py` forks the engine and turns every later kit update into
   a merge conflict. A key you omit keeps the kit default; an explicit empty list
   (`noise_markers: []`) means "filter nothing".

@@ -82,16 +82,18 @@ def _strip_comment(value: str) -> str:
     return value
 
 
-# YAML 1.1's float form, minus the `.nan` / `.inf` special cases (see _coerce).
-# The exponent's `[-+]` is REQUIRED, matching PyYAML: `1.0e+3` is a float there,
-# `1.0e3` is a string.
+# Transcribed from PyYAML's own float resolver, not approximated from it — the
+# sign rules are asymmetric in a way no reasonable guess reproduces:
+#   - the exponent's [-+] is REQUIRED  (`1.0e+3` is a float, `1.0e3` a string)
+#   - a leading sign is allowed on `digits.digits` but NOT on `.digits`
+#     (`-0.5` is a float, `-.5` a string)
+#   - `_` is a digit separator anywhere in the mantissa (`1_0.5` -> 10.5)
+# Omits PyYAML's `.inf` / `.nan` / sexagesimal (`1:30.0`) branches — see _coerce.
 _YAML_FLOAT_RE = re.compile(
-    r"""^[-+]?          # optional sign
-        (?: [0-9]+\.[0-9]*   # 1.  /  1.5
-          | \.[0-9]+         # .5
-        )
-        (?: [eE][-+][0-9]+ )?   # optional, SIGNED exponent
-        $""",
+    r"""^(?:
+          [-+]? [0-9][0-9_]* \. [0-9_]*  (?:[eE][-+][0-9]+)?   # 1.  1.5  -0.5  1_0.5
+        |        \.          [0-9][0-9_]* (?:[eE][-+][0-9]+)?  # .5   (unsigned only)
+        )$""",
     re.VERBOSE,
 )
 
@@ -120,14 +122,14 @@ def _coerce(raw: str) -> Any:
     # "1.0e3", and matching that exactly is the whole point of using its rule
     # instead of an approximation of it.
     #
-    # Three known, deliberate gaps remain, all pinned by the parity test:
-    # `.nan`, `.inf`/`-.inf`, and YAML 1.1's underscore digit separators
-    # (`1_0.5` → 10.5 in PyYAML, a string here). None is meaningful as a config
-    # value in this kit, and supporting them would mean carrying YAML's
-    # special-form table for no adopter benefit.
+    # Two known, deliberate gaps remain, both pinned by the parity test: YAML
+    # 1.1's `.inf` / `.nan` special forms, and its sexagesimal floats (`1:30.0`
+    # → 90.0). Neither is meaningful as a config value in this kit, and
+    # supporting them would mean carrying YAML's special-form table for no
+    # adopter benefit.
     if _YAML_FLOAT_RE.match(text):
         try:
-            return float(text)
+            return float(text.replace("_", ""))  # `_` is a YAML digit separator
         except ValueError:  # pragma: no cover — the pattern already guarantees this
             return text
     return text

@@ -1254,6 +1254,71 @@ def test_record_review_allows_the_fallback_when_the_bot_is_unavailable(
     assert "override" not in recorded[0]["review_receipt"]
 
 
+def test_a_future_dated_clock_is_replaced_rather_than_clamped() -> None:
+    """The incomplete half of the poison-clock fix.
+
+    An unparseable value is replaced, but a future-dated one is perfectly
+    *parseable* — so it survived, got clamped to age 0 by `max(0.0, …)`, and was
+    re-persisted verbatim. The block then lasted until real time caught up with
+    the stamp: a state file copied between machines, or a VM clock that ran ahead
+    and was NTP-corrected back, could hold the merge gate for days.
+    """
+    pr_watch = _load_pr_watch()
+    zero_time = [
+        _bot_check(state="PENDING", bucket="pending", startedAt="0001-01-01T00:00:00Z")
+    ]
+    far_future = (NOW + timedelta(days=30)).isoformat()
+
+    status = pr_watch.summarize_review_bots(
+        zero_time, [], now=NOW, pending_since={"coderabbit": far_future}
+    )
+
+    assert status["pending_since"]["coderabbit"] == NOW.isoformat()
+    assert status["blockers"] != []
+    # …and it ages out on our clock, in minutes rather than in a month.
+    later = pr_watch.summarize_review_bots(
+        zero_time,
+        [],
+        now=NOW + timedelta(minutes=20),
+        pending_since=status["pending_since"],
+    )
+    assert later["blockers"] == []
+
+    # Small skew stays tolerated — a check GitHub stamped a few seconds ahead of
+    # our clock is normal and must not be thrown away as corruption.
+    skewed = (NOW + timedelta(seconds=30)).isoformat()
+    assert pr_watch._age_minutes(skewed, NOW) == 0.0
+
+
+def test_a_failed_check_read_is_recorded_on_the_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The silent bypass, and the worse of the two.
+
+    When the check read fails there are no blockers to raise, so the receipt is
+    taken with the #19 guard simply switched off. Recording the deliberate
+    override but not this would leave the intentional escape auditable and the
+    accidental one invisible.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch, "_gh_json", lambda args: {"number": 9, "headRefOid": "abc123"}
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_check_details",
+        lambda pr, **kw: pr_watch.CheckDetails([], "unavailable"),
+    )
+    recorded: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+
+    report = pr_watch.record_review(9, "fallback:panel", "abc123", now=NOW)
+
+    assert recorded[0]["review_receipt"]["bot_signal"] == "unavailable"
+    assert "guard did not run" in pr_watch.render_record_review(report)
+
+
 def test_the_override_is_recorded_on_the_receipt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

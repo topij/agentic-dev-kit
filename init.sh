@@ -188,6 +188,31 @@ append_to_section() {
   rm -f "$blockfile"
 }
 
+# The 1-based line range [start end] of a top-level section's body, or "0 0" if
+# the section is absent. A section runs from its header to the next line that
+# starts in column 1 with a key.
+#
+# These two helpers exist because every whole-file `grep '^  key:'` in a
+# migration is a latent bug in two directions at once: it misses the key when
+# the adopter's file uses a different indent, and it MATCHES a same-named key
+# under an unrelated section. Both were shipped and both were caught in review.
+section_range() {
+  awk -v section="$1" '
+    index($0, section) == 1 && $0 ~ /^[A-Za-z_]/ { inside = 1; start = NR; next }
+    inside && /^[A-Za-z_][A-Za-z0-9_]*:/ { print start + 1, NR - 1; found = 1; exit }
+    END { if (!found) print (inside ? start + 1 : 0), (inside ? NR : 0) }
+  ' "$2"
+}
+
+# The body lines of a top-level section (empty when absent).
+section_lines() {
+  range=$(section_range "$1" "$2")
+  start=${range% *}
+  end=${range#* }
+  [ "$start" -gt 0 ] || return 0
+  awk -v s="$start" -v e="$end" 'NR >= s && NR <= e' "$2"
+}
+
 # Migrate the original single-runtime schema in place. Re-running init.sh is
 # documented as idempotent; silently leaving an old config without these keys
 # would make the new runtime-aware launchers appear bootstrapped while falling
@@ -316,45 +341,75 @@ migrate_kit_schema() {
     echo "added review.bot_pending_grace_minutes to config/dev-model.yaml"
   fi
 
+  # `review.bots` became load-bearing for the merge gate in the same change:
+  # pr_watch reads it to decide which checks and comment authors belong to a
+  # reviewer. The interactive prompt later only REWRITES an existing line, so a
+  # `review:` section predating the key would silently fall through to the
+  # engine default — benign while the default matches, dangerous for an adopter
+  # whose reviewer is not CodeRabbit.
+  #
+  # Scoped to the review SECTION, at any indent. A `^  bots:` guard would both
+  # miss a 4-space-indented `review:` block (appending a duplicate at 2 spaces,
+  # which the reader resolves last-key-wins — silently dropping the adopter's
+  # real value) and be satisfied by an unrelated `bots:` under another section.
+  if [ -z "$(section_lines review: "$CONFIG_FILE" | grep -E '^[[:space:]]+bots:')" ]; then
+    append_to_section "review:" '  bots: [coderabbit]'
+    if [ -n "$(section_lines review: "$CONFIG_FILE" | grep -E '^[[:space:]]+bots:')" ]; then
+      echo "added review.bots to config/dev-model.yaml"
+    else
+      echo "WARNING: could not add review.bots to $CONFIG_FILE — add it by hand," >&2
+      echo "         or pr_watch will assume your review bot is CodeRabbit." >&2
+    fi
+  fi
+
   # The status-check wording of the same rate-limit outage. Added separately for
   # the same reason: an adopter migrated before it existed keeps their list.
-  # Anchored on the FIRST entry under unavailable_markers rather than on a
-  # specific marker text, which an adopter is free to have edited away. If the
-  # anchor is still missed, SAY SO — a migration that silently no-ops is
-  # indistinguishable from one that ran, and that class of failure has already
-  # cost this repo three bugs in one session.
-  # The idempotency check is scoped to the unavailable_markers BLOCK, not the
-  # whole file: a whole-file grep also matches the phrase in a noise_markers
-  # entry or an adopter's own comment, and would then skip both the migration
-  # AND its warning — a silent no-op, the class this whole block guards against.
-  existing_markers=$(awk '
-    /^  unavailable_markers:/ { in_list = 1; print; next }
-    in_list == 1 && $0 ~ /^[[:space:]]+- / { print; next }
+  #
+  # EVERYTHING here is scoped to the review section and warns on any path it
+  # cannot complete. Both properties are load-bearing and both were got wrong
+  # first time: a whole-file idempotency grep matches the phrase in a
+  # `noise_markers` entry and skips the migration AND its warning; a whole-file
+  # key anchor happily inserts the marker into a same-named list under a
+  # different section, then reports success. A migration that silently no-ops is
+  # indistinguishable from one that ran, and one that silently writes to the
+  # wrong place is worse.
+  markers_block=$(section_lines review: "$CONFIG_FILE" | awk '
+    /^[[:space:]]+unavailable_markers:/ { in_list = 1; print; next }
+    # Comments and blank lines do NOT end the list — treating them as the end
+    # truncates the idempotency view, which re-inserts a marker that is already
+    # there a few lines further down.
+    in_list == 1 && ($0 ~ /^[[:space:]]+- / || $0 ~ /^[[:space:]]*(#.*)?$/) { print; next }
     in_list == 1 { exit }
-  ' "$CONFIG_FILE")
+  ')
 
-  if grep -q '^  unavailable_markers:' "$CONFIG_FILE" \
-     && ! printf '%s\n' "$existing_markers" | grep -qi 'review rate limited'; then
-    # Two shapes are unsafe to append to, and both are valid YAML the config
-    # reader accepts:
+  if [ -n "$markers_block" ] \
+     && ! printf '%s\n' "$markers_block" | grep -qi 'review rate limited'; then
+    # Two list shapes are unsafe to append to, and both are valid YAML the
+    # config reader accepts:
     #   - an inline flow list (`unavailable_markers: ["a", "b"]`) — appending a
     #     `- ` line under it yields a key with both a scalar value and children
-    #   - a block list whose dashes sit at the KEY's indent (what several YAML
-    #     formatters emit) — inserting at a deeper indent silently orphans every
-    #     original entry, which the post-condition grep would still pass
+    #   - a block list whose dashes sit at the KEY's own indent (what several
+    #     YAML formatters emit) — inserting at a deeper indent silently orphans
+    #     every original entry, and the marker-present post-condition still passes
     # So: require a bare key line, and reuse the indent of the list's own first
     # item rather than assuming one.
-    item_indent=$(printf '%s\n' "$existing_markers" | awk 'NR > 1 { sub(/-.*/, ""); print; exit }')
-    if grep -qE '^  unavailable_markers:[[:space:]]*(#.*)?$' "$CONFIG_FILE" \
+    key_line=$(printf '%s\n' "$markers_block" | head -n 1)
+    item_indent=$(printf '%s\n' "$markers_block" \
+      | awk 'NR > 1 && /^[[:space:]]+- / { sub(/-.*/, ""); print; exit }')
+    if printf '%s\n' "$key_line" | grep -qE '^[[:space:]]+unavailable_markers:[[:space:]]*(#.*)?$' \
        && [ -n "$item_indent" ]; then
       tmp="$CONFIG_FILE.tmp.$$"
-      awk -v indent="$item_indent" '
+      # `start`/`end` bound the edit to the review section's line range, so a
+      # same-named key elsewhere in the file cannot be targeted by mistake.
+      awk -v indent="$item_indent" \
+          -v start="$(section_range review: "$CONFIG_FILE" | cut -d' ' -f1)" \
+          -v end="$(section_range review: "$CONFIG_FILE" | cut -d' ' -f2)" '
         inserted == 0 && in_list == 1 && $0 !~ /^[[:space:]]+- / {
           print indent "- \"review rate limited\"       # status-check wording of \"review limit reached\""
           inserted = 1
           in_list = 0
         }
-        /^  unavailable_markers:/ { in_list = 1 }
+        NR >= start && NR <= end && /^[[:space:]]+unavailable_markers:/ { in_list = 1 }
         { print }
         END {
           if (inserted == 0 && in_list == 1)
@@ -363,11 +418,13 @@ migrate_kit_schema() {
       ' "$CONFIG_FILE" > "$tmp"
       # Post-conditions, not a trusted exit code. The marker is inserted EARLY,
       # so "the marker is present" alone would also accept a file truncated
-      # mid-write (disk full, signal) — hence the line count must be exactly one
-      # more than the original. A migration that silently corrupts is worse than
-      # one that silently no-ops, and this repo has already paid for both.
-      if grep -qi 'review rate limited' "$tmp" \
-         && [ "$(wc -l < "$tmp")" -eq "$(( $(wc -l < "$CONFIG_FILE") + 1 ))" ]; then
+      # mid-write (disk full, signal) — hence the record count must be exactly
+      # one more than the original. `awk END{print NR}` rather than `wc -l` so a
+      # file with no trailing newline is counted the same way on both sides.
+      before=$(awk 'END { print NR }' "$CONFIG_FILE")
+      after=$(awk 'END { print NR }' "$tmp")
+      if printf '%s\n' "$(section_lines review: "$tmp")" | grep -qi 'review rate limited' \
+         && [ "$after" -eq "$(( before + 1 ))" ]; then
         mv "$tmp" "$CONFIG_FILE"
         echo "added the status-check rate-limit marker to config/dev-model.yaml"
         rate_limit_marker_added=1
@@ -380,17 +437,12 @@ migrate_kit_schema() {
       echo "         in $CONFIG_FILE — add it by hand, or a rate-limited review bot that reports" >&2
       echo "         the outage only as a status-check description will read as a clean review." >&2
     fi
-  fi
-
-  # `review.bots` became load-bearing for the merge gate in the same change:
-  # pr_watch reads it to decide which checks and comment authors belong to a
-  # reviewer. The interactive prompt below only REWRITES an existing line, so a
-  # `review:` section predating the key would silently fall through to the
-  # engine default. Benign while the default matches, but that is the same
-  # silent-no-op shape as the bugs above.
-  if ! grep -q '^  bots:' "$CONFIG_FILE"; then
-    append_to_section "review:" '  bots: [coderabbit]'
-    echo "added review.bots to config/dev-model.yaml"
+  elif [ -z "$markers_block" ]; then
+    # No unavailable_markers under review: at all. The engine default applies,
+    # which already contains the marker — but say so rather than staying silent,
+    # since "absent" and "present and migrated" are indistinguishable otherwise.
+    echo "note: review.unavailable_markers is absent from $CONFIG_FILE;" >&2
+    echo "      pr_watch's built-in defaults apply (they include the new marker)." >&2
   fi
 }
 

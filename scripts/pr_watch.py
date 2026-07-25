@@ -241,8 +241,9 @@ _DEFAULT_INFORMATIONAL_CHECK_NAMES = ("coderabbit",)
 # about"). Keeping them separate is what lets a bot's check stay non-blocking
 # for `converged` while its state still informs the merge gate — the exact
 # split issues #19 and #23 need. Matched as a case-insensitive SUBSTRING of a
-# check name or comment author, so `coderabbit` covers the check `CodeRabbit`
-# and the author `coderabbitai`; keep entries specific enough not to collide
+# check name, and as a case-insensitive PREFIX of a comment author (that input
+# is not the repo's to control) — so `coderabbit` covers the check `CodeRabbit`
+# and the author `coderabbitai`. Keep entries specific enough not to collide
 # with a CI job name.
 _DEFAULT_REVIEW_BOTS = ("coderabbit",)
 
@@ -832,6 +833,13 @@ def _check_is_pending(detail: dict) -> bool:
     return (detail.get("state") or "").strip().upper() not in _TERMINAL_CHECK_STATES
 
 
+# How far ahead of `now` a timestamp may sit and still be believed. Small skew
+# between GitHub's clock and ours is normal on a just-created check; a value
+# genuinely in the future is not a clock, it is corruption — and one that
+# `max(0.0, …)` would clamp to age 0 forever while re-persisting itself.
+_FUTURE_SKEW_TOLERANCE_MINUTES = 2.0
+
+
 def _age_minutes(timestamp: str | None, now: datetime) -> float | None:
     """Minutes between ``timestamp`` (ISO 8601) and ``now``; ``None`` if unusable.
 
@@ -851,7 +859,15 @@ def _age_minutes(timestamp: str | None, now: datetime) -> float | None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     if parsed.year < 2000:
         return None
-    return max(0.0, (now - parsed).total_seconds() / 60.0)
+    age = (now - parsed).total_seconds() / 60.0
+    if age < -_FUTURE_SKEW_TOLERANCE_MINUTES:
+        # Meaningfully in the future: unusable, NOT age 0. Clamping it would pin
+        # the grace clock at its most-blocking value while the caller re-persists
+        # the same future stamp every poll — the block would then last until real
+        # time caught up with it. Reachable from a state file copied between
+        # machines, or a VM clock that ran ahead and was then NTP-corrected.
+        return None
+    return max(0.0, age)
 
 
 def summarize_review_bots(
@@ -1043,7 +1059,9 @@ def summarize_review_bots(
         entry["blocking"] = True
         blockers.append(
             f"review bot {entry['bot']} has not reported yet "
-            f"(check {entry['check']} pending {entry['age_minutes']}m "
+            # The exact age, not the display-rounded one: `pending 15.0m < 15m
+            # grace` is a true statement rendered as a self-contradiction.
+            f"(check {entry['check']} pending {exact_age:.2f}m "
             f"< {grace_minutes:g}m grace)"
         )
 
@@ -1278,12 +1296,15 @@ def record_review(
     judgment the doctrine asks for — *is this bot unavailable, or merely slow?* —
     is made right here, so this is where it gets mechanized.
 
-    It refuses only for a bot that is genuinely mid-review: an announced outage
-    (either surface) means "not coming" and is allowed straight through to the
-    fallback, and a check pending past the grace window ages out of blocking. See
-    :func:`summarize_review_bots`. ``allow_pending_bot`` is the operator's
-    documented override for the remaining case — evidence the queued review will
-    never arrive that pr_watch cannot see.
+    It refuses only for a bot that is genuinely mid-review. An outage announced
+    on the bot's own **check** means "not coming" and goes straight through to
+    the fallback; a check pending past the grace window ages out of blocking. An
+    outage announced only in a *comment* does NOT clear the refusal — comments
+    are unscoped PR history, so a stale one would wave through a live review (see
+    :func:`summarize_review_bots`) — but the grace window bounds that wait to
+    minutes. ``allow_pending_bot`` is the operator's documented override for the
+    remaining case: evidence the queued review will never arrive that pr_watch
+    cannot see. It is recorded on the receipt, as is a failed check read.
     """
     source = source.strip()
     if not source:
@@ -1302,6 +1323,9 @@ def record_review(
         )
     now = now or datetime.now(timezone.utc)
     state = load_state(pr)
+    # Stays "ok" under an explicit override: `override` already records that the
+    # bot state was deliberately not consulted, so a second key would be noise.
+    bot_signal = "ok"
     if not allow_pending_bot:
         # Checks only. Comments cannot cancel a pending block (see
         # :func:`summarize_review_bots`), so fetching them here would cost a
@@ -1315,6 +1339,7 @@ def record_review(
             pending_since=read_pending_since(state, current_head),
             signal=details.signal,
         )
+        bot_signal = bot_status["signal"]
         if bot_status["blockers"]:
             # Persist the first sighting BEFORE refusing. Without this, a cold
             # `--record-review` (no poll loop running) restarts the grace clock
@@ -1338,6 +1363,15 @@ def record_review(
         # trace. Without it, a receipt taken over an active override is
         # indistinguishable from one taken after a clean bot verdict.
         receipt["override"] = "pending-bot"
+    if bot_signal != "ok":
+        # The SILENT bypass, and the worse of the two: when the check read fails
+        # there are no blockers to raise, so the receipt is taken with the #19
+        # guard simply switched off. Recording an explicit override but not this
+        # would leave the deliberate escape auditable and the accidental one
+        # invisible. Not a refusal — a `gh` too old for these fields, or a PR
+        # with no checks at all, is an environment problem, and refusing would
+        # turn it into a wedge with no way out but the override flag.
+        receipt["bot_signal"] = bot_signal
     state["review_receipt"] = receipt
     save_state(pr, state)
     return {"pr": pr, "recorded_review": True, "review_receipt": receipt}
@@ -1596,10 +1630,21 @@ def render(report: dict) -> str:
 
 def render_record_review(report: dict) -> str:
     receipt = report["review_receipt"]
-    return (
+    lines = [
         f"PR #{report['pr']} — recorded independent review from "
         f"{receipt['source']} for head {receipt['head']}"
-    )
+    ]
+    if receipt.get("override"):
+        lines.append(
+            f"  ⚠ recorded over an active override ({receipt['override']}) — a "
+            "configured review bot had not reported yet"
+        )
+    if receipt.get("bot_signal"):
+        lines.append(
+            f"  ⚠ review-bot state was unreadable ({receipt['bot_signal']}) when this "
+            "receipt was taken — the queued-reviewer guard did not run"
+        )
+    return "\n".join(lines)
 
 
 def render_mark_seen(report: dict) -> str:

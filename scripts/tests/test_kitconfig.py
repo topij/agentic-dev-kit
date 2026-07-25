@@ -64,31 +64,40 @@ top:
     assert parsed["top"]["nested"]["deeper"]["leaf"] == "found"
 
 
-# Every scalar form where "is this a float?" is a judgement call, plus the three
+# Every scalar form where "is this a float?" is a judgement call, plus the
 # known-and-deliberate divergences. Kept as one list so the parity check below
 # cannot quietly cover a smaller set than the type assertions do.
 _FLOAT_EDGE_CASES = (
-    "2.5", "15", "-0.5", "+1.5", ".5", "1.",
+    "2.5", "15", "1.", "0.0", "-0.0",
+    "-0.5", "+1.5",   # sign IS allowed on the digits.digits form
+    ".5", "-.5", "+.5",  # …and is NOT allowed on the .digits form
     "1.0e+3",   # signed exponent — a float in YAML 1.1
-    "1.0e3", "1.0E3", "1.5e3",  # UNSIGNED exponent — a string in YAML 1.1
-    "nan", "inf", "1e5", "1.2.3",  # things bare float() would swallow
+    "1.0e3", "1.0E3", "1.5e3", "-.5e+3",  # UNSIGNED exponent — a string
+    "1_0.5", "._5",  # `_` is a digit separator, but not in the leading position
+    "nan", "inf", "1e5", "1.2.3",  # things a bare float() would swallow
 )
 _KNOWN_PYYAML_DIVERGENCES = {
     ".nan": "float nan in PyYAML; string here",
     ".inf": "float inf in PyYAML; string here",
     "-.inf": "float -inf in PyYAML; string here",
-    "1_0.5": "10.5 in PyYAML (YAML 1.1 digit separators); string here",
+    "1:30.0": "90.0 in PyYAML (YAML 1.1 sexagesimal); string here",
 }
 
 
-def test_decimal_scalars_match_pyyaml_except_three_documented_forms():
+def test_decimal_scalars_match_pyyaml_except_the_documented_forms():
     """Floats are resolved by YAML 1.1's rule, not by handing text to `float()`.
 
     `float()` accepts `nan`, `inf` and `1e5`, all of which PyYAML resolves as
     strings — so the loose version would trade one divergence from the parity
-    invariant for three more. The signed exponent is the subtle half: PyYAML
-    reads `1.0e+3` as 1000.0 and `1.0e3` as a string, and matching that exactly
-    is why the rule is copied rather than approximated.
+    invariant for three more.
+
+    The sign rules are the subtle half, and they are asymmetric in a way no
+    reasonable guess reproduces: the exponent's sign is REQUIRED (`1.0e+3` is a
+    float, `1.0e3` a string), and a leading sign is allowed on `digits.digits`
+    but not on `.digits` (`-0.5` is a float, `-.5` a string). That is why the
+    pattern is transcribed from PyYAML's resolver rather than approximated —
+    an earlier version hoisted the sign out of the alternation and silently
+    diverged on all three of `+.5`, `-.5`, `-.5e+3`.
 
     Parity is asserted over the whole edge-case list rather than a couple of
     hand-picked values, and the known divergences are pinned as divergences — so
