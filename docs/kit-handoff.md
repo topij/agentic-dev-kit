@@ -21,7 +21,7 @@ closed on both surfaces, and the receipt now says what it does *not* cover.
 
 **Theme —** Fixed #19 + #23 together, and then spent most of the session discovering
 that **the fix rounds were more dangerous than the original diff**. Seven review rounds
-on one PR; every one found something real; three of them found a defect introduced by
+on #25 alone; every one found something real; five of them found a defect introduced by
 the previous round's fix.
 
 - **#25 merged — #19 and #23 closed.** `summarize_review_bots` resolves each configured
@@ -50,32 +50,40 @@ the previous round's fix.
   `coverage`) make an omission legible at merge time and block nothing. The faithful
   version of each risks wedging a repo whose bot is permanently unavailable.
 - **Stop patching a mechanism that keeps corrupting.** The `init.sh` marker migration
-  produced four distinct config corruptions across four rounds, each while its own
-  post-conditions passed and it printed success. It was deleted, not fixed a fifth time;
+  produced **three** distinct config corruptions across three rounds, each while its own
+  post-conditions passed and it printed success (the fourth round's finding was about
+  the *replacement message*, not the surgery). It was deleted rather than patched again;
   `init.sh` now detects the gap and prints what to add.
 
 **Learned**
 
-- **A fix round on gate logic is where the next bug comes from.** Across #25 and #29,
-  **eleven review rounds, ten with findings** — and five of those findings were defects
-  introduced by the *previous round's fix*, twice at HIGH. #25 never produced a clean
-  pass; #29 produced one on the fourth attempt. `safety-critical-changes.md` rule 3
-  already says to treat "the last round found nothing" as provisional; this is the first
-  session with enough rounds to show it is not a caution but the base rate.
+- **A fix round on gate logic is where the next bug comes from.** Session-wide:
+  **13 review rounds across #25, #28 and #29 — all 13 found something.** Seven of those
+  findings were defects introduced by the *previous round's fix* (five on #25, two on
+  #29), twice at HIGH. **No round on any PR came back empty**; #29's fourth pass found
+  no HIGH or MEDIUM but still found four LOW, including a stale comment and a dead-
+  argument trap. `safety-critical-changes.md` rule 3 already says to treat "the last
+  round found nothing" as provisional — this session never reached that state at all,
+  so the practical question is not when the findings stop but what blast radius
+  justifies stopping anyway.
 - **Stopping has to be calibrated to the blast radius, not the round count.** #25 was a
   merge gate — worst case, an unreviewed PR lands. #29 is a reported-never-gating display
   field — worst case, a wrong warning. Same review doctrine, different stopping points,
   and saying which one applies is part of the merge decision. The `never gates` property
-  is what made that judgment available, and it was proved (126 report pairs, zero drift
-  in `converged`/`mergeable`/`done`), not assumed.
+  is what made that judgment available, and it was *proved* rather than assumed — by a
+  review pass sweeping report shapes ad hoc, and in-repo by
+  `test_review_coverage_is_reported_and_never_gates` plus the 32-combination matrix in
+  `test_done_keeps_its_original_merge_authorization_semantics`.
 - **Reading is not running.** Three defects were invisible to careful reading and obvious
   on execution — most sharply, CodeRabbit's pending check reports the zero timestamp, so
   the "unmeasurable age fails open" branch was not an edge case but the *only* path that
   bot ever took. The #19 guard was dead code for its own target, and only polling the
   live PR showed it.
-- **Mutation testing found what test names asserted and test bodies didn't.** Two
-  properties on #29 — anchored author matching, and newest-review-per-bot — were named in
-  tests, claimed in the PR body, and pinned by nothing.
+- **Mutation testing found what test names asserted and test bodies didn't.** Five
+  properties across the session were named in tests or claimed in a PR body and pinned by
+  nothing: on #29, anchored author matching, newest-review-per-bot, and the `bots=`
+  threading; on #25, the `init.sh` list-style branch and `grep -qi`'s case-insensitivity.
+  Each was found by breaking the code and watching the suite still pass.
 - **Every whole-file `grep '^  key:'` in a config migration is a bug in two directions**
   — it misses the key at another indent *and* matches a same-named key under an unrelated
   section. This change shipped one of each.
@@ -88,16 +96,19 @@ the previous round's fix.
 - **#27's other half** — invalidating a receipt when the diff changes *shape*, not just
   when the head moves. The cheap half (visibility) shipped; the faithful half runs into
   the same wedge tension as #19/#23.
-- **#26** — the fallback panel. This session ran it manually five times and it carried the
-  entire review load while CodeRabbit was rate-limited for most of the day. It is the
-  highest-value unbuilt thing in the tracker.
+- **#26** — the fallback panel. Run manually ~10 times this session (5 rounds on #25,
+  4 on #29, 1 on #28), two fresh-context lenses per round. CodeRabbit completed only 3
+  reviews across 17 pushed heads, so the panel carried most — not all — of the load; one
+  of its 3 was the round that caught the "ACTION NEEDED" bug. Highest-value unbuilt thing
+  in the tracker.
 
 ▶ Next: **#26** (make the fallback a panel spec). CodeRabbit was rate-limited on nearly
-every head all day, so the panel carried the entire review load — and it is still five
-manual subagent launches per round. Two things this session learned belong in its prompt:
+every head all day (3 completed reviews across 17 heads), so the panel carried most of
+the review load — and it is still two manual subagent launches per round, ~10 rounds this
+session. Two things this session learned belong in its prompt:
 require the lens to **execute** the changed paths (three defects were invisible to
 reading and obvious on running), and to **mutation-test** new branches (that is what
-proved four separate properties were named by tests and pinned by nothing).
+proved five separate properties were named by tests and pinned by nothing).
 
 ______________________________________________________________________
 

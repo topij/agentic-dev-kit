@@ -13,10 +13,15 @@
 
 ## 2026-07-25 — Backlog migrated to GitHub Issues
 
-The two H-severity entries above this line graduated to issues [#26](https://github.com/topij/agentic-dev-kit/issues/26)
-(fallback review needs to be a *panel*) and [#27](https://github.com/topij/agentic-dev-kit/issues/27)
-(a receipt survives a redesign its reviewer never saw). #27's cheap half shipped
-in PR #29; the issue stays open for the shape-change half.
+Two H-severity entries were **removed from this file** and filed as
+[#26](https://github.com/topij/agentic-dev-kit/issues/26) (fallback review needs to be a
+*panel*) and [#27](https://github.com/topij/agentic-dev-kit/issues/27) (a receipt
+survives a redesign its reviewer never saw). #27's cheap half shipped in PR #29; the
+issue stays open for the shape-change half.
+
+Also closed this session, so their inbox entries below are **done**, kept only for the
+trail: **#19** (premature receipt — closed by PR #25) and **#10** (lane-worktree gate
+failure — closed by PR #28).
 
 ## 2026-07-25 — inbox
 
@@ -42,16 +47,22 @@ in PR #29; the issue stays open for the shape-change half.
   incident.
 
 - **A fix round on gate logic is where the next bug comes from — every time (severity: M, pattern).**
-  Seven review rounds on PR #25. Every one found something real, and rounds 3, 4 and 6
-  each found a defect **introduced by the previous round's fix**: an incomplete
-  poison-clock fix that still wedged on a *parseable* future date; a section-scoping fix
-  applied to 1 of 3 guards in the same function; a replacement warning message that
-  walked inline-list adopters into the corruption the deleted mechanism used to cause.
-  `safety-critical-changes.md` rule 3 already says "treat 'the last round found nothing'
-  as provisional" — this is the first session with enough rounds to show *how strongly*
-  it holds. **Candidate graduation:** the rule currently reads as advice; it could state
-  a floor (re-review every fix round on a gate file, no exceptions) and note that fix
-  rounds are higher-risk than the original diff, not lower.
+  Seven review rounds on PR #25. Every one found something real, and **rounds 3 through 7
+  each found a defect introduced by the previous round's fix**: an incomplete poison-clock
+  fix that still wedged on a *parseable* future date (R3); a section-scoping fix applied
+  to 1 of 3 guards in the same function (R4); a replacement warning message that walked
+  inline-list adopters into the corruption the deleted mechanism used to cause (R5); a
+  style detection that missed a real flow spelling (R6); and a list spelling promoted to
+  "supported" that the kit's own reader cannot parse (R7). Session-wide: **13 rounds
+  across three PRs, all 13 with findings, 7 of them self-inflicted by the prior fix.**
+  `safety-critical-changes.md` rule 3 **already** says "Re-review after every fix round
+  until a full pass finds nothing new" and that "fix rounds on gate logic routinely
+  introduce their own regressions" — so the floor is written and was followed. What this
+  session adds is different, and is what should graduate: (a) a *base rate* — 13/13 rounds
+  with findings means "until a pass finds nothing new" may never terminate, so the rule
+  needs a stopping criterion it currently lacks; and (b) the criterion that actually got
+  used, which is **blast radius, not round count** — a merge gate and a
+  reported-never-gating display field cannot share a stopping point.
 
 - **Reading the code is not the same as running it, and the gap is not small (severity: M).**
   Three defects this session were invisible to careful reading and obvious on execution:
@@ -64,13 +75,17 @@ in PR #29; the issue stays open for the shape-change half.
   the lens to *execute* the changed paths and to mutation-test new branches — mutation
   is what proved two properties on #29 were unpinned despite tests that named them.
 
-- **The kit's own PR body drifted from its diff three times in one PR (severity: L).**
-  On #25 the body twice described a design the diff had already replaced, and twice
-  carried a stale test count; on #29 it asserted an anchored-match property that no test
-  pinned. Each was caught by a review pass rather than by the author. Same root as the
-  stale-comment class the kit already knows about, but on a surface nobody re-reads.
-  Cheap mitigation: have `wrap-up`/`pr-watch` re-read the PR body against `git log` before
-  recording the review receipt.
+- **Narrative surfaces drift from the diff, and nobody re-reads them (severity: M).**
+  #25's PR body needed three corrections (a stale test count, and two descriptions of a
+  design the diff had replaced); #29's asserted an anchored-match property no test pinned;
+  and **this very wrap-up** was fact-checked and came back with 13 issues, three of them
+  HIGH — including a number that a review round on #25 had *explicitly corrected*
+  ("four ways to corrupt" → three) and which I reintroduced while writing up the lesson
+  that PR bodies keep drifting. Every instance was caught by a review pass, never by the
+  author. **Proposed fix:** `wrap-up` should fact-check the handoff against `git log` /
+  `gh` before committing — the handoff is read at the start of every future session, so a
+  wrong number there propagates further than a wrong PR body. Filing this at M rather
+  than L because the failure recurred *inside the document describing it*.
 
 - **The cockpit bundled wrap-up narrative edits into a lane branch, and only the hook caught it (severity: L, but the guard worked).**
   While waiting on CI for PR #29 I updated `kit-handoff.md` and `kit-friction-log.md`, then
