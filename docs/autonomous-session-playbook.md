@@ -73,7 +73,8 @@ Follow this top to bottom, per ticket.
   the `review.fallback_panel` pass — one isolated fresh-context reviewer per lens, per
   `docs/agentic-dev-kit/fallback-review-panel.md`. Handle its findings, then bind that
   evidence to the current head with `uv run <engine-dir>/pr_watch.py <PR#>
-  --record-review "fallback:panel" --lenses <names> --head <polled-sha>` (use the `head`
+  --record-review "<review.fallback_panel.receipt_source>" --lenses <names> --head
+  <polled-sha>` (use the `head`
   from the exact reviewed poll; a lane uses the scope-aware `dev_session.sh pr-watch`
   wrapper). Unattended, this matters more than it does interactively: there is no
   operator reading the findings, so a one-lens pass in your own context is the author

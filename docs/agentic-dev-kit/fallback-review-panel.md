@@ -78,11 +78,18 @@ author re-reading their own diff.
 5. **Re-run the panel after the fix round.** Not optional: see below.
 6. Record the receipt with the lenses that actually ran:
 
-   ```
+   ```sh
    uv run <engine-dir>/pr_watch.py <PR#> \
-     --record-review "fallback:panel" --lenses adversarial,correctness \
+     --record-review "<review.fallback_panel.receipt_source>" \
+     --lenses <names of the lenses that actually ran> \
      --head <polled-sha>
    ```
+
+   `--record-review` **refuses** a panel-sourced receipt naming fewer than two
+   distinct lenses. That is deliberate: the claim "a panel reviewed this" is
+   the one thing a receipt should not be able to assert on trust. The way past
+   it is to run the second lens, or to record what actually ran under a
+   single-lens source.
 
 ## Re-running, and when to stop
 
@@ -100,7 +107,9 @@ So the stopping criterion is **blast radius, not round count**:
   field) — a couple of rounds with the findings decaying in severity is
   proportionate. Worst case is a wrong message.
 
-Say which one you applied when you record the receipt. "The last round found
+Say which one you applied **in the PR**, where a human reads it — the receipt
+carries what the review *did not* cover (lenses, `override`, `bot_signal`,
+`bots_behind_head`), not a prose rationale for stopping. "The last round found
 nothing" is not available as a reason if it never happened.
 
 ## Degraded mode
@@ -109,7 +118,9 @@ If the runtime cannot run isolated reviewers, fall back to
 `review.fallback_commands.<runtime>` — one lens, in the author's context. It is
 better than nothing and it is **not** a panel:
 
-- record it as `fallback:<runtime>`, never `fallback:panel`
+- record it as `fallback:<runtime>`, never the panel's `receipt_source` — the
+  engine enforces this, so recording it honestly is also the only thing that
+  works
 - pass `--lenses` naming what actually ran, so the audit trail shows one lens
 - for anything under `safety-critical-changes.md`, say plainly in the PR that
   rule 2 was not satisfied

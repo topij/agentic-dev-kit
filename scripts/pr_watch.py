@@ -255,6 +255,13 @@ _DEFAULT_REVIEW_BOTS = ("coderabbit",)
 # the anti-wedge property that `_DEFAULT_INFORMATIONAL_CHECK_NAMES` exists for.
 _DEFAULT_BOT_PENDING_GRACE_MINUTES = 15.0
 
+# The receipt source a full panel records under. Adopter-configurable
+# (`review.fallback_panel.receipt_source`) because the whole point of the key is
+# that a panel receipt is DISTINGUISHABLE from a single-lens one — an adopter who
+# renames it must still get that property, and the validation below must follow
+# their name rather than a literal.
+_DEFAULT_PANEL_RECEIPT_SOURCE = "fallback:panel"
+
 # Whether a PR must carry at least one real (non-informational) check before it
 # can read as green. True is the safe default — see :func:`summarize_checks`.
 _DEFAULT_REQUIRE_CI = True
@@ -281,6 +288,7 @@ class ReviewConfig(NamedTuple):
     require_ci: bool
     bots: tuple[str, ...]
     bot_pending_grace_minutes: float
+    panel_receipt_source: str
 
 
 def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
@@ -326,6 +334,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         require_ci=_DEFAULT_REQUIRE_CI,
         bots=_DEFAULT_REVIEW_BOTS,
         bot_pending_grace_minutes=_DEFAULT_BOT_PENDING_GRACE_MINUTES,
+        panel_receipt_source=_DEFAULT_PANEL_RECEIPT_SOURCE,
     )
     try:
         from kitconfig import get, get_str_list, load_config
@@ -353,6 +362,13 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         )
         if isinstance(grace, bool) or not isinstance(grace, (int, float)) or grace < 0:
             grace = _DEFAULT_BOT_PENDING_GRACE_MINUTES
+        panel_source = get(
+            config,
+            "review.fallback_panel.receipt_source",
+            _DEFAULT_PANEL_RECEIPT_SOURCE,
+        )
+        if not isinstance(panel_source, str) or not panel_source.strip():
+            panel_source = _DEFAULT_PANEL_RECEIPT_SOURCE
     except FileNotFoundError:
         # `load_config` raises this for an absent config file — a standalone
         # engine run. Defaults are exactly right; stay quiet.
@@ -377,6 +393,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         require_ci=require_ci,
         bots=tuple(bot.strip().lower() for bot in bots if bot.strip()),
         bot_pending_grace_minutes=float(grace),
+        panel_receipt_source=panel_source.strip(),
     )
 
 
@@ -387,6 +404,7 @@ _INFORMATIONAL_CHECK_NAMES = _REVIEW_CONFIG.informational_checks
 _REQUIRE_CI = _REVIEW_CONFIG.require_ci
 _REVIEW_BOTS = _REVIEW_CONFIG.bots
 _BOT_PENDING_GRACE_MINUTES = _REVIEW_CONFIG.bot_pending_grace_minutes
+_PANEL_RECEIPT_SOURCE = _REVIEW_CONFIG.panel_receipt_source
 
 
 # --------------------------------------------------------------------------- gh
@@ -1477,6 +1495,22 @@ def record_review(
         "recorded_at": now.isoformat(),
     }
     named_lenses = [part.strip() for part in (lenses or "").split(",") if part.strip()]
+    # A panel receipt asserts two INDEPENDENT lenses. Left as prose, that claim
+    # was checkable by nobody: `--lenses adversarial,adversarial` rendered as
+    # multi-lens coverage, and omitting `--lenses` entirely still produced a
+    # receipt labelled `fallback:panel`. Principle: a deterministic gate beats a
+    # documented expectation. The escape is not a flag — it is recording the
+    # truth, under a single-lens source.
+    if source == _PANEL_RECEIPT_SOURCE:
+        distinct = {lens.casefold() for lens in named_lenses}
+        if len(distinct) < 2:
+            raise ValueError(
+                f"a {source!r} receipt asserts two independent lenses, but "
+                f"--lenses named {len(distinct)} distinct ({', '.join(named_lenses) or 'none'}). "
+                "Run the second lens, or record what actually ran under a "
+                "single-lens source (e.g. fallback:codex) — see "
+                "docs/agentic-dev-kit/fallback-review-panel.md"
+            )
     if named_lenses:
         receipt["lenses"] = named_lenses
     if allow_pending_bot:

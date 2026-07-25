@@ -42,11 +42,12 @@ _TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
 _DEFAULT_FALLBACK_COMMAND = "/code-review"
 _DEFAULT_ENGINES_DIR = "scripts"
 _DEFAULT_LENSES: list[str] = []
+_DEFAULT_PANEL_RECEIPT_SOURCE = "fallback:panel"
 
 
-def _load_review_config() -> tuple[list[str], str, str, list[str]]:
+def _load_review_config() -> tuple[list[str], str, str, list[str], str]:
     """Read ``(review.bots, review.fallback_commands.claude, paths.engines,
-    review.fallback_panel lens names)``.
+    review.fallback_panel lens names, review.fallback_panel.receipt_source)``.
 
     Best-effort: any failure (missing config, kitconfig unimportable, malformed
     values) falls back to generic defaults rather than raising — this hook must
@@ -69,16 +70,31 @@ def _load_review_config() -> tuple[list[str], str, str, list[str]]:
         panel = kitconfig.get(config, "review.fallback_panel.lenses", [])
         lenses = (
             [
-                lens["name"]
+                lens["name"].strip()
                 for lens in panel
-                if isinstance(lens, dict) and isinstance(lens.get("name"), str)
+                if isinstance(lens, dict)
+                and isinstance(lens.get("name"), str)
+                # A blank name would have the hook advertise a panel with an
+                # unnameable lens — worse than advertising no panel at all.
+                and lens["name"].strip()
             ]
             if isinstance(panel, list)
             else []
         )
-        return bots, fallback, engines, lenses
+        panel_source = kitconfig.get(
+            config, "review.fallback_panel.receipt_source", _DEFAULT_PANEL_RECEIPT_SOURCE
+        )
+        if not isinstance(panel_source, str) or not panel_source.strip():
+            panel_source = _DEFAULT_PANEL_RECEIPT_SOURCE
+        return bots, fallback, engines, lenses, panel_source.strip()
     except Exception:
-        return [], _DEFAULT_FALLBACK_COMMAND, _DEFAULT_ENGINES_DIR, list(_DEFAULT_LENSES)
+        return (
+            [],
+            _DEFAULT_FALLBACK_COMMAND,
+            _DEFAULT_ENGINES_DIR,
+            list(_DEFAULT_LENSES),
+            _DEFAULT_PANEL_RECEIPT_SOURCE,
+        )
 
 
 def _bot_description(bots: list[str]) -> str:
@@ -90,7 +106,11 @@ def _bot_description(bots: list[str]) -> str:
     return " / ".join(names)
 
 
-def _fallback_instruction(fallback_command: str, lenses: list[str]) -> str:
+def _fallback_instruction(
+    fallback_command: str,
+    lenses: list[str],
+    panel_source: str = _DEFAULT_PANEL_RECEIPT_SOURCE,
+) -> str:
     """What to run when a bot is unavailable.
 
     Names the PANEL when one is configured, because a single command in this
@@ -105,7 +125,7 @@ def _fallback_instruction(fallback_command: str, lenses: list[str]) -> str:
             "If a review bot is unavailable, run the fallback review PANEL — one "
             f"isolated, fresh-context reviewer per lens ({', '.join(lenses)}), per "
             "docs/agentic-dev-kit/fallback-review-panel.md — and record it with "
-            "`--record-review \"fallback:panel\" --lenses <names>`. Never treat the "
+            f'`--record-review "{panel_source}" --lenses <names>`. Never treat the '
             "outage as a review waiver."
         )
     return (
@@ -115,7 +135,7 @@ def _fallback_instruction(fallback_command: str, lenses: list[str]) -> str:
 
 
 def build_reminder() -> str:
-    bots, fallback_command, engines_dir, lenses = _load_review_config()
+    bots, fallback_command, engines_dir, lenses, panel_source = _load_review_config()
     bot_desc = _bot_description(bots)
     return (
         "A pull request was just opened or marked ready for review. Per the kit's "
@@ -127,7 +147,7 @@ def build_reminder() -> str:
         "replied-to with a reason. Fix real findings, reply-with-reason to nitpicks "
         "you disagree with, `--mark-seen` each handled round, and keep polling (CI "
         "can take 20-30 min). "
-        + _fallback_instruction(fallback_command, lenses)
+        + _fallback_instruction(fallback_command, lenses, panel_source)
         + " Only stop early if you hit something that genuinely needs an "
         "operator decision."
     )

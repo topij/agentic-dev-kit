@@ -76,18 +76,18 @@ Repeat until the report says **converged**:
      notice only after every finding is handled, then bind the pass to the exact
      `head` from the poll you reviewed:
 
-     ```
+     ```sh
      uv run <engine-dir>/pr_watch.py <PR#> \
-       --record-review "fallback:panel" --lenses adversarial,correctness \
-       --head <polled-sha>
+       --record-review "<review.fallback_panel.receipt_source>" \
+       --lenses <names of the lenses that ran> --head <polled-sha>
      ```
 
      `--lenses` names what actually ran, so a degraded one-lens pass is
-     distinguishable from a panel in the audit trail. If your runtime cannot
-     isolate a reviewer, run `review.fallback_commands` instead and record it as
-     `fallback:<runtime>` with the single lens named — never as `fallback:panel`.
-     For a lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same
-     flags.
+     distinguishable from a panel in the audit trail — and a panel-sourced
+     receipt naming fewer than two distinct lenses is **refused**. If your
+     runtime cannot isolate a reviewer, run `review.fallback_commands` instead
+     and record it as `fallback:<runtime>` with the single lens named. For a
+     lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same flags.
 
    - **Real finding** (a bug, a missing guard, a correctness/clarity issue): fix it in
      the code, commit, push. Re-running the local gate first.

@@ -1249,9 +1249,9 @@ def test_record_review_allows_the_fallback_when_the_bot_is_unavailable(
     monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
     monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
 
-    pr_watch.record_review(22, "fallback:panel", "32f3e4f", now=NOW)
+    pr_watch.record_review(22, "fallback:codex", "32f3e4f", now=NOW)
 
-    assert recorded[0]["review_receipt"]["source"] == "fallback:panel"
+    assert recorded[0]["review_receipt"]["source"] == "fallback:codex"
     assert "override" not in recorded[0]["review_receipt"]
 
 
@@ -1314,7 +1314,7 @@ def test_a_failed_check_read_is_recorded_on_the_receipt(
     monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
     monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
 
-    report = pr_watch.record_review(9, "fallback:panel", "abc123", now=NOW)
+    report = pr_watch.record_review(9, "fallback:codex", "abc123", now=NOW)
 
     assert recorded[0]["review_receipt"]["bot_signal"] == "unavailable"
     assert "guard did not run" in pr_watch.render_record_review(report)
@@ -1335,7 +1335,7 @@ def test_the_override_is_recorded_on_the_receipt(
     monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
 
     pr_watch.record_review(
-        9, "fallback:panel", "abc123", allow_pending_bot=True, now=NOW
+        9, "fallback:codex", "abc123", allow_pending_bot=True, now=NOW
     )
 
     assert recorded[0]["review_receipt"]["override"] == "pending-bot"
@@ -1545,6 +1545,7 @@ def test_missing_config_falls_back_to_defaults_silently(
         True,
         pr_watch._DEFAULT_REVIEW_BOTS,
         pr_watch._DEFAULT_BOT_PENDING_GRACE_MINUTES,
+        pr_watch._DEFAULT_PANEL_RECEIPT_SOURCE,
     )
     assert capsys.readouterr().err == ""
 
@@ -1860,7 +1861,7 @@ def test_a_receipt_records_which_bots_were_behind_the_head(
     monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
     monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
 
-    report = pr_watch.record_review(9, "fallback:panel", "abc123", now=NOW)
+    report = pr_watch.record_review(9, "fallback:codex", "abc123", now=NOW)
 
     assert recorded[0]["review_receipt"]["bots_behind_head"] == {"coderabbit": "0ldc0de"}
     assert "does not stand for its review" in pr_watch.render_record_review(report)
@@ -1892,7 +1893,7 @@ def test_the_override_path_still_records_which_bots_were_behind(
     monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
 
     report = pr_watch.record_review(
-        9, "fallback:panel", "abc123", allow_pending_bot=True, now=NOW
+        9, "fallback:codex", "abc123", allow_pending_bot=True, now=NOW
     )
     receipt = recorded[0]["review_receipt"]
 
@@ -2110,7 +2111,8 @@ def _record(monkeypatch, pr_watch, **kwargs) -> tuple[dict, dict]:
     recorded: list[dict] = []
     monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
     monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
-    report = pr_watch.record_review(9, "fallback:panel", "abc123", now=NOW, **kwargs)
+    source = kwargs.pop("source", "fallback:panel")
+    report = pr_watch.record_review(9, source, "abc123", now=NOW, **kwargs)
     return recorded[0]["review_receipt"], report
 
 
@@ -2126,7 +2128,9 @@ def test_a_single_lens_receipt_does_not_read_like_a_panel(
     """
     pr_watch = _load_pr_watch()
 
-    receipt, report = _record(monkeypatch, pr_watch, lenses="correctness")
+    receipt, report = _record(
+        monkeypatch, pr_watch, source="fallback:codex", lenses="correctness"
+    )
 
     assert receipt["lenses"] == ["correctness"]
     rendered = pr_watch.render_record_review(report)
@@ -2161,7 +2165,9 @@ def test_omitting_lenses_records_nothing_rather_than_guessing(
     pr_watch = _load_pr_watch()
 
     for value in (None, "", "  ", ",", " , "):
-        receipt, report = _record(monkeypatch, pr_watch, lenses=value)
+        receipt, report = _record(
+            monkeypatch, pr_watch, source="fallback:codex", lenses=value
+        )
         assert "lenses" not in receipt, value
         assert "one lens only" not in pr_watch.render_record_review(report), value
 
@@ -2188,3 +2194,51 @@ def test_the_shipped_config_ships_two_disjoint_lenses() -> None:
         kitconfig.get(config, "review.fallback_commands", {}).values()
     )
     assert pr_watch is not None
+
+
+def test_a_panel_receipt_is_refused_without_two_distinct_lenses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The claim "a panel reviewed this" is the one a receipt must not assert on
+    trust.
+
+    Left as prose, `--lenses adversarial,adversarial` rendered as multi-lens
+    coverage and omitting `--lenses` entirely still produced a receipt labelled
+    `fallback:panel`. A deterministic gate beats a documented expectation — and
+    the escape is not a flag, it is recording the truth under a single-lens
+    source.
+    """
+    pr_watch = _load_pr_watch()
+
+    for bad in (None, "", "adversarial", "adversarial,adversarial", "a, A , a"):
+        with pytest.raises(ValueError, match="two independent lenses"):
+            _record(monkeypatch, pr_watch, lenses=bad)
+
+    # Two genuinely distinct lenses go through.
+    receipt, _ = _record(monkeypatch, pr_watch, lenses="adversarial,correctness")
+    assert receipt["lenses"] == ["adversarial", "correctness"]
+
+    # …and the honest single-lens record is always available.
+    single, _ = _record(
+        monkeypatch, pr_watch, source="fallback:codex", lenses="correctness"
+    )
+    assert single["source"] == "fallback:codex"
+
+
+def test_the_panel_gate_follows_a_renamed_receipt_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`receipt_source` is adopter-configurable, so the validation has to follow
+    their name — checking a literal would leave a renamed panel unguarded while
+    rejecting a source they never use."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_PANEL_RECEIPT_SOURCE", "fallback:my-panel")
+
+    with pytest.raises(ValueError, match="two independent lenses"):
+        _record(monkeypatch, pr_watch, source="fallback:my-panel", lenses="one")
+
+    # The old literal is now just an ordinary single-lens source.
+    receipt, _ = _record(
+        monkeypatch, pr_watch, source="fallback:panel", lenses="one"
+    )
+    assert receipt["lenses"] == ["one"]

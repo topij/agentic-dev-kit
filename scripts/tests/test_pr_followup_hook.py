@@ -135,6 +135,48 @@ def test_reminder_points_at_the_panel_not_the_degraded_one_lens_mode(monkeypatch
     assert "/code-review" not in reminder
 
 
+def test_the_reminder_uses_the_configured_receipt_source_not_a_literal():
+    """`review.fallback_panel.receipt_source` exists so an adopter can rename it.
+
+    Prescribing the literal in the instruction would hand them a command that
+    writes a differently-labelled receipt than their own config declares —
+    adding a config key and then ignoring it (Principle #10).
+    """
+    hook = _load_hook()
+
+    renamed = hook._fallback_instruction(
+        "/x", ["adversarial", "correctness"], "fallback:my-panel"
+    )
+
+    assert '"fallback:my-panel"' in renamed
+    assert "fallback:panel" not in renamed
+
+
+def test_blank_lens_names_are_discarded_rather_than_advertised(monkeypatch):
+    """A whitespace-only `name` would have the hook advertise a panel with an
+    unnameable lens — worse than advertising no panel at all."""
+    hook = _load_hook()
+    hook._load_review_config()
+    import kitconfig  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        kitconfig,
+        "load_config",
+        lambda *a, **k: {
+            "review": {
+                "bots": ["somebot"],
+                "fallback_panel": {
+                    "lenses": [{"name": "  "}, {"name": "adversarial"}, {"name": ""}]
+                },
+            }
+        },
+    )
+
+    _bots, _fb, _eng, lenses, _src = hook._load_review_config()
+
+    assert lenses == ["adversarial"]
+
+
 def test_reminder_falls_back_to_the_single_command_with_no_panel_configured():
     """An adopter who has not configured a panel — or a runtime that cannot
     isolate a reviewer — must still get actionable wording, not a dangling
@@ -161,11 +203,12 @@ def test_load_review_config_degrades_gracefully_when_config_unreadable(monkeypat
         raise FileNotFoundError("no config here")
 
     monkeypatch.setattr(kitconfig, "load_config", _boom)
-    bots, fallback, engines, lenses = hook._load_review_config()
+    bots, fallback, engines, lenses, panel_source = hook._load_review_config()
     assert bots == []
     assert fallback == "/code-review"
     assert engines == "scripts"
     # No panel known → the reminder degrades to the single command rather than
     # naming lenses that were never read.
     assert lenses == []
-    assert "PANEL" not in hook._fallback_instruction(fallback, lenses)
+    assert panel_source == "fallback:panel"
+    assert "PANEL" not in hook._fallback_instruction(fallback, lenses, panel_source)
