@@ -185,3 +185,34 @@ def test_kit_repo_self_check_is_clean():
 @pytest.mark.parametrize("adopter_path", kit_doctor.ADOPTER_OWNED)
 def test_adopter_owned_paths_are_never_compared(adopter_path):
     assert adopter_path not in {rel for rel, _ in kit_doctor.KIT_OWNED}
+
+
+def test_hook_detection_honors_core_hookspath(tmp_path):
+    """`.git/hooks` is not the only place git reads hooks from — core.hooksPath
+    overrides it (pre-commit and several monorepo layouts set it). Checking only
+    `.git/hooks` reports a correctly-installed hook as missing, which is the same
+    mistake init.sh made when WRITING the shim: it would tell an adopter to
+    re-run an install that had already worked."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "hooks" / "pre-push", "#!/bin/sh\nexit 0\n")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    # No hook installed anywhere yet.
+    assert kit_doctor.inspect(root, _manifest({}), config).hooks_installed is False
+
+    # Installed at a core.hooksPath location, NOT .git/hooks.
+    _write(root / ".git" / "config", "[core]\n\thooksPath = .githooks\n")
+    _write(root / ".githooks" / "pre-push", "#!/bin/sh\nexit 0\n")
+    assert kit_doctor.inspect(root, _manifest({}), config).hooks_installed is True
+
+
+def test_hook_detection_falls_back_to_git_hooks(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "hooks" / "pre-push", "#!/bin/sh\nexit 0\n")
+    _write(root / ".git" / "hooks" / "pre-push", "#!/bin/sh\nexit 0\n")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    assert kit_doctor.inspect(root, _manifest({}), config).hooks_installed is True
+
+
+def test_remap_tolerates_a_trailing_slash():
+    assert kit_doctor._remap("scripts/pr_watch.py", "scripts/devkit/") == "scripts/devkit/pr_watch.py"

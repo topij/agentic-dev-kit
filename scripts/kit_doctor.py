@@ -154,8 +154,36 @@ def sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _hook_dirs(root: Path):
+    """Every directory git might read hooks from, honoring ``core.hooksPath``.
+
+    ``$GIT_DIR/hooks`` is not the only answer: ``core.hooksPath`` overrides it,
+    and pre-commit plus several monorepo layouts set it. Checking only
+    ``.git/hooks`` reports a correctly-installed hook as missing — the same
+    mistake ``init.sh`` made when *writing* the shim, so it would have told an
+    adopter to re-run an install that had already worked.
+
+    Read via a plain config-file scan rather than shelling out to ``git``, so
+    this stays import- and subprocess-free.
+    """
+    candidates: list[Path] = []
+    config = root / ".git" / "config"
+    if config.is_file():
+        for line in config.read_text(encoding="utf-8", errors="replace").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("hooksPath"):
+                _, _, value = stripped.partition("=")
+                value = value.strip()
+                if value:
+                    path = Path(value)
+                    candidates.append(path if path.is_absolute() else root / path)
+    candidates.append(root / ".git" / "hooks")
+    return [c / "pre-push" for c in candidates]
+
+
 def _remap(rel: str, engines_dir: str) -> str:
     """Rewrite a kit-layout path onto the adopter's engines directory."""
+    engines_dir = engines_dir.rstrip("/") or KIT_ENGINE_PREFIX
     if engines_dir == KIT_ENGINE_PREFIX:
         return rel
     if rel == KIT_ENGINE_PREFIX or rel.startswith(KIT_ENGINE_PREFIX + "/"):
@@ -219,8 +247,9 @@ def inspect(root: Path, manifest: dict, config: dict) -> Report:
     )
 
     hook_target = root / engines_dir / "hooks" / "pre-push"
-    installed = root / ".git" / "hooks" / "pre-push"
-    hooks_installed = installed.is_file() and hook_target.is_file()
+    hooks_installed = hook_target.is_file() and any(
+        candidate.is_file() for candidate in _hook_dirs(root)
+    )
 
     narrative: dict[str, bool] = {}
     for key in ("paths.handoff", "paths.friction_log"):
