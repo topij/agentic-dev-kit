@@ -1223,6 +1223,12 @@ def test_a_marker_named_only_in_a_comment_does_not_count(tmp_path: Path) -> None
     assert "ACTION NEEDED" in proc.stderr
 
 
+# Fewer than this many state_paths tests running means the subprocess collected
+# the wrong thing, not that the sandbox resolver got simpler. 62 at the time of
+# writing; raise it deliberately, never lower it to make a run pass.
+_STATE_PATHS_TEST_FLOOR = 62
+
+
 def test_state_paths_suite_passes_from_inside_a_lane_worktree(tmp_path: Path) -> None:
     """The local gate must not go red for reasons unrelated to the diff.
 
@@ -1269,4 +1275,11 @@ def test_state_paths_suite_passes_from_inside_a_lane_worktree(tmp_path: Path) ->
     # A wrong path exits non-zero (4 = not found, 5 = nothing collected), so this
     # cannot pass vacuously — but assert on the count anyway, so the test fails
     # loudly rather than thinning out if the suite is ever moved.
-    assert re.search(r"\b6\d+ passed", result.stdout), detail
+    #
+    # A FLOOR, parsed, not a range pattern: the state_paths suite is expected to
+    # grow, so an exact count is churn and a `6\d+` regex silently stops matching
+    # at 70 while quietly accepting a drop to 60. The floor only ever needs
+    # raising deliberately.
+    passed = re.search(r"(\d+) passed", result.stdout)
+    assert passed, detail
+    assert int(passed.group(1)) >= _STATE_PATHS_TEST_FLOOR, detail
