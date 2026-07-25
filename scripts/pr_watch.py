@@ -1396,8 +1396,10 @@ def record_review(
     :func:`summarize_review_bots`) — but the grace window bounds that wait to
     minutes. ``allow_pending_bot`` is the operator's documented override for the
     remaining case: evidence the queued review will never arrive that pr_watch
-    cannot see. It is recorded on the receipt, as is a failed check read (but
-    not "no bots configured" — nothing was unreadable in that case).
+    cannot see. It is recorded on the receipt as ``override``, as is a failed
+    check read (``bot_signal``; but not "no bots configured" — nothing was
+    unreadable in that case) and any bot whose last review predates this head
+    (``bots_behind_head``). All three say what the receipt does NOT stand for.
     """
     source = source.strip()
     if not source:
@@ -1443,8 +1445,10 @@ def record_review(
             now=now,
             pending_since=read_pending_since(state, current_head),
             signal=details.signal,
-            reviews=snapshot.get("reviews") or [],
-            head=current_head,
+            # No `reviews=`/`head=`: coverage is computed directly above, for
+            # every path including the override. Passing them here too would
+            # compute it twice from two different bot lists — identical today,
+            # silently divergent the moment this function takes a `bots` arg.
         )
         bot_signal = bot_status["signal"]
         if bot_status["blockers"]:
@@ -1485,9 +1489,9 @@ def record_review(
         receipt["bot_signal"] = bot_signal
     if behind:
         # The sibling of `override` and `bot_signal`: all three record what this
-        # receipt does NOT stand for. Its own message says "a receipt taken now
-        # does not mean it saw this design" — which was printing everywhere
-        # except where a receipt is taken.
+        # receipt does NOT stand for. The poll render warns that a receipt taken
+        # now would not stand for the bot's review of this design — and that was
+        # printing everywhere except where a receipt is actually taken.
         receipt["bots_behind_head"] = {e["bot"]: e["sha"] for e in behind}
     state["review_receipt"] = receipt
     save_state(pr, state)
@@ -1727,6 +1731,8 @@ def render(report: dict) -> str:
     # engine saying "this verdict is not coming" — which is precisely the
     # reviewer-went-away case, so suppressing coverage there silenced the warning
     # in the one situation it was written for.
+    # `.get` here, direct indexing below: an entry missing `blocking` falls out
+    # of `reviewing` and the warning FIRES, which is the safe direction.
     reviewing = {e["bot"] for e in bots.get("pending") or [] if e.get("blocking")}
     for entry in bots.get("coverage") or []:
         if not entry["covers_head"] and entry["bot"] not in reviewing:
