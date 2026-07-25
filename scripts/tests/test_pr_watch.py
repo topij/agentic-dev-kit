@@ -1697,3 +1697,398 @@ Summary only.
 
     assert report["new_comments"] == []
     assert report["done"] is True
+
+
+# --------------------------------------------------------------------------- #
+# review coverage: which commit the bot's last review actually saw (issue #27)
+# --------------------------------------------------------------------------- #
+
+
+def _review(login: str, sha: str, at: str) -> dict:
+    return {"author": {"login": login}, "commit": {"oid": sha}, "submittedAt": at}
+
+
+def test_a_bot_whose_last_review_predates_the_head_is_surfaced() -> None:
+    """The #22 shape, and #25's smaller repeat.
+
+    A receipt binds to the head and a push invalidates it — which answers "was
+    this exact code reviewed", not "by whom, and how much of it did they see".
+    A bot can review commit 1, go rate-limited through a material redesign, and
+    the merge proceeds on a fallback receipt taken at commit 5. Nothing said so.
+    """
+    pr_watch = _load_pr_watch()
+    reviews = [
+        _review("coderabbitai", "aaaaaaa1", "2026-07-25T12:00:00Z"),
+        _review("coderabbitai", "bbbbbbb2", "2026-07-25T13:00:00Z"),  # newest
+        _review("topij", "ccccccc3", "2026-07-25T14:00:00Z"),  # not a bot
+    ]
+
+    behind = pr_watch.bot_review_coverage(reviews, "zzzzzzz9")
+    current = pr_watch.bot_review_coverage(reviews, "bbbbbbb2")
+
+    # Newest review per bot wins, and a human's review is not a bot's coverage.
+    assert [e["bot"] for e in behind] == ["coderabbit"]
+    assert behind[0]["sha"] == "bbbbbbb2"
+    assert behind[0]["covers_head"] is False
+    assert current[0]["covers_head"] is True
+
+
+def test_review_coverage_is_reported_and_never_gates() -> None:
+    """Deliberately the cheap half of #27. Invalidating a receipt when the diff
+    changes *shape* is the faithful fix, but it risks becoming a wedge on a repo
+    whose bot is permanently unavailable — so this only makes the gap visible at
+    merge time instead of reconstructible from the PR thread afterwards.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")]
+    )
+
+    report = pr_watch.build_report(
+        view, [], set(), review_receipt={"head": "abc123", "source": "fallback:panel"}
+    )
+
+    assert report["review_bots"]["coverage"][0]["covers_head"] is False
+    assert "review coverage" in pr_watch.render(report)
+    assert "0ldc0de" in pr_watch.render(report)
+    # …and the merge gate is untouched by it.
+    assert report["mergeable"] is True
+    assert report["merge_blockers"] == []
+
+
+def test_coverage_tolerates_a_missing_or_malformed_commit_field() -> None:
+    """`gh` shapes drift and a review can predate the field. Anything unusable
+    is dropped rather than reported as coverage of an unknown commit — and it
+    must never raise, since this feeds the ordinary poll path."""
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch.bot_review_coverage([], "abc") == []
+    assert pr_watch.bot_review_coverage(None, "abc") == []
+    assert (
+        pr_watch.bot_review_coverage(
+            [
+                {"author": {"login": "coderabbitai"}, "submittedAt": "x"},  # no commit
+                {"author": {"login": "coderabbitai"}, "commit": "oops"},  # not a dict
+                {"author": {"login": "coderabbitai"}, "commit": {}},  # no oid
+            ],
+            "abc",
+        )
+        == []
+    )
+    # No head to compare against: reported, but never claimed to cover it.
+    orphan = pr_watch.bot_review_coverage(
+        [_review("coderabbitai", "aaa", "2026-07-25T12:00:00Z")], None
+    )
+    assert orphan[0]["covers_head"] is False
+
+
+def test_the_coverage_warning_is_silent_when_the_bot_is_current() -> None:
+    """Selectivity is the entire value of this warning, and it was the one thing
+    left unpinned after a dedicated mutation pass.
+
+    Two mutants survived on the same hole: rendering the line unconditionally,
+    and wiring the WRONG head into the coverage call. Both are invisible unless
+    a test drives `build_report` -> `render` with a bot whose last review IS at
+    the head and asserts silence — unit-level `covers_head is True` does not.
+    """
+    pr_watch = _load_pr_watch()
+    at_head = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+    behind = _green_view(
+        reviews=[_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")]
+    )
+
+    assert "review coverage" not in pr_watch.render(
+        pr_watch.build_report(at_head, [], set())
+    )
+    assert "review coverage" in pr_watch.render(
+        pr_watch.build_report(behind, [], set())
+    )
+
+
+def test_the_coverage_warning_defers_to_a_bot_that_is_mid_review() -> None:
+    """A bot reviewing a just-pushed head is behind it by construction.
+
+    The pending line already says a verdict is coming, so warning as well would
+    fire on every poll of the healthy window — training the operator to skim
+    past the case this exists for, a reviewer that went away commits ago.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")]
+    )
+    mid_review = [
+        _bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))
+    ]
+
+    quiet = pr_watch.render(
+        pr_watch.build_report(view, [], set(), check_details=mid_review, now=NOW)
+    )
+    loud = pr_watch.render(pr_watch.build_report(view, [], set(), now=NOW))
+
+    assert "review coverage" not in quiet
+    assert "has not reported yet" in quiet  # the pending line still says it
+    assert "review coverage" in loud
+
+
+def test_a_receipt_records_which_bots_were_behind_the_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The message says "a receipt taken now does not mean it saw this design" —
+    and it was printing everywhere except where a receipt is taken.
+
+    `override` and `bot_signal` both record what a receipt does NOT stand for.
+    This is their sibling, and it was absent from the one path whose entire
+    subject is what the receipt covers.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh_json",
+        lambda args: {
+            "number": 9,
+            "headRefOid": "abc123",
+            "reviews": [_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")],
+        },
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    recorded: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+
+    report = pr_watch.record_review(9, "fallback:panel", "abc123", now=NOW)
+
+    assert recorded[0]["review_receipt"]["bots_behind_head"] == {"coderabbit": "0ldc0de"}
+    assert "does not stand for its review" in pr_watch.render_record_review(report)
+
+
+def test_the_override_path_still_records_which_bots_were_behind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`--allow-pending-bot-review` IS the #22/#25 scenario.
+
+    A bot queued or rate-limited through a redesign, merged on a fallback
+    receipt — the exact case this feature was written for. Computing `behind`
+    inside `if not allow_pending_bot` made the receipt silent precisely there,
+    and combined with the pending-deference below it was a total blind spot:
+    neither the poll nor the receipt said the reviewer's last review was old.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh_json",
+        lambda args: {
+            "number": 9,
+            "headRefOid": "abc123",
+            "reviews": [_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")],
+        },
+    )
+    recorded: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+
+    report = pr_watch.record_review(
+        9, "fallback:panel", "abc123", allow_pending_bot=True, now=NOW
+    )
+    receipt = recorded[0]["review_receipt"]
+
+    assert receipt["override"] == "pending-bot"
+    assert receipt["bots_behind_head"] == {"coderabbit": "0ldc0de"}
+    rendered = pr_watch.render_record_review(report)
+    assert "recorded over an active override" in rendered
+    assert "does not stand for its review" in rendered
+
+
+def test_only_a_blocking_pending_bot_silences_the_coverage_warning() -> None:
+    """The deference must not swallow the case it claims to protect.
+
+    A pending check that has aged past the grace window, or been cancelled by an
+    announced outage, is the engine saying "this verdict is not coming" — the
+    reviewer-went-away case. Deferring to *any* pending entry suppressed the
+    coverage warning in exactly that situation, reachable after ~15 minutes of
+    polling any stuck bot, and on the #22 two-check outage shape.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")]
+    )
+
+    def _render(details):
+        return pr_watch.render(
+            pr_watch.build_report(view, [], set(), check_details=details, now=NOW)
+        )
+
+    # Actively blocking (mid-review) — deferred, as designed.
+    assert "review coverage" not in _render(
+        [_bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))]
+    )
+    # Aged past grace — "treated as not coming", so coverage MUST speak up.
+    assert "review coverage" in _render(
+        [_bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(600))]
+    )
+    # Cancelled by an announced outage — the #22 shape. Same.
+    assert "review coverage" in _render(
+        [
+            _bot_check(description="Review rate limited"),
+            _bot_check(
+                name="CodeRabbit / incremental",
+                state="PENDING",
+                bucket="pending",
+                startedAt=_minutes_ago(1),
+            ),
+        ]
+    )
+
+
+def test_coverage_honours_a_non_default_review_bots_list() -> None:
+    """`bots=bots` threading was correct and pinned by nothing — dropping it
+    passed the whole suite, because every other test uses the default list where
+    scoped and unscoped are identical."""
+    pr_watch = _load_pr_watch()
+    reviews = [
+        _review("otherbot", "0ldc0de", "2026-07-25T12:00:00Z"),
+        _review("coderabbitai", "abc123", "2026-07-25T13:00:00Z"),
+    ]
+
+    scoped = pr_watch.summarize_review_bots(
+        [], [], now=NOW, bots=("otherbot",), reviews=reviews, head="abc123"
+    )
+
+    assert [e["bot"] for e in scoped["coverage"]] == ["otherbot"]
+    assert scoped["coverage"][0]["covers_head"] is False
+    # …and a repo with no bots configured gets no coverage at all.
+    assert (
+        pr_watch.summarize_review_bots(
+            [], [], now=NOW, bots=(), reviews=reviews, head="abc123"
+        )["coverage"]
+        == []
+    )
+
+
+def test_an_unusable_timestamp_sorts_to_the_bottom_not_the_top() -> None:
+    """`str()` coercion is crash-proof and actively wrong.
+
+    It renders garbage as a string sorting ABOVE every real timestamp
+    (`"20260725" > "2026-07-25T…"`), so a malformed review at the head displaces
+    the real dated one and sets `covers_head` — suppressing the warning. The
+    neighbouring crash test fed exactly this input and asserted only that it did
+    not raise, walking straight over the hole.
+    """
+    pr_watch = _load_pr_watch()
+    dated = _review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")
+
+    for junk in (20260725, {"x": 1}, ["a"], 3.5):
+        at_head = {
+            "author": {"login": "coderabbitai"},
+            "commit": {"oid": "current"},
+            "submittedAt": junk,
+        }
+        covered = pr_watch.bot_review_coverage([dated, at_head], "current")
+        assert covered[0]["sha"] == "0ldc0de", junk
+        assert covered[0]["covers_head"] is False, junk
+
+
+def test_a_lookalike_login_cannot_claim_the_bot_reviewed_this_head() -> None:
+    """The one property here with an actual adversary.
+
+    On a public repo any account can open a review, so `xcoderabbit` reviewing
+    the current head must not read as CodeRabbit having covered it — that would
+    suppress the very warning this feature exists to raise. Anchored matching
+    gives that; without a test, flipping `anchored=True` to `False` passes the
+    whole suite (verified by mutation).
+    """
+    pr_watch = _load_pr_watch()
+
+    for impostor in ("xcoderabbit", "my-coderabbit-fan", "notcoderabbit"):
+        assert (
+            pr_watch.bot_review_coverage(
+                [_review(impostor, "abc123", "2026-07-25T12:00:00Z")], "abc123"
+            )
+            == []
+        ), impostor
+
+    # The real logins still count, in both spellings GitHub uses.
+    for real in ("coderabbitai", "coderabbitai[bot]"):
+        covered = pr_watch.bot_review_coverage(
+            [_review(real, "abc123", "2026-07-25T12:00:00Z")], "abc123"
+        )
+        assert covered and covered[0]["covers_head"] is True, real
+
+
+def test_the_newest_review_wins_regardless_of_array_order() -> None:
+    """Pinned independently of array order.
+
+    The other fixture happens to list its reviews ascending, so "newest by
+    timestamp" and "last in the array" are indistinguishable there — replacing
+    the whole comparison with `if True:` passes the suite (verified by
+    mutation). This one lists them descending, so only the timestamp can be
+    right.
+    """
+    pr_watch = _load_pr_watch()
+    descending = [
+        _review("coderabbitai", "newest0", "2026-07-25T18:00:00Z"),
+        _review("coderabbitai", "middle0", "2026-07-25T15:00:00Z"),
+        _review("coderabbitai", "oldest0", "2026-07-25T12:00:00Z"),
+    ]
+
+    assert pr_watch.bot_review_coverage(descending, "zzz")[0]["sha"] == "newest0"
+    # …and the same set shuffled resolves identically.
+    shuffled = [descending[1], descending[2], descending[0]]
+    assert pr_watch.bot_review_coverage(shuffled, "zzz")[0]["sha"] == "newest0"
+
+
+def test_an_undated_review_never_displaces_a_dated_one() -> None:
+    """The safety-relevant direction of the tie-break.
+
+    An undated review that happened to sit at the head would otherwise set
+    `covers_head` and suppress the warning — reporting coverage the reviewer
+    never gave. Asserted in both array orders, since the comparison is
+    order-sensitive by construction.
+    """
+    pr_watch = _load_pr_watch()
+    dated = _review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")
+    undated = {"author": {"login": "coderabbitai"}, "commit": {"oid": "current"}}
+
+    for order in ([dated, undated], [undated, dated]):
+        covered = pr_watch.bot_review_coverage(order, "current")
+        assert covered[0]["sha"] == "0ldc0de", order
+        assert covered[0]["covers_head"] is False, order
+
+
+def test_a_non_string_sha_or_timestamp_cannot_break_the_poll() -> None:
+    """`isinstance(commit, dict)` validates the container, not the value.
+
+    A non-string `oid` passes that guard and then kills `render` on `sha[:7]` —
+    on the ordinary poll path, in the function whose stated job is tolerating
+    malformed input. A non-string timestamp raises TypeError against a sibling
+    review's string.
+    """
+    pr_watch = _load_pr_watch()
+
+    assert (
+        pr_watch.bot_review_coverage(
+            [{"author": {"login": "coderabbitai"}, "commit": {"oid": 12345}}], "abc"
+        )
+        == []
+    )
+    mixed = [
+        _review("coderabbitai", "aaaaaaa", "2026-07-25T12:00:00Z"),
+        {
+            "author": {"login": "coderabbitai"},
+            "commit": {"oid": "bbbbbbb"},
+            "submittedAt": 20260725,  # not a string
+        },
+    ]
+    assert pr_watch.bot_review_coverage(mixed, "zzz")  # does not raise
+
+    # …and the render survives whatever survives the filter.
+    report = pr_watch.build_report(
+        _green_view(reviews=[{"author": {"login": "coderabbitai"}, "commit": {"oid": 1}}]),
+        [],
+        set(),
+    )
+    assert report["review_bots"]["coverage"] == []
+    pr_watch.render(report)  # would raise on `sha[:7]` without the type check

@@ -172,9 +172,42 @@ Self-pace on a bounded cadence — don't busy-wait:
 
   None of this reaches `converged`. That is deliberate and load-bearing: the watch
   loop must be able to finish while a bot that never reports sits pending forever.
-  Every signal here feeds the merge gate only.
+  Every signal *above* feeds the merge gate only.
+
+  It also reports **`review_bots.coverage`** — the commit each bot's *last*
+  review actually saw. A receipt binds to the head and a push invalidates it,
+  which answers "was this exact code reviewed" but not "by whom, and how much of
+  it did they see": a bot can review commit 1, go rate-limited through a
+  material redesign, and the merge proceed on a fallback receipt taken at commit
+  5. When a bot's last review is behind the head the render says so:
+
+  ```
+  ⚠ review coverage: coderabbit's last review was of 954b93f, not the current
+    head — a receipt taken now would not stand for its review of this design;
+    re-request it, or say so explicitly
+  ```
+
+  It defers to a bot that is *actively* pending — one mid-review of a just-pushed
+  head is behind it by construction, and the pending line already says a verdict
+  is coming. It does **not** defer once that check ages past the grace window or
+  is cancelled by an announced outage: that is the engine saying the verdict is
+  not coming, which is the reviewer-went-away case this exists for.
+
+  `--record-review` records the same gap on the receipt as `bots_behind_head`,
+  next to `override` and `bot_signal` — all three say what the receipt does *not*
+  stand for. It is recorded even under `--allow-pending-bot-review`, since that
+  override is itself the #22/#25 scenario. (Unlike the poll render, the receipt
+  does not defer to a pending bot: recording a receipt is the moment the gap
+  matters most.)
+
+  Reported, never gating — deliberately the cheap half of the problem, because
+  invalidating a receipt on a shape change risks wedging a repo whose bot is
+  permanently unavailable.
 
   **Known gaps, so you don't mistake them for coverage:**
+  - `coverage` reports only bots that have reviewed *and* whose review carried a
+    commit SHA. A bot that has never reviewed at all produces no entry and no
+    warning — that case is the pending/unavailable machinery's, not this one's.
   - The pending block only exists once the bot has *registered* a check. In the
     window between `gh pr ready` and the bot creating its check row, "the bot
     hasn't started yet" is indistinguishable from "this repo has no bot", so a
