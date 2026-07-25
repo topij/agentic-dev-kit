@@ -1,9 +1,18 @@
-> **v0 kit status — engine not yet vendored.** This skill documents the *doctrine* and the
-> intended two-session (draft → operator approval → finalize) mechanism, but its
-> deterministic engine — the parse/draft/finalize scripts and pipeline config it references
-> (`scripts/…`, `config/…`) — is **not shipped in kit v0** (they depend on a tracker client,
-> a notify channel, and a state-machine that are project-specific). Until a later kit revision
-> vendors them, either wire your own engine against this prose or run the skill in a lighter
+---
+description: Triage the friction-log inbox into tracker tickets — draft tracker-issue payloads from un-graduated entries, get operator approval via DM, then file approved tickets and open a draft PR sweeping them into the archive. Use to graduate accumulated friction-log entries into the tracker.
+argument-hint: "[resume|new|test]"
+---
+
+> **Engine tracked, not yet vendored — this is a blocked dependency, not unwritten
+> work.** This skill documents the *doctrine* and the intended two-session (draft →
+> operator approval → finalize) mechanism. A working deterministic engine — the
+> parse/draft/finalize scripts and pipeline config it references (`scripts/…`,
+> `config/…`) — already exists (in the kit maintainer's own toolkit repo) but isn't
+> vendored into kit v0 yet: it's blocked on a tracker-adapter abstraction so the
+> engine can target any configured `tracker.backend` rather than one hardcoded
+> tracker client. Tracked in
+> [agentic-dev-kit#6](https://github.com/topij/agentic-dev-kit/issues/6). Until that
+> lands, either wire your own engine against this prose or run the skill in a lighter
 > LLM-only mode. The four fully-wired skills (`session-start`, `wrap-up`, `parallel`,
 > `pr-watch`) ship their engines and work out of the box.
 

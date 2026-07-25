@@ -1,9 +1,19 @@
-> **v0 kit status — engine not yet vendored.** This skill documents the *doctrine* and the
-> pattern-finding pipeline, but its deterministic engine — the merged-PR fetch/digest scripts
-> and pipeline config it references (`scripts/…`, `config/…`) — is **not shipped in kit v0**
-> (they depend on a forge/PR client and a tracker client that are project-specific). Until a
-> later kit revision vendors them, either wire your own engine against this prose or run the
-> skill in a lighter LLM-only mode. The four fully-wired skills (`session-start`, `wrap-up`,
+---
+description: Weekly pattern-finding across the last 7 days of merged PRs — cluster review findings by root cause, and route patterns spanning ≥2 PRs to a CLAUDE.md/skill-prompt PR, single high-severity incidents to the tracker, and everything else to the friction log. Use for scheduled post-merge retros, not ad hoc single-PR review.
+argument-hint: "[backfill|test]"
+---
+
+> **Engine tracked, not yet vendored — this is a blocked dependency, not unwritten
+> work.** This skill documents the *doctrine* and the pattern-finding pipeline. A
+> working deterministic engine — the merged-PR fetch/digest scripts and pipeline
+> config it references (`scripts/…`, `config/…`) — already exists (in the kit
+> maintainer's own toolkit repo) but isn't vendored into kit v0 yet: it's blocked on
+> a tracker-adapter abstraction so the engine can target any configured
+> `tracker.backend` rather than one hardcoded tracker client (it already talks to a
+> forge/PR client generically). Tracked in
+> [agentic-dev-kit#7](https://github.com/topij/agentic-dev-kit/issues/7). Until that
+> lands, either wire your own engine against this prose or run the skill in a lighter
+> LLM-only mode. The four fully-wired skills (`session-start`, `wrap-up`,
 > `parallel`, `pr-watch`) ship their engines and work out of the box.
 
 Weekly pattern-finding across the last 7 days of merged PRs: read each PR's review

@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh run view:*)",
+      "Bash(uv run scripts/pr_watch.py:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -z \"$JOB_NAME\" ] && cd \"$CLAUDE_PROJECT_DIR\" && uv run --script scripts/check_doc_budget.py --quiet || true",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "[ -z \"$JOB_NAME\" ] && cd \"$CLAUDE_PROJECT_DIR\" && uv run --script scripts/check_memory_budget.py --quiet || true",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/hooks/pr_followup_hook.py\"",
+            "if": "Bash(gh pr *)",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
