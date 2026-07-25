@@ -1009,26 +1009,31 @@ def summarize_review_bots(
             continue
         if not _check_is_pending(detail):
             continue
-        age = _age_minutes(detail.get("startedAt"), now)
-        since = detail.get("startedAt")
-        source = "check"
+        # Our own clock wins whenever we already have one. Preferring the
+        # check's stamp would let the age REGRESS: a stamp a few minutes ahead of
+        # our clock reads as unusable at first (so we start observing), then
+        # slides inside the skew tolerance a few minutes later and reads as age
+        # 0 — restarting the window after it had already aged out, and making
+        # `merge_blockers` non-monotonic in wall-clock time.
+        age = _age_minutes(observed.get(bot), now)
+        since = observed.get(bot)
+        source = "observed"
         if age is None:
-            # No usable stamp on the check — fall back to our own first-sighting
-            # clock. A stored value that will not parse is REPLACED, not coerced
-            # to age 0: `age = parse(x) or 0.0` would pin an unparseable value at
-            # the maximally-blocking age *and* write it back, so every later poll
-            # re-reads the same poison and the gate blocks forever. Anything we
-            # cannot read is treated as "no clock yet" and restamped, which keeps
-            # the window bounded whatever wrote the state (a corrupt file, a
-            # different engine version, a richer future format).
-            age = _age_minutes(observed.get(bot), now)
-            if age is None:
-                since = now.isoformat()
-                age = 0.0
-            else:
-                since = observed[bot]
-            observed[bot] = since
+            age = _age_minutes(detail.get("startedAt"), now)
+            since = detail.get("startedAt")
+            source = "check"
+        if age is None:
+            # Neither usable — start our own clock now. A stored value that will
+            # not parse is REPLACED, not coerced to age 0: `age = parse(x) or
+            # 0.0` would pin it at the maximally-blocking age *and* write it
+            # back, so every later poll re-read the same poison and the gate
+            # blocked forever. Same for a value dated in the future, which is
+            # parseable and would otherwise block until real time caught up.
+            since = now.isoformat()
+            age = 0.0
             source = "observed"
+        if source == "observed":
+            observed[bot] = since
         pending.append(
             {
                 "bot": bot,
@@ -1304,7 +1309,8 @@ def record_review(
     :func:`summarize_review_bots`) — but the grace window bounds that wait to
     minutes. ``allow_pending_bot`` is the operator's documented override for the
     remaining case: evidence the queued review will never arrive that pr_watch
-    cannot see. It is recorded on the receipt, as is a failed check read.
+    cannot see. It is recorded on the receipt, as is a failed check read (but
+    not "no bots configured" — nothing was unreadable in that case).
     """
     source = source.strip()
     if not source:
@@ -1363,7 +1369,7 @@ def record_review(
         # trace. Without it, a receipt taken over an active override is
         # indistinguishable from one taken after a clean bot verdict.
         receipt["override"] = "pending-bot"
-    if bot_signal != "ok":
+    if bot_signal == "unavailable":
         # The SILENT bypass, and the worse of the two: when the check read fails
         # there are no blockers to raise, so the receipt is taken with the #19
         # guard simply switched off. Recording an explicit override but not this
@@ -1371,6 +1377,10 @@ def record_review(
         # invisible. Not a refusal — a `gh` too old for these fields, or a PR
         # with no checks at all, is an environment problem, and refusing would
         # turn it into a wedge with no way out but the override flag.
+        #
+        # `"skipped"` (no bots configured) is deliberately NOT recorded: nothing
+        # was unreadable and there was no guard to run, so flagging it would put
+        # a permanent false warning on every receipt a bot-less adopter takes.
         receipt["bot_signal"] = bot_signal
     state["review_receipt"] = receipt
     save_state(pr, state)

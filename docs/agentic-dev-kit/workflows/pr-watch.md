@@ -184,8 +184,9 @@ Self-pace on a bounded cadence — don't busy-wait:
     (the check read failed — e.g. a `gh` too old for the requested `--json`
     fields, or a PR with no checks at all). On `unavailable` **both guards are
     off**; it's reported rather than blocking, because an environment problem
-    shouldn't become a wedge — and a receipt recorded in that state carries a
-    `bot_signal` key so the audit trail shows the guard didn't run.
+    shouldn't become a wedge — and a receipt recorded while the read was
+    `unavailable` carries a `bot_signal` key so the audit trail shows the guard
+    didn't run. (`skipped` is not flagged: nothing was unreadable.)
   - An *older* `pr_watch.py` polling the same PR drops the persisted grace clock,
     restarting the window. Merges wait longer; nothing fails open.
 - **Tune this for your own bot mix in `config/dev-model.yaml`, never in the engine.**
