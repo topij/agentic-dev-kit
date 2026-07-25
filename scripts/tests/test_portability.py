@@ -1221,3 +1221,65 @@ def test_a_marker_named_only_in_a_comment_does_not_count(tmp_path: Path) -> None
     )
 
     assert "ACTION NEEDED" in proc.stderr
+
+
+# Fewer than this many state_paths tests running means the subprocess collected
+# the wrong thing, not that the sandbox resolver got simpler. 62 at the time of
+# writing; raise it deliberately, never lower it to make a run pass.
+_STATE_PATHS_TEST_FLOOR = 62
+
+
+def test_state_paths_suite_passes_from_inside_a_lane_worktree(tmp_path: Path) -> None:
+    """The local gate must not go red for reasons unrelated to the diff.
+
+    `_marker_state_root` discovers a sandbox by walking up from `Path.cwd()`, so
+    a `.devkit_state_root` marker at or above the invocation directory redirects
+    the resolver — and the state_paths suite's "no sandbox configured"
+    assertions fail. Its autouse fixture cleared every env signal but not the
+    cwd, so the failure looked environmental and unexplained.
+
+    It cannot be caught by running that suite the ordinary way: CI checks out a
+    marker-free tree and a developer runs from the main checkout. It appears
+    only when the suite runs from inside a headless lane worktree — exactly what
+    a lane agent does before pushing, and it happened to three lanes in one
+    session (issue #10). So the regression guard has to be the invocation
+    itself, from a directory that carries a marker.
+    """
+    lane = tmp_path / "worktree"
+    lane.mkdir()
+    (lane / ".devkit_state_root").write_text(
+        str(tmp_path / "sandbox-state"), encoding="utf-8"
+    )
+
+    result = subprocess.run(
+        # ENGINE_DIR, not REPO_ROOT/"scripts": `paths.engines` is configurable,
+        # so a vendored layout (scripts/devkit/) keeps this pointing at the
+        # engines that are actually installed.
+        [
+            sys.executable, "-m", "pytest",
+            str(ENGINE_DIR / "lib" / "state_paths" / "tests"),
+            "-q",
+        ],
+        cwd=lane,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+
+    # stderr, not just stdout: pytest reports a bad path or a collection error
+    # there, while stdout says only "no tests ran". Without it, a drift in this
+    # path would turn the gate red with no reason given — which is the exact
+    # unexplained-red-gate failure this test exists to prevent.
+    detail = f"stdout:\n{result.stdout[-2000:]}\nstderr:\n{result.stderr[-2000:]}"
+    assert result.returncode == 0, detail
+    # A wrong path exits non-zero (4 = not found, 5 = nothing collected), so this
+    # cannot pass vacuously — but assert on the count anyway, so the test fails
+    # loudly rather than thinning out if the suite is ever moved.
+    #
+    # A FLOOR, parsed, not a range pattern: the state_paths suite is expected to
+    # grow, so an exact count is churn and a `6\d+` regex silently stops matching
+    # at 70 while quietly accepting a drop to 60. The floor only ever needs
+    # raising deliberately.
+    passed = re.search(r"(\d+) passed", result.stdout)
+    assert passed, detail
+    assert int(passed.group(1)) >= _STATE_PATHS_TEST_FLOOR, detail

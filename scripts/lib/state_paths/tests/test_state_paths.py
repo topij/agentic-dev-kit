@@ -37,20 +37,47 @@ from state_paths.resolver import (
 
 
 @pytest.fixture(autouse=True)
-def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Start each test with all sandbox/cron env signals unset so the resolution
-    chain (and the unsandboxed-lane guard) is explicit, and reset the warn-once flag.
+def _clear_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Start each test with every sandbox signal neutral — env AND cwd.
 
     Every cron/CI marker var must be cleared, not just ``JOB_NAME``: this suite
     runs *in* GitHub Actions, which exports ``CI`` / ``GITHUB_ACTIONS``, so a
     leaked value would silently exempt every guard test from the very guard it
-    asserts on."""
+    asserts on.
+
+    The **cwd** matters for exactly the same reason and was the half this
+    fixture used to miss (issue #10). ``_marker_state_root`` discovers a sandbox
+    by walking up from ``Path.cwd()``, so a ``.devkit_state_root`` marker
+    anywhere at or above the invocation directory redirects the resolver and the
+    "no sandbox configured" assertions fail — while every env var is dutifully
+    unset. It stayed hidden because CI runs from a marker-free checkout; it
+    surfaces the moment the suite runs from inside a headless lane worktree,
+    which is precisely what a lane agent does before pushing. A gate that goes
+    red for reasons unrelated to the diff teaches agents to ignore a red gate.
+
+    Chdir'ing to a fresh ``tmp_path`` makes "no marker above me" the explicit
+    starting state instead of an accident of where pytest was invoked. Tests
+    that care about cwd still ``monkeypatch.chdir`` themselves afterwards, which
+    overrides this — so the fixture makes the default safe without taking the
+    control away from the tests that use it. Only two tests were ever
+    cwd-sensitive without setting their own (the two that failed); the change is
+    also strictly *stricter*, since three others used to pass by accidentally
+    discovering the real repo root.
+
+    Not hermetic, and deliberately so: ``tmp_path`` is marker-free because of
+    where ``TMPDIR`` points, so pointing ``TMPDIR`` inside a marker-carrying
+    worktree still fails. Closing that would need a ``.git`` ceiling sentinel
+    inside ``tmp_path``, which the "no ``.git`` anywhere up → raise" tests
+    require the *absence* of. The lane case this fixes is the one that actually
+    happens.
+    """
     monkeypatch.delenv(STATE_ROOT_ENV, raising=False)
     monkeypatch.delenv(ROOT_ENV, raising=False)
     monkeypatch.delenv(REFUSE_UNSANDBOXED_ENV, raising=False)
     monkeypatch.delenv(CI_ENV_VARS_ENV, raising=False)
     for name in DEFAULT_CI_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.chdir(tmp_path)
     _sp._unsandboxed_warned = False
 
 
