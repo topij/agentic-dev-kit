@@ -86,9 +86,11 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
+import unicodedata
 from pathlib import Path
 from typing import NamedTuple
 
@@ -254,6 +256,7 @@ _DEFAULT_REVIEW_BOTS = ("coderabbit",)
 # treated as never going to report and stops blocking — which is what preserves
 # the anti-wedge property that `_DEFAULT_INFORMATIONAL_CHECK_NAMES` exists for.
 _DEFAULT_BOT_PENDING_GRACE_MINUTES = 15.0
+
 
 # Whether a PR must carry at least one real (non-informational) check before it
 # can read as green. True is the safe default — see :func:`summarize_checks`.
@@ -975,7 +978,8 @@ def summarize_review_bots(
     - **unavailable** — an ``unavailable_markers`` hit on either surface: a
       comment body (already detected today) *or* a bot check's description (#23,
       the surface that was invisible). Never blocks anything. It is an action
-      signal: run the configured fallback review.
+      signal: run the fallback review panel
+      (docs/agentic-dev-kit/fallback-review-panel.md).
 
       Only a **check**-surface hit suppresses the pending block below. A check
       describes the bot's state now; a comment describes the past, and
@@ -1371,6 +1375,7 @@ def record_review(
     expected_head: str,
     *,
     allow_pending_bot: bool = False,
+    lenses: str | None = None,
     now: datetime | None = None,
 ) -> dict:
     """Persist independent-review evidence bound to the PR's current head SHA.
@@ -1400,6 +1405,12 @@ def record_review(
     check read (``bot_signal``; but not "no bots configured" — nothing was
     unreadable in that case) and any bot whose last review predates this head
     (``bots_behind_head``). All three say what the receipt does NOT stand for.
+
+    ``lenses`` names the review lenses that actually ran (see
+    ``docs/agentic-dev-kit/fallback-review-panel.md``). Recorded verbatim so a
+    one-lens pass is distinguishable from a panel in the audit trail: the
+    doctrine holds that a single-lens verdict is not a green light, and without
+    this a degraded `fallback:` receipt reads exactly like a full one.
     """
     source = source.strip()
     if not source:
@@ -1469,6 +1480,9 @@ def record_review(
         "source": source,
         "recorded_at": now.isoformat(),
     }
+    named_lenses = [part.strip() for part in (lenses or "").split(",") if part.strip()]
+    if named_lenses:
+        receipt["lenses"] = named_lenses
     if allow_pending_bot:
         # The escape hatch on a safety gate is the one thing that must leave a
         # trace. Without it, a receipt taken over an active override is
@@ -1501,8 +1515,58 @@ def record_review(
 # ----------------------------------------------------------------------- main
 
 
+# A lens NAME, not a sentence: letters, digits, and the usual separators.
+# `--lenses` splits on `,`, which is also ordinary punctuation — so
+# "adversarial, focused on the new merge gate" arrived as two entries and
+# rendered as a two-lens panel, suppressing the one-lens warning that is the
+# whole remaining value of the field. That is an HONEST input misreported, not
+# only a forgery. Counting only entries that look like names fixes both without
+# a roster and without a gate: prose is still recorded verbatim, it just does
+# not count toward "how many lenses ran".
+_LENS_NAME_RE = re.compile(r"^[\w.+-]{1,40}$")
+
+
+def _countable_lenses(names: list[str]) -> set[str]:
+    """Case-folded lens names from ``names``, ignoring prose."""
+    return {n.casefold() for n in names if _LENS_NAME_RE.match(n)}
+
+
+def _flat(text: object, n: int = 120) -> str:
+    """One line, bounded. For any receipt/config value entering a render.
+
+    Both `source` and the lens names are free text chosen by whoever ran
+    `--record-review`. Interpolated raw, a single newline splits the coverage
+    line in two and leaves the first half reading as a completed panel:
+
+        review evidence: fallback:panel — 2 lenses claimed (adversarial,
+        correctness) (recorded) — ⚠ ONE lens claimed …
+
+    `_excerpt` already established this convention for comment bodies; the
+    receipt fields skipped it.
+    """
+    # Strip C0/C1 control characters BEFORE collapsing whitespace. `split()`
+    # normalizes whitespace but `\x1b` is not whitespace, so ANSI cursor
+    # control survived — and that is strictly worse than the newline this
+    # function was written for: `\x1b[1A\x1b[2K` *erases* lines that exist
+    # rather than appending ones that don't, so a receipt could delete the
+    # merge blockers printed above it.
+    cleaned = "".join(" " if unicodedata.category(c) == "Cc" else c for c in str(text))
+    flat = " ".join(cleaned.split())
+    return flat if len(flat) <= n else flat[: n - 1] + "…"
+
+
 def _excerpt(body: str, n: int = 140) -> str:
-    flat = " ".join((body or "").split())
+    # Same control-character strip as :func:`_flat`, and for a stronger reason:
+    # this renders a COMMENT BODY, which on a public repo any account can write.
+    # It also renders last, so cursor-up sequences here walk over every merge
+    # blocker above them. Pre-existing on main; fixed here because `_flat`'s
+    # docstring cites this function as the convention it copies, and copying a
+    # defect forward is how the convention stops being one.
+    flat = " ".join(
+        "".join(
+            " " if unicodedata.category(c) == "Cc" else c for c in (body or "")
+        ).split()
+    )
     return flat if len(flat) <= n else flat[: n - 1] + "…"
 
 
@@ -1614,6 +1678,34 @@ def build_report(
             else None
         ),
         "head": receipt_head,
+        # Carried into the report so the poll render can state what the receipt
+        # stands for. Previously the one-lens warning printed exactly once — on
+        # the stdout of the `--record-review` call the agent itself chose to
+        # make — and never again at the moment a merge is authorized.
+        # `isinstance(..., list)` first: a bare string is iterable, so a
+        # hand-edited `"lenses": "adversarial"` would otherwise be read as
+        # eleven single-character lenses and render as ample coverage.
+        "lenses": (
+            [
+                lens
+                for lens in review_receipt["lenses"]
+                if isinstance(lens, str) and lens.strip()
+            ]
+            if isinstance(review_receipt, dict)
+            and receipt_head == head
+            and isinstance(review_receipt.get("lenses"), list)
+            else []
+        ),
+        "override": (
+            review_receipt.get("override")
+            if isinstance(review_receipt, dict) and receipt_head == head
+            else None
+        ),
+        "bot_signal": (
+            review_receipt.get("bot_signal")
+            if isinstance(review_receipt, dict) and receipt_head == head
+            else None
+        ),
     }
     merge_blockers: list[str] = []
     if pr_state != "OPEN":
@@ -1748,7 +1840,7 @@ def render(report: dict) -> str:
     for entry in bots.get("unavailable") or []:
         lines.append(
             f"  ⚠ review unavailable [{entry['surface']}] {entry['where']}: "
-            f"{entry['reason']} — run the configured fallback review"
+            f"{entry['reason']} — run the fallback review panel (docs/agentic-dev-kit/fallback-review-panel.md)"
         )
     grace = bots.get("grace_minutes")
     for entry in bots.get("pending") or []:
@@ -1760,7 +1852,47 @@ def render(report: dict) -> str:
             lines.append(
                 f"  ⚠ review bot {entry['bot']} check {entry['check']} still pending after "
                 f"{entry['age_minutes']}m (past the {grace:g}m grace) — "
-                "treated as not coming; run the configured fallback review"
+                "treated as not coming; run the fallback review panel (docs/agentic-dev-kit/fallback-review-panel.md)"
+            )
+    # What the current-head receipt actually stands for. The gate cannot judge
+    # this — `source` is free text an agent chooses — so the honest move is to
+    # SHOW it at the moment a merge is considered, rather than to pattern-match
+    # a label and hope. A relabelled one-lens receipt now reads as one lens
+    # regardless of what it is called.
+    evidence = report.get("review_evidence") or {}
+    if evidence.get("valid"):
+        # SELF-REPORTED, and labelled as such. Whoever ran `--record-review`
+        # wrote both the source and the lens names in one invocation, with
+        # nothing binding either to a review that happened — so this engine
+        # cannot verify coverage, and four rounds of trying to (matching the
+        # source, then the lens names, then a configured roster) produced a
+        # check defeated by one extra character while the render affirmed the
+        # forgery. `safety-critical-changes.md` rule 1: treat "we tightened the
+        # matcher" as a stopgap, not a fix. So: report the claim, name it a
+        # claim, and let a reader judge it. Verifying it needs each lens to
+        # record its own receipt from its own context — see issue #32.
+        named = [_flat(lens, 40) for lens in evidence.get("lenses") or []]
+        distinct = len(_countable_lenses(named))
+        source = _flat(evidence.get("source"))
+        if distinct >= 2:
+            detail = f"{distinct} lenses claimed ({', '.join(named)})"
+        elif named:
+            detail = f"⚠ ONE lens claimed ({named[0]}) — not a dual-lens pass"
+        else:
+            detail = "no lenses recorded"
+        lines.append(f"  review evidence: {source} — {detail}")
+        # The same argument that moved `lenses` to the poll render applies to
+        # its siblings: a caveat printed only on the stdout of the
+        # `--record-review` call the agent itself made is not visible at the
+        # moment a merge is considered.
+        if evidence.get("override"):
+            lines.append(
+                f"    ⚠ recorded over an active override ({_flat(evidence['override'])})"
+            )
+        if evidence.get("bot_signal"):
+            lines.append(
+                f"    ⚠ review-bot state was unreadable ({_flat(evidence['bot_signal'])}) "
+                "when this receipt was taken"
             )
     for blocker in report.get("merge_blockers") or []:
         lines.append(f"  ✗ merge blocker: {blocker}")
@@ -1771,7 +1903,7 @@ def render(report: dict) -> str:
             if c.get("review_unavailable_reason"):
                 lines.append(
                     f"  • [review unavailable] @{c['author']}{loc}: "
-                    f"{c['review_unavailable_reason']} — run the configured fallback review"
+                    f"{c['review_unavailable_reason']} — run the fallback review panel (docs/agentic-dev-kit/fallback-review-panel.md)"
                 )
             else:
                 lines.append(f"  • [{c['kind']}] @{c['author']}{loc}: {c['excerpt']}")
@@ -1782,7 +1914,7 @@ def render_record_review(report: dict) -> str:
     receipt = report["review_receipt"]
     lines = [
         f"PR #{report['pr']} — recorded independent review from "
-        f"{receipt['source']} for head {receipt['head']}"
+        f"{_flat(receipt['source'])} for head {_flat(receipt['head'], 60)}"
     ]
     if receipt.get("override"):
         lines.append(
@@ -1794,9 +1926,27 @@ def render_record_review(report: dict) -> str:
             f"  ⚠ review-bot state was unreadable ({receipt['bot_signal']}) when this "
             "receipt was taken — the queued-reviewer guard did not run"
         )
-    for bot, sha in (receipt.get("bots_behind_head") or {}).items():
+    # Type-guarded like the sibling receipt fields: the state file is plain
+    # JSON on disk and anything that can run this engine can edit it, so a
+    # non-list or a list of non-strings must not crash the render.
+    raw_lenses = receipt.get("lenses")
+    named = (
+        [lens for lens in raw_lenses if isinstance(lens, str) and lens.strip()]
+        if isinstance(raw_lenses, list)
+        else []
+    )
+    named = [_flat(lens, 40) for lens in named]
+    if len(_countable_lenses(named)) == 1:
         lines.append(
-            f"  ⚠ {bot}'s last review was of {sha[:7]}, not this head — this receipt "
+            f"  ⚠ one lens only ({named[0]}) — `safety-critical-changes.md` rule 2 "
+            "holds that a single-lens verdict is not a green light"
+        )
+    elif named:
+        lines.append(f"  lenses: {', '.join(named)}")
+    behind_map = receipt.get("bots_behind_head")
+    for bot, sha in (behind_map if isinstance(behind_map, dict) else {}).items():
+        lines.append(
+            f"  ⚠ {bot}'s last review was of {_flat(sha, 12)}, not this head — this receipt "
             "does not stand for its review of this design"
         )
     return "\n".join(lines)
@@ -1880,6 +2030,16 @@ def main(argv: list[str] | None = None) -> int:
             "will never arrive — a queued bot is SLOW, not unavailable (issue #19)"
         ),
     )
+    parser.add_argument(
+        "--lenses",
+        metavar="NAMES",
+        help=(
+            "with --record-review: comma-separated review lenses that actually ran "
+            "(e.g. adversarial,correctness). Recorded on the receipt so a one-lens "
+            "pass is distinguishable from a panel — see "
+            "docs/agentic-dev-kit/fallback-review-panel.md"
+        ),
+    )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--mark-seen",
@@ -1920,6 +2080,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--head is only valid with --record-review")
     if args.allow_pending_bot_review and args.record_review is None:
         parser.error("--allow-pending-bot-review is only valid with --record-review")
+    if args.lenses and args.record_review is None:
+        parser.error("--lenses is only valid with --record-review")
 
     try:
         pr = resolve_pr(args.pr)
@@ -1945,6 +2107,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.record_review,
                 args.head,
                 allow_pending_bot=args.allow_pending_bot_review,
+                lenses=args.lenses,
             )
         except (RuntimeError, KeyError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)

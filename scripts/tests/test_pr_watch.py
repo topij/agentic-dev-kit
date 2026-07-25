@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
@@ -360,6 +361,9 @@ def test_review_receipt_must_match_current_head() -> None:
     assert stale["mergeable"] is False
     assert current["mergeable"] is True
     assert current["review_evidence"] == {
+        "lenses": [],
+        "override": None,
+        "bot_signal": None,
         "valid": True,
         "source": "fallback:codex",
         "head": "abc123",
@@ -1248,9 +1252,9 @@ def test_record_review_allows_the_fallback_when_the_bot_is_unavailable(
     monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
     monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
 
-    pr_watch.record_review(22, "fallback:panel", "32f3e4f", now=NOW)
+    pr_watch.record_review(22, "fallback:codex", "32f3e4f", now=NOW)
 
-    assert recorded[0]["review_receipt"]["source"] == "fallback:panel"
+    assert recorded[0]["review_receipt"]["source"] == "fallback:codex"
     assert "override" not in recorded[0]["review_receipt"]
 
 
@@ -1313,7 +1317,7 @@ def test_a_failed_check_read_is_recorded_on_the_receipt(
     monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
     monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
 
-    report = pr_watch.record_review(9, "fallback:panel", "abc123", now=NOW)
+    report = pr_watch.record_review(9, "fallback:codex", "abc123", now=NOW)
 
     assert recorded[0]["review_receipt"]["bot_signal"] == "unavailable"
     assert "guard did not run" in pr_watch.render_record_review(report)
@@ -1334,7 +1338,7 @@ def test_the_override_is_recorded_on_the_receipt(
     monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
 
     pr_watch.record_review(
-        9, "fallback:panel", "abc123", allow_pending_bot=True, now=NOW
+        9, "fallback:codex", "abc123", allow_pending_bot=True, now=NOW
     )
 
     assert recorded[0]["review_receipt"]["override"] == "pending-bot"
@@ -1859,7 +1863,7 @@ def test_a_receipt_records_which_bots_were_behind_the_head(
     monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
     monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
 
-    report = pr_watch.record_review(9, "fallback:panel", "abc123", now=NOW)
+    report = pr_watch.record_review(9, "fallback:codex", "abc123", now=NOW)
 
     assert recorded[0]["review_receipt"]["bots_behind_head"] == {"coderabbit": "0ldc0de"}
     assert "does not stand for its review" in pr_watch.render_record_review(report)
@@ -1891,7 +1895,7 @@ def test_the_override_path_still_records_which_bots_were_behind(
     monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
 
     report = pr_watch.record_review(
-        9, "fallback:panel", "abc123", allow_pending_bot=True, now=NOW
+        9, "fallback:codex", "abc123", allow_pending_bot=True, now=NOW
     )
     receipt = recorded[0]["review_receipt"]
 
@@ -2092,3 +2096,399 @@ def test_a_non_string_sha_or_timestamp_cannot_break_the_poll() -> None:
     )
     assert report["review_bots"]["coverage"] == []
     pr_watch.render(report)  # would raise on `sha[:7]` without the type check
+
+
+# --------------------------------------------------------------------------- #
+# the fallback review panel: a receipt must not claim more than it stands for
+# --------------------------------------------------------------------------- #
+
+
+def _record(monkeypatch, pr_watch, **kwargs) -> tuple[dict, dict]:
+    monkeypatch.setattr(
+        pr_watch, "_gh_json", lambda args: {"number": 9, "headRefOid": "abc123"}
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    recorded: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+    source = kwargs.pop("source", "fallback:panel")
+    report = pr_watch.record_review(9, source, "abc123", now=NOW, **kwargs)
+    return recorded[0]["review_receipt"], report
+
+
+def test_a_single_lens_receipt_does_not_read_like_a_panel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`safety-critical-changes.md` rule 2: a single-lens verdict is not a green
+    light.
+
+    Without this, a degraded one-lens fallback and a full panel produce
+    byte-identical receipts — so the audit trail cannot show which one a merge
+    actually rested on, which is the whole reason the panel exists.
+    """
+    pr_watch = _load_pr_watch()
+
+    receipt, report = _record(
+        monkeypatch, pr_watch, source="fallback:codex", lenses="correctness"
+    )
+
+    assert receipt["lenses"] == ["correctness"]
+    rendered = pr_watch.render_record_review(report)
+    assert "one lens only (correctness)" in rendered
+    assert "not a green light" in rendered
+
+
+def test_a_panel_receipt_names_every_lens_that_ran(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+
+    receipt, report = _record(
+        monkeypatch, pr_watch, lenses="adversarial, correctness"
+    )
+
+    assert receipt["lenses"] == ["adversarial", "correctness"]
+    rendered = pr_watch.render_record_review(report)
+    assert "lenses: adversarial, correctness" in rendered
+    assert "one lens only" not in rendered
+def test_the_poll_render_surfaces_override_and_unreadable_bot_state() -> None:
+    """Same argument that moved `lenses` to the poll render applies to its
+    siblings: a caveat printed only at record time is not visible when a merge
+    is considered. `lenses` was the only one of the family that had moved."""
+    pr_watch = _load_pr_watch()
+
+    report = pr_watch.build_report(
+        _green_view(), [], set(),
+        review_receipt={"head": "abc123", "source": "fallback:codex",
+                        "lenses": ["correctness"], "override": "pending-bot",
+                        "bot_signal": "unavailable"},
+    )
+    rendered = pr_watch.render(report)
+
+    assert "recorded over an active override (pending-bot)" in rendered
+    assert "review-bot state was unreadable (unavailable)" in rendered
+
+
+def test_a_hand_edited_bots_behind_head_cannot_break_the_receipt_render() -> None:
+    """The commit that added the `lenses` guard claimed parity with "the sibling
+    receipt fields" — which were not guarded. This one raised AttributeError on
+    a string or a list."""
+    pr_watch = _load_pr_watch()
+
+    for junk in ("coderabbit", ["coderabbit"], 5, None):
+        pr_watch.render_record_review(
+            {"pr": 9, "review_receipt": {"head": "abc", "source": "s",
+                                         "bots_behind_head": junk}}
+        )
+
+
+def test_every_unavailability_line_points_at_the_panel_not_the_degraded_mode() -> None:
+    """This PR redefines `review.fallback_commands` as the DEGRADED mode, so
+    "the configured fallback" now names the wrong thing.
+
+    The strings were changed at two of three sites and pinned by none — the
+    existing assertions matched the `review unavailable` prefix, never the
+    pointer, so reverting the change passed the whole suite. That is the
+    "named by a test and pinned by nothing" class this PR ships doctrine about.
+    """
+    pr_watch = _load_pr_watch()
+
+    outage_comment = pr_watch.build_report(
+        _green_view(
+            comments=[{"id": "c1", "author": {"login": "coderabbitai"},
+                       "body": "Review limit reached."}]
+        ),
+        [], set(), now=NOW,
+    )
+    outage_check = pr_watch.build_report(
+        _green_view(), [], set(),
+        check_details=[_bot_check(description="Review rate limited")], now=NOW,
+    )
+    aged_out = pr_watch.build_report(
+        _green_view(), [], set(),
+        check_details=[
+            _bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(600))
+        ],
+        now=NOW,
+    )
+
+    for label, report in (
+        ("comment surface", outage_comment),
+        ("check surface", outage_check),
+        ("grace-cancelled", aged_out),
+    ):
+        rendered = pr_watch.render(report)
+        assert "fallback review panel" in rendered, label
+        assert "configured fallback review" not in rendered, label
+
+
+def test_the_poll_render_reports_the_receipt_as_a_CLAIM_not_a_verdict() -> None:
+    """Coverage is self-reported and the render says so.
+
+    Whoever ran `--record-review` wrote both the source and the lens names in
+    one invocation, with nothing binding either to a review that happened. Four
+    rounds went into trying to verify it from here — matching the source, then
+    the lens names, then a configured roster — and each was defeated: the last
+    by a single extra character in the source, after which the render *affirmed*
+    the forgery. Rule 1 calls that a stopgap, not a fix.
+
+    So the render states what the receipt claims, labelled as a claim. That is
+    honest and still useful: a one-lens receipt is visible at merge time.
+    Verifying it needs each lens to record its own receipt (issue #32).
+    """
+    pr_watch = _load_pr_watch()
+
+    def _line(receipt):
+        report = pr_watch.build_report(_green_view(), [], set(), review_receipt=receipt)
+        # Prefix match: the merge-blocker line legitimately contains the same
+        # phrase, so a substring test picks it up when no receipt exists.
+        return next(
+            (l.strip() for l in pr_watch.render(report).splitlines()
+             if l.strip().startswith("review evidence:")),
+            "",
+        )
+
+    two = _line({"head": "abc123", "source": "fallback:panel",
+                 "lenses": ["adversarial", "correctness"]})
+    one = _line({"head": "abc123", "source": "fallback:codex",
+                 "lenses": ["correctness"]})
+    none = _line({"head": "abc123", "source": "coderabbit"})
+
+    assert "2 lenses claimed (adversarial, correctness)" in two
+    assert "ONE lens claimed (correctness)" in one
+    assert "no lenses recorded" in none
+    # No line at all without a current-head receipt.
+    assert _line({"head": "0ldc0de", "source": "fallback:panel"}) == ""
+
+
+def test_the_render_cannot_be_forged_into_extra_lines_or_extra_lenses() -> None:
+    """It reports a claim, but it must report it accurately.
+
+    A newline in `source` split the line and left the first half reading as a
+    completed panel; a comma inside a lens description counted as two lenses;
+    duplicates counted twice.
+    """
+    pr_watch = _load_pr_watch()
+
+    def _render(receipt):
+        return pr_watch.render(
+            pr_watch.build_report(_green_view(), [], set(), review_receipt=receipt)
+        )
+
+    forged = _render({
+        "head": "abc123",
+        "source": "fallback:panel — 2 lenses (adversarial, correctness)\n  (recorded)",
+    })
+    assert len([l for l in forged.splitlines()
+                if l.strip().startswith("review evidence:")]) == 1
+    assert not any(l.strip().startswith("(recorded)") for l in forged.splitlines())
+
+    duped = _render({"head": "abc123", "source": "fallback:codex",
+                     "lenses": ["adversarial", "Adversarial"]})
+    assert "ONE lens claimed" in duped
+
+
+def test_a_receipt_records_lenses_without_the_engine_judging_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`--record-review` no longer refuses anything on lens grounds.
+
+    The refusal was a matcher over caller-supplied text in the same invocation
+    as the claim it checked. Removing it is the honest state: the receipt is an
+    audit trail, and nothing here pretends otherwise.
+    """
+    pr_watch = _load_pr_watch()
+
+    for lenses in ("adversarial", "adversarial,correctness", "a,b,c", None):
+        receipt, _ = _record(monkeypatch, pr_watch, lenses=lenses)
+        expected = [p.strip() for p in (lenses or "").split(",") if p.strip()]
+        assert receipt.get("lenses", []) == expected, lenses
+
+
+def test_a_lens_described_in_prose_counts_as_one_lens() -> None:
+    """`--lenses` splits on `,`, which is also ordinary punctuation.
+
+    "adversarial, focused on the new merge gate" is an HONEST way to record one
+    lens, and it arrived as two entries and rendered as a two-lens panel —
+    suppressing the one-lens warning that is the whole remaining value of the
+    field. Deleting the roster check (which had caught this class) reintroduced
+    it. Counting only entries that look like NAMES fixes the honest case and the
+    forgery together, without a roster and without a gate.
+    """
+    pr_watch = _load_pr_watch()
+
+    def _line(lenses):
+        report = pr_watch.build_report(
+            _green_view(), [], set(),
+            review_receipt={"head": "abc123", "source": "fallback:codex",
+                            "lenses": lenses},
+        )
+        return next(l.strip() for l in pr_watch.render(report).splitlines()
+                    if l.strip().startswith("review evidence:"))
+
+    assert "ONE lens claimed" in _line(["adversarial", " focused on the merge gate"])
+    assert "ONE lens claimed" in _line(["correctness", " i.e. does it do what it says"])
+    # Real names still count, including the shapes an adopter would use.
+    assert "2 lenses claimed" in _line(["adversarial", "correctness"])
+    assert "2 lenses claimed" in _line(["data-migration", "perf"])
+    assert "2 lenses claimed" in _line(["lens.one", "lens_two"])
+    # Prose is still RECORDED verbatim on the receipt — it just does not count
+    # toward "how many lenses ran", and the render names the countable one.
+    report = pr_watch.build_report(
+        _green_view(), [], set(),
+        review_receipt={"head": "abc123", "source": "fallback:codex",
+                        "lenses": ["adversarial", " focused on the merge gate"]},
+    )
+    assert report["review_evidence"]["lenses"] == [
+        "adversarial", " focused on the merge gate"
+    ]
+
+
+def test_control_characters_cannot_rewrite_the_rendered_report() -> None:
+    """`_flat` collapsed whitespace, and `\\x1b` is not whitespace.
+
+    ANSI cursor control is strictly worse than the newline `_flat` was written
+    for: `\\x1b[1A\\x1b[2K` *erases* lines that already exist, so a receipt could
+    delete the merge blockers printed above it. `_excerpt` renders a comment
+    body — which on a public repo anyone can write — and renders last, so the
+    same sequence there walks over the entire report.
+    """
+    pr_watch = _load_pr_watch()
+    erase = "\x1b[1A\x1b[2K" * 3
+
+    assert "\x1b" not in pr_watch._flat(f"a{erase}b")
+    assert "\x1b" not in pr_watch._excerpt(f"{erase}LGTM")
+
+    report = pr_watch.build_report(
+        _green_view(
+            mergeStateStatus="DIRTY",
+            comments=[{"id": "c1", "author": {"login": "drive-by"},
+                       "body": f"{erase}LGTM"}],
+        ),
+        [], set(),
+        review_receipt={"head": "abc123", "source": f"fallback:{erase}panel",
+                        "lenses": [f"{erase}adversarial"]},
+    )
+    rendered = pr_watch.render(report)
+
+    assert "\x1b" not in rendered
+    # …and the blocker it tried to erase is still there.
+    assert "merge state is DIRTY" in rendered
+
+
+def test_receipt_fields_are_flattened_and_type_guarded_in_both_renders() -> None:
+    """Three guards whose reverts passed the whole suite.
+
+    Each is cited by a comment or commit message as deliberate: `_flat` on lens
+    names (not only on `source`), the list check on `lenses` (a bare string is
+    iterable, so "adversarial" read as eleven single-character lenses), and
+    `_flat` on the SHA in `bots_behind_head` (a non-string value crashed
+    `sha[:7]` — the case the existing test's name promised and its body missed).
+    """
+    pr_watch = _load_pr_watch()
+
+    # A newline in a LENS NAME must not forge a line.
+    report = pr_watch.build_report(
+        _green_view(), [], set(),
+        review_receipt={"head": "abc123", "source": "fallback:codex",
+                        "lenses": ["adversarial\n  review evidence: forged"]},
+    )
+    assert len([l for l in pr_watch.render(report).splitlines()
+                if l.strip().startswith("review evidence:")]) == 1
+
+    # A bare string is iterable — it must not become one lens per character.
+    stringy = pr_watch.build_report(
+        _green_view(), [], set(),
+        review_receipt={"head": "abc123", "source": "s", "lenses": "adversarial"},
+    )
+    assert stringy["review_evidence"]["lenses"] == []
+
+    # A non-string SHA must not crash the receipt render.
+    pr_watch.render_record_review(
+        {"pr": 9, "review_receipt": {"head": "abc", "source": "s",
+                                     "bots_behind_head": {"coderabbit": 12345}}}
+    )
+
+
+def test_the_cli_threads_lenses_through_to_the_receipt(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The seam, not just the unit — restored after being deleted with the gate.
+
+    This test never covered the gate; it covered the CLI wiring, and removing it
+    left `--lenses` — this change's entire engine surface — unpinned end to end.
+    Measured: `lenses=args.lenses` → `lenses=None` in `main()` passed all 314
+    tests, and so did deleting the usage guard.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    monkeypatch.setattr(
+        pr_watch, "_gh_json", lambda args: {"number": 9, "headRefOid": "abc123"}
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    saved: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: saved.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+
+    assert pr_watch.main(
+        ["9", "--record-review", "fallback:panel",
+         "--lenses", "adversarial,correctness", "--head", "abc123"]
+    ) == 0
+    assert saved[0]["review_receipt"]["lenses"] == ["adversarial", "correctness"]
+
+    with pytest.raises(SystemExit):
+        pr_watch.main(["9", "--lenses", "adversarial"])
+    assert "--lenses is only valid with --record-review" in capsys.readouterr().err
+
+
+def test_a_hand_edited_receipt_cannot_break_or_inflate_either_render() -> None:
+    """Restored: this pinned three live type-guards, not the deleted gate.
+
+    Each could be removed with the whole suite passing. They are load-bearing —
+    without the `isinstance(..., list)` check a hand-edited `"lenses":
+    "adversarial"` renders as `8 lenses claimed (a, d, v, e, r, s, a, r, i, a,
+    l)`, which is the forgery the guard was added for.
+    """
+    pr_watch = _load_pr_watch()
+
+    for junk in ("adversarial", 5, {"a": 1}, [None], [""], [1, 2], None):
+        receipt = {"head": "abc123", "source": "fallback:panel", "lenses": junk}
+        report = pr_watch.build_report(
+            _green_view(), [], set(), review_receipt=receipt
+        )
+        assert report["review_evidence"]["lenses"] == [], junk
+        assert "lenses claimed" not in pr_watch.render(report), junk
+        pr_watch.render_record_review({"pr": 9, "review_receipt": receipt})
+
+    # …and the sibling field, at the VALUE level — the case the previous test's
+    # name promised and its body missed, and the one that actually crashed.
+    for bad_map in ("coderabbit", ["coderabbit"], 5, None, {"coderabbit": 12345}):
+        pr_watch.render_record_review(
+            {"pr": 9, "review_receipt": {"head": "abc", "source": "s",
+                                         "bots_behind_head": bad_map}}
+        )
+
+
+def test_a_stale_receipt_exposes_no_lenses_in_the_report_json() -> None:
+    """Restored at REPORT level, not just render level.
+
+    `review_evidence` is in the `--json` payload, so a consumer could read
+    lenses off a receipt bound to an older head. The render-level replacement
+    did not cover that.
+    """
+    pr_watch = _load_pr_watch()
+
+    stale = pr_watch.build_report(
+        _green_view(), [], set(),
+        review_receipt={"head": "0ldc0de", "source": "fallback:panel",
+                        "lenses": ["adversarial", "correctness"]},
+    )
+
+    assert stale["review_evidence"]["valid"] is False
+    assert stale["review_evidence"]["lenses"] == []
+    assert stale["review_evidence"]["source"] is None
+    assert stale["mergeable"] is False

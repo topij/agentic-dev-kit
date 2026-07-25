@@ -374,6 +374,21 @@ migrate_kit_schema() {
     - "review skipped"
     - "no review credits"' || true
 
+  ensure_review_key fallback_panel '  # The independent pass when a configured bot cannot review. One isolated,
+  # fresh-context reviewer PER LENS — `safety-critical-changes.md` rule 2 wants two
+  # disjoint lenses, which a single command cannot be. `fallback_commands` elsewhere
+  # in this section is the DEGRADED one-lens mode for a runtime that cannot isolate
+  # a reviewer (a migration appends this block, so the two can land in either order).
+  # Which lenses is yours; how to run one is kit doctrine, in
+  # docs/agentic-dev-kit/fallback-review-panel.md.
+  fallback_panel:
+    receipt_source: "fallback:panel"
+    lenses:
+      - name: adversarial
+        focus: "assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards"
+      - name: correctness
+        focus: "assume it works and ask what it says — stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check"' || true
+
   ensure_review_key informational_checks '  informational_checks: [coderabbit]' || true
 
   ensure_review_key require_ci '  # False only for a repo with NO CI at all — otherwise pr-watch never converges.
@@ -715,6 +730,9 @@ add_ignore_line() {
 }
 add_ignore_line "state/"
 add_ignore_line ".devkit_state_root"
+# Isolated review lenses (fallback-review-panel.md contract item 7) run in their
+# own worktrees; those must never be committed back into the repo.
+add_ignore_line ".claude/worktrees/"
 # dev_session.sh copies a repo-root .mcp.json into each lane worktree so lanes
 # inherit MCP access. If yours holds literal credentials rather than ${ENV}
 # references, that copy must never be committable from a lane.
@@ -733,7 +751,7 @@ install_hooks
 echo ""
 echo "agentic-dev-kit is bootstrapped (kit schema v2)."
 echo "Review config/dev-model.yaml for any remaining values (paths, doc_budgets,"
-echo "models, review.fallback_commands) and edit to taste."
+echo "models, review.fallback_panel.lenses) and edit to taste."
 echo ""
 echo "Upgrading later: pull the new kit files, then re-run ./init.sh — it"
 echo "migrates an older config forward in place and never touches a narrative"

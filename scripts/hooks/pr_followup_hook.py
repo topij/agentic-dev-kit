@@ -10,7 +10,8 @@ This closes the gap where the kit only had prose asking the agent to run `/pr-wa
 unasked (Principle #8: "a rule that lives only in a doc is a wish").
 
 Generalized from a project-specific version: the reminder names whichever review
-bot(s) and fallback command this repo actually configures, read from
+bot(s) and the fallback PANEL (or, when fewer than two lenses are configured,
+the single fallback command) this repo actually configures, read from
 `config/dev-model.yaml` via `scripts/lib/kitconfig.py` — never a hardcoded bot name
 (Principle #10, "No hardcoding"). `paths.engines` resolves where `pr_watch.py` lives
 so the reminder's poll command is correct even when the kit is vendored under a
@@ -41,10 +42,12 @@ _TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
 
 _DEFAULT_FALLBACK_COMMAND = "/code-review"
 _DEFAULT_ENGINES_DIR = "scripts"
+_DEFAULT_PANEL_RECEIPT_SOURCE = "fallback:panel"
 
 
-def _load_review_config() -> tuple[list[str], str, str]:
-    """Read ``(review.bots, review.fallback_commands.claude, paths.engines)``.
+def _load_review_config() -> tuple[list[str], str, str, list[str], str]:
+    """Read ``(review.bots, review.fallback_commands.claude, paths.engines,
+    review.fallback_panel lens names, review.fallback_panel.receipt_source)``.
 
     Best-effort: any failure (missing config, kitconfig unimportable, malformed
     values) falls back to generic defaults rather than raising — this hook must
@@ -64,9 +67,39 @@ def _load_review_config() -> tuple[list[str], str, str]:
             fallback = _DEFAULT_FALLBACK_COMMAND
         if not isinstance(engines, str) or not engines:
             engines = _DEFAULT_ENGINES_DIR
-        return bots, fallback, engines
+        panel = kitconfig.get(config, "review.fallback_panel.lenses", [])
+        lenses = (
+            [
+                lens["name"].strip()
+                for lens in panel
+                if isinstance(lens, dict)
+                and isinstance(lens.get("name"), str)
+                # A blank name would have the hook advertise a panel with an
+                # unnameable lens — worse than advertising no panel at all.
+                and lens["name"].strip()
+            ]
+            if isinstance(panel, list)
+            else []
+        )
+        panel_source = kitconfig.get(
+            config, "review.fallback_panel.receipt_source", _DEFAULT_PANEL_RECEIPT_SOURCE
+        )
+        if not isinstance(panel_source, str) or not panel_source.strip():
+            panel_source = _DEFAULT_PANEL_RECEIPT_SOURCE
+        return bots, fallback, engines, lenses, panel_source.strip()
     except Exception:
-        return [], _DEFAULT_FALLBACK_COMMAND, _DEFAULT_ENGINES_DIR
+        return (
+            [],
+            _DEFAULT_FALLBACK_COMMAND,
+            _DEFAULT_ENGINES_DIR,
+            # NO default lens roster, deliberately: this path means the config
+            # could not be read, so nothing has confirmed a panel exists. A
+            # non-empty default here would have the hook tell the operator to
+            # claim panel coverage on the strength of a config it just failed to
+            # load — and nothing downstream would catch that (issue #32).
+            [],
+            _DEFAULT_PANEL_RECEIPT_SOURCE,
+        )
 
 
 def _bot_description(bots: list[str]) -> str:
@@ -78,8 +111,43 @@ def _bot_description(bots: list[str]) -> str:
     return " / ".join(names)
 
 
+def _fallback_instruction(
+    fallback_command: str,
+    lenses: list[str],
+    panel_source: str = _DEFAULT_PANEL_RECEIPT_SOURCE,
+    engines_dir: str = _DEFAULT_ENGINES_DIR,
+) -> str:
+    """What to run when a bot is unavailable.
+
+    Names the PANEL when one is configured, because a single command in this
+    session's own context is the author reviewing their own diff — which
+    `safety-critical-changes.md` rule 2 says is not a green light. This hook
+    fires on every `gh pr create`/`ready`, so it is the most-read statement of
+    the fallback policy in the kit; pointing it at the degraded mode taught the
+    wrong habit every time.
+    """
+    # Two DISTINCT lenses is the panel's floor (see fallback-review-panel.md).
+    # A one-lens `fallback_panel` is not a panel, so advertising one would tell
+    # the operator to claim coverage they cannot have. Nothing downstream will
+    # stop them: the engine records `--lenses` without verifying it (issue #32),
+    # so this wording is the only thing steering it.
+    if len({lens.casefold() for lens in lenses}) >= 2:
+        return (
+            "If a review bot is unavailable, run the fallback review PANEL — one "
+            f"isolated, fresh-context reviewer per lens ({', '.join(lenses)}), per "
+            "docs/agentic-dev-kit/fallback-review-panel.md — and record it with "
+            f"`uv run {engines_dir}/pr_watch.py <PR#> "
+            f'--record-review "{panel_source}" --lenses <names> --head <polled-sha>`. '
+            "Never treat the outage as a review waiver."
+        )
+    return (
+        f"If a review bot is unavailable, run the configured fallback "
+        f"(`{fallback_command}`) instead of treating the outage as a review waiver."
+    )
+
+
 def build_reminder() -> str:
-    bots, fallback_command, engines_dir = _load_review_config()
+    bots, fallback_command, engines_dir, lenses, panel_source = _load_review_config()
     bot_desc = _bot_description(bots)
     return (
         "A pull request was just opened or marked ready for review. Per the kit's "
@@ -90,9 +158,9 @@ def build_reminder() -> str:
         f"until CI is fully green AND every {bot_desc} finding is fixed or "
         "replied-to with a reason. Fix real findings, reply-with-reason to nitpicks "
         "you disagree with, `--mark-seen` each handled round, and keep polling (CI "
-        "can take 20-30 min). If a review bot is unavailable, run the configured "
-        f"fallback (`{fallback_command}`) instead of treating the outage as a review "
-        "waiver. Only stop early if you hit something that genuinely needs an "
+        "can take 20-30 min). "
+        + _fallback_instruction(fallback_command, lenses, panel_source, engines_dir)
+        + " Only stop early if you hit something that genuinely needs an "
         "operator decision."
     )
 

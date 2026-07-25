@@ -8,3 +8,6 @@ __pycache__/
 # appends these to an adopting repo's .gitignore.
 state/
 .devkit_state_root
+
+# Agent worktrees (created by isolated review lenses) are never committed.
+.claude/worktrees/

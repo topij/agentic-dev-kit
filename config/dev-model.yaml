@@ -93,6 +93,29 @@ review:
   # `CodeRabbit` and the author `coderabbitai` either way. Keep entries specific
   # enough not to collide with a CI job name.
   bots: [coderabbit]
+  # The independent pass to run when a configured bot can't review. TWO shapes,
+  # and the difference is whether the reviewer is independent of the author:
+  #
+  #   fallback_panel     one isolated, fresh-context reviewer PER LENS. This is
+  #                      the real substitute — `safety-critical-changes.md`
+  #                      rule 2 wants two disjoint lenses, which a single
+  #                      command cannot be.
+  #   fallback_commands  one command in the cockpit's own context. When the
+  #                      cockpit authored the diff that is the author
+  #                      re-reading their own work — kept as the DEGRADED mode
+  #                      for a runtime with no way to isolate a reviewer.
+  #
+  # Which lenses is adopter knowledge and lives here; how a lens must be run
+  # (fresh context, raw diff, no author framing, execute rather than only read,
+  # mutation-test new branches) is kit doctrine and lives in
+  # docs/agentic-dev-kit/fallback-review-panel.md.
+  fallback_panel:
+    receipt_source: "fallback:panel"   # never the same as a single-lens receipt
+    lenses:
+      - name: adversarial
+        focus: "assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards"
+      - name: correctness
+        focus: "assume it works and ask what it says — stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check"
   fallback_commands:
     claude: "/code-review"
     codex: "/review"

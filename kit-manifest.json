@@ -13,9 +13,13 @@
     ".gitignore"
   ],
   "files": {
+    "docs/agentic-dev-kit/fallback-review-panel.md": {
+      "role": "doctrine",
+      "sha256": "cf460b82d9c0e4f55691ca23a77f0a46911af3282d9f317da46b51e81b9227d2"
+    },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
-      "sha256": "cc3f3a76a22ba0a8552539bd2b85f07e10e59485eae2c3749f06036bf7db2e91"
+      "sha256": "b889d9dddb9c3b5b7441162406094530532288a996af232120ca2b22c822d312"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -23,7 +27,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "7f116a78706776feb68e9065f434eedd63a1eec420f3b8314899b8e4e58dfbfe"
+      "sha256": "358a3eae1277920974a4a2752cfb3112b5cadefc1e9cf5e3399dc57a9aa2912e"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -67,7 +71,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "d2e4fcaf3e4814a340b1c0ac499e3a79a977122004d593629cbb562a9213bbd0"
+      "sha256": "7268ec94aa5b4c44311a57e34447f92b09a64eba34bf7b0e9fecf2e099a68f9f"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
@@ -99,7 +103,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "b04cc9a678a28c9d292b8f4d98062fd24f82e1a5bbdc5ac380dbca7e9394639b"
+      "sha256": "b8ee2baf65375d9422e2bbfce7ba4ce5de965a4f331a3b82ef948606fcc3a670"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",

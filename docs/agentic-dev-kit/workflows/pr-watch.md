@@ -7,9 +7,12 @@ run it without being asked.
 
 **Input:** an optional PR number. With none, the current branch's open PR is used.
 
-Read `config/dev-model.yaml` first. Resolve `<engine-dir>` from `paths.engines`,
-and select the current runtime's independent fallback from
-`review.fallback_commands` when needed.
+Read `config/dev-model.yaml` first. Resolve `<engine-dir>` from `paths.engines`.
+When a configured review bot is unavailable, the substitute pass is the
+**panel** in `review.fallback_panel` — read
+[`../fallback-review-panel.md`](../fallback-review-panel.md) before running it.
+`review.fallback_commands` is the degraded one-lens mode for a runtime that
+cannot isolate a reviewer.
 
 If the diff affects a customer-facing gate, destructive operation, recovery path,
 or other configured high-risk file, read and apply
@@ -65,14 +68,26 @@ Repeat until the report says **converged**:
 1. **If there are `new_comments`:** handle each with judgment —
 
    - **Reviewer unavailable** (`review_unavailable_reason` is set — rate limit,
-     skipped review, no credits): run the current runtime's configured
-     `review.fallback_commands` pass. A blocked bot is an action signal, never
-     auto-noise or a review waiver. Acknowledge the notice only after the fallback
-     review has completed and every finding from it is handled. Then record the
-     pass against the exact `head` from the poll you reviewed with `uv run
-     <engine-dir>/pr_watch.py <PR#> --record-review "fallback:<runtime>" --head
-     <polled-sha>`. For a lane, use `<engine-dir>/dev_session.sh pr-watch <scope>
-     --record-review "fallback:<runtime>" --head <polled-sha>` instead.
+     skipped review, no credits): run the **fallback review panel** —
+     `review.fallback_panel`, one isolated fresh-context reviewer per lens. Read
+     [`../fallback-review-panel.md`](../fallback-review-panel.md) for the contract
+     each lens gets; it is what makes the pass independent of you. A blocked bot
+     is an action signal, never auto-noise or a review waiver. Acknowledge the
+     notice only after every finding is handled, then bind the pass to the exact
+     `head` from the poll you reviewed:
+
+     ```sh
+     uv run <engine-dir>/pr_watch.py <PR#> \
+       --record-review "<review.fallback_panel.receipt_source>" \
+       --lenses <names of the lenses that ran> --head <polled-sha>
+     ```
+
+     `--lenses` names what actually ran, so a degraded one-lens pass is
+     distinguishable from a panel in the audit trail. It is **self-reported** —
+     the engine records it and shows it at merge time, but cannot verify it. If your
+     runtime cannot isolate a reviewer, run `review.fallback_commands` instead
+     and record it as `fallback:<runtime>` with the single lens named. For a
+     lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same flags.
 
    - **Real finding** (a bug, a missing guard, a correctness/clarity issue): fix it in
      the code, commit, push. Re-running the local gate first.
@@ -141,8 +156,8 @@ Self-pace on a bounded cadence — don't busy-wait:
   summaries) is filtered out by the engine. Reviewer-unavailable notices are
   deliberately *not* noise: they surface as new comments and so block `converged`;
   acknowledging one clears `converged` but still leaves the current-head
-  review-evidence blocker on `mergeable` until the configured fallback runs and
-  records its receipt.
+  review-evidence blocker on `mergeable` until the panel runs and records its
+  receipt.
 - **A bot's outage is detected on both surfaces, and a queued bot is not a finished
   one.** `review.unavailable_markers` are matched against comment bodies *and*
   against the status-check description of any check belonging to a configured
@@ -151,7 +166,7 @@ Self-pace on a bounded cadence — don't busy-wait:
   happened to use. The report's `review_bots` block resolves each bot to:
   - **unavailable** — an outage announced on either surface. Rendered as
     `⚠ review unavailable …`, and it never blocks anything: it's the action signal
-    to run `review.fallback_commands`. It stays visible after you `--mark-seen` the
+    to run the `review.fallback_panel` pass. It stays visible after you `--mark-seen` the
     notice comment, so the gap is still readable at merge time. Only a
     **check**-surface outage cancels the pending block below: a check describes
     the bot's state now, while comments are the whole PR history unscoped by
@@ -204,7 +219,26 @@ Self-pace on a bounded cadence — don't busy-wait:
   invalidating a receipt on a shape change risks wedging a repo whose bot is
   permanently unavailable.
 
+  Once a current-head receipt exists, every poll also prints what that receipt
+  **claims** to cover:
+
+  ```
+  review evidence: fallback:panel — 2 lenses claimed (adversarial, correctness)
+  review evidence: fallback:codex — ⚠ ONE lens claimed (correctness) — not a dual-lens pass
+  ```
+
+  Self-reported: `--lenses` is written by whoever ran `--record-review`, and the
+  engine records it without verifying it (issue #32). It is shown here so a
+  one-lens pass is visible when a merge is considered rather than only in the
+  record command's output. Entries that read as prose rather than a lens name
+  are recorded but not counted.
+
   **Known gaps, so you don't mistake them for coverage:**
+  - The `review evidence:` line prints on the **poll render**, which a human
+    reads. `dev_session.sh merge` consumes the JSON and gates on `mergeable`
+    alone — so on an autonomous self-merge path nobody sees it. That is the gap
+    issue #32 exists to close properly; until then, an unattended lane's review
+    coverage is only as good as what it recorded.
   - `coverage` reports only bots that have reviewed *and* whose review carried a
     commit SHA. A bot that has never reviewed at all produces no entry and no
     warning — that case is the pending/unavailable machinery's, not this one's.

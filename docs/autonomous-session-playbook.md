@@ -70,12 +70,15 @@ Follow this top to bottom, per ticket.
   bot's last review rather than waiting indefinitely for a re-review that may not come.
   Fix real findings (commit + push → re-watch); reply-with-reason to nitpicks you keep. If
   every configured bot is unavailable (rate-limited, no credits, skipped the PR), run
-  the current runtime's `review.fallback_commands` value as the substitute independent
-  pass, handle its findings, then bind that evidence to the current head with
-  `uv run <engine-dir>/pr_watch.py <PR#> --record-review "fallback:<runtime>" --head
-  <polled-sha>` (use the `head` from the exact reviewed poll; a lane uses the
-  scope-aware `dev_session.sh pr-watch` wrapper) — a blocked bot is not a waiver on
-  review.
+  the `review.fallback_panel` pass — one isolated fresh-context reviewer per lens, per
+  `docs/agentic-dev-kit/fallback-review-panel.md`. Handle its findings, then bind that
+  evidence to the current head with `uv run <engine-dir>/pr_watch.py <PR#>
+  --record-review "<review.fallback_panel.receipt_source>" --lenses <names> --head
+  <polled-sha>` (use the `head`
+  from the exact reviewed poll; a lane uses the scope-aware `dev_session.sh pr-watch`
+  wrapper). Unattended, this matters more than it does interactively: there is no
+  operator reading the findings, so a one-lens pass in your own context is the author
+  approving their own diff. A blocked bot is not a waiver on review.
 
 ### Merge + close out
 
