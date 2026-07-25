@@ -1052,7 +1052,11 @@ def summarize_review_bots(
         exact_ages.append(age)
 
     blockers: list[str] = []
-    for entry, exact_age in zip(pending, exact_ages):
+    # strict=True: the two lists are appended in lockstep in the loop above, and
+    # a future edit that adds a `continue` between them would otherwise pair
+    # each entry with the WRONG age — silently, and only for a bot with more
+    # than one pending check.
+    for entry, exact_age in zip(pending, exact_ages, strict=True):
         if entry["bot"] in unavailable_bots:
             # This bot's own CHECK announced an outage: it is not going to move
             # off pending, so waiting on it is a wedge with extra steps.

@@ -118,17 +118,38 @@ def test_decimal_scalars_match_pyyaml_except_the_documented_forms():
         )
 
 
-def test_decimal_scalars_keep_their_python_types_without_pyyaml():
-    """The same resolution, asserted directly — the engines run with no PyYAML,
-    so the parity test above skips in exactly the environment that matters most.
-    """
-    parsed = kitconfig.loads(
-        "review:\n  grace: 2.5\n  whole: 15\n  bare_exponent: 1e5\n"
-    )
+# The resolved type of every edge case above. Duplicated deliberately: the
+# parity test derives its expectation from PyYAML, this one states it outright,
+# so a regression has to fool two independent descriptions of the same rule.
+_EXPECTED_TYPES = {
+    "2.5": float, "15": int, "1.": float, "0.0": float, "-0.0": float,
+    "-0.5": float, "+1.5": float, ".5": float,
+    "-.5": str, "+.5": str,          # sign not allowed on the .digits form
+    "1.0e+3": float,                 # signed exponent
+    "1.0e3": str, "1.0E3": str, "1.5e3": str, "-.5e+3": str,  # unsigned
+    "1_0.5": float, "._5": str,      # `_` separates digits, cannot lead
+    "nan": str, "inf": str, "1e5": str, "1.2.3": str,
+}
 
-    assert parsed["review"]["grace"] == 2.5
-    assert isinstance(parsed["review"]["whole"], int)  # not silently a float
-    assert parsed["review"]["bare_exponent"] == "1e5"
+
+def test_every_float_edge_case_has_a_declared_type():
+    """The no-PyYAML assertions must cover the SAME set as the parity check.
+
+    Without this, adding a token to `_FLOAT_EDGE_CASES` silently leaves it
+    untested in the one environment the reader exists for — a bare env with no
+    PyYAML, where the parity test skips.
+    """
+    assert set(_EXPECTED_TYPES) == set(_FLOAT_EDGE_CASES)
+
+
+@pytest.mark.parametrize("token", _FLOAT_EDGE_CASES)
+def test_decimal_scalars_keep_their_python_types_without_pyyaml(token: str):
+    """The engines run with no PyYAML, so the parity test above skips in exactly
+    the environment that matters most. This one never skips."""
+    value = kitconfig.loads(f"v: {token}\n")["v"]
+
+    assert isinstance(value, _EXPECTED_TYPES[token]), (token, value)
+    assert not isinstance(value, bool)  # `15` must not arrive as True
 
 
 def test_inline_and_block_lists():

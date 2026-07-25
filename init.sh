@@ -414,8 +414,17 @@ migrate_kit_schema() {
     in_list == 1 { exit }
   ')
   if [ -n "$markers" ] && ! printf '%s\n' "$markers" | grep -qi 'review rate limited'; then
-    echo "ACTION NEEDED: add this entry to review.unavailable_markers in $CONFIG_FILE:" >&2
-    echo '    - "review rate limited"' >&2
+    echo "ACTION NEEDED: add \"review rate limited\" to review.unavailable_markers" >&2
+    echo "  in $CONFIG_FILE." >&2
+    # The instruction has to match the list style the adopter actually uses.
+    # Telling someone with an inline list to add a `- ` item would have them
+    # hang a block item off a flow scalar — this step is read-only, but it would
+    # still be walking them into the same corruption the surgery used to cause.
+    if printf '%s\n' "$markers" | head -n 1 | grep -qE ':[[:space:]]*\['; then
+      echo '  Yours is written as an inline list — add the string inside the brackets.' >&2
+    else
+      echo '    - "review rate limited"' >&2
+    fi
     echo "  Without it, a review bot that reports a rate limit ONLY as a status-check" >&2
     echo "  description (CodeRabbit does this) reads as a clean review. See issue #23." >&2
   fi
