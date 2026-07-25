@@ -107,12 +107,17 @@ review:
     - "<!-- walkthrough_start -->"
     - "actionable comments posted: 0"
     - "<!-- linear-linkback -->"
-  # Text signalling the reviewer could not run. Deliberately NOT noise: these
-  # surface and block `converged`, because a blocked bot is an action signal (run
-  # the configured fallback), never a silent review waiver. Matched against both
-  # comment bodies AND a configured bot's status-check description — the same
-  # outage is worded differently on the two surfaces, and matching only comments
-  # made detection depend on which one the bot happened to use (issue #23).
+  # Text signalling the reviewer could not run — a blocked bot is an action
+  # signal (run the configured fallback), never a silent review waiver. Matched
+  # against two surfaces, which behave differently on purpose:
+  #   - a COMMENT body: deliberately not noise, so it surfaces as a new comment
+  #     and blocks `converged` until acknowledged.
+  #   - a configured bot's STATUS-CHECK description: surfaced and reported, but
+  #     blocks nothing — there is no comment to acknowledge, so blocking on it
+  #     would wedge the loop. It is the surface that carried the outage on #22
+  #     and made a rate-limited bot read as a clean review (issue #23).
+  # The same outage is worded differently on each, which is why matching only
+  # comments made detection depend on which one the bot happened to use.
   unavailable_markers:
     - "bugbot needs on-demand usage enabled"
     - "review limit reached"

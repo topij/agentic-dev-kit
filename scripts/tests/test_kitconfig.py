@@ -64,41 +64,62 @@ top:
     assert parsed["top"]["nested"]["deeper"]["leaf"] == "found"
 
 
-def test_decimal_scalars_parse_as_floats_without_widening_past_pyyaml():
-    """A dotted number is a float; the things `float()` accepts and YAML doesn't
-    stay strings.
+# Every scalar form where "is this a float?" is a judgement call, plus the three
+# known-and-deliberate divergences. Kept as one list so the parity check below
+# cannot quietly cover a smaller set than the type assertions do.
+_FLOAT_EDGE_CASES = (
+    "2.5", "15", "-0.5", "+1.5", ".5", "1.",
+    "1.0e+3",   # signed exponent — a float in YAML 1.1
+    "1.0e3", "1.0E3", "1.5e3",  # UNSIGNED exponent — a string in YAML 1.1
+    "nan", "inf", "1e5", "1.2.3",  # things bare float() would swallow
+)
+_KNOWN_PYYAML_DIVERGENCES = {
+    ".nan": "float nan in PyYAML; string here",
+    ".inf": "float inf in PyYAML; string here",
+    "-.inf": "float -inf in PyYAML; string here",
+    "1_0.5": "10.5 in PyYAML (YAML 1.1 digit separators); string here",
+}
 
-    The gate matters more than the feature: `float()` alone would swallow `nan`,
-    `inf` and `1e5`, which PyYAML resolves as strings — so an unguarded version
-    would fix one divergence from the parity invariant and open three.
 
-    That claim is checked against PyYAML rather than restated: asserting only the
-    expected values would pass just as happily if the reference resolver disagreed
-    with every one of them.
+def test_decimal_scalars_match_pyyaml_except_three_documented_forms():
+    """Floats are resolved by YAML 1.1's rule, not by handing text to `float()`.
+
+    `float()` accepts `nan`, `inf` and `1e5`, all of which PyYAML resolves as
+    strings — so the loose version would trade one divergence from the parity
+    invariant for three more. The signed exponent is the subtle half: PyYAML
+    reads `1.0e+3` as 1000.0 and `1.0e3` as a string, and matching that exactly
+    is why the rule is copied rather than approximated.
+
+    Parity is asserted over the whole edge-case list rather than a couple of
+    hand-picked values, and the known divergences are pinned as divergences — so
+    closing one later fails this test instead of passing silently.
     """
-    text = """
-review:
-  grace: 2.5
-  whole: 15
-  negative: -0.5
-  exponent: 1.0e+3
-  not_a_number: nan
-  bare_exponent: 1e5
-  version_ish: 1.2.3
-"""
-    parsed = kitconfig.loads(text)
+    yaml = pytest.importorskip("yaml", reason="PyYAML absent — parity check skipped")
+
+    for token in _FLOAT_EDGE_CASES:
+        doc = f"v: {token}\n"
+        assert kitconfig.loads(doc) == yaml.safe_load(doc), token
+
+    for token, why in _KNOWN_PYYAML_DIVERGENCES.items():
+        doc = f"v: {token}\n"
+        assert kitconfig.loads(doc)["v"] == token, f"{token} should stay a string ({why})"
+        assert kitconfig.loads(doc) != yaml.safe_load(doc), (
+            f"{token} now agrees with PyYAML — good, but remove it from "
+            f"_KNOWN_PYYAML_DIVERGENCES and from _coerce's docstring ({why})"
+        )
+
+
+def test_decimal_scalars_keep_their_python_types_without_pyyaml():
+    """The same resolution, asserted directly — the engines run with no PyYAML,
+    so the parity test above skips in exactly the environment that matters most.
+    """
+    parsed = kitconfig.loads(
+        "review:\n  grace: 2.5\n  whole: 15\n  bare_exponent: 1e5\n"
+    )
 
     assert parsed["review"]["grace"] == 2.5
-    assert parsed["review"]["whole"] == 15
-    assert isinstance(parsed["review"]["whole"], int)
-    assert parsed["review"]["negative"] == -0.5
-    assert parsed["review"]["exponent"] == 1000.0
-    assert parsed["review"]["not_a_number"] == "nan"
+    assert isinstance(parsed["review"]["whole"], int)  # not silently a float
     assert parsed["review"]["bare_exponent"] == "1e5"
-    assert parsed["review"]["version_ish"] == "1.2.3"
-
-    yaml = pytest.importorskip("yaml", reason="PyYAML absent — parity check skipped")
-    assert parsed == yaml.safe_load(text)
 
 
 def test_inline_and_block_lists():

@@ -323,18 +323,34 @@ migrate_kit_schema() {
   # anchor is still missed, SAY SO — a migration that silently no-ops is
   # indistinguishable from one that ran, and that class of failure has already
   # cost this repo three bugs in one session.
+  # The idempotency check is scoped to the unavailable_markers BLOCK, not the
+  # whole file: a whole-file grep also matches the phrase in a noise_markers
+  # entry or an adopter's own comment, and would then skip both the migration
+  # AND its warning — a silent no-op, the class this whole block guards against.
+  existing_markers=$(awk '
+    /^  unavailable_markers:/ { in_list = 1; print; next }
+    in_list == 1 && $0 ~ /^[[:space:]]+- / { print; next }
+    in_list == 1 { exit }
+  ' "$CONFIG_FILE")
+
   if grep -q '^  unavailable_markers:' "$CONFIG_FILE" \
-     && ! grep -qi 'review rate limited' "$CONFIG_FILE"; then
-    # ONLY a block list is safe to append an item to. An inline flow list
-    # (`unavailable_markers: ["a", "b"]`) is equally valid YAML and equally
-    # supported by the config reader, but appending a `    - ` line under it
-    # produces a mapping with both a scalar value and children — malformed,
-    # and written straight over the adopter's config. Warn instead.
-    if grep -qE '^  unavailable_markers:[[:space:]]*(#.*)?$' "$CONFIG_FILE"; then
+     && ! printf '%s\n' "$existing_markers" | grep -qi 'review rate limited'; then
+    # Two shapes are unsafe to append to, and both are valid YAML the config
+    # reader accepts:
+    #   - an inline flow list (`unavailable_markers: ["a", "b"]`) — appending a
+    #     `- ` line under it yields a key with both a scalar value and children
+    #   - a block list whose dashes sit at the KEY's indent (what several YAML
+    #     formatters emit) — inserting at a deeper indent silently orphans every
+    #     original entry, which the post-condition grep would still pass
+    # So: require a bare key line, and reuse the indent of the list's own first
+    # item rather than assuming one.
+    item_indent=$(printf '%s\n' "$existing_markers" | awk 'NR > 1 { sub(/-.*/, ""); print; exit }')
+    if grep -qE '^  unavailable_markers:[[:space:]]*(#.*)?$' "$CONFIG_FILE" \
+       && [ -n "$item_indent" ]; then
       tmp="$CONFIG_FILE.tmp.$$"
-      awk '
-        inserted == 0 && in_list == 1 && $0 !~ /^    - / {
-          print "    - \"review rate limited\"       # status-check wording of \"review limit reached\""
+      awk -v indent="$item_indent" '
+        inserted == 0 && in_list == 1 && $0 !~ /^[[:space:]]+- / {
+          print indent "- \"review rate limited\"       # status-check wording of \"review limit reached\""
           inserted = 1
           in_list = 0
         }
@@ -342,15 +358,16 @@ migrate_kit_schema() {
         { print }
         END {
           if (inserted == 0 && in_list == 1)
-            print "    - \"review rate limited\"       # status-check wording of \"review limit reached\""
+            print indent "- \"review rate limited\"       # status-check wording of \"review limit reached\""
         }
       ' "$CONFIG_FILE" > "$tmp"
-      # Post-condition, not a trusted exit code: verify the marker actually
-      # landed before overwriting the adopter's config, and keep the original if
-      # it did not. A migration that silently no-ops is indistinguishable from
-      # one that ran — that class of failure has already cost this repo three
-      # bugs in one session.
-      if grep -qi 'review rate limited' "$tmp"; then
+      # Post-conditions, not a trusted exit code. The marker is inserted EARLY,
+      # so "the marker is present" alone would also accept a file truncated
+      # mid-write (disk full, signal) — hence the line count must be exactly one
+      # more than the original. A migration that silently corrupts is worse than
+      # one that silently no-ops, and this repo has already paid for both.
+      if grep -qi 'review rate limited' "$tmp" \
+         && [ "$(wc -l < "$tmp")" -eq "$(( $(wc -l < "$CONFIG_FILE") + 1 ))" ]; then
         mv "$tmp" "$CONFIG_FILE"
         echo "added the status-check rate-limit marker to config/dev-model.yaml"
         rate_limit_marker_added=1
@@ -363,6 +380,17 @@ migrate_kit_schema() {
       echo "         in $CONFIG_FILE — add it by hand, or a rate-limited review bot that reports" >&2
       echo "         the outage only as a status-check description will read as a clean review." >&2
     fi
+  fi
+
+  # `review.bots` became load-bearing for the merge gate in the same change:
+  # pr_watch reads it to decide which checks and comment authors belong to a
+  # reviewer. The interactive prompt below only REWRITES an existing line, so a
+  # `review:` section predating the key would silently fall through to the
+  # engine default. Benign while the default matches, but that is the same
+  # silent-no-op shape as the bugs above.
+  if ! grep -q '^  bots:' "$CONFIG_FILE"; then
+    append_to_section "review:" '  bots: [coderabbit]'
+    echo "added review.bots to config/dev-model.yaml"
   fi
 }
 

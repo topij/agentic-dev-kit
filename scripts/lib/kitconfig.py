@@ -82,6 +82,20 @@ def _strip_comment(value: str) -> str:
     return value
 
 
+# YAML 1.1's float form, minus the `.nan` / `.inf` special cases (see _coerce).
+# The exponent's `[-+]` is REQUIRED, matching PyYAML: `1.0e+3` is a float there,
+# `1.0e3` is a string.
+_YAML_FLOAT_RE = re.compile(
+    r"""^[-+]?          # optional sign
+        (?: [0-9]+\.[0-9]*   # 1.  /  1.5
+          | \.[0-9]+         # .5
+        )
+        (?: [eE][-+][0-9]+ )?   # optional, SIGNED exponent
+        $""",
+    re.VERBOSE,
+)
+
+
 def _coerce(raw: str) -> Any:
     """Turn one scalar token into a Python value."""
     text = _strip_comment(raw).strip()
@@ -98,14 +112,23 @@ def _coerce(raw: str) -> Any:
         return int(text)
     except ValueError:
         pass
-    # Floats, gated on an explicit decimal point. `float()` alone would accept
-    # `nan`, `inf` and `1e5`, none of which PyYAML's resolver treats as numbers —
-    # widening past the point would trade one divergence from the parity
-    # invariant for three others. A dot is what YAML 1.1 requires too.
-    if "." in text:
+    # Floats, matched against YAML 1.1's own resolver rather than handed to
+    # `float()`. `float()` accepts `nan`, `inf` and `1e5`, and PyYAML resolves
+    # all three as STRINGS — so the loose version would trade one divergence
+    # from the parity invariant for three more. Note the exponent's sign is
+    # mandatory: PyYAML reads `1.0e+3` as 1000.0 but `1.0e3` as the string
+    # "1.0e3", and matching that exactly is the whole point of using its rule
+    # instead of an approximation of it.
+    #
+    # Three known, deliberate gaps remain, all pinned by the parity test:
+    # `.nan`, `.inf`/`-.inf`, and YAML 1.1's underscore digit separators
+    # (`1_0.5` → 10.5 in PyYAML, a string here). None is meaningful as a config
+    # value in this kit, and supporting them would mean carrying YAML's
+    # special-form table for no adopter benefit.
+    if _YAML_FLOAT_RE.match(text):
         try:
             return float(text)
-        except ValueError:
+        except ValueError:  # pragma: no cover — the pattern already guarantees this
             return text
     return text
 

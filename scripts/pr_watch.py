@@ -309,10 +309,14 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
       ``yes``, a typo) keeps the default. The unsafe direction here is reading
       as *False* by accident, which would let a zero-check PR report green.
     - ``bot_pending_grace_minutes`` accepts a non-negative number (``bool`` is
-      rejected despite being an ``int`` subclass). The unsafe direction is a
-      huge value, which would let a dead bot block the merge gate for hours —
-      but that direction fails *closed* (merges wait), so a typo is annoying
-      rather than dangerous, and the default applies to anything non-numeric.
+      rejected despite being an ``int`` subclass; anything non-numeric keeps the
+      default). Both directions are reachable and only one is dangerous: a large
+      value makes a dead bot hold the merge gate for hours — annoying, but
+      fail-*closed* — while **``0`` disables the guard outright**, since the
+      bound is ``age >= grace``. That is a legitimate setting for a repo that
+      wants the #23 outage signal without the #19 wait, but it is opt-out of a
+      safety check, so set it deliberately rather than as a way to quiet a slow
+      bot.
     """
     defaults = ReviewConfig(
         noise_markers=_DEFAULT_NOISE_MARKERS,
@@ -434,7 +438,19 @@ def _warn_bot_signal_lost(reason: str) -> None:
     )
 
 
-def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> list[dict]:
+class CheckDetails(NamedTuple):
+    """``gh pr checks`` rows plus whether they could be read at all.
+
+    The signal is the point: an empty ``rows`` from a failed fetch is otherwise
+    byte-identical to an empty one from a genuinely quiet bot, and both #19's and
+    #23's guards go silently dead in the first case.
+    """
+
+    rows: list[dict]
+    signal: str  # "ok" | "skipped" | "unavailable"
+
+
+def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> CheckDetails:
     """Per-check ``{name, state, bucket, description, startedAt}`` for one PR.
 
     A SECOND ``gh`` call, and deliberately so. ``gh pr view --json
@@ -470,7 +486,7 @@ def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> list
     if bots is None:
         bots = _REVIEW_BOTS
     if not bots:
-        return []
+        return CheckDetails([], "skipped")
     cmd = [
         "gh",
         "pr",
@@ -490,18 +506,18 @@ def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> list
         )
     except (OSError, subprocess.SubprocessError) as exc:
         _warn_bot_signal_lost(str(exc))
-        return []
+        return CheckDetails([], "unavailable")
     try:
         parsed = json.loads(result.stdout)
     except json.JSONDecodeError:
         # stdout wasn't JSON, so the exit code IS the story here — an older `gh`
         # rejecting one of these fields, or a PR with no checks at all.
         _warn_bot_signal_lost(result.stderr or f"gh exited {result.returncode}")
-        return []
+        return CheckDetails([], "unavailable")
     if not isinstance(parsed, list):
         _warn_bot_signal_lost("gh pr checks returned an unexpected shape")
-        return []
-    return [item for item in parsed if isinstance(item, dict)]
+        return CheckDetails([], "unavailable")
+    return CheckDetails([item for item in parsed if isinstance(item, dict)], "ok")
 
 
 def resolve_pr(explicit: int | None) -> int:
@@ -762,16 +778,27 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
     ]
 
 
-def _match_bot(text: str, bots: tuple[str, ...]) -> str | None:
-    """The configured review bot whose name appears in ``text``, if any.
+def _match_bot(text: str, bots: tuple[str, ...], *, anchored: bool = False) -> str | None:
+    """The configured review bot named in ``text``, if any. Case-insensitive.
 
-    Substring, case-insensitive: one bot key (``coderabbit``) has to cover both
-    the check name GitHub shows (``CodeRabbit``) and the comment author
-    (``coderabbitai``), which no exact match spans.
+    Substring by default: one bot key (``coderabbit``) has to cover the check
+    name GitHub shows (``CodeRabbit``), a namespaced variant (``Review /
+    CodeRabbit``), and the comment author (``coderabbitai``), which no exact
+    match spans.
+
+    ``anchored`` requires the text to START with the bot key, and is used for
+    comment authors because that input is not the repo's to control: on a public
+    repo any account may comment, and an unrelated login merely *containing*
+    ``coderabbit`` (``xcoderabbit``) should not be read as the reviewer. Check
+    names come from the repo's own CI and bot configuration, so the looser match
+    is appropriate there. Different rules because the inputs have different
+    trust, not by oversight.
     """
-    low = (text or "").strip().lower()
+    low = str(text or "").strip().lower()
     if not low:
         return None
+    if anchored:
+        return next((bot for bot in bots if low.startswith(bot)), None)
     return next((bot for bot in bots if bot in low), None)
 
 
@@ -795,6 +822,9 @@ def _check_is_pending(detail: dict) -> bool:
 
     Prefers gh's own ``bucket`` (its normalization across ``CheckRun`` and
     ``StatusContext``); falls back to the raw state when a gh version omits it.
+    A row carrying *neither* reads as pending — fail-closed, so a truncated row
+    whose name matches a bot holds the merge gate for the grace window rather
+    than waving it through.
     """
     bucket = (detail.get("bucket") or "").strip().lower()
     if bucket:
@@ -832,6 +862,7 @@ def summarize_review_bots(
     bots: tuple[str, ...] | None = None,
     grace_minutes: float | None = None,
     pending_since: dict | None = None,
+    signal: str = "ok",
 ) -> dict:
     """Resolve each configured review bot to *unavailable*, *pending*, or neither.
 
@@ -853,9 +884,16 @@ def summarize_review_bots(
     - **unavailable** — an ``unavailable_markers`` hit on either surface: a
       comment body (already detected today) *or* a bot check's description (#23,
       the surface that was invisible). Never blocks anything. It is an action
-      signal: run the configured fallback review. It also SUPPRESSES the pending
-      block below — a bot that announced it is not reviewing is not "about to
-      report", so waiting on it would be waiting forever.
+      signal: run the configured fallback review.
+
+      Only a **check**-surface hit suppresses the pending block below. A check
+      describes the bot's state now; a comment describes the past, and
+      ``collect_comments`` returns the entire PR history unscoped by head or
+      age — so letting a comment cancel would mean one transient rate limit on
+      commit 1 waves through every queued review for the rest of the PR. Since
+      rate limits are transient by construction, that is the ordinary case, not
+      a corner one. A comment-surface outage is reported and nothing more; the
+      bot's check is what says whether it is still working.
     - **pending** — the bot's own check is non-terminal and no unavailability was
       announced. A verdict is genuinely coming, so a receipt recorded now would
       be premature (#19: exactly this, on #16, let four valid findings land after
@@ -880,9 +918,21 @@ def summarize_review_bots(
     The map is scoped to a head: a push means a fresh review, so the caller
     resets it.
 
-    Returns ``{grace_minutes, unavailable, pending, blockers, pending_since}``.
-    ``blockers`` are ready-made ``merge_blockers`` strings; ``pending_since`` is
-    the updated map for the caller to persist.
+    Returns ``{grace_minutes, signal, unavailable, pending, blockers,
+    pending_since}``. ``blockers`` are ready-made ``merge_blockers`` strings;
+    ``pending_since`` is the updated map for the caller to persist.
+
+    ``unavailable[].bot`` is ``None`` when a comment matched a marker but its
+    author matches no configured bot — a human writing "review skipped" in a PR
+    comment. Reported (the operator should see it) and attributed to nobody, so
+    it can never suppress anything.
+
+    ``signal`` distinguishes three states a bare empty result cannot: ``"ok"``
+    (checks were read), ``"skipped"`` (no bots configured — nothing to read),
+    and ``"unavailable"`` (the read failed, so both guards are off). Without it
+    a failed fetch is byte-identical to a genuinely clean bot, and the merge gate
+    consumes JSON on stdout — a stderr warning is not readable by
+    ``dev_session.sh merge``.
     """
     if bots is None:
         bots = _REVIEW_BOTS
@@ -897,28 +947,35 @@ def summarize_review_bots(
     # comment: once acked it vanished from `new_comments` and with it the fact
     # that the primary reviewer never ran. Aggregating it here keeps the gap
     # visible at merge time.
+    #
+    # Reported, NOT counted toward `unavailable_bots`. `collect_comments` returns
+    # the whole PR history, unscoped by head or age, so an outage comment from
+    # commit 1 would otherwise cancel the pending block on commit 5 — and rate
+    # limits are transient by construction, which makes "this bot was
+    # rate-limited earlier on this PR" the *normal* state of a later poll. That
+    # would be issue #19 walking back in through the door built to close it.
+    # A check is a statement about the bot's state NOW; a comment is a statement
+    # about the past. Only the former may cancel (surface 2 below).
     for comment in comments or []:
         reason = comment.get("review_unavailable_reason")
         if not reason:
             continue
         author = comment.get("author") or "?"
-        bot = _match_bot(author, bots)
         unavailable.append(
             {
-                "bot": bot,
+                "bot": _match_bot(author, bots, anchored=True),
                 "surface": "comment",
                 "where": f"@{author}",
                 "reason": reason,
             }
         )
-        if bot:
-            unavailable_bots.add(bot)
 
     # Surface 2 — the bot's own check description. Issue #23: on PR #22 this was
     # the ONLY place the rate limit appeared, and it read as a clean review.
     pending: list[dict] = []
+    exact_ages: list[float] = []
     for detail in check_details or []:
-        name = detail.get("name") or detail.get("context") or ""
+        name = str(detail.get("name") or detail.get("context") or "")
         bot = _match_bot(name, bots)
         if not bot:
             continue
@@ -941,10 +998,20 @@ def summarize_review_bots(
         source = "check"
         if age is None:
             # No usable stamp on the check — fall back to our own first-sighting
-            # clock, recording one now if this is the first sighting.
-            since = observed.get(bot) or now.isoformat()
+            # clock. A stored value that will not parse is REPLACED, not coerced
+            # to age 0: `age = parse(x) or 0.0` would pin an unparseable value at
+            # the maximally-blocking age *and* write it back, so every later poll
+            # re-reads the same poison and the gate blocks forever. Anything we
+            # cannot read is treated as "no clock yet" and restamped, which keeps
+            # the window bounded whatever wrote the state (a corrupt file, a
+            # different engine version, a richer future format).
+            age = _age_minutes(observed.get(bot), now)
+            if age is None:
+                since = now.isoformat()
+                age = 0.0
+            else:
+                since = observed[bot]
             observed[bot] = since
-            age = _age_minutes(since, now) or 0.0
             source = "observed"
         pending.append(
             {
@@ -953,20 +1020,26 @@ def summarize_review_bots(
                 "state": (detail.get("state") or "").upper(),
                 "since": since,
                 "age_source": source,
+                # Rounded for display only — the grace comparison below uses the
+                # exact value, so a 14.96m check does not round its way past a
+                # 15m bound.
                 "age_minutes": round(age, 1),
-                # Filled in below, once every surface has been read: an
-                # unavailability announced in a *comment* must be able to cancel
-                # a pending *check*, and the comment loop already ran.
                 "blocking": False,
+                "cancelled_by": None,
             }
         )
+        exact_ages.append(age)
 
     blockers: list[str] = []
-    for entry in pending:
+    for entry, exact_age in zip(pending, exact_ages):
         if entry["bot"] in unavailable_bots:
-            continue  # announced as not reviewing — waiting on it is a wedge
-        if entry["age_minutes"] >= grace_minutes:
-            continue  # aged out — treated as never going to report
+            # This bot's own CHECK announced an outage: it is not going to move
+            # off pending, so waiting on it is a wedge with extra steps.
+            entry["cancelled_by"] = "outage"
+            continue
+        if exact_age >= grace_minutes:
+            entry["cancelled_by"] = "grace"
+            continue
         entry["blocking"] = True
         blockers.append(
             f"review bot {entry['bot']} has not reported yet "
@@ -976,6 +1049,7 @@ def summarize_review_bots(
 
     return {
         "grace_minutes": grace_minutes,
+        "signal": "skipped" if not bots else signal,
         "unavailable": unavailable,
         "pending": pending,
         "blockers": blockers,
@@ -1217,9 +1291,7 @@ def record_review(
     expected_head = expected_head.strip()
     if not expected_head:
         raise ValueError("expected reviewed head must not be empty")
-    snapshot = _gh_json(
-        ["pr", "view", str(pr), "--json", "number,headRefOid,comments,reviews"]
-    )
+    snapshot = _gh_json(["pr", "view", str(pr), "--json", "number,headRefOid"])
     current_head = snapshot.get("headRefOid")
     if not current_head:
         raise ValueError("PR has no headRefOid; cannot bind review evidence")
@@ -1231,15 +1303,17 @@ def record_review(
     now = now or datetime.now(timezone.utc)
     state = load_state(pr)
     if not allow_pending_bot:
-        # Comments are fetched alongside the head so an outage announced in a
-        # COMMENT can still cancel a pending CHECK. Without them, the documented
-        # fallback path would be refused in exactly the case it exists for: a
-        # bot that says "rate limited" while its check never leaves pending.
+        # Checks only. Comments cannot cancel a pending block (see
+        # :func:`summarize_review_bots`), so fetching them here would cost a
+        # round trip to compute nothing — and would give this path a different
+        # view of the same predicate than the poll has.
+        details = fetch_check_details(pr)
         bot_status = summarize_review_bots(
-            fetch_check_details(pr),
-            collect_comments(snapshot, []),
+            details.rows,
+            [],
             now=now,
             pending_since=read_pending_since(state, current_head),
+            signal=details.signal,
         )
         if bot_status["blockers"]:
             # Persist the first sighting BEFORE refusing. Without this, a cold
@@ -1259,6 +1333,11 @@ def record_review(
         "source": source,
         "recorded_at": now.isoformat(),
     }
+    if allow_pending_bot:
+        # The escape hatch on a safety gate is the one thing that must leave a
+        # trace. Without it, a receipt taken over an active override is
+        # indistinguishable from one taken after a clean bot verdict.
+        receipt["override"] = "pending-bot"
     state["review_receipt"] = receipt
     save_state(pr, state)
     return {"pr": pr, "recorded_review": True, "review_receipt": receipt}
@@ -1280,7 +1359,7 @@ def build_report(
     prior_head: str | None = None,
     prior_max_total: int = 0,
     review_receipt: dict | None = None,
-    check_details: list[dict] | None = None,
+    check_details: list[dict] | CheckDetails | None = None,
     now: datetime | None = None,
     prior_pending_since: dict | None = None,  # already head-scoped by the caller
 ) -> dict:
@@ -1330,11 +1409,19 @@ def build_report(
     checks = summarize_checks(view.get("statusCheckRollup") or [])
     comments = collect_comments(view, inline)
     fresh = new_actionable(comments, seen)
+    # A plain list is accepted so a test (or an embedder) can pass rows directly;
+    # only a CheckDetails carries the "could we read them at all" signal.
+    details = (
+        check_details
+        if isinstance(check_details, CheckDetails)
+        else CheckDetails(list(check_details or []), "ok")
+    )
     review_bots = summarize_review_bots(
-        check_details or [],
+        details.rows,
         comments,
         now=now or datetime.now(timezone.utc),
         pending_since=prior_pending_since or {},
+        signal=details.signal,
     )
 
     # False-settle guard: right after a push, `gh` can still report the OLD
@@ -1469,16 +1556,26 @@ def render(report: dict) -> str:
     # place (#23). Printed even when the PR is otherwise clean — a clean report
     # that hides an outage is the exact failure being fixed.
     bots = report.get("review_bots") or {}
+    if bots.get("signal") == "unavailable":
+        lines.append(
+            "  ⚠ review-bot state could not be read — a queued or rate-limited "
+            "reviewer will NOT be detected on this poll (see stderr)"
+        )
     for entry in bots.get("unavailable") or []:
         lines.append(
             f"  ⚠ review unavailable [{entry['surface']}] {entry['where']}: "
             f"{entry['reason']} — run the configured fallback review"
         )
+    grace = bots.get("grace_minutes")
     for entry in bots.get("pending") or []:
-        if not entry.get("blocking"):
+        # Only the aged-out reason is reported here. An entry cancelled by an
+        # outage already has its own ⚠ line above, and printing "past the 15m
+        # grace" for a 1-minute-old check — which the single `not blocking`
+        # branch used to do — states a reason that is simply false.
+        if entry.get("cancelled_by") == "grace":
             lines.append(
                 f"  ⚠ review bot {entry['bot']} check {entry['check']} still pending after "
-                f"{entry['age_minutes']}m (past the {bots.get('grace_minutes')}m grace) — "
+                f"{entry['age_minutes']}m (past the {grace:g}m grace) — "
                 "treated as not coming; run the configured fallback review"
             )
     for blocker in report.get("merge_blockers") or []:

@@ -152,7 +152,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   - **unavailable** — an outage announced on either surface. Rendered as
     `⚠ review unavailable …`, and it never blocks anything: it's the action signal
     to run `review.fallback_commands`. It stays visible after you `--mark-seen` the
-    notice comment, so the gap is still readable at merge time.
+    notice comment, so the gap is still readable at merge time. Only a
+    **check**-surface outage cancels the pending block below: a check describes
+    the bot's state now, while comments are the whole PR history unscoped by
+    head — and since rate limits are transient, an old outage comment would
+    otherwise wave through every later queued review.
   - **pending** — the bot's own check is non-terminal and no outage was announced.
     A verdict is genuinely coming, so this **blocks `mergeable`** (and makes
     `--record-review` refuse) until the check ages past
@@ -168,6 +172,19 @@ Self-pace on a bounded cadence — don't busy-wait:
   None of this reaches `converged`. That is deliberate and load-bearing: the watch
   loop must be able to finish while a bot that never reports sits pending forever.
   Every signal here feeds the merge gate only.
+
+  **Known gaps, so you don't mistake them for coverage:**
+  - The pending block only exists once the bot has *registered* a check. In the
+    window between `gh pr ready` and the bot creating its check row, "the bot
+    hasn't started yet" is indistinguishable from "this repo has no bot", so a
+    receipt recorded in that window is still premature. Give a freshly-readied PR
+    a poll or two before recording one.
+  - `review_bots.signal` is `ok` / `skipped` (no bots configured) / `unavailable`
+    (the check read failed — e.g. a `gh` too old for the requested `--json`
+    fields). On `unavailable` **both guards are off**; it's reported rather than
+    blocking, because an environment problem shouldn't become a wedge.
+  - An *older* `pr_watch.py` polling the same PR drops the persisted grace clock,
+    restarting the window. Merges wait longer; nothing fails open.
 - **Tune this for your own bot mix in `config/dev-model.yaml`, never in the engine.**
   `review.bots`, `review.noise_markers`, `review.unavailable_markers`,
   `review.informational_checks` and `review.bot_pending_grace_minutes` are read from
