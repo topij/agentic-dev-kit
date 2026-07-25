@@ -234,6 +234,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   are recorded but not counted.
 
   **Known gaps, so you don't mistake them for coverage:**
+  - The `review evidence:` line prints on the **poll render**, which a human
+    reads. `dev_session.sh merge` consumes the JSON and gates on `mergeable`
+    alone — so on an autonomous self-merge path nobody sees it. That is the gap
+    issue #32 exists to close properly; until then, an unattended lane's review
+    coverage is only as good as what it recorded.
   - `coverage` reports only bots that have reviewed *and* whose review carried a
     commit SHA. A bot that has never reviewed at all produces no entry and no
     warning — that case is the pending/unavailable machinery's, not this one's.
