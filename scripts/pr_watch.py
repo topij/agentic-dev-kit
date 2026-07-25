@@ -11,13 +11,22 @@ call this once per round: it asks `gh` for the PR's check rollup + every
 comment surface (issue comments, review submissions, inline review comments),
 filters out known auto-noise (while surfacing reviewer-unavailability notices),
 diffs against a per-PR seen-set so only *new actionable* comments surface, and
-reports whether the PR is `done` (checks green, nothing new, merge-ready, and
-independently reviewed at the current head).
+reports two distinct predicates:
+
+- `done` — checks green, nothing new to act on, not mid-settle. The WATCH-LOOP
+  predicate: "is there more for me to fix?"
+- `mergeable` — `done` AND no deterministic merge blocker AND an
+  independent-review receipt bound to the current head. The MERGE-GATE
+  predicate, re-checked by `dev_session.sh merge` at act time.
+
+A `done` PR is not necessarily `mergeable`. Keeping them separate is what lets a
+caller watch to convergence without being forced to record a review receipt just
+to terminate the loop (see `decide_done`).
 
 The caller loops: run this -> if not done, fix the failures / address or reply
 to the new comments -> `--mark-seen` -> wait -> run again. `done` flips true
-once CI is green, every finding has been handled, and an explicitly recorded
-independent-review receipt covers the current head.
+once CI is green and every finding has been handled; `mergeable` additionally
+waits on `--record-review`.
 
 `--mark-seen` NEVER re-polls `gh`. Every plain poll (any invocation without
 `--mark-seen`) persists the exact ``all_seen_keys`` it just reported into a
@@ -417,10 +426,10 @@ def summarize_checks(rollup: list[dict], *, require_ci: bool | None = None) -> d
       unreachable forever, so the watch loop never terminates and
       ``dev_session.sh merge`` always refuses.
 
-    ``False`` does not remove the quality gate: :func:`decide_done` separately
-    requires an independent-review receipt bound to the *current* head, so on a
-    CI-less repo that receipt becomes the only gate — which is why the flag is
-    opt-in per repo rather than inferred from an empty rollup.
+    ``False`` does not remove the quality gate: :func:`decide_mergeable`
+    separately requires an independent-review receipt bound to the *current*
+    head, so on a CI-less repo that receipt becomes the only gate — which is why
+    the flag is opt-in per repo rather than inferred from an empty rollup.
     """
     if require_ci is None:
         require_ci = _REQUIRE_CI
@@ -592,24 +601,47 @@ def decide_done(
     checks: dict,
     new_items: list[dict],
     *,
-    merge_blockers: list[str] | None = None,
-    review_evidence: bool = False,
     settling: bool = False,
 ) -> bool:
-    """Done = green, independently reviewed, merge-ready, and not mid-settle.
+    """Done = green, nothing left to act on, and not mid-settle.
+
+    This is the **watch-loop** predicate and nothing more: it answers "is there
+    more for me to fix?", which is the only question the poll/fix/mark-seen loop
+    needs. It deliberately does NOT mean "safe to merge" — see
+    :func:`decide_mergeable` for that.
+
+    Keeping the two separate is load-bearing. Folding merge authorization into
+    ``done`` makes a watch loop that has genuinely finished report ``done:
+    false`` forever until someone records a review receipt, which (a) wedges any
+    caller that watches to convergence without recording one, and (b) pressures
+    the operator into recording a receipt early just to terminate the loop —
+    exactly the premature-receipt failure tracked in issue #19.
 
     ``settling`` is set right after a push (the PR head SHA moved, or the rollup
     is smaller than the largest seen for this head — new checks not yet
     registered), so a poll can't false-settle on the *stale pre-push* rollup
     (an all-green old commit) before the new commit's CI even starts.
     """
-    return (
-        checks["all_green"]
-        and not new_items
-        and not merge_blockers
-        and review_evidence
-        and not settling
-    )
+    return checks["all_green"] and not new_items and not settling
+
+
+def decide_mergeable(
+    done: bool,
+    *,
+    merge_blockers: list[str] | None = None,
+    review_evidence: bool = False,
+) -> bool:
+    """Mergeable = the watch loop converged AND the merge is authorized.
+
+    Strictly stronger than :func:`decide_done`: a PR must first have nothing
+    left to act on, and additionally carry no deterministic merge blocker (draft,
+    non-open, blocked merge state, changes requested) and an independent-review
+    receipt bound to the *current* head.
+
+    This — not ``done`` — is what an autonomous self-merge gates on
+    (``dev_session.sh merge``).
+    """
+    return done and not merge_blockers and review_evidence
 
 
 # ------------------------------------------------------------------ state I/O
@@ -769,8 +801,12 @@ def build_report(
     - ``merge_blockers`` — deterministic reasons the PR is not currently safe to
       merge (draft, blocked/unknown merge state, requested changes, non-open PR,
       or missing current-head review evidence).
-    - ``done`` — :func:`decide_done`: all checks green, current-head review
-      evidence, no fresh comments, no merge blockers, and not ``settling``.
+    - ``done`` — :func:`decide_done`: all checks green, no fresh comments, and
+      not ``settling``. The **watch-loop** predicate: "is there more to fix?"
+      A ``done`` PR is NOT necessarily safe to merge.
+    - ``mergeable`` — :func:`decide_mergeable`: ``done`` AND no
+      ``merge_blockers`` AND current-head review evidence. The **merge-gate**
+      predicate, and what ``dev_session.sh merge`` re-checks at act time.
     """
     checks = summarize_checks(view.get("statusCheckRollup") or [])
     comments = collect_comments(view, inline)
@@ -860,12 +896,11 @@ def build_report(
             {k for c in comments for k in (c["key"], c["content_key"])}
         ),
     }
-    report["done"] = decide_done(
-        checks,
-        fresh,
+    report["done"] = decide_done(checks, fresh, settling=settling)
+    report["mergeable"] = decide_mergeable(
+        report["done"],
         merge_blockers=merge_blockers,
         review_evidence=review_evidence["valid"],
-        settling=settling,
     )
     return report
 
@@ -873,7 +908,16 @@ def build_report(
 def render(report: dict) -> str:
     ck = report["checks"]
     lines = [f"PR #{report['pr']} — {report['url']}"]
-    state = "✅ DONE — green + clean" if report["done"] else "⏳ not done"
+    # `done` answers "anything left to fix?"; `mergeable` answers "safe to
+    # merge?". Rendering only the former would let "✅ DONE" be misread as merge
+    # authorization — the exact conflation this split exists to remove — so a
+    # converged-but-unauthorized PR says so on the same line.
+    if not report["done"]:
+        state = "⏳ not done"
+    elif report.get("mergeable"):
+        state = "✅ DONE — green + clean · mergeable"
+    else:
+        state = "✅ DONE — green + clean · NOT mergeable (see merge blockers below)"
     if report.get("settling"):
         state += " (settling — new commit pushed; waiting for its checks to register)"
     lines.append(state)
