@@ -78,13 +78,21 @@ Take the fetched kit's copy first:
 
 ```bash
 cp /tmp/agentic-dev-kit/init.sh ./init.sh
-chmod +x init.sh          # the kit ships it 100755; a copy can lose the bit
+chmod +x init.sh                                  # the kit ships it 100755; a copy can lose the bit
+mkdir -p docs/templates && cp /tmp/agentic-dev-kit/docs/templates/*.tmpl docs/templates/
 ./init.sh
 ```
 
-(Equivalently, run `/tmp/agentic-dev-kit/init.sh` from this repo's root — it resolves
-`config/dev-model.yaml` relative to the working directory, not to its own location. Copying
-first is preferred, since the refreshed `init.sh` is part of what you are upgrading to.)
+The templates have to land **before** `init.sh` runs, not with the other file copies in Step
+4: `init.sh` resolves `docs/templates/*.tmpl` relative to the working directory, so without
+them it prints `note: template … missing — skipped` and seeds nothing. For a repo whose
+narrative docs are already in use that is merely noise (they would have been left untouched
+anyway), but a **partially-adopted** repo missing one of the four docs would silently not get
+it seeded.
+
+Note this is also why running `/tmp/agentic-dev-kit/init.sh` in place of the copy is *not*
+equivalent: every path it reads — the config, the templates — resolves against the working
+directory, not against its own location, so it still needs the templates present here.
 
 `init.sh` is the supported config upgrade path, and it is safe to re-run any number of times.
 It only ever **adds** missing keys, never guesses over an existing value; it probes
