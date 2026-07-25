@@ -42,7 +42,6 @@ _TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
 
 _DEFAULT_FALLBACK_COMMAND = "/code-review"
 _DEFAULT_ENGINES_DIR = "scripts"
-_DEFAULT_LENSES: list[str] = []
 _DEFAULT_PANEL_RECEIPT_SOURCE = "fallback:panel"
 
 
@@ -93,7 +92,12 @@ def _load_review_config() -> tuple[list[str], str, str, list[str], str]:
             [],
             _DEFAULT_FALLBACK_COMMAND,
             _DEFAULT_ENGINES_DIR,
-            list(_DEFAULT_LENSES),
+            # NO default lens roster, deliberately: this path means the config
+            # could not be read, so nothing has confirmed a panel exists. A
+            # non-empty default here would have the hook advertise a panel —
+            # and a `--record-review` command the engine then refuses — on the
+            # strength of a config it just failed to load.
+            [],
             _DEFAULT_PANEL_RECEIPT_SOURCE,
         )
 

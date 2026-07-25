@@ -265,3 +265,26 @@ def test_load_review_config_degrades_gracefully_when_config_unreadable(monkeypat
     assert "PANEL" not in hook._fallback_instruction(
         fallback, lenses, panel_source, engines
     )
+
+
+def test_an_unreadable_config_never_advertises_a_panel(monkeypatch):
+    """This path means nothing confirmed a panel exists.
+
+    A default lens roster here would have the hook advertise a panel — and a
+    `--record-review` command the engine then refuses — on the strength of a
+    config it had just failed to read.
+    """
+    hook = _load_hook()
+    hook._load_review_config()
+    import kitconfig  # noqa: PLC0415
+
+    def _boom(*_a, **_k):
+        raise FileNotFoundError("no config")
+
+    monkeypatch.setattr(kitconfig, "load_config", _boom)
+
+    reminder = hook.build_reminder()
+
+    assert "PANEL" not in reminder
+    assert "/code-review" in reminder  # the compatible single-command wording
+    assert "review waiver" in reminder
