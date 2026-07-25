@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["pyyaml"]
+# dependencies = []
 # ///
 """Sweep old session blocks out of the live handoff into its history document.
 
@@ -42,12 +42,11 @@ import re
 import sys
 from pathlib import Path
 
-import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-from devmodel_config import _repo_root, load_config, resolve_path  # noqa: E402
+from kitconfig import load_config, repo_root, resolve_path  # noqa: E402
 
-REPO_ROOT = _repo_root()
+REPO_ROOT = repo_root()
 SEP = "______________________________________________________________________\n"
 SESSION_PREFIXES = ("## Latest session", "## Earlier session", "## Session — ")
 # Recent sessions may write *dated* headings (`## June 5 Fri (cont.) — …`) or a

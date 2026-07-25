@@ -127,6 +127,40 @@ path, and it is safe to run any number of times:
   lives in `config/dev-model.yaml`, so you should never need to edit an engine to
   adopt it. If you have, that's a bug — please report it.
 
+### Which files actually drifted — `kit_doctor`
+
+Re-running `init.sh` handles the config. For the **engines**, the problem is that a
+copy-in has no version marker and no record of whether it was edited, so nothing can
+tell an older engine from a locally-patched one:
+
+```sh
+uv run scripts/kit_doctor.py     # or: python scripts/kit_doctor.py — stdlib only
+```
+
+Per kit-owned file it reports `unchanged` (safe to replace outright), `differs` (diff
+before replacing), `missing`, or `unknown-version`. `differs` deliberately does **not**
+claim a cause — a hash mismatch can't distinguish "older version" from "hand-edited", so
+it narrows by schema version and leaves the call to you. Adopter-owned paths (your
+config, your narrative docs) are never compared; they're *supposed* to differ.
+
+It also checks four things nothing else validates:
+
+- your config's schema generation vs. the kit's
+- that **`paths.engines` points at a directory that actually holds engines** — a `✗` here
+  is the silent breakage where every workflow's `<engine-dir>/…` reference resolves to
+  nothing
+- that the pre-push hook is installed, not merely shipped
+- that the narrative docs were rendered, not left as unrendered templates
+
+`kit-manifest.json` is the hash set it compares against, regenerated at release
+(`--generate-manifest`) and gated in CI so it can't go stale.
+
+**[`/upgrade`](.claude/commands/upgrade.md)** drives the whole sequence — shape detection,
+config migration, then per-file refresh keyed on those states — non-destructively, on a
+branch. It's the counterpart to [`/adopt`](.claude/commands/adopt.md) (first install). A
+repo with no `config/dev-model.yaml` at all predates the config surface and routes to
+`/adopt` instead.
+
 ### Agent runtime adapters
 
 The workflow definitions under `docs/agentic-dev-kit/workflows/` are shared. The

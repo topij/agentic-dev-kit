@@ -1,0 +1,106 @@
+{
+  "adopter_owned": [
+    "config/dev-model.yaml",
+    "docs/handoff.md",
+    "docs/handoff-history.md",
+    "docs/friction-log.md",
+    "docs/friction-log-archive.md",
+    "README.md",
+    ".gitignore"
+  ],
+  "files": {
+    "docs/agentic-dev-kit/safety-critical-changes.md": {
+      "role": "doctrine",
+      "sha256": "cc3f3a76a22ba0a8552539bd2b85f07e10e59485eae2c3749f06036bf7db2e91"
+    },
+    "docs/agentic-dev-kit/workflows/parallel.md": {
+      "role": "workflow",
+      "sha256": "519fa1c623b75ba8cc0c6a3377f49a9681f47ada49f141aaf130d4007fffd460"
+    },
+    "docs/agentic-dev-kit/workflows/pr-watch.md": {
+      "role": "workflow",
+      "sha256": "169d3e27e149a49f736931b838d117a2fe6ad3ac6ddcaefccb99a51b97b505c8"
+    },
+    "docs/agentic-dev-kit/workflows/session-start.md": {
+      "role": "workflow",
+      "sha256": "f7a0a3ba8b65bc82f19764de6430bf82d0ee11d08447936b03de0056ac152c3a"
+    },
+    "docs/agentic-dev-kit/workflows/wrap-up.md": {
+      "role": "workflow",
+      "sha256": "63c26e6337c44653a4b710af68a5bad03e61e4fe0a2231479df4ab105053e071"
+    },
+    "docs/templates/friction-log-archive.md.tmpl": {
+      "role": "template",
+      "sha256": "af4a138e4a5ebe5634c55e7e417cd6b9f362bf3a35182b033f72876cd88180cf"
+    },
+    "docs/templates/friction-log.md.tmpl": {
+      "role": "template",
+      "sha256": "33e5bf0fe285ebbc248e062124d52f86bb78c47767f185d3d04df192db09c66d"
+    },
+    "docs/templates/handoff-history.md.tmpl": {
+      "role": "template",
+      "sha256": "111cf71a4c9b2a296f4fcf5ea02c6516907710e5b4fe0a7b3074f444f862ae69"
+    },
+    "docs/templates/handoff.md.tmpl": {
+      "role": "template",
+      "sha256": "1654465836a9e70a6e81d76208783e9a12d65343d1e9c3091f1d30c25a437ce7"
+    },
+    "scripts/archive_plan_sessions.py": {
+      "role": "engine",
+      "sha256": "fb15bd2dbe03257e6304f6e40f5af14bdffa66288fe0cc7ef2cdc38d0b4f9c76"
+    },
+    "scripts/check_doc_budget.py": {
+      "role": "engine",
+      "sha256": "a402424a12278e6a2ba55f90692aef9e44e9f030932529b5e85208590fc4e6dd"
+    },
+    "scripts/dev_session.sh": {
+      "role": "engine",
+      "sha256": "80311d61d9210c633560cd493402724e64aba9ff95b0ab02a40c97fb130d22eb"
+    },
+    "scripts/hooks/pre-push": {
+      "role": "hook",
+      "sha256": "c469700ff61a1506fa5951b4d5ab3ac95f3213227d8838efa95eef0492516fba"
+    },
+    "scripts/kit_doctor.py": {
+      "role": "engine",
+      "sha256": "23303dfac720e6f20cd1b1131d44b44893bbde8d061d18eadbb26a86a4252eef"
+    },
+    "scripts/lib/devmodel_config.py": {
+      "role": "engine",
+      "sha256": "53458a5d0c72b1fe5e5e5f6e8e5881c08c8c03c255493ae841391c5a8d6c1a29"
+    },
+    "scripts/lib/kitconfig.py": {
+      "role": "engine",
+      "sha256": "41c01a2956185d898f6cb75865d713845630a2d8335976f1460de1ed5f875317"
+    },
+    "scripts/lib/repo_root.sh": {
+      "role": "engine",
+      "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
+    },
+    "scripts/lib/state_paths/__init__.py": {
+      "role": "engine",
+      "sha256": "691a7df06a3bf9019b5faca8b8ebdb9d54463d231d492a632fd54c16cd51a2c6"
+    },
+    "scripts/lib/state_paths/paths.py": {
+      "role": "engine",
+      "sha256": "f54fd7d970402f8581f6c5080aa9614ce41cb2dafa2010c08406129731799397"
+    },
+    "scripts/lib/state_paths/repo_root.py": {
+      "role": "engine",
+      "sha256": "d9412f1fe395b944a86126bcc39f85d6838382b0fc29d68c8b29b965cd530b5a"
+    },
+    "scripts/lib/state_paths/resolver.py": {
+      "role": "engine",
+      "sha256": "e39fca241d6fbf28596ed3954f28a55e65831181cedb02c7c15e372895bb5bd2"
+    },
+    "scripts/pr_watch.py": {
+      "role": "engine",
+      "sha256": "8e1fa0e8e14cc4e26172a91ea675194f7f985592a139ac5a09dd9def97deecd1"
+    },
+    "scripts/reconcile_sessions.sh": {
+      "role": "engine",
+      "sha256": "825796c961162b4b69ecacd4c6a228a3395213fc6323df957b0a123896e59a53"
+    }
+  },
+  "kit_version": 2
+}
