@@ -974,6 +974,7 @@ def test_check_detail_fetch_never_raises_and_degrades_to_no_signal(
         def __init__(self, stdout: str, returncode: int) -> None:
             self.stdout = stdout
             self.returncode = returncode
+            self.stderr = ""
 
     monkeypatch.setattr(
         pr_watch.subprocess,
@@ -994,6 +995,36 @@ def test_check_detail_fetch_never_raises_and_degrades_to_no_signal(
 
     monkeypatch.setattr(pr_watch.subprocess, "run", _boom)
     assert pr_watch.fetch_check_details(1) == []
+
+
+def test_losing_the_bot_signal_warns_once_rather_than_degrading_silently(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Both new guards depend on this fetch, so a silent `[]` disables them
+    without a trace.
+
+    An older `gh` that rejects one of the requested `--json` fields fails exactly
+    this way, and "checked and clean" would be indistinguishable from "never
+    checked" — the failure mode that cost this repo three silent-no-op bugs in
+    one session. Once per process, not per poll: a warning repeated every round
+    of a watch loop is skimmed past exactly like silence.
+    """
+    pr_watch = _load_pr_watch()
+
+    class _Result:
+        stdout = ""
+        stderr = 'unknown JSON field: "startedAt"'
+        returncode = 1
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", lambda *a, **k: _Result())
+
+    assert pr_watch.fetch_check_details(1) == []
+    first = capsys.readouterr().err
+    assert "unknown JSON field" in first
+    assert "will not be detected" in first
+
+    assert pr_watch.fetch_check_details(1) == []
+    assert capsys.readouterr().err == ""  # not once per poll
 
 
 def test_record_review_refuses_while_the_bot_is_still_queued(

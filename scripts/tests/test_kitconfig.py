@@ -71,9 +71,12 @@ def test_decimal_scalars_parse_as_floats_without_widening_past_pyyaml():
     The gate matters more than the feature: `float()` alone would swallow `nan`,
     `inf` and `1e5`, which PyYAML resolves as strings — so an unguarded version
     would fix one divergence from the parity invariant and open three.
+
+    That claim is checked against PyYAML rather than restated: asserting only the
+    expected values would pass just as happily if the reference resolver disagreed
+    with every one of them.
     """
-    parsed = kitconfig.loads(
-        """
+    text = """
 review:
   grace: 2.5
   whole: 15
@@ -83,7 +86,8 @@ review:
   bare_exponent: 1e5
   version_ish: 1.2.3
 """
-    )
+    parsed = kitconfig.loads(text)
+
     assert parsed["review"]["grace"] == 2.5
     assert parsed["review"]["whole"] == 15
     assert isinstance(parsed["review"]["whole"], int)
@@ -92,6 +96,9 @@ review:
     assert parsed["review"]["not_a_number"] == "nan"
     assert parsed["review"]["bare_exponent"] == "1e5"
     assert parsed["review"]["version_ish"] == "1.2.3"
+
+    yaml = pytest.importorskip("yaml", reason="PyYAML absent — parity check skipped")
+    assert parsed == yaml.safe_load(text)
 
 
 def test_inline_and_block_lists():

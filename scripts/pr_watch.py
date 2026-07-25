@@ -413,6 +413,27 @@ def _gh_json(args: list[str]):
     return json.loads(_gh(args))
 
 
+_bot_signal_warned = False
+
+
+def _warn_bot_signal_lost(reason: str) -> None:
+    """Say once, on stderr, that the review-bot guards are running blind.
+
+    Once per process, not per poll: a watch loop calls this every round, and a
+    warning repeated forty times is skimmed past exactly like silence.
+    """
+    global _bot_signal_warned
+    if _bot_signal_warned:
+        return
+    _bot_signal_warned = True
+    print(
+        f"warning: could not read check details ({' '.join(reason.split())[:160]}); "
+        "review-bot pending/outage state is unavailable, so a queued or "
+        "rate-limited reviewer will not be detected",
+        file=sys.stderr,
+    )
+
+
 def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> list[dict]:
     """Per-check ``{name, state, bucket, description, startedAt}`` for one PR.
 
@@ -436,6 +457,12 @@ def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> list
     ignored and only parseable JSON on stdout is used. Any failure degrades to
     ``[]`` — which reads as "no bot signal", the same fail-open direction the
     informational-check exclusion already takes.
+
+    **But it says so, once.** Degrading silently would disable both #19's and
+    #23's guards without a trace — an older ``gh`` that rejects one of these
+    ``--json`` fields fails exactly this way, and "checked and clean" would be
+    indistinguishable from "never checked". Warned once per process rather than
+    per poll, so a watch loop does not turn one real problem into a wall.
 
     Skips the call entirely when no review bots are configured: with nothing to
     match, the result could only ever be discarded.
@@ -461,10 +488,20 @@ def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> list
             cwd=str(REPO_ROOT),
             timeout=60,
         )
-        parsed = json.loads(result.stdout)
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+    except (OSError, subprocess.SubprocessError) as exc:
+        _warn_bot_signal_lost(str(exc))
         return []
-    return [item for item in parsed if isinstance(item, dict)] if isinstance(parsed, list) else []
+    try:
+        parsed = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        # stdout wasn't JSON, so the exit code IS the story here — an older `gh`
+        # rejecting one of these fields, or a PR with no checks at all.
+        _warn_bot_signal_lost(result.stderr or f"gh exited {result.returncode}")
+        return []
+    if not isinstance(parsed, list):
+        _warn_bot_signal_lost("gh pr checks returned an unexpected shape")
+        return []
+    return [item for item in parsed if isinstance(item, dict)]
 
 
 def resolve_pr(explicit: int | None) -> int:
@@ -943,9 +980,12 @@ def summarize_review_bots(
         "pending": pending,
         "blockers": blockers,
         # Only the bots still pending: an entry for a bot that has since
-        # reported would otherwise keep a stale clock alive across polls.
+        # reported would otherwise keep a stale clock alive across polls, and a
+        # later re-review would inherit an already-expired window.
         "pending_since": {
-            bot: at for bot, at in observed.items() if any(e["bot"] == bot for e in pending)
+            bot: at
+            for bot, at in observed.items()
+            if bot in {entry["bot"] for entry in pending}
         },
     }
 

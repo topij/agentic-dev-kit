@@ -325,28 +325,40 @@ migrate_kit_schema() {
   # cost this repo three bugs in one session.
   if grep -q '^  unavailable_markers:' "$CONFIG_FILE" \
      && ! grep -qi 'review rate limited' "$CONFIG_FILE"; then
-    awk '
-      inserted == 0 && in_list == 1 && $0 !~ /^    - / {
-        print "    - \"review rate limited\"       # status-check wording of \"review limit reached\""
-        inserted = 1
-        in_list = 0
-      }
-      /^  unavailable_markers:/ { in_list = 1 }
-      { print }
-      END {
-        if (inserted == 0 && in_list == 1)
+    # ONLY a block list is safe to append an item to. An inline flow list
+    # (`unavailable_markers: ["a", "b"]`) is equally valid YAML and equally
+    # supported by the config reader, but appending a `    - ` line under it
+    # produces a mapping with both a scalar value and children — malformed,
+    # and written straight over the adopter's config. Warn instead.
+    if grep -qE '^  unavailable_markers:[[:space:]]*(#.*)?$' "$CONFIG_FILE"; then
+      tmp="$CONFIG_FILE.tmp.$$"
+      awk '
+        inserted == 0 && in_list == 1 && $0 !~ /^    - / {
           print "    - \"review rate limited\"       # status-check wording of \"review limit reached\""
-      }
-    ' "$CONFIG_FILE" > "$CONFIG_FILE.tmp"
-    # Post-condition, not a trusted exit code: verify the marker actually landed
-    # before overwriting the adopter's config, and keep the original if it did
-    # not. A migration that silently no-ops is indistinguishable from one that
-    # ran — that class of failure has already cost this repo three bugs.
-    if grep -qi 'review rate limited' "$CONFIG_FILE.tmp"; then
-      mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
-      echo "added the status-check rate-limit marker to config/dev-model.yaml"
-    else
-      rm -f "$CONFIG_FILE.tmp"
+          inserted = 1
+          in_list = 0
+        }
+        /^  unavailable_markers:/ { in_list = 1 }
+        { print }
+        END {
+          if (inserted == 0 && in_list == 1)
+            print "    - \"review rate limited\"       # status-check wording of \"review limit reached\""
+        }
+      ' "$CONFIG_FILE" > "$tmp"
+      # Post-condition, not a trusted exit code: verify the marker actually
+      # landed before overwriting the adopter's config, and keep the original if
+      # it did not. A migration that silently no-ops is indistinguishable from
+      # one that ran — that class of failure has already cost this repo three
+      # bugs in one session.
+      if grep -qi 'review rate limited' "$tmp"; then
+        mv "$tmp" "$CONFIG_FILE"
+        echo "added the status-check rate-limit marker to config/dev-model.yaml"
+        rate_limit_marker_added=1
+      else
+        rm -f "$tmp"
+      fi
+    fi
+    if [ -z "${rate_limit_marker_added:-}" ]; then
       echo "WARNING: could not add the \"review rate limited\" marker to review.unavailable_markers" >&2
       echo "         in $CONFIG_FILE — add it by hand, or a rate-limited review bot that reports" >&2
       echo "         the outage only as a status-check description will read as a clean review." >&2
