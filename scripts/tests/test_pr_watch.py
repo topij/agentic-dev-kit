@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
@@ -2092,3 +2093,98 @@ def test_a_non_string_sha_or_timestamp_cannot_break_the_poll() -> None:
     )
     assert report["review_bots"]["coverage"] == []
     pr_watch.render(report)  # would raise on `sha[:7]` without the type check
+
+
+# --------------------------------------------------------------------------- #
+# the fallback review panel: a receipt must not claim more than it stands for
+# --------------------------------------------------------------------------- #
+
+
+def _record(monkeypatch, pr_watch, **kwargs) -> tuple[dict, dict]:
+    monkeypatch.setattr(
+        pr_watch, "_gh_json", lambda args: {"number": 9, "headRefOid": "abc123"}
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    recorded: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+    report = pr_watch.record_review(9, "fallback:panel", "abc123", now=NOW, **kwargs)
+    return recorded[0]["review_receipt"], report
+
+
+def test_a_single_lens_receipt_does_not_read_like_a_panel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`safety-critical-changes.md` rule 2: a single-lens verdict is not a green
+    light.
+
+    Without this, a degraded one-lens fallback and a full panel produce
+    byte-identical receipts — so the audit trail cannot show which one a merge
+    actually rested on, which is the whole reason the panel exists.
+    """
+    pr_watch = _load_pr_watch()
+
+    receipt, report = _record(monkeypatch, pr_watch, lenses="correctness")
+
+    assert receipt["lenses"] == ["correctness"]
+    rendered = pr_watch.render_record_review(report)
+    assert "one lens only (correctness)" in rendered
+    assert "not a green light" in rendered
+
+
+def test_a_panel_receipt_names_every_lens_that_ran(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+
+    receipt, report = _record(
+        monkeypatch, pr_watch, lenses="adversarial, correctness"
+    )
+
+    assert receipt["lenses"] == ["adversarial", "correctness"]
+    rendered = pr_watch.render_record_review(report)
+    assert "lenses: adversarial, correctness" in rendered
+    assert "one lens only" not in rendered
+
+
+def test_omitting_lenses_records_nothing_rather_than_guessing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An older caller, or a receipt from a human reviewer, has no lens list.
+
+    Absent must mean "not stated" — inventing one would make an unknown look
+    like a verified panel, which is the failure direction this whole family of
+    fields exists to close.
+    """
+    pr_watch = _load_pr_watch()
+
+    for value in (None, "", "  ", ",", " , "):
+        receipt, report = _record(monkeypatch, pr_watch, lenses=value)
+        assert "lenses" not in receipt, value
+        assert "one lens only" not in pr_watch.render_record_review(report), value
+
+
+def test_the_shipped_config_ships_two_disjoint_lenses() -> None:
+    """The doctrine's floor is TWO lenses, and it must survive being config.
+
+    A kit that ships a one-lens panel would violate rule 2 out of the box while
+    appearing to satisfy it.
+    """
+    pr_watch = _load_pr_watch()
+    sys.path.insert(0, str(ENGINE_DIR / "lib"))
+    import kitconfig  # noqa: PLC0415
+
+    config = kitconfig.load_config(ENGINE_DIR.parent / "config" / "dev-model.yaml")
+    panel = kitconfig.get(config, "review.fallback_panel")
+
+    assert len({lens["name"] for lens in panel["lenses"]}) >= 2
+    assert all(lens.get("focus") for lens in panel["lenses"])
+    # The panel's receipt source must differ from a single-lens one, or the
+    # audit trail cannot tell them apart.
+    assert panel["receipt_source"] == "fallback:panel"
+    assert panel["receipt_source"] not in set(
+        kitconfig.get(config, "review.fallback_commands", {}).values()
+    )
+    assert pr_watch is not None

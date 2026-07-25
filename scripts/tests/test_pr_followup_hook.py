@@ -105,15 +105,49 @@ def test_exits_zero_on_malformed_or_unexpected_stdin(monkeypatch, capsys, stdin_
 
 
 def test_reminder_names_configured_bots_and_fallback_not_a_hardcoded_bot(monkeypatch):
-    """The reminder must be sourced from config (review.bots / fallback_commands),
+    """The reminder must be sourced from config (review.bots / fallback_panel),
     never a hardcoded bot literal — this is the whole point of generalizing the
     reference implementation (Principle #10, "No hardcoding")."""
     hook = _load_hook()
     reminder = hook.build_reminder()
     assert "coderabbit" in reminder  # from this repo's config/dev-model.yaml review.bots
-    assert "/code-review" in reminder  # review.fallback_commands.claude
-    assert "codex" not in reminder.lower()
     assert "bugbot" not in reminder.lower()
+
+
+def test_reminder_points_at_the_panel_not_the_degraded_one_lens_mode(monkeypatch):
+    """This hook fires on every `gh pr create`/`ready`, so it is the most-read
+    statement of the fallback policy in the kit.
+
+    Pointing it at `fallback_commands` — a single command in the author's own
+    context — taught the wrong habit every time it fired, against
+    `safety-critical-changes.md` rule 2. With a panel configured it must name
+    the panel and its lenses.
+    """
+    hook = _load_hook()
+
+    reminder = hook.build_reminder()
+
+    assert "PANEL" in reminder
+    assert "adversarial" in reminder and "correctness" in reminder
+    assert "fallback-review-panel.md" in reminder
+    assert "--lenses" in reminder
+    # …and it must NOT advertise the degraded command as the thing to run.
+    assert "/code-review" not in reminder
+
+
+def test_reminder_falls_back_to_the_single_command_with_no_panel_configured():
+    """An adopter who has not configured a panel — or a runtime that cannot
+    isolate a reviewer — must still get actionable wording, not a dangling
+    reference to lenses that do not exist."""
+    hook = _load_hook()
+
+    degraded = hook._fallback_instruction("/my-review", [])
+    panel = hook._fallback_instruction("/my-review", ["adversarial", "correctness"])
+
+    assert "`/my-review`" in degraded
+    assert "PANEL" not in degraded
+    assert "review waiver" in degraded  # the invariant survives either way
+    assert "/my-review" not in panel
 
 
 def test_load_review_config_degrades_gracefully_when_config_unreadable(monkeypatch):
@@ -127,7 +161,11 @@ def test_load_review_config_degrades_gracefully_when_config_unreadable(monkeypat
         raise FileNotFoundError("no config here")
 
     monkeypatch.setattr(kitconfig, "load_config", _boom)
-    bots, fallback, engines = hook._load_review_config()
+    bots, fallback, engines, lenses = hook._load_review_config()
     assert bots == []
     assert fallback == "/code-review"
     assert engines == "scripts"
+    # No panel known → the reminder degrades to the single command rather than
+    # naming lenses that were never read.
+    assert lenses == []
+    assert "PANEL" not in hook._fallback_instruction(fallback, lenses)

@@ -41,10 +41,12 @@ _TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
 
 _DEFAULT_FALLBACK_COMMAND = "/code-review"
 _DEFAULT_ENGINES_DIR = "scripts"
+_DEFAULT_LENSES: list[str] = []
 
 
-def _load_review_config() -> tuple[list[str], str, str]:
-    """Read ``(review.bots, review.fallback_commands.claude, paths.engines)``.
+def _load_review_config() -> tuple[list[str], str, str, list[str]]:
+    """Read ``(review.bots, review.fallback_commands.claude, paths.engines,
+    review.fallback_panel lens names)``.
 
     Best-effort: any failure (missing config, kitconfig unimportable, malformed
     values) falls back to generic defaults rather than raising — this hook must
@@ -64,9 +66,19 @@ def _load_review_config() -> tuple[list[str], str, str]:
             fallback = _DEFAULT_FALLBACK_COMMAND
         if not isinstance(engines, str) or not engines:
             engines = _DEFAULT_ENGINES_DIR
-        return bots, fallback, engines
+        panel = kitconfig.get(config, "review.fallback_panel.lenses", [])
+        lenses = (
+            [
+                lens["name"]
+                for lens in panel
+                if isinstance(lens, dict) and isinstance(lens.get("name"), str)
+            ]
+            if isinstance(panel, list)
+            else []
+        )
+        return bots, fallback, engines, lenses
     except Exception:
-        return [], _DEFAULT_FALLBACK_COMMAND, _DEFAULT_ENGINES_DIR
+        return [], _DEFAULT_FALLBACK_COMMAND, _DEFAULT_ENGINES_DIR, list(_DEFAULT_LENSES)
 
 
 def _bot_description(bots: list[str]) -> str:
@@ -78,8 +90,32 @@ def _bot_description(bots: list[str]) -> str:
     return " / ".join(names)
 
 
+def _fallback_instruction(fallback_command: str, lenses: list[str]) -> str:
+    """What to run when a bot is unavailable.
+
+    Names the PANEL when one is configured, because a single command in this
+    session's own context is the author reviewing their own diff — which
+    `safety-critical-changes.md` rule 2 says is not a green light. This hook
+    fires on every `gh pr create`/`ready`, so it is the most-read statement of
+    the fallback policy in the kit; pointing it at the degraded mode taught the
+    wrong habit every time.
+    """
+    if lenses:
+        return (
+            "If a review bot is unavailable, run the fallback review PANEL — one "
+            f"isolated, fresh-context reviewer per lens ({', '.join(lenses)}), per "
+            "docs/agentic-dev-kit/fallback-review-panel.md — and record it with "
+            "`--record-review \"fallback:panel\" --lenses <names>`. Never treat the "
+            "outage as a review waiver."
+        )
+    return (
+        f"If a review bot is unavailable, run the configured fallback "
+        f"(`{fallback_command}`) instead of treating the outage as a review waiver."
+    )
+
+
 def build_reminder() -> str:
-    bots, fallback_command, engines_dir = _load_review_config()
+    bots, fallback_command, engines_dir, lenses = _load_review_config()
     bot_desc = _bot_description(bots)
     return (
         "A pull request was just opened or marked ready for review. Per the kit's "
@@ -90,9 +126,9 @@ def build_reminder() -> str:
         f"until CI is fully green AND every {bot_desc} finding is fixed or "
         "replied-to with a reason. Fix real findings, reply-with-reason to nitpicks "
         "you disagree with, `--mark-seen` each handled round, and keep polling (CI "
-        "can take 20-30 min). If a review bot is unavailable, run the configured "
-        f"fallback (`{fallback_command}`) instead of treating the outage as a review "
-        "waiver. Only stop early if you hit something that genuinely needs an "
+        "can take 20-30 min). "
+        + _fallback_instruction(fallback_command, lenses)
+        + " Only stop early if you hit something that genuinely needs an "
         "operator decision."
     )
 

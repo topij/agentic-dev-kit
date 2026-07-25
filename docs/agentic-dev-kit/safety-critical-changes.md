@@ -21,12 +21,17 @@ skill; do not fork the doctrine into runtime-specific copies.
    is not enough: an adversarial/bypass-focused pass and a general-correctness pass
    routinely find **disjoint** holes. A send/publish gate needs BOTH lenses before
    merge. A single-lens "converged" verdict is an incomplete review, not a green
-   light.
+   light. When your review bot is unavailable, the substitute that satisfies this
+   rule is the panel in [`fallback-review-panel.md`](fallback-review-panel.md) —
+   a single fallback command run in the author's own context does not.
 
 1. **Adversarial review to convergence, not one pass.** Re-review after every fix
    round until a full pass finds nothing new. Fix rounds on gate logic routinely
    introduce their own regressions — treat "the last round found nothing" as
-   provisional, not proof of safety.
+   provisional, not proof of safety. Be aware that "finds nothing new" may never
+   arrive: see [`fallback-review-panel.md`](fallback-review-panel.md) for the
+   observed base rate and for the stopping criterion to use instead — blast
+   radius, not round count.
 
 1. **Kill/recovery paths need an integration test.** Unit tests on the handler are
    insufficient — a kill-path can pass unit tests while the wrapper-level behavior is

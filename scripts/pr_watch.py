@@ -1371,6 +1371,7 @@ def record_review(
     expected_head: str,
     *,
     allow_pending_bot: bool = False,
+    lenses: str | None = None,
     now: datetime | None = None,
 ) -> dict:
     """Persist independent-review evidence bound to the PR's current head SHA.
@@ -1400,6 +1401,12 @@ def record_review(
     check read (``bot_signal``; but not "no bots configured" — nothing was
     unreadable in that case) and any bot whose last review predates this head
     (``bots_behind_head``). All three say what the receipt does NOT stand for.
+
+    ``lenses`` names the review lenses that actually ran (see
+    ``docs/agentic-dev-kit/fallback-review-panel.md``). Recorded verbatim so a
+    one-lens pass is distinguishable from a panel in the audit trail: the
+    doctrine holds that a single-lens verdict is not a green light, and without
+    this a degraded `fallback:` receipt reads exactly like a full one.
     """
     source = source.strip()
     if not source:
@@ -1469,6 +1476,9 @@ def record_review(
         "source": source,
         "recorded_at": now.isoformat(),
     }
+    named_lenses = [part.strip() for part in (lenses or "").split(",") if part.strip()]
+    if named_lenses:
+        receipt["lenses"] = named_lenses
     if allow_pending_bot:
         # The escape hatch on a safety gate is the one thing that must leave a
         # trace. Without it, a receipt taken over an active override is
@@ -1794,6 +1804,14 @@ def render_record_review(report: dict) -> str:
             f"  ⚠ review-bot state was unreadable ({receipt['bot_signal']}) when this "
             "receipt was taken — the queued-reviewer guard did not run"
         )
+    named = receipt.get("lenses") or []
+    if len(named) == 1:
+        lines.append(
+            f"  ⚠ one lens only ({named[0]}) — `safety-critical-changes.md` rule 2 "
+            "holds that a single-lens verdict is not a green light"
+        )
+    elif named:
+        lines.append(f"  lenses: {', '.join(named)}")
     for bot, sha in (receipt.get("bots_behind_head") or {}).items():
         lines.append(
             f"  ⚠ {bot}'s last review was of {sha[:7]}, not this head — this receipt "
@@ -1880,6 +1898,16 @@ def main(argv: list[str] | None = None) -> int:
             "will never arrive — a queued bot is SLOW, not unavailable (issue #19)"
         ),
     )
+    parser.add_argument(
+        "--lenses",
+        metavar="NAMES",
+        help=(
+            "with --record-review: comma-separated review lenses that actually ran "
+            "(e.g. adversarial,correctness). Recorded on the receipt so a one-lens "
+            "pass is distinguishable from a panel — see "
+            "docs/agentic-dev-kit/fallback-review-panel.md"
+        ),
+    )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--mark-seen",
@@ -1920,6 +1948,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--head is only valid with --record-review")
     if args.allow_pending_bot_review and args.record_review is None:
         parser.error("--allow-pending-bot-review is only valid with --record-review")
+    if args.lenses and args.record_review is None:
+        parser.error("--lenses is only valid with --record-review")
 
     try:
         pr = resolve_pr(args.pr)
@@ -1945,6 +1975,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.record_review,
                 args.head,
                 allow_pending_bot=args.allow_pending_bot_review,
+                lenses=args.lenses,
             )
         except (RuntimeError, KeyError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)

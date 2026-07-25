@@ -374,6 +374,20 @@ migrate_kit_schema() {
     - "review skipped"
     - "no review credits"' || true
 
+  ensure_review_key fallback_panel '  # The independent pass when a configured bot cannot review. One isolated,
+  # fresh-context reviewer PER LENS — `safety-critical-changes.md` rule 2 wants two
+  # disjoint lenses, which a single command cannot be. `fallback_commands` below is
+  # the DEGRADED one-lens mode for a runtime that cannot isolate a reviewer.
+  # Which lenses is yours; how to run one is kit doctrine, in
+  # docs/agentic-dev-kit/fallback-review-panel.md.
+  fallback_panel:
+    receipt_source: "fallback:panel"
+    lenses:
+      - name: adversarial
+        focus: "assume the change is wrong and try to prove it"
+      - name: correctness
+        focus: "assume it works and ask what it says"' || true
+
   ensure_review_key informational_checks '  informational_checks: [coderabbit]' || true
 
   ensure_review_key require_ci '  # False only for a repo with NO CI at all — otherwise pr-watch never converges.

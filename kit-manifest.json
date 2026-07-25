@@ -15,7 +15,7 @@
   "files": {
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
-      "sha256": "cc3f3a76a22ba0a8552539bd2b85f07e10e59485eae2c3749f06036bf7db2e91"
+      "sha256": "b889d9dddb9c3b5b7441162406094530532288a996af232120ca2b22c822d312"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -23,7 +23,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "7f116a78706776feb68e9065f434eedd63a1eec420f3b8314899b8e4e58dfbfe"
+      "sha256": "8262dbeb481cb757461c1faf5b695d64eecd84f210438cec131e3eec32d6b1dc"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -99,7 +99,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "b04cc9a678a28c9d292b8f4d98062fd24f82e1a5bbdc5ac380dbca7e9394639b"
+      "sha256": "7999559dcff41c37b82176cefdcd3175a903252c964ef6ea797ef021bf3f7278"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
