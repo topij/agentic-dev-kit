@@ -54,13 +54,13 @@ flowchart TD
     Plan --> L1["lane A<br/>worktree + branch + sandbox"]
     Plan --> L2["lane B<br/>worktree + branch + sandbox"]
     Plan --> L3["lane C<br/>worktree + branch + sandbox"]
-    L1 --> D1["draft PR · green"]
-    L2 --> D2["draft PR · green"]
-    L3 --> D3["draft PR · green"]
+    L1 --> D1["green · marked ready"]
+    L2 --> D2["green · marked ready"]
+    L3 --> D3["green · marked ready"]
     D1 --> R["cockpit reconciles<br/>list --watch + reconcile_sessions.sh"]
     D2 --> R
     D3 --> R
-    R --> M["review + merge<br/>self-merge or operator-merge<br/>per lane's pre-assigned class"]
+    R --> M["cockpit merges<br/>via dev_session.sh merge (self class)<br/>or operator sign-off (operator class)"]
 ```
 
 ### 1 · Plan the batch — `parallel plan`

@@ -152,8 +152,8 @@ decision (and so an autonomous batch knows what it may close itself):
 
 | Lane risk                     | Merge class                                         | Who merges                                                                   |
 | ------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------ |
-| **Mechanical** / **Standard**  | **self-merge** *(autonomous/headless batches only)* | the lane (or cockpit), once green-and-clean with one independent review pass |
-| **High-stakes**                | **operator-merge**                                  | always the operator — never self-merged, even when green                     |
+| **Mechanical** / **Standard**  | **self-merge** *(autonomous/headless batches only)* | the **cockpit**, without operator sign-off, once green-and-clean with one independent review pass — via `dev_session.sh merge`. "Self" means the autonomous process may close it out itself; it never means the lane merges its own PR. |
+| **High-stakes**                | **operator-merge**                                  | always the operator, explicitly — never closed out autonomously, even when green |
 
 The class is persisted in the session metadata and headless JSON descriptor;
 missing/unknown metadata defaults to **operator**. Operator-merge is the floor for anything in your project's high-risk classes:

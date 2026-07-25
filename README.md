@@ -265,9 +265,10 @@ edited by both (the sandbox prevents *state* collisions, not *source* merge conf
 
 The flow: `parallel plan` clusters candidate work by footprint → launch a lane per
 disjoint cluster (`scripts/dev_session.sh new … --merge-class self|operator`) → each
-lane works to a green, ready-for-review PR → the cockpit reconciles every lane and completes the
-recorded merge path. A self-merge must go through `scripts/dev_session.sh merge`; an
-operator-merge remains an explicit cockpit decision.
+lane works to a green, ready-for-review PR → the cockpit reconciles every lane and completes
+the recorded merge path. **Lanes mark their own PRs ready but never merge**: a `self`-class
+lane is closed out by the cockpit through `scripts/dev_session.sh merge` (no operator
+sign-off needed), an `operator`-class one only by an explicit operator decision.
 
 Full walkthrough — the lane contract, the live board, reconciliation, and a worked
 example — in **[`docs/parallel-dev.md`](docs/parallel-dev.md)**. For step-by-step
