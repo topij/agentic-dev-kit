@@ -748,10 +748,11 @@ cmd_merge() {
         || _die "pr-watch failed for PR #$pr"
     # Gate on `mergeable`: converged AND no deterministic merge blocker AND a
     # review receipt bound to this head. The report's `done` is an unchanged
-    # alias of `mergeable` today, but read `mergeable`: it is absent from any
-    # pr_watch predating the split, so an engine/gate version skew fails CLOSED
-    # here, whereas `done` is the key an older or foreign engine might carry with
-    # different semantics. The key that must NEVER gate a merge is `converged` —
+    # alias of `mergeable`, and every pre-split pr_watch emitted `done` with this
+    # same merge-authorization meaning — so either key is safe against a kit
+    # version skew, and `mergeable` additionally fails CLOSED when absent. Read
+    # `mergeable` because it is the precise name and is not the one retained for
+    # backward compatibility. The key that must NEVER gate a merge is `converged` —
     # the watch-loop predicate ("anything left to fix?"), which is deliberately
     # true on a green, comment-clean PR carrying no receipt.
     # Read the flag pr_watch computes — never re-derive it here, or this gate

@@ -77,7 +77,8 @@ Both times the correction came from asking what a *stale reader* of the mechanis
   violation rather than a compromise.** The doctrine has no "floor" the author's own pass
   can meet: rule 2 says a single-lens verdict is "not a green light", and rule 3 wants
   re-review until a pass finds nothing new — but the fallback's approve was written in the
-  same pass that produced `32f3e4f`, so the final commit was reviewed by nothing.
+  same pass that produced `32f3e4f`, so no *independent* review ever covered the final
+  commit — the fallback saw that code, but only as the author re-reading their own fixes.
   CodeRabbit's only review was bound to the first commit, before the redesign.
 - **A cold-context subagent reviewer found what three self-review passes missed** — a stale
   comment on the merge gate itself (`dev_session.sh` `cmd_merge`), describing the design that
@@ -95,9 +96,10 @@ Both times the correction came from asking what a *stale reader* of the mechanis
   covered the first commit; the request for a pass over the final design (posted on #22)
   was refused for rate limits again. Re-request it — this is a safety-critical merge gate
   running on a two-lens subagent panel and the author's own reads.
-- The two H-severity friction entries below (fallback independence; a receipt outliving the
-  design it reviewed) are unfiled. Both now carry a proposed fix, so they are issue-shaped —
-  `triage-friction-log` should graduate them rather than leaving them in the inbox.
+- The two H-severity entries in [`kit-friction-log.md`](kit-friction-log.md) (fallback
+  independence; a receipt outliving the design it reviewed) are unfiled. Both now carry a
+  proposed fix, so they are issue-shaped — `triage-friction-log` should graduate them rather
+  than leaving them in the inbox.
 
 ▶ Next: fix **#19 + #23 together** (Phase 3b) — the queued-vs-unavailable ambiguity, on
 both the comment and status-check surfaces. Design constraint: the informational-check

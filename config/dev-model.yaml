@@ -103,8 +103,8 @@ review:
     - "actionable comments posted: 0"
     - "<!-- linear-linkback -->"
   # Bodies signalling the reviewer could not run. Deliberately NOT noise: these
-  # surface and block `done`, because a blocked bot is an action signal (run the
-  # configured fallback), never a silent review waiver.
+  # surface and block `converged`, because a blocked bot is an action signal (run
+  # the configured fallback), never a silent review waiver.
   unavailable_markers:
     - "bugbot needs on-demand usage enabled"
     - "review limit reached"
@@ -112,10 +112,11 @@ review:
     - "couldn't start this review"
     - "review skipped"
     - "no review credits"
-  # Status checks that are advisory only and must never block `done`. A review
-  # bot's check can sit PENDING forever after a trivial follow-up commit; its real
-  # findings arrive as comments (which DO block). Matched case-insensitively
-  # against the check name.
+  # Status checks that are advisory only and must never block `converged` — this
+  # is the anti-wedge property: a review bot's check can sit PENDING forever after
+  # a trivial follow-up commit, and the watch loop must still be able to finish.
+  # Its real findings arrive as comments (which DO block). Matched
+  # case-insensitively against the check name.
   informational_checks: [coderabbit]
   # Whether a PR must have at least one real (non-informational) CI check before
   # pr_watch will report green. True is the safe default: it stops an autonomous

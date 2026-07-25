@@ -19,7 +19,9 @@
   `safety-critical-changes.md` rule 2 is explicit that this is not a pass: "A single-lens
   'converged' verdict is an incomplete review, not a green light." Rule 3 also went unmet —
   the fallback's own approve was written in the same pass that produced the final commit, so
-  nothing reviewed `32f3e4f`. **Proposed fix:** make `review.fallback_commands` a *panel*
+  no *independent* pass ever covered `32f3e4f` — the fallback did see that code (it posted
+  seconds after the commit, naming it), but a self-review re-reading its own fixes is not a
+  rule-3 re-review. **Proposed fix:** make `review.fallback_commands` a *panel*
   spec rather than an inline command — one fresh-context subagent per lens
   (adversarial/bypass-focused + general-correctness, the two the doctrine says find
   **disjoint** holes), each handed the raw diff with no framing from the author, and a
