@@ -3,8 +3,10 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -960,3 +962,262 @@ def test_shared_lane_contract_has_no_runtime_specific_peer_api() -> None:
 
     assert "SendMessage" not in script
     assert "&& claude" not in script
+
+
+# --------------------------------------------------------------------------- #
+# config migrations — the highest-blast-radius code in the kit
+# --------------------------------------------------------------------------- #
+#
+# `init.sh` rewrites a file the ADOPTER owns, so a bug here corrupts their
+# config rather than merely misbehaving. Three review rounds on one PR produced
+# three distinct corruptions from list surgery alone (wrong indent orphaning
+# every entry; a whole-file key anchor writing into a same-named list under
+# another section; a multi-line item spliced in half), each of which passed the
+# migration's own post-conditions and printed success. None was caught by a test
+# because there were none. Table-driven over the shapes real configs actually
+# take.
+
+_MIGRATION_SHAPES = {
+    # (name): (config text, what must still be true afterwards)
+    "two_space": """review:
+  bots: [bugbot]
+  unavailable_markers:
+    - "my in-house reviewer is offline"
+""",
+    "four_space": """review:
+    bots: [bugbot]
+    unavailable_markers:
+        - "my in-house reviewer is offline"
+""",
+    "flush_indent": """review:
+  bots: [bugbot]
+  unavailable_markers:
+  - "my in-house reviewer is offline"
+""",
+    "inline_flow": """review:
+  bots: [bugbot]
+  unavailable_markers: ["my in-house reviewer is offline"]
+""",
+    "decoy_section_first": """other:
+  bots: [nope]
+  unavailable_markers:
+    - "decoy"
+review:
+  bots: [bugbot]
+  unavailable_markers:
+    - "my in-house reviewer is offline"
+""",
+    "header_trailing_space": """review: 
+  bots: [bugbot]
+  unavailable_markers:
+    - "my in-house reviewer is offline"
+""",
+    "multiline_item": '''review:
+  bots: [bugbot]
+  unavailable_markers:
+    - "the reviewer could not run because the
+       account is out of credits"
+''',
+    "no_trailing_newline": """review:
+  bots: [bugbot]
+  unavailable_markers:
+    - "my in-house reviewer is offline\"""",
+}
+
+
+def _run_init(tmp_path: Path, name: str, config_text: str):
+    repo = tmp_path / name
+    (repo / "config").mkdir(parents=True)
+    shutil.copy2(REPO_ROOT / "init.sh", repo / "init.sh")
+    (repo / "config" / "dev-model.yaml").write_text(config_text, encoding="utf-8")
+    proc = subprocess.run(
+        ["sh", "init.sh"], cwd=repo, check=True, capture_output=True, text=True
+    )
+    return repo / "config" / "dev-model.yaml", proc
+
+
+@pytest.mark.parametrize("shape", sorted(_MIGRATION_SHAPES))
+def test_migration_never_corrupts_or_silently_drops_adopter_config(
+    tmp_path: Path, shape: str
+) -> None:
+    """Whatever else it does, the migration must leave a config that still
+    PARSES and still says what the adopter said.
+
+    `review.bots: [bugbot]` is the canary: an adopter whose reviewer is not
+    CodeRabbit. Every corruption found in review showed up here as either a
+    parse failure or that value silently becoming `[coderabbit]`.
+    """
+    path, _ = _run_init(tmp_path, shape, _MIGRATION_SHAPES[shape])
+    text = path.read_text(encoding="utf-8")
+
+    parsed = yaml.safe_load(text)  # raises on the corruptions found in review
+    assert parsed["review"]["bots"] == ["bugbot"], "adopter's reviewer was overwritten"
+    markers = parsed["review"]["unavailable_markers"]
+    assert markers, "adopter's marker list was emptied"
+    assert any("in-house" in m or "could not run" in m for m in markers), (
+        f"adopter's own marker was dropped: {markers}"
+    )
+    # kitconfig (what the engines actually use) must agree with PyYAML — the
+    # reader exists so engines can drop the dependency, so a disagreement means
+    # the migration produced a file the two halves of the kit read differently.
+    sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
+    import kitconfig  # noqa: PLC0415
+
+    if shape == "multiline_item":
+        # kitconfig has no multi-line-scalar support, so it reads a wrapped list
+        # item as a truncated one. PRE-EXISTING and unrelated to migration: it
+        # reads the input the same way. Asserted as a known divergence rather
+        # than skipped, so closing it later fails here instead of passing quietly.
+        assert kitconfig.loads(text) != parsed
+        assert kitconfig.loads(_MIGRATION_SHAPES[shape]) != yaml.safe_load(
+            _MIGRATION_SHAPES[shape]
+        ), "the divergence is in the reader, not in what the migration wrote"
+    else:
+        assert kitconfig.loads(text) == parsed
+
+    # A decoy section with the same key names must be left exactly as it was.
+    if shape == "decoy_section_first":
+        assert parsed["other"]["unavailable_markers"] == ["decoy"]
+        assert parsed["other"]["bots"] == ["nope"]
+
+
+@pytest.mark.parametrize("shape", sorted(_MIGRATION_SHAPES))
+def test_migration_is_idempotent(tmp_path: Path, shape: str) -> None:
+    """Re-running `./init.sh` is the documented upgrade path, so a second run
+    must be a no-op — not a second copy of every key it added."""
+    path, _ = _run_init(tmp_path, shape, _MIGRATION_SHAPES[shape])
+    once = path.read_text(encoding="utf-8")
+
+    subprocess.run(
+        ["sh", "init.sh"], cwd=path.parent.parent, check=True, capture_output=True, text=True
+    )
+
+    assert path.read_text(encoding="utf-8") == once
+
+
+def test_migration_adds_every_review_key_exactly_once(tmp_path: Path) -> None:
+    """Per-key guards, not one guard over a block of five.
+
+    A single `noise_markers` guard over a block defining five keys meant an
+    adopter who had `unavailable_markers` but not `noise_markers` got a SECOND
+    definition of it — and both readers resolve last-key-wins, so their list was
+    silently replaced by the kit's defaults.
+    """
+    path, _ = _run_init(
+        tmp_path,
+        "partial",
+        'review:\n  bots: [bugbot]\n  unavailable_markers:\n    - "mine"\n',
+    )
+    text = path.read_text(encoding="utf-8")
+
+    for key in (
+        "bots",
+        "noise_markers",
+        "unavailable_markers",
+        "informational_checks",
+        "require_ci",
+        "bot_pending_grace_minutes",
+    ):
+        assert len(re.findall(rf"^\s+{key}:", text, re.MULTILINE)) == 1, key
+    assert yaml.safe_load(text)["review"]["unavailable_markers"] == ["mine"]
+
+
+@pytest.mark.parametrize(
+    ("style", "config", "wanted", "unwanted"),
+    [
+        # Block list — a `- ` item is the right thing to add.
+        (
+            "block",
+            'review:\n  unavailable_markers:\n    - "mine"\n',
+            '- "review rate limited"',
+            "brackets",
+        ),
+        # Inline flow list — telling them to add a `- ` item would hang a block
+        # item off a flow scalar, i.e. walk them into corrupting their config.
+        (
+            "flow",
+            'review:\n  unavailable_markers: ["mine"]\n',
+            "brackets",
+            '- "review rate limited"',
+        ),
+        # Flow list whose brackets do not close on the key line. Valid YAML, but
+        # `kitconfig` parses it to {} / "[" — so the adopter's WHOLE list is
+        # already inert, and "add it inside the brackets" would be confident,
+        # useless advice. Say what's actually wrong instead.
+        (
+            "flow_next_line",
+            'review:\n  unavailable_markers:\n    ["mine", "other"]\n',
+            "cannot parse that",
+            '- "review rate limited"',
+        ),
+        (
+            "flow_multi_line",
+            'review:\n  unavailable_markers: [\n    "mine",\n    "other"\n  ]\n',
+            "cannot parse that",
+            "add the string inside the brackets",
+        ),
+        # A marker containing a `#` must not be cut short by comment-stripping —
+        # doing so asks for a marker the adopter already has.
+        (
+            "hash_in_value",
+            'review:\n  unavailable_markers:\n    - "see #23 for why"\n',
+            '- "review rate limited"',
+            "brackets",
+        ),
+    ],
+)
+def test_the_instruction_matches_the_list_style(
+    tmp_path: Path, style: str, config: str, wanted: str, unwanted: str
+) -> None:
+    """The advice must be correct for the shape the adopter actually has.
+
+    Without a per-style assertion the whole branch is dead-codeable: hardwiring
+    the style test to a constant still passes a suite that only ever checks the
+    block-list direction.
+    """
+    _, proc = _run_init(tmp_path, f"instructs_{style}", config)
+
+    assert "ACTION NEEDED" in proc.stderr
+    assert wanted in proc.stderr
+    assert unwanted not in proc.stderr
+
+
+@pytest.mark.parametrize(
+    ("case", "config"),
+    [
+        # Already present — nothing to ask for.
+        ("block", 'review:\n  unavailable_markers:\n    - "mine"\n    - "review rate limited"\n'),
+        ("flow", 'review:\n  unavailable_markers: ["mine", "review rate limited"]\n'),
+        # Case-insensitively: an adopter may have written it capitalized.
+        ("block_mixed_case", 'review:\n  unavailable_markers:\n    - "Review Rate Limited"\n'),
+        # …and a marker whose text contains a `#` must still count as present.
+        (
+            "hash_in_value",
+            'review:\n  unavailable_markers:\n    - "tracked in #23: review rate limited"\n',
+        ),
+        # A key with no value falls back to the engine defaults, which already
+        # contain the marker — so asking for it would be noise.
+        ("empty_key", "review:\n  unavailable_markers:\n"),
+        # Absent entirely: `ensure_review_key` writes the full default list.
+        ("absent", "review:\n  bots: [bugbot]\n"),
+    ],
+)
+def test_the_instruction_stays_quiet_when_there_is_nothing_to_add(
+    tmp_path: Path, case: str, config: str
+) -> None:
+    _, proc = _run_init(tmp_path, f"quiet_{case}", config)
+
+    assert "ACTION NEEDED" not in proc.stderr
+
+
+def test_a_marker_named_only_in_a_comment_does_not_count(tmp_path: Path) -> None:
+    """The kit's own shipped config carries a trailing comment on that very
+    line, so a raw-line grep is satisfied by a config whose LIST lacks it."""
+    _, proc = _run_init(
+        tmp_path,
+        "comment_only",
+        'review:\n  unavailable_markers:\n'
+        '    - "mine"   # unlike review rate limited, this one is ours\n',
+    )
+
+    assert "ACTION NEEDED" in proc.stderr

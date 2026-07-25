@@ -165,19 +165,39 @@ insert_before_section() {
 }
 
 # Append a block to a named top-level section, immediately before the next one.
+#
+# Always returns 0. It is called under `set -eu` by migrations that do not test
+# its status, so returning non-zero on "section not found" aborts init.sh
+# entirely — which is how an earlier version of this change broke adoption for
+# every config lacking one optional section. Callers that need to know whether
+# the write landed must check the file afterwards; `ensure_review_key` does.
+#
+# The header is matched by PREFIX, not equality, so `review: `, `review:\r` and
+# `review:  # comment` are still the section. The old `$0 == section` missed all
+# three and disagreed with section_range about whether the section existed.
 append_to_section() {
   section="$1"
   block="$2"
   tmpfile="${CONFIG_FILE}.tmp.$$"
   blockfile="${tmpfile}.block"
-  printf '%s\n' "$block" > "$blockfile"
+  # Blocks are authored at the kit's own 2-space body indent. Writing them
+  # verbatim into a section indented differently produces a mapping with two
+  # indent levels — which PyYAML refuses to load at all, taking the WHOLE config
+  # down, while the stdlib reader tolerates it and silently applies last-key-
+  # wins. Re-indent to whatever the section actually uses.
+  body_indent=$(section_lines "$section" "$CONFIG_FILE" \
+    | awk 'NF && $0 !~ /^[[:space:]]*#/ { match($0, /^[[:space:]]*/); print RLENGTH; exit }')
+  printf '%s\n' "$block" \
+    | awk -v extra="$(( ${body_indent:-2} - 2 ))" '
+        { printf "%*s%s\n", (extra > 0 ? extra : 0), "", $0 }
+      ' > "$blockfile"
   awk -v section="$section" -v blockfile="$blockfile" '
     function emit( line) {
       while ((getline line < blockfile) > 0) print line
       close(blockfile)
     }
-    $0 == section { inside = 1 }
-    inside && $0 != section && $0 ~ /^[A-Za-z_][A-Za-z0-9_]*:/ && !inserted {
+    index($0, section) == 1 && $0 ~ /^[A-Za-z_]/ { inside = 1; header = NR }
+    inside && NR != header && $0 ~ /^[A-Za-z_][A-Za-z0-9_]*:/ && !inserted {
       emit()
       inserted = 1
       inside = 0
@@ -186,6 +206,58 @@ append_to_section() {
     END { if (inside && !inserted) emit() }
   ' "$CONFIG_FILE" > "$tmpfile" && mv "$tmpfile" "$CONFIG_FILE"
   rm -f "$blockfile"
+}
+
+# Add one `review:` key if the review SECTION does not already define it.
+# Per-key rather than per-block: the old migration appended a block defining
+# five keys behind a single `noise_markers` guard, so an adopter who had
+# `unavailable_markers` but not `noise_markers` got a SECOND definition of it —
+# and both YAML readers resolve last-key-wins, silently replacing their list.
+# Section-scoped and indent-agnostic: a whole-file `grep '^  key:'` both misses
+# a 4-space-indented `review:` block (then appends a 2-space duplicate into it,
+# which is not even valid YAML) and is satisfied by a same-named key under an
+# unrelated section (then silently skips).
+ensure_review_key() {
+  key="$1"
+  block="$2"
+  if [ -n "$(section_lines review: "$CONFIG_FILE" | grep -E "^[[:space:]]+$key:")" ]; then
+    return 0
+  fi
+  append_to_section "review:" "$block"
+  if [ -n "$(section_lines review: "$CONFIG_FILE" | grep -E "^[[:space:]]+$key:")" ]; then
+    echo "added review.$key to config/dev-model.yaml"
+  else
+    echo "WARNING: could not add review.$key to $CONFIG_FILE — add it by hand." >&2
+    return 1
+  fi
+}
+
+# The 1-based line range [start end] of a top-level section's body, or "0 0" if
+# the section is absent. A section runs from its header to the next line that
+# starts in column 1 with a key.
+#
+# These two helpers exist because every whole-file `grep '^  key:'` in a
+# migration is a latent bug in two directions at once: it misses the key when
+# the adopter's file uses a different indent, and it MATCHES a same-named key
+# under an unrelated section. Both were shipped and both were caught in review.
+section_range() {
+  awk -v section="$1" '
+    # FIRST match only. append_to_section writes to the first occurrence, so a
+    # reader that reported the last one would have the two helpers disagreeing
+    # about which block they are talking about on a duplicated section.
+    !start && index($0, section) == 1 && $0 ~ /^[A-Za-z_]/ { inside = 1; start = NR; next }
+    inside && /^[A-Za-z_][A-Za-z0-9_]*:/ { print start + 1, NR - 1; found = 1; exit }
+    END { if (!found) print (inside ? start + 1 : 0), (inside ? NR : 0) }
+  ' "$2"
+}
+
+# The body lines of a top-level section (empty when absent).
+section_lines() {
+  range=$(section_range "$1" "$2")
+  start=${range% *}
+  end=${range#* }
+  [ "$start" -gt 0 ] || return 0
+  awk -v s="$start" -v e="$end" 'NR >= s && NR <= e' "$2"
 }
 
 # Migrate the original single-runtime schema in place. Re-running init.sh is
@@ -210,8 +282,13 @@ detect_engines_dir() {
   printf 'scripts\n'
 }
 
+# Guards are SECTION-scoped, not whole-file `grep '^  key:'`. That form is a bug
+# in two directions at once: it misses the key when the adopter's section uses a
+# different indent (so the migration re-runs forever, appending a duplicate each
+# time), and it is satisfied by a same-named key under an unrelated section (so
+# the migration never runs and says nothing). Both were shipped here.
 migrate_runtime_schema() {
-  if ! grep -q '^  engines:' "$CONFIG_FILE"; then
+  if [ -z "$(section_lines paths: "$CONFIG_FILE" | grep -E '^[[:space:]]+engines:')" ]; then
     detected_engines="$(detect_engines_dir)"
     append_to_section "paths:" "  # Directory containing the deterministic kit engines.
   engines: $detected_engines"
@@ -228,7 +305,7 @@ migrate_runtime_schema() {
     echo "added runtime mappings to config/dev-model.yaml"
   fi
 
-  if ! grep -q '^  fallback_commands:' "$CONFIG_FILE"; then
+  if [ -z "$(section_lines review: "$CONFIG_FILE" | grep -E '^[[:space:]]+fallback_commands:')" ]; then
     old_fallback=$(get_field "review:" "" "^  fallback_command:")
     [ -n "$old_fallback" ] || old_fallback="/code-review"
     append_to_section "review:" "  fallback_commands:
@@ -237,7 +314,7 @@ migrate_runtime_schema() {
     echo "added runtime review fallbacks to config/dev-model.yaml"
   fi
 
-  if ! grep -q '^  tiers:' "$CONFIG_FILE"; then
+  if [ -z "$(section_lines models: "$CONFIG_FILE" | grep -E '^[[:space:]]+tiers:')" ]; then
     old_cheap=$(get_field "models:" "" "^  cheap:")
     old_default=$(get_field "models:" "" "^  default:")
     old_expensive=$(get_field "models:" "" "^  expensive:")
@@ -278,8 +355,7 @@ migrate_kit_schema() {
     echo "stamped kit.version=2 in config/dev-model.yaml"
   fi
 
-  if ! grep -q '^  noise_markers:' "$CONFIG_FILE"; then
-    append_to_section "review:" '  # Read by pr_watch.py. These used to be literals inside the engine, which meant
+  ensure_review_key noise_markers '  # Read by pr_watch.py. These used to be literals inside the engine, which meant
   # adopting required EDITING the engine — and an edited engine can never be
   # replaced by a kit update (Principle #10).
   noise_markers:
@@ -287,19 +363,117 @@ migrate_kit_schema() {
     - "<!-- this is an auto-generated comment: review in progress"
     - "<!-- walkthrough_start -->"
     - "actionable comments posted: 0"
-    - "<!-- linear-linkback -->"
-  unavailable_markers:
+    - "<!-- linear-linkback -->"' || true
+
+  ensure_review_key unavailable_markers '  unavailable_markers:
     - "bugbot needs on-demand usage enabled"
     - "review limit reached"
     - "rate limited by coderabbit"
+    - "review rate limited"       # the status-check wording of "review limit reached"
     - "couldn'"'"'t start this review"
     - "review skipped"
-    - "no review credits"
-  informational_checks: [coderabbit]
-  # False only for a repo with NO CI at all — otherwise pr-watch never converges.
-  require_ci: true'
-    echo "added review marker/CI config to config/dev-model.yaml"
+    - "no review credits"' || true
+
+  ensure_review_key informational_checks '  informational_checks: [coderabbit]' || true
+
+  ensure_review_key require_ci '  # False only for a repo with NO CI at all — otherwise pr-watch never converges.
+  require_ci: true' || true
+
+  ensure_review_key bot_pending_grace_minutes '  # How long a configured review bot'"'"'s own check may sit pending before the merge
+  # gate stops waiting for it. Below this, a pending bot blocks `mergeable` (a
+  # receipt recorded now would bind to a review that has not happened); above it,
+  # the bot is treated as never going to report, so a dead bot cannot wedge the
+  # gate. Never affects `converged`.
+  bot_pending_grace_minutes: 15' || true
+
+  # `review.bots` became load-bearing for the merge gate in the same change:
+  # pr_watch reads it to decide which checks and comment authors belong to a
+  # reviewer. The interactive prompt later only REWRITES an existing line, so a
+  # `review:` section predating the key would silently fall through to the
+  # engine default — benign while the default matches, dangerous for an adopter
+  # whose reviewer is not CodeRabbit.
+  ensure_review_key bots '  bots: [coderabbit]' || true
+
+  # The status-check wording of the same rate-limit outage (issue #23).
+  #
+  # DETECT AND INSTRUCT — deliberately not an in-place edit. Three review rounds
+  # produced three distinct ways for list surgery to corrupt an adopter's config:
+  # inserting at the wrong indent orphaned every existing entry; a whole-file key
+  # anchor wrote into a same-named list under another section; and inserting
+  # before "the first line that is not an item" splices a multi-line item in
+  # half, yielding YAML that PyYAML refuses to load — each while the
+  # post-conditions passed and success was printed. The payoff was ONE string in
+  # a list an adopter can add in five seconds. That trade is not worth defending
+  # a fourth time, so this now reads the config and tells them what to add.
+  markers=$(section_lines review: "$CONFIG_FILE" | awk '
+    /^[[:space:]]+unavailable_markers:/ { in_list = 1; print; next }
+    # Comments, blanks and continuation lines all stay inside the list — ending
+    # it early truncates the view and reports a marker as missing when it is
+    # simply further down.
+    in_list == 1 && $0 !~ /^[[:space:]]*[a-zA-Z_]+:/ { print; next }
+    in_list == 1 { exit }
+  ')
+  # Match the marker in the VALUES only. The kit's own shipped config carries a
+  # trailing `# the status-check wording of …` comment on that very line, so a
+  # raw-line grep would also be satisfied by an adopter who has the phrase in a
+  # comment and not in the list. Quote-aware: a plain `s/#.*//` would also cut a
+  # marker containing an issue number (`- "tracked in #23: review rate limited"`)
+  # and then ask for a marker that is already there.
+  marker_values=$(printf '%s\n' "$markers" | awk '{
+    out = ""; qc = ""
+    for (i = 1; i <= length($0); i++) {
+      c = substr($0, i, 1)
+      if (qc == "" && (c == "\"" || c == "'\''")) { qc = c }
+      else if (qc != "" && c == qc) { qc = "" }
+      else if (qc == "" && c == "#") { break }
+      out = out c
+    }
+    print out
+  }')
+  if [ -n "$markers" ] && ! printf '%s\n' "$marker_values" | grep -qi 'review rate limited'; then
+    # The instruction has to match the list style the adopter actually uses.
+    # Telling someone with an inline list to add a `- ` item would have them
+    # hang a block item off a flow scalar — this step is read-only, but it would
+    # still be walking them into the same corruption the surgery used to cause.
+    #
+    # Presence of `- ` items is the discriminator, not a `[` on the key line: a
+    # flow list may put its value on the FOLLOWING line, where a key-line test
+    # sees no bracket and hands out the corrupting advice.
+    if printf '%s\n' "$markers" | grep -qE '^[[:space:]]*- '; then
+      style=block
+    elif printf '%s\n' "$markers" | head -n 1 | grep -qE ':[[:space:]]*\[.*\]'; then
+      style=flow
+    elif printf '%s\n' "$markers" | grep -q '\['; then
+      # A flow list whose brackets are NOT closed on the key line. Valid YAML,
+      # but `scripts/lib/kitconfig.py` — the reader every engine uses — parses
+      # it to `{}` or `"["`, so the adopter's ENTIRE marker list is already
+      # being ignored. Asking them to add one more string to it would be
+      # confident, inert advice; the list not working at all is the bigger news.
+      style=unreadable
+    else
+      # A key with no value at all: the reader falls back to the engine
+      # defaults, which already contain the marker. Nothing to ask for.
+      style=none
+    fi
+    if [ "$style" = unreadable ]; then
+      echo "ACTION NEEDED: review.unavailable_markers in $CONFIG_FILE is a flow list" >&2
+      echo "  spanning more than one line. The kit's config reader cannot parse that" >&2
+      echo "  spelling, so NONE of your markers are in effect. Put the whole list on the" >&2
+      echo "  key's own line (\`unavailable_markers: [\"a\", \"b\"]\`) or use a block list," >&2
+      echo '  and include "review rate limited" — see issue #23.' >&2
+    elif [ "$style" != none ]; then
+      echo "ACTION NEEDED: add \"review rate limited\" to review.unavailable_markers" >&2
+      echo "  in $CONFIG_FILE." >&2
+      if [ "$style" = flow ]; then
+        echo '  Yours is written as an inline list — add the string inside the brackets.' >&2
+      else
+        echo '    - "review rate limited"' >&2
+      fi
+      echo "  Without it, a review bot that reports a rate limit ONLY as a status-check" >&2
+      echo "  description (CodeRabbit does this) reads as a clean review. See issue #23." >&2
+    fi
   fi
+
 }
 
 # ── narrative-doc templates ──────────────────────────────────────────────

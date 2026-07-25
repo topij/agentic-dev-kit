@@ -82,6 +82,22 @@ def _strip_comment(value: str) -> str:
     return value
 
 
+# Transcribed from PyYAML's own float resolver, not approximated from it — the
+# sign rules are asymmetric in a way no reasonable guess reproduces:
+#   - the exponent's [-+] is REQUIRED  (`1.0e+3` is a float, `1.0e3` a string)
+#   - a leading sign is allowed on `digits.digits` but NOT on `.digits`
+#     (`-0.5` is a float, `-.5` a string)
+#   - `_` is a digit separator anywhere in the mantissa (`1_0.5` -> 10.5)
+# Omits PyYAML's `.inf` / `.nan` / sexagesimal (`1:30.0`) branches — see _coerce.
+_YAML_FLOAT_RE = re.compile(
+    r"""^(?:
+          [-+]? [0-9][0-9_]* \. [0-9_]*  (?:[eE][-+][0-9]+)?   # 1.  1.5  -0.5  1_0.5
+        |        \.          [0-9][0-9_]* (?:[eE][-+][0-9]+)?  # .5   (unsigned only)
+        )$""",
+    re.VERBOSE,
+)
+
+
 def _coerce(raw: str) -> Any:
     """Turn one scalar token into a Python value."""
     text = _strip_comment(raw).strip()
@@ -97,7 +113,26 @@ def _coerce(raw: str) -> Any:
     try:
         return int(text)
     except ValueError:
-        return text
+        pass
+    # Floats, matched against YAML 1.1's own resolver rather than handed to
+    # `float()`. `float()` accepts `nan`, `inf` and `1e5`, and PyYAML resolves
+    # all three as STRINGS — so the loose version would trade one divergence
+    # from the parity invariant for three more. Note the exponent's sign is
+    # mandatory: PyYAML reads `1.0e+3` as 1000.0 but `1.0e3` as the string
+    # "1.0e3", and matching that exactly is the whole point of using its rule
+    # instead of an approximation of it.
+    #
+    # Two known, deliberate gaps remain, both pinned by the parity test: YAML
+    # 1.1's `.inf` / `.nan` special forms, and its sexagesimal floats (`1:30.0`
+    # → 90.0). Neither is meaningful as a config value in this kit, and
+    # supporting them would mean carrying YAML's special-form table for no
+    # adopter benefit.
+    if _YAML_FLOAT_RE.match(text):
+        try:
+            return float(text.replace("_", ""))  # `_` is a YAML digit separator
+        except ValueError:  # pragma: no cover — the pattern already guarantees this
+            return text
+    return text
 
 
 def _parse_flow_list(text: str) -> list[Any]:
