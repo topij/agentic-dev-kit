@@ -36,7 +36,13 @@ def test_matches_pyyaml_on_the_shipped_config():
 
 def test_loads_the_shipped_config_without_pyyaml():
     config = kitconfig.load_config(SHIPPED_CONFIG)
-    assert kitconfig.get(config, "vcs.protected_branch") == "main"
+    # A nested string parses to a non-empty string, and the schema stamp to an
+    # int. Deliberately NOT `== "main"`: the branch name is adopter-owned, and
+    # pinning it makes this test assert something about whoever's config is on
+    # disk rather than about the reader. A repo whose trunk is `master` is a
+    # supported configuration, not a test failure.
+    protected = kitconfig.get(config, "vcs.protected_branch")
+    assert isinstance(protected, str) and protected
     assert kitconfig.get(config, "kit.version") == 2
 
 
@@ -341,8 +347,17 @@ def test_review_skipped_lives_only_in_unavailable_markers():
     config = kitconfig.load_config(SHIPPED_CONFIG)
     noise = kitconfig.get_str_list(config, "review.noise_markers", [])
     unavailable = kitconfig.get_str_list(config, "review.unavailable_markers", [])
-    assert "review skipped" in unavailable
+
+    # The disjointness property holds for ANY config and is the real subject.
     assert not (set(noise) & set(unavailable)), "markers must not appear in both lists"
+
+    # Where a specific marker lives is adopter-owned. `_load_review_config`
+    # documents `unavailable_markers: []` as supported, and `adopt.md` tells
+    # adopters to run this suite against their own config — so assert this only
+    # when the list is actually populated, rather than failing a legitimately
+    # configured repo.
+    if unavailable:
+        assert "review skipped" in unavailable
 
 
 def test_check_doc_budget_handles_a_config_without_doc_budgets(tmp_path):

@@ -104,13 +104,72 @@ def test_exits_zero_on_malformed_or_unexpected_stdin(monkeypatch, capsys, stdin_
     assert out == ""
 
 
-def test_reminder_names_configured_bots_not_a_hardcoded_bot():
+def test_reminder_names_configured_bots_not_a_hardcoded_bot(monkeypatch):
     """The reminder must be sourced from config (review.bots / fallback_panel),
     never a hardcoded bot literal — this is the whole point of generalizing the
-    reference implementation (Principle #10, "No hardcoding")."""
+    reference implementation (Principle #10, "No hardcoding").
+
+    The bot name is INJECTED rather than read from the ambient repo, for two
+    reasons:
+
+    1. Reading it made this test depend on the surrounding repo configuring a
+       review bot — an adopter setting the truthful ``review.bots: []`` turned
+       it red on a property that has nothing to do with their config.
+    2. More importantly, asserting ``"coderabbit" in reminder`` while the repo's
+       own config says ``coderabbit`` **cannot fail for the reason the test
+       names**: a hard-coded literal in ``build_reminder`` would satisfy it just
+       as well as a config read. It claimed to pin "not hardcoded" and pinned
+       nothing. A bot name that appears in no config and no source file
+       distinguishes the two.
+    """
     hook = _load_hook()
+    monkeypatch.setattr(
+        hook,
+        "_load_review_config",
+        # Shape matches `_load_review_config`'s declared contract
+        # (tuple[list[str], str, str, list[str], str]) rather than being merely
+        # duck-compatible: `panel_source` in particular is guarded twice and
+        # defaulted on the except path, so `None` is not a value the real
+        # function can return, and a mock that returns one could mask a
+        # type-shape bug instead of exposing it.
+        lambda: (["zzz-sentinel-bot"], "/code-review", "scripts", [], "fallback:test-panel"),
+    )
+
     reminder = hook.build_reminder()
-    assert "coderabbit" in reminder  # from this repo's config/dev-model.yaml review.bots
+
+    assert "zzz-sentinel-bot" in reminder
+    assert "coderabbit" not in reminder.lower()
+    assert "bugbot" not in reminder.lower()
+
+
+def test_reminder_names_configured_bots_on_the_panel_branch_too(monkeypatch):
+    """The bot name must come from config on BOTH fallback branches.
+
+    The sibling test above supplies no lenses, which routes
+    `_fallback_instruction` to the DEGRADED wording — so on its own it leaves
+    the PANEL wording uncovered, and a bot literal hardcoded into that branch
+    survives the whole suite. Found by an adversarial review of the commit that
+    added the sentinel, which is a fair reminder that "the mock is minimal" and
+    "the mock exercises the path you care about" are different properties.
+    """
+    hook = _load_hook()
+    monkeypatch.setattr(
+        hook,
+        "_load_review_config",
+        lambda: (
+            ["zzz-sentinel-bot"],
+            "/code-review",
+            "scripts",
+            ["zzz-lens-one", "zzz-lens-two"],
+            "fallback:test-panel",
+        ),
+    )
+
+    reminder = hook.build_reminder()
+
+    assert "PANEL" in reminder  # the panel branch really is the one rendered
+    assert "zzz-sentinel-bot" in reminder
+    assert "coderabbit" not in reminder.lower()
     assert "bugbot" not in reminder.lower()
 
 
@@ -122,13 +181,31 @@ def test_reminder_points_at_the_panel_not_the_degraded_one_lens_mode(monkeypatch
     context — taught the wrong habit every time it fired, against
     `safety-critical-changes.md` rule 2. With a panel configured it must name
     the panel and its lenses.
+
+    The panel is INJECTED rather than read from the ambient repo: this asserts
+    an engine property ("a configured panel is advertised over the degraded
+    command"), and reading it from config made the test require the surrounding
+    repo to configure a panel — it went red when `review.fallback_panel` was
+    removed, which is a legitimate adopter state the hook explicitly handles and
+    which has its own test below.
     """
     hook = _load_hook()
+    monkeypatch.setattr(
+        hook,
+        "_load_review_config",
+        lambda: (
+            ["zzz-sentinel-bot"],
+            "/code-review",
+            "scripts",
+            ["zzz-lens-one", "zzz-lens-two"],
+            "fallback:test-panel",
+        ),
+    )
 
     reminder = hook.build_reminder()
 
     assert "PANEL" in reminder
-    assert "adversarial" in reminder and "correctness" in reminder
+    assert "zzz-lens-one" in reminder and "zzz-lens-two" in reminder
     assert "fallback-review-panel.md" in reminder
     assert "--lenses" in reminder
     # …and it must NOT advertise the degraded command as the thing to run.
