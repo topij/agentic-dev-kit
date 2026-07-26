@@ -14,6 +14,23 @@ jobs:
           python-version: "3.12"
       - name: Install test dependencies
         run: python -m pip install pytest pyyaml
+      - name: Lint Python (ruff)
+        # The kit shipped engines that nothing had ever linted (issue #58). Two
+        # of them were copied into a mature repo with repo-wide ruff and failed
+        # on contact — and this step, on its first run, found a LIVE crash the
+        # whole suite had missed: `yaml.YAMLError` in an `except` tuple with no
+        # `yaml` import (F821), which turned every config-resolution failure
+        # into a NameError inside its own error handler.
+        #
+        # Config lives in ruff.toml (NOT pyproject.toml — the engines are PEP
+        # 723 scripts and a root pyproject drags `uv run` into project mode).
+        # Deliberately lint-only: the kit is not ruff-format clean and does not
+        # try to be, because no single formatting satisfies every adopter's
+        # line-length. Adopters exclude the engines directory instead — see
+        # docs/agentic-dev-kit/adopting-into-a-linted-repo.md.
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: check --no-fix
       - name: Check shell syntax
         run: |
           bash -n scripts/dev_session.sh scripts/reconcile_sessions.sh scripts/lib/repo_root.sh scripts/hooks/pre-push

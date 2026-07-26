@@ -42,7 +42,6 @@ import re
 import sys
 from pathlib import Path
 
-
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import load_config, repo_root, resolve_path  # noqa: E402
 
@@ -274,13 +273,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.plan is None or args.history is None:
         try:
             default_plan, default_history = configured_paths()
+        # No `yaml.YAMLError` here: `configured_paths` resolves through
+        # `kitconfig`, which is a hand-rolled parser with no PyYAML import (the
+        # CI job "Engines must work without PyYAML" pins that). The name was a
+        # leftover from before that migration, and because Python evaluates an
+        # `except` tuple only when an exception actually arrives, it turned
+        # EVERY failure on this path into `NameError: name 'yaml' is not
+        # defined` — masking the real error in the very handler written to
+        # report it clearly. Found by the ruff pass added in this change (F821).
         except (
             FileNotFoundError,
             KeyError,
             OSError,
             TypeError,
             ValueError,
-            yaml.YAMLError,
         ) as exc:
             print(
                 f"error: could not resolve configured handoff paths ({exc})",

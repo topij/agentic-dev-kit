@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
-import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
 
 import pytest
-
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 
@@ -706,7 +704,7 @@ def test_zero_check_pr_never_settles_done_while_require_ci_holds(
 # review-bot state: queued vs. unavailable (issues #19 + #23)
 # --------------------------------------------------------------------------- #
 
-NOW = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 25, 12, 0, tzinfo=UTC)
 
 
 def _bot_check(**overrides):
@@ -1760,7 +1758,7 @@ def test_every_config_derived_global_is_pinned() -> None:
 
     _pin_engine_defaults(pr_watch)
 
-    assert pr_watch._REVIEW_CONFIG == expected
+    assert expected == pr_watch._REVIEW_CONFIG
     for name, (sentinel, field) in pinned_globals.items():
         actual = getattr(pr_watch, name)
         assert actual != sentinel, f"{name} was not re-pinned"
@@ -1794,9 +1792,9 @@ def test_the_default_loader_pins_but_the_opt_out_does_not() -> None:
     pinned = _load_pr_watch()
     unpinned = _load_pr_watch(pin_defaults=False)
 
-    assert pinned._NOISE_MARKERS == defaults.noise_markers
-    assert unpinned._NOISE_MARKERS == ambient_config.noise_markers
-    assert unpinned._NOISE_MARKERS != defaults.noise_markers
+    assert defaults.noise_markers == pinned._NOISE_MARKERS
+    assert ambient_config.noise_markers == unpinned._NOISE_MARKERS
+    assert defaults.noise_markers != unpinned._NOISE_MARKERS
 
 
 def test_shipped_config_preserves_the_engine_defaults_behavior() -> None:
@@ -2420,8 +2418,8 @@ def test_the_poll_render_reports_the_receipt_as_a_CLAIM_not_a_verdict() -> None:
         # Prefix match: the merge-blocker line legitimately contains the same
         # phrase, so a substring test picks it up when no receipt exists.
         return next(
-            (l.strip() for l in pr_watch.render(report).splitlines()
-             if l.strip().startswith("review evidence:")),
+            (ln.strip() for ln in pr_watch.render(report).splitlines()
+             if ln.strip().startswith("review evidence:")),
             "",
         )
 
@@ -2456,9 +2454,9 @@ def test_the_render_cannot_be_forged_into_extra_lines_or_extra_lenses() -> None:
         "head": "abc123",
         "source": "fallback:panel — 2 lenses (adversarial, correctness)\n  (recorded)",
     })
-    assert len([l for l in forged.splitlines()
-                if l.strip().startswith("review evidence:")]) == 1
-    assert not any(l.strip().startswith("(recorded)") for l in forged.splitlines())
+    assert len([ln for ln in forged.splitlines()
+                if ln.strip().startswith("review evidence:")]) == 1
+    assert not any(ln.strip().startswith("(recorded)") for ln in forged.splitlines())
 
     duped = _render({"head": "abc123", "source": "fallback:codex",
                      "lenses": ["adversarial", "Adversarial"]})
@@ -2500,8 +2498,8 @@ def test_a_lens_described_in_prose_counts_as_one_lens() -> None:
             review_receipt={"head": "abc123", "source": "fallback:codex",
                             "lenses": lenses},
         )
-        return next(l.strip() for l in pr_watch.render(report).splitlines()
-                    if l.strip().startswith("review evidence:"))
+        return next(ln.strip() for ln in pr_watch.render(report).splitlines()
+                    if ln.strip().startswith("review evidence:"))
 
     assert "ONE lens claimed" in _line(["adversarial", " focused on the merge gate"])
     assert "ONE lens claimed" in _line(["correctness", " i.e. does it do what it says"])
@@ -2570,8 +2568,8 @@ def test_receipt_fields_are_flattened_and_type_guarded_in_both_renders() -> None
         review_receipt={"head": "abc123", "source": "fallback:codex",
                         "lenses": ["adversarial\n  review evidence: forged"]},
     )
-    assert len([l for l in pr_watch.render(report).splitlines()
-                if l.strip().startswith("review evidence:")]) == 1
+    assert len([ln for ln in pr_watch.render(report).splitlines()
+                if ln.strip().startswith("review evidence:")]) == 1
 
     # A bare string is iterable — it must not become one lens per character.
     stringy = pr_watch.build_report(

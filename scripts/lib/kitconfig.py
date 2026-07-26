@@ -54,10 +54,26 @@ def repo_root(start: Path | None = None) -> Path:
     """Nearest ancestor carrying a ``.git`` entry (dir in a checkout, file in a
     linked worktree). Walking up for the marker — rather than counting
     ``parents[N]`` — is what lets the kit be vendored at any depth
-    (``scripts/devkit/lib/``) without rewriting a single path."""
+    (``scripts/devkit/lib/``) without rewriting a single path.
+
+    Both probes walk. The config probe is the fallback for a tree with no
+    ``.git`` at all — an exported tarball, a ``GIT_DIR``-only setup — where the
+    old ``parents[2]`` arithmetic silently returned the wrong directory for any
+    layout other than the kit's own ``scripts/lib/``. From ``scripts/devkit/lib/``
+    (the layout this docstring names, and the one ``/adopt`` prescribes when the
+    adopter's ``scripts/`` has colliding names) it yielded ``<repo>/scripts``,
+    and ``load_config`` then reported a missing config at a path that never
+    existed. See issue #60.
+
+    ``parents[2]`` survives only as the last resort when neither marker is
+    found — nothing better is knowable at that point.
+    """
     here = (start or Path(__file__)).resolve()
     for candidate in (here, *here.parents):
         if (candidate / ".git").exists():
+            return candidate
+    for candidate in (here, *here.parents):
+        if (candidate / DEFAULT_CONFIG_PATH).is_file():
             return candidate
     return here.parents[2] if len(here.parents) >= 3 else here.parent
 
@@ -74,11 +90,10 @@ def _strip_comment(value: str) -> str:
             quote = ch
         elif quote is not None and ch == quote:
             quote = None
-        elif quote is None and ch == "#":
-            # Only a `#` preceded by whitespace (or at the start) opens a comment,
-            # matching YAML — so `chore/triage-{date}#1` keeps its suffix.
-            if i == 0 or value[i - 1] in (" ", "\t"):
-                return value[:i]
+        # Only a `#` preceded by whitespace (or at the start) opens a comment,
+        # matching YAML — so `chore/triage-{date}#1` keeps its suffix.
+        elif quote is None and ch == "#" and (i == 0 or value[i - 1] in (" ", "\t")):
+            return value[:i]
     return value
 
 

@@ -1,0 +1,46 @@
+# Ruff config for the kit's own Python.
+#
+# WHY THIS FILE EXISTS (issue #58). The kit shipped engines that had never been
+# linted by anything. The cs-toolkit adoption dropped two of them into a mature
+# repo with repo-wide ruff and they failed on contact — and the CI job added
+# alongside this file immediately found a live crash the whole test suite had
+# missed (`F821` in archive_plan_sessions.py: `yaml.YAMLError` in an `except`
+# tuple with no `yaml` import, turning every config-resolution failure into a
+# `NameError` inside the handler written to report it clearly).
+#
+# WHY `ruff.toml` AND NOT `pyproject.toml`. Every engine is a PEP 723 script
+# with inline `# requires-python` metadata, run as `uv run scripts/foo.py`. A
+# root `pyproject.toml` makes uv fall into project mode, create a root `.venv/`
+# and write a stub `uv.lock` — noise at best, a behaviour change at worst.
+# `ruff.toml` configures ruff and nothing else.
+#
+# WHAT THIS FILE IS *NOT* FOR. It does not try to make the engines clean under
+# an arbitrary ADOPTER's ruff config — that is not achievable and chasing it
+# would be a trap. Formatting is the clearest case: cs-toolkit runs
+# `line-length = 120`, another adopter runs the default 88, and no single
+# formatting of a file satisfies both. An adopter must therefore EXCLUDE the
+# engines directory from their own lint and format (see docs/agentic-dev-kit/
+# adopting-into-a-linted-repo.md). This file is about the kit's own quality.
+
+target-version = "py312"   # every engine's PEP 723 header says requires-python >=3.12
+line-length = 100
+
+[lint]
+# E/F   pycodestyle + pyflakes — the real-bug tier (F821 lives here)
+# UP    pyupgrade — keep the engines idiomatic for the 3.12 floor
+# B     flake8-bugbear — mutable defaults, loop-variable capture
+# SIM   flake8-simplify — the rule the adopter's linter tripped on (SIM102)
+# I     isort — deterministic import blocks
+select = ["E", "F", "UP", "B", "SIM", "I"]
+
+# Line length is a formatter's concern, and the kit is deliberately NOT
+# ruff-format clean (see above — there is no formatting that satisfies every
+# adopter, so the engines are left as written and adopters exclude them).
+# Enforcing E501 here would mean reformatting 16 of 20 files to buy nothing.
+ignore = ["E501"]
+
+# `S` (flake8-bandit) is deliberately absent. It is worth having, but it lands
+# 641 findings that are almost entirely `S101` in tests plus `S603`/`S607` on
+# the engines' deliberate argv-form `gh`/`git` calls — all of which need
+# per-file ignores to say anything useful. Adding it belongs in its own change,
+# not bundled with the fix that unblocked an adopter.

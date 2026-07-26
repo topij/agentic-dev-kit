@@ -24,7 +24,6 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
 
 import kitconfig  # noqa: E402
 
-
 SHIPPED_CONFIG = REPO_ROOT / "config" / "dev-model.yaml"
 
 
@@ -379,3 +378,117 @@ def test_check_doc_budget_handles_a_config_without_doc_budgets(tmp_path):
     assert result.returncode == 2, result.stderr
     assert "Traceback" not in result.stderr, result.stderr
     assert "doc_budgets" in result.stderr
+
+
+# ── repo_root(): the marker walk, and its fallback ──────────────────────────
+#
+# `repo_root` had NO coverage at all before issue #60, which is how its
+# docstring and its code came to disagree in plain sight: the docstring says
+# walking up for a marker "rather than counting `parents[N]`" is what lets the
+# kit be vendored at any depth and names `scripts/devkit/lib/` as the case —
+# and the fallback then counted `parents[2]`, which is right only for the kit's
+# OWN `scripts/lib/` depth. From `scripts/devkit/lib/` it returned
+# `<repo>/scripts`, and `load_config` reported a missing config at a path that
+# never existed.
+#
+# The layouts below are the two the kit actually ships into, so a future edit
+# that reintroduces depth-arithmetic fails here rather than in an adopter.
+
+def _tree(root: Path, rel: str, *, git: bool, config: bool) -> Path:
+    """Build a fake checkout and return the `start` path for `repo_root`."""
+    start = root / rel
+    start.parent.mkdir(parents=True, exist_ok=True)
+    start.write_text("# stand-in for kitconfig.py\n", encoding="utf-8")
+    if git:
+        (root / ".git").mkdir(exist_ok=True)
+    if config:
+        (root / "config").mkdir(exist_ok=True)
+        (root / "config" / "dev-model.yaml").write_text("kit:\n  version: 2\n", encoding="utf-8")
+    return start
+
+
+@pytest.mark.parametrize(
+    "layout",
+    [
+        "scripts/lib/kitconfig.py",          # the kit's own layout
+        "scripts/devkit/lib/kitconfig.py",   # vendored — what /adopt prescribes on a name collision
+        "tools/vendor/devkit/lib/kitconfig.py",  # arbitrary depth, per the docstring's promise
+    ],
+)
+def test_repo_root_finds_the_git_marker_at_any_depth(tmp_path: Path, layout: str) -> None:
+    start = _tree(tmp_path, layout, git=True, config=True)
+    assert kitconfig.repo_root(start) == tmp_path
+
+
+@pytest.mark.parametrize(
+    "layout",
+    [
+        "scripts/lib/kitconfig.py",
+        "scripts/devkit/lib/kitconfig.py",
+        "tools/vendor/devkit/lib/kitconfig.py",
+    ],
+)
+def test_repo_root_falls_back_to_the_config_marker_when_there_is_no_git(
+    tmp_path: Path, layout: str
+) -> None:
+    """No `.git` at all — an exported tarball, a GIT_DIR-only setup.
+
+    `scripts/devkit/lib/` is the regression: `parents[2]` yielded
+    `<repo>/scripts` here, so this asserted the exact wrong directory before #60.
+    """
+    start = _tree(tmp_path, layout, git=False, config=True)
+    assert kitconfig.repo_root(start) == tmp_path
+
+
+def test_repo_root_prefers_git_over_a_shallower_config(tmp_path: Path) -> None:
+    """A nested checkout must resolve to ITS root, not an outer repo's config.
+
+    Pins the probe ORDER, not just the outcome — swapping the two loops would
+    make an engine inside a nested checkout read the outer repo's config.
+    """
+    outer = tmp_path / "outer"
+    (outer / "config").mkdir(parents=True)
+    (outer / "config" / "dev-model.yaml").write_text("kit:\n  version: 2\n", encoding="utf-8")
+    inner = outer / "vendor" / "inner"
+    start = _tree(inner, "scripts/devkit/lib/kitconfig.py", git=True, config=False)
+    assert kitconfig.repo_root(start) == inner
+
+
+def test_repo_root_last_resort_when_neither_marker_exists(tmp_path: Path) -> None:
+    """Neither marker: nothing better is knowable, so the arithmetic stands."""
+    start = _tree(tmp_path, "scripts/lib/kitconfig.py", git=False, config=False)
+    assert kitconfig.repo_root(start) == tmp_path
+
+
+def test_archive_plan_sessions_reports_a_missing_config_instead_of_crashing(tmp_path: Path) -> None:
+    """The config-resolution handler must report, not raise.
+
+    `archive_plan_sessions.py` listed `yaml.YAMLError` in this handler's `except`
+    tuple with no `yaml` import. Python evaluates that tuple only when an
+    exception actually arrives, so EVERY failure on this path raised
+    `NameError: name 'yaml' is not defined` from inside the handler written to
+    report the error cleanly — masking the real cause. Found by the ruff pass
+    added alongside this test (F821); nothing in the suite covered it.
+
+    Run from a copied tree with no `config/dev-model.yaml`: the script resolves
+    its root at import time, so an in-place run would find the kit's own config
+    and never reach the handler.
+    """
+    import subprocess
+
+    (tmp_path / "scripts" / "lib").mkdir(parents=True)
+    (tmp_path / ".git").mkdir()
+    for rel in ("scripts/archive_plan_sessions.py", "scripts/lib/kitconfig.py"):
+        (tmp_path / rel).write_bytes((REPO_ROOT / rel).read_bytes())
+
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, str(tmp_path / "scripts" / "archive_plan_sessions.py"), "--dry-run"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=tmp_path,
+    )
+    assert "NameError" not in result.stderr, result.stderr
+    assert "Traceback" not in result.stderr, result.stderr
+    assert result.returncode == 2, f"rc={result.returncode}\n{result.stderr}"
+    assert "could not resolve configured handoff paths" in result.stderr

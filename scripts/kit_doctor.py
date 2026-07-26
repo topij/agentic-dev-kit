@@ -99,6 +99,11 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # upgrading adopter gets doctrine pointing at a file they do not have, and
     # kit_doctor cannot report it missing because it is not tracked.
     ("docs/agentic-dev-kit/fallback-review-panel.md", "doctrine"),
+    # Tracked for the same reason as the line above: /adopt, /upgrade and the
+    # ruff CI step all point at it, and an untracked target means an upgrading
+    # adopter gets doctrine referencing a file they do not have — with
+    # kit_doctor unable to report it missing, because it is not tracked.
+    ("docs/agentic-dev-kit/adopting-into-a-linted-repo.md", "doctrine"),
     # narrative-doc templates (the rendered outputs are adopter-owned)
     ("docs/templates/handoff.md.tmpl", "template"),
     ("docs/templates/handoff-history.md.tmpl", "template"),

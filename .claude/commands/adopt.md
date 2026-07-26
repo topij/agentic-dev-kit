@@ -35,7 +35,13 @@ Run these probes and record the answers — they drive the plan:
 - **`scripts/` layout?** `ls scripts 2>/dev/null` — if it's organized into subdirs, or has files that collide with the kit's script names, vendor the kit's under `scripts/devkit/`; otherwise `scripts/` is fine.
 - **Tracker?** `gh issue list -L1 2>/dev/null` succeeds → GitHub Issues; else look for a Linear/Jira setup. Sets `tracker.backend`.
 - **Review bot?** Do NOT infer from a config file — a repo can have CodeRabbit/Bugbot enabled org-wide with no in-repo config. Check a recent PR or the org settings. Sets `review.bots`.
-- **CI/lint scope?** Read `.pre-commit-config.yaml` + `.github/workflows/`. Does lint run repo-wide or scoped to a package dir? A **repo-wide** ruff will trip on the kit's `state_paths` tests (bare `assert`, `S101`) unless the kit's dir is excluded — flag it now.
+- **CI/lint scope?** Read `.pre-commit-config.yaml` + `.github/workflows/`. Does lint run repo-wide or scoped to a package dir? If **anything** lints or formats repo-wide, read [`adopting-into-a-linted-repo.md`](../../docs/agentic-dev-kit/adopting-into-a-linted-repo.md) before writing a single file, and plan the engines directory around it.
+
+  Two failures, and the second is the dangerous one:
+  - **Red CI** — a repo-wide ruff trips on the kit's `state_paths` tests (bare `assert`, `S101`) and on engine findings the kit's own lint doesn't select. Visible, annoying, harmless.
+  - **A formatter silently rewriting kit-owned engines** — `ruff --fix`, `ruff-format`, black, even a trailing-whitespace hook. This is *not* cosmetic: an engine your tooling edits reports as `differs` forever and can never be replaced by `/upgrade` again. Measured on a real adoption (issue #58): the first `pre-commit run` after install rewrote **both** installed Python engines. Note it defeats `kit_doctor` in the same stroke, so the tool you'd use to notice is the tool being corrupted.
+
+  Consequence for Step 2's plan: **give the engines their own directory** (`scripts/devkit/`) even when no filenames collide, because a directory is the only exclusion unit that doesn't drift as the kit adds files.
 
 ## Step 2 — Propose the adoption plan, then wait
 
