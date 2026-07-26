@@ -214,5 +214,192 @@ def test_hook_detection_falls_back_to_git_hooks(tmp_path):
     assert kit_doctor.inspect(root, _manifest({}), config).hooks_installed is True
 
 
+# ------------------------------------------------------------------ issue #59
+
+
+def test_engine_probe_names_are_derived_from_kit_owned():
+    """The probe must not be a third hand-maintained list of kit files (after
+    KIT_OWNED and kit-manifest.json): adding an engine to KIT_OWNED has to
+    extend it automatically."""
+    expected = {
+        rel[len("scripts/") :] for rel, role in kit_doctor.KIT_OWNED if role == "engine"
+    }
+    assert set(kit_doctor._ENGINE_NAMES) == expected
+    assert "kit_doctor.py" in kit_doctor._ENGINE_NAMES
+    assert "lib/kitconfig.py" in kit_doctor._ENGINE_NAMES
+    # The hook is not an engine and does not live under paths.engines as one.
+    assert "hooks/pre-push" not in kit_doctor._ENGINE_NAMES
+
+
+def test_sized_down_install_of_kit_doctor_alone_is_not_reported_engineless(tmp_path):
+    """Issue #59, reproduced: the exact cs-toolkit Phase 1 shape — only
+    kit_doctor.py and lib/kitconfig.py under `paths.engines`. The old probe
+    named three other files, so this reported '✗ contains no kit engine' while
+    executing from that very directory.
+
+    (The issue's report also showed `2 unchanged` beside that ✗. This fixture
+    passes an empty manifest, so those two files land in `unknown-version`
+    instead — the contradiction being pinned here is the ✗ itself, not the
+    count.)"""
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    (root / "scripts" / "devkit" / "check_doc_budget.py").unlink()
+    _write(root / "scripts" / "devkit" / "kit_doctor.py", "print('doctor')\n")
+    _write(root / "scripts" / "devkit" / "lib" / "kitconfig.py", "print('config')\n")
+
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, _manifest({}), config)
+    assert report.engines_dir_ok is True
+    rendered = kit_doctor.render(report)
+    assert "contains no kit engine" not in rendered
+    assert "✓ paths.engines: scripts/devkit" in rendered
+
+
+def test_an_install_of_only_kitconfig_still_counts_as_an_engines_dir(tmp_path):
+    """A nested engine name (`lib/kitconfig.py`) must probe as well as a
+    top-level one — the remap and the probe have to agree about the layout."""
+    root = _fake_repo(tmp_path, engines="tools/devkit")
+    (root / "tools" / "devkit" / "check_doc_budget.py").unlink()
+    _write(root / "tools" / "devkit" / "lib" / "kitconfig.py", "print('config')\n")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    assert kit_doctor.inspect(root, _manifest({}), config).engines_dir_ok is True
+
+
+# ------------------------------------------------------------------ issue #61.1
+
+
+@pytest.mark.parametrize("written", ['"2"', "'2'", '" 2 "'])
+def test_a_quoted_kit_version_reports_instead_of_crashing(tmp_path, written):
+    """`kitconfig` coerces unquoted integers only (PyYAML parity), so a quoted
+    version stayed a str and `cfg_v < man_v` raised TypeError — a traceback out
+    of the read-only diagnostic an adopter reaches for when something looks
+    wrong.
+
+    Every case here must be genuinely QUOTED. An earlier bare ` 2 ` was not:
+    kitconfig strips whitespace and coerces it to an int before `_as_version`
+    ever sees it, so that case passed on the unfixed code too and pinned
+    nothing about the bug."""
+    root = _fake_repo(tmp_path, version=written)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, _manifest({}, version=2), config)
+    assert report.kit_version_config == 2
+    assert "✓ config schema: v2" in kit_doctor.render(report)
+
+
+def test_a_quoted_manifest_version_is_coerced_too(tmp_path):
+    """Both sides of the comparison, not just the config side."""
+    root = _fake_repo(tmp_path, version="1")
+    manifest = _manifest({})
+    manifest["kit_version"] = "2"
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config)
+    assert report.kit_version_manifest == 2
+    assert "v1, kit ships v2" in kit_doctor.render(report)
+
+
+def test_an_unreadable_version_is_distinguished_from_an_unversioned_one(tmp_path):
+    """`version: v2` is a typo, not a pre-v2 config. Rendering it as
+    'UNVERSIONED — run ./init.sh to migrate' sends the adopter into a migration
+    for a one-character fix."""
+    root = _fake_repo(tmp_path, version="v2")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, _manifest({}), config)
+    assert report.kit_version_config is None
+    assert report.kit_version_config_raw == "v2"
+    rendered = kit_doctor.render(report)
+    assert "UNREADABLE" in rendered
+    assert "UNVERSIONED" not in rendered
+
+
+def test_an_unreadable_version_does_not_attribute_differs_to_an_older_kit(tmp_path):
+    """`differs` must not claim a cause the version cannot establish — the same
+    rule the OLDER-version and LOCAL-EDITS branches already follow."""
+    root = _fake_repo(tmp_path, version="v2")
+    manifest = _manifest({"scripts/check_doc_budget.py": "0" * 64})
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    rendered = kit_doctor.render(kit_doctor.inspect(root, manifest, config))
+    assert "cannot narrow" in rendered
+    assert "OLDER version" not in rendered
+    assert "LOCAL EDITS" not in rendered
+    assert "that is a kit bug" not in rendered
+
+
+def test_an_unreadable_manifest_version_is_not_a_silent_checkmark(tmp_path):
+    """The symmetric hole: coercing the manifest side without reporting it made
+    an unreadable manifest kit_version fall through to a bare `✓ config schema:
+    vN` — a checkmark for a comparison that could not be performed — and then
+    let `differs` assert LOCAL EDITS off the same non-comparison."""
+    root = _fake_repo(tmp_path, version="2")
+    manifest = _manifest({"scripts/check_doc_budget.py": "0" * 64})
+    manifest["kit_version"] = "v3"
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config)
+    assert report.kit_version_manifest is None
+    assert report.kit_version_manifest_raw == "v3"
+    rendered = kit_doctor.render(report)
+    assert "cannot tell whether this config is behind" in rendered
+    assert "✓ config schema" not in rendered
+    assert "LOCAL EDITS" not in rendered
+    assert "that is a kit bug" not in rendered
+
+
+def test_json_reports_both_raw_versions(tmp_path, capsys):
+    """A consumer cannot tell "no version" from "unreadable version" without
+    these, which is the whole reason they exist."""
+    root = _fake_repo(tmp_path, version="v2")
+    manifest_path = tmp_path / "kit-manifest.json"
+    manifest_path.write_text(json.dumps(_manifest({})), encoding="utf-8")
+    kit_doctor.main(["--json", "--root", str(root), "--manifest", str(manifest_path)])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["kit_version_config"] is None
+    assert payload["kit_version_config_raw"] == "v2"
+    assert payload["kit_version_manifest"] == 2
+    assert payload["kit_version_manifest_raw"] == 2
+
+
+@pytest.mark.parametrize(
+    "written, expected",
+    [
+        ('"1_0"', None),  # bare int() accepts Python underscore separators → 10
+        ('"２"', None),  # bare int() accepts Unicode decimal digits → 2
+        ("2.0", 2),  # integral float worked before the fix; must keep working
+        ("2.5", None),
+        ('"0x2"', None),
+    ],
+)
+def test_version_parsing_is_stricter_than_bare_int(tmp_path, written, expected):
+    """`int(str(value))` is looser than "a schema version" in two directions a
+    review panel demonstrated, and both flowed into `--generate-manifest`."""
+    root = _fake_repo(tmp_path, version=written)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    assert kit_doctor.inspect(root, _manifest({}), config).kit_version_config == expected
+
+
+def test_a_boolean_version_is_not_read_as_schema_v1():
+    """`bool` is an `int` subclass, so `int(True)` is 1 and the
+    `isinstance(value, int)` branch would read `version: true` as schema v1.
+    The explicit bool rejection ahead of it is what prevents that."""
+    assert kit_doctor._as_version(True) is None
+    assert kit_doctor._as_version(False) is None
+    assert kit_doctor._as_version(None) is None
+    assert kit_doctor._as_version("2") == 2
+    assert kit_doctor._as_version(2) == 2
+    # A quoted float is a string, and strings must be plain decimal digits.
+    assert kit_doctor._as_version("2.0") is None
+    assert kit_doctor._as_version([2]) is None
+
+
+def test_generate_manifest_refuses_an_unreadable_version(tmp_path, capsys):
+    """Stamping a guessed kit_version would misreport drift for every adopter
+    that reads the manifest, so this exits rather than picking a number."""
+    root = _fake_repo(tmp_path, version="v2")
+    manifest_path = tmp_path / "kit-manifest.json"
+    code = kit_doctor.main(
+        ["--generate-manifest", "--root", str(root), "--manifest", str(manifest_path)]
+    )
+    assert code == 2
+    assert not manifest_path.exists()
+    assert "refusing to stamp" in capsys.readouterr().err
+
+
 def test_remap_tolerates_a_trailing_slash():
     assert kit_doctor._remap("scripts/pr_watch.py", "scripts/devkit/") == "scripts/devkit/pr_watch.py"
