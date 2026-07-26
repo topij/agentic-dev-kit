@@ -4,6 +4,14 @@ on:
   push:
   pull_request:
 
+# Least privilege for GITHUB_TOKEN. Without this the job inherits the
+# repository/organisation default, which is commonly write-capable — and this
+# workflow now runs a third-party action, so the blast radius of a compromised
+# or moved action tag is whatever the token can do. Nothing here needs more
+# than read.
+permissions:
+  contents: read
+
 jobs:
   toolkit:
     runs-on: ubuntu-latest
@@ -22,14 +30,28 @@ jobs:
         # `yaml` import (F821), which turned every config-resolution failure
         # into a NameError inside its own error handler.
         #
-        # Config lives in ruff.toml (NOT pyproject.toml — the engines are PEP
-        # 723 scripts and a root pyproject drags `uv run` into project mode).
+        # Config lives in ruff.toml (NOT pyproject.toml — see the note in that
+        # file; the reason is the plain `uv run … python` form, not PEP 723).
         # Deliberately lint-only: the kit is not ruff-format clean and does not
         # try to be, because no single formatting satisfies every adopter's
         # line-length. Adopters exclude the engines directory instead — see
         # docs/agentic-dev-kit/adopting-into-a-linted-repo.md.
-        uses: astral-sh/ruff-action@v3
+        #
+        # PINNED TO A COMMIT SHA, not the `v3` tag. This is the workflow's only
+        # non-GitHub-owned action, and a tag is mutable: whoever controls it can
+        # move it and run arbitrary code with this job's GITHUB_TOKEN on every
+        # push and pull_request. `permissions:` above reduces what that token
+        # can do; the SHA is what stops the swap.
+        #
+        # `version` is pinned too. Without it the action resolves to whatever
+        # ruff released most recently (there is no pyproject.toml for it to read
+        # a version from — see ruff.toml), so a new rule in the selected
+        # prefixes turns CI red with no change to this repo. Worse, this step
+        # runs BEFORE the tests, so that failure would mask all test signal.
+        # Bump both deliberately.
+        uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6  # v3
         with:
+          version: "0.16.0"
           args: check --no-fix
       - name: Check shell syntax
         run: |

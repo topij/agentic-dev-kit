@@ -68,7 +68,8 @@ check yours.
 
 ### 3. Exclude `kit-manifest.json` from entropy-based secret scanners
 
-The manifest is a sha256 per kit-owned file and nothing else. Every hash reads as a
+The manifest's `files` map is a sha256 per kit-owned file (plus a `role`), alongside
+`kit_version` and an `adopter_owned` list. Every hash reads as a
 high-entropy string: on cs-toolkit, `detect-secrets` flagged 24 of them. **Exclude
 the file rather than adding it to a baseline** — the kit re-cuts the manifest every
 release, so a baseline entry goes stale on every upgrade, whereas a path exclusion

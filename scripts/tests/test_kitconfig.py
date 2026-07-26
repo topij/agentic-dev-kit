@@ -391,8 +391,14 @@ def test_check_doc_budget_handles_a_config_without_doc_budgets(tmp_path):
 # `<repo>/scripts`, and `load_config` reported a missing config at a path that
 # never existed.
 #
-# The layouts below are the two the kit actually ships into, so a future edit
+# The layouts below are the two the kit prescribes (`scripts/lib/` for itself,
+# `scripts/devkit/lib/` for /adopt) plus one deeper than either, so a future edit
 # that reintroduces depth-arithmetic fails here rather than in an adopter.
+#
+# NOTE the `git=True, config=False` in the .git test. Planting BOTH markers makes
+# the .git probe unobservable — the config fallback returns the same root, so
+# deleting the .git probe outright leaves the test green. It did, and this test
+# claimed to pin "at any depth" while pinning nothing.
 
 def _tree(root: Path, rel: str, *, git: bool, config: bool) -> Path:
     """Build a fake checkout and return the `start` path for `repo_root`."""
@@ -416,7 +422,8 @@ def _tree(root: Path, rel: str, *, git: bool, config: bool) -> Path:
     ],
 )
 def test_repo_root_finds_the_git_marker_at_any_depth(tmp_path: Path, layout: str) -> None:
-    start = _tree(tmp_path, layout, git=True, config=True)
+    # config=False so ONLY the .git probe can produce this answer.
+    start = _tree(tmp_path, layout, git=True, config=False)
     assert kitconfig.repo_root(start) == tmp_path
 
 
@@ -426,6 +433,24 @@ def test_repo_root_finds_the_git_marker_at_any_depth(tmp_path: Path, layout: str
         "scripts/lib/kitconfig.py",
         "scripts/devkit/lib/kitconfig.py",
         "tools/vendor/devkit/lib/kitconfig.py",
+    ],
+)
+def test_repo_root_accepts_a_git_file_as_a_linked_worktree_marker(
+    tmp_path: Path, layout: str
+) -> None:
+    """`.git` is a FILE in a linked worktree, which the docstring promises to
+    handle. `.exists()` covers it and `.is_dir()` would not — and nothing pinned
+    that, so the distinction survived only as prose."""
+    start = _tree(tmp_path, layout, git=False, config=False)
+    (tmp_path / ".git").write_text("gitdir: /elsewhere/.git/worktrees/wt\n", encoding="utf-8")
+    assert kitconfig.repo_root(start) == tmp_path
+
+
+@pytest.mark.parametrize(
+    "layout",
+    [
+        "scripts/lib/kitconfig.py",         # root == parents[2]
+        "scripts/devkit/lib/kitconfig.py",  # root == parents[3]
     ],
 )
 def test_repo_root_falls_back_to_the_config_marker_when_there_is_no_git(
@@ -438,6 +463,46 @@ def test_repo_root_falls_back_to_the_config_marker_when_there_is_no_git(
     """
     start = _tree(tmp_path, layout, git=False, config=True)
     assert kitconfig.repo_root(start) == tmp_path
+
+
+def test_config_probe_does_not_escape_into_a_parent_project(tmp_path: Path) -> None:
+    """A .git-less tree nested under a directory that owns a config.
+
+    The unbounded config walk reached the OUTER config and returned another
+    project's root — silently, and `archive_plan_sessions` rewrites the paths it
+    resolves this way. It was strictly worse than the arithmetic it replaced,
+    which gets this exact layout right. Pins the bound, in the direction that
+    matters: escaping is worse than failing.
+    """
+    outer = tmp_path / "outer"
+    (outer / "config").mkdir(parents=True)
+    (outer / "config" / "dev-model.yaml").write_text(
+        "kit:\n  version: 2\npaths:\n  handoff: docs/OUTER.md\n", encoding="utf-8"
+    )
+    release = outer / "releases" / "proj-1.2.3"
+    start = _tree(release, "scripts/lib/kitconfig.py", git=False, config=False)
+
+    resolved = kitconfig.repo_root(start)
+    assert resolved != outer, "escaped into the parent project's config"
+    assert resolved == release
+
+
+def test_config_probe_is_bounded_and_fails_loudly_rather_than_escaping(
+    tmp_path: Path,
+) -> None:
+    """Deeper than any prescribed layout, with no `.git`: the bound stops the walk.
+
+    The kit resolves arbitrary depth through `.git`, which every real checkout
+    has. Only this fallback is bounded, and the bound's price is paid here: the
+    answer is wrong, but it is INSIDE the tree, so `load_config` raises naming a
+    path that does not exist instead of quietly loading someone else's config.
+    """
+    start = _tree(tmp_path, "tools/vendor/devkit/lib/kitconfig.py", git=False, config=True)
+    resolved = kitconfig.repo_root(start)
+    assert resolved != tmp_path          # the bound did stop the walk
+    assert tmp_path in resolved.parents  # ...and it stayed inside the tree
+    with pytest.raises(FileNotFoundError):
+        kitconfig.load_config(resolved / "config" / "dev-model.yaml")
 
 
 def test_repo_root_prefers_git_over_a_shallower_config(tmp_path: Path) -> None:

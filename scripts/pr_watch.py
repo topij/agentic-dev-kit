@@ -97,10 +97,28 @@ from typing import NamedTuple
 
 def _find_repo_root(start: Path) -> Path:
     """Nearest ancestor with a ``.git`` marker (so this keeps working when the kit
-    is vendored under a nested dir, e.g. scripts/devkit/); falls back to the
-    script's grandparent if no marker is found. Inlined — pr_watch stays stdlib-only."""
+    is vendored under a nested dir, e.g. scripts/devkit/). Inlined — pr_watch
+    stays stdlib-only.
+
+    The ``.git`` walk handles any depth. The fallback did not: ``parent.parent``
+    is calibrated for ``scripts/pr_watch.py`` and returns ``<repo>/scripts`` from
+    the vendored ``scripts/devkit/`` layout named right above — the docstring
+    claimed a depth-independence the fallback did not have (issue #60). Probing
+    for the config marker first fixes that; the probe is BOUNDED so the walk
+    cannot escape into a parent project's config and hand this engine another
+    repo's root, which is what ``REPO_ROOT`` feeds to every ``gh``/``git``
+    subprocess ``cwd=`` and to state-root resolution below."""
     for candidate in (start, *start.parents):
         if (candidate / ".git").exists():
+            return candidate
+    # Bound is 3, not the 4 used by lib/kitconfig.py and lib/devmodel_config.py:
+    # this engine sits one directory shallower (`scripts/pr_watch.py`, not
+    # `scripts/lib/…`), so the root is `parents[1]` in the kit's own layout and
+    # `parents[2]` vendored. A bound copied from the lib modules reaches one
+    # level too far and re-opens the escape — which is how the test below
+    # caught it.
+    for candidate in (start, *start.parents[:3]):
+        if (candidate / "config" / "dev-model.yaml").is_file():
             return candidate
     return start.parent.parent
 

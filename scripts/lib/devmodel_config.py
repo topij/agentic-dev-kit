@@ -38,8 +38,16 @@ def _repo_root() -> Path:
     for candidate in (here, *here.parents):
         if (candidate / ".git").exists():
             return candidate
-    # No .git found (e.g. the kit was copied in but `git init` hasn't run
-    # yet) — fall back to two levels up from scripts/lib/.
+    # No .git found (e.g. the kit was copied in but `git init` hasn't run yet).
+    # `parents[2]` alone is calibrated for `scripts/lib/` and returns
+    # `<repo>/scripts` from the vendored `scripts/devkit/lib/` layout that
+    # /adopt prescribes (issue #60), so probe for the config first — bounded,
+    # so the walk cannot escape into a parent project's config. Same rule and
+    # same reasoning as kitconfig.repo_root; kept inline because this module is
+    # deliberately import-free.
+    for candidate in (here, *here.parents[:4]):
+        if (candidate / "config" / "dev-model.yaml").is_file():
+            return candidate
     return here.parents[2]
 
 

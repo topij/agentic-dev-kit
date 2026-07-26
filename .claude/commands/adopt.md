@@ -73,6 +73,7 @@ For each piece, **copy only if the target doesn't already exist**:
 - **Runtime adapters** → `.claude/commands/` and `.agents/skills/` (skip any target that collides with an existing workflow).
 - **Engine scripts** → `scripts/devkit/` (or `scripts/` if clean). Set `paths.engines` to that directory; do not rewrite prompt files. The scripts find the repo root by walking up for `.git`, so they work at any depth.
 - **Safety doctrine** → `docs/agentic-dev-kit/safety-critical-changes.md`; install the thin `.claude/rules/safety-critical-changes.md` adapter when absent and merge `docs/AGENTS-sections.md` into an existing `AGENTS.md` when applicable.
+- **Lint-containment doctrine** → `docs/agentic-dev-kit/adopting-into-a-linted-repo.md`. Install it whenever Step 1 found repo-wide lint or format, and apply its exclusions **in the same commit as the engines** — an engine that gets autoformatted before the exclusion lands is already drifted. `kit_doctor` tracks this file, so skipping it shows up as a permanent `missing`.
 - **`config/dev-model.yaml`** — stamp the Step-1 values: `paths.handoff` → the existing plan (and `paths.handoff_history` / the `doc_budgets` entry to match), `paths.engines`, `runtime`, `tracker`, `review`, and `models`.
 - **`friction-log.md`** (seed only if absent).
 - Append `state/` and `.devkit_state_root` to `.gitignore` if missing.

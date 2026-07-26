@@ -1293,3 +1293,92 @@ def test_state_paths_suite_passes_from_inside_a_lane_worktree(tmp_path: Path) ->
     passed = re.search(r"(\d+) passed", result.stdout)
     assert passed, detail
     assert int(passed.group(1)) >= _STATE_PATHS_TEST_FLOOR, detail
+
+
+# ── the no-.git fallback in the OTHER two root resolvers (issue #60) ─────────
+#
+# `test_python_engine_root_walk_supports_namespacing` above plants a `.git`, so
+# it only ever exercised the marker walk. The FALLBACK was uncovered in all
+# three resolvers, which is how the same depth-arithmetic bug survived in
+# `pr_watch._find_repo_root` and `devmodel_config._repo_root` after it was fixed
+# in `kitconfig.repo_root` — one fix, three copies, and the docstring in
+# pr_watch made the same `scripts/devkit/` claim the issue was filed about.
+
+
+def test_pr_watch_root_fallback_handles_the_vendored_layout(tmp_path: Path) -> None:
+    """No `.git`: the old `start.parent.parent` returned `<repo>/scripts`."""
+    repo = tmp_path / "project"
+    nested = repo / "scripts" / "devkit" / "pr_watch.py"
+    nested.parent.mkdir(parents=True)
+    (repo / "config").mkdir()
+    (repo / "config" / "dev-model.yaml").write_text("kit:\n  version: 2\n", encoding="utf-8")
+    pr_watch = _load_module("pr_watch_fb", ENGINE_DIR / "pr_watch.py")
+
+    assert pr_watch._find_repo_root(nested) == repo
+
+
+def test_pr_watch_root_fallback_does_not_escape_into_a_parent_project(
+    tmp_path: Path,
+) -> None:
+    """REPO_ROOT feeds every `gh`/`git` subprocess `cwd=` and the state root.
+
+    Escaping would point a merge-gate engine at a different repository, so the
+    bound matters more here than anywhere else it is applied.
+    """
+    outer = tmp_path / "outer"
+    (outer / "config").mkdir(parents=True)
+    (outer / "config" / "dev-model.yaml").write_text("kit:\n  version: 2\n", encoding="utf-8")
+    release = outer / "releases" / "proj-1.2.3"
+    nested = release / "scripts" / "pr_watch.py"
+    nested.parent.mkdir(parents=True)
+    pr_watch = _load_module("pr_watch_esc", ENGINE_DIR / "pr_watch.py")
+
+    resolved = pr_watch._find_repo_root(nested)
+    assert resolved != outer, "escaped into the parent project"
+    assert resolved == release
+
+
+def test_devmodel_config_root_fallback_handles_the_vendored_layout(tmp_path: Path) -> None:
+    """`_repo_root()` reads `__file__`, so the module must be copied into place."""
+    repo = tmp_path / "project"
+    lib = repo / "scripts" / "devkit" / "lib"
+    lib.mkdir(parents=True)
+    (repo / "config").mkdir()
+    (repo / "config" / "dev-model.yaml").write_text("kit:\n  version: 2\n", encoding="utf-8")
+    target = lib / "devmodel_config.py"
+    target.write_bytes((ENGINE_DIR / "lib" / "devmodel_config.py").read_bytes())
+
+    module = _load_module("devmodel_config_fb", target)
+    assert module._repo_root() == repo
+
+
+def test_engines_avoid_datetime_utc_alias() -> None:
+    """`datetime.UTC` / `from datetime import UTC` need Python 3.11+.
+
+    `ruff.toml` ignores UP017 so the autofixer cannot introduce this, but the
+    ignore is a comment — nothing stopped it being typed by hand, and the
+    regression it guards against was silent (an ImportError at module load, on
+    an interpreter CI never exercises).
+
+    Scope is ENGINES, not tests: tests only ever run under the pinned CI
+    interpreter, while engines get invoked as a bare `python3 <engine>` by git
+    hooks, cron and CI steps on whatever interpreter is present. The six
+    modules under lib/ carry no PEP 723 header at all, so they inherit their
+    caller's interpreter with nothing to negotiate a newer one.
+    """
+    offenders: list[str] = []
+    for path in sorted(ENGINE_DIR.rglob("*.py")):
+        rel = path.relative_to(ENGINE_DIR)
+        if rel.parts[0] == "tests" or "tests" in rel.parts:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for lineno, line in enumerate(text.splitlines(), 1):
+            code = line.split("#", 1)[0]
+            if re.search(r"\bdatetime\.UTC\b", code) or re.search(
+                r"^\s*from\s+datetime\s+import\s+.*\bUTC\b", code
+            ):
+                offenders.append(f"{rel}:{lineno}: {line.strip()}")
+    assert not offenders, (
+        "use `timezone.utc` — `datetime.UTC` raises ImportError below 3.11:\n"
+        + "\n".join(offenders)
+    )
