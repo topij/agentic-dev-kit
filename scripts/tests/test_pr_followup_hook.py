@@ -126,7 +126,13 @@ def test_reminder_names_configured_bots_not_a_hardcoded_bot(monkeypatch):
     monkeypatch.setattr(
         hook,
         "_load_review_config",
-        lambda: (("zzz-sentinel-bot",), "/code-review", "scripts", (), None),
+        # Shape matches `_load_review_config`'s declared contract
+        # (tuple[list[str], str, str, list[str], str]) rather than being merely
+        # duck-compatible: `panel_source` in particular is guarded twice and
+        # defaulted on the except path, so `None` is not a value the real
+        # function can return, and a mock that returns one could mask a
+        # type-shape bug instead of exposing it.
+        lambda: (["zzz-sentinel-bot"], "/code-review", "scripts", [], "fallback:test-panel"),
     )
 
     reminder = hook.build_reminder()
