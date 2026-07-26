@@ -86,10 +86,12 @@ quality mechanisms disagreeing with each other.
 - **`#50`** — casts doubt backwards on merged mutation evidence.
 - **`#44`/`#45`** — the merge gate cannot see a clean CodeRabbit review (it arrives as
   a comment), and cannot tell a structurally-non-reviewing bot from a pending one.
-- **The friction log is AT budget (150/150) and `triage-friction-log` is now
-  blocking.** This session's friction was routed straight to issues instead, which is
-  the Principle #2 routing — but the claim-drift pattern already in the inbox gained
-  five more instances and wants graduating.
+- ✔ **The friction-log inbox was graduated** (`triage-friction-log`, run inline in
+  LLM-only mode since its engine is unvendored — `#6`). Three entries became `#54`
+  (every verification claim must name the command that establishes it), `#55` (rule 1
+  needs a tightening threshold) and `#56` (removing a mechanism requires enumerating
+  what it rejected); three more needed no ticket because their fixes had already
+  shipped in `#31`. Inbox 150 → 32 lines.
 
 ▶ Next: **cs-toolkit Phase 1 only** — install `config/dev-model.yaml` + `init.sh` +
 `kit-manifest.json` + `kitconfig.py` + `kit_doctor.py` (additive, zero behaviour
