@@ -36,7 +36,13 @@ def test_matches_pyyaml_on_the_shipped_config():
 
 def test_loads_the_shipped_config_without_pyyaml():
     config = kitconfig.load_config(SHIPPED_CONFIG)
-    assert kitconfig.get(config, "vcs.protected_branch") == "main"
+    # A nested string parses to a non-empty string, and the schema stamp to an
+    # int. Deliberately NOT `== "main"`: the branch name is adopter-owned, and
+    # pinning it makes this test assert something about whoever's config is on
+    # disk rather than about the reader. A repo whose trunk is `master` is a
+    # supported configuration, not a test failure.
+    protected = kitconfig.get(config, "vcs.protected_branch")
+    assert isinstance(protected, str) and protected
     assert kitconfig.get(config, "kit.version") == 2
 
 

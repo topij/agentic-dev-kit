@@ -31,10 +31,14 @@ def _pin_engine_defaults(module: ModuleType) -> None:
 
     Passing a path that cannot exist takes ``_load_review_config``'s
     ``FileNotFoundError`` branch, which returns the engine defaults and stays
-    deliberately quiet — the same state as a standalone engine run. Tests that
-    want *other* config call ``_load_review_config`` with a written file
-    themselves (see the ADOPTER_CONFIG cases), and tests that want the SHIPPED
-    config read it explicitly; both are unaffected by this.
+    deliberately quiet — the same state as a standalone engine run.
+
+    A test that genuinely wants the AMBIENT config — this repo's own
+    ``config/dev-model.yaml`` — must ask for it with
+    ``_load_pr_watch(pin_defaults=False)``. Pinning by default and opting out
+    is deliberate: the failure mode of a test that silently reads ambient
+    config is invisible here and only shows up in somebody else's repo, so the
+    safe state is the default and wanting otherwise has to be written down.
     """
     defaults = module._load_review_config(ENGINE_DIR / "does-not-exist" / "dev-model.yaml")
     module._REVIEW_CONFIG = defaults
@@ -46,14 +50,21 @@ def _pin_engine_defaults(module: ModuleType) -> None:
     module._BOT_PENDING_GRACE_MINUTES = defaults.bot_pending_grace_minutes
 
 
-def _load_pr_watch() -> ModuleType:
+def _load_pr_watch(*, pin_defaults: bool = True) -> ModuleType:
+    """Load the engine fresh.
+
+    ``pin_defaults=False`` leaves the module bound to whatever
+    ``config/dev-model.yaml`` the surrounding repo has — correct only for a
+    test whose SUBJECT is that config.
+    """
     spec = importlib.util.spec_from_file_location(
         "pr_watch_under_test", ENGINE_DIR / "pr_watch.py"
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    _pin_engine_defaults(module)
+    if pin_defaults:
+        _pin_engine_defaults(module)
     return module
 
 
@@ -592,10 +603,17 @@ def test_zero_check_pr_is_green_when_require_ci_is_false() -> None:
 
 
 def test_require_ci_defaults_to_the_configured_value() -> None:
-    pr_watch = _load_pr_watch()
+    # `pin_defaults=False` — the name says "the CONFIGURED value", so the
+    # ambient config is the subject and the pinned module would make it vacuous.
+    #
+    # Asserts the WIRING, not the literal: whatever `review.require_ci` is set
+    # to, an empty check list must be non-green exactly when CI is required.
+    # Pinning `is True` here made a legitimate `require_ci: false` fail a kit
+    # test, which is the same bug this module's loader change exists to remove.
+    pr_watch = _load_pr_watch(pin_defaults=False)
 
-    assert pr_watch._REQUIRE_CI is True  # this repo's config
-    assert pr_watch.summarize_checks([])["all_green"] is False
+    assert isinstance(pr_watch._REQUIRE_CI, bool)
+    assert pr_watch.summarize_checks([])["all_green"] is (not pr_watch._REQUIRE_CI)
 
 
 @pytest.mark.parametrize("require_ci", [True, False])
@@ -1691,38 +1709,87 @@ def test_configured_unavailable_marker_still_beats_configured_noise(
     assert pr_watch.is_noise(body) is False
 
 
-def test_the_loaded_engine_is_detached_from_the_ambient_repo_config() -> None:
-    """A module from ``_load_pr_watch`` must carry the ENGINE defaults, never
-    whatever ``config/dev-model.yaml`` the surrounding repo happens to have.
+def test_every_config_derived_global_is_pinned() -> None:
+    """``_pin_engine_defaults`` must overwrite EVERY config-derived global.
 
-    Without this, ~32 tests in this file silently require the ambient repo to
-    configure a review bot, and a real adopter setting the truthful
-    ``review.bots: []`` turns them red on assertions about engine behaviour.
+    Guarding this by loading normally and comparing against the defaults does
+    not work, and the first version of this test made exactly that mistake: for
+    any field where this repo's config happens to AGREE with the engine default
+    the comparison passes whether or not the pin ran. A per-line mutation sweep
+    showed 5 of the 7 pins were unguarded that way — including ``_REVIEW_BOTS``,
+    the one field whose ambient value caused the bug this all exists to fix.
+    Deleting its pin left the suite green here while restoring the entire
+    failure for an adopter with ``review.bots: []``.
 
-    NOTE which field this asserts on, and why it is not ``bots``. In THIS repo
-    the shipped ``review.bots`` and ``_DEFAULT_REVIEW_BOTS`` are both
-    ``coderabbit``, so a bots-only assertion passes whether or not the pinning
-    happens — it would be a test that cannot fail here, which is worse than no
-    test. ``noise_markers`` genuinely differs (the shipped config carries 5,
-    the engine defaults 7), so it is the field that actually detects a
-    regression from inside this repo.
+    So seed every global with a sentinel the defaults cannot equal, then pin.
+    Each assertion below now fails if — and only if — its own line is missing
+    from ``_pin_engine_defaults``, whatever the ambient config says.
     """
-    pr_watch = _load_pr_watch()
+    pr_watch = _load_pr_watch(pin_defaults=False)
 
+    pr_watch._REVIEW_CONFIG = "zzz-sentinel-config"
+    pr_watch._NOISE_MARKERS = ("zzz-sentinel-noise",)
+    pr_watch._REVIEW_UNAVAILABLE_MARKERS = ("zzz-sentinel-unavailable",)
+    pr_watch._INFORMATIONAL_CHECK_NAMES = frozenset({"zzz-sentinel-check"})
+    pr_watch._REQUIRE_CI = "zzz-sentinel-require-ci"
+    pr_watch._REVIEW_BOTS = ("zzz-sentinel-bot",)
+    pr_watch._BOT_PENDING_GRACE_MINUTES = -99999.0
+
+    _pin_engine_defaults(pr_watch)
+
+    assert pr_watch._REVIEW_CONFIG != "zzz-sentinel-config"
     assert pr_watch._NOISE_MARKERS == pr_watch._DEFAULT_NOISE_MARKERS
     assert pr_watch._REVIEW_UNAVAILABLE_MARKERS == pr_watch._DEFAULT_REVIEW_UNAVAILABLE_MARKERS
-    assert pr_watch._REVIEW_BOTS == pr_watch._DEFAULT_REVIEW_BOTS
-    assert pr_watch._BOT_PENDING_GRACE_MINUTES == pr_watch._DEFAULT_BOT_PENDING_GRACE_MINUTES
-    assert pr_watch._REQUIRE_CI == pr_watch._DEFAULT_REQUIRE_CI
     assert pr_watch._INFORMATIONAL_CHECK_NAMES == frozenset(
         pr_watch._DEFAULT_INFORMATIONAL_CHECK_NAMES
     )
+    assert pr_watch._REQUIRE_CI == pr_watch._DEFAULT_REQUIRE_CI
+    assert pr_watch._REVIEW_BOTS == pr_watch._DEFAULT_REVIEW_BOTS
+    assert pr_watch._BOT_PENDING_GRACE_MINUTES == pr_watch._DEFAULT_BOT_PENDING_GRACE_MINUTES
+
+
+def test_the_default_loader_pins_but_the_opt_out_does_not() -> None:
+    """The pinning must actually be wired into ``_load_pr_watch``, and
+    ``pin_defaults=False`` must genuinely leave the ambient config in place —
+    otherwise the shipped-config tests below are asserting about defaults.
+
+    ``noise_markers`` is the discriminator because it is the field where this
+    repo's config and the engine defaults genuinely differ (5 shipped, 7
+    default).
+
+    It SKIPS rather than fails when the ambient config and the defaults
+    coincide, which is the whole point of this PR applied to itself: an
+    adopter whose config happens to match the defaults has no way to
+    distinguish pinned from unpinned, and turning that into a red test would
+    be the exact ambient coupling being removed. A test that cannot be
+    meaningful here should say so, not fail.
+    """
+    ambient = _load_pr_watch(pin_defaults=False)
+    if ambient._NOISE_MARKERS == ambient._DEFAULT_NOISE_MARKERS:
+        pytest.skip(
+            "ambient config's noise_markers match the engine defaults — "
+            "pinned and unpinned are indistinguishable in this repo"
+        )
+
+    pinned = _load_pr_watch()
+
+    assert pinned._NOISE_MARKERS == pinned._DEFAULT_NOISE_MARKERS
+    assert ambient._NOISE_MARKERS != ambient._DEFAULT_NOISE_MARKERS
 
 
 def test_shipped_config_preserves_the_engine_defaults_behavior() -> None:
     """This repo's own config/dev-model.yaml must classify exactly as the
-    literals it replaced — the behavior-preservation argument for BUG 3."""
-    pr_watch = _load_pr_watch()
+    literals it replaced — the behavior-preservation argument for BUG 3.
+
+    ``pin_defaults=False`` is load-bearing: THIS repo's config is the subject.
+    Loading the pinned module here would assert that the defaults classify like
+    the defaults — a tautology that stays green no matter what the shipped
+    config says. That is not hypothetical: the first cut of the pinning change
+    left this test on the pinned loader, and corrupting ``review.noise_markers``
+    in the shipped config then went from "7 tests fail" to "the whole suite is
+    green".
+    """
+    pr_watch = _load_pr_watch(pin_defaults=False)
 
     walkthrough = (
         "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n"
@@ -1739,8 +1806,13 @@ def test_shipped_config_preserves_the_engine_defaults_behavior() -> None:
     ):
         assert pr_watch.review_unavailable_reason(body) is not None, body
         assert pr_watch.is_noise(body) is False, body
-    assert pr_watch._INFORMATIONAL_CHECK_NAMES == frozenset({"coderabbit"})
-    assert pr_watch._REQUIRE_CI is True
+    # `informational_checks` and `require_ci` are ADOPTER-owned values, so assert
+    # the wiring rather than this repo's literals: a repo that legitimately sets
+    # `require_ci: false` (documented for a repo with no CI at all) or names a
+    # different reviewer must not fail a kit test. The marker classification
+    # above is the part that is genuinely about behaviour preservation.
+    assert all(name == name.lower() for name in pr_watch._INFORMATIONAL_CHECK_NAMES)
+    assert pr_watch.summarize_checks([])["all_green"] is (not pr_watch._REQUIRE_CI)
 
 
 def test_normal_coderabbit_walkthrough_remains_noise() -> None:
