@@ -75,3 +75,14 @@ Everything above now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   Contract item 7 constrains the **lenses**; nothing constrains the **cockpit**. **M** —
   proposed fix: add a cockpit-side clause — do not mutate the shared tree between
   launching a panel and reading its findings.
+- **The archive sweep breaks *relative* cross-references, and its docstring says it
+  doesn't.** `archive_plan_sessions.py:20` claims *"It only ever moves content — every
+  cross-reference (ticket ids, PR links, commit shas, …) is preserved."* Every kind it
+  enumerates is **absolute**. A relative one is not preserved: this session's sweep moved
+  the Phase 3a block into the history file while Phase 3b stayed live, orphaning
+  *"see the Phase 3b block above"* — the target is now in a different file. Caught by
+  CodeRabbit on the wrap-up PR, not by the sweep, which reported success. **M** —
+  proposed fix: have the sweep scan moved blocks for `(above|below)`-style references
+  and warn (not rewrite — rewriting is the class of surgery `init.sh`'s deleted marker
+  migration proved dangerous). Same family as #53, which is about the pointer the sweep
+  *writes*; this is about the references it *carries*.

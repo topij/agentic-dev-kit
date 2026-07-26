@@ -10,7 +10,7 @@ and the next step there; this file is append-only history.
 Both times the correction came from asking what a *stale reader* of the mechanism would do.
 
 > **What "Phase 3" and "the cs-toolkit back-port" mean.** cs-toolkit
-> (`/Users/topi/Coding/in-parallel/cs-toolkit`, a separate private repo) is where this kit's
+> (a separate private repo) is where this kit's
 > mechanisms originated; the kit generalized them, and the back-port is returning the
 > improved versions. Phase 3 is the review-receipt + merge-gate slice of that. The vocabulary
 > has never been written down outside this handoff, which made the claim below unverifiable
@@ -88,7 +88,8 @@ Both times the correction came from asking what a *stale reader* of the mechanis
   proposed fix, so they are issue-shaped — `triage-friction-log` should graduate them rather
   than leaving them in the inbox.
 
-✔ Done — shipped as PR #25 (see the Phase 3b block above). The design constraint held:
+✔ Done — shipped as PR #25 (see the Phase 3b block, still live in
+[`kit-handoff.md`](kit-handoff.md)). The design constraint held:
 neither surface's fix touches `converged`.
 
 ### 2026-07-25
