@@ -104,13 +104,35 @@ def test_exits_zero_on_malformed_or_unexpected_stdin(monkeypatch, capsys, stdin_
     assert out == ""
 
 
-def test_reminder_names_configured_bots_not_a_hardcoded_bot():
+def test_reminder_names_configured_bots_not_a_hardcoded_bot(monkeypatch):
     """The reminder must be sourced from config (review.bots / fallback_panel),
     never a hardcoded bot literal — this is the whole point of generalizing the
-    reference implementation (Principle #10, "No hardcoding")."""
+    reference implementation (Principle #10, "No hardcoding").
+
+    The bot name is INJECTED rather than read from the ambient repo, for two
+    reasons:
+
+    1. Reading it made this test depend on the surrounding repo configuring a
+       review bot — an adopter setting the truthful ``review.bots: []`` turned
+       it red on a property that has nothing to do with their config.
+    2. More importantly, asserting ``"coderabbit" in reminder`` while the repo's
+       own config says ``coderabbit`` **cannot fail for the reason the test
+       names**: a hard-coded literal in ``build_reminder`` would satisfy it just
+       as well as a config read. It claimed to pin "not hardcoded" and pinned
+       nothing. A bot name that appears in no config and no source file
+       distinguishes the two.
+    """
     hook = _load_hook()
+    monkeypatch.setattr(
+        hook,
+        "_load_review_config",
+        lambda: (("zzz-sentinel-bot",), "/code-review", "scripts", (), None),
+    )
+
     reminder = hook.build_reminder()
-    assert "coderabbit" in reminder  # from this repo's config/dev-model.yaml review.bots
+
+    assert "zzz-sentinel-bot" in reminder
+    assert "coderabbit" not in reminder.lower()
     assert "bugbot" not in reminder.lower()
 
 

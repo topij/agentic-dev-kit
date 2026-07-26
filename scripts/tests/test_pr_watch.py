@@ -12,6 +12,40 @@ import pytest
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _pin_engine_defaults(module: ModuleType) -> None:
+    """Detach the loaded engine from whatever config happens to be on disk.
+
+    ``pr_watch`` resolves its review config at IMPORT time into module-level
+    constants, so a module loaded here inherits the *ambient repo's*
+    ``config/dev-model.yaml``. These tests exercise the ENGINE, not an
+    adopter's configuration — so without this, they carry an undeclared
+    precondition that the surrounding repo happens to configure a review bot.
+
+    That is not hypothetical. A real adopter (OpenKitchen) set the truthful
+    ``review.bots: []`` — it has CodeRabbit installed but on a plan where it
+    never returns a verdict — and **32 of these tests failed**, on assertions
+    about engine behaviour that have nothing to do with config. Same tree, one
+    config value: ``[]`` -> 32 failed, ``[coderabbit]`` -> all passed. The kit's
+    own invariant is that config is adopter-owned and engines are kit-owned;
+    a legitimate adopter value must never break a kit-owned test.
+
+    Passing a path that cannot exist takes ``_load_review_config``'s
+    ``FileNotFoundError`` branch, which returns the engine defaults and stays
+    deliberately quiet — the same state as a standalone engine run. Tests that
+    want *other* config call ``_load_review_config`` with a written file
+    themselves (see the ADOPTER_CONFIG cases), and tests that want the SHIPPED
+    config read it explicitly; both are unaffected by this.
+    """
+    defaults = module._load_review_config(ENGINE_DIR / "does-not-exist" / "dev-model.yaml")
+    module._REVIEW_CONFIG = defaults
+    module._NOISE_MARKERS = defaults.noise_markers
+    module._REVIEW_UNAVAILABLE_MARKERS = defaults.unavailable_markers
+    module._INFORMATIONAL_CHECK_NAMES = defaults.informational_checks
+    module._REQUIRE_CI = defaults.require_ci
+    module._REVIEW_BOTS = defaults.bots
+    module._BOT_PENDING_GRACE_MINUTES = defaults.bot_pending_grace_minutes
+
+
 def _load_pr_watch() -> ModuleType:
     spec = importlib.util.spec_from_file_location(
         "pr_watch_under_test", ENGINE_DIR / "pr_watch.py"
@@ -19,6 +53,7 @@ def _load_pr_watch() -> ModuleType:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    _pin_engine_defaults(module)
     return module
 
 
@@ -1654,6 +1689,34 @@ def test_configured_unavailable_marker_still_beats_configured_noise(
 
     assert pr_watch.review_unavailable_reason(body) == "otherbot is out of credits"
     assert pr_watch.is_noise(body) is False
+
+
+def test_the_loaded_engine_is_detached_from_the_ambient_repo_config() -> None:
+    """A module from ``_load_pr_watch`` must carry the ENGINE defaults, never
+    whatever ``config/dev-model.yaml`` the surrounding repo happens to have.
+
+    Without this, ~32 tests in this file silently require the ambient repo to
+    configure a review bot, and a real adopter setting the truthful
+    ``review.bots: []`` turns them red on assertions about engine behaviour.
+
+    NOTE which field this asserts on, and why it is not ``bots``. In THIS repo
+    the shipped ``review.bots`` and ``_DEFAULT_REVIEW_BOTS`` are both
+    ``coderabbit``, so a bots-only assertion passes whether or not the pinning
+    happens — it would be a test that cannot fail here, which is worse than no
+    test. ``noise_markers`` genuinely differs (the shipped config carries 5,
+    the engine defaults 7), so it is the field that actually detects a
+    regression from inside this repo.
+    """
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch._NOISE_MARKERS == pr_watch._DEFAULT_NOISE_MARKERS
+    assert pr_watch._REVIEW_UNAVAILABLE_MARKERS == pr_watch._DEFAULT_REVIEW_UNAVAILABLE_MARKERS
+    assert pr_watch._REVIEW_BOTS == pr_watch._DEFAULT_REVIEW_BOTS
+    assert pr_watch._BOT_PENDING_GRACE_MINUTES == pr_watch._DEFAULT_BOT_PENDING_GRACE_MINUTES
+    assert pr_watch._REQUIRE_CI == pr_watch._DEFAULT_REQUIRE_CI
+    assert pr_watch._INFORMATIONAL_CHECK_NAMES == frozenset(
+        pr_watch._DEFAULT_INFORMATIONAL_CHECK_NAMES
+    )
 
 
 def test_shipped_config_preserves_the_engine_defaults_behavior() -> None:
