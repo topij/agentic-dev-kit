@@ -5,11 +5,16 @@ Graduated friction entries live here after they have been routed to the tracker
 
 ## Graduated 2026-07-26 — GitHub Issues (#54–#56)
 
-Swept by the `triage-friction-log` workflow. Three entries graduated to issues
-[#54](https://github.com/topij/agentic-dev-kit/issues/54),
-[#55](https://github.com/topij/agentic-dev-kit/issues/55) and
-[#56](https://github.com/topij/agentic-dev-kit/issues/56); the rest are kept for the
-trail — already-tagged entries, and entries whose proposed fixes had already shipped.
+Swept by the `triage-friction-log` workflow. Eleven entries, fully accounted for:
+
+- **3 graduated** to issues [#54](https://github.com/topij/agentic-dev-kit/issues/54),
+  [#55](https://github.com/topij/agentic-dev-kit/issues/55) and
+  [#56](https://github.com/topij/agentic-dev-kit/issues/56).
+- **3 needed no ticket** — their proposed fixes had already shipped in PR #31.
+- **4 were already tagged** with an issue id (#10, #18, #19, #33).
+- **1 recorded a guard working correctly**, with *"No change proposed"*.
+
+All eleven are kept below for the trail.
 
 ### 2026-07-25 — Backlog migrated to GitHub Issues
 
