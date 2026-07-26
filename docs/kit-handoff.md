@@ -14,10 +14,95 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-26 — the fallback review is a panel, and the attempt to make
-its claim machine-verifiable was built four times and then deleted.
+Last updated: 2026-07-26 — the first real adopter upgrade shipped, and it found
+that the kit's quality mechanisms each cover a different subset of the kit.
 
-## Latest session — 2026-07-26 (#26, overnight)
+## Latest session — 2026-07-26 (adopter upgrades)
+
+**Theme —** Ran the OpenKitchen upgrade end to end. **It worked**, and the doing of
+it produced 17 issues — most of them not about the upgrade but about the kit's own
+quality mechanisms disagreeing with each other.
+
+- **5 PRs merged.** OpenKitchen `#256` (pre-v2 install → schema v2: config migrated
+  with no value changed, pre-push hook finally *installed*, all 10 `differs` files
+  refreshed), `#257` (`review.bots: []`), `#258` (doc sync). Kit `#43` (panel
+  isolation doctrine) and `#49` (test suite detached from ambient config, closing
+  `#48`).
+- **`#48` blocked a one-value adopter config change**, and inverted the founding
+  invariant: `pr_watch` resolves config at *import* time, so ~32 kit tests silently
+  required the ambient repo to configure a review bot. Setting the truthful
+  `review.bots: []` turned them red on assertions about *engine* behaviour. Fixed
+  upstream, never patched in the adopter.
+- **OpenKitchen has no reviewer at all.** CodeRabbit is installed but on the Free
+  plan: 25/25 recent PRs have one walkthrough and **zero reviews**. So the fallback
+  panel is that repo's **primary** reviewer, not a substitute for a bot that is down
+  — and `review.bots` now says so.
+
+**Decided**
+
+- **A defect in a byte-identical kit file goes upstream, never into the adopter.**
+  Applied 9 times on `#256` alone. An edited engine can never be replaced by a kit
+  update, which is the whole property the upgrade exists to preserve.
+- **The founding invariant is symmetric.** "Engines kit-owned, config adopter-owned"
+  also means *a legitimate adopter config value must never break a kit-owned test*.
+  That half was silently false.
+- **Blast radius, not round count** — applied explicitly on `#49` (test
+  infrastructure ⇒ stop at 2 panel rounds) and **stated in the PR**, including what
+  stopping does *not* cover.
+
+**Learned**
+
+- **The kit's quality mechanisms cover different subsets and nothing checks they
+  agree.** `KIT_OWNED` tracks 24 of 37 shipped files; the manifest tracks 0 test
+  files; the suite covers 0 lines of `pre-push`. Every gap between them is where a
+  file can be shipped, depended on, linked to, and invisible to all three — the root
+  cause of `#36`, `#40`, `#41`, `#51`, and how a dangling doc link shipped. `#47` is
+  the single check that closes the class.
+- **Mutation testing can be silently poisoned.** A mutation preserving source
+  *length* leaves stale bytecode that Python treats as valid, so a `git`-clean
+  restore does not restore. The suite ran mutant code for minutes; grep found nothing
+  because comments do not survive compilation (`#50`). **This invalidates mutation
+  evidence gathered earlier in the session, including on the already-merged `#256`.**
+- **My own claims were the most common defect.** Five-plus instances of
+  claim-vs-artifact drift — two wrong numbers in a PR body, a bug report asserting a
+  test did not exist when two do, an undercount of 3-vs-13, an invented "7 tests
+  fail", and a false "untouched" claim that survived a round of corrections because I
+  fixed the commit message and not the body. **Every one was caught by a reviewer,
+  none by me.**
+- **A fix round on the fix is still where the next bug comes from.** `#49` round 2
+  found a MED/HIGH inside round 1's fix: a guard that *failed open by skipping*,
+  because its skip predicate was computed with the function under test.
+- **A review lens handed the wrong repo reports all-clear.** Both lenses on `#256`
+  got a worktree of the *kit* while reviewing the *adopter*; both noticed and cloned
+  the target themselves. Fixed as doctrine in `#43` — isolation must be **of the repo
+  under review**, verified not assumed.
+
+**Open, and owned by nothing yet**
+
+- **`#46` — `pre-push` is all-or-nothing, and it BLOCKS cs-toolkit.** That repo's hook
+  carries two guards the kit's does not (`auto/daily` protection, detect-secrets), and
+  no config key can express either.
+- **`#47`** — derive `KIT_OWNED` from the shipped tree. Highest leverage of the 17.
+- **`#50`** — casts doubt backwards on merged mutation evidence.
+- **`#44`/`#45`** — the merge gate cannot see a clean CodeRabbit review (it arrives as
+  a comment), and cannot tell a structurally-non-reviewing bot from a pending one.
+- **The friction log is AT budget (150/150) and `triage-friction-log` is now
+  blocking.** This session's friction was routed straight to issues instead, which is
+  the Principle #2 routing — but the claim-drift pattern already in the inbox gained
+  five more instances and wants graduating.
+
+▶ Next: **cs-toolkit Phase 1 only** — install `config/dev-model.yaml` + `init.sh` +
+`kit-manifest.json` + `kitconfig.py` + `kit_doctor.py` (additive, zero behaviour
+change) to get a real `kit_doctor` reading, then stop. Defer the `pr_watch` swap
+(the nightly fixer is in active development this week) and the `pre-push` swap
+(blocked on `#46`). **Correction to the runbook**: the `done` → `converged` change
+is in `.claude/commands/pr-watch.md` lines 11/13/39, **not** `nightly-fixer.md`,
+which only delegates — following it literally finds nothing and the failure is a
+silent infinite poll.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-26 (#26, overnight)
 
 **Theme —** Built `review.fallback_panel`, then spent four rounds trying to make the
 receipt's coverage claim verifiable *by the engine*, then deleted all of it. The
@@ -285,77 +370,8 @@ neither surface's fix touches `converged`.
 
 ______________________________________________________________________
 
-## Earlier session — 2026-07-25
-
-**Theme —** Assessed the kit against its own ten principles, then fixed what the
-assessment found. Six PRs merged; tests 83 → 188. The recurring shape: **the kit had
-written down rules it was itself violating.**
-
-- **Adoption was broken at step one.** `init.sh` shipped mode `100644`, so the documented
-  `./init.sh` failed for every adopter. Its narrative-doc seeding was dead code — the kit
-  *ships* `docs/handoff.md`, so the "seed only if absent" guard was permanently false and
-  everyone started with a `my-project` header and a `<tracker.url — stamped by init.sh>`
-  line that `init.sh` never stamped. (#8)
-- **An upgrade path now exists, and it was mostly already written.** `init.sh` already had
-  `migrate_runtime_schema()`; it had never run anywhere, because `./init.sh` didn't work.
-  Fixing the mode unblocked the mechanism. Added `kit.version`, template rendering keyed on
-  an unrendered marker, hook installation as a shim (honoring `core.hooksPath`), and
-  **probing** `paths.engines` rather than defaulting it. (#8)
-- **Engines became kit-owned.** `scripts/lib/kitconfig.py` — a stdlib-only config reader,
-  verified byte-equal to PyYAML on the shipped config and on two real adopter configs — let
-  review-bot markers, CI policy, and the cron/CI exemption move *out* of the engines and
-  into config. Every shipped engine is now dependency-free. That invariant is what makes an
-  upgrade a file copy instead of a manual merge. (#8, #9, #16 — closed #5)
-- **Four hardcoded-literal bugs fixed.** `pre-push` diffed against a hardcoded
-  `origin/main`, so on any repo whose trunk isn't `main` the guard **silently never fired**;
-  `pr-watch` could never converge on a repo with no CI; `JOB_NAME` was a Jenkins-ism that
-  GitHub Actions never sets. (#9)
-- **Claude-side wiring caught up with Codex-side.** All seven commands had no frontmatter,
-  so their surfaced descriptions were raw first lines. Added `.claude/settings.json` with
-  SessionStart budget hooks and a `PostToolUse` hook that mandates PR follow-through —
-  ported from cs-toolkit, which had the better mechanism. (#13)
-- **`kit_doctor` + `/upgrade`.** Per-file drift against a hashed manifest, plus the four
-  installation checks nothing else performed. Run read-only against the real adopters it
-  found `brain`'s live breakage (config `paths.engines` pointing at a directory with no
-  engine in it) and `OpenKitchen`'s four drifted files. (#16, #17)
-
-**Decided**
-
-- Engines are kit-owned; config is adopter-owned. Everything else follows from it.
-- `differs` never claims a *cause* — a hash mismatch can't distinguish "older version" from
-  "hand-edited", and claiming the latter sends someone hunting for edits they never made.
-- Re-running `./init.sh` is the supported config upgrade; `/upgrade` handles engines.
-
-**Learned**
-
-- **The kit predicted its own bugs and shipped them anyway.** `dev_session.sh` states "any
-  doc that quotes [the lane contract] should quote it, not restate it" — and `parallel.md`'s
-  kickoff prompt restated it and drifted from it.
-- **I then resolved that drift toward the wrong source.** The kickoff said "mark ready when
-  done", the lane contract said "leave it in draft", and I treated the contract as
-  authoritative. It wasn't: `CLAUDE-sections.md` — the always-on baseline — says a finished
-  PR must *never* sit in draft, because ready-for-review is what triggers the review bots.
-  The lane contract was the outlier, and `pr_watch` proves it: `"PR is draft"` is a merge
-  blocker, so a `self` merge-class lane obeying the contract could never satisfy
-  `dev_session.sh merge`. The contract forbade the exact action its own merge class
-  required. Corrected in #21: marking ready is the lane's, landing it is the cockpit's.
-  **The lesson isn't "check for drift" — it's that finding two sources doesn't tell you
-  which one is right, and I picked by proximity rather than by testing either against the
-  baseline.**
-- **A guard that fails open must be loud.** Three separate silent-no-op bugs this session
-  (`origin/main`, the uninstalled hook, `paths.engines`). Silence is indistinguishable from
-  "checked and clean".
-- **Same bug class, both directions, one session.** `core.hooksPath` was fixed in `init.sh`
-  (write side) and then reintroduced in `kit_doctor` (read side) hours later. See issue #15.
-- **Queued ≠ unavailable.** A review receipt was recorded while CodeRabbit was merely
-  queued, and its four valid findings landed after the merge. `decide_done` can't tell the
-  two apart.
-
-✔ Superseded by the Phase 3a session (PR #22). The proposed order (merge
-gate → receipts behind a flag → wire the fixer → flip) was replaced: the flag existed to
-defer a breakage caused by `done` conflating two predicates, so splitting them removed the
-need for it.
+> Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
+> Active open items from them are folded into the "Open for next session" lists above.
 
 ______________________________________________________________________
 
-> Older session entries live in [`kit-handoff-history.md`](kit-handoff-history.md).
