@@ -79,7 +79,7 @@
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
-      "sha256": "a1b4fd558ed3be081504c1330b4b3695baee7119926734c140261e619ed07a0c"
+      "sha256": "245d3c880b50b75de0146730820b1e2f6f88c8c3eae439322318368c1a9f9c92"
     },
     "scripts/lib/kitconfig.py": {
       "role": "engine",

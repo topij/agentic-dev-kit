@@ -31,8 +31,10 @@ _MISSING = object()
 def _repo_root() -> Path:
     """Walk up from this file to the nearest ``.git`` ancestor.
 
-    The kit's repo-root discovery uses `.git` only — a copy-in kit always
-    runs from inside the target repo.
+    Discovery is ``.git`` only — a copy-in kit always runs from inside the
+    target repo — with depth arithmetic as a last resort when there is no
+    ``.git`` anywhere. That fallback is calibrated for ``scripts/lib/`` and is
+    wrong for a vendored layout; see the comment on it, and issue #60.
     """
     here = Path(__file__).resolve()
     for candidate in (here, *here.parents):
