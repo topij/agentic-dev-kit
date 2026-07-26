@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
 
@@ -704,7 +704,7 @@ def test_zero_check_pr_never_settles_done_while_require_ci_holds(
 # review-bot state: queued vs. unavailable (issues #19 + #23)
 # --------------------------------------------------------------------------- #
 
-NOW = datetime(2026, 7, 25, 12, 0, tzinfo=UTC)
+NOW = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
 
 
 def _bot_check(**overrides):

@@ -33,11 +33,23 @@ line-length = 100
 # I     isort — deterministic import blocks
 select = ["E", "F", "UP", "B", "SIM", "I"]
 
-# Line length is a formatter's concern, and the kit is deliberately NOT
-# ruff-format clean (see above — there is no formatting that satisfies every
-# adopter, so the engines are left as written and adopters exclude them).
-# Enforcing E501 here would mean reformatting 16 of 20 files to buy nothing.
-ignore = ["E501"]
+ignore = [
+    # Line length is a formatter's concern, and the kit is deliberately NOT
+    # ruff-format clean (see above — there is no formatting that satisfies every
+    # adopter, so the engines are left as written and adopters exclude them).
+    # Enforcing E501 would reformat 16 of 20 files to buy nothing.
+    "E501",
+    # UP017 rewrites `datetime.timezone.utc` to `datetime.UTC`, which raises
+    # ImportError below Python 3.11. Applying it was MEASURED to narrow the
+    # runtime floor: `scripts/pr_watch.py` imported on 3.9 before and did not
+    # after. The PEP 723 headers declare `requires-python >= 3.12`, so 3.11+ is
+    # in contract — but engines are also invoked as a bare `python3 <engine>`
+    # by git hooks, cron and CI on whatever interpreter is present, and the
+    # engines' weakest point is exactly their error paths. Trading runtime
+    # robustness for a cosmetic idiom is the wrong side of that trade, so the
+    # rule is off rather than the violation being fixed.
+    "UP017",
+]
 
 # `S` (flake8-bandit) is deliberately absent. It is worth having, but it lands
 # 641 findings that are almost entirely `S101` in tests plus `S603`/`S607` on

@@ -90,7 +90,7 @@ import subprocess
 import sys
 import time
 import unicodedata
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import NamedTuple
 
@@ -859,7 +859,7 @@ def _age_minutes(timestamp: str | None, now: datetime) -> float | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
+        parsed = parsed.replace(tzinfo=timezone.utc)
     if parsed.year < 2000:
         return None
     age = (now - parsed).total_seconds() / 60.0
@@ -1429,7 +1429,7 @@ def record_review(
             f"PR head changed during review (expected {expected_head}, current {current_head}); "
             "review the new head before recording evidence"
         )
-    now = now or datetime.now(UTC)
+    now = now or datetime.now(timezone.utc)
     state = load_state(pr)
     # Stays "ok" under an explicit override: `override` already records that the
     # bot state was deliberately not consulted, so a second key would be noise.
@@ -1641,7 +1641,7 @@ def build_report(
     review_bots = summarize_review_bots(
         details.rows,
         comments,
-        now=now or datetime.now(UTC),
+        now=now or datetime.now(timezone.utc),
         pending_since=prior_pending_since or {},
         signal=details.signal,
         reviews=view.get("reviews") or [],
