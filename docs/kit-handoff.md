@@ -14,10 +14,79 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-26 — the first real adopter upgrade shipped, and it found
-that the kit's quality mechanisms each cover a different subset of the kit.
+Last updated: 2026-07-26 — a second adopter adopted, and the kit's own fixes for
+what that found regressed twice before being deleted.
 
-## Latest session — 2026-07-26 (adopter upgrades)
+## Latest session — 2026-07-26 (cs-toolkit Phase 1; kit lint; #60 attempted and reverted)
+
+**Theme —** Adopted the kit into cs-toolkit (its ancestor), then fixed upstream what
+the adoption found. **Everything the review panel caught had already passed my own
+review and a green suite** — including two of my own fixes and two of my own tests.
+
+- **cs-toolkit Phase 1 shipped** (`#1791`, merged, main green). Config surface +
+  `init.sh` + manifest + `kit_doctor` + `kitconfig`, additive and inert. First reading:
+  2 unchanged, 0 differ, 22 missing, 0 unknown. `#1792` open with the handoff memo.
+- **Kit `#63` merged, closing `#58`.** `ruff.toml` + a CI lint step. On its **first run**
+  it found a live crash the whole suite had missed: `yaml.YAMLError` in an `except`
+  tuple with no `yaml` import (`F821`), so every config-resolution failure raised
+  `NameError` from inside the handler written to report it cleanly.
+- **Five issues filed from one adoption** — `#58`–`#62`. Two fixed; `#59`, `#61`, `#62`
+  open.
+
+**Decided**
+
+- **Engines must be excludable as a DIRECTORY, and the kit must say so.** Adopters
+  cannot be made lint-clean: cs-toolkit runs `line-length 120`, another runs 88, and no
+  formatting satisfies both. `adopting-into-a-linted-repo.md` is the durable half of
+  `#58`; the lint config is the smaller half.
+- **Two failed tightenings ⇒ delete the mechanism** (rule 1, applied to my own work).
+  `#60`'s fix probed upward for a config marker and escaped into a parent project —
+  unbounded, then bounded and *still* escaping one level up in the shallowest layout.
+  Removed rather than tightened a third time. **`#60` stays open** with both attempts,
+  why a depth bound cannot work, and the `paths.engines`-validation shape that could.
+- **Convergence beats formatting.** cs-toolkit is the ancestor and is AHEAD in places,
+  so "adopt the kit's engine" is a regression there. A capability the adopter has and
+  the kit lacks goes **upstream first**.
+
+**Learned**
+
+- **The panel's isolation pointed at the wrong repo, again — in both lenses, both
+  rounds.** Each was placed on `main` with an empty diff. All four detected it because
+  the prompt required reporting the path and diff stat; without that, four confident
+  all-clears over nothing. Contract item 7 is load-bearing and its warning is not
+  hypothetical.
+- **A test can be precise about the wrong value.** My `#60` escape tests padded the
+  fixture with a spare directory level, pushing the foreign config exactly one index
+  past the bound — so they passed while the real case escaped. Mutation testing showed
+  the bound was pinned *exactly*; it pinned exactly the wrong number.
+- **Two of my tests pinned nothing.** One planted both markers, so the probe it named
+  was never load-bearing — deleting it left the suite green. Both were in the block
+  whose stated job was preventing that.
+- **Regex guards catch the spelling you thought of.** The `datetime.UTC` guard missed
+  `import datetime as dt` and a parenthesised multi-line import. CodeRabbit and the
+  adversarial lens found it independently; a 340-test run did not.
+- **Negating a closing keyword still arms it.** The PR body was edited to retract a
+  closure claim and read "Does NOT close #60" — GitHub matched `close #60` and closed
+  it on merge. Caught post-merge and reopened.
+
+**Open, and owned by nothing yet**
+
+- **`#60`** — reopened, unfixed, with the analysis. Three resolvers, not one.
+- **`#59`, `#61`, `#62`** — `kit_doctor` cannot see itself; `kit.version: "2"` crashes
+  it; `init.sh` stamps YAML unquoted.
+- **`#47`** still the highest-leverage unbuilt thing; `#50` still casts doubt backwards.
+- **`#63`'s last two commits merged unreviewed** — the panel covered `f40070e`, the head
+  moved twice after. `--record-review` correctly refused a stale head, so no receipt
+  claims otherwise. Recorded on the PR as an accepted risk, not a clean bill.
+
+▶ Next: **`#59` then `#61`** — both are `kit_doctor` telling an adopter something false
+on the first screen they see (`✗ contains no kit engine` while running from that very
+directory; a traceback from a read-only diagnostic). Small, self-contained, and they
+fix the tool every future adoption leans on. `#60` needs a design pass, not a patch.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-26 (adopter upgrades)
 
 **Theme —** Ran the OpenKitchen upgrade end to end. **It worked**, and the doing of
 it produced 17 issues — most of them not about the upgrade but about the kit's own
@@ -280,95 +349,6 @@ session. Two things this session learned belong in its prompt:
 require the lens to **execute** the changed paths (three defects were invisible to
 reading and obvious on running), and to **mutation-test** new branches (that is what
 proved five separate properties were named by tests and pinned by nothing).
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-25 (Phase 3a)
-
-**Theme —** Made the Phase 3 sequencing decision, and it changed under scrutiny — twice.
-Both times the correction came from asking what a *stale reader* of the mechanism would do.
-
-> **What "Phase 3" and "the cs-toolkit back-port" mean.** cs-toolkit
-> (`/Users/topi/Coding/in-parallel/cs-toolkit`, a separate private repo) is where this kit's
-> mechanisms originated; the kit generalized them, and the back-port is returning the
-> improved versions. Phase 3 is the review-receipt + merge-gate slice of that. The vocabulary
-> has never been written down outside this handoff, which made the claim below unverifiable
-> from inside this repo — recorded here so the next session doesn't have to reconstruct it.
-
-- **The blocking problem was not the porting order.** `decide_done` conflated "is there
-  more for me to fix?" with "is this authorized to merge?", because `cmd_merge` had no
-  other hook — it re-polled `pr_watch --json` and gated on `done`. That conflation, not the
-  sequence of ports, is what would have wedged cs-toolkit's nightly fixer — its per-lane
-  review step (`.claude/commands/nightly-fixer.md` Step 6.2 in that repo) watches to
-  green-and-clean and records no receipt. Fixing it removed a whole phase from the plan.
-- **#22 merged.** `converged` (watch loop) and `mergeable` (merge gate) are now distinct;
-  `dev_session.sh merge` gates on `mergeable`. Tests 196 → 202.
-- **The first cut of #22 failed open, and my own adversarial re-read caught it — not
-  CodeRabbit, whose pass on that commit raised only a `local`-declaration nit and a test
-  nitpick.** It redefined `done` to
-  mean watch-convergence. Because `/upgrade` refreshes engines **per file** (`missing` is a
-  supported state — "a sized-down adoption omits engines deliberately (one surveyed repo
-  installs 2 of 6 on purpose)"), a new
-  `pr_watch.py` can run against an older `dev_session.sh` whose gate reads `done` — which
-  would then have authorized merges on PRs with no review receipt at all.
-- **So the schema only grows.** `done` stays an unchanged alias of `mergeable`, and both
-  skew directions fail closed. Note what is pinned where: the *function* `decide_done` is
-  held to the pre-split expression across all 32 boolean inputs, but the thing that actually
-  protects an older `dev_session.sh` is the report **key**, and that is pinned by a matrix of
-  report shapes rather than exhaustively. Worth keeping straight — the same function-vs-key
-  confusion is the next bullet's finding.
-- **CodeRabbit was rate-limited**, so the configured fallback pass ran instead. It found
-  three further issues, including a docstring that claimed a compatibility guarantee the
-  *function* doesn't provide — the report **key** does.
-
-**Decided**
-
-- Enforce at the merge point, never at `converged`. A watch loop asking "anything left to
-  fix?" should never be answered "no" only once a review receipt exists.
-- A field that a safety gate reads may be added to, never redefined.
-- #19 and #23 get designed together — they are the same ambiguity on two surfaces, and
-  both run into the informational-check exclusion being load-bearing against wedging.
-
-**Learned**
-
-- **Documentation does not reach a stale reader.** Redefining `done` was safe by every
-  local reading of the new code and unsafe in fact, because the component that would have
-  been wrong is the one that never sees the new docs. Version skew is not hypothetical
-  here: per-file engine upgrades are a supported, documented workflow.
-- **An unavailable reviewer can be indistinguishable from a clean one.** CodeRabbit's
-  rate-limit arrived as a status-check *description* on a check classified informational,
-  so nothing surfaced it (#23). The doctrine's "a blocked bot is an action signal" rule can
-  only fire if the outage is detected.
-- **#22 merged without satisfying review rules 2 or 3, and that should be recorded as a
-  violation rather than a compromise.** The doctrine has no "floor" the author's own pass
-  can meet: rule 2 says a single-lens verdict is "not a green light", and rule 3 wants
-  re-review until a pass finds nothing new — but the fallback's approve was written in the
-  same pass that produced `32f3e4f`, so no *independent* review ever covered the final
-  commit — the fallback saw that code, but only as the author re-reading their own fixes.
-  CodeRabbit's only review was bound to the first commit, before the redesign.
-- **A cold-context subagent reviewer found what three self-review passes missed** — a stale
-  comment on the merge gate itself (`dev_session.sh` `cmd_merge`), describing the design that
-  was rejected. It shipped to `main` in #22 and was fixed in the wrap-up PR (#24), so the
-  artifact is visible only in that diff. Authorship anchoring, not capability, is what
-  self-review cannot escape.
-- A second, adversarially-prompted subagent pass then found nine further issues in the
-  wrap-up itself — including this handoff misattributing a test-coverage claim, and the PR
-  description still carrying the "floor" framing the diff had already retracted. The two
-  lenses overlapped on nothing, which is the doctrine's disjointness claim holding up.
-
-**Open, and owned by nothing yet**
-
-- **#22's merged design has still never had an independent review.** CodeRabbit's only pass
-  covered the first commit; the request for a pass over the final design (posted on #22)
-  was refused for rate limits again. Re-request it — this is a safety-critical merge gate
-  running on a two-lens subagent panel and the author's own reads.
-- The two H-severity entries in [`kit-friction-log.md`](kit-friction-log.md) (fallback
-  independence; a receipt outliving the design it reviewed) are unfiled. Both now carry a
-  proposed fix, so they are issue-shaped — `triage-friction-log` should graduate them rather
-  than leaving them in the inbox.
-
-✔ Done — shipped as PR #25 (see the Phase 3b block above). The design constraint held:
-neither surface's fix touches `converged`.
 
 ______________________________________________________________________
 

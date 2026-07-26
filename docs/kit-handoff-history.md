@@ -4,6 +4,93 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-07-25 (Phase 3a)
+
+**Theme —** Made the Phase 3 sequencing decision, and it changed under scrutiny — twice.
+Both times the correction came from asking what a *stale reader* of the mechanism would do.
+
+> **What "Phase 3" and "the cs-toolkit back-port" mean.** cs-toolkit
+> (`/Users/topi/Coding/in-parallel/cs-toolkit`, a separate private repo) is where this kit's
+> mechanisms originated; the kit generalized them, and the back-port is returning the
+> improved versions. Phase 3 is the review-receipt + merge-gate slice of that. The vocabulary
+> has never been written down outside this handoff, which made the claim below unverifiable
+> from inside this repo — recorded here so the next session doesn't have to reconstruct it.
+
+- **The blocking problem was not the porting order.** `decide_done` conflated "is there
+  more for me to fix?" with "is this authorized to merge?", because `cmd_merge` had no
+  other hook — it re-polled `pr_watch --json` and gated on `done`. That conflation, not the
+  sequence of ports, is what would have wedged cs-toolkit's nightly fixer — its per-lane
+  review step (`.claude/commands/nightly-fixer.md` Step 6.2 in that repo) watches to
+  green-and-clean and records no receipt. Fixing it removed a whole phase from the plan.
+- **#22 merged.** `converged` (watch loop) and `mergeable` (merge gate) are now distinct;
+  `dev_session.sh merge` gates on `mergeable`. Tests 196 → 202.
+- **The first cut of #22 failed open, and my own adversarial re-read caught it — not
+  CodeRabbit, whose pass on that commit raised only a `local`-declaration nit and a test
+  nitpick.** It redefined `done` to
+  mean watch-convergence. Because `/upgrade` refreshes engines **per file** (`missing` is a
+  supported state — "a sized-down adoption omits engines deliberately (one surveyed repo
+  installs 2 of 6 on purpose)"), a new
+  `pr_watch.py` can run against an older `dev_session.sh` whose gate reads `done` — which
+  would then have authorized merges on PRs with no review receipt at all.
+- **So the schema only grows.** `done` stays an unchanged alias of `mergeable`, and both
+  skew directions fail closed. Note what is pinned where: the *function* `decide_done` is
+  held to the pre-split expression across all 32 boolean inputs, but the thing that actually
+  protects an older `dev_session.sh` is the report **key**, and that is pinned by a matrix of
+  report shapes rather than exhaustively. Worth keeping straight — the same function-vs-key
+  confusion is the next bullet's finding.
+- **CodeRabbit was rate-limited**, so the configured fallback pass ran instead. It found
+  three further issues, including a docstring that claimed a compatibility guarantee the
+  *function* doesn't provide — the report **key** does.
+
+**Decided**
+
+- Enforce at the merge point, never at `converged`. A watch loop asking "anything left to
+  fix?" should never be answered "no" only once a review receipt exists.
+- A field that a safety gate reads may be added to, never redefined.
+- #19 and #23 get designed together — they are the same ambiguity on two surfaces, and
+  both run into the informational-check exclusion being load-bearing against wedging.
+
+**Learned**
+
+- **Documentation does not reach a stale reader.** Redefining `done` was safe by every
+  local reading of the new code and unsafe in fact, because the component that would have
+  been wrong is the one that never sees the new docs. Version skew is not hypothetical
+  here: per-file engine upgrades are a supported, documented workflow.
+- **An unavailable reviewer can be indistinguishable from a clean one.** CodeRabbit's
+  rate-limit arrived as a status-check *description* on a check classified informational,
+  so nothing surfaced it (#23). The doctrine's "a blocked bot is an action signal" rule can
+  only fire if the outage is detected.
+- **#22 merged without satisfying review rules 2 or 3, and that should be recorded as a
+  violation rather than a compromise.** The doctrine has no "floor" the author's own pass
+  can meet: rule 2 says a single-lens verdict is "not a green light", and rule 3 wants
+  re-review until a pass finds nothing new — but the fallback's approve was written in the
+  same pass that produced `32f3e4f`, so no *independent* review ever covered the final
+  commit — the fallback saw that code, but only as the author re-reading their own fixes.
+  CodeRabbit's only review was bound to the first commit, before the redesign.
+- **A cold-context subagent reviewer found what three self-review passes missed** — a stale
+  comment on the merge gate itself (`dev_session.sh` `cmd_merge`), describing the design that
+  was rejected. It shipped to `main` in #22 and was fixed in the wrap-up PR (#24), so the
+  artifact is visible only in that diff. Authorship anchoring, not capability, is what
+  self-review cannot escape.
+- A second, adversarially-prompted subagent pass then found nine further issues in the
+  wrap-up itself — including this handoff misattributing a test-coverage claim, and the PR
+  description still carrying the "floor" framing the diff had already retracted. The two
+  lenses overlapped on nothing, which is the doctrine's disjointness claim holding up.
+
+**Open, and owned by nothing yet**
+
+- **#22's merged design has still never had an independent review.** CodeRabbit's only pass
+  covered the first commit; the request for a pass over the final design (posted on #22)
+  was refused for rate limits again. Re-request it — this is a safety-critical merge gate
+  running on a two-lens subagent panel and the author's own reads.
+- The two H-severity entries in [`kit-friction-log.md`](kit-friction-log.md) (fallback
+  independence; a receipt outliving the design it reviewed) are unfiled. Both now carry a
+  proposed fix, so they are issue-shaped — `triage-friction-log` should graduate them rather
+  than leaving them in the inbox.
+
+✔ Done — shipped as PR #25 (see the Phase 3b block above). The design constraint held:
+neither surface's fix touches `converged`.
+
 ### 2026-07-25
 
 **Theme —** Assessed the kit against its own ten principles, then fixed what the
