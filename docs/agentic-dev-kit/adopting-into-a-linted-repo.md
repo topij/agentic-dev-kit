@@ -41,12 +41,24 @@ Put the exclusion in your **tool config**, not in individual hooks — a repo ty
 invokes its linter from three places (a Makefile target, CI, and pre-commit), and
 they must agree. For ruff:
 
+The two config files take **different shapes**, and mixing them up is a parse error,
+not a silent fallback:
+
 ```toml
-# pyproject.toml (or ruff.toml)
+# pyproject.toml — keys nest under [tool.ruff]
 [tool.ruff]
 extend-exclude = ["scripts/devkit"]
 force-exclude = true
 ```
+
+```toml
+# ruff.toml / .ruff.toml — the file IS the [tool.ruff] table; no header
+extend-exclude = ["scripts/devkit"]
+force-exclude = true
+```
+
+A `[tool.ruff]` header inside a standalone `ruff.toml` fails with
+``unknown field `tool` ``. (The kit's own `ruff.toml` is the second shape.)
 
 **`force-exclude` is required, and it is the subtle one.** Without it, ruff honours
 excludes only for paths it discovers itself. pre-commit passes filenames
@@ -72,20 +84,32 @@ catches the drift.
 Do not assume it worked. Prove it, in this order:
 
 ```sh
-# 1. the engines are byte-identical to the kit you copied from
-for f in <engines-dir>/*.py <engines-dir>/lib/*.py; do
-  cmp "$f" "<kit-checkout>/scripts/${f#<engines-dir>/}" || echo "DRIFT: $f"
+ENGINES=scripts/devkit          # your paths.engines
+KIT=/path/to/agentic-dev-kit    # the checkout you copied from
+
+# 1. EVERY tracked file under the engines dir is byte-identical to the kit.
+#    Enumerate them — do not glob. `*.py` and `lib/*.py` silently miss
+#    lib/state_paths/, the shell engines (dev_session.sh, reconcile_sessions.sh,
+#    lib/repo_root.sh) and hooks/pre-push — all manifest-owned, and the shell
+#    ones are the likeliest to be rewritten by a formatter you forgot about.
+git ls-files -- "$ENGINES" | while IFS= read -r f; do
+  cmp -s "$f" "$KIT/scripts/${f#"$ENGINES"/}" || echo "DRIFT: $f"
 done
 
-# 2. run your hooks against them, then check identity AGAIN — this is the real test
-pre-commit run --files <engines-dir>/*.py
-# ...repeat step 1. Anything that changed means the exclusion is not working.
+# 2. run your hooks against them, then repeat step 1 — this is the real test.
+#    Anything that changed means the exclusion is not working.
+git ls-files -- "$ENGINES" | xargs pre-commit run --files
 
 # 3. confirm you excluded only what you meant to
 ruff check --show-files $(git ls-files '*.py') | wc -l          # with the exclusion
 ruff check --no-force-exclude --show-files $(git ls-files '*.py') | wc -l
 # the difference must be exactly your kit files, and nothing else
 ```
+
+Step 1 does double duty: a file under `$ENGINES` with **no counterpart in the kit**
+also reports as `DRIFT`, because `cmp` cannot open the missing target. That is the
+stray-file detection `kit_doctor` does not give you (see the residual-risk section
+below) — so run it from CI, not just once at adoption.
 
 Step 3 matters because `force-exclude` also activates your tool's *default*
 excludes for explicitly-passed files. On cs-toolkit the difference was exactly 2 of
