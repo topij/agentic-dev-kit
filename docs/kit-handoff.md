@@ -34,6 +34,11 @@ deletion is the result, not the failure.
   advertising the degraded mode.
 - **#32 filed** — the design that would actually verify coverage (each lens recording
   its own receipt from its own context), with all four defeats written up.
+- **#33 filed, and it is the one to read first.** `kit_doctor`'s drift self-check
+  rehashes every kit-owned file, so *any* byte change to an engine fails it — which
+  makes a mutation-testing run report every mutant as killed while nothing behavioural
+  caught anything. Its proposed fix (a `driftcheck` pytest marker) is **not built**;
+  only a prose warning in the panel doc ships.
 
 **Decided**
 
@@ -43,18 +48,22 @@ deletion is the result, not the failure.
   and each was defeated by the next round, the last by one decorated character in a
   field the caller writes themselves. What ships records the claim and labels it a
   claim.
-- **Report, never gate — now for a third field.** `--lenses` joins `signal`,
+- **Report, never gate — now for a fourth field.** `--lenses` joins `signal`,
   `bot_signal` and `coverage`. All four make an omission legible; none blocks.
 
 **Learned**
 
 - **Mutation testing this repo reports FALSE KILLS.** `kit_doctor`'s self-check
   rehashes every kit-owned file, so any byte change fails it — a run can report 100%
-  killed while nothing behavioural caught anything. One lens's first pass reported
-  17/17; excluded, 7 had survived. Verified directly. **This invalidates mutation
-  results from earlier rounds this session**, including some I cited as evidence.
-  Contract item 5 now warns about it; anything relying on "N mutants died" from
-  2026-07-25 should be re-checked.
+  killed while nothing behavioural caught anything. **I verified the mechanism
+  directly** — disabling a behaviour outright fails only the manifest test. The
+  *figure* "17/17 reported, 7 survived when excluded" is a reviewing lens's report,
+  restated: the 17 mutants are enumerated nowhere, so treat it as attested, not
+  measured. **This invalidates mutation evidence cited in #25, #28, #29 and #31
+  itself** wherever the reviewer did not exclude that test. Contract item 5 now warns
+  about it; #33 tracks the mechanical fix. (Those 7 survivors were themselves closed
+  inside #31 — 7/7 caught by named tests once real coverage was added — so nothing is
+  known to be live on `main` because of this.)
 - **Two review lenses in one working tree corrupt each other.** One mutates files to
   test them; the other reads that as external corruption and `git checkout --`s it.
   Stopping one left a live mutant behind that silently disabled a guard. Contract
@@ -62,7 +71,8 @@ deletion is the result, not the failure.
 - **Deleting a check can reintroduce a bug it was masking.** The roster check was the
   only thing catching comma-as-punctuation in `--lenses`; removing it brought back the
   exact forgery the commit before it claimed to block, plus an honest input
-  misrendering.
+  misrendering. **Fixed inside #31** (`_countable_lenses` counts entries that look like
+  lens names, not prose) — recorded for the pattern, not as a live defect.
 - **A silent `str.replace()` no-op let me assert a fix that never landed** — twice.
   Every substitution in this session's later rounds reports MISS rather than passing
   quietly.
@@ -71,6 +81,14 @@ deletion is the result, not the failure.
 
 - **#32** — verifying lens coverage rather than self-reporting it. The honest version
   of what #31 tried.
+- **#33** — the drift self-check's false kills. H severity and retroactive; its
+  mechanical fix (a `driftcheck` marker) is unbuilt.
+- **The autonomous self-merge path never displays review coverage.** `dev_session.sh
+  merge` gates on `mergeable` alone, so the `review evidence:` line — the whole
+  remaining value of #31 — is invisible on exactly the path
+  `autonomous-session-playbook.md` argues review independence matters most on. Known
+  and documented in `workflows/pr-watch.md`, deliberately not fixed at the end of a
+  seven-round review; #32 is the real answer.
 - **Adopter upgrades are written but not run.** `~/Documents/openkitchen-devkit-upgrade.md`
   and `~/Documents/cs-toolkit-devkit-adoption.md`. Held at the operator's request until
   #31 landed — it has now landed, so both are unblocked.

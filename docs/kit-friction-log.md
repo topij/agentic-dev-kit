@@ -101,14 +101,21 @@ failure — closed by PR #28).
 
 ## 2026-07-26 — inbox
 
+> **At the 150-line budget.** A `triage-friction-log` sweep is required before the
+> next entry — the two H entries below are issue-shaped and #33 is already filed.
+
 - **Mutation testing this repo reports false kills — filed as [#33](https://github.com/topij/agentic-dev-kit/issues/33) (severity: H).**
   `kit_doctor`'s self-check rehashes every kit-owned file, so any byte change to an
-  engine fails it and every mutant looks killed. Measured on #31: 17/17 reported
-  killed; with that test excluded, **7 had survived**. Filed at H because it is
-  **retroactive** — mutation evidence cited across #25, #28 and #29 this session may be
-  worthless wherever the reviewer did not exclude it, and "N mutants died" was used as
-  a reason to stop reviewing. A false-negative testing tool is worse than none, because
-  it is used to justify confidence.
+  engine fails it and every mutant looks killed. The **mechanism** is trivially
+  reproducible (change one comment in an engine; only the manifest test fails). The
+  **figure** — a lens reporting 17/17 killed on #31, and 7 survivors once that test
+  was excluded — is attested rather than independently measured; the 17 are enumerated
+  nowhere. Those 7 were closed inside #31. Filed at H because it is **retroactive**:
+  mutation evidence cited across #25, #28, #29 and #31 may be worthless wherever the
+  reviewer did not exclude that test, and "N mutants died" was used as a reason to stop
+  reviewing. A false-negative testing tool is worse than none, because it is used to
+  justify confidence. #33's mechanical fix (a `driftcheck` marker) is not built; only
+  the panel doc's prose warning ships.
 
 - **Concurrent review lenses in one working tree destroy each other's work (severity: H).**
   On #31 the adversarial lens mutated `pr_watch.py` to test it; the correctness lens,
@@ -127,7 +134,7 @@ failure — closed by PR #28).
   `--lenses` — so `"adversarial, focused on the merge gate"` (an honest way to record
   ONE lens) rendered as two, suppressing the one-lens warning that was the field's
   entire remaining value. The commit that deleted it quoted that exact input as an
-  example of what it still blocked. **Lesson worth generalising:** when removing a
+  example of what it still blocked. **Fixed inside #31** — recorded for the pattern. **Lesson worth generalising:** when removing a
   mechanism as unfit, enumerate what it was rejecting and confirm each case is either
   still rejected elsewhere or deliberately allowed — the deletion commit did neither.
 
@@ -135,7 +142,7 @@ failure — closed by PR #28).
   already says so (severity: M, pattern).**
   `safety-critical-changes.md` rule 1: *"Treat 'we tightened the matcher' as a stopgap,
   not a fix."* On #31 I tightened it four times before accepting that. The adversarial
-  lens told me in round 3 that the artifact was unverifiable from the engine — same
+  panel told me by round 3 that the artifact was unverifiable from the engine — same
   actor, same invocation, nothing bound to what ran — and I built two more epicycles
   before acting on it. **Proposed fix:** rule 1 could name a threshold ("a second
   tightening of the same matcher is a design signal, not a bug fix") so the decision
