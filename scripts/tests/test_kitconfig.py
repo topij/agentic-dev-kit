@@ -24,7 +24,6 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
 
 import kitconfig  # noqa: E402
 
-
 SHIPPED_CONFIG = REPO_ROOT / "config" / "dev-model.yaml"
 
 
@@ -379,3 +378,187 @@ def test_check_doc_budget_handles_a_config_without_doc_budgets(tmp_path):
     assert result.returncode == 2, result.stderr
     assert "Traceback" not in result.stderr, result.stderr
     assert "doc_budgets" in result.stderr
+
+
+# ── repo_root(): the marker walk, and its fallback ──────────────────────────
+#
+# `repo_root` had NO coverage at all before issue #60, which is how its
+# docstring and its code came to disagree in plain sight: the docstring says
+# walking up for a marker "rather than counting `parents[N]`" is what lets the
+# kit be vendored at any depth and names `scripts/devkit/lib/` as the case —
+# and the fallback then counted `parents[2]`, which is right only for the kit's
+# OWN `scripts/lib/` depth. From `scripts/devkit/lib/` it returned
+# `<repo>/scripts`, and `load_config` reported a missing config at a path that
+# never existed.
+#
+# The layouts below are the two the kit prescribes (`scripts/lib/` for itself,
+# `scripts/devkit/lib/` for /adopt) plus one deeper than either, so a future edit
+# that reintroduces depth-arithmetic fails here rather than in an adopter.
+#
+# NOTE the `git=True, config=False` in the .git test. Planting BOTH markers makes
+# the .git probe unobservable — the config fallback returns the same root, so
+# deleting the .git probe outright leaves the test green. It did, and this test
+# claimed to pin "at any depth" while pinning nothing.
+
+def _tree(root: Path, rel: str, *, git: bool, config: bool) -> Path:
+    """Build a fake checkout and return the `start` path for `repo_root`."""
+    start = root / rel
+    start.parent.mkdir(parents=True, exist_ok=True)
+    start.write_text("# stand-in for kitconfig.py\n", encoding="utf-8")
+    if git:
+        (root / ".git").mkdir(exist_ok=True)
+    if config:
+        (root / "config").mkdir(exist_ok=True)
+        (root / "config" / "dev-model.yaml").write_text("kit:\n  version: 2\n", encoding="utf-8")
+    return start
+
+
+@pytest.mark.parametrize(
+    "layout",
+    [
+        "scripts/lib/kitconfig.py",          # the kit's own layout
+        "scripts/devkit/lib/kitconfig.py",   # vendored — what /adopt prescribes on a name collision
+        "tools/vendor/devkit/lib/kitconfig.py",  # arbitrary depth, per the docstring's promise
+    ],
+)
+def test_repo_root_finds_the_git_marker_at_any_depth(tmp_path: Path, layout: str) -> None:
+    # config=False so ONLY the .git probe can produce this answer.
+    start = _tree(tmp_path, layout, git=True, config=False)
+    assert kitconfig.repo_root(start) == tmp_path
+
+
+@pytest.mark.parametrize(
+    "layout",
+    [
+        "scripts/lib/kitconfig.py",
+        "scripts/devkit/lib/kitconfig.py",
+        "tools/vendor/devkit/lib/kitconfig.py",
+    ],
+)
+def test_repo_root_accepts_a_git_file_as_a_linked_worktree_marker(
+    tmp_path: Path, layout: str
+) -> None:
+    """`.git` is a FILE in a linked worktree, which the docstring promises to
+    handle. `.exists()` covers it and `.is_dir()` would not — and nothing pinned
+    that, so the distinction survived only as prose."""
+    start = _tree(tmp_path, layout, git=False, config=False)
+    (tmp_path / ".git").write_text("gitdir: /elsewhere/.git/worktrees/wt\n", encoding="utf-8")
+    assert kitconfig.repo_root(start) == tmp_path
+
+
+@pytest.mark.parametrize(
+    "layout, root_index",
+    [
+        ("scripts/lib/kitconfig.py", 2),         # the kit's own — arithmetic is right
+        ("scripts/devkit/lib/kitconfig.py", 3),  # vendored — arithmetic is WRONG here
+    ],
+)
+def test_repo_root_without_git_is_depth_arithmetic_and_stays_inside_the_tree(
+    tmp_path: Path, layout: str, root_index: int
+) -> None:
+    """Pins the KNOWN LIMITATION of issue #60, not a fix for it.
+
+    With no `.git`, resolution is `parents[2]`. For the kit's own layout that is
+    the root; for the vendored layout it is `<root>/scripts` — wrong, and the
+    caller then fails naming a path that does not exist. Asserted explicitly so
+    the limitation is visible in the suite rather than discovered by an adopter.
+
+    The property that must hold in BOTH cases is the one below: the answer stays
+    inside the tree. A config-marker probe was tried twice to fix the vendored
+    case and escaped into a parent project both times.
+    """
+    start = _tree(tmp_path, layout, git=False, config=True)
+    resolved = kitconfig.repo_root(start)
+
+    assert resolved == start.parents[2]
+    assert resolved == tmp_path or tmp_path in resolved.parents
+
+    if root_index != 2:  # the vendored case: wrong, and loud about it
+        assert resolved != tmp_path
+        with pytest.raises(FileNotFoundError):
+            kitconfig.load_config(resolved / "config" / "dev-model.yaml")
+
+
+def test_repo_root_never_escapes_into_a_parent_projects_config(tmp_path: Path) -> None:
+    """The foreign config is the IMMEDIATE parent — no padding directory.
+
+    This is the shape both removed probes escaped on. The first version walked
+    to `/`; the second was bounded to the deepest prescribed layout, which still
+    reaches one above the root in the shallowest one. The earlier test for this
+    had a spare `releases/` level that pushed the foreign config just past the
+    bound, so it passed while the real case escaped — the padding was the bug in
+    the test.
+    """
+    outer = tmp_path / "outer"
+    (outer / "config").mkdir(parents=True)
+    (outer / "config" / "dev-model.yaml").write_text(
+        "kit:\n  version: 2\npaths:\n  handoff: FOREIGN.md\n", encoding="utf-8"
+    )
+    inner = outer / "inner"
+    start = _tree(inner, "scripts/lib/kitconfig.py", git=False, config=False)
+
+    resolved = kitconfig.repo_root(start)
+    assert resolved != outer, "escaped into the parent project's config"
+    assert resolved == inner
+
+
+def test_repo_root_resolves_a_nested_checkout_to_its_own_root(tmp_path: Path) -> None:
+    """A checkout nested inside another project resolves to ITS root.
+
+    An earlier version of this docstring claimed to pin the ORDER of two probes.
+    There is only one probe now — the config-marker probe it referred to was
+    removed — so the claim would have been describing a mechanism that no longer
+    exists. It also never held: a review showed that swapping the two loops left
+    the whole suite green, because this fixture's layout put the outer config
+    outside the probe's reach, making the ordering unobservable in exactly the
+    case chosen to demonstrate it.
+
+    What it pins now is narrower and true: `.git` on the inner checkout wins over
+    anything the outer project has, at a vendored depth.
+    """
+    outer = tmp_path / "outer"
+    (outer / "config").mkdir(parents=True)
+    (outer / "config" / "dev-model.yaml").write_text("kit:\n  version: 2\n", encoding="utf-8")
+    inner = outer / "vendor" / "inner"
+    start = _tree(inner, "scripts/devkit/lib/kitconfig.py", git=True, config=False)
+    assert kitconfig.repo_root(start) == inner
+
+
+def test_repo_root_last_resort_when_neither_marker_exists(tmp_path: Path) -> None:
+    """Neither marker: nothing better is knowable, so the arithmetic stands."""
+    start = _tree(tmp_path, "scripts/lib/kitconfig.py", git=False, config=False)
+    assert kitconfig.repo_root(start) == tmp_path
+
+
+def test_archive_plan_sessions_reports_a_missing_config_instead_of_crashing(tmp_path: Path) -> None:
+    """The config-resolution handler must report, not raise.
+
+    `archive_plan_sessions.py` listed `yaml.YAMLError` in this handler's `except`
+    tuple with no `yaml` import. Python evaluates that tuple only when an
+    exception actually arrives, so EVERY failure on this path raised
+    `NameError: name 'yaml' is not defined` from inside the handler written to
+    report the error cleanly — masking the real cause. Found by the ruff pass
+    added alongside this test (F821); nothing in the suite covered it.
+
+    Run from a copied tree with no `config/dev-model.yaml`: the script resolves
+    its root at import time, so an in-place run would find the kit's own config
+    and never reach the handler.
+    """
+    import subprocess
+
+    (tmp_path / "scripts" / "lib").mkdir(parents=True)
+    (tmp_path / ".git").mkdir()
+    for rel in ("scripts/archive_plan_sessions.py", "scripts/lib/kitconfig.py"):
+        (tmp_path / rel).write_bytes((REPO_ROOT / rel).read_bytes())
+
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, str(tmp_path / "scripts" / "archive_plan_sessions.py"), "--dry-run"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=tmp_path,
+    )
+    assert "NameError" not in result.stderr, result.stderr
+    assert "Traceback" not in result.stderr, result.stderr
+    assert result.returncode == 2, f"rc={result.returncode}\n{result.stderr}"
+    assert "could not resolve configured handoff paths" in result.stderr

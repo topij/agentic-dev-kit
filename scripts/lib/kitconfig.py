@@ -49,12 +49,37 @@ _DASH_MAPPING_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*:(?:\s|$)")
 # default of None.
 _MISSING = object()
 
-
 def repo_root(start: Path | None = None) -> Path:
     """Nearest ancestor carrying a ``.git`` entry (dir in a checkout, file in a
     linked worktree). Walking up for the marker — rather than counting
     ``parents[N]`` — is what lets the kit be vendored at any depth
-    (``scripts/devkit/lib/``) without rewriting a single path."""
+    (``scripts/devkit/lib/``) without rewriting a single path.
+
+    KNOWN LIMITATION, and it is deliberate (issue #60 stays open). When there is
+    no ``.git`` anywhere — an exported tarball, a ``GIT_DIR``-only setup — the
+    fallback is depth arithmetic calibrated for the kit's OWN ``scripts/lib/``
+    layout. From the vendored ``scripts/devkit/lib/`` layout it yields
+    ``<repo>/scripts``, and ``load_config`` then fails naming a path that does
+    not exist.
+
+    That is a WRONG answer, but a LOUD and LOCAL one, and it is the better of
+    the two available failures. The obvious fix — also probe upward for
+    ``config/dev-model.yaml`` — was implemented twice here and escaped both
+    times: unbounded it walks to ``/``; bounded to the deepest prescribed layout
+    it still reaches one directory above the root in the SHALLOWEST layout. Both
+    versions returned a FOREIGN project's root from a tree the arithmetic
+    resolved correctly, silently, to a caller that rewrites the paths it is
+    given. Two failed tightenings on a path this load-bearing is the signal to
+    remove the mechanism, not to tighten it a third time
+    (``safety-critical-changes.md`` rule 1).
+
+    A depth bound cannot work, and that is worth stating so nobody tries again:
+    the root sits at ``parents[2]`` in one prescribed layout and ``parents[3]``
+    in the other, so no single bound distinguishes "the root" from "one above
+    the root" without knowing the layout it is trying to discover. A probe that
+    validated a candidate against its own ``paths.engines`` could work; a depth
+    bound cannot.
+    """
     here = (start or Path(__file__)).resolve()
     for candidate in (here, *here.parents):
         if (candidate / ".git").exists():
@@ -74,11 +99,10 @@ def _strip_comment(value: str) -> str:
             quote = ch
         elif quote is not None and ch == quote:
             quote = None
-        elif quote is None and ch == "#":
-            # Only a `#` preceded by whitespace (or at the start) opens a comment,
-            # matching YAML — so `chore/triage-{date}#1` keeps its suffix.
-            if i == 0 or value[i - 1] in (" ", "\t"):
-                return value[:i]
+        # Only a `#` preceded by whitespace (or at the start) opens a comment,
+        # matching YAML — so `chore/triage-{date}#1` keeps its suffix.
+        elif quote is None and ch == "#" and (i == 0 or value[i - 1] in (" ", "\t")):
+            return value[:i]
     return value
 
 

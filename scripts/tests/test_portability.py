@@ -13,7 +13,6 @@ from types import ModuleType
 import pytest
 import yaml
 
-
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -1294,3 +1293,133 @@ def test_state_paths_suite_passes_from_inside_a_lane_worktree(tmp_path: Path) ->
     passed = re.search(r"(\d+) passed", result.stdout)
     assert passed, detail
     assert int(passed.group(1)) >= _STATE_PATHS_TEST_FLOOR, detail
+
+
+# ── the no-.git fallback in the OTHER two root resolvers (issue #60) ─────────
+#
+# `test_python_engine_root_walk_supports_namespacing` above plants a `.git`, so
+# it only ever exercised the marker walk. The FALLBACK was uncovered in all
+# three resolvers, which is how the same depth-arithmetic bug survived in
+# `pr_watch._find_repo_root` and `devmodel_config._repo_root` after it was fixed
+# in `kitconfig.repo_root` — one fix, three copies, and the docstring in
+# pr_watch made the same `scripts/devkit/` claim the issue was filed about.
+
+
+def test_pr_watch_root_fallback_is_arithmetic_and_stays_inside_the_tree(
+    tmp_path: Path,
+) -> None:
+    """Known limitation (#60), asserted rather than left to be discovered.
+
+    No `.git`: `start.parent.parent`. For `<root>/scripts/pr_watch.py` that is
+    the root; vendored under `scripts/devkit/` it is `<root>/scripts` — wrong,
+    but inside the tree.
+    """
+    repo = tmp_path / "project"
+    nested = repo / "scripts" / "devkit" / "pr_watch.py"
+    nested.parent.mkdir(parents=True)
+    (repo / "config").mkdir()
+    (repo / "config" / "dev-model.yaml").write_text("kit:\n  version: 2\n", encoding="utf-8")
+    pr_watch = _load_module("pr_watch_fb", ENGINE_DIR / "pr_watch.py")
+
+    resolved = pr_watch._find_repo_root(nested)
+    assert resolved == repo / "scripts"       # the limitation
+    assert repo in resolved.parents           # ...but still inside the tree
+
+
+def test_pr_watch_root_fallback_does_not_escape_into_a_parent_project(
+    tmp_path: Path,
+) -> None:
+    """Foreign config as the IMMEDIATE parent — the shape the removed probe
+    escaped on. No padding directory; the earlier version of this test had one,
+    which is why it passed while the real case escaped.
+
+    Matters most here: `REPO_ROOT` is the `cwd=` for every `gh`/`git` subprocess
+    and the base for the state root, so escaping points a merge-gate engine at
+    a different repository.
+    """
+    outer = tmp_path / "outer"
+    (outer / "config").mkdir(parents=True)
+    (outer / "config" / "dev-model.yaml").write_text("kit:\n  version: 2\n", encoding="utf-8")
+    inner = outer / "inner"
+    nested = inner / "scripts" / "pr_watch.py"
+    nested.parent.mkdir(parents=True)
+    pr_watch = _load_module("pr_watch_esc", ENGINE_DIR / "pr_watch.py")
+
+    resolved = pr_watch._find_repo_root(nested)
+    assert resolved != outer, "escaped into the parent project"
+    assert resolved == inner
+
+
+def test_devmodel_config_root_fallback_does_not_escape_into_a_parent_project(
+    tmp_path: Path,
+) -> None:
+    """`devmodel_config` had NO escape test at all — its bound was copied from
+    kitconfig and, when mutated to fully unbounded, the whole suite stayed
+    green. Covering it here so all three resolvers are pinned in the direction
+    that matters.
+
+    `_repo_root()` reads `__file__`, so the module must be copied into place.
+    """
+    outer = tmp_path / "outer"
+    (outer / "config").mkdir(parents=True)
+    (outer / "config" / "dev-model.yaml").write_text("kit:\n  version: 2\n", encoding="utf-8")
+    lib = outer / "inner" / "scripts" / "lib"
+    lib.mkdir(parents=True)
+    target = lib / "devmodel_config.py"
+    target.write_bytes((ENGINE_DIR / "lib" / "devmodel_config.py").read_bytes())
+
+    module = _load_module("devmodel_config_esc", target)
+    resolved = module._repo_root()
+    assert resolved != outer, "escaped into the parent project"
+    assert resolved == outer / "inner"
+
+
+def test_engines_avoid_datetime_utc_alias() -> None:
+    """`datetime.UTC` / `from datetime import UTC` need Python 3.11+.
+
+    `ruff.toml` ignores UP017 so the autofixer cannot introduce this, but the
+    ignore is a comment — nothing stops it being typed by hand, and the failure
+    is an ImportError at module load on an interpreter CI never exercises.
+
+    AST, not a regex. The first version of this test matched the literal text
+    `datetime.UTC` on a single line, and a review found two forms that walk
+    straight past it: `import datetime as dt` … `dt.UTC`, and a parenthesised
+    `from datetime import (\n    UTC,\n)`. Both are the same ImportError. A
+    guard that only catches the spelling you happened to think of is the class
+    of test this suite has been bitten by repeatedly.
+
+    Scope is ENGINES, not tests: tests only run under the pinned CI interpreter,
+    while engines are invoked as a bare `python3 <engine>` by git hooks, cron
+    and CI. The six modules under lib/ carry no PEP 723 header at all, so they
+    inherit their caller's interpreter with nothing to negotiate a newer one.
+    """
+    import ast
+
+    offenders: list[str] = []
+    for path in sorted(ENGINE_DIR.rglob("*.py")):
+        rel = path.relative_to(ENGINE_DIR)
+        if "tests" in rel.parts:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        module_aliases = {"datetime"}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "datetime" and alias.asname:
+                        module_aliases.add(alias.asname)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "datetime":
+                for alias in node.names:
+                    if alias.name == "UTC":
+                        offenders.append(f"{rel}:{node.lineno}: from datetime import UTC")
+            elif (
+                isinstance(node, ast.Attribute)
+                and node.attr == "UTC"
+                and isinstance(node.value, ast.Name)
+                and node.value.id in module_aliases
+            ):
+                offenders.append(f"{rel}:{node.lineno}: {node.value.id}.UTC")
+    assert not offenders, (
+        "use `timezone.utc` — `datetime.UTC` raises ImportError below 3.11:\n"
+        + "\n".join(offenders)
+    )

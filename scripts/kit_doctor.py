@@ -99,6 +99,17 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # upgrading adopter gets doctrine pointing at a file they do not have, and
     # kit_doctor cannot report it missing because it is not tracked.
     ("docs/agentic-dev-kit/fallback-review-panel.md", "doctrine"),
+    # Tracked so an adopter who installs the kit gets it, and so kit_doctor can
+    # say when they did not. NOT for the same reason as the line above, despite
+    # an earlier version of this comment claiming so: fallback-review-panel.md
+    # is linked from safety-critical-changes.md, which is itself manifest-owned
+    # and /upgrade-refreshed, so an untracked target would leave *shipped*
+    # doctrine dangling. This file's referrers (/adopt, ruff.toml, the ruff CI
+    # step) are none of them manifest-owned, so nothing shipped would dangle —
+    # the argument for tracking it is simply that it is doctrine an adopter
+    # needs, and it is the only surface that explains the engines-dir exclusion.
+    # (/upgrade does not mention it at all; the earlier comment said it did.)
+    ("docs/agentic-dev-kit/adopting-into-a-linted-repo.md", "doctrine"),
     # narrative-doc templates (the rendered outputs are adopter-owned)
     ("docs/templates/handoff.md.tmpl", "template"),
     ("docs/templates/handoff-history.md.tmpl", "template"),

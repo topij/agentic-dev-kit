@@ -31,16 +31,24 @@ _MISSING = object()
 def _repo_root() -> Path:
     """Walk up from this file to the nearest ``.git`` ancestor.
 
-    The kit's repo-root discovery uses `.git` only — a copy-in kit always
-    runs from inside the target repo.
+    Discovery is ``.git`` only — a copy-in kit always runs from inside the
+    target repo — with depth arithmetic as a last resort when there is no
+    ``.git`` anywhere. That fallback is calibrated for ``scripts/lib/`` and is
+    wrong for a vendored layout; see the comment on it, and issue #60.
     """
     here = Path(__file__).resolve()
     for candidate in (here, *here.parents):
         if (candidate / ".git").exists():
             return candidate
-    # No .git found (e.g. the kit was copied in but `git init` hasn't run
-    # yet) — fall back to two levels up from scripts/lib/.
-    return here.parents[2]
+    # No .git found (e.g. the kit was copied in but `git init` hasn't run yet).
+    # Calibrated for `scripts/lib/`; from the vendored `scripts/devkit/lib/`
+    # layout it returns `<repo>/scripts` and the caller fails naming a path that
+    # does not exist (issue #60, still open). A config-marker probe was tried
+    # here and removed — see kitconfig.repo_root for why a depth bound cannot
+    # fix it and why a wrong-and-loud answer beats escaping into a parent
+    # project. `len` guard so a file within two directories of `/` raises
+    # nothing surprising.
+    return here.parents[2] if len(here.parents) >= 3 else here.parent
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:

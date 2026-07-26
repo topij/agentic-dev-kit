@@ -82,7 +82,6 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -91,14 +90,26 @@ import subprocess
 import sys
 import time
 import unicodedata
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import NamedTuple
 
 
 def _find_repo_root(start: Path) -> Path:
     """Nearest ancestor with a ``.git`` marker (so this keeps working when the kit
-    is vendored under a nested dir, e.g. scripts/devkit/); falls back to the
-    script's grandparent if no marker is found. Inlined — pr_watch stays stdlib-only."""
+    is vendored under a nested dir, e.g. scripts/devkit/). Inlined — pr_watch
+    stays stdlib-only.
+
+    The ``.git`` walk handles any depth. The FALLBACK does not, and that is a
+    known limitation rather than an oversight: ``parent.parent`` is calibrated
+    for ``scripts/pr_watch.py`` and returns ``<repo>/scripts`` from the vendored
+    ``scripts/devkit/`` layout named right above (issue #60, still open). A
+    config-marker probe was tried here and removed — see
+    ``lib/kitconfig.py:repo_root`` for why a depth bound cannot fix it. It
+    matters most here: ``REPO_ROOT`` is the ``cwd=`` for every ``gh``/``git``
+    subprocess and the base for the state root, so a probe that escapes points
+    a merge-gate engine at a different repository. Failing loudly inside the
+    right tree beats resolving quietly into the wrong one."""
     for candidate in (start, *start.parents):
         if (candidate / ".git").exists():
             return candidate

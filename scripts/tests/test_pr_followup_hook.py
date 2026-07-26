@@ -15,7 +15,6 @@ from types import ModuleType
 
 import pytest
 
-
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 HOOK_PATH = ENGINE_DIR / "hooks" / "pr_followup_hook.py"
 

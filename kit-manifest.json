@@ -13,6 +13,10 @@
     ".gitignore"
   ],
   "files": {
+    "docs/agentic-dev-kit/adopting-into-a-linted-repo.md": {
+      "role": "doctrine",
+      "sha256": "c6c74e8cc3f80fe7ce6d88b34845e627a3800bc6c8cca10f57692fece4d16eab"
+    },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
       "sha256": "6d7972f70679beadde81648d25063d9a15f522a3f41fc09da3ee30d55d8616ed"
@@ -55,7 +59,7 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "fb15bd2dbe03257e6304f6e40f5af14bdffa66288fe0cc7ef2cdc38d0b4f9c76"
+      "sha256": "f33e13fef208f3663f389f6c8f3dd6517a7e59ffc7b2dc95259a517c82ce36ad"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
@@ -71,15 +75,15 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "7268ec94aa5b4c44311a57e34447f92b09a64eba34bf7b0e9fecf2e099a68f9f"
+      "sha256": "647c4bab264d26a0b0bdcd15fcef4cbaffb19a68a52260f579522fe9556e0d65"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
-      "sha256": "53458a5d0c72b1fe5e5e5f6e8e5881c08c8c03c255493ae841391c5a8d6c1a29"
+      "sha256": "245d3c880b50b75de0146730820b1e2f6f88c8c3eae439322318368c1a9f9c92"
     },
     "scripts/lib/kitconfig.py": {
       "role": "engine",
-      "sha256": "f24b7122ac6e46262427c7eaff7babac84dd24337a8efdd93ade511ae5f7dc8d"
+      "sha256": "005ef4f3910fd5a5698e659a17bbcf21a8bc4b5ba630891d72a68f52ce98350a"
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",
@@ -103,7 +107,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "b8ee2baf65375d9422e2bbfce7ba4ce5de965a4f331a3b82ef948606fcc3a670"
+      "sha256": "96fdaf3dd6ce72b4ab4a1cf908c2f48e2564f3e739650667e985280008355043"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",

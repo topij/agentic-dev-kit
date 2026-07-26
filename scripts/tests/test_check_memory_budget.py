@@ -15,7 +15,6 @@ from types import ModuleType
 
 import pytest
 
-
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = ENGINE_DIR / "check_memory_budget.py"
 

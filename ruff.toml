@@ -1,0 +1,81 @@
+# Ruff config for the kit's own Python.
+#
+# WHY THIS FILE EXISTS (issue #58). The kit shipped engines that had never been
+# linted by anything. The cs-toolkit adoption dropped two of them into a mature
+# repo with repo-wide ruff and they failed on contact — and the CI job added
+# alongside this file immediately found a live crash the whole test suite had
+# missed (`F821` in archive_plan_sessions.py: `yaml.YAMLError` in an `except`
+# tuple with no `yaml` import, turning every config-resolution failure into a
+# `NameError` inside the handler written to report it clearly).
+#
+# WHY `ruff.toml` AND NOT `pyproject.toml`. A root `pyproject.toml` makes `uv
+# run` fall into PROJECT mode for the non-script invocation in the Makefile —
+# `uv run --with pytest --with pyyaml python …` — which creates a root `.venv/`
+# and writes a stub `uv.lock`. Noise at best, a behaviour change at worst.
+# `ruff.toml` configures ruff and nothing else. (CI does not invoke uv at all;
+# it uses setup-python + pip. The Makefile is the whole reason.)
+#
+# NOTE, because the first version of this comment had it backwards: PEP 723
+# inline metadata does NOT cause that. It is what makes uv SKIP project mode —
+# `uv run scripts/kit_doctor.py` with a root pyproject.toml present produces no
+# `.venv` and no `uv.lock` (verified; uv logs "Reading inline script metadata").
+# The reason to avoid pyproject.toml is the plain `uv run … python` form, which
+# has nothing to do with PEP 723.
+#
+# WHAT THIS FILE IS *NOT* FOR. It does not try to make the engines clean under
+# an arbitrary ADOPTER's ruff config — that is not achievable and chasing it
+# would be a trap. Formatting is the clearest case: cs-toolkit runs
+# `line-length = 120`, another adopter runs the default 88, and no single
+# formatting of a file satisfies both. An adopter must therefore EXCLUDE the
+# engines directory from their own lint and format (see docs/agentic-dev-kit/
+# adopting-into-a-linted-repo.md). This file is about the kit's own quality.
+
+# The five files carrying PEP 723 headers (pr_watch, check_doc_budget,
+# check_memory_budget, archive_plan_sessions, kit_doctor) all declare
+# `requires-python >= 3.12`. The six library modules under lib/ carry no header
+# at all — and those are exactly the ones the UP017 note below is about, since
+# they are imported by whatever interpreter invoked their caller.
+#   grep -l '# /// script' $(git ls-files '*.py')
+target-version = "py312"
+line-length = 100
+
+[lint]
+# E/F   pycodestyle + pyflakes — the real-bug tier (F821 lives here)
+# UP    pyupgrade — keep the engines idiomatic for the 3.12 floor
+# B     flake8-bugbear — mutable defaults, loop-variable capture
+# SIM   flake8-simplify — the rule the adopter's linter tripped on (SIM102)
+# I     isort — deterministic import blocks
+select = ["E", "F", "UP", "B", "SIM", "I"]
+
+ignore = [
+    # Line length is a formatter's concern, and the kit is deliberately NOT
+    # ruff-format clean (see above — there is no formatting that satisfies every
+    # adopter, so the engines are left as written and adopters exclude them).
+    # At the line-length set above E501 flags roughly half the tracked files,
+    # and `ruff format` would rewrite three quarters of them — churn across
+    # every engine hash, for a property no adopter can consume anyway. Counts
+    # are deliberately not pinned here: they moved between two commits of the
+    # change that added this file. Measure instead:
+    #   git ls-files '*.py' | xargs uvx ruff format --check
+    "E501",
+    # UP017 rewrites `datetime.timezone.utc` to `datetime.UTC`, which raises
+    # ImportError below Python 3.11. Applying it was MEASURED to narrow the
+    # runtime floor: `scripts/pr_watch.py` imported on 3.9 before and did not
+    # after. The PEP 723 headers declare `requires-python >= 3.12`, so 3.11+ is
+    # in contract — but engines are also invoked as a bare `python3 <engine>`
+    # by git hooks, cron and CI on whatever interpreter is present, and the
+    # engines' weakest point is exactly their error paths. Trading runtime
+    # robustness for a cosmetic idiom is the wrong side of that trade, so the
+    # rule is off rather than the violation being fixed.
+    "UP017",
+]
+
+# `S` (flake8-bandit) is deliberately absent. It is worth having, but it lands
+# several hundred findings, overwhelmingly `S101` (bare `assert`) in the test
+# suite, plus ~24 `S607` / ~22 `S603` on the engines' deliberate argv-form
+# `gh`/`git` calls — all of which need per-file ignores before the rule says
+# anything useful. The `S101` count moves with every test added, so measure
+# rather than trust a number here:
+#   git ls-files '*.py' | xargs uvx ruff check --isolated --select S --statistics
+# Adding `S` belongs in its own change, not bundled with the fix that unblocked
+# an adopter.
