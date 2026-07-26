@@ -49,58 +49,40 @@ _DASH_MAPPING_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*:(?:\s|$)")
 # default of None.
 _MISSING = object()
 
-# How far above the engine file `repo_root`'s config-marker fallback may look.
-# 4 == `here.parents[:4]`, i.e. the file plus four directories up, which reaches
-# the root of both prescribed layouts (`scripts/lib/`, `scripts/devkit/lib/`).
-# It exists to stop the walk escaping into a parent project — see repo_root.
-_CONFIG_PROBE_MAX_PARENTS = 4
-
-
 def repo_root(start: Path | None = None) -> Path:
     """Nearest ancestor carrying a ``.git`` entry (dir in a checkout, file in a
     linked worktree). Walking up for the marker — rather than counting
     ``parents[N]`` — is what lets the kit be vendored at any depth
     (``scripts/devkit/lib/``) without rewriting a single path.
 
-    Both probes walk. The config probe is the fallback for a tree with no
-    ``.git`` at all — an exported tarball, a ``GIT_DIR``-only setup — where the
-    old ``parents[2]`` arithmetic silently returned the wrong directory for any
-    layout other than the kit's own ``scripts/lib/``. From ``scripts/devkit/lib/``
-    (the layout this docstring names, and the one ``/adopt`` prescribes when the
-    adopter's ``scripts/`` has colliding names) it yielded ``<repo>/scripts``,
-    and ``load_config`` then reported a missing config at a path that never
-    existed. See issue #60.
+    KNOWN LIMITATION, and it is deliberate (issue #60 stays open). When there is
+    no ``.git`` anywhere — an exported tarball, a ``GIT_DIR``-only setup — the
+    fallback is depth arithmetic calibrated for the kit's OWN ``scripts/lib/``
+    layout. From the vendored ``scripts/devkit/lib/`` layout it yields
+    ``<repo>/scripts``, and ``load_config`` then fails naming a path that does
+    not exist.
 
-    The config probe is BOUNDED; the ``.git`` probe is not. Unbounded, the
-    config walk reaches ``/`` and selects a FOREIGN ``config/dev-model.yaml``
-    sitting above a ``.git``-less tree, returning a different project's root —
-    which ``archive_plan_sessions`` would then rewrite. That was measurably
-    WORSE than the arithmetic it replaced, which resolves the kit's own layout
-    correctly in exactly that case. A wrong LOUD answer (``FileNotFoundError``
-    naming a path that does not exist) beats a wrong SILENT one.
+    That is a WRONG answer, but a LOUD and LOCAL one, and it is the better of
+    the two available failures. The obvious fix — also probe upward for
+    ``config/dev-model.yaml`` — was implemented twice here and escaped both
+    times: unbounded it walks to ``/``; bounded to the deepest prescribed layout
+    it still reaches one directory above the root in the SHALLOWEST layout. Both
+    versions returned a FOREIGN project's root from a tree the arithmetic
+    resolved correctly, silently, to a caller that rewrites the paths it is
+    given. Two failed tightenings on a path this load-bearing is the signal to
+    remove the mechanism, not to tighten it a third time
+    (``safety-critical-changes.md`` rule 1).
 
-    ``_CONFIG_PROBE_MAX_PARENTS`` covers every layout the kit prescribes:
-
-    ==========================================  =================
-    layout                                      root
-    ==========================================  =================
-    ``<root>/scripts/lib/`` (the kit's own)     ``parents[2]``
-    ``<root>/scripts/devkit/lib/`` (/adopt's)   ``parents[3]``
-    ==========================================  =================
-
-    Vendoring deeper than that still resolves through ``.git``, which every real
-    checkout has and which is unbounded — the bound constrains only the
-    no-``.git`` fallback.
-
-    ``parents[2]`` survives as the last resort when neither marker is found —
-    nothing better is knowable at that point.
+    A depth bound cannot work, and that is worth stating so nobody tries again:
+    the root sits at ``parents[2]`` in one prescribed layout and ``parents[3]``
+    in the other, so no single bound distinguishes "the root" from "one above
+    the root" without knowing the layout it is trying to discover. A probe that
+    validated a candidate against its own ``paths.engines`` could work; a depth
+    bound cannot.
     """
     here = (start or Path(__file__)).resolve()
     for candidate in (here, *here.parents):
         if (candidate / ".git").exists():
-            return candidate
-    for candidate in (here, *here.parents[:_CONFIG_PROBE_MAX_PARENTS]):
-        if (candidate / DEFAULT_CONFIG_PATH).is_file():
             return candidate
     return here.parents[2] if len(here.parents) >= 3 else here.parent
 

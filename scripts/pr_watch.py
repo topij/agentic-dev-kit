@@ -100,25 +100,18 @@ def _find_repo_root(start: Path) -> Path:
     is vendored under a nested dir, e.g. scripts/devkit/). Inlined — pr_watch
     stays stdlib-only.
 
-    The ``.git`` walk handles any depth. The fallback did not: ``parent.parent``
-    is calibrated for ``scripts/pr_watch.py`` and returns ``<repo>/scripts`` from
-    the vendored ``scripts/devkit/`` layout named right above — the docstring
-    claimed a depth-independence the fallback did not have (issue #60). Probing
-    for the config marker first fixes that; the probe is BOUNDED so the walk
-    cannot escape into a parent project's config and hand this engine another
-    repo's root, which is what ``REPO_ROOT`` feeds to every ``gh``/``git``
-    subprocess ``cwd=`` and to state-root resolution below."""
+    The ``.git`` walk handles any depth. The FALLBACK does not, and that is a
+    known limitation rather than an oversight: ``parent.parent`` is calibrated
+    for ``scripts/pr_watch.py`` and returns ``<repo>/scripts`` from the vendored
+    ``scripts/devkit/`` layout named right above (issue #60, still open). A
+    config-marker probe was tried here and removed — see
+    ``lib/kitconfig.py:repo_root`` for why a depth bound cannot fix it. It
+    matters most here: ``REPO_ROOT`` is the ``cwd=`` for every ``gh``/``git``
+    subprocess and the base for the state root, so a probe that escapes points
+    a merge-gate engine at a different repository. Failing loudly inside the
+    right tree beats resolving quietly into the wrong one."""
     for candidate in (start, *start.parents):
         if (candidate / ".git").exists():
-            return candidate
-    # Bound is 3, not the 4 used by lib/kitconfig.py and lib/devmodel_config.py:
-    # this engine sits one directory shallower (`scripts/pr_watch.py`, not
-    # `scripts/lib/…`), so the root is `parents[1]` in the kit's own layout and
-    # `parents[2]` vendored. A bound copied from the lib modules reaches one
-    # level too far and re-opens the escape — which is how the test below
-    # caught it.
-    for candidate in (start, *start.parents[:3]):
-        if (candidate / "config" / "dev-model.yaml").is_file():
             return candidate
     return start.parent.parent
 

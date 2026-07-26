@@ -39,16 +39,14 @@ def _repo_root() -> Path:
         if (candidate / ".git").exists():
             return candidate
     # No .git found (e.g. the kit was copied in but `git init` hasn't run yet).
-    # `parents[2]` alone is calibrated for `scripts/lib/` and returns
-    # `<repo>/scripts` from the vendored `scripts/devkit/lib/` layout that
-    # /adopt prescribes (issue #60), so probe for the config first — bounded,
-    # so the walk cannot escape into a parent project's config. Same rule and
-    # same reasoning as kitconfig.repo_root; kept inline because this module is
-    # deliberately import-free.
-    for candidate in (here, *here.parents[:4]):
-        if (candidate / "config" / "dev-model.yaml").is_file():
-            return candidate
-    return here.parents[2]
+    # Calibrated for `scripts/lib/`; from the vendored `scripts/devkit/lib/`
+    # layout it returns `<repo>/scripts` and the caller fails naming a path that
+    # does not exist (issue #60, still open). A config-marker probe was tried
+    # here and removed — see kitconfig.repo_root for why a depth bound cannot
+    # fix it and why a wrong-and-loud answer beats escaping into a parent
+    # project. `len` guard so a file within two directories of `/` raises
+    # nothing surprising.
+    return here.parents[2] if len(here.parents) >= 3 else here.parent
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:

@@ -1,8 +1,9 @@
 # Adopting into a repo that lints and formats
 
 > **The one rule.** Your linter and formatter must not touch the kit's engines.
-> A kit engine that your tooling edits can never be replaced by `/upgrade` again —
-> which is the entire property `kit-manifest.json` and `kit_doctor` exist to protect.
+> An engine your tooling rewrites reports as `differs` on every `kit_doctor` run,
+> and returns to `differs` after each commit that touches it — which destroys the
+> signal `/upgrade` depends on.
 
 This page is doctrine (kit-owned). The specific paths and hook names are yours.
 
@@ -11,8 +12,16 @@ This page is doctrine (kit-owned). The specific paths and hook names are yours.
 Engines are **kit-owned**: copied in byte-identical, replaced wholesale on upgrade,
 never edited in your repo. `kit_doctor` enforces that by hashing every engine against
 `kit-manifest.json`. Anything that rewrites a byte — a formatter, an autofixer, a
-trailing-whitespace hook — is indistinguishable from you editing the file by hand,
-and it reports as `differs` forever after.
+trailing-whitespace hook — is indistinguishable from you editing the file by hand.
+
+**To be precise about the damage, because overstating it is its own problem:** a
+reformatted engine is not unrecoverable. `/upgrade` handles `differs` by diffing the
+local file and replacing it, and a formatter-only diff is the easy case. The cost is
+that it *recurs* — the formatter rewrites the file again on the next commit that
+touches it — and, worse, that it makes `differs` uninformative. `/upgrade`'s whole
+Step 3 rests on reading that diff to tell "simply older" from "locally edited"; once
+every engine is permanently `differs` for formatting reasons, a genuine local edit is
+buried in the noise. You lose the signal, not the file.
 
 The failure is quiet. Red CI you notice; `ruff --fix` silently reformatting a file on
 commit you do not. **Measured on a real adoption** (cs-toolkit, kit issue #58): the
@@ -82,9 +91,11 @@ catches the drift.
 
 ### 4. Verify the exclusion actually excludes
 
-Do not assume it worked. Prove it, in this order:
+Do not assume it worked. Prove it, in this order. (`bash`, not POSIX `sh` — the
+loop needs process substitution so the drift flag survives; a pipeline would run
+it in a subshell and the exit status would always be 0.)
 
-```sh
+```bash
 ENGINES=scripts/devkit          # your paths.engines
 KIT=/path/to/agentic-dev-kit    # the checkout you copied from
 
@@ -93,9 +104,11 @@ KIT=/path/to/agentic-dev-kit    # the checkout you copied from
 #    lib/state_paths/, the shell engines (dev_session.sh, reconcile_sessions.sh,
 #    lib/repo_root.sh) and hooks/pre-push — all manifest-owned, and the shell
 #    ones are the likeliest to be rewritten by a formatter you forgot about.
-git ls-files -- "$ENGINES" | while IFS= read -r f; do
-  cmp -s "$f" "$KIT/scripts/${f#"$ENGINES"/}" || echo "DRIFT: $f"
-done
+drift=0
+while IFS= read -r f; do
+  cmp -s "$f" "$KIT/scripts/${f#"$ENGINES"/}" || { echo "DRIFT: $f"; drift=1; }
+done < <(git ls-files -- "$ENGINES")
+[ "$drift" -eq 0 ] || { echo "engines drifted from the kit"; exit 1; }
 
 # 2. run your hooks against them, then repeat step 1 — this is the real test.
 #    Anything that changed means the exclusion is not working.

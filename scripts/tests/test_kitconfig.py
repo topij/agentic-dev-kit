@@ -447,69 +447,74 @@ def test_repo_root_accepts_a_git_file_as_a_linked_worktree_marker(
 
 
 @pytest.mark.parametrize(
-    "layout",
+    "layout, root_index",
     [
-        "scripts/lib/kitconfig.py",         # root == parents[2]
-        "scripts/devkit/lib/kitconfig.py",  # root == parents[3]
+        ("scripts/lib/kitconfig.py", 2),         # the kit's own — arithmetic is right
+        ("scripts/devkit/lib/kitconfig.py", 3),  # vendored — arithmetic is WRONG here
     ],
 )
-def test_repo_root_falls_back_to_the_config_marker_when_there_is_no_git(
-    tmp_path: Path, layout: str
+def test_repo_root_without_git_is_depth_arithmetic_and_stays_inside_the_tree(
+    tmp_path: Path, layout: str, root_index: int
 ) -> None:
-    """No `.git` at all — an exported tarball, a GIT_DIR-only setup.
+    """Pins the KNOWN LIMITATION of issue #60, not a fix for it.
 
-    `scripts/devkit/lib/` is the regression: `parents[2]` yielded
-    `<repo>/scripts` here, so this asserted the exact wrong directory before #60.
+    With no `.git`, resolution is `parents[2]`. For the kit's own layout that is
+    the root; for the vendored layout it is `<root>/scripts` — wrong, and the
+    caller then fails naming a path that does not exist. Asserted explicitly so
+    the limitation is visible in the suite rather than discovered by an adopter.
+
+    The property that must hold in BOTH cases is the one below: the answer stays
+    inside the tree. A config-marker probe was tried twice to fix the vendored
+    case and escaped into a parent project both times.
     """
     start = _tree(tmp_path, layout, git=False, config=True)
-    assert kitconfig.repo_root(start) == tmp_path
+    resolved = kitconfig.repo_root(start)
+
+    assert resolved == start.parents[2]
+    assert resolved == tmp_path or tmp_path in resolved.parents
+
+    if root_index != 2:  # the vendored case: wrong, and loud about it
+        assert resolved != tmp_path
+        with pytest.raises(FileNotFoundError):
+            kitconfig.load_config(resolved / "config" / "dev-model.yaml")
 
 
-def test_config_probe_does_not_escape_into_a_parent_project(tmp_path: Path) -> None:
-    """A .git-less tree nested under a directory that owns a config.
+def test_repo_root_never_escapes_into_a_parent_projects_config(tmp_path: Path) -> None:
+    """The foreign config is the IMMEDIATE parent — no padding directory.
 
-    The unbounded config walk reached the OUTER config and returned another
-    project's root — silently, and `archive_plan_sessions` rewrites the paths it
-    resolves this way. It was strictly worse than the arithmetic it replaced,
-    which gets this exact layout right. Pins the bound, in the direction that
-    matters: escaping is worse than failing.
+    This is the shape both removed probes escaped on. The first version walked
+    to `/`; the second was bounded to the deepest prescribed layout, which still
+    reaches one above the root in the shallowest one. The earlier test for this
+    had a spare `releases/` level that pushed the foreign config just past the
+    bound, so it passed while the real case escaped — the padding was the bug in
+    the test.
     """
     outer = tmp_path / "outer"
     (outer / "config").mkdir(parents=True)
     (outer / "config" / "dev-model.yaml").write_text(
-        "kit:\n  version: 2\npaths:\n  handoff: docs/OUTER.md\n", encoding="utf-8"
+        "kit:\n  version: 2\npaths:\n  handoff: FOREIGN.md\n", encoding="utf-8"
     )
-    release = outer / "releases" / "proj-1.2.3"
-    start = _tree(release, "scripts/lib/kitconfig.py", git=False, config=False)
+    inner = outer / "inner"
+    start = _tree(inner, "scripts/lib/kitconfig.py", git=False, config=False)
 
     resolved = kitconfig.repo_root(start)
     assert resolved != outer, "escaped into the parent project's config"
-    assert resolved == release
+    assert resolved == inner
 
 
-def test_config_probe_is_bounded_and_fails_loudly_rather_than_escaping(
-    tmp_path: Path,
-) -> None:
-    """Deeper than any prescribed layout, with no `.git`: the bound stops the walk.
+def test_repo_root_resolves_a_nested_checkout_to_its_own_root(tmp_path: Path) -> None:
+    """A checkout nested inside another project resolves to ITS root.
 
-    The kit resolves arbitrary depth through `.git`, which every real checkout
-    has. Only this fallback is bounded, and the bound's price is paid here: the
-    answer is wrong, but it is INSIDE the tree, so `load_config` raises naming a
-    path that does not exist instead of quietly loading someone else's config.
-    """
-    start = _tree(tmp_path, "tools/vendor/devkit/lib/kitconfig.py", git=False, config=True)
-    resolved = kitconfig.repo_root(start)
-    assert resolved != tmp_path          # the bound did stop the walk
-    assert tmp_path in resolved.parents  # ...and it stayed inside the tree
-    with pytest.raises(FileNotFoundError):
-        kitconfig.load_config(resolved / "config" / "dev-model.yaml")
+    An earlier version of this docstring claimed to pin the ORDER of two probes.
+    There is only one probe now — the config-marker probe it referred to was
+    removed — so the claim would have been describing a mechanism that no longer
+    exists. It also never held: a review showed that swapping the two loops left
+    the whole suite green, because this fixture's layout put the outer config
+    outside the probe's reach, making the ordering unobservable in exactly the
+    case chosen to demonstrate it.
 
-
-def test_repo_root_prefers_git_over_a_shallower_config(tmp_path: Path) -> None:
-    """A nested checkout must resolve to ITS root, not an outer repo's config.
-
-    Pins the probe ORDER, not just the outcome — swapping the two loops would
-    make an engine inside a nested checkout read the outer repo's config.
+    What it pins now is narrower and true: `.git` on the inner checkout wins over
+    anything the outer project has, at a vendored depth.
     """
     outer = tmp_path / "outer"
     (outer / "config").mkdir(parents=True)

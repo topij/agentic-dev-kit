@@ -15,7 +15,7 @@
   "files": {
     "docs/agentic-dev-kit/adopting-into-a-linted-repo.md": {
       "role": "doctrine",
-      "sha256": "84c9107df894db1e01ccf0737d047494b6e3c4b5566fdb3945398ceadbe81303"
+      "sha256": "c6c74e8cc3f80fe7ce6d88b34845e627a3800bc6c8cca10f57692fece4d16eab"
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
@@ -79,11 +79,11 @@
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
-      "sha256": "eea66fb15d3766b7e41d33540da543171b4aef8ab3a063a7b5058a2fc89b6b7d"
+      "sha256": "a1b4fd558ed3be081504c1330b4b3695baee7119926734c140261e619ed07a0c"
     },
     "scripts/lib/kitconfig.py": {
       "role": "engine",
-      "sha256": "e2a69bf27dd7279f14c7c7a4aa8851ce19ba76750a29e1d25d6fa7f4cdd40fef"
+      "sha256": "005ef4f3910fd5a5698e659a17bbcf21a8bc4b5ba630891d72a68f52ce98350a"
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",
@@ -107,7 +107,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "4ec2557baef37bf8db3c37e81045c2534081aa6b7157cc13a88bf7721433d4b6"
+      "sha256": "96fdaf3dd6ce72b4ab4a1cf908c2f48e2564f3e739650667e985280008355043"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
