@@ -68,13 +68,28 @@ author re-reading their own diff.
    before believing a kill.
 6. **Report, do not fix.** A lens that edits loses the disjointness: it starts
    defending its own changes on the next round.
-7. **Mutate in an isolated copy, never the shared tree.** Mutation testing needs
-   temporary writes, and lenses run concurrently. Discovered the hard way on the
-   PR that added this file: one lens's mutations appeared to the other as an
-   external process corrupting the repo, and it "restored" them mid-run — so one
-   lens's results were unreliable and the other nearly destroyed live work. Give
-   each lens a scratch copy or its own git worktree, and require it to leave the
-   shared tree byte-identical.
+7. **Mutate in an isolated copy of the repo under review, never the shared
+   tree.** Mutation testing needs temporary writes, and lenses run concurrently.
+   Discovered the hard way on the PR that added this file: one lens's mutations
+   appeared to the other as an external process corrupting the repo, and it
+   "restored" them mid-run — so one lens's results were unreliable and the other
+   nearly destroyed live work. Give each lens a scratch copy or its own git
+   worktree, and require it to leave the shared tree byte-identical.
+
+   **Of the repo under review — check, don't assume.** A runtime's built-in
+   isolation usually clones *the session's* repo, which is not the target when
+   the cockpit is reviewing a different one (an adopter repo, a sibling
+   checkout). On the OpenKitchen upgrade both lenses were handed a worktree of
+   the *kit* while reviewing the *adopter*: `git diff <base>...HEAD` was empty in
+   both. Both noticed and cloned the real target themselves — but a lens that
+   did not would have reviewed an empty diff and reported all-clear, which is
+   the worst failure available to a review mechanism.
+
+   So: name the target repo explicitly in the launch prompt, tell the lens to
+   **verify it is looking at the right thing before reviewing** (a non-empty diff
+   with the expected head), and never state in the prompt that isolation has
+   already been arranged unless you have confirmed it. The launch prompt on that
+   run asserted "you are in an isolated worktree of that repo" and was wrong.
 8. **State what was verified clean, and how.** Absence of findings is only
    evidence if you know what was actually checked.
 
@@ -84,12 +99,17 @@ author re-reading their own diff.
 2. Launch **one isolated reviewer per lens**, concurrently, each with the
    contract above and its lens focus. Use whatever isolation your runtime has
    (a subagent, a separate session, a second person). If it has none, see
-   *Degraded mode*.
-3. Triage every finding against the *current* code — some go stale across
+   *Degraded mode*. State the **repo and branch under review** explicitly — see
+   contract item 7 on why the runtime's own isolation may not point at it.
+3. **Confirm each lens reviewed the right code** before you read its findings: a
+   lens reporting a clean pass over an empty or wrong diff looks exactly like a
+   lens reporting a clean pass. A finding count of zero is a result only once you
+   know what was in front of it.
+4. Triage every finding against the *current* code — some go stale across
    rounds.
-4. Fix real findings, reply-with-reason to the rest.
-5. **Re-run the panel after the fix round.** Not optional: see below.
-6. Record the receipt with the lenses that actually ran:
+5. Fix real findings, reply-with-reason to the rest.
+6. **Re-run the panel after the fix round.** Not optional: see below.
+7. Record the receipt with the lenses that actually ran:
 
    ```sh
    uv run <engine-dir>/pr_watch.py <PR#> \
