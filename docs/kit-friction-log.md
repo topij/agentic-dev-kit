@@ -72,6 +72,16 @@ Everything above now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   mutation run, and CodeRabbit all missed**. **No change proposed** — recording it
   because `fallback-review-panel.md` argues this from one prior data point, and this is
   a second, stronger one worth citing there.
+- **The archive sweep broke a cross-reference again — and this time it broke one the
+  PREVIOUS sweep had written.** The 2026-07-26 entry below reports the sweep orphaning
+  *"see the Phase 3b block above"*. Today's sweep moved Phase 3b itself into the history
+  file, so the surviving text — *"see the Phase 3b block, still live in
+  kit-handoff.md"* — became false in a second way: the target is now in the very file
+  the sentence sits in. Fixed by hand in this commit. **M** — the entry below proposes
+  warning on `(above|below)`-style references in *moved* blocks; this instance shows the
+  warning must also cover references **into** a moved block from anywhere in either
+  document, since the block that moved was the reference's *target*, not its location.
+  Same family as `#53`.
 - **The doc-budget remedy no-op reproduced a third time** (see the 2026-07-26 entry
   below). `check_doc_budget` reported 421/400; the remedy it names printed *"nothing to
   move: 5 session block(s) <= --keep 6"*; `--keep 4` was needed and found by guessing.

@@ -181,9 +181,9 @@ Both times the correction came from asking what a *stale reader* of the mechanis
   proposed fix, so they are issue-shaped — `triage-friction-log` should graduate them rather
   than leaving them in the inbox.
 
-✔ Done — shipped as PR #25 (see the Phase 3b block, still live in
-[`kit-handoff.md`](kit-handoff.md)). The design constraint held:
-neither surface's fix touches `converged`.
+✔ Done — shipped as PR #25 (see the Phase 3b block, swept into this file by the
+2026-07-27 archive run). The design constraint held: neither surface's fix
+touches `converged`.
 
 ### 2026-07-25
 
