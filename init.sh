@@ -67,15 +67,18 @@ fi
 # One YAML-aware trailing-comment scanner, shared by get_field and set_field
 # (sh has no awk includes, so the function text is spliced into both programs).
 # comment_idx(rest) returns the 1-based index where a trailing comment starts,
-# or 0. The rules mirror scripts/lib/kitconfig.py's _strip_comment, the reader
-# every engine uses — the two sides must agree on where a value ends:
+# or 0. The rules are YAML's (and therefore PyYAML's):
 #   - a quote opens a quoted scalar only at the FIRST non-space position; a
-#     mid-scalar apostrophe (O'\''Brien) or quote is literal. An earlier version
+#     mid-scalar apostrophe (O'Brien) or quote is literal. An earlier version
 #     of this scan opened on any quote character, which silently absorbed a
 #     real trailing comment into the value (issue #62, review round on #87).
 #   - inside a leading-quoted scalar, # is literal until after the close quote.
 #   - in a plain scalar, # opens a comment only when preceded by whitespace:
 #     `board#view42` is one token, `board #view42` is a value and a comment.
+# The kit's other readers do NOT fully agree with YAML here: kitconfig's
+# _strip_comment opens a quote at any position, and devkit_config_scalar strips
+# " #…" even inside quotes. Issue #88 tracks converging them; this scanner
+# takes YAML's side rather than copying either divergence.
 AWK_COMMENT_IDX='
   function comment_idx(rest,   n, i, j, qc, c, prev) {
     n = length(rest)
@@ -128,7 +131,12 @@ get_field() {
         cidx = comment_idx(rest)
         if (cidx > 0) { rest = substr(rest, 1, cidx - 1) }
         gsub(/^[ \t]+|[ \t]+$/, "", rest)
-        gsub(/^"|"$/, "", rest)
+        # Strip one MATCHING pair of double quotes, the way kitconfig does. The
+        # old independent-ends gsub ate the closing quote of a value that only
+        # ENDS with one (`he said "hi"` -> `he said "hi`) — panel round on #87.
+        if (length(rest) >= 2 && substr(rest, 1, 1) == "\"" && substr(rest, length(rest), 1) == "\"") {
+          rest = substr(rest, 2, length(rest) - 2)
+        }
         print rest
         exit
       }
@@ -333,9 +341,12 @@ detect_engines_dir() {
   # generic (repo_root.sh, kitconfig.py), so an adopter's own scripts/lib/ file
   # would make the earlier candidate shadow a kit vendored at scripts/devkit —
   # the review panel on #87 demonstrated exactly that. A top-level engine name
-  # is distinctive, and no real install ships lib/ helpers without at least one
-  # top-level engine beside them. (kit_doctor keeps lib/ names in ITS probe:
-  # it checks a directory the adopter already configured, not a guess.)
+  # is distinctive. The trade accepted here: an install shipping ONLY lib/
+  # helpers would fall back to `scripts` undetected — lib/ files are
+  # import-only helpers of the top-level engines, and a silent wrong match on
+  # an adopter's own file is the worse failure than a conservative default.
+  # (kit_doctor keeps lib/ names in ITS probe: it checks a directory the
+  # adopter already configured, not a guess.)
   probes=""
   if [ -f kit-manifest.json ]; then
     probes="$(awk -F'"' '
@@ -714,22 +725,38 @@ migrate_kit_schema
 
 # ── prompts ──────────────────────────────────────────────────────────────
 
-# yaml_scalar <value> — the exact text to stamp for a prompted scalar: quoted
-# when the value would otherwise parse wrong AND double-quoting is lossless,
-# raw otherwise (issue #62). Double-quote style makes `\` and `"` significant
-# to YAML and get_field does not unescape, so blanket quoting would turn a
-# value containing either into an unloadable config or a value the two kit
-# readers disagree on (found by the review panel on #87). Such values — and a
-# value already carrying its own single-quoted style — are stamped as the
-# plain scalars they always were: the pre-existing edge, made no worse.
-# kitconfig and devkit_config_scalar strip one matching quote layer on read;
-# get_field above strips double quotes.
+# yaml_scalar <value> — the text to stamp for a historically-unquoted prompted
+# scalar: double-quoted when the value carries a YAML indicator this helper
+# knows AND double-quoting is lossless, raw otherwise (issue #62).
+# Double-quote style makes `\` and `"` significant to YAML and get_field does
+# not unescape, so blanket quoting would turn a value containing either into an
+# unloadable config or a value the kit's readers disagree on (found by the
+# review panel on #87). Such values — and a value already carrying its own
+# single-quoted style — are stamped as the plain scalars they always were: the
+# pre-existing edge, made no worse. NOT covered on purpose: plain-scalar type
+# resolution (a name of `true`/`007`/`~` type-flips under PyYAML, exactly as it
+# always did when stamped raw). kitconfig and devkit_config_scalar strip one
+# matching quote layer on read; get_field above strips a matching double pair.
 yaml_scalar() {
   case "$1" in
     "") printf '""\n' ;;
     *'"'*|*'\'*|"'"*) printf '%s\n' "$1" ;;
-    *':'*|*'#'*|'['*|'{'*|'-'*|'&'*|'*'*|'!'*|'|'*|'>'*|'%'*|'@'*|' '*|*' ') printf '"%s"\n' "$1" ;;
+    *':'*|*'#'*|'['*|']'*|'{'*|'}'*|','*|'-'*|'?'*|'&'*|'*'*|'!'*|'|'*|'>'*|'%'*|'@'*|'`'*|' '*|'	'*|*' '|*'	') printf '"%s"\n' "$1" ;;
     *) printf '%s\n' "$1" ;;
+  esac
+}
+
+# quoted_scalar <value> — for the fields that have ALWAYS stamped double-quoted
+# (tracker.project_name, linear ids, tracker.url, notify.user_key): keep that
+# style, but degrade to a raw plain scalar when double-quoting cannot be
+# lossless — a value containing `"` or `\` inside double quotes is YAML the
+# readers reject or disagree on. Found by the review panel on #87: with
+# set_field now preserving backslashes faithfully, blanket-quoting turned a
+# valid `url: x\py` into an unloadable config on the re-run path.
+quoted_scalar() {
+  case "$1" in
+    *'"'*|*'\'*) printf '%s\n' "$1" ;;
+    *) printf '"%s"\n' "$1" ;;
   esac
 }
 
@@ -747,21 +774,21 @@ set_field "tracker:" "" "^  backend:" "$(yaml_scalar "$backend")"
 
 cur_project_name=$(get_field "tracker:" "" "^  project_name:")
 tracker_project_name=$(ask "Tracker project name" "$cur_project_name")
-set_field "tracker:" "" "^  project_name:" "\"$tracker_project_name\""
+set_field "tracker:" "" "^  project_name:" "$(quoted_scalar "$tracker_project_name")"
 
 if [ "$backend" = "linear" ]; then
   cur_team_id=$(get_field "tracker:" "linear:" "^    team_id:")
   team_id=$(ask "Linear team id" "$cur_team_id")
-  set_field "tracker:" "linear:" "^    team_id:" "\"$team_id\""
+  set_field "tracker:" "linear:" "^    team_id:" "$(quoted_scalar "$team_id")"
 
   cur_project_id=$(get_field "tracker:" "linear:" "^    project_id:")
   project_id=$(ask "Linear project id" "$cur_project_id")
-  set_field "tracker:" "linear:" "^    project_id:" "\"$project_id\""
+  set_field "tracker:" "linear:" "^    project_id:" "$(quoted_scalar "$project_id")"
 fi
 
 cur_tracker_url=$(get_field "tracker:" "" "^  url:")
 tracker_url=$(ask "Tracker board URL (shown in the friction-log header; blank is fine)" "$cur_tracker_url")
-set_field "tracker:" "" "^  url:" "\"$tracker_url\""
+set_field "tracker:" "" "^  url:" "$(quoted_scalar "$tracker_url")"
 
 cur_branch=$(get_field "vcs:" "" "^  protected_branch:")
 branch=$(ask "Protected branch (PRs target this, never commit to it directly)" "$cur_branch")
@@ -769,12 +796,15 @@ set_field "vcs:" "" "^  protected_branch:" "$(yaml_scalar "$branch")"
 
 cur_user_key=$(get_field "notify:" "" "^  user_key:")
 user_key=$(ask "Notify user key (a key into your project's own notify config)" "$cur_user_key")
-set_field "notify:" "" "^  user_key:" "\"$user_key\""
+set_field "notify:" "" "^  user_key:" "$(quoted_scalar "$user_key")"
 
 cur_bots_raw=$(get_field "review:" "" "^  bots:")
-# Strip surrounding [ ] and item quotes for display, since we ask for a plain
-# comma list.
-cur_bots_display=$(printf '%s' "$cur_bots_raw" | sed -e 's/^\[//' -e 's/\]$//' -e 's/"//g')
+# Strip surrounding [ ] and item quotes — BOTH styles: a hand-written
+# `bots: ['coderabbit']` is valid YAML, and stripping only double quotes fed
+# the single-quoted item back through the re-serializer as the literal bot
+# name `'coderabbit'`, which pr_watch then silently fails to match (review
+# panel on #87). We ask for a plain comma list.
+cur_bots_display=$(printf '%s' "$cur_bots_raw" | sed -e 's/^\[//' -e 's/\]$//' -e 's/"//g' -e "s/'//g")
 bots_answer=$(ask "Review bots (comma-separated, or 'none')" "$cur_bots_display")
 # Tolerate an answer typed with brackets ("[coderabbit]") — it is the same
 # comma list, not a nested one (issue #62).
@@ -791,7 +821,7 @@ else
     for (i = 1; i <= NF; i++) {
       item = $i
       gsub(/^[ \t]+|[ \t]+$/, "", item)
-      gsub(/^"|"$/, "", item)
+      gsub(/^["'\'']|["'\'']$/, "", item)
       if (item == "") continue
       out = out (out == "" ? "" : ", ") "\"" item "\""
     }

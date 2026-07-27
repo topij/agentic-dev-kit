@@ -335,6 +335,111 @@ yaml_scalar "$1"
 """
 
 
+def _yaml_scalar_extra_cases() -> list[tuple[str, str]]:
+    # Reserved leading indicators where double-quoting is lossless and a raw
+    # stamp is unloadable or type-flipped YAML (panel round 2 on #87).
+    return [
+        ("`my-proj`", '"`my-proj`"'),
+        ("?x", '"?x"'),
+        (",x", '",x"'),
+        ("]x", '"]x"'),
+        ("}x", '"}x"'),
+    ]
+
+
+@pytest.mark.parametrize(("value", "stamped"), _yaml_scalar_extra_cases())
+def test_yaml_scalar_quotes_reserved_leading_indicators(
+    tmp_path: Path, value: str, stamped: str
+) -> None:
+    (tmp_path / "init.sh").write_bytes((REPO_ROOT / "init.sh").read_bytes())
+    proc = subprocess.run(
+        ["sh", "-c", _YAML_SCALAR_DRIVER, "_", value],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.stdout == stamped + "\n"
+
+
+_QUOTED_SCALAR_DRIVER = """eval "$(sed -n '/^quoted_scalar() {/,/^}/p' init.sh)"
+quoted_scalar "$1"
+"""
+
+
+@pytest.mark.parametrize(
+    ("value", "stamped"),
+    [
+        ("My Project Dev", '"My Project Dev"'),
+        ("", '""'),
+        (r"x\py", r"x\py"),
+        ('a"b', 'a"b'),
+    ],
+)
+def test_quoted_scalar_prefers_quotes_but_degrades_losslessly(
+    tmp_path: Path, value: str, stamped: str
+) -> None:
+    """The historically-always-quoted fields keep their quoted style, except
+    where double-quoting cannot be lossless (`\\` or `\"` in the value) — the
+    panel showed a valid `url: x\\py` re-stamping into unloadable YAML when
+    quoted blindly (round 2, #87)."""
+    (tmp_path / "init.sh").write_bytes((REPO_ROOT / "init.sh").read_bytes())
+    proc = subprocess.run(
+        ["sh", "-c", _QUOTED_SCALAR_DRIVER, "_", value],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.stdout == stamped + "\n"
+
+
+def test_rerun_preserves_tracker_url_with_backslash_for_both_readers(tmp_path: Path) -> None:
+    """A backslash in an always-quoted field degrades to a raw stamp: quoted,
+    PyYAML rejects the escape while kitconfig reads it literally (panel, #87)."""
+    config = SHIPPED_CONFIG.replace('  url: ""', r'  url: "x\py"')
+    assert r'  url: "x\py"' in config
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+    text = _config(repo)
+    assert yaml.safe_load(text)["tracker"]["url"] == r"x\py"
+    sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
+    import kitconfig  # noqa: PLC0415
+
+    assert kitconfig.loads(text)["tracker"]["url"] == r"x\py"
+    _run_init(repo)
+    assert _config(repo) == text
+
+
+def test_rerun_normalizes_single_quoted_bots_item(tmp_path: Path) -> None:
+    """A hand-written `bots: ['coderabbit']` is valid YAML naming the reviewer
+    `coderabbit` — the double-quote-only strip re-serialized it as the literal
+    name `'coderabbit'`, which pr_watch silently fails to match (panel, #87)."""
+    config = SHIPPED_CONFIG.replace("  bots: [coderabbit]", "  bots: ['coderabbit']")
+    assert "  bots: ['coderabbit']" in config
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+    text = _config(repo)
+    assert yaml.safe_load(text)["review"]["bots"] == ["coderabbit"]
+    assert 'bots: ["coderabbit"]' in text
+    _run_init(repo)
+    assert _config(repo) == text
+
+
+def test_rerun_preserves_quote_ending_value_with_comment(tmp_path: Path) -> None:
+    """`he said "hi"` followed by a real comment: the old independent-ends
+    quote strip ate the value's closing quote; the matched-pair strip keeps it
+    (panel round 2, #87)."""
+    repo, text, parsed = _rerun_and_reload(tmp_path, 'he said "hi" # note')
+
+    assert parsed["project"]["name"] == 'he said "hi"'
+    assert '# note' in text.split("name:")[1].splitlines()[0]
+    _run_init(repo)
+    assert _config(repo) == text
+
+
 @pytest.mark.parametrize(
     ("value", "stamped"),
     [
