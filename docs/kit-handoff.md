@@ -20,9 +20,12 @@ third was built, reviewed, and deleted.
 ## Latest session — 2026-07-27 (#59 + #61.1 shipped; #61.2 built and reverted)
 
 **Theme —** Fixed what the cs-toolkit adoption found in `kit_doctor`. The review panel
-ran twice and found **28 defects, four of them regressions against `main`** — my change
-making things *worse* than the code it replaced. None were caught by CI, 372 passing
-tests, my own mutation runs, or CodeRabbit.
+ran twice; round 1 found **four regressions against `main`** — my change making things
+*worse* than the code it replaced: `--root` on a non-repo answering from the *enclosing*
+repository, an inherited `GIT_DIR` overriding it, an unreadable manifest version
+degrading from a loud crash to a silent `✓`, and `version: 2.0` going from accepted to a
+hard `--generate-manifest` failure. **None were caught** by CI, by the suite as it then
+stood (355 tests), by my own mutation run at that head, or by CodeRabbit.
 
 - **`#65` merged (`a18f085`), closing `#59`.** The engines probe derives from
   `KIT_OWNED` instead of naming three files; a quoted `kit.version` no longer crashes
@@ -30,8 +33,10 @@ tests, my own mutation runs, or CodeRabbit.
   because CI gates on that code.
 - **`#61`'s hook-detection half was deleted, not shipped.** Asking git resolved the
   false negatives and introduced worse: answering from an *enclosing* repository when
-  `--root` was not one, and honoring an inherited `GIT_DIR`. `_hook_dirs` is
-  byte-identical to `main`; only its docstring changes, to state the gaps as known.
+  `--root` was not one, and honoring an inherited `GIT_DIR`. `_hook_dirs`'s **body** is
+  byte-identical to `main`; the only change is 25 docstring lines stating the gaps as
+  known — including a false POSITIVE the revert does *not* fix (`.git/hooks` is appended
+  unconditionally, so a hook there reports installed even when git reads elsewhere).
 - **`#66`, `#67` filed** — both `init.sh`, both found by the panel while reviewing
   something else.
 
@@ -49,11 +54,16 @@ tests, my own mutation runs, or CodeRabbit.
 
 **Learned**
 
-- **My claims were wrong three times, in the permanent record each time.** A commit
-  message attributed a defect to the reverted half when it *ships*; a PR table misstated
-  `main`'s behaviour; and the sentence explaining that I had removed a `Closes #61`
-  keyword **contained the keyword**, which GitHub matches regardless of context — the
-  exact trap the friction log recorded last session, re-armed while documenting it.
+- **My claims keep being the defect.** A commit message attributed a defect to the
+  reverted half when it *ships*; a PR table misstated `main`'s behaviour; and the
+  wrap-up's own handoff block then miscited `#36`, overstated a test count, and got a
+  GitHub rule backwards — all caught by a review lens, none by me. This is the third
+  consecutive session where claim-vs-artifact drift is the most common finding.
+- **A closing keyword inside backticks does NOT fire.** Measured:
+  `closingIssuesReferences` is empty for a PR whose body carries a backticked
+  `` `Closes #61` ``, while `#63`'s *un-backticked* "Does NOT close #60" closed it. So
+  the hazard is negated **prose**, not any mention — a grep that ignores code spans
+  would have over-fired on every legitimate reference.
 - **Two of my tests pinned nothing**, including the one whose stated thesis is "don't
   restate the list": it re-derived its expectation from the real `KIT_OWNED` with the
   prefix filter left out, so deleting that filter left the suite green.
@@ -67,15 +77,18 @@ tests, my own mutation runs, or CodeRabbit.
 
 - **Three `init.sh` defects** — `#62` (unquoted YAML stamping), `#66` (inert `~` hook),
   `#67` (the same hardcoded triple `#59` just fixed, where it *writes* bad config).
-  `init.sh` still has zero test coverage (`#36`).
-- **`#61`** — reopened scope: the hook-detection half, with the panel's evidence, the
-  9-form parsing table, and the shape a correct fix needs.
+  `init.sh` has no automated test coverage and **no issue tracks that** — `#36` is the
+  `pre-push` twin, and `#67`'s body miscites it for `init.sh`; both need correcting.
+- **`#61`** — still open, never closed: the hook-detection half, with the panel's
+  evidence, the shape a correct fix needs, and a table of 9 `git config` value forms of
+  which the current scan misparses 5.
 - **`#47`** still the highest-leverage unbuilt thing, and it subsumes `#67`.
 - **`#50`, `#60`** unchanged.
 
-▶ Next: **`#67` + `#62`, behind a first `init.sh` fixture test (`#36`)** — three
-`init.sh` bugs are now open and the file has no coverage, so the harness is the
-unblocking step, not the fixes. `#66` needs the `#61` design call and should follow.
+▶ Next: **file the `init.sh`-coverage issue, then `#67` + `#62` behind it** — three
+`init.sh` bugs are open, the file has zero coverage, and nothing tracks that gap, so the
+harness is the unblocking step and it needs a ticket of its own first. `#66` needs the
+`#61` design call and should follow.
 
 ______________________________________________________________________
 

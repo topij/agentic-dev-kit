@@ -39,23 +39,31 @@ Everything above now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
 - **A mutation harness that restores outside `finally` leaves the repo mutated.** My
   restore line was unreachable when the script died parsing pytest output (a bare
   `python3` with no pytest returned no stdout, and `splitlines()[-1]` raised). The
-  working tree kept a live mutant until `git status` caught it. `#50` and
-  `fallback-review-panel.md` contract item 5 both warn about mutation testing, but only
-  about **stale `.pyc`** — this is the same outcome by a different route, and the
-  `.pyc` framing is what made me think a hash-verified restore was sufficient. **H** —
+  working tree kept a live mutant until `git status` caught it. Neither existing warning
+  covers it: `#50` is about stale `.pyc`, and `fallback-review-panel.md` contract item 5
+  warns only about **false kills** from a checksum/drift test (it does not mention
+  `.pyc` at all). Both frame the hazard as "the result may be wrong"; neither says the
+  repo may be left broken. **H** —
   proposed fix: contract item 5 should say the restore belongs in a `finally` (or a
   git-clean check) and that any harness must verify the tree is clean *after* it exits,
   not only after a successful run.
-- **A negated closing keyword got re-armed while documenting the last one.** Last
-  session's entry says "never write a closing keyword adjacent to an issue number you
-  do not intend to close, even negated". This session I wrote a PR body sentence
-  explaining that I had *removed* a `Closes #61` — and the sentence contained the
-  literal keyword, which GitHub matches regardless of context. Caught by grepping my own
-  text, not by remembering the rule. **M** — proposed fix: the rule needs a mechanical
-  check, not a habit: a `pr-watch` / `wrap-up` step that greps the PR body and every
-  commit message for `(close|fix|resolve)\w*\s+#\d+` and asks the operator to confirm
-  each match is intended. A rule that fires only when you remember it does not survive
-  the session that is busy applying it.
+- **The closing-keyword rule as written is wrong, and measuring it changed the fix.**
+  Last session's entry says never to write one "even negated". Acting on that, I rewrote
+  a PR body sentence that mentioned a backticked `` `Closes #61` ``. Then I measured:
+
+  ```
+  PR #68 body contains `Closes #61` (backticked) → closingIssuesReferences: []
+  PR #63 body contains "Does NOT close #60"      → closingIssuesReferences: [58, 60]
+  ```
+
+  **GitHub excludes inline code spans**; what it does not excuse is negating prose. So
+  the real rule is narrower than the entry below claims, and the obvious mechanical fix
+  — grep for `(close|fix|resolve)\w*\s+#\d+` — would fire on every legitimate backticked
+  reference and train people to ignore it. **M** — proposed fix: a `pr-watch` / `wrap-up`
+  check that strips fenced blocks and inline code **first**, then flags a closing keyword
+  within a few tokens of a negation (`not`, `n't`, `NOT`, "stays open"), which is the
+  actual failure mode. Correct the 2026-07-26 entry's rule at the same time; it is
+  currently stated more strongly than the evidence supports.
 - **A review bot with an incremental model keeps a stale review across a rewrite.**
   CodeRabbit reviewed the pre-split head, then declined `@coderabbitai review`
   ("does not re-review already reviewed commits") and hit its Fair Usage limit on
@@ -67,11 +75,15 @@ Everything above now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   changes the diff shape, rather than only at receipt time. Related: `#27`, `#44`.
 - **The panel's worth is disjointness, and this run measured it.** Round 1: the
   adversarial lens found the enclosing-repo and `GIT_DIR` regressions; the correctness
-  lens independently found the tilde disagreement and the misattributed defect. Almost
-  no overlap, and **four regressions against `main` that CI, 372 tests, my own 19/19
-  mutation run, and CodeRabbit all missed**. **No change proposed** — recording it
-  because `fallback-review-panel.md` argues this from one prior data point, and this is
-  a second, stronger one worth citing there.
+  lens independently found the `~`-expansion disagreement between `init.sh` and the new
+  detector. Almost no overlap. Round 2's correctness lens then found the *misattributed
+  defect* — a false sentence in the commit message written to describe round 1's own
+  outcome, which could not have existed when round 1 ran. **No change proposed** —
+  recording it because `fallback-review-panel.md` argues disjointness from one prior
+  data point, and this is a second, stronger one worth citing there. Note the honest
+  framing of what the panel beat: the four regressions were missed by CI, by the suite
+  **as it then stood**, and by the mutation run **at that head** — not by the 372-test
+  suite quoted elsewhere, which only exists *because* those findings were fixed.
 - **The archive sweep broke a cross-reference again — and this time it broke one the
   PREVIOUS sweep had written.** The 2026-07-26 entry below reports the sweep orphaning
   *"see the Phase 3b block above"*. Today's sweep moved Phase 3b itself into the history
@@ -85,13 +97,14 @@ Everything above now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
 - **The doc-budget remedy no-op reproduced a third time** (see the 2026-07-26 entry
   below). `check_doc_budget` reported 421/400; the remedy it names printed *"nothing to
   move: 5 session block(s) <= --keep 6"*; `--keep 4` was needed and found by guessing.
-  **No new fix proposed** — recording the third occurrence, because two of the three
-  were in *this* repo and the entry below still reads as a one-off. It is not.
-- **A review lens's isolated worktree pointed at `main` again — 4 of 4 launches, second
-  session running.** Every lens detected it and cloned the target itself, because the
-  prompt required reporting the path and diff stat. This is now the *sixth* consecutive
-  launch across two sessions where the runtime's isolation was wrong and the mandatory
-  report was the only thing that caught it. **H** — proposed fix: this is no longer a
+  **No new fix proposed** — recording the third occurrence. The entry below already
+  records two; this makes it three, two of them in *this* repo, which is a pattern
+  rather than a run of bad luck.
+- **A review lens's isolated worktree pointed at the wrong ref again — 5 of 5 this
+  session, 9 of 9 across two.** (Last session's entry below records 4 of 4; this session
+  ran 2 lenses × 2 rounds on `#65` plus 1 on `#68`.) Every lens detected it and cloned
+  the target itself, because the prompt required reporting the path and diff stat.
+  **H** — proposed fix: this is no longer a
   caveat, it is the default behaviour. Contract item 7 should stop saying "verify" and
   start saying "assume the worktree is wrong; clone the target yourself first", with the
   path/diff-stat report as a required field of the lens output (the existing 2026-07-26
