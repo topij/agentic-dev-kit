@@ -159,12 +159,13 @@ def _derive_engine_names(kit_owned: tuple[tuple[str, str], ...]) -> tuple[str, .
     is outside the prefix today; the rule is here so that adding such an entry
     cannot silently produce a garbage probe path.
 
-    The #59 class is NOT closed by this. ``init.sh`` carries the identical
-    triple in ``detect_engines_dir()``, where the same bug does real damage
-    rather than merely misreporting it — on that fixture it writes
-    ``engines: scripts`` for a tree whose engines live in ``scripts/devkit``
-    (issue #67). #47 tracks deriving KIT_OWNED itself from the shipped tree,
-    which subsumes both.
+    ``init.sh``'s ``detect_engines_dir()`` used to carry the identical triple —
+    the write-side half of the same bug (issue #67); it now derives its probe
+    list from the manifest this tuple generates, filtered to top-level engine
+    names (its detection must not match an adopter's own generic ``lib/`` file;
+    this probe checks a directory the adopter already configured, so it keeps
+    them). #47 tracks deriving KIT_OWNED itself from the shipped tree, which
+    subsumes the remaining restatements.
     """
     return tuple(
         rel[len(KIT_ENGINE_PREFIX) + 1 :]

@@ -64,13 +64,50 @@ fi
 # that repeats under two different sections (e.g. "backend:" under both
 # tracker: and notify:) is never ambiguous.
 
+# One YAML-aware trailing-comment scanner, shared by get_field and set_field
+# (sh has no awk includes, so the function text is spliced into both programs).
+# comment_idx(rest) returns the 1-based index where a trailing comment starts,
+# or 0. The rules mirror scripts/lib/kitconfig.py's _strip_comment, the reader
+# every engine uses — the two sides must agree on where a value ends:
+#   - a quote opens a quoted scalar only at the FIRST non-space position; a
+#     mid-scalar apostrophe (O'\''Brien) or quote is literal. An earlier version
+#     of this scan opened on any quote character, which silently absorbed a
+#     real trailing comment into the value (issue #62, review round on #87).
+#   - inside a leading-quoted scalar, # is literal until after the close quote.
+#   - in a plain scalar, # opens a comment only when preceded by whitespace:
+#     `board#view42` is one token, `board #view42` is a value and a comment.
+AWK_COMMENT_IDX='
+  function comment_idx(rest,   n, i, j, qc, c, prev) {
+    n = length(rest)
+    i = 1
+    while (i <= n && substr(rest, i, 1) ~ /[ \t]/) i++
+    if (i > n) return 0
+    c = substr(rest, i, 1)
+    if (c == "\"" || c == "'\''") {
+      qc = c
+      j = i + 1
+      while (j <= n && substr(rest, j, 1) != qc) j++
+      for (j = j + 1; j <= n; j++)
+        if (substr(rest, j, 1) == "#") return j
+      return 0
+    }
+    prev = " "
+    for (j = i; j <= n; j++) {
+      c = substr(rest, j, 1)
+      if (c == "#" && prev ~ /[ \t]/) return j
+      prev = c
+    }
+    return 0
+  }
+'
+
 # get_field <section-line> <subsection-line-or-empty> <key-regex>
-# Prints the current value (quotes stripped, comment stripped, trimmed).
+# Prints the current value (double quotes stripped, comment stripped, trimmed).
 get_field() {
   wantsec="$1"
   wantsub="$2"
   keyre="$3"
-  awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" '
+  awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" "$AWK_COMMENT_IDX"'
     BEGIN { cursec = ""; cursub = "" }
     {
       line = $0
@@ -88,19 +125,8 @@ get_field() {
       if (cursec == wantsec && cursub == wantsub && line ~ keyre) {
         idx = index(line, ":")
         rest = substr(line, idx + 1)
-        # Strip a trailing comment quote-aware (the same scan the marker check
-        # in migrate_kit_schema uses): a "#" inside a quoted value is part of
-        # the value, and a blind index() silently truncated a legal
-        # `name: "Acme #1"` to `Acme` (issue #62).
-        out = ""; qc = ""
-        for (i = 1; i <= length(rest); i++) {
-          c = substr(rest, i, 1)
-          if (qc == "" && (c == "\"" || c == "'\''")) { qc = c }
-          else if (qc != "" && c == qc) { qc = "" }
-          else if (qc == "" && c == "#") { break }
-          out = out c
-        }
-        rest = out
+        cidx = comment_idx(rest)
+        if (cidx > 0) { rest = substr(rest, 1, cidx - 1) }
         gsub(/^[ \t]+|[ \t]+$/, "", rest)
         gsub(/^"|"$/, "", rest)
         print rest
@@ -125,7 +151,7 @@ set_field() {
   keyre="$3"
   newval="$4"
   tmpfile="${CONFIG_FILE}.tmp.$$"
-  newval="$newval" awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" '
+  newval="$newval" awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" "$AWK_COMMENT_IDX"'
     BEGIN { cursec = ""; cursub = ""; newval = ENVIRON["newval"] }
     {
       line = $0
@@ -146,17 +172,10 @@ set_field() {
         idx = index(line, ":")
         prefix = substr(line, 1, idx)
         rest = substr(line, idx + 1)
-        # Find a trailing comment quote-aware (issue #62): a "#" inside a
-        # quoted value is part of the value, not a comment to re-attach —
-        # a blind index() here re-attached the tail of the old value as a
-        # growing pseudo-comment on every re-run.
-        cidx = 0; qc = ""
-        for (i = 1; i <= length(rest); i++) {
-          c = substr(rest, i, 1)
-          if (qc == "" && (c == "\"" || c == "'\''")) { qc = c }
-          else if (qc != "" && c == qc) { qc = "" }
-          else if (qc == "" && c == "#") { cidx = i; break }
-        }
+        # comment_idx (shared above) finds the comment to re-attach — a blind
+        # index() re-attached the tail of the old value as a growing
+        # pseudo-comment on every re-run (issue #62).
+        cidx = comment_idx(rest)
         if (cidx > 0) {
           comment = substr(rest, cidx)
           printf "%s %s  %s\n", prefix, newval, comment
@@ -309,12 +328,27 @@ detect_engines_dir() {
   # lost it. Manifest paths are under the kit's own `scripts/` layout and are
   # probed relative to each candidate — the same prefix swap kit_doctor._remap
   # does.
+  #
+  # lib/ entries are excluded from DETECTION on purpose: their basenames are
+  # generic (repo_root.sh, kitconfig.py), so an adopter's own scripts/lib/ file
+  # would make the earlier candidate shadow a kit vendored at scripts/devkit —
+  # the review panel on #87 demonstrated exactly that. A top-level engine name
+  # is distinctive, and no real install ships lib/ helpers without at least one
+  # top-level engine beside them. (kit_doctor keeps lib/ names in ITS probe:
+  # it checks a directory the adopter already configured, not a guess.)
   probes=""
   if [ -f kit-manifest.json ]; then
     probes="$(awk -F'"' '
       /^    "/ { key = $2 }
-      /^      "role": "engine"/ { if (index(key, "scripts/") == 1) print substr(key, 9) }
+      /^      "role": "engine"/ {
+        if (index(key, "scripts/") == 1 && index(key, "scripts/lib/") != 1)
+          print substr(key, 9)
+      }
     ' kit-manifest.json 2>/dev/null || true)"
+    if [ -z "$probes" ]; then
+      echo "note: kit-manifest.json is present but no engine entries could be read from it —" >&2
+      echo "      falling back to the built-in engine probe list for paths.engines detection." >&2
+    fi
   fi
   [ -n "$probes" ] || probes="check_doc_budget.py
 pr_watch.py
@@ -680,22 +714,36 @@ migrate_kit_schema
 
 # ── prompts ──────────────────────────────────────────────────────────────
 
-# Every prompted scalar is stamped QUOTED, the way tracker.project_name and
-# notify.user_key always were — an unquoted answer containing `:`, `#`, or a
-# leading `[` / `-` yields YAML that parses differently than intended, or not
-# at all (issue #62). Every kit reader (kitconfig, devkit_config_scalar,
-# get_field above) strips one layer of quotes.
+# yaml_scalar <value> — the exact text to stamp for a prompted scalar: quoted
+# when the value would otherwise parse wrong AND double-quoting is lossless,
+# raw otherwise (issue #62). Double-quote style makes `\` and `"` significant
+# to YAML and get_field does not unescape, so blanket quoting would turn a
+# value containing either into an unloadable config or a value the two kit
+# readers disagree on (found by the review panel on #87). Such values — and a
+# value already carrying its own single-quoted style — are stamped as the
+# plain scalars they always were: the pre-existing edge, made no worse.
+# kitconfig and devkit_config_scalar strip one matching quote layer on read;
+# get_field above strips double quotes.
+yaml_scalar() {
+  case "$1" in
+    "") printf '""\n' ;;
+    *'"'*|*'\'*|"'"*) printf '%s\n' "$1" ;;
+    *':'*|*'#'*|'['*|'{'*|'-'*|'&'*|'*'*|'!'*|'|'*|'>'*|'%'*|'@'*|' '*|*' ') printf '"%s"\n' "$1" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
 cur_name=$(get_field "project:" "" "^  name:")
 name=$(ask "Project name" "$cur_name")
-set_field "project:" "" "^  name:" "\"$name\""
+set_field "project:" "" "^  name:" "$(yaml_scalar "$name")"
 
 cur_runtime=$(get_field "runtime:" "" "^  default:")
 runtime=$(ask "Agent runtime (claude | codex | none)" "$cur_runtime")
-set_field "runtime:" "" "^  default:" "\"$runtime\""
+set_field "runtime:" "" "^  default:" "$(yaml_scalar "$runtime")"
 
 cur_backend=$(get_field "tracker:" "" "^  backend:")
 backend=$(ask "Tracker backend (linear | github-issues | jira | none)" "$cur_backend")
-set_field "tracker:" "" "^  backend:" "\"$backend\""
+set_field "tracker:" "" "^  backend:" "$(yaml_scalar "$backend")"
 
 cur_project_name=$(get_field "tracker:" "" "^  project_name:")
 tracker_project_name=$(ask "Tracker project name" "$cur_project_name")
@@ -717,7 +765,7 @@ set_field "tracker:" "" "^  url:" "\"$tracker_url\""
 
 cur_branch=$(get_field "vcs:" "" "^  protected_branch:")
 branch=$(ask "Protected branch (PRs target this, never commit to it directly)" "$cur_branch")
-set_field "vcs:" "" "^  protected_branch:" "\"$branch\""
+set_field "vcs:" "" "^  protected_branch:" "$(yaml_scalar "$branch")"
 
 cur_user_key=$(get_field "notify:" "" "^  user_key:")
 user_key=$(ask "Notify user key (a key into your project's own notify config)" "$cur_user_key")
