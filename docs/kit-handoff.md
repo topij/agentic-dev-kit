@@ -14,10 +14,75 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-27 — two of three adopter-facing `kit_doctor` lies fixed; the
-third was built, reviewed, and deleted.
+Last updated: 2026-07-27 — friction-log inbox graduated to `#70`–`#77`; the `reports/`
+contract settled.
 
-## Latest session — 2026-07-27 (#59 + #61.1 shipped; #61.2 built and reverted)
+## Latest session — 2026-07-27 (friction-log inbox graduated; `reports/` contract settled)
+
+**Theme —** Ran the triage sweep the doc-budget warning had been asking for. Thirteen
+entries in, thirteen accounted for. Both PRs merged **without an independent review** —
+CodeRabbit was rate-limited on its plan while its status check reported **pass**, twice.
+
+- **`#78` merged (`8b1d6b2`).** 13 un-graduated entries → 8 issues (`#70`–`#77`) plus one
+  no-ticket. Four of the eight each merge **two** entries recorded on separate days,
+  because the occurrence count is the evidence (`#71` three occurrences, `#75` nine of
+  nine). Friction log 190 → 50 lines, back under its 150 budget.
+- **`#79` filed, `#80` merged (`4e9cad9`).** `reports/` carried two contradictory
+  contracts — `post-merge-systemize` said never commit it, `triage-friction-log` said
+  git-track it, and `.gitignore` matched neither, so the first rule was unenforced. Now
+  ignored here and in `init.sh`, with both skill lines corrected.
+- **The triage engine is still unvendored (`#6`)**, so the sweep ran in the skill's
+  LLM-only mode: marker, archive sweep and finalize done by hand against the same
+  contract, with a frozen-inbox snapshot for window safety.
+
+**Decided**
+
+- **A rate-limited reviewer is not a waiver, but the operator may waive it.** Both
+  waivers were explicit and scoped — the second was re-asked rather than extended,
+  because that diff touched `init.sh` and not only docs — and both are recorded on the
+  PR and in the squash body. **No review receipt was written**: a receipt would flip
+  `mergeable` and let automation merge unreviewed work.
+- **Use closing keywords deliberately rather than avoiding them.** `#80` carried one
+  intended `Closes #79`, linted before push and verified after opening. Across two squash
+  merges: `#79` closed, `#70`–`#77` all still open. The rule forbids *unintended*
+  adjacency, not the mechanism.
+
+**Learned**
+
+- **`make test` exists and runs the whole suite in 22s** (372 passed). I probed
+  `uv run pytest` and `python3 -m pytest`, both failed, and wrote *"tests were not run
+  locally — pytest is not installed"* into `#80`'s body. False; corrected on the PR.
+  Nothing in the repo points at `make test`, and there is no root `CLAUDE.md`. Fourth
+  consecutive session where a claim of mine was the defect.
+- **The kit's own triage skill defaults to a draft PR, and CodeRabbit skips drafts
+  outright.** The workflow's happy path produces a PR its configured reviewer will never
+  read, and the skill says nothing about it.
+- **A rate-limited CodeRabbit reports `pass`** — the `#23` surface, now with two fresh
+  instances in merged PRs and a third in the history file.
+
+**Open, and owned by nothing yet**
+
+- **`#70`–`#77`** — this sweep's output, untouched. `#71` (closing-keyword guard) and
+  `#75` (invert contract item 7, nine of nine) carry the strongest evidence.
+- **`chore/update-handoff-2026-07-27` holds unmerged work and needs an operator call.**
+  `f3d4e6e` ("fix eight claim errors a review lens found in this handoff") and `30ab573`
+  ("fix a cross-reference this sweep broke") are **not ancestors of `main`** — an earlier
+  session's branch that never landed, possibly superseded by `42873d8`. Left intact
+  rather than cleaned up. It is also what `#81` was accidentally opened against.
+- Everything open at the end of the **2026-07-27 `#59` + `#61.1`** session still stands:
+  three `init.sh` defects with no coverage and nothing tracking that gap, `#61`, `#47`,
+  `#50`, `#60`. (Named rather than "the block below" — an archive sweep moves blocks
+  between files and orphans relative pointers; that is `#73`.)
+
+▶ Next: **a root `CLAUDE.md` naming `make test`, then the `init.sh`-coverage issue** —
+today's false "tests not run locally" claim on a merged PR is the second verification-claim
+defect in as many sessions and the fix is one file; then pick up the carry from the
+`#59` + `#61.1` session, where three `init.sh` bugs are open against a file with zero
+coverage and no issue tracking that gap.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-27 (#59 + #61.1 shipped; #61.2 built and reverted)
 
 **Theme —** Fixed what the cs-toolkit adoption found in `kit_doctor`. The review panel
 ran twice; round 1 found **four regressions against `main`** — my change making things
@@ -249,90 +314,6 @@ change) to get a real `kit_doctor` reading, then stop. Defer the `pr_watch` swap
 is in `.claude/commands/pr-watch.md` lines 11/13/39, **not** `nightly-fixer.md`,
 which only delegates — following it literally finds nothing and the failure is a
 silent infinite poll.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-26 (#26, overnight)
-
-**Theme —** Built `review.fallback_panel`, then spent four rounds trying to make the
-receipt's coverage claim verifiable *by the engine*, then deleted all of it. The
-deletion is the result, not the failure.
-
-- **#31 merged, closing #26.** `review.fallback_panel` is the primary substitute when
-  a bot can't review: one isolated, fresh-context reviewer per lens.
-  `fallback_commands` stays as the explicitly degraded one-lens mode. The lens
-  *contract* — fresh context, raw diff, no author framing, execute rather than only
-  read, mutation-test, report-don't-fix — is the part worth having written down, and
-  lives in the new kit-owned `docs/agentic-dev-kit/fallback-review-panel.md`.
-- **`pr_followup_hook` now names the panel.** It fires on every `gh pr create`/`ready`,
-  which made it the most-read statement of fallback policy in the kit — and it was
-  advertising the degraded mode.
-- **#32 filed** — the design that would actually verify coverage (each lens recording
-  its own receipt from its own context), with all four defeats written up.
-- **#33 filed, and it is the one to read first.** `kit_doctor`'s drift self-check
-  rehashes every kit-owned file, so *any* byte change to an engine fails it — which
-  makes a mutation-testing run report every mutant as killed while nothing behavioural
-  caught anything. Its proposed fix (a `driftcheck` pytest marker) is **not built**;
-  only a prose warning in the panel doc ships.
-
-**Decided**
-
-- **Four tightenings of a matcher is the signal to delete it.** `safety-critical-
-  changes.md` rule 1 says treat "we tightened the matcher" as a stopgap. I tightened
-  it four times — source equality, lens names, a required roster, a counted roster —
-  and each was defeated by the next round, the last by one decorated character in a
-  field the caller writes themselves. What ships records the claim and labels it a
-  claim.
-- **Report, never gate — now for a fourth field.** `--lenses` joins `signal`,
-  `bot_signal` and `coverage`. All four make an omission legible; none blocks.
-
-**Learned**
-
-- **Mutation testing this repo reports FALSE KILLS.** `kit_doctor`'s self-check
-  rehashes every kit-owned file, so any byte change fails it — a run can report 100%
-  killed while nothing behavioural caught anything. **I verified the mechanism
-  directly** — disabling a behaviour outright fails only the manifest test. The
-  *figure* "17/17 reported, 7 survived when excluded" is a reviewing lens's report,
-  restated: the 17 mutants are enumerated nowhere, so treat it as attested, not
-  measured. **This invalidates mutation evidence cited in #25, #28, #29 and #31
-  itself** wherever the reviewer did not exclude that test. Contract item 5 now warns
-  about it; #33 tracks the mechanical fix. (Those 7 survivors were themselves closed
-  inside #31 — 7/7 caught by named tests once real coverage was added — so nothing is
-  known to be live on `main` because of this.)
-- **Two review lenses in one working tree corrupt each other.** One mutates files to
-  test them; the other reads that as external corruption and `git checkout --`s it.
-  Stopping one left a live mutant behind that silently disabled a guard. Contract
-  item 7: isolated worktrees.
-- **Deleting a check can reintroduce a bug it was masking.** The roster check was the
-  only thing catching comma-as-punctuation in `--lenses`; removing it brought back the
-  exact forgery the commit before it claimed to block, plus an honest input
-  misrendering. **Fixed inside #31** (`_countable_lenses` counts entries that look like
-  lens names, not prose) — recorded for the pattern, not as a live defect.
-- **A silent `str.replace()` no-op let me assert a fix that never landed** — twice.
-  Every substitution in this session's later rounds reports MISS rather than passing
-  quietly.
-
-**Open, and owned by nothing yet**
-
-- **#32** — verifying lens coverage rather than self-reporting it. The honest version
-  of what #31 tried.
-- **#33** — the drift self-check's false kills. H severity and retroactive; its
-  mechanical fix (a `driftcheck` marker) is unbuilt.
-- **The autonomous self-merge path never displays review coverage.** `dev_session.sh
-  merge` gates on `mergeable` alone, so the `review evidence:` line — the whole
-  remaining value of #31 — is invisible on exactly the path
-  `autonomous-session-playbook.md` argues review independence matters most on. Known
-  and documented in `workflows/pr-watch.md`, deliberately not fixed at the end of a
-  seven-round review; #32 is the real answer.
-- **Adopter upgrades are written but not run.** `~/Documents/openkitchen-devkit-upgrade.md`
-  and `~/Documents/cs-toolkit-devkit-adoption.md`. Held at the operator's request until
-  #31 landed — it has now landed, so both are unblocked.
-
-▶ Next: **run the OpenKitchen upgrade** (`~/Documents/openkitchen-devkit-upgrade.md`).
-It is a real adopter on a pre-#8 install that cannot migrate its own config until
-`init.sh` and `kitconfig.py` are copied in, and its pre-push hook is not installed.
-cs-toolkit is the larger job — an *adoption*, not an upgrade, plus a fixer change from
-`done` to `converged` that will otherwise wedge an unattended nightly loop.
 
 ______________________________________________________________________
 
