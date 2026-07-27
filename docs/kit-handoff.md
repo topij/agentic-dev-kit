@@ -14,10 +14,10 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-27 (second session) — root `CLAUDE.md` shipped; init.sh harness +
-`#67`/`#62` fixes merged, every PR independently reviewed.
+Last updated: 2026-07-27 · third session of the day — root `CLAUDE.md` shipped; init.sh
+harness + `#67`/`#62` fixes merged; all three PRs reviewed (piecewise on `#87`).
 
-## Latest session — 2026-07-27 · 2 (CLAUDE.md; init.sh harness + fixes; review loop worked)
+## Latest session — 2026-07-27 · 3 (CLAUDE.md; init.sh harness + fixes; review loop worked)
 
 **Theme —** Worked the review-round problem directly. Three PRs merged, each watched to
 convergence with real independent review: two CodeRabbit passes obtained by re-triggering
@@ -27,10 +27,11 @@ regressions **in my own fix** before they shipped.
 - **`#83` merged (`63acfcf`).** Root `CLAUDE.md` naming `make test` as *the* verification
   command — the discoverability precondition for `#54`. CodeRabbit reviewed the exact
   head clean after a re-trigger (its rate window was 13s).
-- **`#85` merged (`cde96e8`), closing `#84`.** init.sh fixture harness: 13 tests + 4
-  strict-xfail reproductions of `#62`/`#67`. `#84` corrected the record first: init.sh
+- **`#85` merged (`cde96e8`), closing `#84`.** init.sh fixture harness: 14 tests — 10 pins
+  plus 4 strict-xfail reproductions of `#62`/`#67`. `#84` corrected the record first: init.sh
   was **not** at zero coverage — its migration path was well covered; the three open
-  bugs lived in the uncovered paths (detection, hostile-value stamping, seeding, hooks).
+  bugs lived in the uncovered paths — detection (`#67`), hostile-value stamping (`#62`),
+  hooks (`#66`); seeding and `.gitignore` were uncovered but bug-free.
 - **`#87` merged (`7c71385`), closing `#67` + `#62`.** Manifest-derived engines
   detection (top-level names only), lossless-only quoting (`yaml_scalar` /
   `quoted_scalar`), one shared YAML-correct comment scanner, ENVIRON value transport,
@@ -50,7 +51,7 @@ regressions **in my own fix** before they shipped.
 
 - **A rate-limited reviewer with a short recovery window gets re-triggered, not waived
   or substituted.** `@coderabbitai review` after the window produced real reviews of the
-  exact head on `#83` and `#87`. Observed windows: 13s, 2min, 33min, 48min — panel when
+  exact head on `#83` and `#87`. Windows observed ranged from 13s to 48min — panel when
   long, re-trigger when short.
 - **Piecewise review coverage is recorded piecewise.** `#87`'s final delta
   (reviewer-prescribed fixes only) merged without a bot pass of its own; the receipt's
@@ -72,21 +73,21 @@ regressions **in my own fix** before they shipped.
 - **`#44`'s shape depends on how the review was triggered**: clean reviews on `#83`/`#85`
   arrived as edited comments (no review object — coverage machinery blind, receipts
   recorded by hand); `#87`'s re-triggered pass submitted a real review object with a
-  commit SHA — the first `coverage` entry the engine has seen. Posted to `#44`. The
+  commit SHA, so `coverage` populated (`covers_head: true`). Posted to `#44`. The
   rate-limited check reporting **pass** recurred four more times (posted to `#45`).
 
 **Open, and owned by nothing yet**
 
 - **`#86`, `#88`** — this session's filings; both small and well-specified.
-- **`#47`** — still the highest-leverage unbuilt thing, three sessions running; it now
-  also subsumes the probe-list restatements `#87` documented (init.sh fallback triple,
-  kit_doctor's KIT_OWNED).
+- **`#47`** — called the highest-leverage unbuilt thing in three recent sessions. A scope
+  note is posted on the issue itself: `#87` left init.sh's fallback triple as a
+  deliberate manifest-lost fallback, so `#47`'s tree-derivation should say whether that
+  restatement is in or out of its scope.
 - **`#66`** — still behind the `#61` design call. `#54`, `#71`, `#72`, `#75` (now with
   supporting data), `#77`, and the rest of the backlog per session-start.
 
-▶ Next: `#47` — derive `KIT_OWNED` from the shipped tree and fail CI on divergence; it
-closes the shipped-vs-tracked gap class (`#36`/`#40`/`#41`/`#51` root cause) and
-subsumes the remaining hand-maintained probe lists.
+▶ Next: `#47` — derive `KIT_OWNED` from the shipped tree and fail CI on divergence; its
+own body names `#36`/`#37`/`#40`/`#41` as the gap class it closes.
 
 ______________________________________________________________________
 

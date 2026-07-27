@@ -108,16 +108,24 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   for `#45` / `#23`. `kit-handoff-history.md` records CodeRabbit rate-limiting in an
   earlier session too, so this is at least the third.
 
-## 2026-07-27 (second session)
+## 2026-07-27 (third session of the day)
 
 - **`pr-watch` prescribes the fallback panel on ANY reviewer outage; a short rate-limit
-  window makes re-triggering strictly better.** Observed recovery windows this session:
-  13s (`#83`), 2min and 48min (`#87`), 33min (`#85`). When short, `@coderabbitai review`
+  window makes re-triggering strictly better.** Recovery windows observed this session
+  ranged from 13s to 48min across `#83`/`#85`/`#87`. When short, `@coderabbitai review`
   after the window produced a real review of the exact head — stronger evidence than a
   panel receipt, at zero cost. Neither `pr-watch.md` nor the workflow's
   reviewer-unavailable branch mentions the notice's "Next review available in" field or
   the re-trigger command. **M** — proposed fix: the reviewer-unavailable branch should
   read the recovery window from the outage notice; short window → wait and re-trigger,
   then fall back to the panel only if that fails; long window on a risky diff → run the
-  panel now and offer the recovered bot the final head afterwards. Both halves were
-  exercised this session and both produced full independent coverage.
+  panel now and offer the recovered bot the final head afterwards. The re-trigger half
+  is validated (`#83`; `#85`'s recovered pass covered its full final diff); the
+  offer-the-final-head half can still end in an acknowledged gap — `#87`'s last push
+  rate-limited again and merged with the coverage gap recorded on the receipt.
+- **`gh api -X PATCH … -f body=@-` writes the literal string `@-`, destroying the
+  comment.** Only `-F` performs `@`-file/stdin expansion; `-f` is always a string. Three
+  freshly-posted issue comments were clobbered to `@-` this session and caught only
+  because a later edit re-read one. **L** — proposed fix: any workflow step that edits a
+  GitHub comment via `gh api` should use `-F body=@<file>` and verify the comment's
+  body length (or a content marker) after the PATCH.
