@@ -85,8 +85,8 @@ silently revert to draft (a later `gh pr merge` fails with "Pull Request is
 still a draft"). `--assert-draft` / `--assert-ready` read `isDraft` and issue
 the one corrective `gh pr ready [--undo]` call if it drifted, then re-read to
 confirm — call the former right after `gh pr create --draft`, the latter
-right before `gh pr merge`. On the REST backend the corrective call is the
-equivalent GraphQL mutation instead, since REST has no draft-toggle endpoint.
+right before `gh pr merge`. Both REFUSE on the REST backend: they mutate the PR,
+and REST is read-only here (see `require_gh_backend`).
 
 Exit codes:
     0 — reported (regardless of the verdict; check `converged` / `mergeable` in
@@ -749,7 +749,22 @@ def _http_get_all_wrapped(
             raise RuntimeError(
                 f"GitHub API GET {next_url} returned {type(data).__name__}, expected a JSON object"
             )
-        items.extend(data.get(key) or [])
+        page = data.get(key)
+        # The extracted value needs its own check, not just the page. `or []`
+        # only rescues a falsy value: a STRING here extends character by
+        # character, a dict extends its keys, and either way
+        # `_rest_check_rows` then filters the garbage out and the whole check
+        # surface reads as empty — the exact fail-open the page check above
+        # was added to close, one level down. A missing key stays legal
+        # (an empty rollup is a real state).
+        if page is None:
+            page = []
+        if not isinstance(page, list):
+            raise RuntimeError(
+                f"GitHub API GET {next_url} returned {type(page).__name__} for "
+                f"{key!r}, expected a JSON array"
+            )
+        items.extend(page)
         next_url = _next_link(link)
         pages += 1
     if next_url:
@@ -2479,14 +2494,15 @@ def build_report(
         "settling": settling,
         "max_total": max_total,
         "checks": checks,
-        # A truncated read BLOCKS `mergeable` and not `converged`, which is the
-        # split those two predicates exist for: the watch loop must still be able
-        # to finish, but an incomplete read must never authorize a merge. Merely
-        # reporting it was not enough — `truncated_reads` had no consumer at all
-        # (`render` did not print it and `dev_session.sh merge` reads only
-        # `mergeable`), so a poll that had silently missed the review bot's own
-        # check still reached the autonomous merge path as `mergeable: true`.
-        # Empty on the `gh` backend, which paginates through `gh` itself.
+        # Reported, and gating nothing. It does not need to gate: REST cannot
+        # authorize a merge at all, so the only thing truncation can still
+        # mislead is `converged` — and blocking THAT would wedge the watch loop,
+        # which is the one thing these two predicates exist to keep separate.
+        # An earlier design made it a merge blocker and that was worse than
+        # useless: a persistent pagination anomaly closed the gate for a PR
+        # forever, with no ageing-out and no override, unlike every sibling
+        # environment-caused blocker. Empty on the `gh` backend, which paginates
+        # through `gh` itself.
         "truncated_reads": list(_truncated_reads),
         "new_comments": [
             {

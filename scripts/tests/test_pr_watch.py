@@ -4094,5 +4094,47 @@ def test_the_write_paths_still_work_on_gh(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(
         pr_watch, "_gh_json", lambda args: {"number": 1, "headRefOid": "abc123", "reviews": []}
     )
+    # `record_review` also consults the bot signal, which shells out to `gh pr
+    # checks`. Without this it reaches the REAL binary and the network — a test
+    # whose behaviour depends on this machine's gh auth.
+    #
+    # Not pinned, and cannot be from here: `fetch_check_details` never raises, so
+    # un-stubbing it changes no assertion on a machine where `gh` works — the same
+    # "invisible exactly where it works" shape as the loader's backend pin. The
+    # honest fix is a suite-wide guard that fails any test touching the network or
+    # spawning a subprocess; tracked separately rather than approximated here.
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "skipped")
+    )
     receipt = pr_watch.record_review(1, source="fallback:panel", expected_head="abc123")
     assert receipt["review_receipt"]["head"] == "abc123"
+
+
+def test_a_non_list_value_under_the_expected_key_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CodeRabbit's Major on #96, and a genuine gap in my own fail-closed fix: the
+    PAGE was validated but the value extracted from it was not.
+
+    `data.get(key) or []` only rescues a falsy value. A string extends character
+    by character, a dict extends its keys, and `_rest_check_rows` then filters the
+    garbage out — so a whole check surface reads as empty and `summarize_checks`
+    sees only the other one. That is the same fail-open the page check closes, one
+    level down.
+    """
+    pr_watch = _load_pr_watch()
+
+    for bad in ("truncated", {"a": 1}, 42):
+        monkeypatch.setattr(
+            pr_watch, "_http_get", lambda url, token, _b=bad, **_kw: ({"check_runs": _b}, None)
+        )
+        with pytest.raises(RuntimeError, match="expected a JSON array"):
+            pr_watch._http_get_all_wrapped("https://api.github.com/cr", "t", "check_runs")
+
+    # A missing key is still legal — an empty rollup is a real state, not an error.
+    monkeypatch.setattr(pr_watch, "_http_get", lambda url, token, **_kw: ({"total_count": 0}, None))
+    assert pr_watch._http_get_all_wrapped("https://api.github.com/cr", "t", "check_runs") == []
+    monkeypatch.setattr(
+        pr_watch, "_http_get", lambda url, token, **_kw: ({"check_runs": None}, None)
+    )
+    assert pr_watch._http_get_all_wrapped("https://api.github.com/cr", "t", "check_runs") == []
