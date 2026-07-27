@@ -48,3 +48,62 @@ proposed"*: it is a second, stronger data point for the disjointness argument in
 `fallback-review-panel.md`, which currently rests on one.
 
 Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-archive.md).
+
+## 2026-07-27
+
+- **The kit has a working local test command and nothing points at it.** `make test`
+  runs the full suite — **372 passed in 22s** — supplying its own dependencies via
+  `uv run --with pytest --with pyyaml`. But the two probes an agent reaches for first
+  both fail in a way that reads as *"pytest is unavailable in this environment"*:
+  `uv run pytest` → `Failed to spawn: pytest`, `python3 -m pytest` → `No module named
+  pytest`. **No markdown file in the repo mentions `make test`**, and there is no root
+  `CLAUDE.md`. This session concluded the environment could not run tests, deferred
+  verification to CI on two PRs, and wrote *"tests were not run locally — pytest is not
+  installed"* into the body of a **merged** PR (`#80`); corrected afterwards by comment.
+  **H** — proposed fix: a root `CLAUDE.md` naming `make test` as *the* verification
+  command. `#54` requires every verification claim to name the command that establishes
+  it, and that has no chance of holding while the only working command is undiscoverable.
+  Same family as `#54`.
+- **The `Makefile`'s `test` target claims a local gate that does not exist.** Its comment
+  says the target *"Runs the same suites the lane contract's local gate runs before every
+  push."* There is no such gate: `scripts/hooks/pre-push` deliberately runs no tests
+  (line 23 — checks are kept separate and independently testable), and
+  `scripts/dev_session.sh` runs none either. **M** — proposed fix: either correct the
+  comment to describe what exists, or make it true by having `pre-push` run `make test`.
+  The second is a design call, not a patch — `pre-push`'s own comment argues for keeping
+  checks separate, and 22s lands on every push. Same family as `#54`: a comment claiming
+  more than the code does.
+- **The triage skill's default output is a PR its configured reviewer will never read.**
+  `finalize.pr_draft` defaults to `true`, and CodeRabbit skips draft PRs outright
+  (*"Review skipped: draft pull request"*). So `triage-friction-log`'s happy path
+  produces a draft PR that receives no bot review, and nothing in the skill says so —
+  the operator discovers it only when the review gate will not close. **M** — proposed
+  fix: either default `pr_draft` to `false`, or have the skill state that a draft PR
+  needs `@coderabbitai review` or a ready-flip before the review gate can be satisfied.
+  Surfaced on `#78`.
+- **The wrap-up branch name collides on a same-date session, and `gh pr create` turns
+  the collision into a PR that reverts the day's merged work.** The handoff branch is
+  `chore/update-handoff-{date}`, so a *second* session on the same date recreates an
+  identical name off the current `main`. The push is correctly rejected as a
+  non-fast-forward — but `gh pr create` then opens a PR against the **pre-existing
+  remote branch**, exits 0, and prints a PR URL. `#81` was opened this way: it carried an
+  earlier session's commits, cut from a base predating today's merges, so its diff was
+  **160 insertions / 249 deletions against `main`** — un-graduating the friction inbox,
+  deleting 186 lines of archive, and undoing the `reports/` work. Merging it would have
+  reverted both PRs that landed earlier the same day. Caught only because the
+  rejected-push hint and the PR URL landed in the same output and the head sha was then
+  compared. **H** — proposed fix, two parts: (1) uniquify the wrap-up branch name (short
+  sha suffix) or fail loudly when the remote branch already exists; (2) more general and
+  more important — any workflow step that pushes and then opens a PR must **verify the
+  push landed** before creating it. `git push -q && gh pr create` is not sufficient: with
+  `-q` the rejection is a stderr hint, the exit status is swallowed by the chain, and the
+  PR gets created against whatever the remote already had. Compare remote head to local
+  `HEAD` first.
+- **A rate-limited CodeRabbit reports its check as `pass` — two more instances.** `#78`
+  and `#80` both merged with a green `CodeRabbit` check that had reviewed nothing
+  (*"Review limit reached"* / *"Review rate limited"*). `pr_watch` handled both correctly
+  — recorded `unavailable` and refused to converge on missing review evidence — so the
+  engine is not the problem; the hazard is the **check rollup**, which reads as reviewed
+  to any human scanning it. **No new fix proposed** — recording two further occurrences
+  for `#45` / `#23`. `kit-handoff-history.md` records CodeRabbit rate-limiting in an
+  earlier session too, so this is at least the third.

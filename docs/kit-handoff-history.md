@@ -4,6 +4,88 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-07-26 (#26, overnight)
+
+**Theme —** Built `review.fallback_panel`, then spent four rounds trying to make the
+receipt's coverage claim verifiable *by the engine*, then deleted all of it. The
+deletion is the result, not the failure.
+
+- **#31 merged, closing #26.** `review.fallback_panel` is the primary substitute when
+  a bot can't review: one isolated, fresh-context reviewer per lens.
+  `fallback_commands` stays as the explicitly degraded one-lens mode. The lens
+  *contract* — fresh context, raw diff, no author framing, execute rather than only
+  read, mutation-test, report-don't-fix — is the part worth having written down, and
+  lives in the new kit-owned `docs/agentic-dev-kit/fallback-review-panel.md`.
+- **`pr_followup_hook` now names the panel.** It fires on every `gh pr create`/`ready`,
+  which made it the most-read statement of fallback policy in the kit — and it was
+  advertising the degraded mode.
+- **#32 filed** — the design that would actually verify coverage (each lens recording
+  its own receipt from its own context), with all four defeats written up.
+- **#33 filed, and it is the one to read first.** `kit_doctor`'s drift self-check
+  rehashes every kit-owned file, so *any* byte change to an engine fails it — which
+  makes a mutation-testing run report every mutant as killed while nothing behavioural
+  caught anything. Its proposed fix (a `driftcheck` pytest marker) is **not built**;
+  only a prose warning in the panel doc ships.
+
+**Decided**
+
+- **Four tightenings of a matcher is the signal to delete it.** `safety-critical-
+  changes.md` rule 1 says treat "we tightened the matcher" as a stopgap. I tightened
+  it four times — source equality, lens names, a required roster, a counted roster —
+  and each was defeated by the next round, the last by one decorated character in a
+  field the caller writes themselves. What ships records the claim and labels it a
+  claim.
+- **Report, never gate — now for a fourth field.** `--lenses` joins `signal`,
+  `bot_signal` and `coverage`. All four make an omission legible; none blocks.
+
+**Learned**
+
+- **Mutation testing this repo reports FALSE KILLS.** `kit_doctor`'s self-check
+  rehashes every kit-owned file, so any byte change fails it — a run can report 100%
+  killed while nothing behavioural caught anything. **I verified the mechanism
+  directly** — disabling a behaviour outright fails only the manifest test. The
+  *figure* "17/17 reported, 7 survived when excluded" is a reviewing lens's report,
+  restated: the 17 mutants are enumerated nowhere, so treat it as attested, not
+  measured. **This invalidates mutation evidence cited in #25, #28, #29 and #31
+  itself** wherever the reviewer did not exclude that test. Contract item 5 now warns
+  about it; #33 tracks the mechanical fix. (Those 7 survivors were themselves closed
+  inside #31 — 7/7 caught by named tests once real coverage was added — so nothing is
+  known to be live on `main` because of this.)
+- **Two review lenses in one working tree corrupt each other.** One mutates files to
+  test them; the other reads that as external corruption and `git checkout --`s it.
+  Stopping one left a live mutant behind that silently disabled a guard. Contract
+  item 7: isolated worktrees.
+- **Deleting a check can reintroduce a bug it was masking.** The roster check was the
+  only thing catching comma-as-punctuation in `--lenses`; removing it brought back the
+  exact forgery the commit before it claimed to block, plus an honest input
+  misrendering. **Fixed inside #31** (`_countable_lenses` counts entries that look like
+  lens names, not prose) — recorded for the pattern, not as a live defect.
+- **A silent `str.replace()` no-op let me assert a fix that never landed** — twice.
+  Every substitution in this session's later rounds reports MISS rather than passing
+  quietly.
+
+**Open, and owned by nothing yet**
+
+- **#32** — verifying lens coverage rather than self-reporting it. The honest version
+  of what #31 tried.
+- **#33** — the drift self-check's false kills. H severity and retroactive; its
+  mechanical fix (a `driftcheck` marker) is unbuilt.
+- **The autonomous self-merge path never displays review coverage.** `dev_session.sh
+  merge` gates on `mergeable` alone, so the `review evidence:` line — the whole
+  remaining value of #31 — is invisible on exactly the path
+  `autonomous-session-playbook.md` argues review independence matters most on. Known
+  and documented in `workflows/pr-watch.md`, deliberately not fixed at the end of a
+  seven-round review; #32 is the real answer.
+- **Adopter upgrades are written but not run.** `~/Documents/openkitchen-devkit-upgrade.md`
+  and `~/Documents/cs-toolkit-devkit-adoption.md`. Held at the operator's request until
+  #31 landed — it has now landed, so both are unblocked.
+
+▶ Next: **run the OpenKitchen upgrade** (`~/Documents/openkitchen-devkit-upgrade.md`).
+It is a real adopter on a pre-#8 install that cannot migrate its own config until
+`init.sh` and `kitconfig.py` are copied in, and its pre-push hook is not installed.
+cs-toolkit is the larger job — an *adoption*, not an upgrade, plus a fixer change from
+`done` to `converged` that will otherwise wedge an unattended nightly loop.
+
 ### 2026-07-25 (Phase 3b)
 
 **Theme —** Fixed #19 + #23 together, and then spent most of the session discovering
