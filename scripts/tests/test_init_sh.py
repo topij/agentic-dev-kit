@@ -17,9 +17,9 @@ fixtures never reach:
   the not-a-kit-shim guard. #66's ``core.hooksPath = ~/…`` case is out of scope
   until the #61 design call settles the fix shape.
 
-Defect reproductions are ``xfail(strict=True)`` pinned to their issue: the fix
-PR flips each by deleting the marker, and a later regression fails loudly
-instead of quietly returning to xfail.
+The #62/#67 defect reproductions landed as ``xfail(strict=True)`` and were
+flipped to plain pins by the change that closed those issues — they now guard
+against regression like any other test here.
 """
 
 from __future__ import annotations
@@ -27,12 +27,14 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
 
 SHIPPED_CONFIG = (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
 
@@ -174,20 +176,15 @@ def test_engines_detection_prefers_scripts_when_engines_live_there(tmp_path: Pat
     assert yaml.safe_load(_config(repo))["paths"]["engines"] == "scripts"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="issue #67: detect_engines_dir probes a hardcoded triple, so a sized-down "
-    "install (kit_doctor.py + lib/kitconfig.py only) falls through and stamps "
-    "`engines: scripts` for a tree whose engines live in scripts/devkit",
-)
 def test_engines_detection_sized_down_install(tmp_path: Path) -> None:
-    """A sized-down install (kit_doctor.py + lib/kitconfig.py only) must still be
-    detected. The fix direction (#67) reads the probe list from
-    kit-manifest.json (role == engine) — the generated projection of KIT_OWNED,
+    """A sized-down install (kit_doctor.py + lib/kitconfig.py only) is detected.
+    The fix (#67) reads the probe list from kit-manifest.json (role == engine,
+    filtered to top-level names) — the generated projection of KIT_OWNED,
     kit_doctor's probe source since #59, and the one form of it sh can read —
-    which this fixture supplies; the test pins the detection OUTCOME only. It
-    cannot see where a probe list came from, so the single-source property
-    itself is #47's to enforce, not this test's."""
+    which this fixture supplies; before it,
+    a hardcoded probe triple fell through and stamped `engines: scripts`. The
+    test pins the detection OUTCOME only: it cannot see where a probe list came
+    from, so the single-source property itself is #47's to enforce."""
     repo = _fixture(tmp_path, config=V1_CONFIG, manifest=True)
     for rel in ("kit_doctor.py", "lib/kitconfig.py"):
         path = repo / "scripts" / "devkit" / rel
@@ -197,6 +194,41 @@ def test_engines_detection_sized_down_install(tmp_path: Path) -> None:
     _run_init(repo)
 
     assert yaml.safe_load(_config(repo))["paths"]["engines"] == "scripts/devkit"
+
+
+def test_engines_detection_not_fooled_by_generic_lib_names(tmp_path: Path) -> None:
+    """lib/ entries are excluded from the detection probe: their basenames are
+    generic, so an adopter's own scripts/lib/repo_root.sh would otherwise make
+    `scripts` shadow a kit vendored at scripts/devkit — a false positive the
+    3-name probe never had (panel, #87)."""
+    repo = _fixture(tmp_path, config=V1_CONFIG, manifest=True)
+    adopters_own = repo / "scripts" / "lib" / "repo_root.sh"
+    adopters_own.parent.mkdir(parents=True)
+    adopters_own.write_text("# the adopter's own helper\n", encoding="utf-8")
+    for rel in ("pr_watch.py", "kit_doctor.py"):
+        engine = repo / "scripts" / "devkit" / rel
+        engine.parent.mkdir(parents=True, exist_ok=True)
+        engine.write_text("# engine\n", encoding="utf-8")
+
+    _run_init(repo)
+
+    assert yaml.safe_load(_config(repo))["paths"]["engines"] == "scripts/devkit"
+
+
+def test_degraded_manifest_warns_and_falls_back(tmp_path: Path) -> None:
+    """A present-but-unparseable manifest must not silently resurrect the #67
+    misdetection: the fallback triple still detects the layout it always could,
+    and stderr says the manifest was unreadable (panel, #87)."""
+    repo = _fixture(tmp_path, config=V1_CONFIG)
+    (repo / "kit-manifest.json").write_text("", encoding="utf-8")
+    engine = repo / "scripts" / "devkit" / "pr_watch.py"
+    engine.parent.mkdir(parents=True)
+    engine.write_text("# engine\n", encoding="utf-8")
+
+    proc = _run_init(repo)
+
+    assert yaml.safe_load(_config(repo))["paths"]["engines"] == "scripts/devkit"
+    assert "no engine entries could be read" in proc.stderr
 
 
 # --------------------------------------------------------------------------- #
@@ -212,23 +244,263 @@ def _shipped_with_name(name_value: str) -> str:
 
 def test_rerun_on_shipped_config_preserves_every_value_and_is_stable(tmp_path: Path) -> None:
     """A non-interactive re-run over the shipped config must change no value,
-    and a further re-run must be byte-identical (the documented upgrade path)."""
+    and a further re-run must be byte-identical (the documented upgrade path).
+    The bots byte-assertion pins the quoted-item list serialization — value
+    equality alone let a revert to unquoted items survive (panel, #87)."""
     repo = _fixture(tmp_path, config=SHIPPED_CONFIG)
 
     _run_init(repo)
     once = _config(repo)
     assert yaml.safe_load(once) == yaml.safe_load(SHIPPED_CONFIG)
+    assert 'bots: ["coderabbit"]' in once
 
     _run_init(repo)
     assert _config(repo) == once
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="issue #62: prompted values are re-stamped unquoted, so a legal quoted "
-    "name containing a colon becomes invalid YAML on a plain re-run",
+def _rerun_and_reload(tmp_path: Path, name_value: str) -> tuple[Path, str, dict]:
+    """Fixture + one non-interactive run over the shipped config with
+    project.name set to `name_value`; returns (repo, config text, parsed)."""
+    repo = _fixture(tmp_path, config=_shipped_with_name(name_value))
+    _run_init(repo)
+    text = _config(repo)
+    return repo, text, yaml.safe_load(text)
+
+
+def test_rerun_preserves_name_with_interior_double_quote(tmp_path: Path) -> None:
+    """A plain scalar containing double quotes is stamped RAW, exactly as main
+    always did — blanket quoting turned it into unloadable YAML, taking every
+    PyYAML consumer down (panel, #87). Lossless double-quoting of `"` would
+    need escape support get_field does not have."""
+    repo, text, parsed = _rerun_and_reload(tmp_path, 'he said "hi" ok')
+
+    assert parsed["project"]["name"] == 'he said "hi" ok'
+    assert '  name: he said "hi" ok\n' in text
+    _run_init(repo)
+    assert _config(repo) == text
+
+
+def test_rerun_preserves_name_with_backslashes_for_both_readers(tmp_path: Path) -> None:
+    """A value containing backslashes is stamped RAW: double-quoting it makes
+    YAML interpret the backslashes as escapes while kitconfig reads them
+    literally — an unloadable config or a reader split-brain (panel, #87)."""
+    repo, text, parsed = _rerun_and_reload(tmp_path, r"C:\proj\new")
+
+    assert parsed["project"]["name"] == r"C:\proj\new"
+    import kitconfig  # noqa: PLC0415
+
+    assert kitconfig.loads(text)["project"]["name"] == r"C:\proj\new"
+    _run_init(repo)
+    assert _config(repo) == text
+
+
+def test_rerun_preserves_single_quoted_name(tmp_path: Path) -> None:
+    """A value already in single-quoted style is left in it (stamped raw) —
+    re-wrapping it in double quotes corrupted the value to literal `'…'`
+    (panel, #87)."""
+    repo, text, parsed = _rerun_and_reload(tmp_path, "'Acme Co'")
+
+    assert parsed["project"]["name"] == "Acme Co"
+    assert "  name: 'Acme Co'\n" in text
+    _run_init(repo)
+    assert _config(repo) == text
+
+
+def test_rerun_keeps_apostrophe_value_and_its_comment(tmp_path: Path) -> None:
+    """A mid-scalar apostrophe is literal, not an opening quote: the earlier
+    scan treated it as one, decided the trailing `#` was 'inside quotes', and
+    absorbed the line's real comment into the value (panel, #87)."""
+    repo, text, parsed = _rerun_and_reload(tmp_path, "O'Brien kit  # keep this comment")
+
+    assert parsed["project"]["name"] == "O'Brien kit"
+    assert "  name: O'Brien kit  # keep this comment\n" in text
+    _run_init(repo)
+    assert _config(repo) == text
+
+
+def test_rerun_preserves_midword_hash(tmp_path: Path) -> None:
+    """`a#b` is one plain-scalar token — YAML (and kitconfig) open a comment
+    only after whitespace. The old blind index() truncated it (panel, #87)."""
+    repo, text, parsed = _rerun_and_reload(tmp_path, "a#b")
+
+    assert parsed["project"]["name"] == "a#b"
+    _run_init(repo)
+    assert _config(repo) == text
+
+
+# The Makefile's install-hooks target established this pattern: extract one
+# function straight out of init.sh, so the test always drives current logic.
+_YAML_SCALAR_DRIVER = """eval "$(sed -n '/^yaml_scalar() {/,/^}/p' init.sh)"
+yaml_scalar "$1"
+"""
+
+
+def _yaml_scalar_extra_cases() -> list[tuple[str, str]]:
+    # Reserved leading indicators where double-quoting is lossless and a raw
+    # stamp is unloadable or type-flipped YAML (panel round 2 on #87).
+    return [
+        ("`my-proj`", '"`my-proj`"'),
+        ("?x", '"?x"'),
+        (",x", '",x"'),
+        ("]x", '"]x"'),
+        ("}x", '"}x"'),
+    ]
+
+
+@pytest.mark.parametrize(("value", "stamped"), _yaml_scalar_extra_cases())
+def test_yaml_scalar_quotes_reserved_leading_indicators(
+    tmp_path: Path, value: str, stamped: str
+) -> None:
+    (tmp_path / "init.sh").write_bytes((REPO_ROOT / "init.sh").read_bytes())
+    proc = subprocess.run(
+        ["sh", "-c", _YAML_SCALAR_DRIVER, "_", value],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.stdout == stamped + "\n"
+
+
+_QUOTED_SCALAR_DRIVER = """eval "$(sed -n '/^quoted_scalar() {/,/^}/p' init.sh)"
+quoted_scalar "$1"
+"""
+
+
+@pytest.mark.parametrize(
+    ("value", "stamped"),
+    [
+        ("My Project Dev", '"My Project Dev"'),
+        ("", '""'),
+        (r"x\py", r"x\py"),
+        ('a"b', 'a"b'),
+    ],
 )
+def test_quoted_scalar_prefers_quotes_but_degrades_losslessly(
+    tmp_path: Path, value: str, stamped: str
+) -> None:
+    """The historically-always-quoted fields keep their quoted style, except
+    where double-quoting cannot be lossless (`\\` or `\"` in the value) — the
+    panel showed a valid `url: x\\py` re-stamping into unloadable YAML when
+    quoted blindly (round 2, #87)."""
+    (tmp_path / "init.sh").write_bytes((REPO_ROOT / "init.sh").read_bytes())
+    proc = subprocess.run(
+        ["sh", "-c", _QUOTED_SCALAR_DRIVER, "_", value],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.stdout == stamped + "\n"
+
+
+def test_rerun_preserves_tracker_url_with_backslash_for_both_readers(tmp_path: Path) -> None:
+    """A backslash in an always-quoted field degrades to a raw stamp: quoted,
+    PyYAML rejects the escape while kitconfig reads it literally (panel, #87)."""
+    config = SHIPPED_CONFIG.replace('  url: ""', r'  url: "x\py"')
+    assert r'  url: "x\py"' in config
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+    text = _config(repo)
+    assert yaml.safe_load(text)["tracker"]["url"] == r"x\py"
+    import kitconfig  # noqa: PLC0415
+
+    assert kitconfig.loads(text)["tracker"]["url"] == r"x\py"
+    _run_init(repo)
+    assert _config(repo) == text
+
+
+def test_rerun_normalizes_single_quoted_bots_item(tmp_path: Path) -> None:
+    """A hand-written `bots: ['coderabbit']` is valid YAML naming the reviewer
+    `coderabbit` — the double-quote-only strip re-serialized it as the literal
+    name `'coderabbit'`, which pr_watch silently fails to match (panel, #87)."""
+    config = SHIPPED_CONFIG.replace("  bots: [coderabbit]", "  bots: ['coderabbit']")
+    assert "  bots: ['coderabbit']" in config
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+    text = _config(repo)
+    assert yaml.safe_load(text)["review"]["bots"] == ["coderabbit"]
+    assert 'bots: ["coderabbit"]' in text
+    _run_init(repo)
+    assert _config(repo) == text
+
+
+def test_rerun_handles_doubled_single_quote_escape(tmp_path: Path) -> None:
+    """YAML's `''` escape inside a single-quoted scalar: the close-quote scan
+    must skip it, or the interior `#` reads as a comment and the value is
+    truncated with its remainder re-attached as a comment (CodeRabbit on #87)."""
+    repo, text, parsed = _rerun_and_reload(tmp_path, "'it''s #1' # note")
+
+    assert parsed["project"]["name"] == "it's #1"
+    once = text
+    _run_init(repo)
+    assert _config(repo) == once
+
+
+def test_rerun_drops_yaml_significant_chars_from_bots_items(tmp_path: Path) -> None:
+    """A quote or backslash inside a bots item would corrupt the whole flow
+    list when re-wrapped; such characters cannot appear in a real bot handle
+    and are dropped so the config stays loadable (CodeRabbit on #87)."""
+    config = SHIPPED_CONFIG.replace('  bots: [coderabbit]', '  bots: ["a\\"b"]')
+    assert '  bots: ["a\\"b"]' in config
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+    text = _config(repo)
+    assert yaml.safe_load(text)["review"]["bots"] == ["ab"]
+    _run_init(repo)
+    assert _config(repo) == text
+
+
+def test_rerun_preserves_quote_ending_value_with_comment(tmp_path: Path) -> None:
+    """`he said "hi"` followed by a real comment: the old independent-ends
+    quote strip ate the value's closing quote; the matched-pair strip keeps it
+    (panel round 2, #87)."""
+    repo, text, parsed = _rerun_and_reload(tmp_path, 'he said "hi" # note')
+
+    assert parsed["project"]["name"] == 'he said "hi"'
+    assert '# note' in text.split("name:")[1].splitlines()[0]
+    _run_init(repo)
+    assert _config(repo) == text
+
+
+@pytest.mark.parametrize(
+    ("value", "stamped"),
+    [
+        ("plain", "plain"),
+        ("Acme: Platform", '"Acme: Platform"'),
+        ("Acme #1", '"Acme #1"'),
+        ("a#b", '"a#b"'),
+        ("[coderabbit]", '"[coderabbit]"'),
+        ("-lead", '"-lead"'),
+        ('he said "hi"', 'he said "hi"'),
+        (r"C:\proj", r"C:\proj"),
+        ("'quoted'", "'quoted'"),
+        ("", '""'),
+    ],
+)
+def test_yaml_scalar_stamping_policy(tmp_path: Path, value: str, stamped: str) -> None:
+    """Quote only when needed AND lossless: `:`/`#`/leading-indicator values are
+    double-quoted; values containing `"` or `\\` (YAML-significant in
+    double-quoted style, and get_field does not unescape) or already
+    single-quoted stay raw; empty stamps as an explicit empty string."""
+    (tmp_path / "init.sh").write_bytes((REPO_ROOT / "init.sh").read_bytes())
+    proc = subprocess.run(
+        ["sh", "-c", _YAML_SCALAR_DRIVER, "_", value],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.stdout == stamped + "\n"
+
+
 def test_rerun_preserves_quoted_name_with_colon(tmp_path: Path) -> None:
+    """Prompted values are stamped quoted when needed (#62) — the unquoted
+    re-stamp turned a legal quoted name containing a colon into invalid YAML on
+    a plain re-run. yaml_scalar's full policy is table-tested below."""
     repo = _fixture(tmp_path, config=_shipped_with_name('"Acme: Platform"'))
 
     _run_init(repo)
@@ -236,37 +508,40 @@ def test_rerun_preserves_quoted_name_with_colon(tmp_path: Path) -> None:
     assert yaml.safe_load(_config(repo))["project"]["name"] == "Acme: Platform"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="issue #62: get_field's comment strip is not quote-aware, so a quoted "
-    "name containing # is silently truncated and the truncation re-stamped",
-)
 def test_rerun_preserves_quoted_name_with_hash(tmp_path: Path) -> None:
+    """get_field's comment strip is quote-aware (#62) — a blind index() silently
+    truncated a quoted name containing # and re-stamped the truncation. The
+    second run pins set_field's comment scan too: a quote-blind one re-attached
+    the tail of the old value as a growing pseudo-comment on every re-run."""
     repo = _fixture(tmp_path, config=_shipped_with_name('"Acme #1"'))
 
     _run_init(repo)
+    once = _config(repo)
+    assert yaml.safe_load(once)["project"]["name"] == "Acme #1"
 
-    assert yaml.safe_load(_config(repo))["project"]["name"] == "Acme #1"
+    _run_init(repo)
+    assert _config(repo) == once
 
 
 # --------------------------------------------------------------------------- #
 # set_field — awk value handling (#62 part 2)
 # --------------------------------------------------------------------------- #
 
-# The Makefile's install-hooks target established this pattern: extract one
-# function straight out of init.sh, so the test always drives current logic.
-_SET_FIELD_DRIVER = """CONFIG_FILE="config/dev-model.yaml"
+# The Makefile's install-hooks target established this pattern: extract the
+# needed blocks straight out of init.sh, so the test always drives current
+# logic. set_field splices the shared AWK_COMMENT_IDX scanner into its awk
+# program, so the driver extracts that definition too.
+_SET_FIELD_DRIVER = '''CONFIG_FILE="config/dev-model.yaml"
+eval "$(sed -n "/^AWK_COMMENT_IDX=/,/^'/p" init.sh)"
 eval "$(sed -n '/^set_field() {/,/^}/p' init.sh)"
 set_field "tracker:" "" "^  url:" "$1"
-"""
+'''
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="issue #62: awk -v runs escape processing on the assigned value, so a "
-    "backslash sequence in a stamped value is transformed before substitution",
-)
 def test_set_field_writes_backslashes_literally(tmp_path: Path) -> None:
+    """The value reaches awk via the environment (#62) — `awk -v` ran escape
+    processing on the assignment, turning a backslash-n in a stamped value into
+    a real newline before substitution."""
     repo = _fixture(tmp_path, config='tracker:\n  url: ""\n')
     value = '"' + r"https://x.example/a\nb\\c" + '"'
 
@@ -314,6 +589,18 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
     assert "kit-handoff.md" in seeded["docs/kit-handoff-history.md"]  # {{HANDOFF}}
     assert "kit-friction-log-archive.md" in seeded["docs/kit-friction-log.md"]  # {{FRICTION_ARCHIVE}}
     assert "tracker.url" in seeded["docs/kit-friction-log.md"]  # {{TRACKER_URL}} fallback
+
+
+def test_render_preserves_backslashes_in_values(tmp_path: Path) -> None:
+    """_render passes values to awk via ENVIRON: with `-v`, a backslash-n in a
+    project name became a real newline in every seeded doc — this was the one
+    #62 surface the suite left unpinned (panel, #87)."""
+    repo = _fixture(tmp_path, config=_shipped_with_name(r"Acme\nCo"), templates=True)
+
+    _run_init(repo)
+
+    handoff = (repo / "docs" / "kit-handoff.md").read_text(encoding="utf-8")
+    assert r"Acme\nCo" in handoff
 
 
 def test_seeding_respects_in_use_docs_and_reclaims_marked_ones(tmp_path: Path) -> None:

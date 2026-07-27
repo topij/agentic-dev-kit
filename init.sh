@@ -64,13 +64,59 @@ fi
 # that repeats under two different sections (e.g. "backend:" under both
 # tracker: and notify:) is never ambiguous.
 
+# One YAML-aware trailing-comment scanner, shared by get_field and set_field
+# (sh has no awk includes, so the function text is spliced into both programs).
+# comment_idx(rest) returns the 1-based index where a trailing comment starts,
+# or 0. The rules are YAML's (and therefore PyYAML's):
+#   - a quote opens a quoted scalar only at the FIRST non-space position; a
+#     mid-scalar apostrophe (O'Brien) or quote is literal. An earlier version
+#     of this scan opened on any quote character, which silently absorbed a
+#     real trailing comment into the value (issue #62, review round on #87).
+#   - inside a leading-quoted scalar, # is literal until after the close quote.
+#   - in a plain scalar, # opens a comment only when preceded by whitespace:
+#     `board#view42` is one token, `board #view42` is a value and a comment.
+# The kit's other readers do NOT fully agree with YAML here: kitconfig's
+# _strip_comment opens a quote at any position, and devkit_config_scalar strips
+# " #…" even inside quotes. Issue #88 tracks converging them; this scanner
+# takes YAML's side rather than copying either divergence.
+AWK_COMMENT_IDX='
+  function comment_idx(rest,   n, i, j, qc, c, prev) {
+    n = length(rest)
+    i = 1
+    while (i <= n && substr(rest, i, 1) ~ /[ \t]/) i++
+    if (i > n) return 0
+    c = substr(rest, i, 1)
+    if (c == "\"" || c == "'\''") {
+      qc = c
+      j = i + 1
+      while (j <= n) {
+        if (substr(rest, j, 1) == qc) {
+          if (qc == "'\''" && substr(rest, j + 1, 1) == qc) { j += 2; continue }
+          break
+        }
+        j++
+      }
+      for (j = j + 1; j <= n; j++)
+        if (substr(rest, j, 1) == "#") return j
+      return 0
+    }
+    prev = " "
+    for (j = i; j <= n; j++) {
+      c = substr(rest, j, 1)
+      if (c == "#" && prev ~ /[ \t]/) return j
+      prev = c
+    }
+    return 0
+  }
+'
+
 # get_field <section-line> <subsection-line-or-empty> <key-regex>
-# Prints the current value (quotes stripped, comment stripped, trimmed).
+# Prints the current value (double quotes stripped, comment stripped, trimmed).
 get_field() {
   wantsec="$1"
   wantsub="$2"
   keyre="$3"
-  awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" '
+  awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" "$AWK_COMMENT_IDX"'
     BEGIN { cursec = ""; cursub = "" }
     {
       line = $0
@@ -88,10 +134,15 @@ get_field() {
       if (cursec == wantsec && cursub == wantsub && line ~ keyre) {
         idx = index(line, ":")
         rest = substr(line, idx + 1)
-        cidx = index(rest, "#")
+        cidx = comment_idx(rest)
         if (cidx > 0) { rest = substr(rest, 1, cidx - 1) }
         gsub(/^[ \t]+|[ \t]+$/, "", rest)
-        gsub(/^"|"$/, "", rest)
+        # Strip one MATCHING pair of double quotes, the way kitconfig does. The
+        # old independent-ends gsub ate the closing quote of a value that only
+        # ENDS with one (`he said "hi"` -> `he said "hi`) — panel round on #87.
+        if (length(rest) >= 2 && substr(rest, 1, 1) == "\"" && substr(rest, length(rest), 1) == "\"") {
+          rest = substr(rest, 2, length(rest) - 2)
+        }
         print rest
         exit
       }
@@ -102,14 +153,20 @@ get_field() {
 # set_field <section-line> <subsection-line-or-empty> <key-regex> <new-value-literal>
 # Replaces the value for the matched field in place, preserving any
 # trailing "# comment" on that line untouched.
+#
+# The VALUE reaches awk via the environment, never `-v`: `awk -v var=value`
+# runs backslash-escape processing on the assignment, so a `\n` or `\\` in a
+# prompted answer would be transformed before substitution (issue #62). The
+# section/key parameters stay `-v` — they are this script's own literals, not
+# adopter data.
 set_field() {
   wantsec="$1"
   wantsub="$2"
   keyre="$3"
   newval="$4"
   tmpfile="${CONFIG_FILE}.tmp.$$"
-  awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" -v newval="$newval" '
-    BEGIN { cursec = ""; cursub = "" }
+  newval="$newval" awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" "$AWK_COMMENT_IDX"'
+    BEGIN { cursec = ""; cursub = ""; newval = ENVIRON["newval"] }
     {
       line = $0
       if (line ~ /^[A-Za-z_][A-Za-z0-9_]*:[ \t]*$/) {
@@ -129,7 +186,10 @@ set_field() {
         idx = index(line, ":")
         prefix = substr(line, 1, idx)
         rest = substr(line, idx + 1)
-        cidx = index(rest, "#")
+        # comment_idx (shared above) finds the comment to re-attach — a blind
+        # index() re-attached the tail of the old value as a growing
+        # pseudo-comment on every re-run (issue #62).
+        cidx = comment_idx(rest)
         if (cidx > 0) {
           comment = substr(rest, cidx)
           printf "%s %s  %s\n", prefix, newval, comment
@@ -271,15 +331,61 @@ section_lines() {
 # silently, since nothing validates the value. Falls back to `scripts` only when
 # no engine is found anywhere.
 detect_engines_dir() {
+  # The names probed for are derived from kit-manifest.json ("role": "engine") —
+  # the generated projection of KIT_OWNED, which kit_doctor's engines probe
+  # derives from since #59, and the one form of that list sh can read.
+  # Restating them here as literals was issue #67: a sized-down install holding
+  # only kit_doctor.py and lib/kitconfig.py matched none of the three named
+  # files, so this function stamped `engines: scripts` for a tree whose engines
+  # live in scripts/devkit. The manifest ships next to init.sh, so it is present
+  # at install time; the old triple remains only as the fallback for a copy that
+  # lost it. Manifest paths are under the kit's own `scripts/` layout and are
+  # probed relative to each candidate — the same prefix swap kit_doctor._remap
+  # does.
+  #
+  # lib/ entries are excluded from DETECTION on purpose: their basenames are
+  # generic (repo_root.sh, kitconfig.py), so an adopter's own scripts/lib/ file
+  # would make the earlier candidate shadow a kit vendored at scripts/devkit —
+  # the review panel on #87 demonstrated exactly that. A top-level engine name
+  # is distinctive. The trade accepted here: an install shipping ONLY lib/
+  # helpers would fall back to `scripts` undetected — lib/ files are
+  # import-only helpers of the top-level engines, and a silent wrong match on
+  # an adopter's own file is the worse failure than a conservative default.
+  # (kit_doctor keeps lib/ names in ITS probe: it checks a directory the
+  # adopter already configured, not a guess.)
+  probes=""
+  if [ -f kit-manifest.json ]; then
+    probes="$(awk -F'"' '
+      /^    "/ { key = $2 }
+      /^      "role": "engine"/ {
+        if (index(key, "scripts/") == 1 && index(key, "scripts/lib/") != 1)
+          print substr(key, 9)
+      }
+    ' kit-manifest.json 2>/dev/null || true)"
+    if [ -z "$probes" ]; then
+      echo "note: kit-manifest.json is present but no engine entries could be read from it —" >&2
+      echo "      falling back to the built-in engine probe list for paths.engines detection." >&2
+    fi
+  fi
+  [ -n "$probes" ] || probes="check_doc_budget.py
+pr_watch.py
+dev_session.sh"
+  # set -f while $probes is word-split unquoted: a glob character in a
+  # manifest path must stay literal, never pathname-expand (CodeRabbit on
+  # #87). Restored on every exit path — hence the break-out variable rather
+  # than returning from inside the loop.
+  found=""
+  set -f
   for candidate in scripts scripts/devkit scripts/kit scripts/agentic-dev-kit tools/devkit bin/devkit; do
-    for probe in check_doc_budget.py pr_watch.py dev_session.sh; do
+    for probe in $probes; do
       if [ -f "$candidate/$probe" ]; then
-        printf '%s\n' "$candidate"
-        return 0
+        found="$candidate"
+        break 2
       fi
     done
   done
-  printf 'scripts\n'
+  set +f
+  printf '%s\n' "${found:-scripts}"
 }
 
 # Guards are SECTION-scoped, not whole-file `grep '^  key:'`. That form is a bug
@@ -501,15 +607,25 @@ migrate_kit_schema() {
 TEMPLATE_MARKER="devkit-template: unrendered"
 
 # _render <template> <target> — substitute the {{TOKENS}} and write.
-# awk (not sed) so a value containing /, &, or \ — a tracker URL, most obviously —
+# awk (not sed) so a value containing / or & — a tracker URL, most obviously —
 # is substituted literally rather than reinterpreted as replacement syntax.
+# The values reach awk via the environment, never `-v`: `-v` runs
+# backslash-escape processing on the assignment, which would transform a `\`
+# in a value before substitution — the exact hazard an earlier version of this
+# comment claimed awk avoided (issue #62). `today` stays `-v`: it is generated
+# by this script, not adopter data.
 _render() {
   _tmpl="$1"
   _out="$2"
-  awk -v project="$name" -v today="$(date +%Y-%m-%d)" \
-      -v tracker="$render_tracker_url" -v enginedir="$render_engine_dir" \
-      -v handoff="$render_handoff_link" -v handoffhist="$render_handoff_history_link" \
-      -v frictionarch="$render_friction_archive_link" '
+  project="$name" tracker="$render_tracker_url" enginedir="$render_engine_dir" \
+  handoff="$render_handoff_link" handoffhist="$render_handoff_history_link" \
+  frictionarch="$render_friction_archive_link" \
+  awk -v today="$(date +%Y-%m-%d)" '
+    BEGIN {
+      project = ENVIRON["project"]; tracker = ENVIRON["tracker"]
+      enginedir = ENVIRON["enginedir"]; handoff = ENVIRON["handoff"]
+      handoffhist = ENVIRON["handoffhist"]; frictionarch = ENVIRON["frictionarch"]
+    }
     function subst(s, tok, val,   i, acc) {
       acc = ""
       while ((i = index(s, tok)) > 0) {
@@ -622,53 +738,113 @@ migrate_kit_schema
 
 # ── prompts ──────────────────────────────────────────────────────────────
 
+# yaml_scalar <value> — the text to stamp for a historically-unquoted prompted
+# scalar: double-quoted when the value carries a YAML indicator this helper
+# knows AND double-quoting is lossless, raw otherwise (issue #62).
+# Double-quote style makes `\` and `"` significant to YAML and get_field does
+# not unescape, so blanket quoting would turn a value containing either into an
+# unloadable config or a value the kit's readers disagree on (found by the
+# review panel on #87). Such values — and a value already carrying its own
+# single-quoted style — are stamped as the plain scalars they always were: the
+# pre-existing edge, made no worse. NOT covered on purpose: plain-scalar type
+# resolution (a name of `true`/`007`/`~` type-flips under PyYAML, exactly as it
+# always did when stamped raw). kitconfig and devkit_config_scalar strip one
+# matching quote layer on read; get_field above strips a matching double pair.
+yaml_scalar() {
+  case "$1" in
+    "") printf '""\n' ;;
+    *'"'*|*'\'*|"'"*) printf '%s\n' "$1" ;;
+    *':'*|*'#'*|'['*|']'*|'{'*|'}'*|','*|'-'*|'?'*|'&'*|'*'*|'!'*|'|'*|'>'*|'%'*|'@'*|'`'*|' '*|'	'*|*' '|*'	') printf '"%s"\n' "$1" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+# quoted_scalar <value> — for the fields that have ALWAYS stamped double-quoted
+# (tracker.project_name, linear ids, tracker.url, notify.user_key): keep that
+# style, but degrade to a raw plain scalar when double-quoting cannot be
+# lossless — a value containing `"` or `\` inside double quotes is YAML the
+# readers reject or disagree on. Found by the review panel on #87: with
+# set_field now preserving backslashes faithfully, blanket-quoting turned a
+# valid `url: x\py` into an unloadable config on the re-run path.
+quoted_scalar() {
+  case "$1" in
+    *'"'*|*'\'*) printf '%s\n' "$1" ;;
+    *) printf '"%s"\n' "$1" ;;
+  esac
+}
+
 cur_name=$(get_field "project:" "" "^  name:")
 name=$(ask "Project name" "$cur_name")
-set_field "project:" "" "^  name:" "$name"
+set_field "project:" "" "^  name:" "$(yaml_scalar "$name")"
 
 cur_runtime=$(get_field "runtime:" "" "^  default:")
 runtime=$(ask "Agent runtime (claude | codex | none)" "$cur_runtime")
-set_field "runtime:" "" "^  default:" "$runtime"
+set_field "runtime:" "" "^  default:" "$(yaml_scalar "$runtime")"
 
 cur_backend=$(get_field "tracker:" "" "^  backend:")
 backend=$(ask "Tracker backend (linear | github-issues | jira | none)" "$cur_backend")
-set_field "tracker:" "" "^  backend:" "$backend"
+set_field "tracker:" "" "^  backend:" "$(yaml_scalar "$backend")"
 
 cur_project_name=$(get_field "tracker:" "" "^  project_name:")
 tracker_project_name=$(ask "Tracker project name" "$cur_project_name")
-set_field "tracker:" "" "^  project_name:" "\"$tracker_project_name\""
+set_field "tracker:" "" "^  project_name:" "$(quoted_scalar "$tracker_project_name")"
 
 if [ "$backend" = "linear" ]; then
   cur_team_id=$(get_field "tracker:" "linear:" "^    team_id:")
   team_id=$(ask "Linear team id" "$cur_team_id")
-  set_field "tracker:" "linear:" "^    team_id:" "\"$team_id\""
+  set_field "tracker:" "linear:" "^    team_id:" "$(quoted_scalar "$team_id")"
 
   cur_project_id=$(get_field "tracker:" "linear:" "^    project_id:")
   project_id=$(ask "Linear project id" "$cur_project_id")
-  set_field "tracker:" "linear:" "^    project_id:" "\"$project_id\""
+  set_field "tracker:" "linear:" "^    project_id:" "$(quoted_scalar "$project_id")"
 fi
 
 cur_tracker_url=$(get_field "tracker:" "" "^  url:")
 tracker_url=$(ask "Tracker board URL (shown in the friction-log header; blank is fine)" "$cur_tracker_url")
-set_field "tracker:" "" "^  url:" "\"$tracker_url\""
+set_field "tracker:" "" "^  url:" "$(quoted_scalar "$tracker_url")"
 
 cur_branch=$(get_field "vcs:" "" "^  protected_branch:")
 branch=$(ask "Protected branch (PRs target this, never commit to it directly)" "$cur_branch")
-set_field "vcs:" "" "^  protected_branch:" "$branch"
+set_field "vcs:" "" "^  protected_branch:" "$(yaml_scalar "$branch")"
 
 cur_user_key=$(get_field "notify:" "" "^  user_key:")
 user_key=$(ask "Notify user key (a key into your project's own notify config)" "$cur_user_key")
-set_field "notify:" "" "^  user_key:" "\"$user_key\""
+set_field "notify:" "" "^  user_key:" "$(quoted_scalar "$user_key")"
 
 cur_bots_raw=$(get_field "review:" "" "^  bots:")
-# Strip surrounding [ ] for display, since we ask for a plain comma list.
-cur_bots_display=$(printf '%s' "$cur_bots_raw" | sed -e 's/^\[//' -e 's/\]$//')
+# Strip surrounding [ ] and item quotes — BOTH styles: a hand-written
+# `bots: ['coderabbit']` is valid YAML, and stripping only double quotes fed
+# the single-quoted item back through the re-serializer as the literal bot
+# name `'coderabbit'`, which pr_watch then silently fails to match (review
+# panel on #87). We ask for a plain comma list.
+cur_bots_display=$(printf '%s' "$cur_bots_raw" | sed -e 's/^\[//' -e 's/\]$//' -e 's/"//g' -e "s/'//g")
 bots_answer=$(ask "Review bots (comma-separated, or 'none')" "$cur_bots_display")
+# Tolerate an answer typed with brackets ("[coderabbit]") — it is the same
+# comma list, not a nested one (issue #62).
+bots_answer=$(printf '%s' "$bots_answer" | sed -e 's/^[[:space:]]*\[//' -e 's/\][[:space:]]*$//')
 if [ "$bots_answer" = "none" ] || [ -z "$bots_answer" ]; then
   bots_value="[]"
 else
-  # normalize "a, b,c" -> "[a, b, c]"
-  bots_value="[$(printf '%s' "$bots_answer" | sed -e 's/[[:space:]]*,[[:space:]]*/, /g' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')]"
+  # Serialize "a, b,c" as a proper flow list with every item QUOTED — an item
+  # is data, not YAML (issue #62). The answer arrives on stdin, so nothing
+  # escape-processes it; quotes already on a re-run's kept default are stripped
+  # before re-quoting, keeping the re-stamp stable.
+  bots_value="[$(printf '%s\n' "$bots_answer" | awk -F',' '{
+    out = ""
+    for (i = 1; i <= NF; i++) {
+      item = $i
+      gsub(/^[ \t]+|[ \t]+$/, "", item)
+      gsub(/^["'\'']|["'\'']$/, "", item)
+      # A quote or backslash cannot be part of a legitimate bot handle, and
+      # inside a double-quoted flow item either would corrupt the whole list
+      # the way the scalar helpers now refuse to — drop them rather than
+      # stamp unloadable YAML (CodeRabbit on #87).
+      gsub(/["\\]/, "", item)
+      if (item == "") continue
+      out = out (out == "" ? "" : ", ") "\"" item "\""
+    }
+    print out
+  }')]"
 fi
 set_field "review:" "" "^  bots:" "$bots_value"
 
