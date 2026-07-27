@@ -34,6 +34,82 @@ accounted for.
 
 Everything above now lives in [`kit-friction-log-archive.md`](kit-friction-log-archive.md).
 
+## 2026-07-27
+
+- **A mutation harness that restores outside `finally` leaves the repo mutated.** My
+  restore line was unreachable when the script died parsing pytest output (a bare
+  `python3` with no pytest returned no stdout, and `splitlines()[-1]` raised). The
+  working tree kept a live mutant until `git status` caught it. Neither existing warning
+  covers it: `#50` is about stale `.pyc`, and `fallback-review-panel.md` contract item 5
+  warns only about **false kills** from a checksum/drift test (it does not mention
+  `.pyc` at all). Both frame the hazard as "the result may be wrong"; neither says the
+  repo may be left broken. **H** —
+  proposed fix: contract item 5 should say the restore belongs in a `finally` (or a
+  git-clean check) and that any harness must verify the tree is clean *after* it exits,
+  not only after a successful run.
+- **The closing-keyword rule as written is wrong, and measuring it changed the fix.**
+  Last session's entry says never to write one "even negated". Acting on that, I rewrote
+  a PR body sentence that mentioned a backticked `` `Closes #61` ``. Then I measured:
+
+  ```
+  PR #68 body contains `Closes #61` (backticked) → closingIssuesReferences: []
+  PR #63 body contains "Does NOT close #60"      → closingIssuesReferences: [58, 60]
+  ```
+
+  **GitHub excludes inline code spans**; what it does not excuse is negating prose. So
+  the real rule is narrower than the entry below claims, and the obvious mechanical fix
+  — grep for `(close|fix|resolve)\w*\s+#\d+` — would fire on every legitimate backticked
+  reference and train people to ignore it. **M** — proposed fix: a `pr-watch` / `wrap-up`
+  check that strips fenced blocks and inline code **first**, then flags a closing keyword
+  within a few tokens of a negation (`not`, `n't`, `NOT`, "stays open"), which is the
+  actual failure mode. Correct the 2026-07-26 entry's rule at the same time; it is
+  currently stated more strongly than the evidence supports.
+- **A review bot with an incremental model keeps a stale review across a rewrite.**
+  CodeRabbit reviewed the pre-split head, then declined `@coderabbitai review`
+  ("does not re-review already reviewed commits") and hit its Fair Usage limit on
+  `@coderabbitai full review`. The PR was force-pushed and then substantially rewritten,
+  so the only bot review covered code that no longer existed. `pr_watch`'s
+  `bots_behind_head` recorded it correctly — the friction is that **nothing warns at
+  push time**, when re-requesting is still cheap. **M** — proposed fix: have `pr-watch`
+  surface `covers_head: false` as a distinct, louder line right after a push that
+  changes the diff shape, rather than only at receipt time. Related: `#27`, `#44`.
+- **The panel's worth is disjointness, and this run measured it.** Round 1: the
+  adversarial lens found the enclosing-repo and `GIT_DIR` regressions; the correctness
+  lens independently found the `~`-expansion disagreement between `init.sh` and the new
+  detector. Almost no overlap. Round 2's correctness lens then found the *misattributed
+  defect* — a false sentence in the commit message written to describe round 1's own
+  outcome, which could not have existed when round 1 ran. **No change proposed** —
+  recording it because `fallback-review-panel.md` argues disjointness from one prior
+  data point, and this is a second, stronger one worth citing there. Note the honest
+  framing of what the panel beat: the four regressions were missed by CI, by the suite
+  **as it then stood**, and by the mutation run **at that head** — not by the 372-test
+  suite quoted elsewhere, which only exists *because* those findings were fixed.
+- **The archive sweep broke a cross-reference again — and this time it broke one the
+  PREVIOUS sweep had written.** The 2026-07-26 entry below reports the sweep orphaning
+  *"see the Phase 3b block above"*. Today's sweep moved Phase 3b itself into the history
+  file, so the surviving text — *"see the Phase 3b block, still live in
+  kit-handoff.md"* — became false in a second way: the target is now in the very file
+  the sentence sits in. Fixed by hand in this commit. **M** — the entry below proposes
+  warning on `(above|below)`-style references in *moved* blocks; this instance shows the
+  warning must also cover references **into** a moved block from anywhere in either
+  document, since the block that moved was the reference's *target*, not its location.
+  Same family as `#53`.
+- **The doc-budget remedy no-op reproduced a third time** (see the 2026-07-26 entry
+  below). `check_doc_budget` reported 421/400; the remedy it names printed *"nothing to
+  move: 5 session block(s) <= --keep 6"*; `--keep 4` was needed and found by guessing.
+  **No new fix proposed** — recording the third occurrence. The entry below already
+  records two; this makes it three, two of them in *this* repo, which is a pattern
+  rather than a run of bad luck.
+- **A review lens's isolated worktree pointed at the wrong ref again — 5 of 5 this
+  session, 9 of 9 across two.** (Last session's entry below records 4 of 4; this session
+  ran 2 lenses × 2 rounds on `#65` plus 1 on `#68`.) Every lens detected it and cloned
+  the target itself, because the prompt required reporting the path and diff stat.
+  **H** — proposed fix: this is no longer a
+  caveat, it is the default behaviour. Contract item 7 should stop saying "verify" and
+  start saying "assume the worktree is wrong; clone the target yourself first", with the
+  path/diff-stat report as a required field of the lens output (the existing 2026-07-26
+  entry proposed the report; this one is about inverting the default).
+
 ## 2026-07-26
 
 - **The doc-budget remedy does not fire at the default `--keep`.** `check_doc_budget`
