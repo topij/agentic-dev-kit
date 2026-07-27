@@ -517,6 +517,12 @@ def _check_api_url(url: str) -> str:
     first is server-supplied. Validating inside the HTTP boundary covers the
     initial URL and every followed page with one check.
 
+    Only github.com is supported: there is no `GH_HOST`/`GITHUB_HOST` handling
+    anywhere in this engine, so a GitHub Enterprise origin parses to a valid
+    owner/repo and is then queried against api.github.com. That is normally a 404,
+    but if the same owner/repo exists publicly it would report a DIFFERENT
+    repository's state as this PR's. Enterprise users should keep `gh` on PATH.
+
     Caveat worth knowing rather than papering over: urllib carries headers
     passed via ``headers=`` across an HTTP redirect, so a 3xx to another host
     would still re-send the Authorization header. That is pre-existing urllib
@@ -531,8 +537,20 @@ def _check_api_url(url: str) -> str:
     return url
 
 
+def _count_request(url: str) -> None:
+    global _rest_request_count
+    _rest_request_count += 1
+    if _rest_request_count > _REST_MAX_REQUESTS:
+        raise RuntimeError(
+            f"REST transport exceeded {_REST_MAX_REQUESTS} requests in one run "
+            f"(most recently {url}) — refusing to continue rather than wedge the "
+            "watch loop; this usually means a pagination cycle"
+        )
+
+
 def _http_get(url: str, token: str, *, timeout: int = 30) -> tuple[Any, str | None]:
     """GET ``url``, returning (parsed JSON, the raw ``Link`` header or None)."""
+    _count_request(url)
     req = urllib.request.Request(_check_api_url(url), headers=_http_headers(token))  # noqa: S310
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — fixed api.github.com host
@@ -561,8 +579,6 @@ def _next_link(link_header: str | None) -> str | None:
         return None
     for part in link_header.split(","):
         section = [p.strip() for p in part.split(";")]
-        if not section:
-            continue
         # Scan EVERY parameter, not just the second, and accept an unquoted
         # value. `<url>; type="text/html"; rel="next"` and `rel=next` are both
         # legal per RFC 8288, and reading only `section[1] == 'rel="next"'`
@@ -581,6 +597,15 @@ def _next_link(link_header: str | None) -> str | None:
 # `Link` header cannot spin a watch loop forever; 20 pages at per_page=100 is
 # 2000 items, far past any real PR.
 _REST_MAX_PAGES = 20
+
+# Total HTTP requests one process may issue. The per-socket `timeout` bounds a
+# single hung request; nothing bounded how MANY, and a cyclic `Link` header made
+# one poll issue 142 requests — a ~71-minute worst case at the 30s timeout. `_gh`
+# caps its subprocess at 60s precisely so "a hung gh call must not wedge the
+# watch loop"; the REST path needs the same ceiling or it reintroduces the wedge.
+# Generous against real usage: an ordinary poll issues 9.
+_REST_MAX_REQUESTS = 120
+_rest_request_count = 0
 
 _truncation_warned: set[str] = set()
 
@@ -603,11 +628,12 @@ def _warn_pagination_truncated(url: str, max_pages: int) -> None:
     specific claim about the review-bot guards, and reusing it here would say
     something false about which guard is blind.
 
-    The stderr line is deduped per URL (a watch loop re-reads the same URL every
-    poll, and forty identical warnings are skimmed past exactly like silence).
-    The reported LIST is not deduped: one poll reads the check-runs URL twice —
-    once in `rest_pr_view`, once in `fetch_check_details` — and both truncations
-    are real events the report should carry.
+    The stderr line is deduped per URL WITHIN ONE PROCESS, which is one poll:
+    `pr_watch.py` is invoked fresh per round, so this never spans polls. What it
+    actually collapses is the check-runs URL being read twice in a single poll
+    (once in `rest_pr_view`, once in `fetch_check_details`). The reported LIST is
+    not deduped, because both of those reads are real events; `build_report`
+    de-duplicates when turning them into merge blockers.
     """
     _truncated_reads.append(url)
     if url in _truncation_warned:
@@ -623,14 +649,25 @@ def _warn_pagination_truncated(url: str, max_pages: int) -> None:
 
 def _http_get_all(url: str, token: str, *, max_pages: int = _REST_MAX_PAGES) -> list:
     """GET ``url`` following ``Link: rel="next"``, for endpoints whose body IS
-    the JSON array (reviews, issue comments, inline comments)."""
+    the JSON array (reviews, issue comments, inline comments).
+
+    A page that is not a list RAISES rather than contributing nothing. Skipping
+    it silently was a fail-open straight through the merge gate, and the same one
+    `_rest_object` exists to close for the object reads: a 200 with a `null` body
+    on `pulls/{n}/reviews` made `review_decision` empty, which removed the
+    CHANGES_REQUESTED blocker and flipped `mergeable` from false to TRUE. On the
+    comment surfaces it made every unread finding read as "no findings".
+    """
     items: list = []
     next_url: str | None = url
     pages = 0
     while next_url and pages < max_pages:
         data, link = _http_get(next_url, token)
-        if isinstance(data, list):
-            items.extend(data)
+        if not isinstance(data, list):
+            raise RuntimeError(
+                f"GitHub API GET {next_url} returned {type(data).__name__}, expected a JSON array"
+            )
+        items.extend(data)
         next_url = _next_link(link)
         pages += 1
     if next_url:
@@ -655,8 +692,11 @@ def _http_get_all_wrapped(
     pages = 0
     while next_url and pages < max_pages:
         data, link = _http_get(next_url, token)
-        if isinstance(data, dict):
-            items.extend(data.get(key) or [])
+        if not isinstance(data, dict):
+            raise RuntimeError(
+                f"GitHub API GET {next_url} returned {type(data).__name__}, expected a JSON object"
+            )
+        items.extend(data.get(key) or [])
         next_url = _next_link(link)
         pages += 1
     if next_url:
@@ -830,7 +870,11 @@ def _rest_check_rows(check_runs: list[dict], statuses: list[dict]) -> list[dict]
 def _rest_object(data: Any, what: str) -> dict:
     """Return ``data`` as a dict, or raise the error ``main`` knows how to print.
 
-    Every REST read has to pass through something like this. ``main`` catches
+    Every REST read of an OBJECT passes through this; the list reads raise their
+    own equivalent inside ``_http_get_all`` / ``_http_get_all_wrapped``. (An
+    earlier version of this docstring claimed "every REST read", while the four
+    list reads silently dropped a wrong-typed page — the fail-open that claim
+    concealed.) ``main`` catches
     ``(RuntimeError, KeyError, ValueError)``, so a ``null`` or list body reaching
     ``.get`` raises ``AttributeError`` and escapes as a traceback instead of
     ``error: …`` + exit 2. GitHub really does return a bare ``null`` body, and an
@@ -840,6 +884,19 @@ def _rest_object(data: Any, what: str) -> dict:
     if not isinstance(data, dict):
         raise RuntimeError(f"{what} response was not a JSON object")
     return data
+
+
+def _coerce_review_timestamp(raw: dict) -> str:
+    """The review's submission time, or `""` when it is unusable.
+
+    Extracted so the property the comment in `bot_review_coverage` argues for is
+    reachable by a test: mutating that line to `str(...)` survived the whole
+    suite, even though the comment explains precisely why `str(...)` is wrong.
+    """
+    submitted = raw.get("submittedAt")
+    if not isinstance(submitted, str):
+        submitted = raw.get("submitted_at")  # REST's spelling
+    return submitted if isinstance(submitted, str) else ""
 
 
 def _rest_review_decision(reviews: list[dict]) -> str | None:
@@ -1600,10 +1657,7 @@ def bot_review_coverage(
         # one and sets `covers_head` — suppressing the very warning this exists
         # to raise. Unusable timestamps must sort to the BOTTOM, exactly like
         # the missing ones below.
-        submitted = raw.get("submittedAt")
-        if not isinstance(submitted, str):
-            submitted = raw.get("submitted_at")  # REST's spelling
-        submitted = submitted if isinstance(submitted, str) else ""
+        submitted = _coerce_review_timestamp(raw)
         if bot not in latest or submitted >= latest[bot]["submitted_at"]:
             latest[bot] = {
                 "bot": bot,
@@ -2374,6 +2428,11 @@ def build_report(
         ),
     }
     merge_blockers: list[str] = []
+    for truncated in dict.fromkeys(_truncated_reads):
+        merge_blockers.append(
+            f"a paginated read was TRUNCATED at the page ceiling ({truncated}) — "
+            "the poll did not see all checks/comments, so it cannot authorize a merge"
+        )
     if pr_state != "OPEN":
         merge_blockers.append(f"PR state is {pr_state}")
     if bool(view.get("isDraft")):
@@ -2410,12 +2469,14 @@ def build_report(
         "settling": settling,
         "max_total": max_total,
         "checks": checks,
-        # Reported, never gating — the same call `review_bots.signal` makes: an
-        # environment problem must not become a wedge. But it has to be IN the
-        # JSON, because that is what `dev_session.sh merge` reads; a truncated
-        # read that only warned on stderr would reach an autonomous merge path
-        # as `converged: true` with nothing to see. Empty on the `gh` backend,
-        # which paginates through `gh` itself.
+        # A truncated read BLOCKS `mergeable` and not `converged`, which is the
+        # split those two predicates exist for: the watch loop must still be able
+        # to finish, but an incomplete read must never authorize a merge. Merely
+        # reporting it was not enough — `truncated_reads` had no consumer at all
+        # (`render` did not print it and `dev_session.sh merge` reads only
+        # `mergeable`), so a poll that had silently missed the review bot's own
+        # check still reached the autonomous merge path as `mergeable: true`.
+        # Empty on the `gh` backend, which paginates through `gh` itself.
         "truncated_reads": list(_truncated_reads),
         "new_comments": [
             {

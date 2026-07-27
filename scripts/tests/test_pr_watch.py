@@ -3270,6 +3270,12 @@ def _fake_urlopen(monkeypatch: pytest.MonkeyPatch, module: ModuleType, pages: di
     Patching `_http_get` would put the mock ABOVE `_check_api_url`, so a test
     could only ever verify its own scaffolding. Everything from the guard
     downwards has to be real code for these assertions to mean anything.
+
+    Scope caveat: `pr_watch.urllib.request` IS the shared stdlib module, so this
+    patch is process-global for the duration of the test — unlike
+    `_pin_engine_backend`, which swaps a per-module stand-in precisely to avoid
+    that. `monkeypatch` restores it at teardown, so it is safe under pytest's
+    sequential default; do not reuse this helper from threaded or asyncio tests.
     """
     attempted: list[str] = []
 
@@ -3368,17 +3374,17 @@ def test_fetch_check_details_survives_a_non_object_body(
     """It is called OUTSIDE `main`'s try, so anything escaping crashes the poll
     instead of degrading.
 
-    Two layers, tested separately because they fail differently:
+    Two layers, and from HERE they are indistinguishable — both produce
+    `([], "unavailable")`. An earlier version of this docstring claimed they were
+    "tested separately because they fail differently", which was backwards, and
+    claimed the risk was an untested except tuple, which was also backwards:
+    mutation testing showed the tuple IS pinned and the `_rest_object` call site
+    is the one of five that nothing kills, because the tuple absorbs exactly what
+    the guard was added to prevent.
 
-    1. The `isinstance(pr_data, dict)` guard turns a `null`/list/str body into a
-       RuntimeError *inside* the block, where it is caught.
-    2. The widened except tuple catches an AttributeError/TypeError raised
-       anywhere else in the block. Layer 1 makes that unreachable for a
-       malformed BODY specifically, so this asserts it by injecting the error
-       from the fetch — otherwise the tuple is untested and a later edit that
-       removes a guard reopens the crash silently. (An earlier version of this
-       test only covered layer 1, and mutation testing showed the tuple
-       widening survived removal.)
+    So this test pins the OBSERVABLE contract — never raises, always degrades —
+    and `test_the_guard_not_the_tuple_reports_a_malformed_body` pins which layer
+    produced it, by reading the warning text only the guard can produce.
     """
     pr_watch = _load_pr_watch()
     _no_gh(pr_watch, monkeypatch)
@@ -3428,6 +3434,11 @@ def test_rest_pr_view_makes_one_git_call_for_six_urls(monkeypatch: pytest.Monkey
         return ("owner", "repo")
 
     monkeypatch.setattr(pr_watch, "_rest_repo_slug", _slug)
+    built_urls: list[str] = []
+    real_api = pr_watch._rest_api
+    monkeypatch.setattr(
+        pr_watch, "_rest_api", lambda path, slug=None: built_urls.append(real_api(path, slug)) or built_urls[-1]
+    )
     monkeypatch.setattr(
         pr_watch,
         "_http_get",
@@ -3438,6 +3449,9 @@ def test_rest_pr_view_makes_one_git_call_for_six_urls(monkeypatch: pytest.Monkey
 
     pr_watch.fetch_pr_view(1)
     assert len(slug_calls) == 1
+    # Count the URLs too — the name says "six" and nothing checked it, so adding
+    # or dropping a read was invisible.
+    assert len(built_urls) == 6, built_urls
 
     # A second call re-derives it: no process-lifetime state to go stale.
     pr_watch.fetch_pr_view(1)
@@ -3730,7 +3744,10 @@ def test_a_branch_name_cannot_rewrite_the_resolve_query(
 
     assert pr_watch.resolve_pr(None) == 5
     url = attempted[0]
-    assert "state=closed" not in url.split("head=")[1].split("&")[0] or "%26" in url
+    # Assert the encoding directly. The previous form was `A or B`, which passes
+    # when either holds and so could not distinguish "encoded" from "the branch
+    # name happened not to appear".
+    assert "%26" in url, f"the branch name's & was not percent-encoded: {url}"
     assert url.count("state=") == 1, f"branch name injected a parameter: {url}"
 
 
@@ -3791,3 +3808,297 @@ def test_the_loader_detaches_the_engine_from_ambient_path() -> None:
     assert pr_watch._resolve_backend() == ("gh", None)
     # Non-`gh` lookups still reach the real shutil, so nothing else is masked.
     assert pr_watch.shutil.which("definitely-not-a-real-binary-xyz") is None
+
+
+# --- round 2: the adversarial lens's two HIGH fail-opens --------------------
+
+
+def test_a_malformed_list_body_cannot_flip_the_merge_gate_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The round-2 HIGH. `_http_get_all` skipped a non-list page silently, so a
+    200 with a `null` body on `pulls/{n}/reviews` produced an empty
+    `review_decision` — which removed the CHANGES_REQUESTED blocker and flipped
+    `mergeable` from false to TRUE. The same fail-open `e3586b2` closed, through
+    a different door: unreadable read to authorized merge.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+
+    for body in (None, {"message": "Bad credentials"}, "a string"):
+        monkeypatch.setattr(
+            pr_watch, "_http_get", lambda url, token, _b=body, **_kw: (_b, None)
+        )
+        with pytest.raises(RuntimeError, match="expected a JSON array"):
+            pr_watch._http_get_all("https://api.github.com/repos/o/r/pulls/9/reviews", "t")
+
+    # And the wrapped variant, which feeds the check surfaces.
+    for body in (None, [], "a string"):
+        monkeypatch.setattr(
+            pr_watch, "_http_get", lambda url, token, _b=body, **_kw: (_b, None)
+        )
+        with pytest.raises(RuntimeError, match="expected a JSON object"):
+            pr_watch._http_get_all_wrapped(
+                "https://api.github.com/repos/o/r/commits/s/check-runs", "t", "check_runs"
+            )
+
+
+def test_an_unreadable_review_surface_does_not_read_as_no_findings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End to end through the poll, which is where it mattered: the failure has to
+    reach `main` as an error, not as a clean report."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get",
+        lambda url, token, **_kw: (
+            ({"number": 9, "state": "open", "head": {"sha": "h"}}, None)
+            if "pulls/9" in url and "reviews" not in url and "comments" not in url
+            else (None, None)  # every list surface answers 200 + null
+        ),
+    )
+    with pytest.raises(RuntimeError, match="expected a JSON"):
+        pr_watch.fetch_pr_view(9)
+
+
+def test_a_truncated_read_blocks_the_merge_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The other round-2 HIGH. Hitting the page ceiling drops checks — including
+    the review bot's own — so `summarize_review_bots` finds nothing pending and
+    raises no blocker. `truncated_reads` was added to make that visible and had
+    ZERO consumers: `render` never printed it and `dev_session.sh merge` reads
+    only `mergeable`, so a poll that had silently missed the bot's check still
+    reached the autonomous merge path as `mergeable: true`.
+
+    It blocks `mergeable` and NOT `converged`, which is exactly what those two
+    predicates are for: the watch loop must still be able to finish, but an
+    incomplete read must never authorize a merge.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get",
+        lambda url, token, **_kw: ([{"id": 1}], '<https://api.github.com/n>; rel="next"'),
+    )
+    pr_watch._http_get_all("https://api.github.com/checks", "t", max_pages=1)
+
+    report = pr_watch.build_report(
+        _green_view(), [], set(), check_details=pr_watch.CheckDetails([], "skipped")
+    )
+    assert report["converged"] is True, "the watch loop must still be able to finish"
+    assert report["mergeable"] is False
+    assert any("TRUNCATED" in b for b in report["merge_blockers"])
+    # De-duplicated into blockers even though the same URL is read twice a poll.
+    pr_watch._http_get_all("https://api.github.com/checks", "t", max_pages=1)
+    again = pr_watch.build_report(
+        _green_view(), [], set(), check_details=pr_watch.CheckDetails([], "skipped")
+    )
+    assert len([b for b in again["merge_blockers"] if "TRUNCATED" in b]) == 1
+
+
+def test_the_wrapped_helper_reports_its_own_truncation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting the truncation call from `_http_get_all_wrapped` alone survived
+    the whole suite: every truncation test drove the PLAIN helper, so the surface
+    where truncation causes the documented false green was the untested one."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get",
+        lambda url, token, **_kw: (
+            {"check_runs": [{"name": "c"}]},
+            '<https://api.github.com/n>; rel="next"',
+        ),
+    )
+    pr_watch._http_get_all_wrapped("https://api.github.com/cr", "t", "check_runs", max_pages=1)
+    assert pr_watch._truncated_reads == ["https://api.github.com/cr"]
+
+
+def test_a_pagination_cycle_cannot_wedge_the_poll(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`timeout` bounds ONE socket; nothing bounded how many. A cyclic `Link` made
+    one poll issue 142 requests — ~71 minutes at the 30s timeout — while `_gh`
+    caps its subprocess at 60s so "a hung gh call must not wedge the watch loop".
+    """
+    pr_watch = _load_pr_watch()
+    calls = {"n": 0}
+
+    def _get(url, token, **_kw):
+        calls["n"] += 1
+        pr_watch._count_request(url)
+        return [{"id": calls["n"]}], '<https://api.github.com/same>; rel="next"'
+
+    monkeypatch.setattr(pr_watch, "_http_get", _get)
+    with pytest.raises(RuntimeError, match="exceeded .* requests"):
+        for _ in range(50):
+            pr_watch._http_get_all("https://api.github.com/same", "t", max_pages=20)
+    assert calls["n"] <= pr_watch._REST_MAX_REQUESTS + 1
+
+
+def test_the_guard_not_the_tuple_reports_a_malformed_body(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`fetch_check_details`'s `_rest_object` call was the 1 of 5 sites no test
+    killed: the widened except tuple absorbs the AttributeError the guard exists
+    to prevent, so both layers look identical from the caller. Distinguished by
+    the warning text, which only the guard produces.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    monkeypatch.setattr(pr_watch, "_http_get", lambda url, token, **_kw: (None, None))
+
+    assert pr_watch.fetch_check_details(1) == ([], "unavailable")
+    assert "not a JSON object" in capsys.readouterr().err
+
+
+def test_github_token_is_accepted_not_just_gh_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`GITHUB_TOKEN` is what GitHub Actions injects — the cloud-session case this
+    whole backend exists for — and dropping it from `_github_token` survived every
+    test, because `_no_gh` only ever sets `GH_TOKEN`."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch.shutil, "which", lambda _n: None)
+
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.setenv("GITHUB_TOKEN", "actions-token")
+    assert pr_watch._resolve_backend() == ("rest", "actions-token")
+
+    # GH_TOKEN wins when both are set, matching gh's own precedence.
+    monkeypatch.setenv("GH_TOKEN", "explicit")
+    assert pr_watch._resolve_backend() == ("rest", "explicit")
+
+
+def test_the_origin_url_parse_is_covered_at_all(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`_rest_repo_slug` was stubbed by every test, so the only thing between the
+    REST backend and a 404 on every call had zero coverage — swapping owner/repo
+    or dropping the `.git` strip both survived the suite.
+
+    Calls the real function with only `git` stubbed. A first attempt at this test
+    re-derived the regex in the test body instead, which would have pinned nothing
+    about the engine — the same defect class this test exists to close. `ruff`'s
+    unused-variable warning is what caught it.
+    """
+    pr_watch = _load_pr_watch()
+
+    cases = {
+        "git@github.com:topij/agentic-dev-kit.git": ("topij", "agentic-dev-kit"),
+        "https://github.com/topij/agentic-dev-kit.git": ("topij", "agentic-dev-kit"),
+        "https://github.com/topij/agentic-dev-kit": ("topij", "agentic-dev-kit"),
+        "ssh://git@github.com:22/topij/agentic-dev-kit.git": ("topij", "agentic-dev-kit"),
+        "https://x-access-token:tok@github.com/topij/agentic-dev-kit.git": ("topij", "agentic-dev-kit"),
+        "https://github.com/topij/agentic-dev-kit/": ("topij", "agentic-dev-kit"),
+        "git://github.com/topij/agentic-dev-kit.git": ("topij", "agentic-dev-kit"),
+    }
+    for url, expected in cases.items():
+        monkeypatch.setattr(pr_watch, "_git_out", lambda args, what, _u=url: _u)
+        # Order matters: owner first. A swap is a total failure (every call 404s).
+        assert pr_watch._rest_repo_slug() == expected, url
+
+    # An origin that is not a parseable remote must say so, not synthesize a slug.
+    monkeypatch.setattr(pr_watch, "_git_out", lambda args, what: "not-a-url")
+    with pytest.raises(RuntimeError, match="could not parse owner/repo"):
+        pr_watch._rest_repo_slug()
+
+
+def test_a_terminal_status_context_is_not_read_as_pending() -> None:
+    """REST returns lowercase status states. Dropping the `.upper()` made every
+    status context miss the uppercase bucket table and read as pending, while
+    `summarize_checks` (which upper-cases independently) saw SUCCESS — the same
+    two-lane split this round removed for STALE, in the wedge direction: a bot's
+    terminal check would block the merge gate for the whole grace window.
+    """
+    pr_watch = _load_pr_watch()
+
+    row = pr_watch._rest_check_rows(
+        [], [{"context": "CodeRabbit", "state": "success", "description": "", "created_at": ""}]
+    )[0]
+    assert row["state"] == "SUCCESS"
+    assert row["bucket"] == "pass"
+    assert pr_watch._check_is_pending(row) is False
+    assert pr_watch.summarize_review_bots([row], [], now=NOW)["pending"] == []
+
+
+def test_an_approved_host_actually_receives_the_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Three tests pinned that a REJECTED host gets no request; none pinned that
+    an approved one gets the Authorization header. Deleting it from
+    `_http_headers` survived — at runtime that is the anonymous 60/hr limit and a
+    404 on any private repo."""
+    pr_watch = _load_pr_watch()
+    built: list[dict] = []
+    real_request = pr_watch.urllib.request.Request
+
+    def _request(url, **kw):
+        built.append(kw.get("headers") or {})
+        return real_request(url, **kw)
+
+    monkeypatch.setattr(pr_watch.urllib.request, "Request", _request)
+    _fake_urlopen(monkeypatch, pr_watch, {"api.github.com": ([], None)})
+
+    pr_watch._http_get("https://api.github.com/repos/o/r/pulls/1", "s3cret")
+    assert built and built[0].get("Authorization") == "Bearer s3cret"
+
+
+def test_an_unusable_review_timestamp_sorts_below_a_real_one() -> None:
+    """The comment above this line argues at length that `str(...)` would be
+    "actively wrong" because garbage sorts ABOVE a real timestamp and so
+    suppresses the coverage warning — and mutating it to exactly that survived.
+    """
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch._coerce_review_timestamp({"submittedAt": "2026-07-25T10:00:00Z"}) == "2026-07-25T10:00:00Z"
+    assert pr_watch._coerce_review_timestamp({"submitted_at": "2026-07-25T10:00:00Z"}) == "2026-07-25T10:00:00Z"
+    # The mutation the comment warns about returns "20260725" instead of "".
+    # It must be garbage in REST's `submitted_at`: garbage in `submittedAt` is
+    # already wiped to None by the first isinstance, so `str(None if …)` yields
+    # "" either way and the input cannot distinguish the two. A first version of
+    # this test used only that input and the mutant survived.
+    for garbage in (
+        {"submitted_at": 20260725},
+        {"submitted_at": {"x": 1}},
+        {"submittedAt": 20260725},
+        {},
+    ):
+        assert pr_watch._coerce_review_timestamp(garbage) == "", garbage
+
+    # And end to end: a garbage-dated review must not displace the real one.
+    reviews = [
+        {"user": {"login": "coderabbitai"}, "commit_id": "real", "submitted_at": "2026-07-25T10:00:00Z"},
+        {"user": {"login": "coderabbitai"}, "commit_id": "garbage", "submittedAt": 99999999},
+    ]
+    assert pr_watch.bot_review_coverage(reviews, "garbage")[0]["sha"] == "real"
+
+
+def test_resolve_pr_asks_only_for_open_prs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`state=all` survived: `data[0]` could then be a merged PR for the same
+    branch name."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    monkeypatch.setattr(pr_watch, "_git_out", lambda args, what: "dev/x")
+    attempted = _fake_urlopen(monkeypatch, pr_watch, {"pulls?head=": ([{"number": 5}], None)})
+
+    pr_watch.resolve_pr(None)
+    assert "state=open" in attempted[0]
+
+
+def test_the_review_snapshot_also_makes_one_git_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The commit message claimed `rest_review_snapshot` threads the slug like
+    `rest_pr_view`; reverting it to a per-URL lookup survived."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    calls: list[int] = []
+    monkeypatch.setattr(
+        pr_watch, "_rest_repo_slug", lambda: (calls.append(1), ("owner", "repo"))[1]
+    )
+    monkeypatch.setattr(
+        pr_watch, "_http_get", lambda url, token, **_kw: ({"number": 3, "head": {"sha": "s"}}, None)
+    )
+    monkeypatch.setattr(pr_watch, "_http_get_all", lambda url, token, **_kw: [])
+
+    pr_watch.fetch_review_snapshot(3)
+    assert len(calls) == 1
