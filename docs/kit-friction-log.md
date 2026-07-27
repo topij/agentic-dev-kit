@@ -129,3 +129,48 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   because a later edit re-read one. **L** — proposed fix: any workflow step that edits a
   GitHub comment via `gh api` should use `-F body=@<file>` and verify the comment's
   body length (or a content marker) after the PATCH.
+
+## 2026-07-27 (fourth session of the day)
+
+- **A test written from the fix's own framing can pin the bug as correct.** My
+  `comparable_max_total` reset disabled the false-settle guard on the DEFAULT `gh`
+  backend (`mergeable` false → **true** for every existing PR), and the test I wrote
+  alongside it asserted `settling is False` / `converged is True` as the *desired*
+  outcome. So the suite pinned the permissive direction and nothing pinned the guard —
+  a mutation removing the reset was **killed by my own test**. Two review lenses found
+  it independently; the suite could not, by construction. **H** — proposed fix: for a
+  change to a gate, the test must assert the *blocking* direction survives, not that the
+  new behaviour occurs. Worth a line in `safety-critical-changes.md`: when a fix changes
+  what a guard concludes, pin the guard's refusal first and the fix's effect second.
+- **`archive_plan_sessions.py`'s default `--keep 6` is a no-op remedy — third
+  occurrence, now in this repo twice.** `check_doc_budget` warned at 470/400 lines and
+  the sweep answered *"nothing to move: 6 session block(s) <= --keep 6"*, leaving the
+  file over budget with the warning still firing. `--keep 4` moved 2 blocks and brought
+  it to 314. This is `#74` exactly; recording the recurrence because the wrap-up workflow
+  tells the operator to run the sweep and the sweep does nothing at its default.
+  **M** — no new fix proposed beyond `#74`: the remedy should take the *budget* as input
+  and drop blocks until it fits, rather than counting blocks.
+- **Chaining `make test` into commit-and-push let me push a red tree.** I ran
+  `make test && git commit && git push` as one compound command, `make test` failed on a
+  stale manifest hash, and the failure scrolled past while the commit and push
+  succeeded. CI on that head went red. **M** — proposed fix: the wrap-up and lane
+  contracts should say verification runs as its **own** step whose result is read before
+  anything is committed; a compound `&&` chain that ends in a push makes the failure
+  invisible at exactly the moment it matters. Related to `#54` (name the command that
+  established a claim) but distinct: here the command ran and its answer was ignored.
+- **`--record-review` un-converges the PR it just certified, and the merge then needs a
+  second `--mark-seen`.** Posting the coverage record made `converged` false (my own
+  comment is a new comment), so `mergeable` went false with an *empty* `merge_blockers`
+  list — which reads as "no reason" to anyone scanning it. Acking cleared it. This is
+  `#42`; recording an occurrence plus the detail that the empty blocker list makes the
+  cause unguessable from the JSON alone. **L**
+- **Panel isolation pointed at the wrong ref 5 of 5 launches this session** (all at base
+  `main`, empty diff), and all five lenses detected and corrected it because the launch
+  prompt required clone-verify-report. Cumulative: 13 of 14 across three sessions with
+  the inversion in place. **No new fix proposed** — occurrence data for `#75`, whose
+  premise now has enough evidence to act on.
+- **CodeRabbit rate-limited three times in one session**, twice recovering inside 30s and
+  once still limited at merge time. The 41-minute window observed earlier in the day was
+  the outlier, not the norm. **No new fix proposed** — supports the friction entry from
+  session 3 that the reviewer-unavailable branch should read the recovery window and
+  re-trigger when it is short.
