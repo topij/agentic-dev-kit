@@ -142,8 +142,9 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   change to a gate, the test must assert the *blocking* direction survives, not that the
   new behaviour occurs. Worth a line in `safety-critical-changes.md`: when a fix changes
   what a guard concludes, pin the guard's refusal first and the fix's effect second.
-- **`archive_plan_sessions.py`'s default `--keep 6` is a no-op remedy — third
-  occurrence, now in this repo twice.** `check_doc_budget` warned at 470/400 lines and
+- **`archive_plan_sessions.py`'s default `--keep 6` is a no-op remedy — fourth
+  occurrence, third in this repo.** (The graduated-issue note above already records
+  three, two here.) `check_doc_budget` warned at 470/400 lines and
   the sweep answered *"nothing to move: 6 session block(s) <= --keep 6"*, leaving the
   file over budget with the warning still firing. `--keep 4` moved 2 blocks and brought
   it to 314. This is `#74` exactly; recording the recurrence because the wrap-up workflow
@@ -164,13 +165,18 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   list — which reads as "no reason" to anyone scanning it. Acking cleared it. This is
   `#42`; recording an occurrence plus the detail that the empty blocker list makes the
   cause unguessable from the JSON alone. **L**
-- **Panel isolation pointed at the wrong ref 5 of 5 launches this session** (all at base
-  `main`, empty diff), and all five lenses detected and corrected it because the launch
-  prompt required clone-verify-report. Cumulative: 13 of 14 across three sessions with
-  the inversion in place. **No new fix proposed** — occurrence data for `#75`, whose
-  premise now has enough evidence to act on.
-- **CodeRabbit rate-limited three times in one session**, twice recovering inside 30s and
-  once still limited at merge time. The 41-minute window observed earlier in the day was
-  the outlier, not the norm. **No new fix proposed** — supports the friction entry from
-  session 3 that the reviewer-unavailable branch should read the recovery window and
-  re-trigger when it is short.
+- **The provided worktree was at the base ref on 5 of 5 panel launches this session**
+  (`main`, empty diff), and every lens detected and corrected it because the launch
+  prompt required clone-verify-report. **No cumulative figure claimed**: the earlier
+  sessions' "8 of 8" counts launches that isolated *correctly*, so it cannot be added to
+  a count of launches that pointed *wrong* — an easy error to make and worth not making
+  in the record. **No new fix proposed** — occurrence data posted to `#75`.
+- **CodeRabbit rate-limited three times in one session**, once still limited at merge
+  time, and **its recovery-window figures are not retrievable afterwards** — it edits the
+  rate-limit notice comment in place, so a window read live (41 minutes on `#91` this
+  session) is overwritten by the next edit and cannot be audited later. That is the
+  finding: every claim in this log about a recovery window is an ephemeral observation
+  with no artifact behind it, which is why they keep failing verification. **L** —
+  proposed fix: when the reviewer-unavailable branch reads the window, record the value
+  and the timestamp on the PR, so the decision to wait-and-re-trigger versus run the
+  panel is auditable. Supports the session-3 entry proposing that branch.

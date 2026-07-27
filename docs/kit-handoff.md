@@ -34,30 +34,33 @@ instead, and merged.
 - **The bound costs nothing**: `dev_session.sh cmd_merge` resolves through `gh repo view`
   + `gh pr list` *before* it reads `mergeable`, so a gh-less session never had a merge
   path. `#96` turns that accident into an enforced invariant.
-- **Filed `#92`–`#98`** — the Codex-adapter pair, the broadening bar, and four defects
-  the panel found that predate this work.
+- **Filed six issues** (`#92`–`#95`, `#97`, `#98`) — the Codex-adapter pair, the
+  broadening bar, and three defects the panel found that predate this work. `#96` is the
+  PR, not an issue.
 
 **Decided**
 
 - **A structural bound beats validating every boundary** (rule 1's "deterministic
   artifact"). Five rounds of per-boundary tightening never converged; one guard in one
-  place ended the class. Kept to two functions so `#94`'s broadening is a deletion.
+  place ended the class. Kept to two functions so `#94`'s broadening is a deletion plus
+  its 13-row bar, not a rewrite.
 - **Two of my own mechanisms deleted under rule 1 rather than tightened**: a request
   ceiling that created a fail-open by starving the one caller that swallows its
   exception, and a settle-baseline reset that disabled the false-settle guard on the
   **default `gh` backend** for every existing PR.
 - **A third lens earns its place when the first two keep finding the same shape.** Two
-  general lenses found one fail-open each per round; a lens briefed only on
-  "enumerate every external input, trace it to a permissive verdict" found three the
-  others never saw, and produced the 56-row enumeration now on `#94` as its bar.
+  general lenses each found one HIGH per round — in the tests on round 1, engine
+  fail-opens after that; a lens briefed only on "enumerate every external input, trace
+  it to a permissive verdict" found three the others never saw. Its 56-row input
+  enumeration is distilled to the 13-row acceptance table now on `#94`.
 - **Coverage recorded piecewise, again.** The final delta (a reviewer-requested doc line
   + a manifest hash) is unreviewed and says so, with `bots_behind_head` on the receipt.
 
 **Learned**
 
-- **My own fixes were the largest single source of HIGH findings** — three of seven
-  fail-opens, plus a fail-open on the *default* backend, plus a test that pinned the
-  permissive outcome as correct. The reviewed, *requested* fixes held; the unrequested
+- **My own fixes were the largest single source of HIGH findings** — three of the seven
+  fail-opens across both PRs, one of them on the *default* `gh` backend, with a test
+  that pinned its permissive outcome as correct. The reviewed, *requested* fixes held; the unrequested
   hardening I added alongside them is what broke.
 - **My claims were the dominant defect four rounds running** — a comment naming a
   consumer that did neither thing claimed, "nothing branches on this" about a field that
@@ -66,16 +69,18 @@ instead, and merged.
   the diff-size comparison wrong twice, both flattering, both corrected on the record.
 - **I pushed a red tree** by chaining `make test` into commit-and-push and acting past a
   failure on screen.
-- **Panel isolation pointed at the wrong ref 5 of 5 times**, and all five lenses detected
-  it because the prompt required clone-verify-report. More data for `#75`.
+- **The provided worktree was at the base ref on 5 of 5 panel launches**, and every lens
+  detected it because the prompt required clone-verify-report. Posted to `#75`; no
+  cumulative claimed — the earlier sessions' figures count a different thing.
 
 **Open, and owned by nothing yet**
 
 - **`#94`** — broadening REST to merge authorization, with the fail-open enumeration as a
   written bar. Needs a real consumer first; nothing can merge gh-lessly today.
-- **`#95`, `#98`** — pre-existing fail-opens on `main` (a PR can forge a check that
-  cancels its own reviewer's block; `render` sanitises bodies but not the path/author
-  beside them). **`#97`** — no guard stops a kit test hitting the network.
+- **`#95`** — a pre-existing fail-open on `main`: a PR can forge a check that cancels its
+  own reviewer's pending block. **`#98`** — pre-existing too, but it *hides* blockers
+  rather than opening the gate: `render` sanitises comment bodies and not the path/author
+  beside them, so a filename can walk the cursor over them. **`#97`** — no guard stops a kit test hitting the network.
 - **`#92`, `#93`** — the kit ships Codex skills but no `AGENTS.md`; cs-toolkit forked the
   wrap-up workflow into a 160-line skill. `#93` must recover upstream content *before*
   thinning it.
@@ -85,7 +90,8 @@ instead, and merged.
   `session-start`.
 
 ▶ Next: `session-start` — several independent threads (`#92`/`#93` Codex adapter, the
-cs-toolkit swap, `#47`, and four panel-found defects on `main`), so let it re-propose.
+cs-toolkit swap, `#47`, `#100`, and three panel-found defects on `main`), so let it
+re-propose.
 
 ______________________________________________________________________
 
