@@ -70,7 +70,8 @@ clock) — "polls only" means it never authorizes a merge and never mutates the 
 not that it touches no disk. Calling that "read-only" was imprecise. So the watch loop works without `gh`, and merge authorization still
 requires it — which costs nothing, because `dev_session.sh merge` needs `gh`
 anyway. See `rest_cannot_authorize_merge` for why this is a structural bound
-rather than validation at each boundary, and issue #94 for lifting it.
+rather than validation at each boundary, and issue #94 for lifting it. It polls
+only; it is not read-only — it still writes its own per-PR watch state.
 
 Usage:
     uv run scripts/pr_watch.py                 # current branch's PR, human summary
@@ -537,8 +538,8 @@ def _resolve_backend() -> tuple[str, str | None]:
 # enumeration recorded there. Keep the bound in these two functions so that
 # broadening stays a deletion rather than a rewrite.
 
-_REST_READ_ONLY_BLOCKER = (
-    "the REST backend cannot authorize a merge — it is read-only (issue #94); "
+_REST_POLL_ONLY_BLOCKER = (
+    "the REST backend cannot authorize a merge — it polls only (issue #94); "
     "run the merge from a session with `gh` available"
 )
 
@@ -556,19 +557,30 @@ def _active_backend_name() -> str:
         return "unknown"
 
 
-def rest_cannot_authorize_merge() -> str | None:
-    """The merge blocker to add when the active backend is REST, else None.
+def rest_cannot_authorize_merge(backend: str | None = None) -> str | None:
+    """The merge blocker to add when the report's data came from REST, else None.
+
+    ``backend`` must be the backend that ACTUALLY PERFORMED THE READS, threaded in
+    by the caller. Re-resolving it here was a race: `_resolve_backend` re-reads
+    PATH on every call by design, so a `gh` that appeared during the poll's network
+    phase — several round trips at a 30s timeout each — made this return None for a
+    report built entirely from REST data. Measured: `mergeable: true` with
+    `_gh_json` never called.
+
+    Resolving once per poll and threading it satisfies the #48 lesson (no
+    import-time memoization) without letting the bound drift from the data.
 
     Deliberately NOT conditioned on anything observed about the PR: the whole
     point is that no remote response participates in this decision.
     """
-    try:
-        backend, _ = _resolve_backend()
-    except RuntimeError:
-        # No usable backend at all. `main` raises on the first read anyway; a
-        # missing backend must never read as "gh, therefore permitted".
-        return _REST_READ_ONLY_BLOCKER
-    return _REST_READ_ONLY_BLOCKER if backend == "rest" else None
+    if backend is None:
+        try:
+            backend, _ = _resolve_backend()
+        except RuntimeError:
+            # No usable backend at all. A missing backend must never read as
+            # "gh, therefore permitted".
+            return _REST_POLL_ONLY_BLOCKER
+    return _REST_POLL_ONLY_BLOCKER if backend == "rest" else None
 
 
 def require_gh_backend(operation: str) -> None:
@@ -584,7 +596,7 @@ def require_gh_backend(operation: str) -> None:
     backend, _ = _resolve_backend()
     if backend == "rest":
         raise RuntimeError(
-            f"{operation} needs the `gh` backend: the REST fallback is read-only "
+            f"{operation} needs the `gh` backend: the REST fallback polls only "
             "(issue #94). Install and authenticate `gh`, or run this from a "
             "session that has it."
         )
@@ -737,12 +749,14 @@ def _warn_pagination_truncated(url: str, max_pages: int) -> None:
     specific claim about the review-bot guards, and reusing it here would say
     something false about which guard is blind.
 
-    The stderr line is deduped per URL WITHIN ONE PROCESS, which is one poll:
-    `pr_watch.py` is invoked fresh per round, so this never spans polls. What it
-    actually collapses is the check-runs URL being read twice in a single poll
-    (once in `rest_pr_view`, once in `fetch_check_details`). The reported LIST is
-    not deduped, because both of those reads are real events; `build_report`
-    de-duplicates when turning them into merge blockers.
+    The stderr line is deduped per URL within one process, which is one poll —
+    the engine is invoked fresh per round. What that collapses is the check-runs
+    URL being read twice in a single poll (`rest_pr_view`, then
+    `fetch_check_details`).
+
+    ``_truncated_reads`` itself is NOT deduped: both reads are real events.
+    :func:`render` is what collapses them for display; ``build_report`` copies the
+    list through unchanged and raises no blocker from it.
     """
     _truncated_reads.append(url)
     if url in _truncation_warned:
@@ -805,16 +819,25 @@ def _http_get_all_wrapped(
             raise RuntimeError(
                 f"GitHub API GET {next_url} returned {type(data).__name__}, expected a JSON object"
             )
-        page = data.get(key)
         # The extracted value needs its own check, not just the page. `or []`
-        # only rescues a falsy value: a STRING here extends character by
-        # character, a dict extends its keys, and either way
-        # `_rest_check_rows` then filters the garbage out and the whole check
-        # surface reads as empty — the exact fail-open the page check above
-        # was added to close, one level down. A missing key stays legal
-        # (an empty rollup is a real state).
-        if page is None:
-            page = []
+        # only rescued a falsy value: a STRING extends character by character, a
+        # dict extends its keys, and `_rest_check_rows` then filters the garbage
+        # out so the whole check surface reads as empty.
+        #
+        # An ABSENT key is also rejected, which an earlier version of this allowed
+        # by conflating "empty list" with "no key". GitHub always returns the
+        # wrapper key — `{"total_count": 0, "check_runs": []}` for a commit with no
+        # checks — so its absence means the body is not this endpoint's shape,
+        # typically a 200 carrying an error payload. Treating that as "this surface
+        # has no checks" dropped a whole surface silently: a real FAILING status
+        # context vanished and `all_green` went true, with no warning and no
+        # `truncated_reads` entry. An empty LIST is still legal.
+        if key not in data:
+            raise RuntimeError(
+                f"GitHub API GET {next_url} returned no {key!r} key — not this "
+                "endpoint's shape (usually an error payload with a 200 status)"
+            )
+        page = data.get(key)
         if not isinstance(page, list):
             raise RuntimeError(
                 f"GitHub API GET {next_url} returned {type(page).__name__} for "
@@ -927,6 +950,26 @@ _REST_BUCKETS = {
 }
 
 
+def _rest_str(value: object) -> str:
+    """Coerce a remote scalar to ``str``, mapping anything else to ``""``.
+
+    The `gh` path never needed this: the CLI applies a schema, so every string
+    field arrives as a string. REST hands raw JSON straight to
+    :func:`summarize_checks` and :func:`summarize_review_bots`, which call
+    ``.strip()`` / ``.lower()`` on these fields — so a dict-valued ``name`` or
+    ``output.title`` raised AttributeError out of `build_report`, which runs
+    OUTSIDE `main`'s try.
+
+    That is worse than a bad message: the raise precedes :func:`persist_poll`, so
+    no state is written and every subsequent poll repeats it. The PR's watch loop
+    is stuck with no ageing-out and no override — a wedge, from one malformed
+    field. ``str()`` is deliberately not used: it would turn ``{"a": 1}`` into the
+    string ``"{'a': 1}"`` and feed that to the outage matchers as if it were a
+    real description.
+    """
+    return value if isinstance(value, str) else ""
+
+
 def _rest_check_rows(check_runs: list[dict], statuses: list[dict]) -> list[dict]:
     """Shape REST check runs + legacy status contexts into ``gh pr checks`` rows.
 
@@ -940,12 +983,12 @@ def _rest_check_rows(check_runs: list[dict], statuses: list[dict]) -> list[dict]
         if not isinstance(run, dict):
             continue
         completed = run.get("status") == "completed"
-        state = str(
-            (run.get("conclusion") if completed else run.get("status")) or ""
+        state = _rest_str(
+            run.get("conclusion") if completed else run.get("status")
         ).upper()
         rows.append(
             {
-                "name": run.get("name") or "check",
+                "name": _rest_str(run.get("name")) or "check",
                 "state": state,
                 "bucket": _REST_BUCKETS.get(state, "pending"),
                 # `output.title` is what gh surfaces as a CheckRun's description
@@ -957,23 +1000,23 @@ def _rest_check_rows(check_runs: list[dict], statuses: list[dict]) -> list[dict]
                 # `main`'s try — and from `rest_pr_view`, which does not. Guarded
                 # here so both callers are safe rather than one.
                 "description": (
-                    (run.get("output") or {}).get("title") or ""
+                    _rest_str((run.get("output") or {}).get("title"))
                     if isinstance(run.get("output"), dict)
                     else ""
                 ),
-                "startedAt": run.get("started_at") or "",
+                "startedAt": _rest_str(run.get("started_at")),
             }
         )
     for status in statuses:
         if not isinstance(status, dict):
             continue
-        state = str(status.get("state") or "").upper()
+        state = _rest_str(status.get("state")).upper()
         rows.append(
             {
-                "name": status.get("context") or "status",
+                "name": _rest_str(status.get("context")) or "status",
                 "state": state,
                 "bucket": _REST_BUCKETS.get(state, "pending"),
-                "description": status.get("description") or "",
+                "description": _rest_str(status.get("description")),
                 # Deliberately EMPTY, matching what the `gh` path effectively
                 # provides: gh reports a StatusContext's startedAt as the zero
                 # time, which `_age_minutes` rejects, so the grace clock falls
@@ -1132,9 +1175,11 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict]]:
         "isDraft": bool(pr_data.get("draft")),
         "baseRefName": (pr_data.get("base") or {}).get("ref"),
         # REST's `mergeable_state` (clean/dirty/blocked/behind/unstable/…) is a
-        # different enum than GraphQL's `mergeStateStatus`. Passed through
-        # upper-cased as the closest available signal; nothing downstream
-        # branches on its exact values, and `decide_mergeable` does not read it.
+        # different enum than GraphQL's `mergeStateStatus`, passed through
+        # upper-cased. This DOES feed a merge blocker: `build_report` branches on
+        # `UNSTABLE` and on anything outside {CLEAN, HAS_HOOKS}. The two enums
+        # happen to overlap on the values that matter, but the mapping is
+        # approximate and #94 should verify it rather than inherit it.
         "mergeStateStatus": (str(pr_data.get("mergeable_state") or "").upper() or None),
         "reviewDecision": _rest_review_decision(reviews),
         "headRefOid": sha,
@@ -1154,8 +1199,9 @@ _bot_signal_warned = False
 def _warn_bot_signal_lost(reason: str) -> None:
     """Say once, on stderr, that the review-bot guards are running blind.
 
-    Once per process, not per poll: a watch loop calls this every round, and a
-    warning repeated forty times is skimmed past exactly like silence.
+    Once per process. The engine runs as a fresh process per round, so that is
+    also once per poll — loud rather than silent, which is the point: a lost bot
+    signal must not be mistakable for a clean one.
     """
     global _bot_signal_warned
     if _bot_signal_warned:
@@ -2404,6 +2450,11 @@ def build_report(
     check_details: list[dict] | CheckDetails | None = None,
     now: datetime | None = None,
     prior_pending_since: dict | None = None,  # already head-scoped by the caller
+    # The backend that PERFORMED THE READS in `view`/`inline`. Threaded rather
+    # than re-resolved so the REST bound cannot drift from the data it is bounding
+    # — see :func:`rest_cannot_authorize_merge`. None means "resolve it", which is
+    # right for a caller that did no I/O of its own (tests, `--mark-seen`).
+    backend: str | None = None,
 ) -> dict:
     """Assemble the JSON-serializable watch report for one PR snapshot.
 
@@ -2531,7 +2582,7 @@ def build_report(
         ),
     }
     merge_blockers: list[str] = []
-    rest_blocker = rest_cannot_authorize_merge()
+    rest_blocker = rest_cannot_authorize_merge(backend)
     if rest_blocker:
         merge_blockers.append(rest_blocker)
     if pr_state != "OPEN":
@@ -2584,7 +2635,7 @@ def build_report(
         # false-settle baseline is never compared across two backends that count
         # checks differently (see :func:`comparable_max_total`), and useful in the
         # JSON for anyone debugging why a gh-less poll behaves differently.
-        "backend": _active_backend_name(),
+        "backend": backend if backend is not None else _active_backend_name(),
         "new_comments": [
             {
                 "kind": c["kind"],
@@ -2823,28 +2874,6 @@ def render_assert_draft(report: dict) -> str:
     return f"PR #{pr} — drifted from {want}, correction FAILED (isDraft={report.get('final_draft')})"
 
 
-def comparable_max_total(state: dict, backend: str) -> int:
-    """The stored ``max_total``, or 0 when a different backend produced it.
-
-    The false-settle guard compares this poll's check count against the highest
-    seen for this head. That is only meaningful within ONE transport: REST
-    paginates the Checks API fully while `gh pr view` requests
-    `contexts(first: 100)` unpaginated, so a PR with more contexts than that
-    yields a higher count on REST. Carrying that number into a `gh` poll makes
-    `settling` true on every subsequent poll — the watch loop never terminates
-    and `dev_session.sh merge` refuses indefinitely, with a new push as the only
-    escape. A backend switch is therefore a fresh baseline, exactly like a head
-    change.
-
-    A state file written before this key existed has no recorded backend; that
-    reads as "not comparable", which costs one extra settling round rather than
-    risking the wedge.
-    """
-    if state.get("max_total_backend") != backend:
-        return 0
-    return int(state.get("max_total") or 0)
-
-
 def persist_poll(pr: int, report: dict, seen: set[str]) -> dict:
     """Persist post-poll watch state and return it.
 
@@ -2864,15 +2893,31 @@ def persist_poll(pr: int, report: dict, seen: set[str]) -> dict:
         "seen": sorted(seen),
         "head": report["head"],
         "max_total": report["max_total"],
-        # WHICH backend produced that count. The two transports read different
-        # check surfaces — REST paginates `commits/{sha}/check-runs` fully, while
-        # `gh pr view --json statusCheckRollup` requests `contexts(first: 100)`
-        # unpaginated — so on a PR with more contexts than that, REST
-        # deterministically reports MORE than `gh`. Sharing one monotone
-        # `max_total` across both then strands the lower-reporting backend in
-        # `settling` on every poll, forever, with a new push as the only exit.
-        # Recording the source lets `main` treat a backend switch as a fresh
-        # baseline instead of a permanent regression.
+        # WHICH backend produced that count — recorded for diagnosis only.
+        # NOTHING reads it, deliberately.
+        #
+        # There is a real cross-backend wedge here: the two transports read
+        # different check surfaces (REST paginates `commits/{sha}/check-runs`
+        # fully; `gh pr view --json statusCheckRollup` requests
+        # `contexts(first: 100)` unpaginated), so on a PR with more contexts than
+        # that, REST reports MORE than `gh`. One monotone `max_total` shared
+        # across both then strands the lower-reporting backend in `settling` until
+        # the next push.
+        #
+        # The obvious fix — reset the baseline when the backend changes — was
+        # built here and REMOVED under `safety-critical-changes.md` rule 1,
+        # because it fails open and does so on the DEFAULT backend. Resetting
+        # `prior_max_total` to 0 makes `max_total = checks["total"]`, so
+        # `checks["total"] < max_total` can never be true: the reset can only ever
+        # REMOVE `settling`, never add it. Every state file written before the key
+        # existed read as "not comparable", so upgrading turned the false-settle
+        # guard off for every existing PR on `gh` and flipped `mergeable` from
+        # false to TRUE. Measured, not theorised.
+        #
+        # So the wedge stays, as a fail-CLOSED known limitation (it refuses to
+        # merge; a push clears it), rather than being traded for a fail-open on the
+        # path everyone uses. Fixing it properly needs the two backends to count
+        # the same checks, which is #94 territory.
         "max_total_backend": report.get("backend"),
         "pending_seen": report["all_seen_keys"],
     }
@@ -3014,6 +3059,12 @@ def main(argv: list[str] | None = None) -> int:
             print(render_assert_draft(draft_report))
         return 0 if draft_report["ok"] else 2
 
+    # Resolved ONCE, before the first read, and threaded from here on. Not a
+    # cache: it is re-resolved on the next invocation (a fresh process per poll),
+    # which is what the #48 lesson actually requires. What it prevents is the
+    # backend changing DURING one poll's multi-round-trip network phase and the
+    # REST bound then being evaluated against the wrong transport.
+    backend_name = _active_backend_name()
     try:
         view, inline = fetch_pr_view(pr)
     except (RuntimeError, KeyError, ValueError) as exc:
@@ -3022,7 +3073,6 @@ def main(argv: list[str] | None = None) -> int:
     # Deliberately outside the try: this call never raises and never blocks the
     # loop — see :func:`fetch_check_details`.
     check_details = fetch_check_details(pr)
-    backend_name = _active_backend_name()
 
     state = load_state(pr)
     seen = set(state.get("seen", []))
@@ -3031,10 +3081,11 @@ def main(argv: list[str] | None = None) -> int:
         inline,
         seen,
         prior_head=state.get("head"),
-        prior_max_total=comparable_max_total(state, backend_name),
+        prior_max_total=int(state.get("max_total") or 0),
         review_receipt=state.get("review_receipt"),
         check_details=check_details,
         prior_pending_since=read_pending_since(state, view.get("headRefOid")),
+        backend=backend_name,
     )
 
     persist_poll(pr, report, seen)

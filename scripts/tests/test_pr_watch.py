@@ -3525,13 +3525,16 @@ def test_the_checks_fetch_asks_for_a_full_page(monkeypatch: pytest.MonkeyPatch) 
         assert "per_page=100" in url, f"{url} would truncate at the API default of 30"
 
 
-def test_truncation_reaches_the_json_the_merge_gate_reads(
+def test_truncation_is_reported_in_the_json_and_the_render(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The adversarial lens: truncation warned on stderr only, so a partial read
     reached `dev_session.sh merge` as `converged: true` with no trace.
-    `summarize_review_bots.signal` exists for exactly this reason — a stderr
-    warning is not readable by the thing that decides a merge.
+    Note what this does NOT claim: `dev_session.sh merge` reads only
+    `mergeable`/`pr`/`base`/`head`, so nothing in the repo consumes this key. It is
+    in the JSON for a caller that wants it and printed by `render` for a human;
+    the earlier name of this test asserted a merge-gate consumer that does not
+    exist.
 
     REST list endpoints return oldest-first, so the ceiling drops the NEWEST
     comments, which is where fresh findings are.
@@ -4090,8 +4093,11 @@ def test_the_refusal_names_the_way_out() -> None:
     is needed and point at the issue that tracks lifting the restriction."""
     pr_watch = _load_pr_watch()
 
-    message = pr_watch._REST_READ_ONLY_BLOCKER
-    assert "read-only" in message
+    message = pr_watch._REST_POLL_ONLY_BLOCKER
+    # "polls only", not "read-only": the engine does write its own watch state, so
+    # the stronger word was inaccurate on the surface an operator reads.
+    assert "polls only" in message
+    assert "read-only" not in message
     assert "#94" in message
     assert "gh" in message
 
@@ -4143,11 +4149,22 @@ def test_a_non_list_value_under_the_expected_key_is_rejected(
         with pytest.raises(RuntimeError, match="expected a JSON array"):
             pr_watch._http_get_all_wrapped("https://api.github.com/cr", "t", "check_runs")
 
-    # A missing key is still legal — an empty rollup is a real state, not an error.
-    monkeypatch.setattr(pr_watch, "_http_get", lambda url, token, **_kw: ({"total_count": 0}, None))
-    assert pr_watch._http_get_all_wrapped("https://api.github.com/cr", "t", "check_runs") == []
+    # An ABSENT key is rejected: GitHub always returns the wrapper key, so its
+    # absence means an error payload with a 200 status. Treating it as "no checks"
+    # dropped a whole surface — a real failing status context vanished and
+    # `all_green` went true, with no warning at all.
+    monkeypatch.setattr(pr_watch, "_http_get", lambda url, token, **_kw: ({"message": "Bad credentials"}, None))
+    with pytest.raises(RuntimeError, match="returned no 'check_runs' key"):
+        pr_watch._http_get_all_wrapped("https://api.github.com/cr", "t", "check_runs")
     monkeypatch.setattr(
         pr_watch, "_http_get", lambda url, token, **_kw: ({"check_runs": None}, None)
+    )
+    with pytest.raises(RuntimeError, match="expected a JSON array"):
+        pr_watch._http_get_all_wrapped("https://api.github.com/cr", "t", "check_runs")
+
+    # An empty LIST is legal — a commit with no checks is a real state.
+    monkeypatch.setattr(
+        pr_watch, "_http_get", lambda url, token, **_kw: ({"total_count": 0, "check_runs": []}, None)
     )
     assert pr_watch._http_get_all_wrapped("https://api.github.com/cr", "t", "check_runs") == []
 
@@ -4166,8 +4183,9 @@ def test_the_no_backend_message_does_not_promise_a_path_that_refuses() -> None:
     """
     pr_watch = _load_pr_watch()
 
-    message = pr_watch._REST_READ_ONLY_BLOCKER
+    message = pr_watch._REST_POLL_ONLY_BLOCKER
     assert "GraphQL" not in message
+    assert "read-only" not in message
 
     import pytest as _pytest
 
@@ -4213,41 +4231,134 @@ def test_truncation_is_printed_where_a_human_reads_it(
     assert "issues/9/comments" in rendered
 
 
-def test_a_backend_switch_does_not_wedge_the_settle_guard() -> None:
-    """The adversarial lens's wedge. REST paginates the Checks API fully; `gh pr
-    view` requests `contexts(first: 100)` unpaginated — so on a PR with more
-    contexts than that, REST reports MORE checks. Both backends share one state
-    file and `max_total` is monotone per head, so a REST poll's higher count made
-    every later `gh` poll report `settling: true` forever, with a new push as the
-    only escape.
+def test_the_false_settle_guard_is_not_disabled_by_a_missing_state_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Replaces a test that pinned a fail-open of my own making.
+
+    A previous round added `comparable_max_total`, which reset `prior_max_total`
+    to 0 whenever the state file had no recorded backend — true of every file the
+    shipped engine has ever written. That looks conservative and is not: with
+    `prior_max_total=0`, `max_total` becomes `checks["total"]`, so
+    `checks["total"] < max_total` can never hold. Resetting the baseline can only
+    ever REMOVE `settling`, never add it — so upgrading disabled the false-settle
+    guard for every existing PR on the DEFAULT `gh` backend and flipped
+    `mergeable` from false to true. The mechanism is deleted; this pins the
+    property it broke.
+
+    Driven through `main`, deliberately. The deleted test called the helper itself
+    and handed the result to `build_report`, so reverting the fix in `main` — the
+    only production call site — left the suite green. Third occurrence of that
+    shape on this branch.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_pr_view",
+        lambda pr: (_green_view(headRefOid="abc123"), []),
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "skipped")
+    )
+    # A state file exactly as the shipped engine writes it: a baseline, no backend.
+    monkeypatch.setattr(
+        pr_watch,
+        "load_state",
+        lambda pr: {"head": "abc123", "max_total": 6, "seen": [], "review_receipt": {
+            "head": "abc123", "source": "fallback:panel", "lenses": ["adversarial", "correctness"]}},
+    )
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: None)
+
+    captured: list[dict] = []
+    real_build = pr_watch.build_report
+    monkeypatch.setattr(
+        pr_watch,
+        "build_report",
+        lambda *a, **kw: captured.append(real_build(*a, **kw)) or captured[-1],
+    )
+
+    assert pr_watch.main(["9", "--json"]) == 0
+    report = captured[0]
+    # The rollup has 1 check against a stored baseline of 6, so this poll has NOT
+    # seen every check yet — the guard must hold.
+    assert report["settling"] is True, "the false-settle guard was disabled"
+    assert report["converged"] is False
+    assert report["mergeable"] is False
+
+
+def test_the_rest_bound_uses_the_backend_that_did_the_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`_resolve_backend` re-reads PATH on every call by design, so re-resolving
+    the backend inside `build_report` was a race: a `gh` appearing during the
+    poll's network phase (several round trips at 30s each) made the bound evaluate
+    against a transport that fetched nothing, and a report built entirely from REST
+    data came back `mergeable: true`.
+
+    Fixed by resolving once in `main`, before the first read, and threading it.
     """
     pr_watch = _load_pr_watch()
 
-    rest_state = {"head": "abc123", "max_total": 5, "max_total_backend": "rest"}
-    # Same backend: the baseline is real and must still be honoured.
-    assert pr_watch.comparable_max_total(rest_state, "rest") == 5
-    # Different backend: not comparable, so a fresh baseline rather than a wedge.
-    assert pr_watch.comparable_max_total(rest_state, "gh") == 0
-    # A state file predating the key reads as not comparable, which costs one
-    # settling round rather than risking the wedge.
-    assert pr_watch.comparable_max_total({"head": "abc123", "max_total": 5}, "gh") == 0
-
-    # End to end: the gh poll that used to be stranded now settles.
     view = _green_view(headRefOid="abc123")
-    stranded = pr_watch.build_report(
-        view, [], set(), prior_head="abc123", prior_max_total=5,
-        check_details=pr_watch.CheckDetails([], "skipped"),
-    )
-    assert stranded["settling"] is True, "precondition: a higher baseline strands it"
+    receipt = {"head": "abc123", "source": "fallback:panel", "lenses": ["a", "b"]}
 
-    healthy = pr_watch.build_report(
-        view, [], set(), prior_head="abc123",
-        prior_max_total=pr_watch.comparable_max_total(rest_state, "gh"),
-        check_details=pr_watch.CheckDetails([], "skipped"),
+    # Data came from REST: the bound must fire even though PATH now says `gh`.
+    rest = pr_watch.build_report(
+        view, [], set(), review_receipt=receipt,
+        check_details=pr_watch.CheckDetails([], "skipped"), backend="rest",
     )
-    assert healthy["settling"] is False
-    assert healthy["converged"] is True
+    assert rest["mergeable"] is False
+    assert any("cannot authorize a merge" in b for b in rest["merge_blockers"])
+    assert rest["backend"] == "rest"
 
+    # And the reverse: a gh-fetched report is not bounded by a PATH that lost gh.
+    monkeypatch.setattr(pr_watch.shutil, "which", lambda _n: None)
+    monkeypatch.setenv("GH_TOKEN", "t0ken")
+    gh = pr_watch.build_report(
+        view, [], set(), review_receipt=receipt,
+        check_details=pr_watch.CheckDetails([], "skipped"), backend="gh",
+    )
+    assert gh["mergeable"] is True
+    assert gh["backend"] == "gh"
+
+
+def test_main_resolves_the_backend_before_it_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The threading has to happen in `main`, which is the only production caller —
+    asserting it on `build_report` alone would leave the wiring unpinned, which is
+    exactly how the previous round's fix survived deletion."""
+    pr_watch = _load_pr_watch()
+    order: list[str] = []
+
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    monkeypatch.setattr(
+        pr_watch, "_active_backend_name", lambda: (order.append("resolve"), "rest")[1]
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_pr_view",
+        lambda pr: (order.append("read"), (_green_view(headRefOid="abc123"), []))[1],
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "skipped")
+    )
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: None)
+
+    seen_backend: list[str | None] = []
+    real_build = pr_watch.build_report
+
+    def _build(*a, **kw):
+        seen_backend.append(kw.get("backend"))
+        return real_build(*a, **kw)
+
+    monkeypatch.setattr(pr_watch, "build_report", _build)
+    assert pr_watch.main(["9", "--json"]) == 0
+
+    assert order[:2] == ["resolve", "read"], f"resolved after reading: {order}"
+    assert seen_backend == ["rest"], "main did not thread the backend it resolved"
 
 def test_the_report_names_which_backend_produced_it() -> None:
     """`persist_poll` needs it to scope the settle baseline, so it has to be in
@@ -4393,3 +4504,92 @@ def test_the_rest_field_mappings_that_feed_merge_blockers_are_pinned(
     assert any("draft" in b.lower() for b in report["merge_blockers"])
     assert any("BLOCKED" in b for b in report["merge_blockers"])
     assert report["base"] == "release"
+
+
+def test_a_malformed_check_field_cannot_wedge_the_poll(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The `gh` CLI applies a schema, so these fields always arrive as strings.
+    REST hands raw JSON to `summarize_checks`/`summarize_review_bots`, which call
+    `.strip()` and `.lower()` on them — so a dict-valued `name` or `output.title`
+    raised AttributeError out of `build_report`, which runs OUTSIDE `main`'s try.
+
+    The wedge is the point: the raise precedes `persist_poll`, so no state is
+    written and every later poll repeats it. One malformed field, and that PR's
+    watch loop is stuck with no ageing-out and no override.
+    """
+    pr_watch = _load_pr_watch()
+
+    rows = pr_watch._rest_check_rows(
+        [
+            {
+                "name": {"a": 1},
+                "status": "completed",
+                "conclusion": ["success"],
+                "output": {"title": {"nested": "Review rate limited"}},
+                "started_at": {"t": 1},
+            }
+        ],
+        [{"context": 42, "state": {"s": 1}, "description": ["x"], "created_at": ""}],
+    )
+
+    # Every field a downstream pure function will call a string method on.
+    for row in rows:
+        for field in ("name", "state", "bucket", "description", "startedAt"):
+            assert isinstance(row[field], str), (field, row)
+
+    # And end to end: the two consumers must not raise.
+    assert pr_watch.summarize_checks(rows)["all_green"] is False
+    pr_watch.summarize_review_bots(rows, [], now=NOW)
+
+    # A dict description must NOT be stringified into the outage matchers — that
+    # would let `{'nested': 'Review rate limited'}` read as a real rate-limit.
+    assert rows[0]["description"] == ""
+
+    report = pr_watch.build_report(
+        {
+            "number": 9, "state": "OPEN", "headRefOid": "h",
+            "statusCheckRollup": rows, "reviews": [], "comments": [],
+        },
+        [], set(), check_details=pr_watch.CheckDetails(rows, "ok"),
+    )
+    assert report["merge_blockers"] is not None  # it got this far without raising
+
+
+def test_our_own_clock_wins_over_the_checks_stamp() -> None:
+    """A 13-line comment argues for this precedence and nothing tested it; a review
+    lens inverted it and the whole suite stayed green.
+
+    Demonstrated permissive when inverted: an observed clock 1 minute old plus a
+    bot check started 45m ago gives `blocking: True` with our clock and
+    `cancelled_by: grace` with the check's — #19's merge blocker gone. Preferring
+    the check's stamp also lets the age REGRESS, which makes `merge_blockers`
+    non-monotonic in wall-clock time.
+    """
+    pr_watch = _load_pr_watch()
+
+    detail = _bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(45))
+    result = pr_watch.summarize_review_bots(
+        [detail], [], now=NOW, pending_since={"coderabbit": _minutes_ago(1)}
+    )
+    assert result["pending"], "the bot should still be pending"
+    entry = result["pending"][0]
+    assert entry["age_source"] == "observed", "the check's stamp displaced our clock"
+    assert entry["age_minutes"] == 1.0
+    assert entry["blocking"] is True
+    assert result["blockers"] != []
+
+
+def test_a_check_row_carrying_neither_bucket_nor_state_reads_as_pending() -> None:
+    """`_check_is_pending`'s docstring calls this fail-closed and deliberate — "a
+    truncated row whose name matches a bot holds the merge gate for the grace
+    window rather than waving it through" — and replacing it with `return False`
+    passed the suite."""
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch._check_is_pending({"name": "CodeRabbit"}) is True
+    assert pr_watch._check_is_pending({"name": "CodeRabbit", "bucket": ""}) is True
+    assert pr_watch._check_is_pending({"name": "CodeRabbit", "state": ""}) is True
+    # And a genuinely terminal row still reads as finished.
+    assert pr_watch._check_is_pending({"name": "CodeRabbit", "state": "SUCCESS"}) is False
+    assert pr_watch._check_is_pending({"name": "CodeRabbit", "bucket": "pass"}) is False

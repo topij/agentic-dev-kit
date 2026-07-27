@@ -256,6 +256,30 @@ Self-pace on a bounded cadence — don't busy-wait:
     didn't run. (`skipped` is not flagged: nothing was unreadable.)
   - An *older* `pr_watch.py` polling the same PR drops the persisted grace clock,
     restarting the window. Merges wait longer; nothing fails open.
+- **Without `gh`, the engine polls but cannot authorize a merge.** When the `gh`
+  binary is absent it falls back to the GitHub REST API using
+  `GH_TOKEN`/`GITHUB_TOKEN` (with neither, it exits 2 saying so). That fallback is
+  deliberately **poll-only**:
+  - `mergeable` is **false by construction**, with the merge blocker `the REST
+    backend cannot authorize a merge — it polls only`. No response from GitHub can
+    change that; it is not a judgement about the PR.
+  - `--record-review`, `--assert-draft` and `--assert-ready` **refuse** with exit
+    2. They write durable evidence or mutate the PR, so they need `gh`.
+  - `converged` works normally, which is the point: you can run the watch-and-fix
+    loop from a session without `gh` and hand the merge back to one that has it.
+  - `report["backend"]` says which transport produced the poll (`gh` / `rest`).
+  - Broadening this is tracked as an issue in this repo's tracker; it needs every
+    external input to read fail-closed first, so do not lift it casually.
+  - Known gaps on the REST path, stated rather than discovered: no GitHub
+    Enterprise (`GH_HOST`), no `GH_REPO` (it reads `origin`), and `dev_session.sh
+    pr-watch <scope>` itself needs `gh`, so a gh-less session must invoke the
+    engine directly.
+- **`truncated_reads`** lists any paginated read that stopped at the page ceiling
+  rather than at the end of the data. A truncated read means the poll did **not**
+  see every check or comment, so `converged` may be premature — REST list
+  endpoints return oldest-first, so what gets dropped is the newest. It gates
+  nothing (blocking `converged` would wedge the loop) and is printed by the human
+  render as well as carried in the JSON. Empty on the `gh` backend.
 - **Tune this for your own bot mix in `config/dev-model.yaml`, never in the engine.**
   `review.bots`, `review.noise_markers`, `review.unavailable_markers`,
   `review.informational_checks` and `review.bot_pending_grace_minutes` are read from
