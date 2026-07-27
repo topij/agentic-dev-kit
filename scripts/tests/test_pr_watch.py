@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
@@ -48,12 +50,45 @@ def _pin_engine_defaults(module: ModuleType) -> None:
     module._BOT_PENDING_GRACE_MINUTES = defaults.bot_pending_grace_minutes
 
 
+def _pin_engine_backend(module: ModuleType) -> None:
+    """Detach the loaded engine from whether this MACHINE happens to have `gh`.
+
+    The transport picks its backend from ``shutil.which("gh")`` on every call.
+    That is right for production and wrong for a test suite: ~14 of these tests
+    mock ``_gh_json`` and nothing else, so on a machine with no `gh` on PATH they
+    resolve to REST, the mock is never consulted, and they fail — on assertions
+    about receipts and merge blockers that have nothing to do with transport.
+
+    Measured, not hypothetical: same tree, `gh` on PATH -> 120 passed; `gh`
+    removed -> **14 failed, 106 passed**. `make test` is green here and on
+    GitHub-hosted runners only because both ship `gh`, which is exactly the
+    ambient-state coupling the config half of this file already exists to
+    prevent. A kit-owned test must not depend on the host.
+
+    Swaps in a per-module stand-in rather than patching the real ``shutil``,
+    which is shared process-wide. A test whose SUBJECT is backend selection
+    overrides ``module.shutil.which`` itself (see ``_no_gh``), and because each
+    test loads the engine fresh, that override cannot leak into another test.
+    """
+
+    class _ShutilPinnedToGh:
+        @staticmethod
+        def which(name: str) -> str | None:
+            if name == "gh":
+                return "/pinned/by/tests/gh"
+            return shutil.which(name)
+
+    module.shutil = _ShutilPinnedToGh
+
+
 def _load_pr_watch(*, pin_defaults: bool = True) -> ModuleType:
     """Load the engine fresh.
 
     ``pin_defaults=False`` leaves the module bound to whatever
     ``config/dev-model.yaml`` the surrounding repo has — correct only for a
-    test whose SUBJECT is that config.
+    test whose SUBJECT is that config. The BACKEND pin is unconditional: no
+    test should depend on whether the host has `gh`, including the ones that
+    deliberately read ambient config.
     """
     spec = importlib.util.spec_from_file_location(
         "pr_watch_under_test", ENGINE_DIR / "pr_watch.py"
@@ -63,6 +98,7 @@ def _load_pr_watch(*, pin_defaults: bool = True) -> ModuleType:
     spec.loader.exec_module(module)
     if pin_defaults:
         _pin_engine_defaults(module)
+    _pin_engine_backend(module)
     return module
 
 
@@ -3228,21 +3264,102 @@ def test_the_token_only_ever_goes_to_the_github_api() -> None:
             pr_watch._check_api_url(hostile)
 
 
-def test_rest_pagination_stops_at_a_hostile_link_host(monkeypatch: pytest.MonkeyPatch) -> None:
-    """End to end: a `Link` header pointing off-host must abort the read, not
-    follow it with the Authorization header attached."""
+def _fake_urlopen(monkeypatch: pytest.MonkeyPatch, module: ModuleType, pages: dict) -> list[str]:
+    """Mock the socket, not the transport.
+
+    Patching `_http_get` would put the mock ABOVE `_check_api_url`, so a test
+    could only ever verify its own scaffolding. Everything from the guard
+    downwards has to be real code for these assertions to mean anything.
+    """
+    attempted: list[str] = []
+
+    class _Resp:
+        def __init__(self, body: bytes, link: str | None) -> None:
+            self._body = body
+            self.headers = {"Link": link} if link else {}
+
+        def read(self) -> bytes:
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+    def _urlopen(req, timeout=None):
+        url = req.full_url
+        attempted.append(url)
+        for fragment, (body, link) in pages.items():
+            if fragment in url:
+                return _Resp(json.dumps(body).encode(), link)
+        return _Resp(b"[]", None)
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", _urlopen)
+    return attempted
+
+
+def test_the_host_guard_is_actually_wired_into_the_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A `Link` header pointing off-host must abort the read, and the abort must
+    come from production code.
+
+    The first version of this test replaced `_http_get` — the function that
+    CONTAINS the guard — with a mock that called `_check_api_url` itself, so
+    `pytest.raises` was satisfied by the scaffolding. Deleting the guard call
+    from `_http_get` left it green. Mutation testing caught that; this version
+    mocks `urlopen`, below the guard, so the call site is load-bearing.
+    """
     pr_watch = _load_pr_watch()
+    attempted = _fake_urlopen(
+        monkeypatch,
+        pr_watch,
+        {
+            "api.github.com/first": ([{"id": 1}], '<https://evil.example.com/steal>; rel="next"'),
+        },
+    )
 
-    real_get = pr_watch._http_get
-
-    def _get(url, token, **_kw):
-        pr_watch._check_api_url(url)
-        return [{"id": 1}], '<https://evil.example.com/page2>; rel="next"'
-
-    monkeypatch.setattr(pr_watch, "_http_get", _get)
-    assert real_get is not _get  # sanity: we replaced the boundary, not the guard
     with pytest.raises(RuntimeError, match="refusing to send a GitHub token"):
-        pr_watch._http_get_all("https://api.github.com/a", "t")
+        pr_watch._http_get_all("https://api.github.com/first", "t0ken")
+
+    # The decisive assertion: the off-host URL was never requested at all.
+    assert any("api.github.com/first" in u for u in attempted)
+    assert not any("evil.example.com" in u for u in attempted)
+
+
+def test_the_host_guard_is_wired_into_the_graphql_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`_http_post_json` carries the token too, so its call site needs pinning
+    separately — the GET guard passing says nothing about the POST."""
+    pr_watch = _load_pr_watch()
+    attempted = _fake_urlopen(monkeypatch, pr_watch, {})
+
+    with pytest.raises(RuntimeError, match="refusing to send a GitHub token"):
+        pr_watch._http_post_json("https://evil.example.com/graphql", "t0ken", {"query": "{}"})
+    assert attempted == []
+
+
+def test_the_token_header_is_attached_only_after_the_url_is_approved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ordering matters, not just the outcome: the guard must run before the
+    request carrying Authorization is built."""
+    pr_watch = _load_pr_watch()
+    built: list[dict] = []
+    real_request = pr_watch.urllib.request.Request
+
+    def _request(url, **kw):
+        built.append({"url": url, "headers": kw.get("headers") or {}})
+        return real_request(url, **kw)
+
+    monkeypatch.setattr(pr_watch.urllib.request, "Request", _request)
+    _fake_urlopen(monkeypatch, pr_watch, {})
+
+    with pytest.raises(RuntimeError, match="refusing to send a GitHub token"):
+        pr_watch._http_get("https://evil.example.com/x", "t0ken")
+    assert built == []  # no Request object was ever constructed for that host
 
 
 def test_fetch_check_details_survives_a_non_object_body(
@@ -3325,3 +3442,352 @@ def test_rest_pr_view_makes_one_git_call_for_six_urls(monkeypatch: pytest.Monkey
     # A second call re-derives it: no process-lifetime state to go stale.
     pr_watch.fetch_pr_view(1)
     assert len(slug_calls) == 2
+
+
+# --- round 2: what the two-lens panel found ---------------------------------
+
+
+def test_coverage_reads_rests_review_spellings() -> None:
+    """The adversarial lens's HIGH. `bot_review_coverage` read only GraphQL's
+    `commit.oid` / `submittedAt`; REST spells them `commit_id` (a bare string)
+    and `submitted_at`. Every REST review was skipped, so `coverage` was always
+    empty — the #22/#25 "last review was of <sha>, not the current head" warning
+    could never render on this backend and `bots_behind_head` was never written
+    to a receipt. Dead code, on the guard the merge gate leans on hardest.
+    """
+    pr_watch = _load_pr_watch()
+
+    rest_reviews = [
+        {
+            "user": {"login": "coderabbitai"},
+            "state": "COMMENTED",
+            "commit_id": "0ldc0mm1t",
+            "submitted_at": "2026-07-25T10:00:00Z",
+        }
+    ]
+    coverage = pr_watch.bot_review_coverage(rest_reviews, "newhead")
+    assert [(e["bot"], e["sha"], e["covers_head"]) for e in coverage] == [
+        ("coderabbit", "0ldc0mm1t", False)
+    ]
+
+    # And it must reach the render, which is where a human sees it.
+    report = pr_watch.build_report(
+        _green_view(headRefOid="newhead", reviews=rest_reviews),
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails([], "skipped"),
+    )
+    assert "not the current head" in pr_watch.render(report)
+
+
+def test_coverage_still_prefers_the_graphql_spelling_when_both_are_present() -> None:
+    """Accepting REST's names must not let them shadow gh's — a payload carrying
+    both must resolve the same as it did before this transport existed."""
+    pr_watch = _load_pr_watch()
+
+    both = [
+        {
+            "user": {"login": "coderabbitai"},
+            "commit": {"oid": "graphqlsha"},
+            "commit_id": "restsha",
+            "submittedAt": "2026-07-25T10:00:00Z",
+            "submitted_at": "2026-07-01T10:00:00Z",
+        }
+    ]
+    entry = pr_watch.bot_review_coverage(both, "graphqlsha")[0]
+    assert entry["sha"] == "graphqlsha"
+    assert entry["submitted_at"] == "2026-07-25T10:00:00Z"
+    assert entry["covers_head"] is True
+
+
+def test_the_status_surface_is_paginated_like_check_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both lenses found this independently. The combined-status read was a
+    single unpaginated GET that discarded the `Link` header — on the
+    StatusContext surface #23 is actually about, in the same function whose
+    sibling read carries the docstring about a false green from exactly this.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+
+    pages = {
+        "check-runs": ({"check_runs": []}, None),
+        "status?per_page=100&page=2": (
+            {"statuses": [{"context": "late", "state": "pending", "description": "", "created_at": ""}]},
+            None,
+        ),
+        "status?per_page=100": (
+            {"statuses": [{"context": "early", "state": "success", "description": "", "created_at": ""}]},
+            '<https://api.github.com/repos/owner/repo/commits/s/status?per_page=100&page=2>; rel="next"',
+        ),
+    }
+    _fake_urlopen(monkeypatch, pr_watch, pages)
+
+    _, statuses = pr_watch._rest_fetch_checks("s", token="t0ken")
+    names = [s["context"] for s in statuses]
+    assert names == ["early", "late"], "page 2 of the status surface was dropped"
+
+    # And the dropped one was blocking, so truncating it is a false green.
+    rows = pr_watch._rest_check_rows([], statuses)
+    assert pr_watch.summarize_checks(rows)["all_green"] is False
+
+
+def test_the_checks_fetch_asks_for_a_full_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`per_page=100` was asserted by a comment and by
+    `_http_get_all_wrapped`'s docstring, and checked by nothing — dropping it
+    survived every test. At the API default of 30 this is the truncation the
+    pagination bound exists to make survivable, on every poll.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    attempted = _fake_urlopen(
+        monkeypatch, pr_watch, {"check-runs": ({"check_runs": []}, None), "status": ({"statuses": []}, None)}
+    )
+
+    pr_watch._rest_fetch_checks("sha1", token="t0ken")
+    checks_urls = [u for u in attempted if "check-runs" in u or "/status" in u]
+    assert checks_urls, "no check URL was requested"
+    for url in checks_urls:
+        assert "per_page=100" in url, f"{url} would truncate at the API default of 30"
+
+
+def test_truncation_reaches_the_json_the_merge_gate_reads(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The adversarial lens: truncation warned on stderr only, so a partial read
+    reached `dev_session.sh merge` as `converged: true` with no trace.
+    `summarize_review_bots.signal` exists for exactly this reason — a stderr
+    warning is not readable by the thing that decides a merge.
+
+    REST list endpoints return oldest-first, so the ceiling drops the NEWEST
+    comments, which is where fresh findings are.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get",
+        lambda url, token, **_kw: ([{"id": 1}], '<https://api.github.com/n>; rel="next"'),
+    )
+
+    pr_watch._http_get_all("https://api.github.com/issues/9/comments", "t", max_pages=2)
+    capsys.readouterr()
+
+    report = pr_watch.build_report(
+        _green_view(), [], set(), check_details=pr_watch.CheckDetails([], "skipped")
+    )
+    assert report["truncated_reads"] == ["https://api.github.com/issues/9/comments"]
+
+    # Reported, never gating — an environment problem must not become a wedge.
+    assert report["converged"] is True
+
+
+def test_both_reads_of_one_url_in_a_poll_are_recorded(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One poll reads the check-runs URL twice — `rest_pr_view`, then
+    `fetch_check_details`. The stderr line is deduped so a watch loop is not a
+    wall of warnings; the recorded LIST must not be, or the second truncation
+    vanishes."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get",
+        lambda url, token, **_kw: ([{"id": 1}], '<https://api.github.com/n>; rel="next"'),
+    )
+
+    for _ in range(2):
+        pr_watch._http_get_all("https://api.github.com/same", "t", max_pages=1)
+
+    assert pr_watch._truncated_reads == [
+        "https://api.github.com/same",
+        "https://api.github.com/same",
+    ]
+    assert capsys.readouterr().err.count("TRUNCATED") == 1
+
+
+def test_a_dismissal_clears_a_standing_block() -> None:
+    """REST rewrites a dismissed review's `state` to DISMISSED, so it is that
+    reviewer's latest verdict. Removing DISMISSED from the accepted set survived
+    every test, and no test mentioned it — while the docstring simultaneously
+    claimed REST does not expose dismissals at all.
+    """
+    pr_watch = _load_pr_watch()
+    decision = pr_watch._rest_review_decision
+
+    assert decision([{"user": {"login": "a"}, "state": "CHANGES_REQUESTED"}]) == "CHANGES_REQUESTED"
+    assert decision([
+        {"user": {"login": "a"}, "state": "CHANGES_REQUESTED"},
+        {"user": {"login": "a"}, "state": "DISMISSED"},
+    ]) is None
+    assert decision([
+        {"user": {"login": "a"}, "state": "CHANGES_REQUESTED"},
+        {"user": {"login": "a"}, "state": "DISMISSED"},
+        {"user": {"login": "b"}, "state": "APPROVED"},
+    ]) == "APPROVED"
+
+
+def test_review_decision_survives_a_non_dict_user() -> None:
+    """`(review.get("user") or {})` passes a STRING through and then raises
+    AttributeError on `.get`, which `main` does not catch — a traceback on an
+    ordinary poll. `user: null` is real: GitHub returns it for deleted accounts.
+    """
+    pr_watch = _load_pr_watch()
+    assert pr_watch._rest_review_decision([{"user": "a-string", "state": "APPROVED"}]) == "APPROVED"
+    assert pr_watch._rest_review_decision([{"user": None, "state": "APPROVED"}]) == "APPROVED"
+
+
+def test_every_rest_entry_point_degrades_to_an_error_not_a_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`main` catches (RuntimeError, KeyError, ValueError). A `null` body reaching
+    `.get` raises AttributeError and escapes as a traceback — and the invariant
+    was applied to 2 of 5 entry points, so `--record-review`, `--assert-draft`
+    and `--assert-ready` all still crashed.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    monkeypatch.setattr(pr_watch, "_http_get", lambda url, token, **_kw: (None, None))
+    monkeypatch.setattr(pr_watch, "_http_get_all", lambda url, token, **_kw: [])
+
+    for label, call in (
+        ("rest_pr_view", lambda: pr_watch.fetch_pr_view(1)),
+        ("rest_review_snapshot", lambda: pr_watch.fetch_review_snapshot(1)),
+        ("_rest_read_is_draft", lambda: pr_watch._read_is_draft(1)),
+        ("_rest_mutate_draft", lambda: pr_watch._rest_mutate_draft(1, False, token="t")),
+    ):
+        with pytest.raises(RuntimeError) as excinfo:
+            call()
+        assert "not a JSON object" in str(excinfo.value), label
+
+
+def test_a_failed_graphql_draft_mutation_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The GraphQL error check was pinned by nothing — `if False:` survived. A
+    token without permission would otherwise surface as "the correction did not
+    stick" instead of naming the actual cause."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    monkeypatch.setattr(
+        pr_watch, "_http_get", lambda url, token, **_kw: ({"node_id": "N", "draft": True}, None)
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_post_json",
+        lambda url, token, payload, **_kw: {"errors": [{"message": "Resource not accessible"}]},
+    )
+
+    with pytest.raises(RuntimeError, match="Resource not accessible"):
+        pr_watch._rest_mutate_draft(1, False, token="t")
+
+
+def test_a_pr_with_no_head_sha_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Removing this raise survived, degrading to a 404 on `commits/None/...`."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    monkeypatch.setattr(pr_watch, "_http_get", lambda url, token, **_kw: ({"number": 1}, None))
+    monkeypatch.setattr(pr_watch, "_http_get_all", lambda url, token, **_kw: [])
+
+    with pytest.raises(RuntimeError, match="no head SHA"):
+        pr_watch.fetch_pr_view(1)
+
+
+def test_next_link_handles_the_legal_forms_github_could_send() -> None:
+    """Two RFC 8288-legal forms returned None — a silent truncation with no
+    warning, because to the caller it is identical to "no next page"."""
+    pr_watch = _load_pr_watch()
+    nxt = pr_watch._next_link
+
+    assert nxt('<https://a/2>; type="text/html"; rel="next"') == "https://a/2"
+    assert nxt("<https://a/2>; rel=next") == "https://a/2"
+    assert nxt('<https://a/2>; rel="NEXT"') == "https://a/2"
+    assert nxt('<https://a/1>; rel="prev", <https://a/3>; rel="next"') == "https://a/3"
+    assert nxt('<https://a/9>; rel="last"') is None
+
+
+def test_a_stale_check_reads_the_same_way_in_both_lanes() -> None:
+    """`_REST_BUCKETS["STALE"] = "skipping"` made the two lanes disagree about
+    one row: finished to the bot lane (which trusts `bucket`) and pending to the
+    blocking tally. The bot-lane side was the fail-open direction."""
+    pr_watch = _load_pr_watch()
+
+    row = pr_watch._rest_check_rows(
+        [{"name": "CodeRabbit", "status": "completed", "conclusion": "stale", "output": {}, "started_at": ""}],
+        [],
+    )[0]
+    assert pr_watch._check_is_pending(row) is True
+    assert pr_watch.summarize_checks([row])["all_green"] is False
+
+
+def test_a_branch_name_cannot_rewrite_the_resolve_query(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unencoded `&` in a branch name injected a query parameter the caller
+    never asked for — `dev/x&state=closed` produced `&state=closed&state=open`."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    monkeypatch.setattr(pr_watch, "_git_out", lambda args, what: "dev/x&state=closed")
+    attempted = _fake_urlopen(monkeypatch, pr_watch, {"pulls?head=": ([{"number": 5}], None)})
+
+    assert pr_watch.resolve_pr(None) == 5
+    url = attempted[0]
+    assert "state=closed" not in url.split("head=")[1].split("&")[0] or "%26" in url
+    assert url.count("state=") == 1, f"branch name injected a parameter: {url}"
+
+
+def test_coverage_orders_rest_reviews_by_rests_timestamp() -> None:
+    """The `submitted_at` fallback is only load-bearing when ONE bot has several
+    reviews: with a single review the bot is added regardless of its timestamp,
+    so a test with one review pins the sha spelling and nothing about the date.
+    Mutation testing showed exactly that — dropping the REST spelling survived.
+
+    Ordering is what decides which sha `coverage` reports, and therefore whether
+    the "not the current head" warning fires. An undated review must never
+    displace a dated one.
+    """
+    pr_watch = _load_pr_watch()
+
+    reviews = [
+        {
+            "user": {"login": "coderabbitai"},
+            "commit_id": "newer",
+            "submitted_at": "2026-07-25T12:00:00Z",
+        },
+        {
+            "user": {"login": "coderabbitai"},
+            "commit_id": "older",
+            "submitted_at": "2026-07-25T09:00:00Z",
+        },
+    ]
+    entry = pr_watch.bot_review_coverage(reviews, "head")[0]
+    assert entry["sha"] == "newer", "REST's submitted_at was not used to order"
+    assert entry["submitted_at"] == "2026-07-25T12:00:00Z"
+
+    # Reversed input order must give the same answer — it is the timestamp that
+    # decides, not the position in the list.
+    assert pr_watch.bot_review_coverage(list(reversed(reviews)), "head")[0]["sha"] == "newer"
+
+    # An undated REST review cannot displace a dated one.
+    undated = [
+        {"user": {"login": "coderabbitai"}, "commit_id": "dated", "submitted_at": "2026-07-25T09:00:00Z"},
+        {"user": {"login": "coderabbitai"}, "commit_id": "undated"},
+    ]
+    assert pr_watch.bot_review_coverage(undated, "head")[0]["sha"] == "dated"
+
+
+def test_the_loader_detaches_the_engine_from_ambient_path() -> None:
+    """The suite must not depend on whether this MACHINE has `gh`.
+
+    Asserted on the pin itself rather than on its effect, deliberately: on a host
+    that HAS `gh`, removing the pin changes no outcome, so a test written against
+    the effect passes on the very machines where the coupling is invisible — and
+    fails only in someone else's environment. That is the failure mode the
+    config half of this file already exists to prevent (a legitimate ambient
+    difference breaking a kit-owned test), and it was measured here: `gh` on
+    PATH -> 120 passed, `gh` removed -> 14 failed.
+    """
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch.shutil.which("gh") == "/pinned/by/tests/gh"
+    assert pr_watch._resolve_backend() == ("gh", None)
+    # Non-`gh` lookups still reach the real shutil, so nothing else is masked.
+    assert pr_watch.shutil.which("definitely-not-a-real-binary-xyz") is None

@@ -570,7 +570,9 @@ def _next_link(link_header: str | None) -> str | None:
         # to the caller it is indistinguishable from "no next page".
         for param in section[1:]:
             name, _, value = param.partition("=")
-            if name.strip().lower() == "rel" and value.strip().strip('"\'') == "next":
+            # Both sides lowered: RFC 8288 relation types are case-insensitive,
+            # so `rel="NEXT"` is the same link as `rel="next"`.
+            if name.strip().lower() == "rel" and value.strip().strip('"\'').lower() == "next":
                 return section[0].strip("<>")
     return None
 
@@ -825,6 +827,21 @@ def _rest_check_rows(check_runs: list[dict], statuses: list[dict]) -> list[dict]
     return rows
 
 
+def _rest_object(data: Any, what: str) -> dict:
+    """Return ``data`` as a dict, or raise the error ``main`` knows how to print.
+
+    Every REST read has to pass through something like this. ``main`` catches
+    ``(RuntimeError, KeyError, ValueError)``, so a ``null`` or list body reaching
+    ``.get`` raises ``AttributeError`` and escapes as a traceback instead of
+    ``error: …`` + exit 2. GitHub really does return a bare ``null`` body, and an
+    error payload for these endpoints is a dict with no expected keys, so this is
+    the ordinary failure path rather than a defensive nicety.
+    """
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{what} response was not a JSON object")
+    return data
+
+
 def _rest_review_decision(reviews: list[dict]) -> str | None:
     """Derive GraphQL's ``reviewDecision`` from a REST reviews list.
 
@@ -902,9 +919,7 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict]]:
     :func:`_author` already handles, so no renaming is needed.
     """
     slug = _rest_repo_slug()
-    pr_data, _ = _http_get(_rest_api(f"pulls/{pr}", slug), token)
-    if not isinstance(pr_data, dict):
-        raise RuntimeError(f"PR #{pr} response was not an object")
+    pr_data = _rest_object(_http_get(_rest_api(f"pulls/{pr}", slug), token)[0], f"PR #{pr}")
     sha = (pr_data.get("head") or {}).get("sha")
     if not sha:
         raise RuntimeError(f"PR #{pr} response carried no head SHA")
@@ -945,22 +960,25 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict]]:
 def rest_review_snapshot(pr: int, *, token: str) -> dict:
     """REST equivalent of the ``number,headRefOid,reviews`` fetch used by
     :func:`record_review` to bind a receipt to the current head."""
-    pr_data, _ = _http_get(_rest_api(f"pulls/{pr}"), token)
+    slug = _rest_repo_slug()
+    pr_data = _rest_object(_http_get(_rest_api(f"pulls/{pr}", slug), token)[0], f"PR #{pr}")
     return {
         "number": pr_data.get("number"),
         "headRefOid": (pr_data.get("head") or {}).get("sha"),
-        "reviews": _http_get_all(_rest_api(f"pulls/{pr}/reviews?per_page=100"), token),
+        "reviews": _http_get_all(
+            _rest_api(f"pulls/{pr}/reviews?per_page=100", slug), token
+        ),
     }
 
 
 def _rest_read_is_draft(pr: int, *, token: str) -> bool:
-    data, _ = _http_get(_rest_api(f"pulls/{pr}"), token)
+    data = _rest_object(_http_get(_rest_api(f"pulls/{pr}"), token)[0], f"PR #{pr}")
     return bool(data.get("draft"))
 
 
 def _rest_mutate_draft(pr: int, want_draft: bool, *, token: str) -> None:
     """Toggle the draft bit via GraphQL — REST has no draft-toggle endpoint."""
-    pr_data, _ = _http_get(_rest_api(f"pulls/{pr}"), token)
+    pr_data = _rest_object(_http_get(_rest_api(f"pulls/{pr}"), token)[0], f"PR #{pr}")
     node_id = pr_data.get("node_id")
     if not node_id:
         raise RuntimeError(
@@ -1072,9 +1090,9 @@ def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> Chec
     if backend == "rest":
         try:
             slug = _rest_repo_slug()
-            pr_data, _ = _http_get(_rest_api(f"pulls/{pr}", slug), token)
-            if not isinstance(pr_data, dict):
-                raise RuntimeError(f"PR #{pr} response was not an object")
+            pr_data = _rest_object(
+                _http_get(_rest_api(f"pulls/{pr}", slug), token)[0], f"PR #{pr}"
+            )
             sha = (pr_data.get("head") or {}).get("sha")
             if not sha:
                 raise RuntimeError(f"PR #{pr} response carried no head SHA")
