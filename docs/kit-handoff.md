@@ -14,10 +14,84 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-27 — friction-log inbox graduated to `#70`–`#77`; the `reports/`
-contract settled.
+Last updated: 2026-07-27 · third session of the day — root `CLAUDE.md` shipped; init.sh
+harness + `#67`/`#62` fixes merged; all three PRs reviewed (piecewise on `#87`).
 
-## Latest session — 2026-07-27 (friction-log inbox graduated; `reports/` contract settled)
+## Latest session — 2026-07-27 · 3 (CLAUDE.md; init.sh harness + fixes; review loop worked)
+
+**Theme —** Worked the review-round problem directly. Three PRs merged, each watched to
+convergence with real independent review: two CodeRabbit passes obtained by re-triggering
+after rate-limit windows, four fallback-panel rounds that caught two config-bricking
+regressions **in my own fix** before they shipped.
+
+- **`#83` merged (`63acfcf`).** Root `CLAUDE.md` naming `make test` as *the* verification
+  command — the discoverability precondition for `#54`. CodeRabbit reviewed the exact
+  head clean after a re-trigger (its rate window was 13s).
+- **`#85` merged (`cde96e8`), closing `#84`.** init.sh fixture harness: 14 tests — 10 pins
+  plus 4 strict-xfail reproductions of `#62`/`#67`. `#84` corrected the record first: init.sh
+  was **not** at zero coverage — its migration path was well covered; the three open
+  bugs lived in the uncovered paths — detection (`#67`), hostile-value stamping (`#62`),
+  hooks (`#66`); seeding and `.gitignore` were uncovered but bug-free.
+- **`#87` merged (`7c71385`), closing `#67` + `#62`.** Manifest-derived engines
+  detection (top-level names only), lossless-only quoting (`yaml_scalar` /
+  `quoted_scalar`), one shared YAML-correct comment scanner, ENVIRON value transport,
+  quoted bots serialization. Suite 372 → 418 across the session.
+- **The panel earned its cost on `#87`**: round 1 caught my always-quote change turning
+  an interior `"` into an unloadable config and `\` into a reader split-brain — worse
+  than the bug it fixed; round 2 caught the same class surviving on the five
+  always-quoted fields, plus a bots single-quote regression. None were caught by the
+  suite as it stood at those heads.
+- **Stale `chore/update-handoff-2026-07-27` deleted** after verifying full supersession
+  (its fixed text is on main/archive; the graduated issues quote the fixed numbers).
+- **Filed `#86`** (.mcp.json sniff misses the kit's own documented credential shape) and
+  **`#88`** (the three config readers disagree on where a value ends). **Corrected**
+  `#67`'s Note (it miscited `#36`, the pre-push twin).
+
+**Decided**
+
+- **A rate-limited reviewer with a short recovery window gets re-triggered, not waived
+  or substituted.** `@coderabbitai review` after the window produced real reviews of the
+  exact head on `#83` and `#87`. Windows observed ranged from 13s to 48min — panel when
+  long, re-trigger when short.
+- **Piecewise review coverage is recorded piecewise.** `#87`'s final delta
+  (reviewer-prescribed fixes only) merged without a bot pass of its own; the receipt's
+  `bots_behind_head` annotation plus a PR comment state exactly what covered what.
+- **Quote only when lossless.** Blanket-quoting stamped values is a corruption class,
+  not a fix — values YAML would reinterpret (`"`, `\`, leading `'`) stamp raw as they
+  always did.
+
+**Learned**
+
+- **The handoff's own claim was the defect again — fifth consecutive session.** "init.sh
+  has no automated test coverage" was false (four migration tests run it); caught this
+  time by grounding before filing rather than by a reviewer, and the corrected framing
+  changed both the issue and the work.
+- **Panel isolation went 8 for 8** when every launch prompt assumed the worktree was
+  wrong and required clone-verify-report — the inversion `#75` proposes, working as
+  predicted (contrast: 9 of 9 wrong across the prior two sessions). Occurrence data
+  posted to `#75`.
+- **`#44`'s shape depends on how the review was triggered**: clean reviews on `#83`/`#85`
+  arrived as edited comments (no review object — coverage machinery blind, receipts
+  recorded by hand); `#87`'s re-triggered pass submitted a real review object with a
+  commit SHA, so `coverage` populated (`covers_head: true`). Posted to `#44`. The
+  rate-limited check reporting **pass** recurred four more times (posted to `#45`).
+
+**Open, and owned by nothing yet**
+
+- **`#86`, `#88`** — this session's filings; both small and well-specified.
+- **`#47`** — called the highest-leverage unbuilt thing in three recent sessions. A scope
+  note is posted on the issue itself: `#87` left init.sh's fallback triple as a
+  deliberate manifest-lost fallback, so `#47`'s tree-derivation should say whether that
+  restatement is in or out of its scope.
+- **`#66`** — still behind the `#61` design call. `#54`, `#71`, `#72`, `#75` (now with
+  supporting data), `#77`, and the rest of the backlog per session-start.
+
+▶ Next: `#47` — derive `KIT_OWNED` from the shipped tree and fail CI on divergence; its
+own body names `#36`/`#37`/`#40`/`#41` as the gap class it closes.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-27 (friction-log inbox graduated; `reports/` contract settled)
 
 **Theme —** Ran the triage sweep the doc-budget warning had been asking for. Thirteen
 entries in, thirteen accounted for. Both PRs merged **without an independent review** —
