@@ -17,9 +17,9 @@ fixtures never reach:
   the not-a-kit-shim guard. #66's ``core.hooksPath = ~/…`` case is out of scope
   until the #61 design call settles the fix shape.
 
-Defect reproductions are ``xfail(strict=True)`` pinned to their issue: the fix
-PR flips each by deleting the marker, and a later regression fails loudly
-instead of quietly returning to xfail.
+The #62/#67 defect reproductions landed as ``xfail(strict=True)`` and were
+flipped to plain pins by the change that closed those issues — they now guard
+against regression like any other test here.
 """
 
 from __future__ import annotations
@@ -29,7 +29,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -174,20 +173,14 @@ def test_engines_detection_prefers_scripts_when_engines_live_there(tmp_path: Pat
     assert yaml.safe_load(_config(repo))["paths"]["engines"] == "scripts"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="issue #67: detect_engines_dir probes a hardcoded triple, so a sized-down "
-    "install (kit_doctor.py + lib/kitconfig.py only) falls through and stamps "
-    "`engines: scripts` for a tree whose engines live in scripts/devkit",
-)
 def test_engines_detection_sized_down_install(tmp_path: Path) -> None:
-    """A sized-down install (kit_doctor.py + lib/kitconfig.py only) must still be
-    detected. The fix direction (#67) reads the probe list from
-    kit-manifest.json (role == engine) — the generated projection of KIT_OWNED,
-    kit_doctor's probe source since #59, and the one form of it sh can read —
-    which this fixture supplies; the test pins the detection OUTCOME only. It
-    cannot see where a probe list came from, so the single-source property
-    itself is #47's to enforce, not this test's."""
+    """A sized-down install (kit_doctor.py + lib/kitconfig.py only) is detected.
+    The fix (#67) reads the probe list from kit-manifest.json (role == engine) —
+    the generated projection of KIT_OWNED, kit_doctor's probe source since #59,
+    and the one form of it sh can read — which this fixture supplies; before it,
+    a hardcoded probe triple fell through and stamped `engines: scripts`. The
+    test pins the detection OUTCOME only: it cannot see where a probe list came
+    from, so the single-source property itself is #47's to enforce."""
     repo = _fixture(tmp_path, config=V1_CONFIG, manifest=True)
     for rel in ("kit_doctor.py", "lib/kitconfig.py"):
         path = repo / "scripts" / "devkit" / rel
@@ -223,12 +216,9 @@ def test_rerun_on_shipped_config_preserves_every_value_and_is_stable(tmp_path: P
     assert _config(repo) == once
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="issue #62: prompted values are re-stamped unquoted, so a legal quoted "
-    "name containing a colon becomes invalid YAML on a plain re-run",
-)
 def test_rerun_preserves_quoted_name_with_colon(tmp_path: Path) -> None:
+    """Prompted values are stamped quoted (#62) — the unquoted re-stamp turned a
+    legal quoted name containing a colon into invalid YAML on a plain re-run."""
     repo = _fixture(tmp_path, config=_shipped_with_name('"Acme: Platform"'))
 
     _run_init(repo)
@@ -236,17 +226,19 @@ def test_rerun_preserves_quoted_name_with_colon(tmp_path: Path) -> None:
     assert yaml.safe_load(_config(repo))["project"]["name"] == "Acme: Platform"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="issue #62: get_field's comment strip is not quote-aware, so a quoted "
-    "name containing # is silently truncated and the truncation re-stamped",
-)
 def test_rerun_preserves_quoted_name_with_hash(tmp_path: Path) -> None:
+    """get_field's comment strip is quote-aware (#62) — a blind index() silently
+    truncated a quoted name containing # and re-stamped the truncation. The
+    second run pins set_field's comment scan too: a quote-blind one re-attached
+    the tail of the old value as a growing pseudo-comment on every re-run."""
     repo = _fixture(tmp_path, config=_shipped_with_name('"Acme #1"'))
 
     _run_init(repo)
+    once = _config(repo)
+    assert yaml.safe_load(once)["project"]["name"] == "Acme #1"
 
-    assert yaml.safe_load(_config(repo))["project"]["name"] == "Acme #1"
+    _run_init(repo)
+    assert _config(repo) == once
 
 
 # --------------------------------------------------------------------------- #
@@ -261,12 +253,10 @@ set_field "tracker:" "" "^  url:" "$1"
 """
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="issue #62: awk -v runs escape processing on the assigned value, so a "
-    "backslash sequence in a stamped value is transformed before substitution",
-)
 def test_set_field_writes_backslashes_literally(tmp_path: Path) -> None:
+    """The value reaches awk via the environment (#62) — `awk -v` ran escape
+    processing on the assignment, turning a backslash-n in a stamped value into
+    a real newline before substitution."""
     repo = _fixture(tmp_path, config='tracker:\n  url: ""\n')
     value = '"' + r"https://x.example/a\nb\\c" + '"'
 
