@@ -78,7 +78,8 @@ silently revert to draft (a later `gh pr merge` fails with "Pull Request is
 still a draft"). `--assert-draft` / `--assert-ready` read `isDraft` and issue
 the one corrective `gh pr ready [--undo]` call if it drifted, then re-read to
 confirm — call the former right after `gh pr create --draft`, the latter
-right before `gh pr merge`.
+right before `gh pr merge`. On the REST backend the corrective call is the
+equivalent GraphQL mutation instead, since REST has no draft-toggle endpoint.
 
 Exit codes:
     0 — reported (regardless of the verdict; check `converged` / `mergeable` in
@@ -560,8 +561,17 @@ def _next_link(link_header: str | None) -> str | None:
         return None
     for part in link_header.split(","):
         section = [p.strip() for p in part.split(";")]
-        if len(section) >= 2 and section[1] == 'rel="next"':
-            return section[0].strip("<>")
+        if not section:
+            continue
+        # Scan EVERY parameter, not just the second, and accept an unquoted
+        # value. `<url>; type="text/html"; rel="next"` and `rel=next` are both
+        # legal per RFC 8288, and reading only `section[1] == 'rel="next"'`
+        # returned None for each — a silent truncation with no warning, because
+        # to the caller it is indistinguishable from "no next page".
+        for param in section[1:]:
+            name, _, value = param.partition("=")
+            if name.strip().lower() == "rel" and value.strip().strip('"\'') == "next":
+                return section[0].strip("<>")
     return None
 
 
@@ -572,17 +582,32 @@ _REST_MAX_PAGES = 20
 
 _truncation_warned: set[str] = set()
 
+# URLs truncated by the page ceiling during THIS process, in order. Reported in
+# the JSON, not only on stderr: `summarize_review_bots`'s own `signal` field
+# exists because "a stderr warning is not readable by `dev_session.sh merge`",
+# and truncation is the same class of problem — REST list endpoints return
+# oldest-first, so hitting the ceiling drops the NEWEST comments, which is where
+# fresh findings live. A silent partial read that reports `converged: true` to an
+# autonomous merge path is the failure this makes visible.
+_truncated_reads: list[str] = []
+
 
 def _warn_pagination_truncated(url: str, max_pages: int) -> None:
-    """Say so when the page ceiling — not the data — ended a paginated read.
+    """Record and announce that the page ceiling — not the data — ended a read.
 
     A partial list is byte-identical to a complete one, which is the same
     "truncated reads as absent rather than unread" direction the ceiling exists
     to bound. Deliberately NOT ``_warn_bot_signal_lost``: that warning makes a
     specific claim about the review-bot guards, and reusing it here would say
-    something false about which guard is blind. Once per URL per process, for
-    the same reason that one is once per process.
+    something false about which guard is blind.
+
+    The stderr line is deduped per URL (a watch loop re-reads the same URL every
+    poll, and forty identical warnings are skimmed past exactly like silence).
+    The reported LIST is not deduped: one poll reads the check-runs URL twice —
+    once in `rest_pr_view`, once in `fetch_check_details` — and both truncations
+    are real events the report should carry.
     """
+    _truncated_reads.append(url)
     if url in _truncation_warned:
         return
     _truncation_warned.add(url)
@@ -716,8 +741,12 @@ def rest_resolve_pr(explicit: int | None, *, token: str) -> int:
     branch = _git_out(
         ["rev-parse", "--abbrev-ref", "HEAD"], what="determine the current branch"
     )
+    # quote(): a branch is not the repo's to sanitize, and an unencoded `&` or
+    # `?` in one silently rewrites the query — `dev/x&state=closed` produced
+    # `…&state=closed&state=open`, i.e. a filter the caller never asked for.
+    head = urllib.parse.quote(f"{slug[0]}:{branch}", safe="")
     data, _ = _http_get(
-        _rest_api(f"pulls?head={slug[0]}:{branch}&state=open&per_page=100", slug), token
+        _rest_api(f"pulls?head={head}&state=open&per_page=100", slug), token
     )
     # A non-list body would make `data[0]` a TypeError, which `main`'s handler
     # does not catch — so it would escape as a traceback rather than `error: …`.
@@ -734,7 +763,12 @@ _REST_BUCKETS = {
     "SUCCESS": "pass",
     "NEUTRAL": "skipping",
     "SKIPPED": "skipping",
-    "STALE": "skipping",
+    # STALE is deliberately ABSENT, so it falls through to "pending" below.
+    # `summarize_checks` treats it as neither terminal-ok nor bad, i.e. pending,
+    # and `_TERMINAL_CHECK_STATES` omits it too. Mapping it to "skipping" here
+    # made the two lanes disagree about the same row: finished to the bot lane
+    # (`_check_is_pending` trusts the bucket) and pending to the blocking tally.
+    # The bot-lane side of that split is the fail-open direction.
     "CANCELLED": "cancel",
     "FAILURE": "fail",
     "ERROR": "fail",
@@ -805,11 +839,17 @@ def _rest_review_decision(reviews: list[dict]) -> str | None:
     ``COMMENTED`` and ``PENDING`` submissions carry no verdict and are skipped,
     so they cannot displace an earlier one. REST returns reviews oldest-first.
 
-    An approximation of GraphQL's field, and it errs toward blocking: GraphQL
-    also accounts for dismissed reviews and required-reviewer rules, which REST
-    does not expose here. It can therefore report CHANGES_REQUESTED where
-    GraphQL would say REVIEW_REQUIRED after a dismissal — a spurious blocker,
-    never a missing one.
+    Dismissals ARE handled: dismissing a review rewrites its ``state`` to
+    ``DISMISSED``, so it counts as that reviewer's latest verdict and clears an
+    earlier block. An earlier version of this docstring claimed REST does not
+    expose them and that a dismissal therefore produced a spurious blocker —
+    both false, and the code already disagreed with it.
+
+    Still an approximation of GraphQL's field, in one direction that is worth
+    naming: it does not know about required-reviewer rules, so where GraphQL
+    would say ``REVIEW_REQUIRED`` this returns ``None``. That yields no blocker
+    where GraphQL also raises none from this field, so nothing is lost — the
+    merge gate's own review-receipt requirement is what covers that case.
     """
     latest: dict[str, str] = {}
     for review in reviews or []:
@@ -818,7 +858,12 @@ def _rest_review_decision(reviews: list[dict]) -> str | None:
         verdict = str(review.get("state") or "").upper()
         if verdict not in {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}:
             continue
-        author = (review.get("user") or {}).get("login") or "?"
+        user = review.get("user")
+        # isinstance, not `or {}`: a STRING `user` passes the truthiness test and
+        # then raises AttributeError on `.get`, which `main` does not catch — so
+        # an ordinary poll would end in a traceback instead of `error: …`.
+        # (`user: null` is real — GitHub returns it for deleted accounts.)
+        author = (user.get("login") if isinstance(user, dict) else None) or "?"
         latest[author] = verdict
     verdicts = set(latest.values())
     if "CHANGES_REQUESTED" in verdicts:
@@ -836,9 +881,17 @@ def _rest_fetch_checks(
     check_runs = _http_get_all_wrapped(
         _rest_api(f"commits/{sha}/check-runs?per_page=100", slug), token, "check_runs"
     )
-    combined, _ = _http_get(_rest_api(f"commits/{sha}/status?per_page=100", slug), token)
-    statuses = (combined or {}).get("statuses") if isinstance(combined, dict) else []
-    return check_runs, statuses or []
+    # Paginated for the same reason check-runs is, and it was not: this is the
+    # StatusContext surface, which is the one #23 is actually about — a
+    # rate-limited CodeRabbit announced its outage ONLY as the description on an
+    # otherwise-SUCCESS status context. A single unpaginated GET here dropped the
+    # `Link` header, so past 100 contexts the missing ones read as "not present"
+    # rather than "not yet read" — the exact false green the sibling read's
+    # docstring cites, in the same function.
+    statuses = _http_get_all_wrapped(
+        _rest_api(f"commits/{sha}/status?per_page=100", slug), token, "statuses"
+    )
+    return check_runs, statuses
 
 
 def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict]]:
@@ -1507,8 +1560,15 @@ def bot_review_coverage(
         bot = _match_bot(_author(raw), bots, anchored=True)
         if not bot:
             continue
+        # BOTH spellings, for the same reason `_author` takes both: GraphQL
+        # nests the sha as `commit.oid` and REST returns a bare `commit_id`.
+        # Reading only the GraphQL pair made this whole function dead code on
+        # the REST backend — every review `continue`d, so `coverage` was always
+        # `[]`, the #22/#25 "last review was of <sha>, not the current head"
+        # warning never rendered, and `bots_behind_head` was never written to a
+        # receipt. Silently, and specifically on the gate this guard protects.
         commit = raw.get("commit")
-        sha = commit.get("oid") if isinstance(commit, dict) else None
+        sha = commit.get("oid") if isinstance(commit, dict) else raw.get("commit_id")
         # Type-checked, not just truthy: a non-string `oid` survives an
         # `isinstance(commit, dict)` guard and then kills `render` on
         # `sha[:7]` — on the ordinary poll path, for a field this is supposed
@@ -1523,6 +1583,8 @@ def bot_review_coverage(
         # to raise. Unusable timestamps must sort to the BOTTOM, exactly like
         # the missing ones below.
         submitted = raw.get("submittedAt")
+        if not isinstance(submitted, str):
+            submitted = raw.get("submitted_at")  # REST's spelling
         submitted = submitted if isinstance(submitted, str) else ""
         if bot not in latest or submitted >= latest[bot]["submitted_at"]:
             latest[bot] = {
@@ -2330,6 +2392,13 @@ def build_report(
         "settling": settling,
         "max_total": max_total,
         "checks": checks,
+        # Reported, never gating — the same call `review_bots.signal` makes: an
+        # environment problem must not become a wedge. But it has to be IN the
+        # JSON, because that is what `dev_session.sh merge` reads; a truncated
+        # read that only warned on stderr would reach an autonomous merge path
+        # as `converged: true` with nothing to see. Empty on the `gh` backend,
+        # which paginates through `gh` itself.
+        "truncated_reads": list(_truncated_reads),
         "new_comments": [
             {
                 "kind": c["kind"],

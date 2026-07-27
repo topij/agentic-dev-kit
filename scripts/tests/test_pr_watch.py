@@ -2782,13 +2782,21 @@ def test_rest_pr_view_assembles_the_same_shape_build_report_consumes(
             },
         },
     )
-    monkeypatch.setattr(
-        pr_watch,
-        "_http_get_all_wrapped",
-        lambda url, token, key, **kw: [
-            {"name": "Test", "status": "completed", "conclusion": "success", "output": {"title": ""}, "started_at": "2026-07-25T11:00:00Z"}
-        ],
-    )
+    # Keyed on `key`, deliberately: both check surfaces now go through this one
+    # function, so a mock that ignores `key` would serve check-runs for the
+    # statuses read too — hiding which surface each row actually came from.
+    def _get_all_wrapped(url, token, key, **_kw):
+        if key == "check_runs":
+            return [
+                {"name": "Test", "status": "completed", "conclusion": "success", "output": {"title": ""}, "started_at": "2026-07-25T11:00:00Z"}
+            ]
+        if key == "statuses":
+            return [
+                {"context": "legacy", "state": "success", "description": "", "created_at": "2026-07-25T11:00:00Z"}
+            ]
+        raise AssertionError(f"unexpected wrapped-list key {key!r}")
+
+    monkeypatch.setattr(pr_watch, "_http_get_all_wrapped", _get_all_wrapped)
 
     def _get_all(url, token, **_kw):
         if "pulls/9/reviews" in url:
