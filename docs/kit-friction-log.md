@@ -107,3 +107,17 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   to any human scanning it. **No new fix proposed** — recording two further occurrences
   for `#45` / `#23`. `kit-handoff-history.md` records CodeRabbit rate-limiting in an
   earlier session too, so this is at least the third.
+
+## 2026-07-27 (second session)
+
+- **`pr-watch` prescribes the fallback panel on ANY reviewer outage; a short rate-limit
+  window makes re-triggering strictly better.** Observed recovery windows this session:
+  13s (`#83`), 2min and 48min (`#87`), 33min (`#85`). When short, `@coderabbitai review`
+  after the window produced a real review of the exact head — stronger evidence than a
+  panel receipt, at zero cost. Neither `pr-watch.md` nor the workflow's
+  reviewer-unavailable branch mentions the notice's "Next review available in" field or
+  the re-trigger command. **M** — proposed fix: the reviewer-unavailable branch should
+  read the recovery window from the outage notice; short window → wait and re-trigger,
+  then fall back to the panel only if that fails; long window on a risky diff → run the
+  panel now and offer the recovered bot the final head afterwards. Both halves were
+  exercised this session and both produced full independent coverage.
