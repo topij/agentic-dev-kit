@@ -68,10 +68,18 @@ state:
 """
 
 
-def _env() -> dict[str, str]:
-    # Isolate from the developer's own git config: a global core.hooksPath would
-    # otherwise redirect a fixture's hook install into their real hooks directory.
-    return dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull)
+def _env(ceiling: Path) -> dict[str, str]:
+    # Isolate from the developer's own git config (a global core.hooksPath would
+    # redirect a fixture's hook install into their real hooks directory) AND from
+    # any repository enclosing pytest's tmp dir: without a ceiling, a git=False
+    # fixture's install_hooks discovers the enclosing repo and writes a shim into
+    # its live .git/hooks — found by the adversarial review lens on this change.
+    return dict(
+        os.environ,
+        GIT_CONFIG_GLOBAL=os.devnull,
+        GIT_CONFIG_SYSTEM=os.devnull,
+        GIT_CEILING_DIRECTORIES=str(ceiling),
+    )
 
 
 def _fixture(
@@ -99,7 +107,7 @@ def _fixture(
         shutil.copy2(REPO_ROOT / "scripts" / "hooks" / "pre-push", target)
     if git:
         subprocess.run(
-            ["git", "init", "-q"], cwd=repo, check=True, env=_env(), capture_output=True
+            ["git", "init", "-q"], cwd=repo, check=True, env=_env(tmp_path), capture_output=True
         )
     return repo
 
@@ -114,7 +122,7 @@ def _run_init(repo: Path) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         stdin=subprocess.DEVNULL,
-        env=_env(),
+        env=_env(repo.parent),
     )
 
 
@@ -142,10 +150,15 @@ def test_engines_detection_finds_namespaced_layout(tmp_path: Path) -> None:
 
 
 def test_engines_detection_prefers_scripts_when_engines_live_there(tmp_path: Path) -> None:
-    """Candidate order: the kit's own layout wins when engines really are there."""
+    """Candidate order: with engines present in BOTH scripts/ and scripts/devkit/,
+    the kit's own layout wins. (Both populated on purpose — with only one, any
+    candidate order passes and the test pins nothing; found by both review
+    lenses on this change.)"""
     repo = _fixture(tmp_path, config=V1_CONFIG, manifest=True)
-    (repo / "scripts").mkdir()
-    (repo / "scripts" / "pr_watch.py").write_text("# engine\n", encoding="utf-8")
+    for candidate in ("scripts", "scripts/devkit"):
+        engine = repo / candidate / "pr_watch.py"
+        engine.parent.mkdir(parents=True, exist_ok=True)
+        engine.write_text("# engine\n", encoding="utf-8")
 
     _run_init(repo)
 
@@ -159,9 +172,12 @@ def test_engines_detection_prefers_scripts_when_engines_live_there(tmp_path: Pat
     "`engines: scripts` for a tree whose engines live in scripts/devkit",
 )
 def test_engines_detection_sized_down_install(tmp_path: Path) -> None:
-    """The probe list must come from kit-manifest.json (role == engine), the same
-    single source kit_doctor derives its probe from since #59 — not a fourth
-    hand-maintained restatement."""
+    """A sized-down install (kit_doctor.py + lib/kitconfig.py only) must still be
+    detected. The fix direction (#67) derives the probe list from
+    kit-manifest.json (role == engine) — kit_doctor's single source since #59 —
+    which this fixture supplies; the test pins the detection OUTCOME only. It
+    cannot see where a probe list came from, so the single-source property
+    itself is #47's to enforce, not this test's."""
     repo = _fixture(tmp_path, config=V1_CONFIG, manifest=True)
     for rel in ("kit_doctor.py", "lib/kitconfig.py"):
         path = repo / "scripts" / "devkit" / rel
@@ -265,15 +281,21 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
 
     _run_init(repo)
 
-    handoff = (repo / "docs" / "kit-handoff.md").read_text(encoding="utf-8")
-    assert "{{" not in handoff
-    assert "my-project" in handoff
-    for rel in (
-        "docs/kit-handoff-history.md",
-        "docs/kit-friction-log.md",
-        "docs/kit-friction-log-archive.md",
-    ):
-        assert (repo / rel).is_file(), f"{rel} was not seeded"
+    # Token rendering is asserted for ALL four docs: {{HANDOFF}} appears only in
+    # the handoff-history template, and with the check on one doc a deleted
+    # substitution survived the whole suite (adversarial lens, this change).
+    seeded = {
+        rel: (repo / rel).read_text(encoding="utf-8")
+        for rel in (
+            "docs/kit-handoff.md",
+            "docs/kit-handoff-history.md",
+            "docs/kit-friction-log.md",
+            "docs/kit-friction-log-archive.md",
+        )
+    }
+    for rel, text in seeded.items():
+        assert "{{" not in text, f"unrendered token left in {rel}"
+    assert "my-project" in seeded["docs/kit-handoff.md"]
 
 
 def test_seeding_respects_in_use_docs_and_reclaims_marked_ones(tmp_path: Path) -> None:
@@ -310,6 +332,20 @@ def test_gitignore_entries_added_exactly_once_across_reruns(tmp_path: Path) -> N
         assert lines.count(entry) == 1, f"{entry!r} appears {lines.count(entry)} times"
 
 
+def test_gitignore_gains_mcp_json_only_for_literal_credentials(tmp_path: Path) -> None:
+    """The .mcp.json credential sniff: a literal secret value gets the file
+    ignored; ${ENV} references leave it tracked."""
+    literal = _fixture(tmp_path / "literal", config=SHIPPED_CONFIG)
+    (literal / ".mcp.json").write_text('{"CF_TOKEN": "abc123"}', encoding="utf-8")
+    _run_init(literal)
+    assert ".mcp.json" in (literal / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+    envref = _fixture(tmp_path / "envref", config=SHIPPED_CONFIG)
+    (envref / ".mcp.json").write_text('{"CF_TOKEN": "${CF_TOKEN}"}', encoding="utf-8")
+    _run_init(envref)
+    assert ".mcp.json" not in (envref / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
 # --------------------------------------------------------------------------- #
 # install_hooks
 # --------------------------------------------------------------------------- #
@@ -334,7 +370,7 @@ def test_hook_shim_honors_repo_local_hookspath(tmp_path: Path) -> None:
         ["git", "config", "core.hooksPath", ".githooks"],
         cwd=repo,
         check=True,
-        env=_env(),
+        env=_env(repo.parent),
         capture_output=True,
     )
 
