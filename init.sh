@@ -733,6 +733,10 @@ add_ignore_line ".devkit_state_root"
 # Isolated review lenses (fallback-review-panel.md contract item 7) run in their
 # own worktrees; those must never be committed back into the repo.
 add_ignore_line ".claude/worktrees/"
+# Pipeline reports (triage proposals, systemize digests) are derived scratch from
+# the same runs that write state/, and the workflows commit only the doc/skill/
+# config paths they edited — never reports/.
+add_ignore_line "reports/"
 # dev_session.sh copies a repo-root .mcp.json into each lane worktree so lanes
 # inherit MCP access. If yours holds literal credentials rather than ${ENV}
 # references, that copy must never be committable from a lane.
