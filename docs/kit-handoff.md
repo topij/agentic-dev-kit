@@ -59,11 +59,14 @@ stood (355 tests), by my own mutation run at that head, or by CodeRabbit.
   wrap-up's own handoff block then miscited `#36`, overstated a test count, and got a
   GitHub rule backwards — all caught by a review lens, none by me. This is the third
   consecutive session where claim-vs-artifact drift is the most common finding.
-- **A closing keyword inside backticks does NOT fire.** Measured:
-  `closingIssuesReferences` is empty for a PR whose body carries a backticked
-  `` `Closes #61` ``, while `#63`'s *un-backticked* "Does NOT close #60" closed it. So
-  the hazard is negated **prose**, not any mention — a grep that ignores code spans
-  would have over-fired on every legitimate reference.
+- **An under-determined measurement talked me out of a correct rule.** `#68`'s
+  squash-merge closed `#61` (reopened by hand) because I had weakened the standing
+  "never write a closing keyword next to an issue number, even negated" rule after
+  measuring one PR body as inert. That experiment varied **two** things at once —
+  fenced-vs-inline *and* body-vs-commit — so it never established the thing I concluded
+  from it. Three attempts to state the rule precisely have each been wrong; the
+  conservative original would have prevented all three incidents. Stop deriving the
+  mechanism (rule 1).
 - **Two of my tests pinned nothing**, including the one whose stated thesis is "don't
   restate the list": it re-derived its expectation from the real `KIT_OWNED` with the
   prefix filter left out, so deleting that filter left the suite green.
@@ -79,7 +82,8 @@ stood (355 tests), by my own mutation run at that head, or by CodeRabbit.
   `#67` (the same hardcoded triple `#59` just fixed, where it *writes* bad config).
   `init.sh` has no automated test coverage and **no issue tracks that** — `#36` is the
   `pre-push` twin, and `#67`'s body miscites it for `init.sh`; both need correcting.
-- **`#61`** — still open, never closed: the hook-detection half, with the panel's
+- **`#61`** — open (closed in error by `#68`'s squash-merge, reopened by hand): the
+  hook-detection half, with the panel's
   evidence, the shape a correct fix needs, and a table of 9 `git config` value forms of
   which the current scan misparses 5.
 - **`#47`** still the highest-leverage unbuilt thing, and it subsumes `#67`.

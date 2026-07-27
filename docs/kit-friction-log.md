@@ -47,23 +47,49 @@ Everything above now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   proposed fix: contract item 5 should say the restore belongs in a `finally` (or a
   git-clean check) and that any harness must verify the tree is clean *after* it exits,
   not only after a successful run.
-- **The closing-keyword rule as written is wrong, and measuring it changed the fix.**
-  Last session's entry says never to write one "even negated". Acting on that, I rewrote
-  a PR body sentence that mentioned a backticked `` `Closes #61` ``. Then I measured:
+- **The closing-keyword trap fired again, because I weakened a correct rule on the
+  strength of an experiment that did not test what I thought.** `#61` was closed by the
+  squash-merge of `#68` and reopened by hand.
 
-  ```
-  PR #68 body contains `Closes #61` (backticked) → closingIssuesReferences: []
-  PR #63 body contains "Does NOT close #60"      → closingIssuesReferences: [58, 60]
-  ```
+  **What is actually measured** — three data points, with their confounds stated,
+  because two earlier write-ups of this stated more than the data supports:
 
-  **GitHub excludes inline code spans**; what it does not excuse is negating prose. So
-  the real rule is narrower than the entry below claims, and the obvious mechanical fix
-  — grep for `(close|fix|resolve)\w*\s+#\d+` — would fire on every legitimate backticked
-  reference and train people to ignore it. **M** — proposed fix: a `pr-watch` / `wrap-up`
-  check that strips fenced blocks and inline code **first**, then flags a closing keyword
-  within a few tokens of a negation (`not`, `n't`, `NOT`, "stays open"), which is the
-  actual failure mode. Correct the 2026-07-26 entry's rule at the same time; it is
-  currently stated more strongly than the evidence supports.
+  | artifact | form | outcome |
+  | --- | --- | --- |
+  | `#68` body | `Closes #61` inside a **fenced block** | inert (`closingIssuesReferences: []`) |
+  | `9c6ab3a` commit message | `Closes #61` in an **inline** span | **fired** — closed `#61` |
+  | `#63` body | `Does NOT close #60` **and** a plain `fix #60` | fired; which one is **not isolated** |
+
+  **What is NOT measured, though I twice wrote as if it were:** whether an *inline* span
+  is inert in a PR body. The two backtick data points differ in **two** variables at once
+  — fenced-vs-inline *and* body-vs-commit — so "GitHub excludes inline code spans" and
+  "fenced blocks are inert everywhere, inline spans fire everywhere" fit the evidence
+  equally well. Under the second reading, the fix I proposed last round (strip inline
+  code from a PR body before checking) reopens the exact hole that closed `#61`.
+
+  Likewise the *negation* hypothesis: `#63`'s body carries a plain, non-negated `fix #60`
+  alongside the negated mention, so a check that only flags keywords **near a negation**
+  would have passed that body clean.
+
+  **H** — **stop deriving a mechanism; take the conservative rule.** Three attempts to
+  state this precisely have each been wrong, which is rule 1's threshold. The original
+  2026-07-26 rule below — never write a closing keyword adjacent to an issue number you
+  do not intend to close, in any form, on any surface — would have prevented all three
+  incidents; the measurement talked me *out* of a correct rule. It stands as written, and
+  the proposed check follows it rather than any theory of markdown:
+
+  - flag **every** match on **every** surface — PR body, every commit message, and the
+    squash message — with **no stripping** of code spans or fenced blocks;
+  - cover the forms the naive regex misses and GitHub honours: `owner/repo#61`, a full
+    issue URL, and `Closes: #61` (a colon, not whitespace);
+  - check the **squash message at merge time** specifically. It is composed *after* the
+    PR body was reviewed, and nothing reviews it — verified: `9c6ab3a`'s message matches
+    neither `#68`'s title, its body, nor any of its three branch commits, and no hook in
+    `scripts/` inspects commit messages at all;
+  - the operator confirms each match. Over-firing is the acceptable failure here.
+
+  Occurrence count, corrected: **three occurrences across two sessions** (`#63` and `#64`
+  were the same session; `9c6ab3a` is this one).
 - **A review bot with an incremental model keeps a stale review across a rewrite.**
   CodeRabbit reviewed the pre-split head, then declined `@coderabbitai review`
   ("does not re-review already reviewed commits") and hit its Fair Usage limit on
