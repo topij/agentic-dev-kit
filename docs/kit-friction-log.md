@@ -34,6 +34,59 @@ accounted for.
 
 Everything above now lives in [`kit-friction-log-archive.md`](kit-friction-log-archive.md).
 
+## 2026-07-27
+
+- **A mutation harness that restores outside `finally` leaves the repo mutated.** My
+  restore line was unreachable when the script died parsing pytest output (a bare
+  `python3` with no pytest returned no stdout, and `splitlines()[-1]` raised). The
+  working tree kept a live mutant until `git status` caught it. `#50` and
+  `fallback-review-panel.md` contract item 5 both warn about mutation testing, but only
+  about **stale `.pyc`** — this is the same outcome by a different route, and the
+  `.pyc` framing is what made me think a hash-verified restore was sufficient. **H** —
+  proposed fix: contract item 5 should say the restore belongs in a `finally` (or a
+  git-clean check) and that any harness must verify the tree is clean *after* it exits,
+  not only after a successful run.
+- **A negated closing keyword got re-armed while documenting the last one.** Last
+  session's entry says "never write a closing keyword adjacent to an issue number you
+  do not intend to close, even negated". This session I wrote a PR body sentence
+  explaining that I had *removed* a `Closes #61` — and the sentence contained the
+  literal keyword, which GitHub matches regardless of context. Caught by grepping my own
+  text, not by remembering the rule. **M** — proposed fix: the rule needs a mechanical
+  check, not a habit: a `pr-watch` / `wrap-up` step that greps the PR body and every
+  commit message for `(close|fix|resolve)\w*\s+#\d+` and asks the operator to confirm
+  each match is intended. A rule that fires only when you remember it does not survive
+  the session that is busy applying it.
+- **A review bot with an incremental model keeps a stale review across a rewrite.**
+  CodeRabbit reviewed the pre-split head, then declined `@coderabbitai review`
+  ("does not re-review already reviewed commits") and hit its Fair Usage limit on
+  `@coderabbitai full review`. The PR was force-pushed and then substantially rewritten,
+  so the only bot review covered code that no longer existed. `pr_watch`'s
+  `bots_behind_head` recorded it correctly — the friction is that **nothing warns at
+  push time**, when re-requesting is still cheap. **M** — proposed fix: have `pr-watch`
+  surface `covers_head: false` as a distinct, louder line right after a push that
+  changes the diff shape, rather than only at receipt time. Related: `#27`, `#44`.
+- **The panel's worth is disjointness, and this run measured it.** Round 1: the
+  adversarial lens found the enclosing-repo and `GIT_DIR` regressions; the correctness
+  lens independently found the tilde disagreement and the misattributed defect. Almost
+  no overlap, and **four regressions against `main` that CI, 372 tests, my own 19/19
+  mutation run, and CodeRabbit all missed**. **No change proposed** — recording it
+  because `fallback-review-panel.md` argues this from one prior data point, and this is
+  a second, stronger one worth citing there.
+- **The doc-budget remedy no-op reproduced a third time** (see the 2026-07-26 entry
+  below). `check_doc_budget` reported 421/400; the remedy it names printed *"nothing to
+  move: 5 session block(s) <= --keep 6"*; `--keep 4` was needed and found by guessing.
+  **No new fix proposed** — recording the third occurrence, because two of the three
+  were in *this* repo and the entry below still reads as a one-off. It is not.
+- **A review lens's isolated worktree pointed at `main` again — 4 of 4 launches, second
+  session running.** Every lens detected it and cloned the target itself, because the
+  prompt required reporting the path and diff stat. This is now the *sixth* consecutive
+  launch across two sessions where the runtime's isolation was wrong and the mandatory
+  report was the only thing that caught it. **H** — proposed fix: this is no longer a
+  caveat, it is the default behaviour. Contract item 7 should stop saying "verify" and
+  start saying "assume the worktree is wrong; clone the target yourself first", with the
+  path/diff-stat report as a required field of the lens output (the existing 2026-07-26
+  entry proposed the report; this one is about inverting the default).
+
 ## 2026-07-26
 
 - **The doc-budget remedy does not fire at the default `--keep`.** `check_doc_budget`
