@@ -181,7 +181,7 @@ Format:
 :clipboard: *Triage — friction-log graduation candidates*
 
 [N] proposals drafted from the current un-graduated inbox.
-Source: [reports/triage_<today>.md] (also pushed in next branch).
+Source: [reports/triage_<today>.md] (local only — `reports/` is gitignored).
 
 *1.* `[label1, label2, …]` — *[title 1]*
 > [first ~60 chars of body … truncated with `…` if longer]
@@ -439,8 +439,11 @@ Source doc updated on draft PR: <pr_url|chore/triage-YYYY-MM-DD>
 If any creates failed in Step 4, list them with their error in a separate thread
 reply.
 
-Delete the state file. The `reports/triage_<today>.md` report is kept (git-tracked
-alongside other reports, no automatic cleanup).
+Delete the state file. The `reports/triage_<today>.md` report stays on disk but is
+**never committed** — `reports/` is gitignored, the same as `state/`, and the finalize
+commit carries only the two doc edits. The report is derived: once the sweep lands,
+every proposal is a tracker issue and every source entry is verbatim in the archive.
+No automatic cleanup.
 
 **End Session B.** Output:
 

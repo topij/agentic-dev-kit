@@ -11,3 +11,9 @@ state/
 
 # Agent worktrees (created by isolated review lenses) are never committed.
 .claude/worktrees/
+
+# Pipeline reports (triage proposals, systemize digests). Derived scratch from
+# the same runs that write state/: once a sweep lands, every proposal is a
+# tracker issue and every source entry is verbatim in the archive. Tracking them
+# would also be the kit's one narrative path with no doc_budgets tripwire.
+reports/
