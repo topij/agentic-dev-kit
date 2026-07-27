@@ -75,7 +75,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "553ec24191fd289724e88ac2c40d3b529de507f912692f4bf3a62d5784c0eba3"
+      "sha256": "3ac900b5d22b8dab56d8955c515deb1b2612f40ab1e4371e1f059d37a0c0db60"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
