@@ -129,3 +129,54 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   because a later edit re-read one. **L** — proposed fix: any workflow step that edits a
   GitHub comment via `gh api` should use `-F body=@<file>` and verify the comment's
   body length (or a content marker) after the PATCH.
+
+## 2026-07-27 (fourth session of the day)
+
+- **A test written from the fix's own framing can pin the bug as correct.** My
+  `comparable_max_total` reset disabled the false-settle guard on the DEFAULT `gh`
+  backend (`mergeable` false → **true** for every existing PR), and the test I wrote
+  alongside it asserted `settling is False` / `converged is True` as the *desired*
+  outcome. So the suite pinned the permissive direction and nothing pinned the guard —
+  a mutation removing the reset was **killed by my own test**. Two review lenses found
+  it independently; the suite could not, by construction. **H** — proposed fix: for a
+  change to a gate, the test must assert the *blocking* direction survives, not that the
+  new behaviour occurs. Worth a line in `safety-critical-changes.md`: when a fix changes
+  what a guard concludes, pin the guard's refusal first and the fix's effect second.
+- **`archive_plan_sessions.py`'s default `--keep 6` is a no-op remedy — fourth
+  occurrence, third in this repo.** (The graduated-issue note above already records
+  three, two here.) `check_doc_budget` warned at 470/400 lines and
+  the sweep answered *"nothing to move: 6 session block(s) <= --keep 6"*, leaving the
+  file over budget with the warning still firing. `--keep 4` moved 2 blocks and brought
+  it to 314. This is `#74` exactly; recording the recurrence because the wrap-up workflow
+  tells the operator to run the sweep and the sweep does nothing at its default.
+  **M** — no new fix proposed beyond `#74`: the remedy should take the *budget* as input
+  and drop blocks until it fits, rather than counting blocks.
+- **Chaining `make test` into commit-and-push let me push a red tree.** I ran
+  `make test && git commit && git push` as one compound command, `make test` failed on a
+  stale manifest hash, and the failure scrolled past while the commit and push
+  succeeded. CI on that head went red. **M** — proposed fix: the wrap-up and lane
+  contracts should say verification runs as its **own** step whose result is read before
+  anything is committed; a compound `&&` chain that ends in a push makes the failure
+  invisible at exactly the moment it matters. Related to `#54` (name the command that
+  established a claim) but distinct: here the command ran and its answer was ignored.
+- **`--record-review` un-converges the PR it just certified, and the merge then needs a
+  second `--mark-seen`.** Posting the coverage record made `converged` false (my own
+  comment is a new comment), so `mergeable` went false with an *empty* `merge_blockers`
+  list — which reads as "no reason" to anyone scanning it. Acking cleared it. This is
+  `#42`; recording an occurrence plus the detail that the empty blocker list makes the
+  cause unguessable from the JSON alone. **L**
+- **The provided worktree was at the base ref on 5 of 5 panel launches this session**
+  (`main`, empty diff), and every lens detected and corrected it because the launch
+  prompt required clone-verify-report. **No cumulative figure claimed**: the earlier
+  sessions' "8 of 8" counts launches that isolated *correctly*, so it cannot be added to
+  a count of launches that pointed *wrong* — an easy error to make and worth not making
+  in the record. **No new fix proposed** — occurrence data posted to `#75`.
+- **CodeRabbit rate-limited three times in one session**, once still limited at merge
+  time, and **its recovery-window figures are not retrievable afterwards** — it edits the
+  rate-limit notice comment in place, so a window read live (41 minutes on `#91` this
+  session) is overwritten by the next edit and cannot be audited later. That is the
+  finding: every claim in this log about a recovery window is an ephemeral observation
+  with no artifact behind it, which is why they keep failing verification. **L** —
+  proposed fix: when the reviewer-unavailable branch reads the window, record the value
+  and the timestamp on the PR, so the decision to wait-and-re-trigger versus run the
+  panel is auditable. Supports the session-3 entry proposing that branch.
