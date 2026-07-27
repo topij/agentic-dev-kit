@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
@@ -54,16 +55,17 @@ def _pin_engine_backend(module: ModuleType) -> None:
     """Detach the loaded engine from whether this MACHINE happens to have `gh`.
 
     The transport picks its backend from ``shutil.which("gh")`` on every call.
-    That is right for production and wrong for a test suite: ~14 of these tests
-    mock ``_gh_json`` and nothing else, so on a machine with no `gh` on PATH they
-    resolve to REST, the mock is never consulted, and they fail — on assertions
-    about receipts and merge blockers that have nothing to do with transport.
+    That is right for production and wrong for a test suite: a number of these
+    tests mock ``_gh_json`` and nothing else, so on a machine with no `gh` on PATH
+    they resolve to REST, the mock is never consulted, and they fail — on
+    assertions about receipts and merge blockers that have nothing to do with
+    transport. The count is not quoted here on purpose; it changes as tests are
+    added, and an out-of-date figure in a docstring is worse than none.
 
     The invariant, stated instead of a count: without the pin, removing `gh` from
-    PATH turns a passing suite into a failing one. The exact number of failures is
-    environment-dependent — independent measurements of the same tree produced 14,
-    15 and 16 — so a precise figure here would be claim-drift bait rather than
-    evidence, which is what an earlier version of this docstring was. `make test`
+    PATH turns a passing suite into a failing one. No figure is quoted — the count
+    is environment-dependent AND changes as tests are added, so it would be
+    claim-drift bait rather than evidence. `make test`
     is green here and on GitHub-hosted runners only because both ship `gh`, which
     is exactly the ambient-state coupling the config half of this file already
     exists to prevent. A kit-owned test must not depend on the host.
@@ -3231,11 +3233,16 @@ def _fake_urlopen(monkeypatch: pytest.MonkeyPatch, module: ModuleType, pages: di
     could only ever verify its own scaffolding. Everything from the guard
     downwards has to be real code for these assertions to mean anything.
 
-    Scope caveat: `pr_watch.urllib.request` IS the shared stdlib module, so this
-    patch is process-global for the duration of the test — unlike
-    `_pin_engine_backend`, which swaps a per-module stand-in precisely to avoid
-    that. `monkeypatch` restores it at teardown, so it is safe under pytest's
-    sequential default; do not reuse this helper from threaded or asyncio tests.
+    Deliberately does NOT call `_check_api_url` itself. `_http_get` calls it
+    before building the Request, so the production call site is what these tests
+    exercise; a mock that re-ran the guard would be satisfied by its own
+    scaffolding, which is the defect that let the host guard go untested on #91.
+
+    Patches the engine's own opener (`pr_watch._opener`), not
+    `urllib.request.urlopen`. That is per-module rather than process-global — the
+    same reason `_pin_engine_backend` swaps a per-module stand-in for `shutil` —
+    so it cannot leak into another test even in principle. It also keeps the real
+    `_ApiOnlyRedirectHandler` out of the way; that handler has its own test.
     """
     attempted: list[str] = []
 
@@ -3261,7 +3268,12 @@ def _fake_urlopen(monkeypatch: pytest.MonkeyPatch, module: ModuleType, pages: di
                 return _Resp(json.dumps(body).encode(), link)
         return _Resp(b"[]", None)
 
-    monkeypatch.setattr(module.urllib.request, "urlopen", _urlopen)
+    class _Opener:
+        @staticmethod
+        def open(req, timeout=None):
+            return _urlopen(req, timeout=timeout)
+
+    monkeypatch.setattr(module, "_opener", _Opener)
     return attempted
 
 
@@ -3614,10 +3626,10 @@ def test_every_rest_entry_point_degrades_to_an_error_not_a_traceback(
     # Only the read paths that remain on REST. `fetch_review_snapshot` and the
     # draft mutation are gh-only now, so calling them here would shell out to a
     # real `gh` and hit the network.
-    for label, call in (
-        ("rest_pr_view", lambda: pr_watch.fetch_pr_view(1)),
-        ("_rest_read_is_draft", lambda: pr_watch._read_is_draft(1)),
-    ):
+    # `rest_pr_view` is the only REST entry point left: `fetch_review_snapshot`
+    # and the draft read are gh-only now, refused by `require_gh_backend` before
+    # any REST call, so there is no REST path through them to degrade.
+    for label, call in (("rest_pr_view", lambda: pr_watch.fetch_pr_view(1)),):
         with pytest.raises(RuntimeError) as excinfo:
             call()
         assert "not a JSON object" in str(excinfo.value), label
@@ -3630,7 +3642,7 @@ def test_a_pr_with_no_head_sha_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(pr_watch, "_http_get", lambda url, token, **_kw: ({"number": 1}, None))
     monkeypatch.setattr(pr_watch, "_http_get_all", lambda url, token, **_kw: [])
 
-    with pytest.raises(RuntimeError, match="no head SHA"):
+    with pytest.raises(RuntimeError, match="no usable head SHA"):
         pr_watch.fetch_pr_view(1)
 
 
@@ -4138,3 +4150,246 @@ def test_a_non_list_value_under_the_expected_key_is_rejected(
         pr_watch, "_http_get", lambda url, token, **_kw: ({"check_runs": None}, None)
     )
     assert pr_watch._http_get_all_wrapped("https://api.github.com/cr", "t", "check_runs") == []
+
+
+# --- panel round on #96: what the two lenses found --------------------------
+
+
+def test_the_no_backend_message_does_not_promise_a_path_that_refuses() -> None:
+    """The correctness lens's HIGH. The message an operator actually reads still
+    said `--assert-draft`/`--assert-ready` "need it too, for the GraphQL draft
+    mutation" — on a branch with no GraphQL path, where those flags refuse once a
+    token IS set. Following the advice led straight to a flat refusal.
+
+    The previous commit claimed to have fixed this and had fixed only the module
+    docstring, which is the surface nobody reads.
+    """
+    pr_watch = _load_pr_watch()
+
+    message = pr_watch._REST_READ_ONLY_BLOCKER
+    assert "GraphQL" not in message
+
+    import pytest as _pytest
+
+    with _pytest.MonkeyPatch.context() as mp:
+        mp.setattr(pr_watch.shutil, "which", lambda _n: None)
+        mp.delenv("GH_TOKEN", raising=False)
+        mp.delenv("GITHUB_TOKEN", raising=False)
+        with _pytest.raises(RuntimeError) as excinfo:
+            pr_watch._resolve_backend()
+
+    advice = str(excinfo.value)
+    assert "GraphQL" not in advice, "promises a path this engine does not have"
+    # It must say the fallback polls only, so the operator is not sent down a
+    # route that ends in `require_gh_backend`.
+    assert "POLLS ONLY" in advice or "polls only" in advice
+    for flag in ("--record-review", "--assert-draft", "--assert-ready"):
+        assert flag in advice
+
+
+def test_truncation_is_printed_where_a_human_reads_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The other HIGH: `truncated_reads` had no consumer at all, while the comment
+    introducing it claimed it was "what makes the failure visible". `render` never
+    printed it and `dev_session.sh merge` reads only `mergeable`.
+
+    The precedent the comment cited — `review_bots.signal` — works precisely
+    because `render` branches on it. So the render line IS the mechanism here.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get",
+        lambda url, token, **_kw: ([{"id": 1}], '<https://api.github.com/n>; rel="next"'),
+    )
+    pr_watch._http_get_all("https://api.github.com/issues/9/comments", "t", max_pages=1)
+
+    report = pr_watch.build_report(
+        _green_view(), [], set(), check_details=pr_watch.CheckDetails([], "skipped")
+    )
+    rendered = pr_watch.render(report)
+    assert "truncat" in rendered.lower(), "a field nothing prints is read by nobody"
+    assert "issues/9/comments" in rendered
+
+
+def test_a_backend_switch_does_not_wedge_the_settle_guard() -> None:
+    """The adversarial lens's wedge. REST paginates the Checks API fully; `gh pr
+    view` requests `contexts(first: 100)` unpaginated — so on a PR with more
+    contexts than that, REST reports MORE checks. Both backends share one state
+    file and `max_total` is monotone per head, so a REST poll's higher count made
+    every later `gh` poll report `settling: true` forever, with a new push as the
+    only escape.
+    """
+    pr_watch = _load_pr_watch()
+
+    rest_state = {"head": "abc123", "max_total": 5, "max_total_backend": "rest"}
+    # Same backend: the baseline is real and must still be honoured.
+    assert pr_watch.comparable_max_total(rest_state, "rest") == 5
+    # Different backend: not comparable, so a fresh baseline rather than a wedge.
+    assert pr_watch.comparable_max_total(rest_state, "gh") == 0
+    # A state file predating the key reads as not comparable, which costs one
+    # settling round rather than risking the wedge.
+    assert pr_watch.comparable_max_total({"head": "abc123", "max_total": 5}, "gh") == 0
+
+    # End to end: the gh poll that used to be stranded now settles.
+    view = _green_view(headRefOid="abc123")
+    stranded = pr_watch.build_report(
+        view, [], set(), prior_head="abc123", prior_max_total=5,
+        check_details=pr_watch.CheckDetails([], "skipped"),
+    )
+    assert stranded["settling"] is True, "precondition: a higher baseline strands it"
+
+    healthy = pr_watch.build_report(
+        view, [], set(), prior_head="abc123",
+        prior_max_total=pr_watch.comparable_max_total(rest_state, "gh"),
+        check_details=pr_watch.CheckDetails([], "skipped"),
+    )
+    assert healthy["settling"] is False
+    assert healthy["converged"] is True
+
+
+def test_the_report_names_which_backend_produced_it() -> None:
+    """`persist_poll` needs it to scope the settle baseline, so it has to be in
+    the report rather than recomputed at persist time."""
+    pr_watch = _load_pr_watch()  # loader pins gh
+
+    report = pr_watch.build_report(
+        _green_view(), [], set(), check_details=pr_watch.CheckDetails([], "skipped")
+    )
+    assert report["backend"] == "gh"
+    state = pr_watch.persist_poll(4242, report, set())
+    assert state["max_total_backend"] == "gh"
+
+
+def test_a_redirect_cannot_carry_the_token_off_host() -> None:
+    """urllib follows 3xx internally and carries `headers=` across it, so
+    validating the URL the engine CHOSE proves nothing about where the token
+    lands. Verified against the stdlib: only content-length/content-type are
+    stripped on redirect, so Authorization survives.
+
+    Before this transport existed no GitHub token left the process at all — `gh`
+    owned its auth — so this exposure is the transport's to close.
+    """
+    pr_watch = _load_pr_watch()
+    handler = pr_watch._ApiOnlyRedirectHandler()
+
+    with pytest.raises(RuntimeError, match="refusing to send a GitHub token"):
+        handler.redirect_request(
+            urllib.request.Request("https://api.github.com/repos/o/r/pulls/1"),
+            None, 302, "Found", {}, "https://evil.example.com/steal",
+        )
+
+    # The opener the engine actually uses must have the handler installed.
+    assert any(
+        isinstance(h, pr_watch._ApiOnlyRedirectHandler) for h in pr_watch._opener.handlers
+    ), "the checked handler is not wired into the opener `_http_get` uses"
+
+
+def test_a_non_default_port_is_not_the_github_api() -> None:
+    """A server-supplied `Link` naming api.github.com:8443 is not the API."""
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch._check_api_url("https://api.github.com/x")
+    assert pr_watch._check_api_url("https://api.github.com:443/x")
+    with pytest.raises(RuntimeError, match="refusing to send a GitHub token"):
+        pr_watch._check_api_url("https://api.github.com:8443/x")
+
+
+def test_the_page_ceiling_itself_is_pinned() -> None:
+    """The last remaining wedge bound, and nothing asserted it: every pagination
+    test passes `max_pages=` explicitly, so raising the module constant left the
+    suite green. Measured consequence of doing so on a cyclic `Link`: >500,000
+    requests and still climbing.
+    """
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch._REST_MAX_PAGES == 20, (
+        "the default page ceiling is the only bound on a cyclic Link header; "
+        "changing it is a deliberate act that should fail this test"
+    )
+
+
+def test_malformed_list_elements_do_not_crash_the_poll(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`_http_get_all` proves the RESPONSE is a list; a hostile element inside it
+    still reached `.get`. `build_report` runs outside `main`'s try, so that exits
+    1 with a traceback rather than `error: …` — on the path that runs every round.
+    """
+    pr_watch = _load_pr_watch()
+
+    view = {
+        "number": 9,
+        "state": "OPEN",
+        "headRefOid": "h",
+        "statusCheckRollup": [],
+        "reviews": ["hostile-string", {"user": {"login": "x"}, "body": "real"}],
+        "comments": [None, 42, {"id": 1, "user": {"login": "y"}, "body": "also real"}],
+    }
+    comments = pr_watch.collect_comments(view, ["a-string", {"id": 2, "body": "inline"}])
+    bodies = sorted(c["body"] for c in comments)
+    assert bodies == ["also real", "inline", "real"], bodies
+
+    # And a non-dict `output` on a check run must not crash the row shaping.
+    rows = pr_watch._rest_check_rows(
+        [{"name": "c", "status": "completed", "conclusion": "success", "output": "rate limited"}], []
+    )
+    assert rows[0]["description"] == ""
+
+
+def test_a_non_dict_head_is_rejected_not_dereferenced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`(pr_data.get("head") or {}).get("sha")` passes a STRING through the
+    truthiness test and then raises AttributeError out of `rest_pr_view`."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    monkeypatch.setattr(
+        pr_watch, "_http_get", lambda url, token, **_kw: ({"number": 9, "head": "deadbee"}, None)
+    )
+    monkeypatch.setattr(pr_watch, "_http_get_all", lambda url, token, **_kw: [])
+
+    with pytest.raises(RuntimeError, match="no usable head SHA"):
+        pr_watch.fetch_pr_view(9)
+
+
+def test_the_rest_field_mappings_that_feed_merge_blockers_are_pinned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`isDraft`, `mergeStateStatus` and `baseRefName` each feed a merge blocker or
+    a `dev_session.sh` cross-check, and all three were unpinned — inert only
+    because the REST bound makes `mergeable` false regardless. Issue #94's plan to
+    lift that bound would make three untested mappings load-bearing at once.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get",
+        lambda url, token, **_kw: (
+            {
+                "number": 9,
+                "state": "open",
+                "draft": True,
+                "base": {"ref": "release"},
+                "mergeable_state": "blocked",
+                "head": {"sha": "h"},
+            },
+            None,
+        ),
+    )
+    monkeypatch.setattr(pr_watch, "_http_get_all", lambda url, token, **_kw: [])
+    monkeypatch.setattr(pr_watch, "_http_get_all_wrapped", lambda url, token, key, **_kw: [])
+
+    view, _ = pr_watch.fetch_pr_view(9)
+    assert view["isDraft"] is True
+    assert view["mergeStateStatus"] == "BLOCKED"
+    assert view["baseRefName"] == "release"
+
+    report = pr_watch.build_report(
+        view, [], set(), check_details=pr_watch.CheckDetails([], "skipped")
+    )
+    assert any("draft" in b.lower() for b in report["merge_blockers"])
+    assert any("BLOCKED" in b for b in report["merge_blockers"])
+    assert report["base"] == "release"
