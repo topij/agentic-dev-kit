@@ -69,17 +69,26 @@ state:
 
 
 def _env(ceiling: Path) -> dict[str, str]:
-    # Isolate from the developer's own git config (a global core.hooksPath would
-    # redirect a fixture's hook install into their real hooks directory) AND from
-    # any repository enclosing pytest's tmp dir: without a ceiling, a git=False
-    # fixture's install_hooks discovers the enclosing repo and writes a shim into
-    # its live .git/hooks — found by the adversarial review lens on this change.
-    return dict(
+    # Isolate from the developer's own git context three ways (all found by the
+    # adversarial review lens on this change):
+    # - null the global/system config: a global core.hooksPath would redirect a
+    #   fixture's hook install into their real hooks directory;
+    # - a discovery ceiling, so a git=False fixture can never resolve a repo
+    #   enclosing pytest's tmp dir. No current fixture pairs git=False with a
+    #   hooks source, so this is prophylactic — but with one added by hand,
+    #   install_hooks demonstrably wrote a shim into the enclosing repo's live
+    #   .git/hooks;
+    # - drop an inherited GIT_DIR/GIT_WORK_TREE, which an explicit ceiling does
+    #   not override.
+    env = dict(
         os.environ,
         GIT_CONFIG_GLOBAL=os.devnull,
         GIT_CONFIG_SYSTEM=os.devnull,
         GIT_CEILING_DIRECTORIES=str(ceiling),
     )
+    env.pop("GIT_DIR", None)
+    env.pop("GIT_WORK_TREE", None)
+    return env
 
 
 def _fixture(
@@ -173,8 +182,9 @@ def test_engines_detection_prefers_scripts_when_engines_live_there(tmp_path: Pat
 )
 def test_engines_detection_sized_down_install(tmp_path: Path) -> None:
     """A sized-down install (kit_doctor.py + lib/kitconfig.py only) must still be
-    detected. The fix direction (#67) derives the probe list from
-    kit-manifest.json (role == engine) — kit_doctor's single source since #59 —
+    detected. The fix direction (#67) reads the probe list from
+    kit-manifest.json (role == engine) — the generated projection of KIT_OWNED,
+    kit_doctor's probe source since #59, and the one form of it sh can read —
     which this fixture supplies; the test pins the detection OUTCOME only. It
     cannot see where a probe list came from, so the single-source property
     itself is #47's to enforce, not this test's."""
@@ -295,7 +305,15 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
     }
     for rel, text in seeded.items():
         assert "{{" not in text, f"unrendered token left in {rel}"
-    assert "my-project" in seeded["docs/kit-handoff.md"]
+    # Token ABSENCE alone lets a substitution that renders to the EMPTY string
+    # pass — an uninitialized awk variable is silently "" (adversarial lens,
+    # round 2) — so also pin one rendered VALUE per token family, per doc:
+    assert "my-project" in seeded["docs/kit-handoff.md"]  # {{PROJECT_NAME}}
+    assert "scripts/check_doc_budget.py" in seeded["docs/kit-handoff.md"]  # {{ENGINE_DIR}}
+    assert "kit-handoff-history.md" in seeded["docs/kit-handoff.md"]  # {{HANDOFF_HISTORY}}
+    assert "kit-handoff.md" in seeded["docs/kit-handoff-history.md"]  # {{HANDOFF}}
+    assert "kit-friction-log-archive.md" in seeded["docs/kit-friction-log.md"]  # {{FRICTION_ARCHIVE}}
+    assert "tracker.url" in seeded["docs/kit-friction-log.md"]  # {{TRACKER_URL}} fallback
 
 
 def test_seeding_respects_in_use_docs_and_reclaims_marked_ones(tmp_path: Path) -> None:
@@ -333,8 +351,11 @@ def test_gitignore_entries_added_exactly_once_across_reruns(tmp_path: Path) -> N
 
 
 def test_gitignore_gains_mcp_json_only_for_literal_credentials(tmp_path: Path) -> None:
-    """The .mcp.json credential sniff: a literal secret value gets the file
-    ignored; ${ENV} references leave it tracked."""
+    """The .mcp.json credential sniff, for the key shapes its regex matches
+    (upper-case underscore forms like CF_TOKEN): a literal value gets the file
+    ignored, a ${ENV} reference leaves it tracked. The sniff itself misses the
+    kit's own documented hyphenated shape (CF-Access-Client-Id) — #86 tracks
+    that; this green pins the guard that exists, not sufficiency."""
     literal = _fixture(tmp_path / "literal", config=SHIPPED_CONFIG)
     (literal / ".mcp.json").write_text('{"CF_TOKEN": "abc123"}', encoding="utf-8")
     _run_init(literal)
