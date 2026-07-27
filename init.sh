@@ -89,7 +89,13 @@ AWK_COMMENT_IDX='
     if (c == "\"" || c == "'\''") {
       qc = c
       j = i + 1
-      while (j <= n && substr(rest, j, 1) != qc) j++
+      while (j <= n) {
+        if (substr(rest, j, 1) == qc) {
+          if (qc == "'\''" && substr(rest, j + 1, 1) == qc) { j += 2; continue }
+          break
+        }
+        j++
+      }
       for (j = j + 1; j <= n; j++)
         if (substr(rest, j, 1) == "#") return j
       return 0
@@ -364,15 +370,22 @@ detect_engines_dir() {
   [ -n "$probes" ] || probes="check_doc_budget.py
 pr_watch.py
 dev_session.sh"
+  # set -f while $probes is word-split unquoted: a glob character in a
+  # manifest path must stay literal, never pathname-expand (CodeRabbit on
+  # #87). Restored on every exit path — hence the break-out variable rather
+  # than returning from inside the loop.
+  found=""
+  set -f
   for candidate in scripts scripts/devkit scripts/kit scripts/agentic-dev-kit tools/devkit bin/devkit; do
     for probe in $probes; do
       if [ -f "$candidate/$probe" ]; then
-        printf '%s\n' "$candidate"
-        return 0
+        found="$candidate"
+        break 2
       fi
     done
   done
-  printf 'scripts\n'
+  set +f
+  printf '%s\n' "${found:-scripts}"
 }
 
 # Guards are SECTION-scoped, not whole-file `grep '^  key:'`. That form is a bug
@@ -822,6 +835,11 @@ else
       item = $i
       gsub(/^[ \t]+|[ \t]+$/, "", item)
       gsub(/^["'\'']|["'\'']$/, "", item)
+      # A quote or backslash cannot be part of a legitimate bot handle, and
+      # inside a double-quoted flow item either would corrupt the whole list
+      # the way the scalar helpers now refuse to — drop them rather than
+      # stamp unloadable YAML (CodeRabbit on #87).
+      gsub(/["\\]/, "", item)
       if (item == "") continue
       out = out (out == "" ? "" : ", ") "\"" item "\""
     }

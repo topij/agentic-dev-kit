@@ -34,6 +34,7 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
 
 SHIPPED_CONFIG = (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
 
@@ -286,7 +287,6 @@ def test_rerun_preserves_name_with_backslashes_for_both_readers(tmp_path: Path) 
     repo, text, parsed = _rerun_and_reload(tmp_path, r"C:\proj\new")
 
     assert parsed["project"]["name"] == r"C:\proj\new"
-    sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
     import kitconfig  # noqa: PLC0415
 
     assert kitconfig.loads(text)["project"]["name"] == r"C:\proj\new"
@@ -404,7 +404,6 @@ def test_rerun_preserves_tracker_url_with_backslash_for_both_readers(tmp_path: P
     _run_init(repo)
     text = _config(repo)
     assert yaml.safe_load(text)["tracker"]["url"] == r"x\py"
-    sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
     import kitconfig  # noqa: PLC0415
 
     assert kitconfig.loads(text)["tracker"]["url"] == r"x\py"
@@ -424,6 +423,33 @@ def test_rerun_normalizes_single_quoted_bots_item(tmp_path: Path) -> None:
     text = _config(repo)
     assert yaml.safe_load(text)["review"]["bots"] == ["coderabbit"]
     assert 'bots: ["coderabbit"]' in text
+    _run_init(repo)
+    assert _config(repo) == text
+
+
+def test_rerun_handles_doubled_single_quote_escape(tmp_path: Path) -> None:
+    """YAML's `''` escape inside a single-quoted scalar: the close-quote scan
+    must skip it, or the interior `#` reads as a comment and the value is
+    truncated with its remainder re-attached as a comment (CodeRabbit on #87)."""
+    repo, text, parsed = _rerun_and_reload(tmp_path, "'it''s #1' # note")
+
+    assert parsed["project"]["name"] == "it's #1"
+    once = text
+    _run_init(repo)
+    assert _config(repo) == once
+
+
+def test_rerun_drops_yaml_significant_chars_from_bots_items(tmp_path: Path) -> None:
+    """A quote or backslash inside a bots item would corrupt the whole flow
+    list when re-wrapped; such characters cannot appear in a real bot handle
+    and are dropped so the config stays loadable (CodeRabbit on #87)."""
+    config = SHIPPED_CONFIG.replace('  bots: [coderabbit]', '  bots: ["a\\"b"]')
+    assert '  bots: ["a\\"b"]' in config
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+    text = _config(repo)
+    assert yaml.safe_load(text)["review"]["bots"] == ["ab"]
     _run_init(repo)
     assert _config(repo) == text
 
