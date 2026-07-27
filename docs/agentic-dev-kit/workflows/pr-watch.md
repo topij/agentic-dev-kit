@@ -271,9 +271,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   - Broadening this is tracked as an issue in this repo's tracker; it needs every
     external input to read fail-closed first, so do not lift it casually.
   - Known gaps on the REST path, stated rather than discovered: no GitHub
-    Enterprise (`GH_HOST`), no `GH_REPO` (it reads `origin`), and `dev_session.sh
-    pr-watch <scope>` itself needs `gh`, so a gh-less session must invoke the
-    engine directly.
+    Enterprise (`GH_HOST`), no `GH_REPO` (it reads `origin`), no **fork**
+    checkouts (the branch lookup reuses the `origin` owner, so a fork queries the
+    fork while the PR lives upstream — pass an explicit PR number there), and
+    `dev_session.sh pr-watch <scope>` itself needs `gh`, so a gh-less session must
+    invoke the engine directly.
 - **`truncated_reads`** lists any paginated read that stopped at the page ceiling
   rather than at the end of the data. A truncated read means the poll did **not**
   see every check or comment, so `converged` may be premature — REST list
