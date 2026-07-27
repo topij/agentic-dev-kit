@@ -100,6 +100,7 @@ import sys
 import time
 import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -504,9 +505,34 @@ def _http_headers(token: str) -> dict[str, str]:
     }
 
 
+_API_HOST = "api.github.com"
+
+
+def _check_api_url(url: str) -> str:
+    """Refuse to send the token anywhere but the GitHub API over TLS.
+
+    Not defensive boilerplate: `_http_get_all` follows a `Link: rel="next"` URL
+    that comes from the RESPONSE, so the destination of every page after the
+    first is server-supplied. Validating inside the HTTP boundary covers the
+    initial URL and every followed page with one check.
+
+    Caveat worth knowing rather than papering over: urllib carries headers
+    passed via ``headers=`` across an HTTP redirect, so a 3xx to another host
+    would still re-send the Authorization header. That is pre-existing urllib
+    behaviour rather than something this transport introduces, and GitHub does
+    not redirect these endpoints cross-host.
+    """
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname != _API_HOST:
+        raise RuntimeError(
+            f"refusing to send a GitHub token to {url!r} — only https://{_API_HOST} is allowed"
+        )
+    return url
+
+
 def _http_get(url: str, token: str, *, timeout: int = 30) -> tuple[Any, str | None]:
     """GET ``url``, returning (parsed JSON, the raw ``Link`` header or None)."""
-    req = urllib.request.Request(url, headers=_http_headers(token))  # noqa: S310
+    req = urllib.request.Request(_check_api_url(url), headers=_http_headers(token))  # noqa: S310
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — fixed api.github.com host
             body = resp.read()
@@ -544,6 +570,29 @@ def _next_link(link_header: str | None) -> str | None:
 # 2000 items, far past any real PR.
 _REST_MAX_PAGES = 20
 
+_truncation_warned: set[str] = set()
+
+
+def _warn_pagination_truncated(url: str, max_pages: int) -> None:
+    """Say so when the page ceiling — not the data — ended a paginated read.
+
+    A partial list is byte-identical to a complete one, which is the same
+    "truncated reads as absent rather than unread" direction the ceiling exists
+    to bound. Deliberately NOT ``_warn_bot_signal_lost``: that warning makes a
+    specific claim about the review-bot guards, and reusing it here would say
+    something false about which guard is blind. Once per URL per process, for
+    the same reason that one is once per process.
+    """
+    if url in _truncation_warned:
+        return
+    _truncation_warned.add(url)
+    print(
+        f"warning: paginated GitHub read stopped at the {max_pages}-page ceiling "
+        f"({url}) — the result is TRUNCATED, not complete; checks or comments "
+        "beyond that point were not read",
+        file=sys.stderr,
+    )
+
 
 def _http_get_all(url: str, token: str, *, max_pages: int = _REST_MAX_PAGES) -> list:
     """GET ``url`` following ``Link: rel="next"``, for endpoints whose body IS
@@ -557,6 +606,8 @@ def _http_get_all(url: str, token: str, *, max_pages: int = _REST_MAX_PAGES) -> 
             items.extend(data)
         next_url = _next_link(link)
         pages += 1
+    if next_url:
+        _warn_pagination_truncated(url, max_pages)
     return items
 
 
@@ -581,6 +632,8 @@ def _http_get_all_wrapped(
             items.extend(data.get(key) or [])
         next_url = _next_link(link)
         pages += 1
+    if next_url:
+        _warn_pagination_truncated(url, max_pages)
     return items
 
 
@@ -589,7 +642,7 @@ def _http_post_json(
 ) -> Any:
     body = json.dumps(payload).encode("utf-8")
     headers = {**_http_headers(token), "Content-Type": "application/json"}
-    req = urllib.request.Request(url, data=body, headers=headers)  # noqa: S310
+    req = urllib.request.Request(_check_api_url(url), data=body, headers=headers)  # noqa: S310
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — fixed api.github.com host
             return json.loads(resp.read())
@@ -633,23 +686,42 @@ def _rest_repo_slug() -> tuple[str, str]:
     return match.group(1), match.group(2)
 
 
-def _rest_api(path: str) -> str:
-    owner, repo = _rest_repo_slug()
+def _rest_api(path: str, slug: tuple[str, str] | None = None) -> str:
+    """Build an API URL. Pass ``slug`` when building several in one operation.
+
+    Not cached at module scope, deliberately — that is the shape
+    :func:`_resolve_backend` documents as the #48 hazard, and a cached slug goes
+    stale the moment a caller changes repository (which the test suite does).
+    Threading it through instead gets the same one-lookup-per-operation saving
+    with no process-lifetime state: :func:`rest_pr_view` builds six URLs from
+    one ``git remote`` call.
+    """
+    owner, repo = slug if slug is not None else _rest_repo_slug()
     return f"https://api.github.com/repos/{owner}/{repo}/{path}"
 
 
 def rest_resolve_pr(explicit: int | None, *, token: str) -> int:
-    """REST equivalent of :func:`resolve_pr`."""
+    """REST equivalent of :func:`resolve_pr`.
+
+    Known limitation, stated rather than silently wrong: the head filter reuses
+    the `origin` owner, so on a FORK checkout this queries the fork while the PR
+    lives upstream (`gh` resolves that correctly). The kit's own model is
+    same-repo `dev/<scope>` branches — `dev_session.sh` assumes it too — so a
+    fork workflow is already outside what this engine supports. Pass an explicit
+    PR number there.
+    """
     if explicit is not None:
         return explicit
-    owner, _ = _rest_repo_slug()
+    slug = _rest_repo_slug()
     branch = _git_out(
         ["rev-parse", "--abbrev-ref", "HEAD"], what="determine the current branch"
     )
     data, _ = _http_get(
-        _rest_api(f"pulls?head={owner}:{branch}&state=open&per_page=100"), token
+        _rest_api(f"pulls?head={slug[0]}:{branch}&state=open&per_page=100", slug), token
     )
-    if not data:
+    # A non-list body would make `data[0]` a TypeError, which `main`'s handler
+    # does not catch — so it would escape as a traceback rather than `error: …`.
+    if not isinstance(data, list) or not data:
         raise RuntimeError(f"no open PR found for branch {branch!r}")
     return int(data[0]["number"])
 
@@ -719,14 +791,54 @@ def _rest_check_rows(check_runs: list[dict], statuses: list[dict]) -> list[dict]
     return rows
 
 
-def _rest_fetch_checks(sha: str, *, token: str) -> tuple[list[dict], list[dict]]:
+def _rest_review_decision(reviews: list[dict]) -> str | None:
+    """Derive GraphQL's ``reviewDecision`` from a REST reviews list.
+
+    Load-bearing, not cosmetic. :func:`build_report` raises a merge blocker on
+    ``CHANGES_REQUESTED``; leaving this ``None`` on the REST path meant an
+    explicit "request changes" produced NO blocker there while blocking on `gh`
+    — a fail-open in the merge gate, and the one direction this transport must
+    never introduce.
+
+    Only each reviewer's LATEST verdict counts: a CHANGES_REQUESTED that the
+    same reviewer later replaced with an APPROVED must not keep blocking.
+    ``COMMENTED`` and ``PENDING`` submissions carry no verdict and are skipped,
+    so they cannot displace an earlier one. REST returns reviews oldest-first.
+
+    An approximation of GraphQL's field, and it errs toward blocking: GraphQL
+    also accounts for dismissed reviews and required-reviewer rules, which REST
+    does not expose here. It can therefore report CHANGES_REQUESTED where
+    GraphQL would say REVIEW_REQUIRED after a dismissal — a spurious blocker,
+    never a missing one.
+    """
+    latest: dict[str, str] = {}
+    for review in reviews or []:
+        if not isinstance(review, dict):
+            continue
+        verdict = str(review.get("state") or "").upper()
+        if verdict not in {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}:
+            continue
+        author = (review.get("user") or {}).get("login") or "?"
+        latest[author] = verdict
+    verdicts = set(latest.values())
+    if "CHANGES_REQUESTED" in verdicts:
+        return "CHANGES_REQUESTED"
+    if "APPROVED" in verdicts:
+        return "APPROVED"
+    return None
+
+
+def _rest_fetch_checks(
+    sha: str, *, token: str, slug: tuple[str, str] | None = None
+) -> tuple[list[dict], list[dict]]:
     """Both check surfaces for one commit: Checks API runs + combined statuses."""
+    slug = slug if slug is not None else _rest_repo_slug()
     check_runs = _http_get_all_wrapped(
-        _rest_api(f"commits/{sha}/check-runs?per_page=100"), token, "check_runs"
+        _rest_api(f"commits/{sha}/check-runs?per_page=100", slug), token, "check_runs"
     )
-    combined, _ = _http_get(_rest_api(f"commits/{sha}/status?per_page=100"), token)
-    statuses = (combined or {}).get("statuses") or []
-    return check_runs, statuses
+    combined, _ = _http_get(_rest_api(f"commits/{sha}/status?per_page=100", slug), token)
+    statuses = (combined or {}).get("statuses") if isinstance(combined, dict) else []
+    return check_runs, statuses or []
 
 
 def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict]]:
@@ -736,16 +848,28 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict]]:
     spells a comment's author ``user`` where GraphQL spells it ``author``, which
     :func:`_author` already handles, so no renaming is needed.
     """
-    pr_data, _ = _http_get(_rest_api(f"pulls/{pr}"), token)
+    slug = _rest_repo_slug()
+    pr_data, _ = _http_get(_rest_api(f"pulls/{pr}", slug), token)
+    if not isinstance(pr_data, dict):
+        raise RuntimeError(f"PR #{pr} response was not an object")
     sha = (pr_data.get("head") or {}).get("sha")
     if not sha:
         raise RuntimeError(f"PR #{pr} response carried no head SHA")
-    check_runs, statuses = _rest_fetch_checks(sha, token=token)
+    check_runs, statuses = _rest_fetch_checks(sha, token=token, slug=slug)
+    reviews = _http_get_all(_rest_api(f"pulls/{pr}/reviews?per_page=100", slug), token)
     view = {
         "number": pr_data.get("number"),
         "title": pr_data.get("title"),
         "url": pr_data.get("html_url"),
-        "state": str(pr_data.get("state") or "").upper(),
+        # REST spells a merged PR `state: "closed"` + `merged: true`, where
+        # GraphQL says `MERGED`. `build_report` blocks on any non-OPEN state
+        # either way, so this is about the blocker naming the right reason
+        # rather than about whether one fires.
+        "state": (
+            "MERGED"
+            if pr_data.get("merged")
+            else str(pr_data.get("state") or "").upper()
+        ),
         "isDraft": bool(pr_data.get("draft")),
         "baseRefName": (pr_data.get("base") or {}).get("ref"),
         # REST's `mergeable_state` (clean/dirty/blocked/behind/unstable/…) is a
@@ -753,15 +877,15 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict]]:
         # upper-cased as the closest available signal; nothing downstream
         # branches on its exact values, and `decide_mergeable` does not read it.
         "mergeStateStatus": (str(pr_data.get("mergeable_state") or "").upper() or None),
-        "reviewDecision": None,
+        "reviewDecision": _rest_review_decision(reviews),
         "headRefOid": sha,
         "statusCheckRollup": _rest_check_rows(check_runs, statuses),
-        "reviews": _http_get_all(_rest_api(f"pulls/{pr}/reviews?per_page=100"), token),
+        "reviews": reviews,
         "comments": _http_get_all(
-            _rest_api(f"issues/{pr}/comments?per_page=100"), token
+            _rest_api(f"issues/{pr}/comments?per_page=100", slug), token
         ),
     }
-    inline = _http_get_all(_rest_api(f"pulls/{pr}/comments?per_page=100"), token)
+    inline = _http_get_all(_rest_api(f"pulls/{pr}/comments?per_page=100", slug), token)
     return view, inline
 
 
@@ -894,12 +1018,19 @@ def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> Chec
         return CheckDetails([], "unavailable")
     if backend == "rest":
         try:
-            pr_data, _ = _http_get(_rest_api(f"pulls/{pr}"), token)
+            slug = _rest_repo_slug()
+            pr_data, _ = _http_get(_rest_api(f"pulls/{pr}", slug), token)
+            if not isinstance(pr_data, dict):
+                raise RuntimeError(f"PR #{pr} response was not an object")
             sha = (pr_data.get("head") or {}).get("sha")
             if not sha:
                 raise RuntimeError(f"PR #{pr} response carried no head SHA")
-            check_runs, statuses = _rest_fetch_checks(sha, token=token)
-        except (RuntimeError, OSError, KeyError, ValueError) as exc:
+            check_runs, statuses = _rest_fetch_checks(sha, token=token, slug=slug)
+        # AttributeError/TypeError included on purpose: this function is called
+        # OUTSIDE `main`'s try, so anything escaping here crashes the whole poll
+        # rather than degrading. A `null` or list body would otherwise raise
+        # AttributeError from `.get`, which no handler upstream catches.
+        except (RuntimeError, OSError, KeyError, ValueError, AttributeError, TypeError) as exc:
             _warn_bot_signal_lost(str(exc))
             return CheckDetails([], "unavailable")
         return CheckDetails(_rest_check_rows(check_runs, statuses), "ok")
@@ -1008,10 +1139,14 @@ def assert_draft_state(
     """Ensure PR `pr` has isDraft == want_draft, correcting a drifted bit once.
 
     Reads isDraft; if it already matches, returns without a correction. If it
-    drifted, issues the corrective gh command (`gh pr ready --undo <pr>` to make
-    it a draft, `gh pr ready <pr>` to make it ready) — which is idempotent, so a
-    stale initial read that drove a redundant call is harmless — then re-reads to
-    confirm with a bounded settle-retry (gh's draft bit can lag the mutation).
+    drifted, issues the corrective call for whichever backend is active — on
+    `gh` that is `gh pr ready --undo <pr>` to make it a draft and `gh pr ready
+    <pr>` to make it ready; on REST it is the `convertPullRequestToDraft` /
+    `markPullRequestReadyForReview` GraphQL mutation in
+    :func:`_rest_mutate_draft`, because REST has no draft-toggle endpoint. Both
+    are idempotent, so a stale initial read that drove a redundant call is
+    harmless. Then re-reads to confirm with a bounded settle-retry (the draft
+    bit can lag the mutation on either backend).
     Returns a report dict: {pr, want_draft, initial_draft, corrected: bool,
     final_draft, ok: bool}. `ok` is True iff final_draft == want_draft.
     """
