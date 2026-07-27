@@ -51,7 +51,10 @@ Usage:
 Exit codes:
     0 — every kit-owned file is `unchanged` (or intentionally absent)
     1 — at least one file `differs` or is `unknown-version`
-    2 — usage error (no config, no manifest, unreadable input)
+    2 — usage error (no config, no manifest, unreadable input) — including a
+        `kit.version` that is present but not a number. That is deliberately
+        NOT a warning-and-exit-0: CI gates on this exit code, and a config the
+        report itself calls UNREADABLE must not pass a gate.
 """
 
 from __future__ import annotations
@@ -139,6 +142,39 @@ ADOPTER_OWNED: tuple[str, ...] = (
 # adopter's configured engines directory.
 KIT_ENGINE_PREFIX = "scripts"
 
+def _derive_engine_names(kit_owned: tuple[tuple[str, str], ...]) -> tuple[str, ...]:
+    """Engine paths as they sit UNDER `paths.engines`, derived from KIT_OWNED.
+
+    Used to probe whether a configured engines directory holds anything at all.
+    DERIVED rather than restated: this used to be a hardcoded triple
+    (check_doc_budget.py, pr_watch.py, dev_session.sh), so a deliberately
+    sized-down install containing only kit_doctor.py and lib/kitconfig.py
+    reported "contains no kit engine" — from inside the very directory it was
+    executing out of, while the same run counted those two files as
+    ``unchanged`` (issue #59).
+
+    Entries outside ``KIT_ENGINE_PREFIX`` are skipped: their location under an
+    adopter's engines dir is not derivable by a prefix swap, so including one
+    would make the probe stat a path no layout produces. Nothing in KIT_OWNED
+    is outside the prefix today; the rule is here so that adding such an entry
+    cannot silently produce a garbage probe path.
+
+    The #59 class is NOT closed by this. ``init.sh`` carries the identical
+    triple in ``detect_engines_dir()``, where the same bug does real damage
+    rather than merely misreporting it — on that fixture it writes
+    ``engines: scripts`` for a tree whose engines live in ``scripts/devkit``
+    (issue #67). #47 tracks deriving KIT_OWNED itself from the shipped tree,
+    which subsumes both.
+    """
+    return tuple(
+        rel[len(KIT_ENGINE_PREFIX) + 1 :]
+        for rel, role in kit_owned
+        if role == "engine" and rel.startswith(KIT_ENGINE_PREFIX + "/")
+    )
+
+
+_ENGINE_NAMES: tuple[str, ...] = _derive_engine_names(KIT_OWNED)
+
 
 @dataclass
 class FileStatus:
@@ -156,6 +192,20 @@ class Report:
     engines_dir_ok: bool
     hooks_installed: bool
     narrative_rendered: dict[str, bool]
+    # The version values as they were actually written, so the report can tell
+    # "a version key that is not a number" (a typo — do not migrate) apart from
+    # "no usable version" (pre-v2 — do migrate). Both leave the parsed field at
+    # None, and conflating them sends an adopter with `version: v2` into a
+    # migration they do not need.
+    #
+    # LIMIT, because the sentinel is `raw is not None`: an explicit `version:`
+    # / `version: null` / `version: ~` resolves to None and is therefore
+    # indistinguishable from an absent key. All three render as UNVERSIONED.
+    # That is the right advice for an absent key and merely imprecise for a null
+    # one, so it is recorded rather than worked around — a second sentinel would
+    # be a value that config parsing cannot currently produce.
+    kit_version_config_raw: object = None
+    kit_version_manifest_raw: object = None
     files: list[FileStatus] = field(default_factory=list)
 
     @property
@@ -175,6 +225,61 @@ def sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _as_version(value: object) -> int | None:
+    """Read a schema version from config or manifest; None if it isn't one.
+
+    ``kitconfig`` coerces UNQUOTED integers only — deliberately, because that is
+    what PyYAML does — so ``version: "2"`` arrives here as the string ``"2"``
+    and the ``cfg_v < man_v`` comparison in `render` raised ``TypeError: '<' not
+    supported between instances of 'str' and 'int'`` (issue #61). Quoting a
+    scalar is an ordinary thing for a YAML author to do, and a *read-only
+    diagnostic* answering it with a traceback tells the adopter the doctor is
+    broken rather than their config. Coercing here rather than in ``kitconfig``
+    keeps that module's PyYAML parity intact — the divergence would be the bug.
+
+    Dispatched on type rather than run through ``int(str(value))``, because that
+    shorter form is looser than "a schema version": ``int()`` accepts Python's
+    underscore separators and any Unicode decimal digit, so a QUOTED
+    ``version: "1_0"`` would become a confident, silent **10** and ``"２"``
+    would become 2 — values no YAML parser produced.
+
+    **Scope, precisely.** This only filters values `kitconfig` handed over as a
+    ``str``, i.e. ones the author quoted. An UNQUOTED ``version: 1_0`` is
+    resolved to the int 10 by `kitconfig` — and by PyYAML, since YAML 1.1
+    genuinely permits underscore separators in integers — so it arrives here as
+    a plain ``int`` and is passed through. That is correct: second-guessing a
+    value YAML itself resolved is not this function's job. (`kitconfig` does
+    diverge from PyYAML on unquoted non-ASCII digits, where PyYAML yields a
+    ``str``; that belongs to `kitconfig`'s parity tests, not here.)
+
+    ``bool`` is rejected first and explicitly: it is an ``int`` subclass, so the
+    ``isinstance(value, int)`` branch below would otherwise read ``version:
+    true`` as schema v1.
+
+    A ``float`` that is integral is accepted (``2.0`` → 2) only because the code
+    this replaced handled it and rejecting it would make a plausible YAML
+    spelling strictly worse than before the fix. A leading sign is accepted on
+    the ``str`` branch so that quoted and unquoted spellings of the same value
+    agree — the report tells adopters they are equivalent.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
+    if isinstance(value, str):
+        text = value.strip()
+        # A leading sign is part of the number, not of the digits. Sliced with
+        # an explicit tuple: `text[:1] in "+-"` is True for the empty string.
+        digits = text[1:] if text[:1] in ("+", "-") else text
+        # `isascii()` rejects Unicode decimal digits; `isdigit()` rejects the
+        # `1_0` underscore form that bare `int()` would silently accept. Both
+        # are False for "", so a bare sign or an empty value falls through.
+        return int(text) if digits.isascii() and digits.isdigit() else None
+    return None
+
+
 def _hook_dirs(root: Path):
     """Every directory git might read hooks from, honoring ``core.hooksPath``.
 
@@ -186,6 +291,31 @@ def _hook_dirs(root: Path):
 
     Read via a plain config-file scan rather than shelling out to ``git``, so
     this stays import- and subprocess-free.
+
+    **Known-incomplete, deliberately (issue #61).** What this scan misses:
+
+    - a ``hooksPath`` set anywhere but ``.git/config`` — ``~/.gitconfig``,
+      ``$XDG_CONFIG_HOME/git/config``, an ``[includeIf]`` include;
+    - git's own value normalization: surrounding quotes, inline ``#``/``;``
+      comments, and ``~`` expansion;
+    - case. Git config keys are case-insensitive, so ``git config
+      core.hookspath X`` writes ``hookspath =`` and the ``startswith`` below
+      does not match it;
+
+    and, in the other direction, it matches ``hooksPath`` under *any* section,
+    plus any key merely beginning with those letters.
+
+    Asking git instead is the obvious fix and was attempted; a review panel
+    found that version answered from an *enclosing* repository when `root` was
+    not one, and honored an inherited ``GIT_DIR`` — both silent, both worse than
+    these false negatives. Reverted rather than shipped half-right; #61 carries
+    the evidence and the shape a correct version needs.
+
+    **Not fixed by that revert, and present here:** ``.git/hooks`` is appended
+    unconditionally, so a hook sitting there reports as installed even when
+    ``core.hooksPath`` sends git somewhere else and git will never run it. That
+    is a false POSITIVE on a quality gate, it predates this file's current
+    shape, and it is part of what #61 has to resolve.
     """
     candidates: list[Path] = []
     config = root / ".git" / "config"
@@ -262,10 +392,10 @@ def inspect(root: Path, manifest: dict, config: dict) -> Report:
 
     # A configured engines dir that holds no engine is the silent failure that
     # made one surveyed repo's workflows resolve `<engine-dir>/…` to nothing.
-    engines_probe = any(
-        (root / engines_dir / name).is_file()
-        for name in ("check_doc_budget.py", "pr_watch.py", "dev_session.sh")
-    )
+    # ANY kit engine counts (see `_ENGINE_NAMES`): a sized-down adoption is a
+    # supported state, so the probe must answer "is this the engines dir?" and
+    # not "did you install the three I happen to name?".
+    engines_probe = any((root / engines_dir / name).is_file() for name in _ENGINE_NAMES)
 
     hook_target = root / engines_dir / "hooks" / "pre-push"
     hooks_installed = hook_target.is_file() and any(
@@ -283,9 +413,13 @@ def inspect(root: Path, manifest: dict, config: dict) -> Report:
             "devkit-template: unrendered" not in doc.read_text(encoding="utf-8", errors="replace")
         )
 
+    raw_version = get(config, "kit.version", None)
+    raw_manifest_version = manifest.get("kit_version")
     return Report(
-        kit_version_config=get(config, "kit.version", None),
-        kit_version_manifest=manifest.get("kit_version"),
+        kit_version_config=_as_version(raw_version),
+        kit_version_manifest=_as_version(raw_manifest_version),
+        kit_version_config_raw=raw_version,
+        kit_version_manifest_raw=raw_manifest_version,
         engines_dir=engines_dir,
         engines_dir_ok=engines_probe,
         hooks_installed=hooks_installed,
@@ -297,12 +431,34 @@ def inspect(root: Path, manifest: dict, config: dict) -> Report:
 def render(report: Report) -> str:
     lines: list[str] = ["kit-doctor — installation report", ""]
     cfg_v, man_v = report.kit_version_config, report.kit_version_manifest
-    if cfg_v is None:
+    if cfg_v is None and report.kit_version_config_raw is not None:
+        # Present but not a number. Deliberately NOT the "run ./init.sh to
+        # migrate" advice below: the fix is a one-character config edit, and
+        # sending someone into a migration for a typo is the same wrong-advice
+        # failure as the engines probe in #59.
+        lines.append(
+            f"  ⚠ config schema: UNREADABLE — kit.version is {report.kit_version_config_raw!r}, "
+            "expected an unquoted or quoted integer (e.g. `version: 2`)"
+        )
+    elif cfg_v is None:
         lines.append("  ⚠ config schema: UNVERSIONED (pre-v2) — run ./init.sh to migrate and stamp")
     elif man_v is not None and cfg_v < man_v:
         lines.append(f"  ⚠ config schema: v{cfg_v}, kit ships v{man_v} — run ./init.sh to migrate")
     else:
         lines.append(f"  ✓ config schema: v{cfg_v}")
+
+    # The manifest's version gets its OWN line rather than an `elif` above, for
+    # two reasons the previous shape got wrong: an ABSENT or null kit_version
+    # leaves the comparison just as impossible as an unreadable one (and used to
+    # fall through to a bare ✓), and a config-side problem used to swallow the
+    # manifest-side one entirely, so a packaging fault went unnamed.
+    if man_v is None:
+        raw = report.kit_version_manifest_raw
+        detail = "absent" if raw is None else repr(raw)
+        lines.append(
+            f"  ⚠ manifest kit_version is {detail} — cannot tell whether this config is "
+            "behind the kit"
+        )
 
     if report.engines_dir_ok:
         lines.append(f"  ✓ paths.engines: {report.engines_dir}")
@@ -334,18 +490,43 @@ def render(report: Report) -> str:
         f"{len(by_state.get('unknown-version', []))} unknown"
     )
     # Narrow "differs" using the schema version rather than asserting a cause.
+    # An UNREADABLE version narrows nothing: "no version key" soundly implies
+    # pre-v2 and therefore older, but `version: v2` implies nothing at all, and
+    # this file's whole position on `differs` is that it must not claim a cause
+    # it cannot know.
+    config_unreadable = (
+        report.kit_version_config is None and report.kit_version_config_raw is not None
+    )
+    # A manifest with no USABLE version — absent, null, or unparseable — is no
+    # comparison point at all. Only qualified by a versioned config, because an
+    # UNVERSIONED config is pre-v2 by definition and therefore older regardless.
+    cannot_narrow = config_unreadable or (
+        report.kit_version_manifest is None and report.kit_version_config is not None
+    )
+    # `behind` has THREE consumers: the `elif` below, the `else` below, and the
+    # kit-bug nudge after this block. It is deliberately not re-qualified by
+    # `cannot_narrow` — each consumer handles that itself, and a redundant
+    # condition here would pin nothing while reading as if it did.
     behind = (
         report.kit_version_config is not None
         and report.kit_version_manifest is not None
         and report.kit_version_config < report.kit_version_manifest
-    ) or report.kit_version_config is None
-    differs_label = (
-        "differ from the manifest — this repo's config predates the kit's, so these are "
-        "probably just an OLDER version rather than local edits; diff to confirm"
-        if behind
-        else "differ from the manifest — same schema version, so these are likely LOCAL EDITS; "
-        "diff before replacing"
-    )
+    ) or (report.kit_version_config is None and not config_unreadable)
+    if cannot_narrow:
+        differs_label = (
+            "differ from the manifest — a schema version is unusable, so it "
+            "cannot narrow this to an older kit versus local edits; diff before replacing"
+        )
+    elif behind:
+        differs_label = (
+            "differ from the manifest — this repo's config predates the kit's, so these are "
+            "probably just an OLDER version rather than local edits; diff to confirm"
+        )
+    else:
+        differs_label = (
+            "differ from the manifest — same schema version, so these are likely LOCAL EDITS; "
+            "diff before replacing"
+        )
     for state, label in (
         ("differs", differs_label),
         ("unknown-version", "no manifest entry — drift cannot be judged"),
@@ -359,7 +540,12 @@ def render(report: Report) -> str:
             suffix = f"  ({f.detail})" if f.detail else ""
             lines.append(f"    · {f.path} [{f.role}]{suffix}")
 
-    if by_state.get("differs") and not behind:
+    # `not cannot_narrow` is load-bearing, and only for the MANIFEST side: an
+    # unreadable *config* version leaves `behind` True and is suppressed by that
+    # alone, but an unusable *manifest* version leaves `behind` False, so
+    # without this the nudge would fire on a comparison that never ran — telling
+    # the adopter to report a kit bug on the strength of nothing.
+    if by_state.get("differs") and not behind and not cannot_narrow:
         lines.append(
             "\n  Engines are kit-owned: everything project-specific belongs in"
             "\n  config/dev-model.yaml. If you had to edit an engine to adopt it,"
@@ -395,8 +581,23 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.generate_manifest:
-        version = get(config, "kit.version", 2)
-        manifest = generate_manifest(root, int(version))
+        # An absent (or explicitly null) kit.version takes the documented
+        # default; only a value that is PRESENT and unreadable is refused. The
+        # earlier shape defaulted before parsing, so it printed "kit.version is
+        # None" for a null key while silently stamping 2 for an absent one —
+        # naming the one case that did not error.
+        raw_version = get(config, "kit.version", None)
+        version = 2 if raw_version is None else _as_version(raw_version)
+        if version is None:
+            # Refuse rather than guess: a manifest stamped with the wrong
+            # kit_version misreports drift for every adopter that reads it.
+            print(
+                f"error: kit.version is {raw_version!r}, expected an unquoted or quoted "
+                "integer — refusing to stamp a manifest with a guessed version",
+                file=sys.stderr,
+            )
+            return 2
+        manifest = generate_manifest(root, version)
         manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         holes = [p for p, e in manifest["files"].items() if e["sha256"] is None]
         print(f"wrote {manifest_path} ({len(manifest['files'])} files, kit_version={version})")
@@ -427,6 +628,11 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "kit_version_config": report.kit_version_config,
                     "kit_version_manifest": report.kit_version_manifest,
+                    # A null parsed value with a non-null raw one means the key
+                    # is present but unreadable, which a consumer cannot
+                    # otherwise distinguish from an absent version.
+                    "kit_version_config_raw": report.kit_version_config_raw,
+                    "kit_version_manifest_raw": report.kit_version_manifest_raw,
                     "engines_dir": report.engines_dir,
                     "engines_dir_ok": report.engines_dir_ok,
                     "hooks_installed": report.hooks_installed,
@@ -442,6 +648,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(render(report))
 
+    if report.kit_version_config is None and report.kit_version_config_raw is not None:
+        # Unreadable input, per the exit-code contract above. Reported first so
+        # the adopter sees the ⚠ line, then a non-zero status so CI cannot go
+        # green on a config this very run called UNREADABLE.
+        return 2
     return 1 if report.drifted else 0
 
 
