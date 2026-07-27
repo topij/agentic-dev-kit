@@ -59,11 +59,13 @@ stood (355 tests), by my own mutation run at that head, or by CodeRabbit.
   wrap-up's own handoff block then miscited `#36`, overstated a test count, and got a
   GitHub rule backwards — all caught by a review lens, none by me. This is the third
   consecutive session where claim-vs-artifact drift is the most common finding.
-- **A closing keyword inside backticks does NOT fire.** Measured:
-  `closingIssuesReferences` is empty for a PR whose body carries a backticked
-  `` `Closes #61` ``, while `#63`'s *un-backticked* "Does NOT close #60" closed it. So
-  the hazard is negated **prose**, not any mention — a grep that ignores code spans
-  would have over-fired on every legitimate reference.
+- **A rule measured on one surface must be re-measured on the next.** A backticked
+  closing keyword is ignored in a **PR body** (rendered markdown — measured:
+  `closingIssuesReferences: []`) and **fires in a commit message** (plain text, where a
+  backtick is just a character). I measured the first, generalised to the second, built a
+  pre-merge grep on that generalisation, and the squash-merge closed `#61` anyway —
+  through the safeguard written for this exact trap. Reopened by hand; third occurrence
+  in three sessions.
 - **Two of my tests pinned nothing**, including the one whose stated thesis is "don't
   restate the list": it re-derived its expectation from the real `KIT_OWNED` with the
   prefix filter left out, so deleting that filter left the suite green.

@@ -47,23 +47,39 @@ Everything above now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   proposed fix: contract item 5 should say the restore belongs in a `finally` (or a
   git-clean check) and that any harness must verify the tree is clean *after* it exits,
   not only after a successful run.
-- **The closing-keyword rule as written is wrong, and measuring it changed the fix.**
-  Last session's entry says never to write one "even negated". Acting on that, I rewrote
-  a PR body sentence that mentioned a backticked `` `Closes #61` ``. Then I measured:
+- **The closing-keyword trap fired a third time — through the safeguard I had just
+  built for it.** Sequence, because the shape of the mistake is the finding:
 
-  ```
-  PR #68 body contains `Closes #61` (backticked) → closingIssuesReferences: []
-  PR #63 body contains "Does NOT close #60"      → closingIssuesReferences: [58, 60]
-  ```
+  1. Last session's entry (below) says never to write a closing keyword next to an
+     issue number, "even negated".
+  2. This session I measured that rule and found it too strong: a PR body carrying a
+     backticked `` `Closes #61` `` produced `closingIssuesReferences: []`, while `#63`'s
+     un-backticked negated mention had fired. Conclusion recorded: **GitHub excludes
+     inline code spans**, so the hazard is negated *prose*.
+  3. I built a pre-merge grep from that conclusion — strip code spans, then look for a
+     closing keyword — ran it on a squash-merge message, and it passed.
+  4. **The merge closed `#61` anyway.** Reopened by hand.
 
-  **GitHub excludes inline code spans**; what it does not excuse is negating prose. So
-  the real rule is narrower than the entry below claims, and the obvious mechanical fix
-  — grep for `(close|fix|resolve)\w*\s+#\d+` — would fire on every legitimate backticked
-  reference and train people to ignore it. **M** — proposed fix: a `pr-watch` / `wrap-up`
-  check that strips fenced blocks and inline code **first**, then flags a closing keyword
-  within a few tokens of a negation (`not`, `n't`, `NOT`, "stays open"), which is the
-  actual failure mode. Correct the 2026-07-26 entry's rule at the same time; it is
-  currently stated more strongly than the evidence supports.
+  The measurement was right and the generalisation was wrong. A PR body is **rendered
+  markdown**; a commit message is **plain text**, where a backtick is just a character.
+  Same string, two surfaces, opposite behaviour:
+
+  | surface | backticked `` `Closes #N` `` |
+  | --- | --- |
+  | PR body | ignored (measured: `closingIssuesReferences: []`) |
+  | commit message | **fires** (measured: `#61` closed by the squash of `#68`) |
+
+  **H** — proposed fix, now with the surface distinction that makes it correct: the
+  `pr-watch` / `wrap-up` check must run *per surface*. For a **PR body**, strip fenced
+  blocks and inline code first, then flag a keyword near a negation. For a **commit or
+  squash message**, strip nothing — flag every `(close|fix|resolve)\w*\s+#\d+` and make
+  the operator confirm each one is intended. And a squash-merge message needs checking
+  at merge time specifically, because it is composed *after* the PR body was reviewed and
+  is never itself reviewed by anything.
+
+  Worth stating plainly for whoever hits this next: three occurrences, three sessions,
+  and the third got through a safeguard written for the second. A rule derived from one
+  surface must not be applied to another without re-measuring there.
 - **A review bot with an incremental model keeps a stale review across a rewrite.**
   CodeRabbit reviewed the pre-split head, then declined `@coderabbitai review`
   ("does not re-review already reviewed commits") and hit its Fair Usage limit on
