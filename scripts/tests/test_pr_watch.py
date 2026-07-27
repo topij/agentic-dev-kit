@@ -2665,3 +2665,399 @@ def test_a_stale_receipt_exposes_no_lenses_in_the_report_json() -> None:
     assert stale["review_evidence"]["lenses"] == []
     assert stale["review_evidence"]["source"] is None
     assert stale["mergeable"] is False
+
+
+# ---------------------------------------------------------------------------
+# transport backends (#90) — `gh` by default, REST when `gh` is absent.
+#
+# The point of most of these is NOT that REST returns data: it is that the two
+# guards which depend on check DESCRIPTIONS (#23's outage guard) and check
+# TIMESTAMPS (#19's queued-bot grace) still fire on the REST path. A port that
+# moved only `_gh_json` would leave `fetch_check_details` shelling out to a `gh`
+# that is not installed, degrading to no-signal on every poll — so a
+# rate-limited reviewer would read as a clean one, in the engine that decides a
+# PR is safe to merge.
+
+
+def _no_gh(module: ModuleType, monkeypatch: pytest.MonkeyPatch, *, token: str | None = "t0ken") -> None:
+    """Put the module on the REST path: no `gh` binary, a token, a known slug."""
+    monkeypatch.setattr(module.shutil, "which", lambda _name: None)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    if token is not None:
+        monkeypatch.setenv("GH_TOKEN", token)
+    monkeypatch.setattr(module, "_rest_repo_slug", lambda: ("owner", "repo"))
+
+
+def _route_http(module: ModuleType, monkeypatch: pytest.MonkeyPatch, routes: dict) -> list[str]:
+    """Mock the HTTP boundary, dispatching on a substring of the URL.
+
+    Returns the list of requested URLs so a test can assert on what was asked
+    for. `routes` values are the parsed JSON body; a missing route is an
+    explicit failure rather than a silent empty result.
+    """
+    seen: list[str] = []
+
+    def _get(url: str, token: str, **_kw):
+        seen.append(url)
+        for fragment, payload in routes.items():
+            if fragment in url:
+                return payload, None
+        raise AssertionError(f"unrouted GET {url}")
+
+    monkeypatch.setattr(module, "_http_get", _get)
+    return seen
+
+
+def test_backend_prefers_gh_and_is_never_memoized(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Selection must be per call. A cached backend would let the first test (or
+    the first poll) pin it for the whole process, making which backend runs
+    depend on whether the machine happens to have `gh` — the #48 failure mode,
+    with ambient PATH in place of ambient config.
+    """
+    pr_watch = _load_pr_watch()
+
+    monkeypatch.setattr(pr_watch.shutil, "which", lambda _name: "/usr/bin/gh")
+    assert pr_watch._resolve_backend() == ("gh", None)
+
+    # Same process, same module object: PATH changes and the answer must change.
+    monkeypatch.setattr(pr_watch.shutil, "which", lambda _name: None)
+    monkeypatch.setenv("GH_TOKEN", "t0ken")
+    assert pr_watch._resolve_backend() == ("rest", "t0ken")
+
+    monkeypatch.setattr(pr_watch.shutil, "which", lambda _name: "/usr/bin/gh")
+    assert pr_watch._resolve_backend() == ("gh", None)
+
+
+def test_no_gh_and_no_token_is_actionable_not_a_traceback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The bug the fallback exists to fix: a missing `gh` reaching the operator
+    as a raw FileNotFoundError out of subprocess.run."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch, token=None)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        pr_watch.resolve_pr(None)
+    message = str(excinfo.value)
+    assert "not found on PATH" in message
+    assert "GH_TOKEN" in message  # names the way out, not just the problem
+
+
+def test_gh_present_still_takes_the_gh_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default backend is unchanged — REST must be unreachable with `gh` on PATH."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch.shutil, "which", lambda _name: "/usr/bin/gh")
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(pr_watch, "_gh_json", lambda args: (calls.append(args), {"number": 7})[1])
+
+    def _no_http(*_a, **_k):
+        raise AssertionError("REST must not be reached while `gh` is on PATH")
+
+    monkeypatch.setattr(pr_watch, "_http_get", _no_http)
+
+    assert pr_watch.resolve_pr(None) == 7
+    assert calls == [["pr", "view", "--json", "number"]]
+
+
+def test_rest_pr_view_assembles_the_same_shape_build_report_consumes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    _route_http(
+        pr_watch,
+        monkeypatch,
+        {
+            "commits/deadbee/status": {"statuses": [{"context": "legacy", "state": "success", "description": "", "created_at": "2026-07-25T11:00:00Z"}]},
+            "pulls/9": {
+                "number": 9,
+                "title": "a title",
+                "html_url": "https://github.com/owner/repo/pull/9",
+                "state": "open",
+                "draft": False,
+                "base": {"ref": "main"},
+                "mergeable_state": "clean",
+                "head": {"sha": "deadbee"},
+                "node_id": "PR_node",
+            },
+        },
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get_all_wrapped",
+        lambda url, token, key, **kw: [
+            {"name": "Test", "status": "completed", "conclusion": "success", "output": {"title": ""}, "started_at": "2026-07-25T11:00:00Z"}
+        ],
+    )
+
+    def _get_all(url, token, **_kw):
+        if "pulls/9/reviews" in url:
+            return [{"user": {"login": "coderabbitai"}, "body": "looks fine", "commit_id": "deadbee"}]
+        if "issues/9/comments" in url:
+            return [{"id": 1, "user": {"login": "human"}, "body": "a comment"}]
+        if "pulls/9/comments" in url:
+            return [{"id": 2, "user": {"login": "human"}, "body": "inline", "path": "a.py", "line": 3}]
+        raise AssertionError(f"unrouted GET-all {url}")
+
+    monkeypatch.setattr(pr_watch, "_http_get_all", _get_all)
+
+    view, inline = pr_watch.fetch_pr_view(9)
+
+    assert view["number"] == 9
+    assert view["headRefOid"] == "deadbee"
+    assert view["isDraft"] is False
+    assert view["baseRefName"] == "main"
+    assert [c["body"] for c in view["comments"]] == ["a comment"]
+    assert [r["body"] for r in view["reviews"]] == ["looks fine"]
+    assert [c["body"] for c in inline] == ["inline"]
+    # The rollup carries both check surfaces, in the shape summarize_checks reads.
+    assert pr_watch.summarize_checks(view["statusCheckRollup"])["all_green"] is True
+    # REST spells the author `user`; `_author` must still resolve it.
+    assert pr_watch._author(view["comments"][0]) == "human"
+
+
+def test_rest_check_rows_carry_the_fields_both_guards_read() -> None:
+    """`description` and `startedAt` are the whole reason this shaping exists —
+    the GraphQL rollup `gh pr view` returns has neither."""
+    pr_watch = _load_pr_watch()
+
+    rows = pr_watch._rest_check_rows(
+        [
+            {
+                "name": "CodeRabbit",
+                "status": "completed",
+                "conclusion": "success",
+                "output": {"title": "Review rate limited"},
+                "started_at": "2026-07-25T11:50:00Z",
+            }
+        ],
+        [
+            {
+                "context": "legacy/ci",
+                "state": "pending",
+                "description": "queued",
+                "created_at": "2026-07-25T11:55:00Z",
+            }
+        ],
+    )
+
+    assert rows[0] == {
+        "name": "CodeRabbit",
+        "state": "SUCCESS",
+        "bucket": "pass",
+        "description": "Review rate limited",
+        "startedAt": "2026-07-25T11:50:00Z",
+    }
+    # A StatusContext gets a REAL timestamp: gh reports startedAt as the zero
+    # time (0001-01-01) for these, which `_age_minutes` has to reject.
+    assert rows[1]["startedAt"] == "2026-07-25T11:55:00Z"
+    assert rows[1]["bucket"] == "pending"
+
+
+def test_rest_outage_guard_fires_on_a_check_description() -> None:
+    """#23 end to end on REST rows: the rate limit appears ONLY as the check
+    description, on an otherwise-SUCCESS check."""
+    pr_watch = _load_pr_watch()
+
+    rows = pr_watch._rest_check_rows(
+        [
+            {
+                "name": "CodeRabbit",
+                "status": "completed",
+                "conclusion": "success",
+                "output": {"title": "Review rate limited"},
+                "started_at": "2026-07-25T11:50:00Z",
+            }
+        ],
+        [],
+    )
+    result = pr_watch.summarize_review_bots(rows, [], now=NOW)
+
+    assert [u["reason"] for u in result["unavailable"]] == ["review rate limited"]
+    assert result["unavailable"][0]["surface"] == "check"
+
+
+def test_rest_pending_guard_fires_and_uses_the_checks_own_clock() -> None:
+    """#19 on REST rows: an in-progress run is pending, and its `started_at`
+    feeds the grace window."""
+    pr_watch = _load_pr_watch()
+
+    rows = pr_watch._rest_check_rows(
+        [
+            {
+                "name": "CodeRabbit",
+                "status": "in_progress",
+                "conclusion": None,
+                "output": {"title": ""},
+                "started_at": _minutes_ago(5),
+            }
+        ],
+        [],
+    )
+    assert rows[0]["bucket"] == "pending"
+    assert rows[0]["state"] == "IN_PROGRESS"
+
+    result = pr_watch.summarize_review_bots(rows, [], now=NOW)
+    assert [p["bot"] for p in result["pending"]] == ["coderabbit"]
+    assert result["pending"][0]["age_source"] == "check"
+    assert result["pending"][0]["age_minutes"] == 5.0
+    # Inside the grace window, a pending bot blocks the MERGE gate.
+    assert result["blockers"] != []
+
+
+def test_rest_bucket_is_fail_closed_for_an_unrecognized_conclusion() -> None:
+    """`_check_is_pending` trusts `bucket` when present, so a wrong bucket here
+    is the one direction that could wave a bot through. An unknown conclusion
+    must read as pending (hold the gate), never as pass.
+    """
+    pr_watch = _load_pr_watch()
+
+    rows = pr_watch._rest_check_rows(
+        [{"name": "CodeRabbit", "status": "completed", "conclusion": "some_new_github_state", "output": {}, "started_at": ""}],
+        [{"context": "CodeRabbit", "state": "brand_new", "description": "", "created_at": ""}],
+    )
+    assert [r["bucket"] for r in rows] == ["pending", "pending"]
+    assert all(pr_watch._check_is_pending(r) for r in rows)
+
+
+def test_rest_check_pagination_is_followed_then_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The Checks API defaults to per_page=30. cs-toolkit shipped a false green
+    from a single unpaginated GET against 48 real check runs: the truncated
+    checks read as absent rather than unread. Follow `Link`, and bound it so a
+    malformed header cannot spin the loop forever.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+
+    pages = {
+        "page=1": ({"check_runs": [{"name": "one"}]}, '<https://api.github.com/x?page=2>; rel="next"'),
+        "page=2": ({"check_runs": [{"name": "two"}]}, None),
+    }
+
+    def _get(url: str, token: str, **_kw):
+        for fragment, payload in pages.items():
+            if fragment in url:
+                return payload
+        return ({"check_runs": [{"name": "first"}]}, '<https://api.github.com/x?page=1>; rel="next"')
+
+    monkeypatch.setattr(pr_watch, "_http_get", _get)
+    got = pr_watch._http_get_all_wrapped("https://api.github.com/x", "t", "check_runs")
+    assert [r["name"] for r in got] == ["first", "one", "two"]
+
+    # A cyclic Link header must stop, not spin.
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get",
+        lambda url, token, **_kw: ({"check_runs": [{"name": "loop"}]}, '<https://api.github.com/same>; rel="next"'),
+    )
+    bounded = pr_watch._http_get_all_wrapped("https://api.github.com/same", "t", "check_runs", max_pages=4)
+    assert len(bounded) == 4
+
+
+def test_next_link_ignores_other_rels() -> None:
+    pr_watch = _load_pr_watch()
+    header = '<https://api.github.com/a?page=3>; rel="prev", <https://api.github.com/a?page=5>; rel="next", <https://api.github.com/a?page=9>; rel="last"'
+    assert pr_watch._next_link(header) == "https://api.github.com/a?page=5"
+    assert pr_watch._next_link(None) is None
+    assert pr_watch._next_link('<https://x>; rel="last"') is None
+
+
+def test_fetch_check_details_on_rest_never_raises_and_says_so_once(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Same never-raises contract as the `gh` path, and the same audible
+    degrade: a silent `[]` would disable both guards without a trace."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("GitHub API GET … failed (403 Forbidden)")
+
+    monkeypatch.setattr(pr_watch, "_http_get", _boom)
+
+    assert pr_watch.fetch_check_details(1) == ([], "unavailable")
+    err = capsys.readouterr().err
+    assert "403" in err
+    assert "will not be detected" in err
+
+    assert pr_watch.fetch_check_details(1) == ([], "unavailable")
+    assert capsys.readouterr().err == ""  # once per process, not per poll
+
+    # And with no backend at all it still degrades rather than raising.
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    assert pr_watch.fetch_check_details(1) == ([], "unavailable")
+
+
+def test_fetch_check_details_on_rest_returns_rows_with_a_real_signal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    _route_http(
+        pr_watch,
+        monkeypatch,
+        {
+            "commits/abc123/status": {"statuses": []},
+            "pulls/5": {"head": {"sha": "abc123"}},
+        },
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get_all_wrapped",
+        lambda url, token, key, **kw: [
+            {"name": "CodeRabbit", "status": "completed", "conclusion": "success", "output": {"title": "Review limit reached"}, "started_at": "2026-07-25T11:50:00Z"}
+        ],
+    )
+
+    details = pr_watch.fetch_check_details(5)
+    assert details.signal == "ok"
+    assert details.rows[0]["description"] == "Review limit reached"
+    # per_page=100 on the checks fetch is not decoration — see the pagination test.
+    assert pr_watch.summarize_review_bots(details.rows, [], now=NOW)["unavailable"] != []
+
+
+def test_rest_draft_assertion_uses_the_graphql_mutation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """REST has no draft-toggle endpoint, so `--assert-ready` needs GraphQL."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+
+    # Three reads, in order: the initial isDraft, the node_id lookup inside the
+    # mutation (whose draft value is not read), then the post-correction confirm.
+    drafts = iter([True, True, False])
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get",
+        lambda url, token, **_kw: ({"draft": next(drafts), "node_id": "PR_node"}, None),
+    )
+    posted: list[dict] = []
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_post_json",
+        lambda url, token, payload, **_kw: (posted.append({"url": url, "payload": payload}), {"data": {}})[1],
+    )
+
+    report = pr_watch.assert_draft_state(4, want_draft=False, confirm_retries=1, confirm_delay_s=0)
+
+    assert report["corrected"] is True
+    assert report["ok"] is True
+    assert posted[0]["url"] == "https://api.github.com/graphql"
+    assert "markPullRequestReadyForReview" in posted[0]["payload"]["query"]
+    assert posted[0]["payload"]["variables"]["id"] == "PR_node"
+
+
+def test_rest_review_snapshot_binds_a_receipt_to_the_current_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`--record-review` must be able to refuse a stale head on REST too —
+    otherwise a receipt could bind to code the reviewer never saw."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    monkeypatch.setattr(
+        pr_watch, "_http_get", lambda url, token, **_kw: ({"number": 3, "head": {"sha": "newhead"}}, None)
+    )
+    monkeypatch.setattr(pr_watch, "_http_get_all", lambda url, token, **_kw: [])
+
+    assert pr_watch.fetch_review_snapshot(3)["headRefOid"] == "newhead"
+
+    with pytest.raises(ValueError, match="head changed during review"):
+        pr_watch.record_review(3, source="fallback:panel", expected_head="oldhead")

@@ -7,7 +7,7 @@
 
 The shared `pr-watch` workflow (and the "PR follow-through" policy in your project's
 agent instructions)
-call this once per round: it asks `gh` for the PR's check rollup + every
+call this once per round: it asks GitHub for the PR's check rollup + every
 comment surface (issue comments, review submissions, inline review comments),
 filters out known auto-noise (while surfacing reviewer-unavailability notices),
 diffs against a per-PR seen-set so only *new actionable* comments surface, and
@@ -52,8 +52,16 @@ reported poll's set structurally can't be acked — it stays unseen and surfaces
 on the next poll. Calling `--mark-seen` cold (no prior poll reported since the
 last ack) acks nothing and says so via `report["note"]`.
 
-The `gh` shelling is a thin layer; the classification + diff + done logic are pure
+The transport is a thin layer; the classification + diff + done logic are pure
 functions (tested). Stdlib only.
+
+**Two backends.** `gh` is the default whenever the binary is on PATH, and its
+behaviour is unchanged. When `gh` is absent — cloud and container sessions with
+no binary and no way to run an interactive `gh auth login` — the same fields are
+read from the GitHub REST + GraphQL APIs using `GH_TOKEN`/`GITHUB_TOKEN`. With
+neither, the engine exits 2 with an actionable message rather than a
+`FileNotFoundError` traceback. Selection is per call, never memoized: see
+`_resolve_backend`.
 
 Usage:
     uv run scripts/pr_watch.py                 # current branch's PR, human summary
@@ -75,8 +83,8 @@ right before `gh pr merge`.
 Exit codes:
     0 — reported (regardless of the verdict; check `converged` / `mergeable` in
         the output), or the draft-bit assertion held/was corrected successfully
-    2 — usage error (no PR found, gh failure), or a draft-bit assertion that
-        failed to correct (`ok: false`)
+    2 — usage error (no PR found, transport failure, no usable backend), or a
+        draft-bit assertion that failed to correct (`ok: false`)
 """
 
 from __future__ import annotations
@@ -86,13 +94,16 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
 import unicodedata
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 
 def _find_repo_root(start: Path) -> Path:
@@ -432,6 +443,369 @@ def _gh_json(args: list[str]):
     return json.loads(_gh(args))
 
 
+# --------------------------------------------------------------- rest transport
+#
+# `gh` stays the default backend and its path is unchanged. Some cloud and
+# container sessions have no `gh` binary and no way to run an interactive
+# `gh auth login`; there, this backend re-derives the same fields from the
+# GitHub REST + GraphQL APIs over `urllib` (stdlib only — this engine must stay
+# dependency-free so it can run from a git hook), authenticating with
+# GH_TOKEN/GITHUB_TOKEN.
+#
+# Dispatch is SEMANTIC, not a generic `gh --json` emulator: each of the six
+# things this engine actually asks GitHub for has its own pair of
+# implementations. Emulating arbitrary `--json` field sets would be a fake
+# abstraction that silently returns the wrong shape the first time a caller
+# asks for a field the emulator never mapped.
+#
+# `_http_get` / `_http_get_all` / `_http_get_all_wrapped` / `_http_post_json`
+# are the HTTP boundary — tests mock these, never the network.
+
+
+def _github_token() -> str | None:
+    return os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+
+
+def _resolve_backend() -> tuple[str, str | None]:
+    """Pick ``"gh"`` or ``"rest"``, or raise a clear, actionable RuntimeError.
+
+    Resolved **lazily on every call**, never memoized at import time. Issue #48
+    is the standing lesson: `pr_watch` resolving config at import time silently
+    coupled ~32 kit tests to ambient repo state. A cached backend would do the
+    same thing with ambient PATH — the first test to import the module would
+    pin the backend for every test after it, and which backend that is would
+    depend on whether the machine running CI happens to have `gh`.
+    ``shutil.which`` is a cheap filesystem stat, so there is nothing to cache.
+
+    Never lets a missing `gh` reach the operator as a raw ``FileNotFoundError``
+    traceback — that is the bug this fallback exists to fix. Callers in
+    :func:`main` already catch ``RuntimeError`` and print ``error: …`` + exit 2.
+    """
+    if shutil.which("gh") is not None:
+        return "gh", None
+    token = _github_token()
+    if not token:
+        raise RuntimeError(
+            "`gh` CLI not found on PATH and no GitHub token in the environment — "
+            "the watch engine needs one or the other. Install and authenticate "
+            "`gh`, or set GH_TOKEN or GITHUB_TOKEN to a token with `repo` scope "
+            "to use the REST fallback (`--assert-draft`/`--assert-ready` need it "
+            "too, for the GraphQL draft mutation)."
+        )
+    return "rest", token
+
+
+def _http_headers(token: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "agentic-dev-kit-pr-watch",
+    }
+
+
+def _http_get(url: str, token: str, *, timeout: int = 30) -> tuple[Any, str | None]:
+    """GET ``url``, returning (parsed JSON, the raw ``Link`` header or None)."""
+    req = urllib.request.Request(url, headers=_http_headers(token))  # noqa: S310
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — fixed api.github.com host
+            body = resp.read()
+            link = resp.headers.get("Link")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(
+            f"GitHub API GET {url} failed ({exc.code} {exc.reason})"
+            + (
+                " — the token may lack `repo` scope or have expired"
+                if exc.code in (401, 403)
+                else ""
+            )
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"GitHub API GET {url} failed: {exc.reason}") from exc
+    try:
+        return json.loads(body), link
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"GitHub API GET {url} returned non-JSON body") from exc
+
+
+def _next_link(link_header: str | None) -> str | None:
+    """The ``rel="next"`` URL from a GitHub ``Link`` pagination header, if any."""
+    if not link_header:
+        return None
+    for part in link_header.split(","):
+        section = [p.strip() for p in part.split(";")]
+        if len(section) >= 2 and section[1] == 'rel="next"':
+            return section[0].strip("<>")
+    return None
+
+
+# Page ceiling for every paginated REST read. Bounded so a malformed or cyclic
+# `Link` header cannot spin a watch loop forever; 20 pages at per_page=100 is
+# 2000 items, far past any real PR.
+_REST_MAX_PAGES = 20
+
+
+def _http_get_all(url: str, token: str, *, max_pages: int = _REST_MAX_PAGES) -> list:
+    """GET ``url`` following ``Link: rel="next"``, for endpoints whose body IS
+    the JSON array (reviews, issue comments, inline comments)."""
+    items: list = []
+    next_url: str | None = url
+    pages = 0
+    while next_url and pages < max_pages:
+        data, link = _http_get(next_url, token)
+        if isinstance(data, list):
+            items.extend(data)
+        next_url = _next_link(link)
+        pages += 1
+    return items
+
+
+def _http_get_all_wrapped(
+    url: str, token: str, key: str, *, max_pages: int = _REST_MAX_PAGES
+) -> list:
+    """Same as :func:`_http_get_all` for an endpoint that wraps its array in an
+    object — the Checks API's ``{"total_count": …, "check_runs": [...]}``.
+
+    Pagination here is load-bearing, not defensive. The Checks API defaults to
+    ``per_page=30``; cs-toolkit shipped a false green from a single unpaginated
+    GET against 48 real check runs, which truncated the rollup so the missing
+    checks read as "not present" rather than "not yet read". Callers must pass
+    ``per_page=100`` on ``url`` as well, to keep the page count low.
+    """
+    items: list = []
+    next_url: str | None = url
+    pages = 0
+    while next_url and pages < max_pages:
+        data, link = _http_get(next_url, token)
+        if isinstance(data, dict):
+            items.extend(data.get(key) or [])
+        next_url = _next_link(link)
+        pages += 1
+    return items
+
+
+def _http_post_json(
+    url: str, token: str, payload: dict, *, timeout: int = 30
+) -> Any:
+    body = json.dumps(payload).encode("utf-8")
+    headers = {**_http_headers(token), "Content-Type": "application/json"}
+    req = urllib.request.Request(url, data=body, headers=headers)  # noqa: S310
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — fixed api.github.com host
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"GitHub API POST {url} failed ({exc.code} {exc.reason})") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"GitHub API POST {url} failed: {exc.reason}") from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"GitHub API POST {url} returned non-JSON body") from exc
+
+
+def _git_out(args: list[str], *, what: str) -> str:
+    try:
+        result = subprocess.run(  # noqa: S603
+            ["git", *args],  # noqa: S607 — git resolved from PATH, fixed argv
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError(f"could not {what}: {exc}") from exc
+    if result.returncode != 0:
+        raise RuntimeError(f"could not {what}: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+def _rest_repo_slug() -> tuple[str, str]:
+    """``(owner, repo)`` parsed from the ``origin`` remote URL.
+
+    Only reached on the gh-less REST path, which always runs from a checkout —
+    so a git-less environment is not a case worth defending further.
+    """
+    url = _git_out(
+        ["remote", "get-url", "origin"], what="read the `origin` remote URL"
+    )
+    match = re.search(r"[:/]([^/:]+)/([^/]+?)(?:\.git)?/?$", url)
+    if not match:
+        raise RuntimeError(f"could not parse owner/repo from origin remote URL: {url!r}")
+    return match.group(1), match.group(2)
+
+
+def _rest_api(path: str) -> str:
+    owner, repo = _rest_repo_slug()
+    return f"https://api.github.com/repos/{owner}/{repo}/{path}"
+
+
+def rest_resolve_pr(explicit: int | None, *, token: str) -> int:
+    """REST equivalent of :func:`resolve_pr`."""
+    if explicit is not None:
+        return explicit
+    owner, _ = _rest_repo_slug()
+    branch = _git_out(
+        ["rev-parse", "--abbrev-ref", "HEAD"], what="determine the current branch"
+    )
+    data, _ = _http_get(
+        _rest_api(f"pulls?head={owner}:{branch}&state=open&per_page=100"), token
+    )
+    if not data:
+        raise RuntimeError(f"no open PR found for branch {branch!r}")
+    return int(data[0]["number"])
+
+
+# REST conclusion/status -> the bucket `gh pr checks` would report. Kept as an
+# explicit table rather than derived, because `_check_is_pending` treats a row
+# with NO bucket and no recognized state as pending (fail-closed) — so a wrong
+# bucket here is the one direction that could wave a bot through.
+_REST_BUCKETS = {
+    "SUCCESS": "pass",
+    "NEUTRAL": "skipping",
+    "SKIPPED": "skipping",
+    "STALE": "skipping",
+    "CANCELLED": "cancel",
+    "FAILURE": "fail",
+    "ERROR": "fail",
+    "TIMED_OUT": "fail",
+    "ACTION_REQUIRED": "fail",
+    "STARTUP_FAILURE": "fail",
+}
+
+
+def _rest_check_rows(check_runs: list[dict], statuses: list[dict]) -> list[dict]:
+    """Shape REST check runs + legacy status contexts into ``gh pr checks`` rows.
+
+    Carries ``description`` and ``startedAt``, which is the whole point: the
+    GraphQL rollup `gh pr view` returns has neither, and without them #23's
+    outage guard and #19's queued-bot grace window have nothing to read. On the
+    REST path this shaping is the ONLY source of both.
+    """
+    rows: list[dict] = []
+    for run in check_runs:
+        if not isinstance(run, dict):
+            continue
+        completed = run.get("status") == "completed"
+        state = str(
+            (run.get("conclusion") if completed else run.get("status")) or ""
+        ).upper()
+        rows.append(
+            {
+                "name": run.get("name") or "check",
+                "state": state,
+                "bucket": _REST_BUCKETS.get(state, "pending"),
+                # `output.title` is what gh surfaces as a CheckRun's description
+                # — the field that carried CodeRabbit's rate limit on #22.
+                "description": ((run.get("output") or {}).get("title") or ""),
+                "startedAt": run.get("started_at") or "",
+            }
+        )
+    for status in statuses:
+        if not isinstance(status, dict):
+            continue
+        state = str(status.get("state") or "").upper()
+        rows.append(
+            {
+                "name": status.get("context") or "status",
+                "state": state,
+                "bucket": _REST_BUCKETS.get(state, "pending"),
+                "description": status.get("description") or "",
+                # `created_at`, deliberately: gh reports a StatusContext's
+                # startedAt as the zero time (0001-01-01), which `_age_minutes`
+                # then has to reject. REST carries a real stamp, so the grace
+                # window can use the check's own clock instead of ours.
+                "startedAt": status.get("created_at") or "",
+            }
+        )
+    return rows
+
+
+def _rest_fetch_checks(sha: str, *, token: str) -> tuple[list[dict], list[dict]]:
+    """Both check surfaces for one commit: Checks API runs + combined statuses."""
+    check_runs = _http_get_all_wrapped(
+        _rest_api(f"commits/{sha}/check-runs?per_page=100"), token, "check_runs"
+    )
+    combined, _ = _http_get(_rest_api(f"commits/{sha}/status?per_page=100"), token)
+    statuses = (combined or {}).get("statuses") or []
+    return check_runs, statuses
+
+
+def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict]]:
+    """REST equivalent of the ``gh pr view`` + inline-comments fetch in :func:`main`.
+
+    Returns ``(view, inline)`` in the shape :func:`build_report` consumes. REST
+    spells a comment's author ``user`` where GraphQL spells it ``author``, which
+    :func:`_author` already handles, so no renaming is needed.
+    """
+    pr_data, _ = _http_get(_rest_api(f"pulls/{pr}"), token)
+    sha = (pr_data.get("head") or {}).get("sha")
+    if not sha:
+        raise RuntimeError(f"PR #{pr} response carried no head SHA")
+    check_runs, statuses = _rest_fetch_checks(sha, token=token)
+    view = {
+        "number": pr_data.get("number"),
+        "title": pr_data.get("title"),
+        "url": pr_data.get("html_url"),
+        "state": str(pr_data.get("state") or "").upper(),
+        "isDraft": bool(pr_data.get("draft")),
+        "baseRefName": (pr_data.get("base") or {}).get("ref"),
+        # REST's `mergeable_state` (clean/dirty/blocked/behind/unstable/…) is a
+        # different enum than GraphQL's `mergeStateStatus`. Passed through
+        # upper-cased as the closest available signal; nothing downstream
+        # branches on its exact values, and `decide_mergeable` does not read it.
+        "mergeStateStatus": (str(pr_data.get("mergeable_state") or "").upper() or None),
+        "reviewDecision": None,
+        "headRefOid": sha,
+        "statusCheckRollup": _rest_check_rows(check_runs, statuses),
+        "reviews": _http_get_all(_rest_api(f"pulls/{pr}/reviews?per_page=100"), token),
+        "comments": _http_get_all(
+            _rest_api(f"issues/{pr}/comments?per_page=100"), token
+        ),
+    }
+    inline = _http_get_all(_rest_api(f"pulls/{pr}/comments?per_page=100"), token)
+    return view, inline
+
+
+def rest_review_snapshot(pr: int, *, token: str) -> dict:
+    """REST equivalent of the ``number,headRefOid,reviews`` fetch used by
+    :func:`record_review` to bind a receipt to the current head."""
+    pr_data, _ = _http_get(_rest_api(f"pulls/{pr}"), token)
+    return {
+        "number": pr_data.get("number"),
+        "headRefOid": (pr_data.get("head") or {}).get("sha"),
+        "reviews": _http_get_all(_rest_api(f"pulls/{pr}/reviews?per_page=100"), token),
+    }
+
+
+def _rest_read_is_draft(pr: int, *, token: str) -> bool:
+    data, _ = _http_get(_rest_api(f"pulls/{pr}"), token)
+    return bool(data.get("draft"))
+
+
+def _rest_mutate_draft(pr: int, want_draft: bool, *, token: str) -> None:
+    """Toggle the draft bit via GraphQL — REST has no draft-toggle endpoint."""
+    pr_data, _ = _http_get(_rest_api(f"pulls/{pr}"), token)
+    node_id = pr_data.get("node_id")
+    if not node_id:
+        raise RuntimeError(
+            f"PR #{pr} response had no node_id — cannot issue the GraphQL "
+            "draft-state mutation"
+        )
+    mutation = (
+        "mutation($id: ID!) { convertPullRequestToDraft(input: {pullRequestId: $id})"
+        " { pullRequest { isDraft } } }"
+        if want_draft
+        else "mutation($id: ID!) { markPullRequestReadyForReview(input: {pullRequestId: $id})"
+        " { pullRequest { isDraft } } }"
+    )
+    result = _http_post_json(
+        "https://api.github.com/graphql",
+        token,
+        {"query": mutation, "variables": {"id": node_id}},
+    )
+    if isinstance(result, dict) and result.get("errors"):
+        raise RuntimeError(f"GitHub GraphQL draft-state mutation failed: {result['errors']}")
+
+
 _bot_signal_warned = False
 
 
@@ -497,11 +871,38 @@ def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> Chec
 
     Skips the call entirely when no review bots are configured: with nothing to
     match, the result could only ever be discarded.
+
+    **On the REST backend this is not optional plumbing.** Leaving it shelling
+    out to a `gh` that is not installed would degrade to ``([], "unavailable")``
+    on *every* poll: the warning fires once, and from then on both guards are
+    dead while the loop keeps reporting. A rate-limited reviewer would read as a
+    clean one, in the engine that decides a PR is safe to merge. So the REST
+    path supplies the same three fields from the Checks API and the combined
+    status API — see :func:`_rest_check_rows`.
     """
     if bots is None:
         bots = _REVIEW_BOTS
     if not bots:
         return CheckDetails([], "skipped")
+    try:
+        backend, token = _resolve_backend()
+    except RuntimeError as exc:
+        # No usable backend at all. Reached only if some caller invokes this
+        # before `main`'s own fetch has raised; degrade the same way as any
+        # other failed read rather than raising out of a never-raises function.
+        _warn_bot_signal_lost(str(exc))
+        return CheckDetails([], "unavailable")
+    if backend == "rest":
+        try:
+            pr_data, _ = _http_get(_rest_api(f"pulls/{pr}"), token)
+            sha = (pr_data.get("head") or {}).get("sha")
+            if not sha:
+                raise RuntimeError(f"PR #{pr} response carried no head SHA")
+            check_runs, statuses = _rest_fetch_checks(sha, token=token)
+        except (RuntimeError, OSError, KeyError, ValueError) as exc:
+            _warn_bot_signal_lost(str(exc))
+            return CheckDetails([], "unavailable")
+        return CheckDetails(_rest_check_rows(check_runs, statuses), "ok")
     cmd = [
         "gh",
         "pr",
@@ -539,12 +940,50 @@ def resolve_pr(explicit: int | None) -> int:
     """Return the PR number — explicit, or the current branch's open PR."""
     if explicit is not None:
         return explicit
+    backend, token = _resolve_backend()
+    if backend == "rest":
+        return rest_resolve_pr(None, token=token)
     data = _gh_json(["pr", "view", "--json", "number"])
     return int(data["number"])
 
 
+def fetch_pr_view(pr: int) -> tuple[dict, list[dict]]:
+    """The PR snapshot + its inline review comments, from either backend.
+
+    One function rather than two call sites so the `gh` and REST paths cannot
+    drift into returning different field sets.
+    """
+    backend, token = _resolve_backend()
+    if backend == "rest":
+        return rest_pr_view(pr, token=token)
+    view = _gh_json(
+        [
+            "pr",
+            "view",
+            str(pr),
+            "--json",
+            "number,title,url,state,isDraft,baseRefName,mergeStateStatus,reviewDecision,headRefOid,statusCheckRollup,reviews,comments",
+        ]
+    )
+    inline = _gh_json(
+        ["api", f"repos/{{owner}}/{{repo}}/pulls/{pr}/comments", "--paginate"]
+    )
+    return view, inline
+
+
+def fetch_review_snapshot(pr: int) -> dict:
+    """``number``/``headRefOid``/``reviews`` for one PR, from either backend."""
+    backend, token = _resolve_backend()
+    if backend == "rest":
+        return rest_review_snapshot(pr, token=token)
+    return _gh_json(["pr", "view", str(pr), "--json", "number,headRefOid,reviews"])
+
+
 def _read_is_draft(pr: int) -> bool:
-    """Read the PR's current isDraft bit via gh (coerced to bool)."""
+    """Read the PR's current isDraft bit (coerced to bool)."""
+    backend, token = _resolve_backend()
+    if backend == "rest":
+        return _rest_read_is_draft(pr, token=token)
     return bool(_gh_json(["pr", "view", str(pr), "--json", "isDraft"])["isDraft"])
 
 
@@ -580,7 +1019,10 @@ def assert_draft_state(
     corrected = initial_draft != want_draft
     final_draft = initial_draft
     if corrected:
-        if want_draft:
+        backend, token = _resolve_backend()
+        if backend == "rest":
+            _rest_mutate_draft(pr, want_draft, token=token)
+        elif want_draft:
             _gh(["pr", "ready", str(pr), "--undo"])
         else:
             _gh(["pr", "ready", str(pr)])
@@ -1429,9 +1871,7 @@ def record_review(
     expected_head = expected_head.strip()
     if not expected_head:
         raise ValueError("expected reviewed head must not be empty")
-    snapshot = _gh_json(
-        ["pr", "view", str(pr), "--json", "number,headRefOid,reviews"]
-    )
+    snapshot = fetch_review_snapshot(pr)
     current_head = snapshot.get("headRefOid")
     if not current_head:
         raise ValueError("PR has no headRefOid; cannot bind review evidence")
@@ -2142,18 +2582,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if draft_report["ok"] else 2
 
     try:
-        view = _gh_json(
-            [
-                "pr",
-                "view",
-                str(pr),
-                "--json",
-                "number,title,url,state,isDraft,baseRefName,mergeStateStatus,reviewDecision,headRefOid,statusCheckRollup,reviews,comments",
-            ]
-        )
-        inline = _gh_json(
-            ["api", f"repos/{{owner}}/{{repo}}/pulls/{pr}/comments", "--paginate"]
-        )
+        view, inline = fetch_pr_view(pr)
     except (RuntimeError, KeyError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
