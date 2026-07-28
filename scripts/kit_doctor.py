@@ -118,6 +118,10 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("docs/templates/handoff-history.md.tmpl", "template"),
     ("docs/templates/friction-log.md.tmpl", "template"),
     ("docs/templates/friction-log-archive.md.tmpl", "template"),
+    # The AGENTS.md entry point renders from this (#92). Only the TEMPLATE is
+    # kit-owned: the rendered root AGENTS.md is the adopter's to extend, so it
+    # is listed in ADOPTER_OWNED below instead.
+    ("docs/templates/AGENTS.md.tmpl", "template"),
 )
 
 # Paths that are the ADOPTER's — expected to differ, never reported as drift.
@@ -129,6 +133,9 @@ ADOPTER_OWNED: tuple[str, ...] = (
     "docs/handoff-history.md",
     "docs/friction-log.md",
     "docs/friction-log-archive.md",
+    # Rendered from docs/templates/AGENTS.md.tmpl; unlike an engine it is meant
+    # to be edited, so it must never be reported as drift.
+    "AGENTS.md",
     # This repo's own narrative files (see the note in config/dev-model.yaml).
     "docs/kit-handoff.md",
     "docs/kit-handoff-history.md",

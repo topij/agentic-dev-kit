@@ -285,7 +285,13 @@ def test_load_config_reports_a_missing_file_clearly():
 
 @pytest.mark.parametrize(
     "name",
-    ["handoff.md.tmpl", "handoff-history.md.tmpl", "friction-log.md.tmpl", "friction-log-archive.md.tmpl"],
+    [
+        "handoff.md.tmpl",
+        "handoff-history.md.tmpl",
+        "friction-log.md.tmpl",
+        "friction-log-archive.md.tmpl",
+        "AGENTS.md.tmpl",
+    ],
 )
 def test_narrative_templates_ship(name):
     """init.sh renders these; a missing one silently degrades adoption to an

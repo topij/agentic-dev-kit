@@ -27,9 +27,10 @@ Bootstraps the agentic-dev-kit in the current repo:
   2. Stamps the answers into config/dev-model.yaml in place.
   3. Migrates an older config schema forward in place (kit.version) and
      stamps the current generation.
-  4. Renders the four narrative docs from docs/templates/ — but only when a
-     target is missing or still carries the unrendered marker, so a handoff
-     you are actually using is left byte-identical.
+  4. Renders the four narrative docs and the root AGENTS.md entry point from
+     docs/templates/ — but only when a target is missing or still carries
+     the unrendered marker, so a file you are actually using is left
+     byte-identical.
   5. Appends the kit's state-sandbox paths to .gitignore if they're
      missing (never duplicates a line on re-run).
   6. Installs the pre-push hook as a shim (honoring core.hooksPath).
@@ -620,11 +621,13 @@ _render() {
   project="$name" tracker="$render_tracker_url" enginedir="$render_engine_dir" \
   handoff="$render_handoff_link" handoffhist="$render_handoff_history_link" \
   frictionarch="$render_friction_archive_link" \
+  handoffpath="$render_handoff_path" protectedbranch="$render_protected_branch" \
   awk -v today="$(date +%Y-%m-%d)" '
     BEGIN {
       project = ENVIRON["project"]; tracker = ENVIRON["tracker"]
       enginedir = ENVIRON["enginedir"]; handoff = ENVIRON["handoff"]
       handoffhist = ENVIRON["handoffhist"]; frictionarch = ENVIRON["frictionarch"]
+      handoffpath = ENVIRON["handoffpath"]; protectedbranch = ENVIRON["protectedbranch"]
     }
     function subst(s, tok, val,   i, acc) {
       acc = ""
@@ -641,7 +644,9 @@ _render() {
       line = subst(line, "{{TRACKER_URL}}", tracker)
       line = subst(line, "{{ENGINE_DIR}}", enginedir)
       line = subst(line, "{{HANDOFF_HISTORY}}", handoffhist)
+      line = subst(line, "{{HANDOFF_PATH}}", handoffpath)
       line = subst(line, "{{FRICTION_ARCHIVE}}", frictionarch)
+      line = subst(line, "{{PROTECTED_BRANCH}}", protectedbranch)
       line = subst(line, "{{HANDOFF}}", handoff)
       print line
     }
@@ -888,11 +893,22 @@ _doc_link() {
 render_handoff_history_link="$(_doc_link "$handoff_path" "$handoff_history_path")"
 render_handoff_link="$(_doc_link "$handoff_history_path" "$handoff_path")"
 render_friction_archive_link="$(_doc_link "$friction_path" "$friction_archive_path")"
+# AGENTS.md renders at the repo root, so its handoff link is the repo-relative
+# configured path — the sibling-relative `_doc_link` forms above would 404 from
+# there whenever the handoff lives in a subdirectory (the default).
+render_handoff_path="$handoff_path"
+render_protected_branch="$branch"
+[ -n "$render_protected_branch" ] || render_protected_branch="main"
 
 seed_doc "handoff" "$handoff_path"
 seed_doc "handoff-history" "$handoff_history_path"
 seed_doc "friction-log" "$friction_path"
 seed_doc "friction-log-archive" "$friction_archive_path"
+# The Codex-side entry point (#92): AGENTS.md is to Codex what CLAUDE.md is to
+# Claude. The kit ships no root AGENTS.md, so a fresh adopt seeds it from the
+# template; one an adopter is already using carries no marker and is never
+# touched — unlike an engine, the rendered file is the adopter's to extend.
+seed_doc "AGENTS" "AGENTS.md"
 
 # ── .gitignore: state sandbox paths ───────────────────────────────────────
 

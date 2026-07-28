@@ -1,0 +1,75 @@
+<!-- Rendered from docs/templates/AGENTS.md.tmpl by ./init.sh.
+     Unlike an engine, this file is MEANT TO BE EDITED: it is adopter-owned, and
+     you are expected to extend it with what only this repo knows — your
+     tracker's lifecycle quirks, the paths an agent must treat as sensitive,
+     your own build targets, your rules list. The sections it ships with are
+     the floor, not the ceiling. -->
+
+# AGENTS.md — {{PROJECT_NAME}}
+
+The repository entry point for agents that read `AGENTS.md` (Codex, among
+others), the way Claude reads `CLAUDE.md`. It states the contract every session
+runs under and links the files where the full doctrine lives — it binds that
+doctrine into this runtime; it does not fork it.
+
+## Where the contract lives
+
+- **The living plan is [`{{HANDOFF_PATH}}`]({{HANDOFF_PATH}}).** Read it at
+  session start; update it at wrap-up. It — not an agent's memory, not a
+  scratch note — is the single source of truth for what is done, in progress,
+  and next. The session bookends are skills: `session-start` to pick up work,
+  `wrap-up` to hand it off.
+- **Everything project-specific lives in `config/dev-model.yaml`.** Skills and
+  engines read it from there; never hardcode a value that belongs in it.
+- **Read the shared contract before changing anything, then the nearest
+  path-scoped rule.** Gates, customer-facing send paths, destructive
+  operations, and kill/recovery paths are governed by
+  [`docs/agentic-dev-kit/safety-critical-changes.md`](docs/agentic-dev-kit/safety-critical-changes.md);
+  when the configured review bot cannot review, the substitute is the panel in
+  [`docs/agentic-dev-kit/fallback-review-panel.md`](docs/agentic-dev-kit/fallback-review-panel.md).
+- Tracker board: {{TRACKER_URL}}
+
+## Branches and pull requests
+
+- `{{PROTECTED_BRANCH}}` is protected — never commit to it directly. Branch and
+  open a PR.
+- **Opening or pushing a PR is not completion: follow it through CI and
+  review.** The `pr-watch` skill is that loop — poll, fix, acknowledge,
+  re-poll — until the PR is green and every review finding is fixed or
+  explicitly answered.
+- **Require an independent review pass before any authorized self-merge. A
+  missing, skipped, or rate-limited review is not a clean review** — a green
+  check whose description says the reviewer was rate-limited reviewed nothing.
+
+## Verification
+
+- The verification command is `<name it here — the one command that runs this
+  repo's whole suite, so no session has to rediscover it>`. Run it as its own
+  step and read its result before committing anything; a compound chain that
+  ends in a push hides the failure exactly when it matters.
+- **Do not infer that a successful process exit means a deliverable exists.**
+  Look at the artifact.
+- **Prefer deterministic validation and receipts over prompt-only assurances.**
+  When you claim something is verified, name the command that established it
+  and its actual result.
+
+## Devkit boundary
+
+- **Do not hand-edit kit-owned files.** `{{ENGINE_DIR}}/kit_doctor.py` reports
+  which shipped files have drifted; anything project-specific belongs in
+  `config/dev-model.yaml`, not inside an engine.
+- Reusable workflow behaviour is ported **upstream** to the kit, not grown in a
+  local fork of an engine or skill.
+- **Keep Claude/Codex differences in thin runtime adapters; do not fork the
+  workflow semantics.** The runtime-neutral definitions live in
+  `docs/agentic-dev-kit/workflows/`; `.claude/commands/` and `.agents/skills/`
+  are bindings over them, and so is this file.
+
+## Yours to extend
+
+The sections above are the generic spine. What only this repo knows belongs
+below — add it here, keep it current at wrap-up. Ready-made material is in
+[`docs/AGENTS-sections.md`](docs/AGENTS-sections.md). Typical entries: your
+tracker's lifecycle quirks, paths an agent must treat as sensitive, build
+targets beyond the verification command, your path-scoped rules and where they
+live.

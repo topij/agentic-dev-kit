@@ -37,8 +37,8 @@ cp -r /path/to/agentic-dev-kit/. .
 
 `init.sh` prompts you for a handful of values — project name, agent runtime, tracker board,
 the protected branch, your review bot — and stamps them into `config/dev-model.yaml`.
-It renders the four narrative docs from `docs/templates/`, installs the pre-push hook, and
-adds the state sandbox to `.gitignore`.
+It renders the four narrative docs and the root `AGENTS.md` entry point from
+`docs/templates/`, installs the pre-push hook, and adds the state sandbox to `.gitignore`.
 
 It renders a narrative doc when the target is **missing or still carries the shipped
 `devkit-template: unrendered` marker** — so a handoff you are actually using is left
