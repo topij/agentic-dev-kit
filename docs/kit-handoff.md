@@ -14,10 +14,76 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-27 · fourth session of the day — gh-less REST transport merged
-(`#96`) after `#91` was closed unmerged; the cs-toolkit `pr_watch` swap is unblocked.
+Last updated: 2026-07-28 — fix-round scope (`#101`) and the severity gate it exposed
+(`#102`) both merged; `#92` is the next lane and now lands under both.
 
-## Latest session — 2026-07-27 · 4 (gh-less REST transport; `#91` closed, `#96` merged)
+## Latest session — 2026-07-28 (fix-round scope shipped; the severity gate it exposed)
+
+**Theme —** Two doctrine changes, the second existing because the first cost far more
+than it should have. `#101` took three panel rounds and six isolated reviewers for one
+paragraph; `#102` is the rule that stops that recurring.
+
+- **`#101` merged (`238de25`), closing `#100`.** Rule 3 gains *"a fix round addresses
+  only what the review found"* — a new mechanism is an addition however squarely a
+  finding prompted it, so it gets filed. Plus a paragraph in `fallback-review-panel.md`
+  stating that lever replaces none of the stopping criterion.
+- **Both HIGHs on `#101` came from my own fix rounds.** Round 1 added a carve-out that
+  licensed the exact fail-open the rule cites as evidence; round 2 failed to close it;
+  round 3 proved it empirically — two fresh readers, given only the paragraph, both
+  permitted the case, both quoting my clause.
+- **`#102` merged (`87dfa83`).** The blast-radius classification now also decides which
+  findings to act on: HIGH always, plus anything at any severity that says the change is
+  a *regression* rather than merely imprecise. New contract item 9 makes lenses report
+  both labels.
+- **CodeRabbit reviewed neither PR's final state** — one clean pass on `#101`'s first
+  head, then a plan quota that no waiting clears. The fallback panel was the independent
+  pass throughout: five rounds, ten isolated lenses across the two PRs.
+
+**Decided**
+
+- **Two failed tightenings ⇒ delete, applied to my own clause.** `#101`'s carve-out was
+  itself an unrequested mechanism added mid-fix-round in response to a MED — the shape
+  the paragraph prohibits, reproduced inside it. Deleted rather than reworded a third
+  time.
+- **Severity level alone is the wrong gate.** `#102`'s own first round returned 0 HIGH /
+  7 MED, four of which said the paragraph loosened a control it claimed to tighten. The
+  discriminator that works is regression-vs-imprecision.
+- **The gate belongs at the act-on stage, never in the lens prompts.** `#101` was
+  docs-only and drew two real HIGHs; a lens told to calibrate down for "it's only docs"
+  would have downgraded exactly those two. It is also the anchoring contract item 2
+  forbids.
+
+**Learned**
+
+- **A gate that reads labels nothing produces is not a gate.** `#102`'s HIGH: "act on
+  HIGH" and "says regression" are lens output, and no contract item or `focus` string
+  ever asked for either. It read as working only because I supplied severity ad hoc in
+  my own launch prompts — the drift the single-source rule exists to stop.
+- **A three-space list continuation is correct CommonMark and broken Python-Markdown**,
+  which silently renumbered rule 4 to rule 1 while the header still said "Four rules
+  apply". Six files cite these rules by number. Caught by rendering in both engines, not
+  by review.
+- **I shipped a false claim in a commit message** (`4ac203e`), retracted in the PR body
+  before merge, so it never reached `main`.
+- **`#76` reproduced twice**: neither PR's final head was lens-reviewed, and
+  `--record-review --head` can only assert the exact head, so both merged with the
+  coverage recorded as PR prose and no receipt.
+
+**Open, and owned by nothing yet**
+
+- **`#92`, `#93`** — untouched; `#92` was the planned follow-on and now lands under both
+  new rules.
+- **`#95`, `#97`, `#98`** — the three panel-found defects on `main`, unchanged.
+- `#47`, `#54`, `#66`, `#71`, `#72`, `#75`, `#76`, `#77`, `#86`, `#88` and the rest per
+  `session-start`.
+
+▶ Next: `#92` — ship `docs/templates/AGENTS.md.tmpl` rendered by `init.sh`, added to
+`KIT_OWNED` and the manifest so `kit_doctor` reports it. Read `#92` for the generic
+spine to lift; note in the template that adopters are expected to extend it.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-27 · 4 (gh-less REST transport; `#91` closed, `#96` merged)
 
 **Theme —** One feature, five review rounds, two PRs. The first attempt was closed
 unmerged because *severity rose every round* — each round hardened one more boundary and
