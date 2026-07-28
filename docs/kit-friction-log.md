@@ -147,3 +147,50 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   exactly that. Third consecutive session where the prose carried the errors and the code
   did not. **No new fix proposed** — occurrence data for `#120`, which proposes the
   cheaper message-only terminal check; three sessions of evidence now sit behind it.
+
+## 2026-07-28 (fourth session of the day)
+
+- **A correct general argument was used to justify deleting instances it did not cover,
+  and the deletion opened the exact hole the change existed to close.** After three panel
+  rounds walked through the same guard tests, the fix round deleted them on the argument
+  that *"a text search over a file cannot be sound, because whoever edits it can read the
+  search."* That argument is true. It did not apply to two of the three tests: they were
+  built on `make -n`, which executes make and reads what it says it would run. With them
+  gone, the `mutation-test` recipe silently losing `-m 'not driftcheck'` was observed by
+  nothing (`make test` → 500 passed), and a behaviour-only mutation then reported a
+  **kill** — `#33` restored inside the command built to escape it. Caught only because the
+  next round's adversarial lens restored the deleted assertions into every bypass and
+  watched them kill each one. **M** — proposed fix: when a fix round *removes* a
+  mechanism, `#56` already asks for an enumeration of what it was rejecting; this says the
+  enumeration must be **per-item and executed**, not a category judgement applied to a
+  group. The deletion rationale here was written once and applied to three tests that
+  differed in exactly the property the rationale turned on.
+- **`safety-critical-changes.md` rule 1 tells you to stop, and does not say what to do
+  instead when the change *is* a guard.** Four rounds, HIGHs every time, severity never
+  below three. Rule 1 prescribes "a deterministic artifact" — but for a guard over an
+  unbounded space of edits, the artifact is the thing under review. Stopping produced a
+  deletion that was too broad; not stopping would have produced a fifth round. What
+  actually resolved it was a reviewer running the *counterfactual* (restore the deleted
+  code into each bypass), which no rule asks for. **M** — proposed fix: add a
+  counterfactual step to the panel contract for any round that removes a guard — restore
+  it and measure, rather than reasoning about whether it was load-bearing.
+- **`pr_watch.py:687` still discards the 403 body and asserts a cause it cannot know.**
+  `#130` corrected the *record* about this; the defect itself has no ticket. In a web
+  container the whole API host is path-blocked, so `pr_watch` cannot arbitrate a merge
+  gate at all — both of this session's merges were reconstructed from MCP calls by hand.
+  **M** — proposed fix: surface the response body, and have the REST transport detect the
+  proxy sentinel and name the GitHub MCP as the supported path. Needs a ticket.
+- **`session-start`'s tracker step overflows its own tool limit at 68 open issues.** The
+  MCP `list_issues` call returned 177k characters and had to be re-read from a spill file
+  and field-filtered by hand. The workflow already warns that a naive "dump everything"
+  call overflows, and prescribes a field-limited call — but the MCP tool exposes no field
+  selection, so the prescription cannot be followed on this backend. **L** — proposed fix:
+  the workflow's tracker step needs a backend-specific note for GitHub-Issues-over-MCP:
+  page at `perPage: 25` and read `number`/`title`/`labels`/`state` only.
+- **CodeRabbit registered nothing on a fourth consecutive PR.** `#126`, `#129`, `#130`,
+  `#131` — no check, no comment, past grace on all four. The fallback panel was the only
+  independent pass every time. **No new fix proposed** — occurrence data for `#45`/`#23`,
+  now with four consecutive instances behind it rather than one.
+- **`#113` reproduced a third time.** `chore/update-handoff-2026-07-28` already existed on
+  the remote, so the wrap-up branched as `chore/wrap-up-2026-07-28-mutation-gate` by hand.
+  **No new fix proposed** — third occurrence, still no mechanism.

@@ -14,10 +14,74 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-28 — the friction inbox graduated (`#126`); sixteen new tickets
-(`#112`–`#128`), the inbox down to 28 lines from 287.
+Last updated: 2026-07-28 — `#33`/`#112` shipped (`#131`) and the `pr_watch` 403 entry
+corrected (`#130`); five new tickets (`#132`–`#136`) from four panel rounds.
 
-## Latest session — 2026-07-28 (the inbox graduated; the panel audited the record)
+## Latest session — 2026-07-28 · 4 (the mutation gate shipped; four panel rounds)
+
+**Theme —** Two merges and a review loop that would not converge. The mechanism is small;
+the durable result is a measured account of how a guard test can be defeated four times
+running, and of a general argument being applied to instances it did not cover.
+
+- **`#130` merged (`e8e7789`).** The `pr_watch` 403 entry from `#126` had the diagnosis
+  right and the remedy wrong: it treated the proxy's *"an org admin must connect the
+  Claude GitHub App"* body as actionable. It is a canned string — this is a personal repo
+  with no org admin, and GitHub access was enabled throughout. Established by running the
+  commands: `GET /user` returns `topij` **with the sentinel and with no auth header at
+  all**; `/repos/*` and the public `/octocat` both 403; `documentation_url` is
+  `docs.anthropic.com`. A path allowlist, not a credential problem.
+- **`#131` merged (`9fb4baa`).** `driftcheck` marker on the byte-comparison test,
+  registered in a new `scripts/tests/conftest.py` so it travels with vendored tests;
+  `make mutation-test`; `fallback-review-panel.md` item 5 rewritten repo-agnostic with the
+  rule that does not depend on any of it — **a kill is only a kill if a test asserting
+  behaviour is what failed**. `#112`'s item 1 satisfied by construction; item 2 declined
+  with reasons on the issue.
+- **Five tickets filed:** `#132` (`/upgrade` cannot deliver anything under
+  `scripts/tests/`), `#133` (the converse marker guard, with live instances on `main`),
+  `#134` (kit tests hardcode `parents[2]`, so they fail in the `scripts/devkit/` layout),
+  `#135` (a conftest `collect_ignore` is the one narrowing vector CI cannot catch),
+  `#136` (panel lenses collide in the shared scratchpad, and copying a worktree is not
+  isolation).
+
+**Learned**
+
+- **A guard test over an unbounded space cannot be finished.** Four rounds, four sets of
+  HIGHs: a literal parked in a `#` comment; the first `target:` block read while make runs
+  the last; `--deselect`/`-k`/`-k` with no space/`--ignore=`; symmetric narrowing; a
+  dropped `.PHONY:` token. Every round's fix was the next round's finding — `rule 1`'s
+  pattern, and severity never fell below three HIGHs.
+- **But the general argument was applied to instances it did not cover.** "A text search
+  cannot be sound" is true, and two of the three tests deleted on that basis were built on
+  `make -n` — an *execution* probe. Deleting them opened the one hole the change existed
+  to close: with the flag silently dropped from the recipe, the full suite stays green and
+  a behaviour-only mutation then reads as a **kill**. The adversarial lens proved it by
+  restoring the deleted assertions into every bypass and watching them kill each one.
+- **My commit messages were the dominant defect, again — fourth session running.** Two
+  measured figures were real and their write-ups under-specified what produced them (a
+  "single module" narrowing that was partial; a `.PHONY` mutant needing an unstated
+  flag duplication). Also promoted an *attested* 17/17 figure to "measured" **in the same
+  commit that demoted it elsewhere**.
+- **CodeRabbit registered nothing on four consecutive PRs** (`#126`, `#129`, `#130`,
+  `#131`). The fallback panel was the only independent pass on all of them.
+- **`pr_watch` cannot arbitrate the merge gate in a web container at all** — the whole
+  API host is path-blocked — so both merges were reconstructed from MCP calls.
+
+**Open, and owned by nothing yet**
+
+- **`#132`–`#136`** — this session's five. `#132` and `#134` both land squarely on the
+  `scripts/devkit/` layout, so they gate any further cs-toolkit adoption.
+- **`#113` gained a third occurrence** — `chore/update-handoff-2026-07-28` already existed
+  on the remote again; avoided by hand, still no mechanism.
+- **`#33` and `#112` are shipped but still open** — close them deliberately after
+  confirming `#131` is what each asked for.
+
+▶ Next: `session-start` — several independent threads (the cs-toolkit Phase 2 question and
+its blockers `#41`/`#37`/`#132`/`#134`, plus `#93`'s ordering constraint), so let it
+re-read the tracker and propose.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-28 (the inbox graduated; the panel audited the record)
 
 **Theme —** One deliverable, and a review panel that spent almost all of its findings on
 the record rather than the sweep. The graduation is the small half; the durable result is
@@ -230,158 +294,6 @@ paragraph; `#102` is the rule that stops that recurring.
 ▶ Next: `#92` — ship `docs/templates/AGENTS.md.tmpl` rendered by `init.sh`, added to
 `KIT_OWNED` and the manifest so `kit_doctor` reports it. Read `#92` for the generic
 spine to lift; note in the template that adopters are expected to extend it.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-27 · 4 (gh-less REST transport; `#91` closed, `#96` merged)
-
-**Theme —** One feature, five review rounds, two PRs. The first attempt was closed
-unmerged because *severity rose every round* — each round hardened one more boundary and
-the next round found the next one. The second bounds the new transport structurally
-instead, and merged.
-
-- **`#96` merged (`fd75cd7`), closing `#90`.** `pr_watch` can poll without `gh` (REST
-  over `urllib`, `GH_TOKEN`/`GITHUB_TOKEN`), and on that backend it **polls only**:
-  `mergeable` is false by construction and `--record-review` / `--assert-draft` /
-  `--assert-ready` refuse. Suite 418 → 488, and 488 again with `gh` off PATH.
-- **`#91` closed unmerged** with its rationale on the PR. Three panel rounds found 2, 2,
-  then ~7 HIGH — **three of them introduced by the previous round's own fixes**. Six of
-  the seven were "some degraded response makes REST report `mergeable: true`".
-- **The bound costs nothing**: `dev_session.sh cmd_merge` resolves through `gh repo view`
-  + `gh pr list` *before* it reads `mergeable`, so a gh-less session never had a merge
-  path. `#96` turns that accident into an enforced invariant.
-- **Filed six issues** (`#92`–`#95`, `#97`, `#98`) — the Codex-adapter pair, the
-  broadening bar, and three defects the panel found that predate this work. `#96` is the
-  PR, not an issue.
-
-**Decided**
-
-- **A structural bound beats validating every boundary** (rule 1's "deterministic
-  artifact"). Five rounds of per-boundary tightening never converged; one guard in one
-  place ended the class. Kept to two functions so `#94`'s broadening is a deletion plus
-  its 13-row bar, not a rewrite.
-- **Two of my own mechanisms deleted under rule 1 rather than tightened**: a request
-  ceiling that created a fail-open by starving the one caller that swallows its
-  exception, and a settle-baseline reset that disabled the false-settle guard on the
-  **default `gh` backend** for every existing PR.
-- **A third lens earns its place when the first two keep finding the same shape.** Two
-  general lenses each found one HIGH per round — in the tests on round 1, engine
-  fail-opens after that; a lens briefed only on "enumerate every external input, trace
-  it to a permissive verdict" found three the others never saw. Its 56-row input
-  enumeration is distilled to the 13-row acceptance table now on `#94`.
-- **Coverage recorded piecewise, again.** The final delta (a reviewer-requested doc line
-  + a manifest hash) is unreviewed and says so, with `bots_behind_head` on the receipt.
-
-**Learned**
-
-- **My own fixes were the largest single source of HIGH findings** — three of the seven
-  fail-opens across both PRs, one of them on the *default* `gh` backend, with a test
-  that pinned its permissive outcome as correct. The reviewed, *requested* fixes held; the unrequested
-  hardening I added alongside them is what broke.
-- **My claims were the dominant defect four rounds running** — a comment naming a
-  consumer that did neither thing claimed, "nothing branches on this" about a field that
-  gates a merge, "read-only" surviving on the two surfaces operators read, a commit
-  claiming a docstring fix it never applied. Also: the cs-toolkit reasoning backwards and
-  the diff-size comparison wrong twice, both flattering, both corrected on the record.
-- **I pushed a red tree** by chaining `make test` into commit-and-push and acting past a
-  failure on screen.
-- **The provided worktree was at the base ref on 5 of 5 panel launches**, and every lens
-  detected it because the prompt required clone-verify-report. Posted to `#75`; no
-  cumulative claimed — the earlier sessions' figures count a different thing.
-
-**Open, and owned by nothing yet**
-
-- **`#94`** — broadening REST to merge authorization, with the fail-open enumeration as a
-  written bar. Needs a real consumer first; nothing can merge gh-lessly today.
-- **`#95`** — a pre-existing fail-open on `main`: a PR can forge a check that cancels its
-  own reviewer's pending block. **`#98`** — pre-existing too, but it *hides* blockers
-  rather than opening the gate: `render` sanitises comment bodies and not the path/author
-  beside them, so a filename can walk the cursor over them. **`#97`** — no guard stops a kit test hitting the network.
-- **`#92`, `#93`** — the kit ships Codex skills but no `AGENTS.md`; cs-toolkit forked the
-  wrap-up workflow into a 160-line skill. `#93` must recover upstream content *before*
-  thinning it.
-- **The cs-toolkit `pr_watch` swap is unblocked** and is the *fix* for that repo's two
-  transport fail-opens, not the trigger (correction recorded on `#94`).
-- `#47`, `#66`, `#54`, `#71`, `#72`, `#75`, `#77`, `#86`, `#88` and the rest per
-  `session-start`.
-
-▶ Next: `session-start` — several independent threads (`#92`/`#93` Codex adapter, the
-cs-toolkit swap, `#47`, `#100`, and three panel-found defects on `main`), so let it
-re-propose.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-27 · 3 (CLAUDE.md; init.sh harness + fixes; review loop worked)
-
-**Theme —** Worked the review-round problem directly. Three PRs merged, each watched to
-convergence with real independent review: two CodeRabbit passes obtained by re-triggering
-after rate-limit windows, four fallback-panel rounds that caught two config-bricking
-regressions **in my own fix** before they shipped.
-
-- **`#83` merged (`63acfcf`).** Root `CLAUDE.md` naming `make test` as *the* verification
-  command — the discoverability precondition for `#54`. CodeRabbit reviewed the exact
-  head clean after a re-trigger (its rate window was 13s).
-- **`#85` merged (`cde96e8`), closing `#84`.** init.sh fixture harness: 14 tests — 10 pins
-  plus 4 strict-xfail reproductions of `#62`/`#67`. `#84` corrected the record first: init.sh
-  was **not** at zero coverage — its migration path was well covered; the three open
-  bugs lived in the uncovered paths — detection (`#67`), hostile-value stamping (`#62`),
-  hooks (`#66`); seeding and `.gitignore` were uncovered but bug-free.
-- **`#87` merged (`7c71385`), closing `#67` + `#62`.** Manifest-derived engines
-  detection (top-level names only), lossless-only quoting (`yaml_scalar` /
-  `quoted_scalar`), one shared YAML-correct comment scanner, ENVIRON value transport,
-  quoted bots serialization. Suite 372 → 418 across the session.
-- **The panel earned its cost on `#87`**: round 1 caught my always-quote change turning
-  an interior `"` into an unloadable config and `\` into a reader split-brain — worse
-  than the bug it fixed; round 2 caught the same class surviving on the five
-  always-quoted fields, plus a bots single-quote regression. None were caught by the
-  suite as it stood at those heads.
-- **Stale `chore/update-handoff-2026-07-27` deleted** after verifying full supersession
-  (its fixed text is on main/archive; the graduated issues quote the fixed numbers).
-- **Filed `#86`** (.mcp.json sniff misses the kit's own documented credential shape) and
-  **`#88`** (the three config readers disagree on where a value ends). **Corrected**
-  `#67`'s Note (it miscited `#36`, the pre-push twin).
-
-**Decided**
-
-- **A rate-limited reviewer with a short recovery window gets re-triggered, not waived
-  or substituted.** `@coderabbitai review` after the window produced real reviews of the
-  exact head on `#83` and `#87`. Windows observed ranged from 13s to 48min — panel when
-  long, re-trigger when short.
-- **Piecewise review coverage is recorded piecewise.** `#87`'s final delta
-  (reviewer-prescribed fixes only) merged without a bot pass of its own; the receipt's
-  `bots_behind_head` annotation plus a PR comment state exactly what covered what.
-- **Quote only when lossless.** Blanket-quoting stamped values is a corruption class,
-  not a fix — values YAML would reinterpret (`"`, `\`, leading `'`) stamp raw as they
-  always did.
-
-**Learned**
-
-- **The handoff's own claim was the defect again — fifth consecutive session.** "init.sh
-  has no automated test coverage" was false (four migration tests run it); caught this
-  time by grounding before filing rather than by a reviewer, and the corrected framing
-  changed both the issue and the work.
-- **Panel isolation went 8 for 8** when every launch prompt assumed the worktree was
-  wrong and required clone-verify-report — the inversion `#75` proposes, working as
-  predicted (contrast: 9 of 9 wrong across the prior two sessions). Occurrence data
-  posted to `#75`.
-- **`#44`'s shape depends on how the review was triggered**: clean reviews on `#83`/`#85`
-  arrived as edited comments (no review object — coverage machinery blind, receipts
-  recorded by hand); `#87`'s re-triggered pass submitted a real review object with a
-  commit SHA, so `coverage` populated (`covers_head: true`). Posted to `#44`. The
-  rate-limited check reporting **pass** recurred four more times (posted to `#45`).
-
-**Open, and owned by nothing yet**
-
-- **`#86`, `#88`** — this session's filings; both small and well-specified.
-- **`#47`** — called the highest-leverage unbuilt thing in three recent sessions. A scope
-  note is posted on the issue itself: `#87` left init.sh's fallback triple as a
-  deliberate manifest-lost fallback, so `#47`'s tree-derivation should say whether that
-  restatement is in or out of its scope.
-- **`#66`** — still behind the `#61` design call. `#54`, `#71`, `#72`, `#75` (now with
-  supporting data), `#77`, and the rest of the backlog per session-start.
-
-▶ Next: `#47` — derive `KIT_OWNED` from the shipped tree and fail CI on divergence; its
-own body names `#36`/`#37`/`#40`/`#41` as the gap class it closes.
 
 ______________________________________________________________________
 
