@@ -19,10 +19,11 @@ was audited against the shipped tree (`#147`); eight new tickets (`#138`–`#146
 
 ## Latest session — 2026-07-29 (the second sweep, and a documentation audit)
 
-**Theme —** Two merges and seven panel rounds. The deliverables are routine; the durable
-result is a measurement: **across seven rounds and twelve isolated lenses, no HIGH finding
-was ever in executable code.** Every one was in prose — and the prose that kept failing was
-the prose *about* the verification, not the verification.
+**Theme —** Two merges and eight panel rounds. The deliverables are routine; the durable
+result is a measurement: **across eight rounds and fourteen isolated lenses, no HIGH finding
+was ever in executable behaviour.** Every one was in prose — two of them inside `.py`/`.sh`
+files, so "prose" means wherever it lives — and the prose that kept failing was the prose
+*about* the verification, not the verification.
 
 - **`#144` merged (`cdeae7a`).** Second `triage-friction-log` sweep dated 2026-07-28.
   Fourteen entries in, fourteen out: seven graduated into six issues (`#138`–`#143`), seven
@@ -42,13 +43,20 @@ the prose *about* the verification, not the verification.
   enumeration must be per-item and executed), `#142` (counterfactual step when a round removes
   a guard), `#143` (`session-start` overflows at 68 issues), `#145` (three config keys read by
   no code), `#146` (`parallel-headless.md` linked but untracked).
+- **`#145` was closed by accident and reopened.** `#147`'s squash message read *"Filed rather
+  than fixed:"* followed directly by the reference; GitHub matched it and closed the issue
+  (`events` shows
+  `closed commit_id=030f053`). The sentence asserted the opposite. This is `CLAUDE.md`'s
+  closing-keyword ground rule and `#71`, firing in a session that was scanning for it — the scan
+  never ran on a squash message. Occurrence data on `#71`.
 
 **Learned**
 
 - **The record about a change is a bigger defect source than the change.** The sweep moved the
   right bytes on its first commit and no round found otherwise; three rounds went to the record.
-  The audit's edits were nearly all correct; three rounds went to its evidence. One HIGH was in
-  prose that *ships* — `pr-watch.md`'s flag table — which is the case worth separating.
+  The audit's edits were nearly all correct; three rounds went to its evidence. **Three** HIGHs
+  were in prose that *ships* — `pr-watch.md`'s flag table, `devmodel_config.py`'s docstring, and
+  `init.sh`'s `# Requires:` header — which is the class worth separating from the rest.
 - **Correction-by-surface is the failure mode.** The same false `#23` sentence was fixed in the
   friction log (R1), found still live on `#45`'s comment (R2), then still live in `#140`'s issue
   body (R3). R4 found a fix that had silently matched nothing while its commit message reported
@@ -65,10 +73,13 @@ the prose *about* the verification, not the verification.
 
 **Open, and owned by nothing yet**
 
-- **`#138`–`#146`** — this session's eight. `#138` and `#127` are the pair that would make a
-  sweep's own claims mechanically checkable; both were filed *and then immediately reproduced*
-  inside this session's pilot run of them.
-- **The friction inbox is already back over budget** — 169/150, from this session's seven
+- **`#138`, `#139`, `#140`, `#141`, `#142`, `#143`, `#145`, `#146`** — this session's eight,
+  enumerated rather than written as a range, because `#138`–`#146` spans `#144` (a PR, not a
+  ticket) and hides any member's state from a `#N` sweep. That is how a closed `#145` sat in this
+  list for six minutes. `#138` and `#127` are the pair that would make a sweep's own claims
+  mechanically checkable — `#138` filed here, `#127` by the previous session — and both were
+  reproduced inside this session's pilot run of them.
+- **The friction inbox is well back over budget** — 196/150, from this session's seven
   entries. Another `triage-friction-log` sweep is due, and `#113`'s hazard now has a *state-path*
   instance: `state/triage/frozen-inbox_{date}.json` collides on a same-day re-run.
 - **`#132`–`#136` from the previous session** — `#132` is **closed** (shipped `2026-07-28`), so
@@ -76,10 +87,12 @@ the prose *about* the verification, not the verification.
 - **`#33` and `#112` are shipped but still open** — close them deliberately after confirming
   `#131` is what each asked for.
 
-▶ Next: `session-start` — the threads are diffuse (nine fresh tickets, no in-flight PR), so let
-it re-read the tracker and propose. If you want one now: `triage-friction-log`, because the
-inbox is over budget again and this session's entries are the freshest evidence behind `#120`,
-`#138` and `#127`.
+▶ Next: `triage-friction-log` — the inbox is 196/150, the same tripwire that opened this
+session, and its seven entries are the freshest evidence behind `#120`, `#138`, `#127` and `#71`.
+Prefer it over `session-start` this time: `#143` (filed here) records that `session-start`'s
+tracker step overflowed its tool limit at 68 open issues and that the remedy it prescribes cannot
+be run on this backend — there are 79 open now, so page at `perPage: 25` and read
+`number`/`title`/`labels`/`state` only if you do run it.
 
 ______________________________________________________________________
 

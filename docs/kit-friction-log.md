@@ -116,8 +116,10 @@ versions of this parenthetical over-claimed the mitigation.)*
   comments the run posted, the PR body, the commit messages. Distinct from `#138`, which asks the
   *routing* to be verified — this asks a *correction* to be propagated. The silent-no-op half also
   argues that a scripted text replacement should assert it changed something.
-- **Across seven panel rounds and twelve isolated lenses on two PRs, no HIGH was in executable
-  code — every one was in prose.** The sweep moved exactly the right bytes on its first commit and
+- **Across eight panel rounds and fourteen isolated lenses on three PRs, no HIGH was in
+  executable *behaviour* — every one was in prose.** Two of them sat inside `.py`/`.sh` files (a
+  module docstring and `init.sh`'s `# Requires:` header), so "prose" here means prose wherever it
+  lives, not "outside the source tree". The sweep moved exactly the right bytes on its first commit and
   no round ever found otherwise; three rounds went to the record describing it. The documentation
   audit's edits were almost all correct; three rounds went to its evidence for them. One HIGH was
   in prose that *ships* (`pr-watch.md` described `--assert-draft`/`--assert-ready` as read-only
@@ -134,31 +136,55 @@ versions of this parenthetical over-claimed the mitigation.)*
   substring test: a lens built an archive whose visible text is `CORRUPTED` ×200 with the real bytes
   hidden in an HTML comment at EOF, and **the check passed**. Both headings needed two rewrites to
   match what the code does. **No new fix proposed** — occurrence data for `#138` (routing) and
-  `#127` (integrity), both filed by this session and both reproduced inside their own pilot run.
-- **`#75` reproduced on 12 of 12 lens launches.** Every isolated reviewer was placed in a worktree
-  at `main` with an empty `git diff main...HEAD`, across two PRs and seven rounds. Every one
+  `#127` (integrity). `#138` was filed by this session; `#127` was filed by the previous one
+  (`2026-07-28T13:46:49Z`, during `#126`'s review). Both were reproduced inside this session's
+  pilot run of the checks they ask for.
+- **`#75` reproduced on 14 of 14 lens launches.** Every isolated reviewer was placed in a worktree
+  at `main` with an empty `git diff main...HEAD`, across three PRs and eight rounds. Every one
   detected it and fetched the real head, because the launch prompt required reporting path, sha and
   diffstat *before* reviewing. Largest set recorded, and unanimous. **No new fix proposed** —
-  occurrence data for `#75`, but at 12/12 the contract item should stop saying "verify" and start
+  occurrence data for `#75`, but at 14/14 the contract item should stop saying "verify" and start
   saying "assume wrong, fetch first".
-- **A closing keyword reached a PR body because the guard ran in the same command as the publish.**
-  The scan for `close|fix|resolve` adjacent to an issue number was run on every PR body this
-  session — but on one invocation the `grep` and the `gh pr edit` were chained in a single shell
-  command, so the edit published regardless of what the scan found. It found a `closed`
-  immediately preceding an issue reference. No
-  `closingIssuesReferences` were created (verified on both PRs) and the body was corrected within a
-  minute. **M** — proposed fix: this is `#71`'s guard, and the instance says where it has to live.
-  A scan that can be sequenced *after* the thing it guards is not a guard; it belongs in a
-  pre-publish hook or a CI check on the PR body, not in the author's own command line.
+- **A closing keyword in a squash message closed an issue documenting an unfixed defect — and
+  the check that cleared it could not see the surface that fired.** `#147`'s squash message read
+  *"Filed rather than fixed:"* followed directly by the two references. GitHub matched the
+  keyword immediately preceding the first and closed it when `030f053` landed: `gh api …/issues/145/events` returns
+  `event=closed commit_id=030f053`, and `commit_id` is populated only when a commit triggers the
+  close. The sentence was asserting the **opposite**. `#146`, filed the same way in the same
+  sentence, survived because no keyword happened to sit next to it. Reopened by hand.
+
+  Two separate failures, and the second is the interesting one:
+
+  1. **The scan never ran on the surface that mattered.** A `close|fix|resolve`-adjacent-to-`#N`
+     scan was run on every PR body and on the added lines of every diff this session. A squash
+     message is composed at merge time, after every other gate has passed, and was never scanned.
+     `CLAUDE.md` names it explicitly; the habit did not.
+  2. **The clearing check was structurally blind.** This entry's first version reported the
+     incident as a near-miss — *"no `closingIssuesReferences` were created (verified on both
+     PRs)"*. That field is derived from the **PR body** and cannot see a commit message, so it
+     returns `[]` whether or not a squash message fired. The verification was aimed at the wrong
+     surface and returned a confident, meaningless pass.
+
+  Separately and more mildly: on one invocation the scan and the `gh pr edit` were chained in a
+  single shell command, so the edit published regardless of what the scan found. That one *was*
+  a near-miss — it found a `closed` adjacent to a reference in a PR body, and the body was
+  corrected. **M** — proposed fix: this is `#71`, and the instance sharpens where its guard must
+  live and what it must read. A scan the author can sequence after the thing it guards is not a
+  guard; and any "no harm done" check must read the issue's own **event stream**
+  (`gh api repos/:o/:r/issues/N/events`, looking for `closed` with a non-null `commit_id`), not a
+  PR-body-derived field. Second occurrence — the archive already records the same keyword firing from
+  an inline code span in a commit message against `#61` — and the first where the checking was also wrong.
 - **CodeRabbit registered nothing on a sixth and seventh consecutive PR.** `#126`, `#129`, `#130`,
   `#131`, `#137`, `#144`, `#147` — no check row, no comment, past grace on every one. The fallback
   panel was the only independent pass throughout. The occurrence comment recording this pattern was
   itself posted with an undercount ("four consecutive"), eight minutes after the fifth instance
   merged. **No new fix proposed** — occurrence data for `#45`.
 - **`#113` has a latent instance in a state path, not just a branch name.** This session ran a
-  *second* sweep on a date that already had one, so both `chore/triage-{date}` and
-  `state/triage/frozen-inbox_{date}.json` would have collided with the first sweep's. The branch was
-  renamed by hand; the snapshot path was not, and nothing warned. **No data was lost** — `stat`
+  *second* sweep on a date that already had one, so `chore/triage-{date}` and
+  `state/triage/frozen-inbox_{date}.json` were both candidates to collide. **Neither actually
+  did**, and for the same reason: the first sweep ran on `claude/triage-friction-log-kabrzh`
+  (`gh pr view 126 --json headRefName`) and wrote no snapshot at all, so the default branch name
+  was never taken either. The branch was renamed by hand against a collision that was not there. **No data was lost** — `stat`
   reports `frozen-inbox_2026-07-28.json` with `created == modified == Jul 28 23:14:44`, this
   session's write, and only the `2026-07-27` file predates it, because the first sweep never wrote
   a snapshot at all. **M** — proposed fix: `#113` should cover date-patterned *state* paths as well
