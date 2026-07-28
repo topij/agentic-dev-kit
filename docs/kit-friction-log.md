@@ -15,14 +15,17 @@
 
 The inbox was swept by the `triage-friction-log` workflow. Twenty-four entries in,
 twenty-four accounted for: **thirteen graduated** into new issues
-([#112](https://github.com/topij/agentic-dev-kit/issues/112)–[#125](https://github.com/topij/agentic-dev-kit/issues/125)),
+([#112](https://github.com/topij/agentic-dev-kit/issues/112)–[#120](https://github.com/topij/agentic-dev-kit/issues/120),
+[#122](https://github.com/topij/agentic-dev-kit/issues/122)–[#125](https://github.com/topij/agentic-dev-kit/issues/125)),
 **ten** routed as occurrence comments on the issues they are evidence for
-(#33, #42, #45, #54, #74, #75, #76, #118), and **one** — `make test` being
+(#42, #45 ×3, #54, #74 ×2, #75, #76, #118), and **one** — `make test` being
 undiscoverable — recorded as **discharged**, its proposed root `CLAUDE.md` having since
-landed.
+landed. `13 + 10 + 1 = 24`.
 
-One issue in that range, [#121](https://github.com/topij/agentic-dev-kit/issues/121),
-came from the sweep itself rather than the inbox: this repo's `tracker:` config is still
-`init.sh` placeholder pointing at Linear.
+[#121](https://github.com/topij/agentic-dev-kit/issues/121) sits inside that numeric
+range but came from the sweep itself rather than the inbox: this repo's `tracker:` config
+is still `init.sh` placeholder pointing at Linear. #33 also received a comment, but a
+cross-reference to #112 rather than one of the ten — see the archive for why that
+distinction cost this record an audit.
 
 Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-archive.md).

@@ -11,7 +11,12 @@ Twenty-four entries in, twenty-four accounted for: **thirteen graduated** into n
 issues, **ten** routed as occurrence comments on the issues they are evidence for, and
 **one** discharged by work that has since landed.
 
-New issues [#112](https://github.com/topij/agentic-dev-kit/issues/112)–[#125](https://github.com/topij/agentic-dev-kit/issues/125). Four entries were rated **H**:
+The thirteen graduated entries became
+[#112](https://github.com/topij/agentic-dev-kit/issues/112)–[#120](https://github.com/topij/agentic-dev-kit/issues/120)
+and [#122](https://github.com/topij/agentic-dev-kit/issues/122)–[#125](https://github.com/topij/agentic-dev-kit/issues/125)
+— [#121](https://github.com/topij/agentic-dev-kit/issues/121) sits inside that numeric
+range but is not one of them (see below). Four of the twenty-four entries were rated
+**H**; three of the four became issues:
 
 - [#112](https://github.com/topij/agentic-dev-kit/issues/112) — the manifest-hash gate
   reads as test coverage but is discharged by one `--generate-manifest` run, so any
@@ -19,8 +24,10 @@ New issues [#112](https://github.com/topij/agentic-dev-kit/issues/112)–[#125](
   first. Inverse symptom of [#33](https://github.com/topij/agentic-dev-kit/issues/33),
   cross-referenced there.
 - [#113](https://github.com/topij/agentic-dev-kit/issues/113) — a push-then-PR step can
-  open a PR against a stale remote branch and exit 0; this is how `#81` became a
-  160/249 revert of the day's merged work.
+  open a PR against a stale remote branch and exit 0; this is how `#81` came to carry
+  160 insertions / 249 deletions **against `main`**, reverting the day's merged work.
+  (The qualifier matters: GitHub's own file view of `#81` reports a different figure,
+  because it diffs against the merge base rather than against `main`.)
 - [#114](https://github.com/topij/agentic-dev-kit/issues/114) — a test written from the
   fix's own framing can pin the bug as correct; the mutation was killed by that test.
 - The fourth, **`make test` is undiscoverable**, is the one entry recorded as
@@ -34,15 +41,45 @@ still `init.sh` placeholder (`backend: linear`, blank ids) while this repo's rea
 tracker is GitHub Issues on itself, which the engine in
 [#6](https://github.com/topij/agentic-dev-kit/issues/6) will read the moment it lands.
 
-Occurrence comments went to [#33](https://github.com/topij/agentic-dev-kit/issues/33),
-[#42](https://github.com/topij/agentic-dev-kit/issues/42),
-[#45](https://github.com/topij/agentic-dev-kit/issues/45) (three entries),
-[#54](https://github.com/topij/agentic-dev-kit/issues/54),
-[#74](https://github.com/topij/agentic-dev-kit/issues/74) (two entries),
-[#75](https://github.com/topij/agentic-dev-kit/issues/75),
-[#76](https://github.com/topij/agentic-dev-kit/issues/76), and
-[#118](https://github.com/topij/agentic-dev-kit/issues/118). All twenty-four entries are
-kept verbatim below for the trail, along with the prior graduation marker.
+The ten occurrence comments went to
+[#42](https://github.com/topij/agentic-dev-kit/issues/42) (one entry),
+[#45](https://github.com/topij/agentic-dev-kit/issues/45) (three),
+[#54](https://github.com/topij/agentic-dev-kit/issues/54) (one),
+[#74](https://github.com/topij/agentic-dev-kit/issues/74) (two),
+[#75](https://github.com/topij/agentic-dev-kit/issues/75) (one),
+[#76](https://github.com/topij/agentic-dev-kit/issues/76) (one), and
+[#118](https://github.com/topij/agentic-dev-kit/issues/118) (one) — summing to ten, so
+`13 + 10 + 1 = 24` closes.
+
+Two clarifications the review panel forced, because the first version of this section
+did not survive an audit:
+
+- **[#33](https://github.com/topij/agentic-dev-kit/issues/33) is not in that list.** It
+  received a *cross-reference* to #112 — a **graduated** entry, already counted among the
+  thirteen — not occurrence data for any of the ten. Listing it made the enumeration sum
+  to eleven against a stated ten, so `24` in produced `25` out.
+- **Not all ten carried *"No new fix proposed"***. Five did; the rest (notably the
+  entries routed to #54, #118 and #42) proposed a fix that belonged on an **existing**
+  issue rather than a new one. Being comment-shaped rather than ticket-shaped is what
+  they have in common, not the absence of a proposal.
+
+Three of the twenty-four entries also named
+[#23](https://github.com/topij/agentic-dev-kit/issues/23) alongside #45 as a routing
+target; that comment was posted after the panel caught its omission.
+
+The panel itself produced two further issues, neither from the inbox:
+[#127](https://github.com/topij/agentic-dev-kit/issues/127) — nothing mechanically
+distinguishes a sweep from a deletion, and `check_doc_budget` scores the deletion higher
+(proved by wiping both files and watching every gate stay green) — and
+[#128](https://github.com/topij/agentic-dev-kit/issues/128), the skill's notify-channel
+stop having no in-session-operator exception, which this run violated.
+
+All twenty-four entries are kept verbatim below for the trail, along with the prior
+graduation marker. Note that the swept text includes the previous sweep's closing line,
+*"Everything swept now lives in `kit-friction-log-archive.md`"*, which is now a self-link
+inside the archive it names — the class [#73](https://github.com/topij/agentic-dev-kit/issues/73)
+exists for. It is left byte-identical deliberately: rewriting swept content would break
+the verbatim property that makes this archive auditable.
 
 ### 2026-07-27 — Backlog migrated to GitHub Issues (#70–#77)
 
