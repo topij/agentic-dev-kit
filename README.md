@@ -84,10 +84,16 @@ patterns to rules).
 
 ## Quickstart
 
-**Prerequisites.** `init.sh` itself needs only POSIX `sh`, `awk`, and `git`. The
-engines need [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file
+**Prerequisites.** `init.sh` needs POSIX `sh` plus the usual coreutils/text tools it
+shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `cat`, `head`, `mkdir`, `chmod`, `touch`,
+`basename`, `dirname`, `date` and `git` — all standard on macOS
+and Linux, none of them a runtime you have to install. The engines need [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file
 scripts), `git`, and — for `pr-watch` / `parallel` — the GitHub CLI `gh`,
-authenticated. No PyYAML: the config reader is stdlib-only.
+authenticated. **No PyYAML in anything you run:** `scripts/lib/kitconfig.py`, the reader
+every engine imports, is stdlib-only. (`scripts/lib/devmodel_config.py` *is*
+PyYAML-backed, but no engine imports it and the parity tests compare `kitconfig` against
+`yaml.safe_load` directly rather than against it — so PyYAML is a test-time dependency at
+most.)
 
 ```sh
 # Click "Use this template" on GitHub and clone the result — or, into an
@@ -101,7 +107,16 @@ cp -r /path/to/agentic-dev-kit/. .
 
 `init.sh` stamps your answers into `config/dev-model.yaml`, renders the narrative
 docs and the root `AGENTS.md` entry point from `docs/templates/`, installs the
-pre-push hook, and adds the state sandbox to `.gitignore`. It never overwrites a
+pre-push hook, and adds four entries to `.gitignore` — `state/`, `.devkit_state_root`,
+`.claude/worktrees/` (isolated review lenses) and `reports/` (derived pipeline output).
+It adds a fifth, `.mcp.json`, **only** if that file exists and appears to hold literal
+credentials rather than `${ENV_VAR}` references; it says so when it does. That check
+matters because `dev_session.sh` copies a repo-root `.mcp.json` into every lane
+worktree, so a lane inherits whatever is in it. **The sniff is narrower than it looks:** its regex is case-sensitive and matches
+only `_`-separated names, so the hyphenated mixed-case shape the kit's own docs use
+(`"CF-Access-Client-Secret"`) is **not** detected and `.mcp.json` stays tracked
+([#86](https://github.com/topij/agentic-dev-kit/issues/86), open). Do not rely on it —
+prefer `${ENV_VAR}` references so there is no literal to leak. It never overwrites a
 rendered doc that is already in use — only one whose **first line** still carries the
 shipped `devkit-template: unrendered` marker (or that is missing entirely). A doc
 that merely mentions the marker further down is in use, and is left alone.
@@ -203,7 +218,12 @@ the adoption surfaced. The principles it applies:
 - **Namespace the scripts if `scripts/` is organized.** If the repo keeps `scripts/`
   in subdirs, vendor the kit under `scripts/devkit/` (or similar) and set
   `paths.engines` accordingly. Every engine discovers the repo root by walking up for
-  `.git`, so it works at any depth without prompt rewrites.
+  `.git`, so it works at any depth without prompt rewrites. One documented limitation:
+  with **no** `.git` anywhere above it, `kitconfig` falls back to depth arithmetic
+  calibrated for `scripts/lib/`, which is wrong in a vendored layout —
+  [issue #60](https://github.com/topij/agentic-dev-kit/issues/60) stays open on it. Any
+  real checkout has a `.git`, so this bites test harnesses and tarball copies, not
+  adopters.
 - **Check your CI/lint scope.** The `state_paths` tests use bare `assert` (they're
   pytest tests) — make sure a repo-wide lint scopes away from the kit's dir or ignores
   `S101` there.
@@ -224,14 +244,16 @@ Each piece maps to one or more of the ten principles in
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
 | `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, and `pr-watch`. |
 | `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the `--headless` JSON descriptor, the lane-contract preamble, the fan-out recipe. |
-| `.claude/commands/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows. Claude also ships the project-specific `triage-friction-log`, `post-merge-systemize`, and `adopt` commands. |
+| `.claude/commands/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows. Claude ships eight commands: the four wired workflows (`session-start`, `wrap-up`, `parallel`, `pr-watch`) plus `triage-friction-log`, `post-merge-systemize`, `adopt`, and `upgrade`. |
+| `scripts/check_memory_budget.py` | #1, #8 Mechanism over memory | A `SessionStart` hook (wired in `.claude/settings.json`) that warns when an agent-memory file outgrows its budget — the memory-side counterpart to `check_doc_budget.py`. |
+| `scripts/hooks/pr_followup_hook.py` | #5 PR follow-through | A `PostToolUse` hook on `gh pr *` that fires the mandatory watch-to-green loop the moment a PR is opened or readied, so following through is a mechanism rather than a thing the agent has to remember. Reads five config keys: `review.bots`, `review.fallback_commands.claude`, `paths.engines`, `review.fallback_panel.lenses` and `review.fallback_panel.receipt_source`. |
 | `docs/AGENTS-sections.md` | #4, #5, #6 | Ready-to-merge persistent instructions for Codex adopters. |
 | `docs/CLAUDE-sections.md` | #4 Merge classes, #5 PR follow-through | Ready-to-paste CLAUDE.md sections: risk-based PR splitting, the mandatory watch-to-green loop, execution rules, the rules-layout convention. |
 | `docs/autonomous-session-playbook.md` | #4, #5, #7 | The full operating contract for operator-requested autonomous sessions — branch hygiene, sequencing, local gate, draft→ready, watch-and-fix to merge, self-merge policy. |
 | `docs/agentic-dev-kit/safety-critical-changes.md` | #6 Safety-critical doctrine | Shared doctrine for send-gates, destructive operations, and kill/recovery paths; bound through the Claude rule and the suggested `AGENTS.md` section. |
 | `config/dev-model.yaml` | #10 No hardcoding | The single config surface every skill and script reads instead of hardcoding a value. |
 | `scripts/lib/kitconfig.py` | #10 No hardcoding | Stdlib-only reader for `config/dev-model.yaml`, used where an engine must stay dependency-free (`pr_watch.py` declares zero third-party deps). |
-| `scripts/check_doc_budget.py`, `scripts/archive_plan_sessions.py` | #1 | The tripwire and sweep that keep the handoff file from ballooning. |
+| `scripts/check_doc_budget.py`, `scripts/archive_plan_sessions.py` | #1 | The tripwire and sweep that keep the handoff file from ballooning. Which files are watched — and how big each may get — is the `doc_budgets:` list in `config/dev-model.yaml`; each entry is `{path, budget, archive, remedy}`, and the `remedy` string is what the warning tells you to run. Warn-only by default — it exits 0 even when a doc is over budget, and returns 1 only under `--strict`. It exits 2 on a usage or config error whatever the flags, so a `path:` naming a doc you have since renamed will gate any pipeline that runs it. |
 | `scripts/pr_watch.py` | #5 | The poll-fix-ack engine behind `pr-watch`. |
 | `scripts/dev_session.sh`, `scripts/reconcile_sessions.sh` | #3 | Worktree/lane launcher and reconciler. |
 | `scripts/hooks/pre-push` | #8 Mechanism over memory | A hook, not a memory — refuses a push that would corrupt the narrative files. |
@@ -252,9 +274,15 @@ engines. Read `PRINCIPLES.md` for both principles' full statement.
 `session-start`, `wrap-up`, `parallel`, and `pr-watch` come with their engine scripts
 and both runtime adapters. `triage-friction-log` and `post-merge-systemize` document
 the flywheel's
-triage and pattern-finding mechanism, but their deterministic engines (a tracker
-client, a notify channel, and a merged-PR fetcher) are project-specific and left
-for you to wire — see the banner atop each of those two skill files.
+triage and pattern-finding mechanism, but their deterministic engines are
+project-specific and left for you to wire — see the banner atop each of those two skill
+files. What is missing, precisely — two integrations plus five scripts, every one of the five
+verified absent from `scripts/`: a tracker client, a notify channel, `scripts/fetch_merged_prs.py` (the forge-API fetcher), `scripts/digest_merged_prs.py`
+(the slimmer that consumes it), `scripts/heartbeat_cli.py`, and `triage-friction-log`'s own
+`scripts/triage_friction_log.py` + `scripts/finalize_triage.py`.
+[Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
+behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)
+tracks the systemize side.
 
 ## Parallel dev sessions
 
@@ -283,8 +311,18 @@ Once you've adopted the kit, it's yours. `config/dev-model.yaml` is the single
 place to point the skills and scripts at your project's paths, tracker, review
 bots, and model tiers — start there. Beyond config, edit the skills and scripts
 freely: they're prompts and small stdlib scripts, meant to be read and changed.
-Run the state-sandbox and portability suites after modifying the engines:
-`python -m pytest scripts/lib/state_paths/tests/ scripts/tests/`.
+Run the suite after modifying the engines:
+
+```sh
+make test          # the whole suite; supplies pytest + pyyaml itself via uv
+make mutation-test # same, minus the drift self-check — use this when mutating files
+```
+
+`make test` is the command, not a convenience wrapper. The two probes you would
+otherwise reach for both fail in a way that reads as *"pytest is unavailable here"* and
+is not: `uv run pytest` → `Failed to spawn: pytest` (pytest is not a project
+dependency), and `python3 -m pytest` → `No module named pytest` (the system Python has
+none; a bare `python` may not exist at all, which is a third misleading signal). The `Makefile` target exists precisely because the bare invocation does not work.
 
 Improvements that would help other adopters are welcome back here.
 

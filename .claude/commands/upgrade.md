@@ -148,7 +148,7 @@ entries are exactly where the risk is.
 
 ```bash
 uv run <engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
-python -m pytest <engine-dir>/lib/state_paths/tests <engine-dir>/tests -q
+uv run --with pytest --with pyyaml python -m pytest <engine-dir>/lib/state_paths/tests <engine-dir>/tests -q
 uv run <engine-dir>/check_doc_budget.py
 ```
 

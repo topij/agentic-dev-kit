@@ -18,9 +18,13 @@ established it and its actual result — #54 tracks making this a standing rule.
 
 ## Ground rules
 
-- `main` is protected: never commit to it directly. Branch (`dev/<scope>` for cockpit
-  lanes) and open a PR — and opening the PR is not done; watch it to green and
-  review-clean (`pr-watch`).
+- `main` is protected: never commit to it directly. Branch and open a PR — and opening
+  the PR is not done; watch it to green and review-clean (`pr-watch`).
+  **Cockpit work branches `chore/<slug>` or `feat/<slug>`, never `dev/<scope>`.**
+  `dev/` is `vcs.dev_branch_prefix` — the prefix reserved for isolated lanes — and
+  `scripts/hooks/pre-push` refuses any push from a `dev/*` branch that touches
+  `docs/kit-handoff.md` or `docs/kit-friction-log.md`. A wrap-up commit on a `dev/*`
+  branch is blocked by the repo's own hook.
 - All configuration lives in `config/dev-model.yaml`; skills and engines read it from
   there. Never hardcode a value that belongs in it.
 - The living plan is `docs/kit-handoff.md` — read at session start, updated at wrap-up.

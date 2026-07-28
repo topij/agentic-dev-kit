@@ -120,6 +120,39 @@ Repeat until the report says **converged**:
 
 1. **Pace the next poll** (see below), then go to step 1.
 
+## The draft-bit flags — they CORRECT, they do not check
+
+`--assert-draft` and `--assert-ready` are documented in `pr_watch.py`'s own docstring and
+noted under the REST backend in the Notes section below, but nothing says **when** to reach for them,
+and their names badly undersell what they do. Read this before using either.
+
+**Both mutate the PR.** Despite "assert", neither is a read-only check. Each reads
+`isDraft`, and if it does not match, issues the corrective `gh pr ready` (for
+`--assert-ready`) or `gh pr ready --undo` (for `--assert-draft`), then re-reads to
+confirm. So:
+
+```sh
+uv run <engine-dir>/pr_watch.py 916 --assert-draft   # right after `gh pr create --draft`
+uv run <engine-dir>/pr_watch.py 916 --assert-ready   # right before `gh pr merge`
+```
+
+Running `--assert-ready` on a PR you *deliberately* left as a draft will **flip it to
+ready for review**, at which point a review bot may pick it up. That is the opposite of
+a safe read-only probe, so never use either as a way to "check" PR state.
+
+They exist because `gh`'s draft bit is flaky in both directions (observed on gh 2.89.0):
+a `--draft` create can silently land non-draft, and a ready PR can silently revert to
+draft so a later `gh pr merge` fails with *"Pull Request is still a draft"*. Exit 0 means
+the bit held **or was corrected**; exit 2 means the correction did not take.
+
+Both **require `gh`** — they mutate, and the REST fallback refuses them with exit 2, as
+it does `--record-review`.
+
+The one remaining flag not used in the loop above is `--allow-pending-bot-review`, which
+lets `--record-review` proceed while a configured bot's own check is still pending. Use
+it only with evidence the queued verdict will never arrive; it is recorded on the receipt
+as `override`, because it is exactly the scenario a premature receipt exists to prevent.
+
 ## Pacing
 
 Self-pace on a bounded cadence — don't busy-wait:

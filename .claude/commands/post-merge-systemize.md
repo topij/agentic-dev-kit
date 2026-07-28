@@ -99,7 +99,7 @@ patterns, or the pattern threshold — always read from config.
 | `github_repo` (or your forge's equivalent)              | `owner/name`; empty → infer from cwd.                                                   |
 | `review_sources` / `operator_login`                     | Comment-source classification (consumed by the fetcher).                                |
 | `friction_log_path`                                     | Where single-incident findings land (`docs/friction-log.md`).                           |
-| `tracker.team_id` / `tracker.project_id` / `tracker.label_name` | Config for high-severity single-incident tickets — `tracker.project_id` should match `config/dev-model.yaml → tracker.project_name`. |
+| `tracker.linear.team_id` / `tracker.linear.project_id` / `tracker.linear.label_name` | Config for high-severity single-incident tickets — `tracker.linear.project_id` should match `config/dev-model.yaml → tracker.project_name`. |
 | `finalize.branch_pattern` / `commit_subject` / `pr_draft` | The ≥2-PR-pattern CLAUDE.md/skill-prompt PR (`vcs.systemize_branch_pattern`).           |
 
 ______________________________________________________________________
@@ -314,12 +314,12 @@ ______________________________________________________________________
 
 For each high-severity single-incident, file via your tracker's issue-create tool:
 
-- `team` → `tracker.team_id`; `project` → `tracker.project_name` (always — your
+- `team` → `tracker.linear.team_id`; `project` → `tracker.project_name` (always — your
   project's fixed default).
 - `title` — concise, prefixed `[systemize]`.
 - `description` — the shape, the PR it came from, the review quote, and the proposed
   fix.
-- Apply `tracker.label_name` — resolve/create via the label tools if needed; don't
+- Apply `tracker.linear.label_name` — resolve/create via the label tools if needed; don't
   block filing on a label miss.
 
 Capture `{identifier, url}` for the DM. If the tracker is unavailable (pre-flight

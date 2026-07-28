@@ -1,9 +1,18 @@
-"""Tiny loader for ``config/dev-model.yaml`` — the kit's single config surface.
+"""PyYAML-backed loader for ``config/dev-model.yaml`` — superseded, near-vestigial.
 
-Every kit script reads project-specific values (paths, tracker ids, doc
-budgets, ...) through this module instead of hardcoding them (the kit's
-"No hardcoding" principle). Stdlib + PyYAML only, on purpose: no other
-dependency should ever be required just to read a config value.
+**No engine imports this module**, and nothing in the test suite checks it for parity
+against ``kitconfig``. Every shipped script reads config through ``kitconfig.py``, which
+is stdlib-only so an engine can declare zero third-party dependencies; and
+``test_kitconfig.py``'s parity tests compare ``kitconfig.loads`` against
+``yaml.safe_load`` **directly**, not against anything here.
+
+What actually depends on this file, established by deleting it and re-running the suite:
+one test, ``test_portability.py::test_devmodel_config_root_fallback_does_not_escape_into_a_parent_project``,
+which copies the file to exercise a repo-root fallback path. Plus its ``KIT_OWNED`` row
+in ``kit_doctor.py``.
+
+So: reach for ``kitconfig`` in anything that ships, and do not add callers here. Whether
+this module should exist at all is an open question rather than a settled design.
 
 Usage:
     from devmodel_config import get, load_config, resolve_path

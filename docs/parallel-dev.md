@@ -25,9 +25,10 @@ A **lane** is one unit of parallel work, fully isolated:
   shell), so concurrent writes to `state/cache/` and other scratch state can't clobber
   each other. See [`scripts/lib/state_paths/`](../scripts/lib/state_paths/).
 
-The **cockpit** is your main session. It owns the two narrative files
-(`docs/handoff.md`, `docs/friction-log.md`), the review pass, and the terminal merge
-decision. Lanes never touch the narrative files — they carry their handoff in their
+The **cockpit** is your main session. It owns the two narrative files (`paths.handoff`
+and `paths.friction_log` in `config/dev-model.yaml` — `docs/handoff.md` and
+`docs/friction-log.md` by default), the review pass, and the terminal merge decision.
+Lanes never touch the narrative files — they carry their handoff in their
 **pull request description**, the one channel that's reviewed and visible across every
 lane.
 
@@ -172,8 +173,8 @@ cockpit — each flipping its own PR ready as it finishes, so the review bots pi
 staggered rather than all at once.
 The two cheap self-merge lanes land through `dev_session.sh merge`; the auth rate-limit
 lane (security-adjacent) hands back for operator review. You reconcile all three,
-merge, and only then update `docs/handoff.md` with what shipped — from the cockpit,
-once.
+merge, and only then update the handoff (`paths.handoff`) with what shipped — from the
+cockpit, once.
 
 ## See also
 

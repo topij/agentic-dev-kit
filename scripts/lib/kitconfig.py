@@ -18,9 +18,11 @@ actually uses, and nothing else:
 
 It is **not** a YAML implementation: no anchors, no multi-line scalars, no flow
 mappings, no multi-document streams. A construct it does not understand is
-skipped rather than guessed at. If you need those, keep using
-``devmodel_config.py`` (PyYAML-backed) — the two agree on every construct this
-one supports, which the test suite pins.
+skipped rather than guessed at. If you need those, use PyYAML directly — do not
+reach for ``devmodel_config.py``, which is superseded and has no callers (see its
+docstring). What the suite actually pins is this module against ``yaml.safe_load``:
+``test_kitconfig.py`` asserts ``kitconfig.loads(text) == yaml.safe_load(text)`` over
+every construct the kit uses, behind an ``importorskip``.
 
 Usage:
     from kitconfig import get, load_config
