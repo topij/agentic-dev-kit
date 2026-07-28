@@ -63,9 +63,44 @@ author re-reading their own diff.
    you are mutating (this kit has one: `kit_doctor`'s self-check), *every*
    mutation fails it regardless of behaviour, and a whole run can report 100%
    killed while nothing behavioural caught anything. One lens's first pass here
-   reported 17/17 killed; re-run with that test excluded, 7 had survived.
-   Exclude the drift test — or regenerate the manifest after each mutation —
-   before believing a kill.
+   reported 17/17 killed; re-run with that test excluded, 7 had survived —
+   attested by that lens, not independently measured, since the 17 are
+   enumerated nowhere. Quoted for the shape of the effect, not as a figure to
+   reproduce.
+
+   **So exclude your repo's drift test before believing a kill** — by node id, by
+   marker, by whatever your suite supports. In *this kit's own* repo that test
+   carries a `driftcheck` marker, so the invocation is:
+
+   ```
+   pytest -m 'not driftcheck'        # in this repo: make mutation-test
+   ```
+
+   That marker is this repo's implementation, not a property of your repo. If you
+   vendored these tests, check before relying on it: the marker and the conftest
+   that registers it live under the tests directory, which is **not** tracked by
+   `kit-manifest.json`, so an `/upgrade` will hand you this page without them.
+
+   **Check that the exclusion excluded something.** An `-m` expression naming a
+   marker no test carries deselects nothing and warns about nothing — you get a
+   normal-looking green run with the drift test still in it. Confirm the run
+   reports a `deselected` count, or skip the marker and name the test outright
+   with `--deselect <nodeid>`.
+
+   **Regenerating the manifest instead is not the recommended route.** It does
+   yield a truthful result, but it is per-mutant bookkeeping that fails silently
+   in the confident direction — forget it once and the mutant reads as killed.
+   The deeper problem is that it hides its own irrelevance: the drift check goes
+   from failing to *passing*, so it looks like a test that was consulted and had
+   nothing to say. Deselection reaches the same verdict while leaving the
+   evidence on screen — a `deselected` count says plainly that this check did not
+   participate. Both routes end in a green run for a surviving mutant; only one
+   of them tells you which tests that green was made of (#112).
+
+   **The rule none of this depends on: a kill is only a kill if a test that
+   asserts behaviour is the thing that failed.** Check *which* test failed, not
+   how many — a test comparing stored text is no more evidence than a test
+   comparing stored hashes.
 6. **Report, do not fix.** A lens that edits loses the disjointness: it starts
    defending its own changes on the next round.
 7. **Mutate in an isolated copy of the repo under review, never the shared

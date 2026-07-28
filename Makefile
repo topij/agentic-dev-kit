@@ -1,4 +1,4 @@
-# Makefile — thin entry points: `make install-hooks` and `make test`.
+# Makefile — thin entry points: `make install-hooks`, `make test`, `make mutation-test`.
 #
 # install-hooks
 # -------------
@@ -22,8 +22,27 @@
 # test
 # ----
 # Runs the same suites the lane contract's local gate runs before every push.
+#
+# mutation-test
+# -------------
+# The same suites MINUS the byte-comparison drift check (issues #33, #112). Use
+# this — never plain `make test` — when deciding whether a deliberate mutation
+# was caught, because `test_kit_repo_self_check_is_clean` rehashes every
+# kit-owned file and so fails for ANY mutation to one, behavioural coverage or
+# not. A run that leaves it in reports a kill for every mutation to a KIT_OWNED
+# file — the 26 paths in kit-manifest.json, NOT the whole repo: a mutation to
+# scripts/tests/, scripts/check_memory_budget.py or init.sh never trips it.
+# One lens once REPORTED 17/17 killed, which was 7 survivors with it excluded.
+# Attested, not measured: the 17 mutants are enumerated nowhere, and
+# docs/kit-handoff-history.md says so explicitly. Quoted for the shape of the
+# effect, not as a figure anything here reproduces.
+#
+# Regenerating the manifest instead also produces a truthful result, and is NOT
+# what this target does, because it is per-mutant bookkeeping whose failure mode
+# is silent and in the confident direction — forget it once and the mutant reads
+# as killed.
 
-.PHONY: install-hooks test
+.PHONY: install-hooks test mutation-test
 
 install-hooks:
 	@engines_dir="$$(python3 -c "import sys; sys.path.insert(0, 'scripts/lib'); import kitconfig; c = kitconfig.load_config(); print(kitconfig.get(c, 'paths.engines', 'scripts'))" 2>/dev/null || echo scripts)"; \
@@ -32,3 +51,6 @@ install-hooks:
 
 test:
 	uv run --with pytest --with pyyaml python -m pytest scripts/lib/state_paths/tests scripts/tests -q
+
+mutation-test:
+	uv run --with pytest --with pyyaml python -m pytest scripts/lib/state_paths/tests scripts/tests -q -m 'not driftcheck'
