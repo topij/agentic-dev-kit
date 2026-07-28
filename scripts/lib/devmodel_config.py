@@ -1,14 +1,18 @@
-"""PyYAML-backed loader for ``config/dev-model.yaml`` — the parity reference.
+"""PyYAML-backed loader for ``config/dev-model.yaml`` — superseded, near-vestigial.
 
-**No engine imports this module.** Every shipped script reads config through
-``kitconfig.py``, which is stdlib-only so an engine can declare zero third-party
-dependencies. This module is the PyYAML implementation that ``kitconfig``'s parity
-tests check it against: if the two ever disagree on a construct the kit uses,
-``scripts/tests/test_kitconfig.py`` fails. Keeping it means "our hand-rolled parser
-matches a real YAML parser" is an assertion rather than a hope.
+**No engine imports this module**, and nothing in the test suite checks it for parity
+against ``kitconfig``. Every shipped script reads config through ``kitconfig.py``, which
+is stdlib-only so an engine can declare zero third-party dependencies; and
+``test_kitconfig.py``'s parity tests compare ``kitconfig.loads`` against
+``yaml.safe_load`` **directly**, not against anything here.
 
-So: reach for ``kitconfig`` in anything that ships. Reach for this only to widen the
-parity surface.
+What actually depends on this file, established by deleting it and re-running the suite:
+one test, ``test_portability.py::test_devmodel_config_root_fallback_does_not_escape_into_a_parent_project``,
+which copies the file to exercise a repo-root fallback path. Plus its ``KIT_OWNED`` row
+in ``kit_doctor.py``.
+
+So: reach for ``kitconfig`` in anything that ships, and do not add callers here. Whether
+this module should exist at all is an open question rather than a settled design.
 
 Usage:
     from devmodel_config import get, load_config, resolve_path

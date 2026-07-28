@@ -120,20 +120,38 @@ Repeat until the report says **converged**:
 
 1. **Pace the next poll** (see below), then go to step 1.
 
-## The engine's other modes
+## The draft-bit flags — they CORRECT, they do not check
 
-The loop above uses `--json`, `--mark-seen` and `--record-review`. Four more flags exist
-and are easy to miss:
+`--assert-draft` and `--assert-ready` are documented in `pr_watch.py`'s own docstring and
+mentioned above under the REST backend, but nothing here says **when** to reach for them,
+and their names badly undersell what they do. Read this before using either.
 
-| flag | what it does |
-| ---- | ------------ |
-| `--assert-draft <PR#>` | Exits non-zero unless the PR is currently a draft. Use it before pushing work you do not want reviewed yet — it turns "I meant to open that as a draft" into a failure rather than a surprise. |
-| `--assert-ready <PR#>` | The converse: exits non-zero unless the PR is ready for review. This is the gate that stops a lane declaring itself done while its PR is still a draft no bot will look at (`review skipped: draft pull request`). |
-| `--allow-pending-bot-review` | Lets `--record-review` proceed while a configured bot's own check is still pending. Only with evidence the queued verdict will never arrive — the override is recorded on the receipt as `override`, because it is exactly the scenario a premature receipt exists to prevent. |
-| `--lenses <names>` | Accompanies `--record-review`; names the lenses that actually ran. Self-reported, unverified, and shown at merge time so a one-lens pass is visible. |
+**Both mutate the PR.** Despite "assert", neither is a read-only check. Each reads
+`isDraft`, and if it does not match, issues the corrective `gh pr ready` (for
+`--assert-ready`) or `gh pr ready --undo` (for `--assert-draft`), then re-reads to
+confirm. So:
 
-`--assert-draft` and `--assert-ready` **require `gh`** — they mutate or gate on PR state,
-so the REST fallback refuses them with exit 2, as it does `--record-review`.
+```sh
+uv run <engine-dir>/pr_watch.py 916 --assert-draft   # right after `gh pr create --draft`
+uv run <engine-dir>/pr_watch.py 916 --assert-ready   # right before `gh pr merge`
+```
+
+Running `--assert-ready` on a PR you *deliberately* left as a draft will **flip it to
+ready for review**, at which point a review bot may pick it up. That is the opposite of
+a safe read-only probe, so never use either as a way to "check" PR state.
+
+They exist because `gh`'s draft bit is flaky in both directions (observed on gh 2.89.0):
+a `--draft` create can silently land non-draft, and a ready PR can silently revert to
+draft so a later `gh pr merge` fails with *"Pull Request is still a draft"*. Exit 0 means
+the bit held **or was corrected**; exit 2 means the correction did not take.
+
+Both **require `gh`** — they mutate, and the REST fallback refuses them with exit 2, as
+it does `--record-review`.
+
+The one remaining flag not used in the loop above is `--allow-pending-bot-review`, which
+lets `--record-review` proceed while a configured bot's own check is still pending. Use
+it only with evidence the queued verdict will never arrive; it is recorded on the receipt
+as `override`, because it is exactly the scenario a premature receipt exists to prevent.
 
 ## Pacing
 

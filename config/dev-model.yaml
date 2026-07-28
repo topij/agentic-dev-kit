@@ -66,7 +66,10 @@ doc_budgets:
 vcs:
   forge: github                  # github | gitlab | other — some skills branch on this
   protected_branch: main         # never committed to directly; PRs target this
-  dev_branch_prefix: dev         # cockpit lane branches: <prefix>/<scope>
+  # Prefix for ISOLATED LANE branches (<prefix>/<scope>) — not for cockpit work.
+  # scripts/hooks/pre-push refuses a push from <prefix>/* that touches the narrative
+  # files, so cockpit branches must use chore/* or feat/* instead.
+  dev_branch_prefix: dev
   # {date} expands to today's ISO date at skill runtime.
   triage_branch_pattern: "chore/triage-{date}"
   systemize_branch_pattern: "chore/systemize-{date}"

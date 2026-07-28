@@ -56,7 +56,7 @@ header to the source markdown.
 >   frozen-list into the archive (`--frozen-inbox`) + branch/commit/push/draft-PR
 >   (Session B only).
 > - your tracker's client library or MCP — for filing approved proposals. By backend:
->   `github-issues` → `gh issue create --title "…" --body "…" --label <tracker.<backend>.label_name>`
+>   `github-issues` → `gh issue create --title "…" --body "…" --label <your label>`
 >   (the id in the output is the ticket ref); `linear` → the Linear MCP / client with
 >   `tracker.linear.team_id` + `tracker.linear.project_id`; other trackers → their own CLI or API.
 > - your notify library / MCP — synchronous DM to the operator.
@@ -86,9 +86,9 @@ patterns — always read from config.
 | `state_path`              | Repo-root-relative path for the pipeline's state file                                |
 | `source_path`             | Path to `docs/friction-log.md`                                                       |
 | `report_pattern`          | Output pattern for the parser's report (e.g. `reports/triage_{date}.md`)             |
-| `tracker.<backend>.team_id`         | Tracker team id (Linear-shaped backends) — leave blank for others. **Backend-specific ids nest one level deeper than the shared keys**: `tracker.linear.team_id`, not `tracker.team_id`, which does not exist. |
-| `tracker.<backend>.project_id`      | Tracker project id — should match `config/dev-model.yaml → tracker.project_name`      |
-| `tracker.<backend>.label_name`      | Label applied to every triage-filed ticket                                          |
+| `tracker.linear.team_id`         | Tracker team id. **Backend ids nest under the backend**: `tracker.linear.team_id` — `tracker.team_id` does not exist. The shipped config defines a sub-map for `linear` only, so a `github-issues` or `jira` adopter has no such keys at all and must add the sub-map (or drop these fields from their own run). |
+| `tracker.linear.project_id`      | Tracker project id — should match `config/dev-model.yaml → tracker.project_name`      |
+| `tracker.linear.label_name`      | Label applied to every triage-filed ticket                                          |
 | `approval_keywords`       | Bulk-approve keywords — default keywords come from your shared approval helper       |
 | `cancel_keywords`         | Bulk-cancel keywords                                                                  |
 | `finalize.branch_pattern` | Branch name format (default `chore/triage-{date}`, `vcs.triage_branch_pattern`)       |
@@ -332,10 +332,10 @@ route doesn't accept a pre-resolved label-id list (which matters for atomicity),
 small direct client-library call may be a better fit than the MCP route — document
 whichever your project uses.
 
-Resolve `team`/`project` from config (`tracker.<backend>.team_id` → `tracker.project_name`,
+Resolve `team`/`project` from config (`tracker.linear.team_id` → `tracker.project_name`,
 always — this project's fixed default per your own config convention), `title` +
 `description` from the proposal (modified body for `approve_modified`), `labels` from
-the LLM's proposed labels. Don't force-apply the pipeline's own `tracker.<backend>.label_name`
+the LLM's proposed labels. Don't force-apply the pipeline's own `tracker.linear.label_name`
 from config here unless your MCP wrapper pre-resolves labels reliably — apply it
 out-of-band via a comment/label-update call if needed; the per-proposal labels already
 give reasonable area/type/priority filterability.

@@ -84,14 +84,16 @@ patterns to rules).
 
 ## Quickstart
 
-**Prerequisites.** `init.sh` needs POSIX `sh` plus `awk`, `grep`, `sed`, `cut`, `mv`,
-`date` and `git` — all standard on macOS and Linux, none of them a runtime you have to
-install. The engines need [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file
+**Prerequisites.** `init.sh` needs POSIX `sh` plus the usual coreutils/text tools it
+shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `head`, `mkdir`, `chmod`, `touch`,
+`basename`, `dirname`, `date` and `git` — all standard on macOS
+and Linux, none of them a runtime you have to install. The engines need [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file
 scripts), `git`, and — for `pr-watch` / `parallel` — the GitHub CLI `gh`,
 authenticated. **No PyYAML in anything you run:** `scripts/lib/kitconfig.py`, the reader
 every engine imports, is stdlib-only. (`scripts/lib/devmodel_config.py` *is*
-PyYAML-backed, and exists only as the reference implementation the parity tests check
-`kitconfig` against — no engine imports it, so PyYAML is a test-time dependency at most.)
+PyYAML-backed, but no engine imports it and the parity tests compare `kitconfig` against
+`yaml.safe_load` directly rather than against it — so PyYAML is a test-time dependency at
+most.)
 
 ```sh
 # Click "Use this template" on GitHub and clone the result — or, into an
@@ -110,7 +112,11 @@ pre-push hook, and adds four entries to `.gitignore` — `state/`, `.devkit_stat
 It adds a fifth, `.mcp.json`, **only** if that file exists and appears to hold literal
 credentials rather than `${ENV_VAR}` references; it says so when it does. That check
 matters because `dev_session.sh` copies a repo-root `.mcp.json` into every lane
-worktree, so a lane inherits whatever is in it. It never overwrites a
+worktree, so a lane inherits whatever is in it. **The sniff is narrower than it looks:** its regex is case-sensitive and matches
+only `_`-separated names, so the hyphenated mixed-case shape the kit's own docs use
+(`"CF-Access-Client-Secret"`) is **not** detected and `.mcp.json` stays tracked
+([#86](https://github.com/topij/agentic-dev-kit/issues/86), open). Do not rely on it —
+prefer `${ENV_VAR}` references so there is no literal to leak. It never overwrites a
 rendered doc that is already in use — only one whose **first line** still carries the
 shipped `devkit-template: unrendered` marker (or that is missing entirely). A doc
 that merely mentions the marker further down is in use, and is left alone.
@@ -240,14 +246,14 @@ Each piece maps to one or more of the ten principles in
 | `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the `--headless` JSON descriptor, the lane-contract preamble, the fan-out recipe. |
 | `.claude/commands/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows. Claude ships eight commands: the four wired workflows (`session-start`, `wrap-up`, `parallel`, `pr-watch`) plus `triage-friction-log`, `post-merge-systemize`, `adopt`, and `upgrade`. |
 | `scripts/check_memory_budget.py` | #1, #8 Mechanism over memory | A `SessionStart` hook (wired in `.claude/settings.json`) that warns when an agent-memory file outgrows its budget — the memory-side counterpart to `check_doc_budget.py`. |
-| `scripts/hooks/pr_followup_hook.py` | #5 PR follow-through | A `PostToolUse` hook on `gh pr *` that fires the mandatory watch-to-green loop the moment a PR is opened or readied, so following through is a mechanism rather than a thing the agent has to remember. Reads `review.bots`, `review.fallback_panel` and `paths.engines` from config. |
+| `scripts/hooks/pr_followup_hook.py` | #5 PR follow-through | A `PostToolUse` hook on `gh pr *` that fires the mandatory watch-to-green loop the moment a PR is opened or readied, so following through is a mechanism rather than a thing the agent has to remember. Reads five config keys: `review.bots`, `review.fallback_commands.claude`, `paths.engines`, `review.fallback_panel.lenses` and `review.fallback_panel.receipt_source`. |
 | `docs/AGENTS-sections.md` | #4, #5, #6 | Ready-to-merge persistent instructions for Codex adopters. |
 | `docs/CLAUDE-sections.md` | #4 Merge classes, #5 PR follow-through | Ready-to-paste CLAUDE.md sections: risk-based PR splitting, the mandatory watch-to-green loop, execution rules, the rules-layout convention. |
 | `docs/autonomous-session-playbook.md` | #4, #5, #7 | The full operating contract for operator-requested autonomous sessions — branch hygiene, sequencing, local gate, draft→ready, watch-and-fix to merge, self-merge policy. |
 | `docs/agentic-dev-kit/safety-critical-changes.md` | #6 Safety-critical doctrine | Shared doctrine for send-gates, destructive operations, and kill/recovery paths; bound through the Claude rule and the suggested `AGENTS.md` section. |
 | `config/dev-model.yaml` | #10 No hardcoding | The single config surface every skill and script reads instead of hardcoding a value. |
 | `scripts/lib/kitconfig.py` | #10 No hardcoding | Stdlib-only reader for `config/dev-model.yaml`, used where an engine must stay dependency-free (`pr_watch.py` declares zero third-party deps). |
-| `scripts/check_doc_budget.py`, `scripts/archive_plan_sessions.py` | #1 | The tripwire and sweep that keep the handoff file from ballooning. Which files are watched — and how big each may get — is the `doc_budgets:` list in `config/dev-model.yaml`; each entry is `{path, budget, archive, remedy}`, and the `remedy` string is what the warning tells you to run. Warn-only, never a hard block. |
+| `scripts/check_doc_budget.py`, `scripts/archive_plan_sessions.py` | #1 | The tripwire and sweep that keep the handoff file from ballooning. Which files are watched — and how big each may get — is the `doc_budgets:` list in `config/dev-model.yaml`; each entry is `{path, budget, archive, remedy}`, and the `remedy` string is what the warning tells you to run. Warn-only by default — it exits 0 even when a doc is over budget, and only returns 1 under `--strict` (or 2 on a usage/config error). |
 | `scripts/pr_watch.py` | #5 | The poll-fix-ack engine behind `pr-watch`. |
 | `scripts/dev_session.sh`, `scripts/reconcile_sessions.sh` | #3 | Worktree/lane launcher and reconciler. |
 | `scripts/hooks/pre-push` | #8 Mechanism over memory | A hook, not a memory — refuses a push that would corrupt the narrative files. |
@@ -270,9 +276,10 @@ and both runtime adapters. `triage-friction-log` and `post-merge-systemize` docu
 the flywheel's
 triage and pattern-finding mechanism, but their deterministic engines are
 project-specific and left for you to wire — see the banner atop each of those two skill
-files. What is missing, precisely: a tracker client, a notify channel, a merged-PR
-fetcher (`scripts/digest_merged_prs.py`), a heartbeat (`scripts/heartbeat_cli.py`), and
-`triage-friction-log`'s own `scripts/triage_friction_log.py` + `scripts/finalize_triage.py`.
+files. What is missing, precisely — all five absent from `scripts/`: a tracker client, a notify
+channel, `scripts/fetch_merged_prs.py` (the forge-API fetcher), `scripts/digest_merged_prs.py`
+(the slimmer that consumes it), `scripts/heartbeat_cli.py`, and `triage-friction-log`'s own
+`scripts/triage_friction_log.py` + `scripts/finalize_triage.py`.
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
 behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)
 tracks the systemize side.
@@ -314,8 +321,8 @@ make mutation-test # same, minus the drift self-check — use this when mutating
 `make test` is the command, not a convenience wrapper. The two probes you would
 otherwise reach for both fail in a way that reads as *"pytest is unavailable here"* and
 is not: `uv run pytest` → `Failed to spawn: pytest` (pytest is not a project
-dependency), and `python -m pytest` → `No module named pytest` (the system Python has
-none). The `Makefile` target exists precisely because the bare invocation does not work.
+dependency), and `python3 -m pytest` → `No module named pytest` (the system Python has
+none; a bare `python` may not exist at all, which is a third misleading signal). The `Makefile` target exists precisely because the bare invocation does not work.
 
 Improvements that would help other adopters are welcome back here.
 

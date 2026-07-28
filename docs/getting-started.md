@@ -15,8 +15,10 @@ The loop you're setting up:
 
 See the [README diagram](../README.md#how-it-fits-together) for the whole picture.
 
-**Prerequisites.** `init.sh` needs POSIX `sh` plus `awk`, `grep`, `sed`, `cut`, `mv`,
-`date` and `git` — all standard on macOS and Linux. The engines additionally need
+**Prerequisites.** `init.sh` needs POSIX `sh` plus the usual coreutils/text tools it
+shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `head`, `mkdir`, `chmod`, `touch`,
+`basename`, `dirname`, `date` and `git` — all standard on macOS
+and Linux. The engines additionally need
 [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file scripts) and, for
 `pr-watch` / `parallel`, the GitHub CLI `gh`, authenticated (`gh auth status`). No
 PyYAML — `kitconfig.py`, the config reader every engine imports, is stdlib-only.
@@ -138,7 +140,7 @@ and what's next…
 ## 2026-01-05 — inbox
 
 - **`init.sh` didn't detect an existing tracker config (severity: L).** Had to set
-  `tracker.project_id` by hand. Fix: probe for a known config file first.
+  `tracker.linear.project_id` by hand. Fix: probe for a known config file first.
 ```
 
 Because the next `session-start` reads that handoff, the thread is never lost —
