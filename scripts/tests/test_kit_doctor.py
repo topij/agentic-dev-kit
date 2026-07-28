@@ -219,13 +219,31 @@ def test_shipped_manifest_covers_every_kit_owned_file():
     assert not holes, f"manifest has null hashes (files absent at generation): {holes}"
 
 
+@pytest.mark.driftcheck
 def test_kit_repo_self_check_is_clean():
     """The kit's own checkout must report zero drift against its own manifest —
-    otherwise the manifest is stale and every adopter report is wrong."""
+    otherwise the manifest is stale and every adopter report is wrong.
+
+    Marked `driftcheck` because this test compares BYTES, not behaviour: any
+    edit to a kit-owned file fails it, including a deliberate mutation. Left in
+    a mutation run it reports a kill for every mutant while nothing behavioural
+    caught anything (#33 — one measured run went from 17/17 killed to 7
+    surviving once it was excluded). Regenerating the manifest instead makes it
+    pass and contributes nothing, which is how a gate that is not coverage came
+    to be read as coverage (#112).
+    """
     manifest = json.loads((REPO_ROOT / kit_doctor.MANIFEST_NAME).read_text(encoding="utf-8"))
     config = kit_doctor.load_config(REPO_ROOT / "config" / "dev-model.yaml")
     report = kit_doctor.inspect(REPO_ROOT, manifest, config)
-    assert report.drifted == [], [f"{f.path}: {f.state}" for f in report.drifted]
+    assert report.drifted == [], (
+        "kit-owned files differ from kit-manifest.json: "
+        + str([f"{f.path}: {f.state}" for f in report.drifted])
+        + ". This compares bytes, not behaviour. If you are MUTATION-TESTING, "
+        "this failure is a FALSE KILL — nothing behavioural caught your "
+        "mutation. Re-run with `-m 'not driftcheck'` (or `make mutation-test`) "
+        "and read the result again. If you are not, the manifest is stale: run "
+        "`kit_doctor.py --generate-manifest` and commit it with your change."
+    )
 
 
 @pytest.mark.parametrize("adopter_path", kit_doctor.ADOPTER_OWNED)

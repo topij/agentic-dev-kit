@@ -64,8 +64,27 @@ author re-reading their own diff.
    mutation fails it regardless of behaviour, and a whole run can report 100%
    killed while nothing behavioural caught anything. One lens's first pass here
    reported 17/17 killed; re-run with that test excluded, 7 had survived.
-   Exclude the drift test — or regenerate the manifest after each mutation —
-   before believing a kill.
+
+   **So the mutation-testing invocation is not the plain suite.** Run:
+
+   ```
+   pytest -m 'not driftcheck'        # in this repo: make mutation-test
+   ```
+
+   Any test that compares bytes against a manifest rather than asserting
+   behaviour carries the `driftcheck` marker and is deselected by that
+   expression. Adopters: the marker is registered in the conftest that ships
+   beside the tests, so it works wherever you vendored them.
+
+   **A drift test's pass is never evidence either.** Regenerating the manifest
+   after each mutation also yields a truthful result, and is deliberately *not*
+   the recommended route: it is per-mutant bookkeeping that fails silently in
+   the confident direction — forget it once and the mutant reads as killed.
+   Worse, performing it makes the drift check pass while contributing nothing,
+   so a mutant that survived every behavioural test comes back fully green. That
+   is what made this gate read as coverage when it is not (#112). **A kill is
+   only a kill if a test that asserts behaviour is the thing that failed** —
+   check which test failed, not how many.
 6. **Report, do not fix.** A lens that edits loses the disjointness: it starts
    defending its own changes on the next round.
 7. **Mutate in an isolated copy of the repo under review, never the shared
