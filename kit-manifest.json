@@ -5,6 +5,7 @@
     "docs/handoff-history.md",
     "docs/friction-log.md",
     "docs/friction-log-archive.md",
+    "AGENTS.md",
     "docs/kit-handoff.md",
     "docs/kit-handoff-history.md",
     "docs/kit-friction-log.md",
@@ -41,6 +42,10 @@
       "role": "workflow",
       "sha256": "63c26e6337c44653a4b710af68a5bad03e61e4fe0a2231479df4ab105053e071"
     },
+    "docs/templates/AGENTS.md.tmpl": {
+      "role": "template",
+      "sha256": "d8c138c219430f099835df87d3ba5f2e0c5b1099a2a5928a2cbe021866f3abd7"
+    },
     "docs/templates/friction-log-archive.md.tmpl": {
       "role": "template",
       "sha256": "af4a138e4a5ebe5634c55e7e417cd6b9f362bf3a35182b033f72876cd88180cf"
@@ -75,7 +80,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "8bd837d3d09b9573c062980836dbe39a4e29ee03b80fc3f64a11f9b494544acd"
+      "sha256": "c27df43c0e5f7162ce17e3c89fa72e7b7ea29e0af4e488e3356a02a9aac11b22"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",

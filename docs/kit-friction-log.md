@@ -130,54 +130,6 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   GitHub comment via `gh api` should use `-F body=@<file>` and verify the comment's
   body length (or a content marker) after the PATCH.
 
-## 2026-07-28
-
-- **A reviewer's plan quota is not a rate-limit window, and `unavailable_markers`
-  cannot tell them apart.** CodeRabbit's notice read *"you've reached your PR review
-  limit … Next review available in: 56 minutes"*, but re-triggering two minutes past
-  that window produced nothing, and it never registered a check on the next PR either.
-  The kit's reviewer-unavailable branch assumes a window you can wait out and re-trigger
-  after — the session-3 entry above is built entirely on that assumption. A quota needs
-  the panel immediately and no re-trigger attempt. **M** — proposed fix: distinguish the
-  two in the unavailable branch; treat *"review limit reached"* as non-recoverable
-  within the session rather than something to wait out.
-- **A three-space list continuation is correct CommonMark and silently renumbers the
-  list under Python-Markdown.** `1. ` is three columns, so three spaces is the
-  CommonMark content column and GitHub rendered it correctly — Python-Markdown requires
-  four and otherwise closes the list, emitting a fresh `<ol>` that restarts at 1. In
-  `safety-critical-changes.md` that turned rule 4 into rule 1 while the header still
-  said *"Four rules apply"*, and six files cite those rules by number. A bot review of
-  that exact head passed it clean; rendering in both engines caught it. **M** — proposed
-  fix: render kit-owned docs in both engines as a check, or fix the convention at
-  four-space continuations and say so where the docs are edited.
-- **A gate that reads labels nothing produces is not a gate.** `#102` shipped a rule
-  keying on finding severity and a regression/imprecision axis — both lens *output* —
-  when no contract item and neither `focus` string in `dev-model.yaml` ever asked a lens
-  for either. It read as working only because the cockpit supplied severity ad hoc in
-  its own launch prompts, which is exactly the drift the panel doc's single-source rule
-  exists to prevent. Fixed in-PR (contract item 9), recorded because the *class* is
-  general: any doctrine that consumes a field must name where the field is required.
-  **M** — proposed fix, beyond `#102`: when a rule starts consuming a lens-reported
-  field, the contract must be amended in the same change.
-- **A rate-limited CodeRabbit reported its check as `SUCCESS` again** — and this time
-  the misleading green sat on a diff that *did* contain a real defect (the indentation
-  bug above). Every earlier occurrence was on a clean diff, so this is the first where
-  the false green could have shipped something. **No new fix proposed** — occurrence
-  data for `#45` / `#23`.
-- **`#76` reproduced twice in one session.** Neither `#101` nor `#102` had its final
-  head reviewed by any lens, and `--record-review --head` can only assert that the exact
-  head was reviewed — so on both the honest choice was to record nothing and write the
-  coverage table into a PR comment instead. Both merged with `mergeable: false` and an
-  explicit operator decision. **No new fix proposed** — occurrence data for `#76`, with
-  the detail that the honest path always forces an operator merge.
-- **Deferred from `#102`, not yet issue-shaped**: the act-on gate has a fail-closed
-  default for an ambiguous *change* but none for an ambiguous *finding*, and the party
-  resolving that axis is the author who benefits from the cheaper answer (contract item
-  9 now pushes it to the reporting end, which is a mitigation rather than a fix);
-  `docs/CLAUDE-sections.md:116-118` enumerates the doctrine as five items for adopters
-  to paste and is now incomplete; step 5 gains no forward pointer to the gate that
-  narrows it. **L**
-
 ## 2026-07-27 (fourth session of the day)
 
 - **A test written from the fix's own framing can pin the bug as correct.** My
@@ -228,3 +180,68 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   proposed fix: when the reviewer-unavailable branch reads the window, record the value
   and the timestamp on the PR, so the decision to wait-and-re-trigger versus run the
   panel is auditable. Supports the session-3 entry proposing that branch.
+
+## 2026-07-28
+
+- **A reviewer's plan quota is not a rate-limit window, and `unavailable_markers`
+  cannot tell them apart.** CodeRabbit's notice read *"you've reached your PR review
+  limit … Next review available in: 56 minutes"*, but re-triggering two minutes past
+  that window produced nothing, and it never registered a check on the next PR either.
+  The kit's reviewer-unavailable branch assumes a window you can wait out and re-trigger
+  after — the session-3 entry above is built entirely on that assumption. A quota needs
+  the panel immediately and no re-trigger attempt. **M** — proposed fix: distinguish the
+  two in the unavailable branch; treat *"review limit reached"* as non-recoverable
+  within the session rather than something to wait out.
+- **A three-space list continuation is correct CommonMark and silently renumbers the
+  list under Python-Markdown.** `1. ` is three columns, so three spaces is the
+  CommonMark content column and GitHub rendered it correctly — Python-Markdown requires
+  four and otherwise closes the list, emitting a fresh `<ol>` that restarts at 1. In
+  `safety-critical-changes.md` that turned rule 4 into rule 1 while the header still
+  said *"Four rules apply"*, and ten files outside the session records cite those rules
+  by number (fourteen counting the records themselves). A bot review of
+  that exact head passed it clean; rendering in both engines caught it. **M** — proposed
+  fix: render kit-owned docs in both engines as a check, or fix the convention at
+  four-space continuations and say so where the docs are edited.
+- **A gate that reads labels nothing produces is not a gate.** `#102` shipped a rule
+  keying on finding severity and a regression/imprecision axis — both lens *output* —
+  when no contract item and neither `focus` string in `dev-model.yaml` ever asked a lens
+  for either. It read as working only because the cockpit supplied severity ad hoc in
+  its own launch prompts, which is exactly the drift the panel doc's single-source rule
+  exists to prevent. Fixed in-PR (contract item 9), recorded because the *class* is
+  general: any doctrine that consumes a field must name where the field is required.
+  **M** — proposed fix, beyond `#102`: when a rule starts consuming a lens-reported
+  field, the contract must be amended in the same change.
+- **A rate-limited CodeRabbit reported its check as `SUCCESS` again** — on `#101`'s
+  `4a0d499`. Correcting this entry as first merged, which got both attributions wrong.
+  The false green did not sit on the defective diff: `4a0d499` is the head that *fixed*
+  the indentation bug above, and the head that carried the bug (`d8bf1af`) received a
+  genuine completed review that passed it clean — the next entry. Nor was it the first
+  false green that could have shipped something: `#91`'s final head `d96d4a1` reported
+  `SUCCESS` / *"Review rate limited"* while panel round 3 found ~7 HIGH against that
+  exact head. **No new fix proposed** — occurrence data for `#45` / `#23`.
+- **A fully working bot review missed a defect that renumbered doctrine.** `#101`'s
+  first head `d8bf1af` — the one carrying the indentation bug — received a genuine,
+  completed CodeRabbit review (walkthrough, five pre-merge checks passed) that
+  reported it clean, while the defect turned rule 4 into rule 1 in a file ten others
+  outside the session records cite by number. That is a worse failure mode than the
+  rate-limited false green, which reviewed nothing: this review ran and vouched for
+  the head. It was recorded
+  nowhere — the entry above had attributed the miss to the rate-limited pass. **M** —
+  no fix proposed beyond the render-in-both-engines check the indentation entry
+  proposes; recorded so "bot reviewed and missed it" is not conflated with "bot never
+  reviewed", which the occurrence data for `#45` / `#23` counts.
+- **`#76` reproduced twice in one session.** Neither `#101` nor `#102` had its final
+  head reviewed by any lens, and `--record-review --head` can only assert that the exact
+  head was reviewed — so on both the honest choice was to record nothing and write the
+  coverage table into a PR comment instead. Both merged with `mergeable: false` and an
+  explicit operator decision. **No new fix proposed** — occurrence data for `#76`, with
+  the detail that the honest path always forces an operator merge.
+- **Deferred from `#102`, not yet issue-shaped**: the act-on gate has a fail-closed
+  default for an ambiguous *change* but none for an ambiguous *finding*, and the party
+  resolving that axis is the author who benefits from the cheaper answer (contract item
+  9 now pushes it to the reporting end, which is a mitigation rather than a fix); the
+  *"say which one you applied in the PR"* antecedent now has two candidates;
+  `docs/CLAUDE-sections.md:116-118` enumerates the doctrine as five items for adopters
+  to paste and is now incomplete; step 5 gains no forward pointer to the gate that
+  narrows it; and class 2's worst-case test (*"a wrong message"*) fits a report field
+  better than a doctrine file, which is acted on by every future author. **L**

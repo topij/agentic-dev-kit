@@ -118,6 +118,10 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("docs/templates/handoff-history.md.tmpl", "template"),
     ("docs/templates/friction-log.md.tmpl", "template"),
     ("docs/templates/friction-log-archive.md.tmpl", "template"),
+    # The AGENTS.md entry point renders from this (#92). Only the TEMPLATE is
+    # kit-owned: the rendered root AGENTS.md is the adopter's to extend, so it
+    # is listed in ADOPTER_OWNED below instead.
+    ("docs/templates/AGENTS.md.tmpl", "template"),
 )
 
 # Paths that are the ADOPTER's — expected to differ, never reported as drift.
@@ -129,6 +133,9 @@ ADOPTER_OWNED: tuple[str, ...] = (
     "docs/handoff-history.md",
     "docs/friction-log.md",
     "docs/friction-log-archive.md",
+    # Rendered from docs/templates/AGENTS.md.tmpl; unlike an engine it is meant
+    # to be edited, so it must never be reported as drift.
+    "AGENTS.md",
     # This repo's own narrative files (see the note in config/dev-model.yaml).
     "docs/kit-handoff.md",
     "docs/kit-handoff-history.md",
@@ -409,9 +416,29 @@ def inspect(root: Path, manifest: dict, config: dict) -> Report:
         if not rel:
             continue
         doc = root / str(rel)
-        # "Rendered" = present and no longer carrying the shipped marker.
+        # "Rendered" = present and no longer carrying the shipped marker ON LINE 1.
+        # This mirrors init.sh's seed guard, which reads only the first line:
+        # matching anywhere made the two disagree about the same file — a doc that
+        # merely quotes the marker in prose was reported "still an unrendered
+        # template — run ./init.sh" while init.sh correctly left it alone, making
+        # the prescribed remedy a no-op (panel round 2).
+        #
+        # read_BYTES, not read_text: read_text() applies universal-newline
+        # translation, so a lone CR ends its "first line" while `head -n 1` ends
+        # only at LF. Round 2's fix used read_text and so swapped one divergence
+        # for another — on a CR-delimited file the doctor said "in use" while
+        # init.sh seeded over it (panel round 3). Splitting the raw decode on "\n"
+        # is what head -n 1 actually does.
+        #
+        # Known remaining divergence, pre-existing and unrelated to line
+        # matching: an unreadable file makes init.sh's guard fail safe ("in
+        # use") while this raises PermissionError and aborts the whole run.
+        # Not filed as of this change, and deliberately not fixed here — note
+        # that pr_watch and pr_followup_hook both treat an unreadable config as
+        # "must never raise", so this check is the outlier.
         narrative[str(rel)] = doc.is_file() and (
-            "devkit-template: unrendered" not in doc.read_text(encoding="utf-8", errors="replace")
+            "devkit-template: unrendered"
+            not in doc.read_bytes().decode("utf-8", "replace").split("\n", 1)[0]
         )
 
     raw_version = get(config, "kit.version", None)

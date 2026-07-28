@@ -566,7 +566,7 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
 
     _run_init(repo)
 
-    # Token rendering is asserted for ALL four docs: {{HANDOFF}} appears only in
+    # Token rendering is asserted for ALL five seeded docs: {{HANDOFF}} appears only in
     # the handoff-history template, and with the check on one doc a deleted
     # substitution survived the whole suite (adversarial lens, this change).
     seeded = {
@@ -576,6 +576,7 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
             "docs/kit-handoff-history.md",
             "docs/kit-friction-log.md",
             "docs/kit-friction-log-archive.md",
+            "AGENTS.md",
         )
     }
     for rel, text in seeded.items():
@@ -589,6 +590,9 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
     assert "kit-handoff.md" in seeded["docs/kit-handoff-history.md"]  # {{HANDOFF}}
     assert "kit-friction-log-archive.md" in seeded["docs/kit-friction-log.md"]  # {{FRICTION_ARCHIVE}}
     assert "tracker.url" in seeded["docs/kit-friction-log.md"]  # {{TRACKER_URL}} fallback
+    # AGENTS.md renders at the repo ROOT, so its handoff link is the repo-relative
+    # configured path, not the sibling-relative form the narrative docs use.
+    assert "docs/kit-handoff.md" in seeded["AGENTS.md"]  # {{HANDOFF_PATH}}
 
 
 def test_render_preserves_backslashes_in_values(tmp_path: Path) -> None:
@@ -619,6 +623,68 @@ def test_seeding_respects_in_use_docs_and_reclaims_marked_ones(tmp_path: Path) -
     reseeded = marked.read_text(encoding="utf-8")
     assert "skeleton" not in reseeded
     assert "{{" not in reseeded
+
+
+def test_agents_md_renders_the_configured_protected_branch(tmp_path: Path) -> None:
+    """{{PROTECTED_BRANCH}} pinned against a DISTINCTIVE value, because the token
+    has a FALLBACK: `render_protected_branch` defaults to "main" when the config
+    value is empty. Asserting the shipped `main` therefore cannot tell "the
+    configured value was rendered" from "the config was never read and the
+    fallback fired" — a distinctive value separates them. (Round 2's correctness
+    lens disproved this docstring's first version, which claimed asserting `main`
+    would pass with the substitution deleted: the template contains no literal
+    `main`, so that assertion would have failed. The test is right; the reason
+    given for it was not.)"""
+    config = SHIPPED_CONFIG.replace("protected_branch: main", "protected_branch: trunk-9f2a")
+    repo = _fixture(tmp_path, config=config, templates=True)
+
+    _run_init(repo)
+
+    assert "trunk-9f2a" in (repo / "AGENTS.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("marker_line", [2, 3])
+def test_seeding_leaves_a_doc_that_merely_quotes_the_marker_untouched(
+    tmp_path: Path, marker_line: int
+) -> None:
+    """The marker counts only on line 1, where every shipped skeleton carries it.
+    Matching it anywhere let a hand-written AGENTS.md that documented the marker
+    convention in prose be silently overwritten — content loss, reported as
+    "seeded" (panel, adversarial lens).
+
+    LINE 2 is parametrized because this is the DESTRUCTIVE consumer: with the
+    marker only on line 3, widening the guard to `head -n 2` left the whole suite
+    green while init.sh overwrote a doc whose line 2 quotes the marker. The
+    read-only reporter got this case first; the file-destroying one had it open
+    two rounds longer (panel round 5)."""
+    repo = _fixture(tmp_path, config=SHIPPED_CONFIG, templates=True)
+    mine = repo / "AGENTS.md"
+    lines = ["# AGENTS.md — hand written", "", "still hand written", ""]
+    lines[marker_line - 1] = "The kit marks skeletons `devkit-template: unrendered` on line 1."
+    original = "\n".join(lines) + "\n"
+    # Positive control: a fixture that lost the marker would pass vacuously,
+    # since "left untouched" is also the no-marker outcome (panel round 5).
+    assert "devkit-template: unrendered" in original.split("\n")[marker_line - 1]
+    mine.write_text(original, encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert mine.read_text(encoding="utf-8") == original
+    assert "AGENTS.md already in use — left untouched" in result.stdout
+
+
+def test_kit_ships_no_root_agents_md(tmp_path: Path) -> None:
+    """AGENTS.md is seeded by ABSENCE, not by a marker, so the guard holds only
+    while the kit itself ships no root AGENTS.md — and ./init.sh run in a kit
+    checkout creates one. Committing that would hand every `cp -r` adopter the
+    kit's own rendered file with the guard permanently false and no diagnostic:
+    the #8 failure the marker exists to prevent, re-entering through the one
+    target that has no marker (panel, adversarial lens; #8 corrected from a
+    misattribution to #37/#41 — that is the forgot-a-manifest-row class)."""
+    assert not (REPO_ROOT / "AGENTS.md").exists(), (
+        "the kit tree must not ship a root AGENTS.md — if ./init.sh was run here, "
+        "delete the generated AGENTS.md rather than committing it"
+    )
 
 
 # --------------------------------------------------------------------------- #

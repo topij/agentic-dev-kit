@@ -100,9 +100,11 @@ cp -r /path/to/agentic-dev-kit/. .
 ```
 
 `init.sh` stamps your answers into `config/dev-model.yaml`, renders the narrative
-docs from `docs/templates/`, installs the pre-push hook, and adds the state
-sandbox to `.gitignore`. It never overwrites a narrative doc that is already in
-use — only one still carrying the shipped `devkit-template: unrendered` marker.
+docs and the root `AGENTS.md` entry point from `docs/templates/`, installs the
+pre-push hook, and adds the state sandbox to `.gitignore`. It never overwrites a
+rendered doc that is already in use — only one whose **first line** still carries the
+shipped `devkit-template: unrendered` marker (or that is missing entirely). A doc
+that merely mentions the marker further down is in use, and is left alone.
 
 Ten minutes, start to finish. For a full worked example of a first session — from
 adoption through `wrap-up` — see **[`docs/getting-started.md`](docs/getting-started.md)**.
@@ -218,7 +220,7 @@ Each piece maps to one or more of the ten principles in
 |---|---|---|
 | `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan — read at session start, updated at session end. Older sessions sweep to the history file once it crosses a line budget. |
 | `docs/friction-log.md` + `docs/friction-log-archive.md` | #2 Friction flywheel | Append-only inbox for bugs and rough edges, triaged on a cadence: single incidents route down to your tracker, real patterns graduate up into a rule. |
-| `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above on adopt or upgrade — never overwrites one already in use. |
+| `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above, plus the root `AGENTS.md` entry point for Codex-run adopters, on adopt or upgrade — never overwrites one already in use. |
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
 | `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, and `pr-watch`. |
 | `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the `--headless` JSON descriptor, the lane-contract preamble, the fan-out recipe. |
