@@ -321,7 +321,12 @@ def test_shipped_skeletons_carry_the_unrendered_marker(skeleton):
     # a `my-project` header. Proven reachable: moving this marker to line 3 left
     # the whole suite passing while init.sh reported the skeleton "already in
     # use" (panel round 2, correctness lens).
-    assert text.splitlines()[0].find("devkit-template: unrendered") != -1, (
+    # split("\n", 1)[0], NOT splitlines()[0]: splitlines also breaks on \x0b \x0c
+    # \x1c \x1d \x1e \x85    , none of which end a line for `head -n 1`
+    # or for kit_doctor. Using it here would check a PREFIX of the real first
+    # line, which for the negative assertion below can pass while production
+    # fails (panel round 3).
+    assert "devkit-template: unrendered" in text.split("\n", 1)[0], (
         f"{doc}: the marker must be on line 1 — init.sh's guard reads no further"
     )
 
@@ -337,7 +342,7 @@ def test_kits_own_plan_is_real_not_a_skeleton():
     for key in ("paths.handoff", "paths.friction_log"):
         doc = REPO_ROOT / kitconfig.get(config, key)
         text = doc.read_text(encoding="utf-8")
-        assert "devkit-template: unrendered" not in text.splitlines()[0], doc
+        assert "devkit-template: unrendered" not in text.split("\n", 1)[0], doc
         assert "YYYY-MM-DD" not in text, f"{doc} still has placeholder dates"
 
 

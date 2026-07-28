@@ -137,6 +137,41 @@ def test_unrendered_narrative_doc_is_flagged(tmp_path):
     assert report.narrative_rendered["docs/friction-log.md"] is True
 
 
+def test_marker_below_line_one_is_in_use_not_an_unrendered_template(tmp_path):
+    """The doctor reads LINE 1 only, matching init.sh's seed guard. Reverting it
+    to a whole-file match left the entire suite green except the manifest-hash
+    gate — which is discharged by regenerating the manifest, so it pins nothing
+    (panel round 3). A doc that merely quotes the marker is in use; reporting it
+    as an unrendered template prescribes a remedy that provably does nothing."""
+    root = _fake_repo(tmp_path)
+    (root / "docs" / "handoff.md").write_text(
+        "# A real plan\n\nWe mark skeletons with `devkit-template: unrendered`.\n",
+        encoding="utf-8",
+    )
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    report = kit_doctor.inspect(root, _manifest({}), config)
+
+    assert report.narrative_rendered["docs/handoff.md"] is True
+
+
+def test_marker_on_a_cr_delimited_first_line_is_still_detected(tmp_path):
+    """`head -n 1` ends at LF only, so on a CR-delimited file its "first line" is
+    the whole file. Path.read_text() applies universal-newline translation and
+    would end the line at the first CR instead — reporting "in use" for a file
+    init.sh will seed straight over (panel round 3). Reading bytes keeps the two
+    predicates on the same text."""
+    root = _fake_repo(tmp_path)
+    (root / "docs" / "handoff.md").write_bytes(
+        b"# Title\r<!-- devkit-template: unrendered -->\rbody\r"
+    )
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    report = kit_doctor.inspect(root, _manifest({}), config)
+
+    assert report.narrative_rendered["docs/handoff.md"] is False
+
+
 def test_missing_manifest_entry_is_unknown_not_unchanged(tmp_path):
     root = _fake_repo(tmp_path)
     manifest = _manifest({"scripts/check_doc_budget.py": None})

@@ -224,8 +224,8 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   completed CodeRabbit review (walkthrough, five pre-merge checks passed) that
   reported it clean, while the defect turned rule 4 into rule 1 in a file ten others
   outside the session records cite by number. That is a worse failure mode than the
-  rate-limited false green,
-  which reviewed nothing: this review ran and vouched for the head. It was recorded
+  rate-limited false green, which reviewed nothing: this review ran and vouched for
+  the head. It was recorded
   nowhere — the entry above had attributed the miss to the rate-limited pass. **M** —
   no fix proposed beyond the render-in-both-engines check the indentation entry
   proposes; recorded so "bot reviewed and missed it" is not conflated with "bot never

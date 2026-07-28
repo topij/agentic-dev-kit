@@ -417,14 +417,25 @@ def inspect(root: Path, manifest: dict, config: dict) -> Report:
             continue
         doc = root / str(rel)
         # "Rendered" = present and no longer carrying the shipped marker ON LINE 1.
-        # Must match init.sh's seed guard exactly: init.sh reads only the first
-        # line, so matching anywhere here made the two disagree about the same
-        # file — a doc that merely quotes the marker in prose was reported "still
-        # an unrendered template — run ./init.sh" while init.sh correctly left it
-        # alone, making the prescribed remedy a no-op (panel round 2).
+        # This mirrors init.sh's seed guard, which reads only the first line:
+        # matching anywhere made the two disagree about the same file — a doc that
+        # merely quotes the marker in prose was reported "still an unrendered
+        # template — run ./init.sh" while init.sh correctly left it alone, making
+        # the prescribed remedy a no-op (panel round 2).
+        #
+        # read_BYTES, not read_text: read_text() applies universal-newline
+        # translation, so a lone CR ends its "first line" while `head -n 1` ends
+        # only at LF. Round 2's fix used read_text and so swapped one divergence
+        # for another — on a CR-delimited file the doctor said "in use" while
+        # init.sh seeded over it (panel round 3). Splitting the raw decode on "\n"
+        # is what head -n 1 actually does.
+        #
+        # Known remaining divergence: an unreadable file makes init.sh's guard
+        # fail safe ("in use") while this raises. Pre-existing, and unrelated to
+        # line matching — see the tracker rather than assuming it is handled.
         narrative[str(rel)] = doc.is_file() and (
             "devkit-template: unrendered"
-            not in doc.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
+            not in doc.read_bytes().decode("utf-8", "replace").split("\n", 1)[0]
         )
 
     raw_version = get(config, "kit.version", None)
