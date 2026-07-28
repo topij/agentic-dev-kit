@@ -23,7 +23,7 @@
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
-      "sha256": "1f300888111d1d8c11331a9c6b0434110e67ac9fb448bb0913326db9781e4d34"
+      "sha256": "3fe6a06f4f66ad4a3c97eeb3ba39025a82cc5f4abd8701796b4abe566c644028"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
