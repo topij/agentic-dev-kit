@@ -87,9 +87,12 @@ author re-reading their own diff.
    **Regenerating the manifest instead is not the recommended route.** It does
    yield a truthful result, but it is per-mutant bookkeeping that fails silently
    in the confident direction — forget it once and the mutant reads as killed.
-   And performing it makes the drift check pass while contributing nothing, so a
-   mutant that survived every behavioural test comes back fully green. That is
-   what made this gate read as coverage when it is not (#112).
+   The deeper problem is that it hides its own irrelevance: the drift check goes
+   from failing to *passing*, so it looks like a test that was consulted and had
+   nothing to say. Deselection reaches the same verdict while leaving the
+   evidence on screen — a `deselected` count says plainly that this check did not
+   participate. Both routes end in a green run for a surviving mutant; only one
+   of them tells you which tests that green was made of (#112).
 
    **The rule none of this depends on: a kill is only a kill if a test that
    asserts behaviour is the thing that failed.** Check *which* test failed, not

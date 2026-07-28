@@ -67,8 +67,13 @@ tell a sweep from a deletion.
 
 - **`#112`–`#128`** — this session's sixteen. `#112` (the manifest-hash gate is not
   coverage) is the highest-leverage: it invalidates every mutation claim over a
-  `KIT_OWNED` file until the regenerate-first step is mandatory. `#127` and `#128` are the
-  panel's own.
+  `KIT_OWNED` file. `#127` and `#128` are the panel's own.
+  **Superseded remedy —** this line used to end "until the regenerate-first step is
+  mandatory", which is `#112`'s own proposed item 1. A later session took the opposite
+  route: the drift test carries a `driftcheck` marker and is deselected, so there is no
+  manifest gate left to discharge and regenerate-first is deliberately *not* recommended
+  (`fallback-review-panel.md` item 5 says so). Corrected here because a living plan that
+  points the next session at a rejected remedy is worse than one that says nothing.
 - **`#113` gained a second occurrence** — this session was a same-date second session, so
   `chore/update-handoff-2026-07-28` already existed on the remote. Avoided by branching
   off fresh `main` under a different name rather than by any mechanism.

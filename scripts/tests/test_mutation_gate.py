@@ -51,16 +51,22 @@ DRIFTCHECK_NODE = "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is
 
 MUTATION_INVOCATION = "-m 'not driftcheck'"
 
-# Several assertions below read the kit's OWN repo layout (its Makefile, its
-# doctrine file). Those files are not vendored into an adopter's tree, so in a
-# `scripts/devkit/` layout the checks are not failing — they are inapplicable.
-# Skipping is honest; asserting would report a defect that is not one. Making
-# the marker assertions themselves portable is a real gap, filed separately.
+# Several assertions below need the kit's own root `Makefile`, which is NOT
+# vendored — an adopter gets the engines directory, not this file — so in a
+# `scripts/devkit/` layout those checks are inapplicable rather than failing,
+# and skipping is honest where asserting would report a defect that is not one.
+#
+# Note the doctrine file is a DIFFERENT case and the reason here used to say
+# otherwise: `docs/agentic-dev-kit/fallback-review-panel.md` IS manifest-tracked,
+# shipped by /adopt and refreshed by /upgrade, so adopters do have it. It is
+# included in the predicate only because the one test that reads it also needs
+# the kit layout to be meaningful. Making the marker assertions themselves
+# portable is a real gap, filed separately.
 _KIT_LAYOUT = (REPO_ROOT / "Makefile").is_file() and (
     REPO_ROOT / "docs" / "agentic-dev-kit" / "fallback-review-panel.md"
 ).is_file()
 kit_repo_only = pytest.mark.skipif(
-    not _KIT_LAYOUT, reason="asserts on the kit's own Makefile/doctrine, which adopters do not vendor"
+    not _KIT_LAYOUT, reason="needs the kit's own root Makefile, which adopters do not vendor"
 )
 
 
@@ -91,28 +97,42 @@ def _collect(*extra: str) -> list[str]:
     ]
 
 
-def _recipe(target: str) -> list[str]:
-    """The command lines of a Makefile target, comments and blanks stripped.
+def _make_would_run(target: str) -> str:
+    """What `make` itself says it would execute for a target.
 
-    Whole-file substring checks were the first version of this and are worth
-    nothing: `# was: -m 'not driftcheck'` above a gutted recipe satisfied them.
+    Asks make rather than parsing the Makefile. Two earlier versions of this
+    helper were text-based and both were defeated by text: a whole-file
+    substring search was satisfied by `# was: -m 'not driftcheck'` sitting above
+    a gutted recipe, and hand-parsing the first `target:` block read the WRONG
+    recipe entirely — GNU make executes the LAST definition of a duplicated
+    target, so appending a second block silently replaced what ran while the
+    assertion kept reading the original.
+
+    `make -n` has neither problem: comments never reach the output, and the
+    command printed is the one that would actually run.
     """
-    lines = (REPO_ROOT / "Makefile").read_text(encoding="utf-8").splitlines()
-    recipe: list[str] = []
-    collecting = False
-    for line in lines:
-        if line.startswith(f"{target}:"):
-            collecting = True
-            continue
-        if collecting:
-            if line.startswith("\t"):
-                body = line.split("#", 1)[0].strip()
-                if body:
-                    recipe.append(body)
-            elif line.strip():
-                break
-    assert recipe, f"no recipe found for Makefile target `{target}`"
-    return recipe
+    proc = subprocess.run(  # noqa: S603
+        ["make", "-n", target],  # noqa: S607 — resolved via PATH, like every other make call here
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, f"`make -n {target}` failed:\n{proc.stdout}\n{proc.stderr}"
+    lines = [
+        line.strip()
+        for line in proc.stdout.splitlines()
+        if line.strip() and not line.startswith("make")
+    ]
+    assert lines, f"`make -n {target}` printed no command"
+    return " ".join(lines)
+
+
+def _phony_targets() -> list[str]:
+    for line in (REPO_ROOT / "Makefile").read_text(encoding="utf-8").splitlines():
+        if line.startswith(".PHONY:"):
+            return line.split(":", 1)[1].split()
+    raise AssertionError("no .PHONY line in the Makefile")
 
 
 def test_driftcheck_marks_exactly_the_byte_comparison_test():
@@ -178,17 +198,28 @@ def test_the_exclusion_is_on_the_mutation_target_and_only_there():
     On `test:` it is actively harmful: `make test` is what CLAUDE.md names as
     this repo's verification command, and with the drift test deselected there a
     genuinely stale manifest passes the local gate silently.
-    """
-    mutation_recipe = " ".join(_recipe("mutation-test"))
-    test_recipe = " ".join(_recipe("test"))
 
-    assert MUTATION_INVOCATION in mutation_recipe, (
-        f"`make mutation-test` must pass {MUTATION_INVOCATION}; recipe is: {mutation_recipe}"
+    "Only there" is checked against every `.PHONY` target rather than against
+    `test:` alone, and covers `--deselect`/`-k` as well as the marker — the
+    doctrine this repo ships names `--deselect <nodeid>` as a legitimate way to
+    exclude the drift test, which makes it the spelling a reader is most likely
+    to reach for on the wrong target.
+    """
+    mutation_cmd = _make_would_run("mutation-test")
+    assert MUTATION_INVOCATION in mutation_cmd, (
+        f"`make mutation-test` must pass {MUTATION_INVOCATION}; make would run: {mutation_cmd}"
     )
-    assert "driftcheck" not in test_recipe, (
-        "`make test` must NOT exclude the drift check — that is the gate that "
-        f"catches a stale manifest locally. Recipe is: {test_recipe}"
-    )
+
+    for target in _phony_targets():
+        if target == "mutation-test":
+            continue
+        cmd = _make_would_run(target)
+        for spelling in ("driftcheck", "--deselect", "-k "):
+            assert spelling not in cmd, (
+                f"`make {target}` excludes the drift check via {spelling!r} — that "
+                "is the gate catching a stale manifest locally, and only "
+                f"`mutation-test` may drop it. make would run: {cmd}"
+            )
 
 
 @kit_repo_only
@@ -200,25 +231,36 @@ def test_the_mutation_run_covers_the_same_suites_as_the_normal_run():
 
     Known limit, measured: a narrowing severe enough to drop THIS file from the
     mutation target cannot be killed under `make mutation-test`, because the
-    assertion is no longer collected. `make test` and CI both still run the
-    whole suite unfiltered and do kill it. A guard cannot police a filter that
-    can exclude the guard.
+    assertion is no longer collected. `make test` still runs the whole suite and
+    does kill it. A guard cannot police a filter that can exclude the guard.
     """
-    mutation_recipe = " ".join(_recipe("mutation-test"))
-    test_recipe = " ".join(_recipe("test"))
+    mutation_cmd = _make_would_run("mutation-test")
+    test_cmd = _make_would_run("test")
 
     # Exact equality, not "contains each suite". A substring check passes when
     # the suite list is REPLACED by a path underneath it — `scripts/tests` is a
-    # substring of `scripts/tests/test_kit_doctor.py` — which is how the first
+    # substring of `scripts/tests/test_kit_doctor.py` — which is how an earlier
     # version of this assertion let a one-module mutation run survive.
-    assert mutation_recipe == f"{test_recipe} {MUTATION_INVOCATION}", (
+    assert mutation_cmd == f"{test_cmd} {MUTATION_INVOCATION}", (
         "`make mutation-test` must be exactly `make test` plus "
         f"{MUTATION_INVOCATION}, so the two can never cover different suites.\n"
-        f"  test:          {test_recipe}\n"
-        f"  mutation-test: {mutation_recipe}"
+        f"  test:          {test_cmd}\n"
+        f"  mutation-test: {mutation_cmd}"
     )
+    # Anchor the shared suite list against CI, which is the only definition of
+    # "the whole suite" that neither target can edit. Equality above makes the
+    # two targets agree with EACH OTHER; narrowing both symmetrically satisfies
+    # it, and did, until this was added.
+    ci = (REPO_ROOT / ".github/workflows/test.yml").read_text(encoding="utf-8")
     for suite in SUITES:
-        assert suite in test_recipe, f"`make test` no longer runs {suite}"
+        assert f"{suite} " in f"{test_cmd} ", (
+            f"`make test` no longer runs {suite} as a whole suite; "
+            f"make would run: {test_cmd}"
+        )
+        assert suite in ci, (
+            f"CI no longer runs {suite}, so this test's anchor is gone — fix the "
+            "workflow or update SUITES deliberately"
+        )
 
 
 def test_the_drift_failure_message_names_the_escape_hatch(monkeypatch):
@@ -285,12 +327,20 @@ def test_marker_is_registered_by_the_conftest_beside_the_tests():
 
 @kit_repo_only
 def test_the_doctrine_names_the_live_spelling():
-    """The folklore guard: #33's complaint was that the exclusion lived in
-    reviewers' heads. Writing it down helps only while what is written is true.
+    """ACCIDENTAL-DRIFT DETECTOR ONLY. This is a text search, and it cannot
+    survive anyone who reads it.
 
-    Note what this does and does not cover: renaming the marker in the decorator
-    and the conftest is caught by the two collection tests above, not here. This
-    catches the opposite drift — code keeps the marker, prose stops naming it.
+    Stated plainly because an earlier version of this test was presented as a
+    guard and is not one: a review defeated it by replacing the whole of item 5
+    with the folklore #33 exists to kill and parking both literals in an HTML
+    comment, which passes. No text search over prose can do better, so the
+    honest scope is small — it catches the marker being renamed or the paragraph
+    deleted by someone who simply did not notice the other surface. It is worth
+    keeping at that size and worth nothing beyond it.
+
+    What actually protects the mechanism is the collection tests above, which
+    exercise pytest rather than reading a file. Renaming the marker in the
+    decorator and the conftest is caught there, not here.
     """
     doctrine = (REPO_ROOT / "docs/agentic-dev-kit/fallback-review-panel.md").read_text(
         encoding="utf-8"

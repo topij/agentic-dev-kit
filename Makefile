@@ -1,4 +1,4 @@
-# Makefile — thin entry points: `make install-hooks` and `make test`.
+# Makefile — thin entry points: `make install-hooks`, `make test`, `make mutation-test`.
 #
 # install-hooks
 # -------------
@@ -32,7 +32,10 @@
 # not. A run that leaves it in reports a kill for every mutation to a KIT_OWNED
 # file — the 26 paths in kit-manifest.json, NOT the whole repo: a mutation to
 # scripts/tests/, scripts/check_memory_budget.py or init.sh never trips it.
-# Measured once at 17/17 killed, which was 7 survivors with it excluded.
+# One lens once REPORTED 17/17 killed, which was 7 survivors with it excluded.
+# Attested, not measured: the 17 mutants are enumerated nowhere, and
+# docs/kit-handoff-history.md says so explicitly. Quoted for the shape of the
+# effect, not as a figure anything here reproduces.
 #
 # Regenerating the manifest instead also produces a truthful result, and is NOT
 # what this target does, because it is per-mutant bookkeeping whose failure mode
