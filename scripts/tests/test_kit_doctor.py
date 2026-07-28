@@ -137,17 +137,22 @@ def test_unrendered_narrative_doc_is_flagged(tmp_path):
     assert report.narrative_rendered["docs/friction-log.md"] is True
 
 
-def test_marker_below_line_one_is_in_use_not_an_unrendered_template(tmp_path):
+@pytest.mark.parametrize("marker_line", [2, 3])
+def test_marker_below_line_one_is_in_use_not_an_unrendered_template(tmp_path, marker_line):
     """The doctor reads LINE 1 only, matching init.sh's seed guard. Reverting it
     to a whole-file match left the entire suite green except the manifest-hash
     gate — which is discharged by regenerating the manifest, so it pins nothing
     (panel round 3). A doc that merely quotes the marker is in use; reporting it
-    as an unrendered template prescribes a remedy that provably does nothing."""
+    as an unrendered template prescribes a remedy that provably does nothing.
+
+    LINE 2 is parametrized, not just line 3: with the marker only on line 3, a
+    doctor reading the first TWO lines passed the whole suite while disagreeing
+    with init.sh about a doc whose line 2 quotes the marker — the round-2 defect
+    reopened one line lower, invisible to the tests (panel round 4)."""
     root = _fake_repo(tmp_path)
-    (root / "docs" / "handoff.md").write_text(
-        "# A real plan\n\nWe mark skeletons with `devkit-template: unrendered`.\n",
-        encoding="utf-8",
-    )
+    body = ["# A real plan", "", "still a real plan", ""]
+    body[marker_line - 1] = "We mark skeletons with `devkit-template: unrendered`."
+    (root / "docs" / "handoff.md").write_text("\n".join(body) + "\n", encoding="utf-8")
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 
     report = kit_doctor.inspect(root, _manifest({}), config)

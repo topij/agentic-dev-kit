@@ -604,7 +604,9 @@ migrate_kit_schema() {
 # to make the "seed only if absent" guard permanently false, and every adopter
 # started with an unrendered skeleton. The marker below is what distinguishes
 # "the pristine file the kit shipped" from "a handoff someone is actually
-# using": a rendered/edited file has no marker and is never touched.
+# using": a file whose FIRST LINE does not carry it is in use and is never
+# touched — a rendered doc that merely quotes the marker in its body is in use
+# too, which is the whole point of anchoring to line 1 (see below).
 #
 # The marker is matched on the FIRST LINE ONLY, which is where every shipped
 # skeleton carries it — a position the suite pins, since this guard now depends

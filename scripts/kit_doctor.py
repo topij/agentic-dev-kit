@@ -430,9 +430,12 @@ def inspect(root: Path, manifest: dict, config: dict) -> Report:
         # init.sh seeded over it (panel round 3). Splitting the raw decode on "\n"
         # is what head -n 1 actually does.
         #
-        # Known remaining divergence: an unreadable file makes init.sh's guard
-        # fail safe ("in use") while this raises. Pre-existing, and unrelated to
-        # line matching — see the tracker rather than assuming it is handled.
+        # Known remaining divergence, pre-existing and unrelated to line
+        # matching: an unreadable file makes init.sh's guard fail safe ("in
+        # use") while this raises PermissionError and aborts the whole run.
+        # Not filed as of this change, and deliberately not fixed here — note
+        # that pr_watch and pr_followup_hook both treat an unreadable config as
+        # "must never raise", so this check is the outlier.
         narrative[str(rel)] = doc.is_file() and (
             "devkit-template: unrendered"
             not in doc.read_bytes().decode("utf-8", "replace").split("\n", 1)[0]

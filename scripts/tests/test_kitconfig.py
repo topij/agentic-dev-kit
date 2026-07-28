@@ -299,6 +299,21 @@ def test_narrative_templates_ship(name):
     assert (REPO_ROOT / "docs" / "templates" / name).is_file()
 
 
+def _production_first_line(doc):
+    """The first line exactly as the two production consumers see it.
+
+    read_BYTES, not read_text: read_text applies universal-newline translation,
+    so a lone CR would end the line here but not for `head -n 1` — the same
+    \r hazard kit_doctor.py was fixed for in panel round 3. Reading text and
+    splitting on "\n" left the negative assertion below able to pass while
+    ./init.sh would seed over the kit's own living plan (panel round 4).
+    splitlines() is wrong for the same reason and eight more: it also breaks on
+    \x0b \x0c \x1c \x1d \x1e \x85 U+2028 U+2029. Mirrors kit_doctor.py's
+    predicate verbatim — if that changes, change this with it.
+    """
+    return doc.read_bytes().decode("utf-8", "replace").split("\n", 1)[0]
+
+
 @pytest.mark.parametrize(
     "skeleton",
     ["handoff.md", "handoff-history.md", "friction-log.md", "friction-log-archive.md"],
@@ -313,20 +328,14 @@ def test_shipped_skeletons_carry_the_unrendered_marker(skeleton):
     session blocks never ship to adopters, so reading the config here would check
     the kit's live plan (which must NOT carry the marker) instead of the skeleton."""
     doc = REPO_ROOT / "docs" / skeleton
-    text = doc.read_text(encoding="utf-8")
-    assert "devkit-template: unrendered" in text, doc
+    assert "devkit-template: unrendered" in doc.read_text(encoding="utf-8"), doc
     # Pinned to LINE 1 specifically: init.sh's seed guard reads only the first
     # line, so a skeleton carrying the marker lower down is invisible to it and
     # the #8 failure returns silently — a green suite with every adopter back on
     # a `my-project` header. Proven reachable: moving this marker to line 3 left
     # the whole suite passing while init.sh reported the skeleton "already in
     # use" (panel round 2, correctness lens).
-    # split("\n", 1)[0], NOT splitlines()[0]: splitlines also breaks on \x0b \x0c
-    # \x1c \x1d \x1e \x85    , none of which end a line for `head -n 1`
-    # or for kit_doctor. Using it here would check a PREFIX of the real first
-    # line, which for the negative assertion below can pass while production
-    # fails (panel round 3).
-    assert "devkit-template: unrendered" in text.split("\n", 1)[0], (
+    assert "devkit-template: unrendered" in _production_first_line(doc), (
         f"{doc}: the marker must be on line 1 — init.sh's guard reads no further"
     )
 
@@ -341,9 +350,10 @@ def test_kits_own_plan_is_real_not_a_skeleton():
     config = kitconfig.load_config(SHIPPED_CONFIG)
     for key in ("paths.handoff", "paths.friction_log"):
         doc = REPO_ROOT / kitconfig.get(config, key)
-        text = doc.read_text(encoding="utf-8")
-        assert "devkit-template: unrendered" not in text.split("\n", 1)[0], doc
-        assert "YYYY-MM-DD" not in text, f"{doc} still has placeholder dates"
+        assert "devkit-template: unrendered" not in _production_first_line(doc), doc
+        assert "YYYY-MM-DD" not in doc.read_text(encoding="utf-8"), (
+            f"{doc} still has placeholder dates"
+        )
 
 
 @pytest.mark.parametrize(

@@ -7,11 +7,13 @@
 # shim rather than copying the hook body or symlinking it — see init.sh's own
 # comments on why) is the single source of truth. Running the whole of
 # `./init.sh` here would also re-trigger its interactive project/tracker
-# prompts and its docs/ narrative-template seeding step — well outside what a
-# target named "install-hooks" should touch, and on a repo whose narrative
-# docs still carry the `devkit-template: unrendered` marker (this kit's own
-# repo, before an adopter has claimed them) it would rewrite docs/** as a
-# side effect. So this target extracts and runs just the install_hooks()
+# prompts and its narrative-template seeding step — well outside what a target
+# named "install-hooks" should touch. On a repo whose narrative docs still
+# carry the `devkit-template: unrendered` marker on line 1 (an adopter who has
+# not yet claimed them) that seeding rewrites those docs; in this kit's own
+# repo, whose plan lives at docs/kit-*.md and is in use, it instead creates a
+# root AGENTS.md. Either way it is a side effect this target must not have.
+# So this target extracts and runs just the install_hooks()
 # function body straight out of init.sh — it always reflects init.sh's
 # current logic, never a stale/diverged copy — after resolving
 # `paths.engines` the same way init.sh does (via config/dev-model.yaml,
