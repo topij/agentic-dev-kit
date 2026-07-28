@@ -28,11 +28,11 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "2096e895d1b9d70f08e944ce99957116f349bc68f2428c627ee90b8a404f167f"
+      "sha256": "d944a198e1ef32fe958d454b6e66fe35c125cf84af7fe4b71911f2806d02b3b1"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "483d5ccbb5ad764c263a762b47d487e107682bbc81d41493fc0c4c08ceb4315f"
+      "sha256": "a78804d2d440ff352901b83c6a4ccd102287c6df20b1945d7a501c86f6d998ce"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -68,7 +68,7 @@
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
-      "sha256": "b56e93c8f2584d3086d3773dabcdaf440028af46546412a8bf704187079f4f48"
+      "sha256": "f6f44bc62dbb134c44e00590f184ee737468c1774f15987e37b00855eae98231"
     },
     "scripts/dev_session.sh": {
       "role": "engine",
@@ -84,7 +84,7 @@
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
-      "sha256": "245d3c880b50b75de0146730820b1e2f6f88c8c3eae439322318368c1a9f9c92"
+      "sha256": "d396de57a73420ca0e532aded8f3b1b2d109ae3c3efb494d55b64dedb4de0a01"
     },
     "scripts/lib/kitconfig.py": {
       "role": "engine",

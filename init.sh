@@ -8,7 +8,7 @@
 # values, and never clobbers a narrative doc that is already in use — only one
 # whose FIRST LINE still carries the shipped `devkit-template: unrendered` marker.
 #
-# Requires: sh, awk, grep, mv. No non-stdlib dependencies.
+# Requires: sh, awk, grep, sed, cut, mv, date, git. No non-stdlib dependencies.
 
 set -eu
 

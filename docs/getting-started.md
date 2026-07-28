@@ -15,10 +15,11 @@ The loop you're setting up:
 
 See the [README diagram](../README.md#how-it-fits-together) for the whole picture.
 
-**Prerequisites.** `init.sh` itself needs only POSIX `sh`, `awk`, and `git`. The
-engines additionally need [`uv`](https://docs.astral.sh/uv/) (they're PEP-723
-single-file scripts) and, for `pr-watch` / `parallel`, the GitHub CLI `gh`,
-authenticated (`gh auth status`). No PyYAML — the config reader is stdlib-only.
+**Prerequisites.** `init.sh` needs POSIX `sh` plus `awk`, `grep`, `sed`, `cut`, `mv`,
+`date` and `git` — all standard on macOS and Linux. The engines additionally need
+[`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file scripts) and, for
+`pr-watch` / `parallel`, the GitHub CLI `gh`, authenticated (`gh auth status`). No
+PyYAML — `kitconfig.py`, the config reader every engine imports, is stdlib-only.
 
 ## 1 · Adopt the kit
 
@@ -99,11 +100,13 @@ let a cheaper tier do the mechanical building.
 Every change goes through a branch and a PR — and opening the PR is *not* the end
 of the task:
 
-```sh
-pr-watch 42
+```text
+/pr-watch 42          # Claude; `$pr-watch 42` in Codex
 ```
 
-polls CI and review comments and doesn't stop until the PR is **green and clean**:
+(That's a skill invocation in your agent session, not a shell command — the engine
+underneath is `uv run scripts/pr_watch.py 42`.) It polls CI and review comments and
+doesn't stop until the PR is **green and clean**:
 every check passing, and every review finding either fixed or replied-to with a
 reason. A review bot being down isn't a waiver — run an independent review pass
 instead.
@@ -155,8 +158,11 @@ Single incidents route **down** (to the tracker); repeated patterns route **up**
 and your friction log honest instead of ratcheting every week.
 
 > **Note:** these two skills ship as *doctrine* — the prose and routing rules are
-> here, but their deterministic engines (a tracker client, a merged-PR fetcher) are
-> project-specific and left for you to wire. The four core skills
+> here, but their deterministic engines — a tracker client, a notify channel, a
+> merged-PR fetcher, a heartbeat, and `triage-friction-log`'s own parse/finalize
+> scripts — are project-specific and left for you to wire
+> ([#6](https://github.com/topij/agentic-dev-kit/issues/6),
+> [#7](https://github.com/topij/agentic-dev-kit/issues/7)). The four core skills
 > (`session-start`, `wrap-up`, `parallel`, `pr-watch`) run out of the box.
 
 ## That's the loop

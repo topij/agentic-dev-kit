@@ -13,8 +13,15 @@ them through `models.runtime_mappings` only when the current runtime supports th
 control. A workflow invocation means `/name` in Claude or `$name` in Codex.
 
 Engine: `<engine-dir>/dev_session.sh`. Sessions live in a
-sibling `<project>-sessions/` dir by default (override with `DEVKIT_SESSIONS_DIR`);
+sibling `dev-model-sessions/` dir by default (override with `DEVKIT_SESSIONS_DIR`);
 your CI/cron runner sets neither env var, so it's unaffected.
+
+**A lane inherits the cockpit's MCP access.** `dev_session.sh new` copies a repo-root
+`.mcp.json` into each lane worktree, so every lane can reach the same MCP servers the
+cockpit can. If that file holds *literal* credentials rather than `${ENV_VAR}`
+references, each lane worktree then holds a copy of them — which is why `init.sh` adds
+`.mcp.json` to `.gitignore` when it detects that shape. Prefer `${ENV_VAR}` references
+so the file can stay tracked and the lane copies carry no secret.
 
 ## Default action — show the board
 

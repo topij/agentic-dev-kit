@@ -1,9 +1,14 @@
-"""Tiny loader for ``config/dev-model.yaml`` — the kit's single config surface.
+"""PyYAML-backed loader for ``config/dev-model.yaml`` — the parity reference.
 
-Every kit script reads project-specific values (paths, tracker ids, doc
-budgets, ...) through this module instead of hardcoding them (the kit's
-"No hardcoding" principle). Stdlib + PyYAML only, on purpose: no other
-dependency should ever be required just to read a config value.
+**No engine imports this module.** Every shipped script reads config through
+``kitconfig.py``, which is stdlib-only so an engine can declare zero third-party
+dependencies. This module is the PyYAML implementation that ``kitconfig``'s parity
+tests check it against: if the two ever disagree on a construct the kit uses,
+``scripts/tests/test_kitconfig.py`` fails. Keeping it means "our hand-rolled parser
+matches a real YAML parser" is an assertion rather than a hope.
+
+So: reach for ``kitconfig`` in anything that ships. Reach for this only to widen the
+parity surface.
 
 Usage:
     from devmodel_config import get, load_config, resolve_path

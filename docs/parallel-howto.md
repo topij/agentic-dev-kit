@@ -54,7 +54,7 @@ Keep that three-way split in mind and every verb below makes sense.
 | *(you paste the launch line)* | Starts the new session in a **new terminal** | No | — |
 
 Even `new` doesn't touch *your* working tree: the worktree it creates is a separate
-directory under a sibling `<project>-sessions/` folder (override with
+directory under a sibling `dev-model-sessions/` folder (override with
 `DEVKIT_SESSIONS_DIR`).
 
 ---
@@ -101,7 +101,7 @@ Substitute a lowercase slug for `<scope>` (e.g. `add-rate-limit`, `fix-cli-help`
 
 What this does:
 
-1. Creates a git **worktree** in the sibling `<project>-sessions/` directory (a linked
+1. Creates a git **worktree** in the sibling `dev-model-sessions/` directory (a linked
    worktree sharing this repo's objects — not a full clone).
 2. Creates a fresh branch using `vcs.dev_branch_prefix`, branched off the configured
    `origin/<vcs.protected_branch>` by default — **not** off your current branch. That's
@@ -199,11 +199,15 @@ workflow-fan-out pseudocode a multi-lane launcher needs, see
 
 When a lane's PR is merged (or you're abandoning it), reconcile and tear down.
 
-**Find a lane's sandbox path** (e.g. to inspect its scratch state):
+**Find a lane's worktree path** (e.g. to `cd` into it):
 
 ```bash
 scripts/dev_session.sh path <scope>
 ```
+
+That prints the **worktree** (`<sessions-dir>/<scope>/wt`), not the state sandbox. The
+sandbox is its sibling, `<sessions-dir>/<scope>/state` — there is no subcommand that
+prints it, so build it from the worktree path if you need to inspect scratch state.
 
 **Reconcile the whole batch to a terminal state** before you write anything to the
 shared handoff — an aggregate "everything's done" is not evidence a specific lane

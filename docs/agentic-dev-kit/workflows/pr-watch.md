@@ -120,6 +120,21 @@ Repeat until the report says **converged**:
 
 1. **Pace the next poll** (see below), then go to step 1.
 
+## The engine's other modes
+
+The loop above uses `--json`, `--mark-seen` and `--record-review`. Four more flags exist
+and are easy to miss:
+
+| flag | what it does |
+| ---- | ------------ |
+| `--assert-draft <PR#>` | Exits non-zero unless the PR is currently a draft. Use it before pushing work you do not want reviewed yet — it turns "I meant to open that as a draft" into a failure rather than a surprise. |
+| `--assert-ready <PR#>` | The converse: exits non-zero unless the PR is ready for review. This is the gate that stops a lane declaring itself done while its PR is still a draft no bot will look at (`review skipped: draft pull request`). |
+| `--allow-pending-bot-review` | Lets `--record-review` proceed while a configured bot's own check is still pending. Only with evidence the queued verdict will never arrive — the override is recorded on the receipt as `override`, because it is exactly the scenario a premature receipt exists to prevent. |
+| `--lenses <names>` | Accompanies `--record-review`; names the lenses that actually ran. Self-reported, unverified, and shown at merge time so a one-lens pass is visible. |
+
+`--assert-draft` and `--assert-ready` **require `gh`** — they mutate or gate on PR state,
+so the REST fallback refuses them with exit 2, as it does `--record-review`.
+
 ## Pacing
 
 Self-pace on a bounded cadence — don't busy-wait:
