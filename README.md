@@ -102,8 +102,9 @@ cp -r /path/to/agentic-dev-kit/. .
 `init.sh` stamps your answers into `config/dev-model.yaml`, renders the narrative
 docs and the root `AGENTS.md` entry point from `docs/templates/`, installs the
 pre-push hook, and adds the state sandbox to `.gitignore`. It never overwrites a
-rendered doc that is already in use — only one still carrying the shipped
-`devkit-template: unrendered` marker (or missing entirely).
+rendered doc that is already in use — only one whose **first line** still carries the
+shipped `devkit-template: unrendered` marker (or that is missing entirely). A doc
+that merely mentions the marker further down is in use, and is left alone.
 
 Ten minutes, start to finish. For a full worked example of a first session — from
 adoption through `wrap-up` — see **[`docs/getting-started.md`](docs/getting-started.md)**.
