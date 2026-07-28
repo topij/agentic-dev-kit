@@ -88,7 +88,7 @@
     },
     "scripts/lib/kitconfig.py": {
       "role": "engine",
-      "sha256": "005ef4f3910fd5a5698e659a17bbcf21a8bc4b5ba630891d72a68f52ce98350a"
+      "sha256": "d15242d1d59e92d088b6cbbfec9df88f2942e37a01c72ad535cd06e5d1bdd562"
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",

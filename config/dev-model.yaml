@@ -53,8 +53,9 @@ runtime:
 doc_budgets:
   # Line-count tripwires (the archival mechanism of Principle #1). A file over budget
   # is a housekeeping nudge: check_doc_budget.py exits 0 by default even when one is
-  # over. It returns 1 only under --strict, and 2 on a usage/config error — so it CAN
-  # gate a pipeline, if you invoke it that way.
+  # over, and returns 1 only under --strict. It exits 2 on a usage or CONFIG error
+  # regardless of flags — including a `path:` here that no longer exists — so a renamed
+  # doc gates any pipeline running it, however it is invoked.
   - path: docs/kit-handoff.md
     budget: 400
     archive: docs/kit-handoff-history.md
