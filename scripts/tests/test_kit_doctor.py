@@ -152,6 +152,12 @@ def test_marker_below_line_one_is_in_use_not_an_unrendered_template(tmp_path, ma
     root = _fake_repo(tmp_path)
     body = ["# A real plan", "", "still a real plan", ""]
     body[marker_line - 1] = "We mark skeletons with `devkit-template: unrendered`."
+    # Positive control: True is also _fake_repo's default state, so a fixture
+    # that lost the marker — a typo, or an off-by-one in the index arithmetic
+    # above — would pass vacuously and stop killing the mutant this test exists
+    # for (panel round 5).
+    assert "devkit-template: unrendered" in body[marker_line - 1]
+    assert not any("devkit-template" in line for i, line in enumerate(body) if i != marker_line - 1)
     (root / "docs" / "handoff.md").write_text("\n".join(body) + "\n", encoding="utf-8")
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 

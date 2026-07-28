@@ -643,18 +643,28 @@ def test_agents_md_renders_the_configured_protected_branch(tmp_path: Path) -> No
     assert "trunk-9f2a" in (repo / "AGENTS.md").read_text(encoding="utf-8")
 
 
-def test_seeding_leaves_a_doc_that_merely_quotes_the_marker_untouched(tmp_path: Path) -> None:
+@pytest.mark.parametrize("marker_line", [2, 3])
+def test_seeding_leaves_a_doc_that_merely_quotes_the_marker_untouched(
+    tmp_path: Path, marker_line: int
+) -> None:
     """The marker counts only on line 1, where every shipped skeleton carries it.
     Matching it anywhere let a hand-written AGENTS.md that documented the marker
     convention in prose be silently overwritten — content loss, reported as
-    "seeded" (panel, adversarial lens)."""
+    "seeded" (panel, adversarial lens).
+
+    LINE 2 is parametrized because this is the DESTRUCTIVE consumer: with the
+    marker only on line 3, widening the guard to `head -n 2` left the whole suite
+    green while init.sh overwrote a doc whose line 2 quotes the marker. The
+    read-only reporter got this case first; the file-destroying one had it open
+    two rounds longer (panel round 5)."""
     repo = _fixture(tmp_path, config=SHIPPED_CONFIG, templates=True)
     mine = repo / "AGENTS.md"
-    original = (
-        "# AGENTS.md — hand written\n\n"
-        "The kit's skeletons are marked `devkit-template: unrendered` on line 1;\n"
-        "this file is not one of them.\n"
-    )
+    lines = ["# AGENTS.md — hand written", "", "still hand written", ""]
+    lines[marker_line - 1] = "The kit marks skeletons `devkit-template: unrendered` on line 1."
+    original = "\n".join(lines) + "\n"
+    # Positive control: a fixture that lost the marker would pass vacuously,
+    # since "left untouched" is also the no-marker outcome (panel round 5).
+    assert "devkit-template: unrendered" in original.split("\n")[marker_line - 1]
     mine.write_text(original, encoding="utf-8")
 
     result = _run_init(repo)
