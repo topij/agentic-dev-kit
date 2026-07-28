@@ -16,7 +16,7 @@ The loop you're setting up:
 See the [README diagram](../README.md#how-it-fits-together) for the whole picture.
 
 **Prerequisites.** `init.sh` needs POSIX `sh` plus the usual coreutils/text tools it
-shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `head`, `mkdir`, `chmod`, `touch`,
+shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `cat`, `head`, `mkdir`, `chmod`, `touch`,
 `basename`, `dirname`, `date` and `git` — all standard on macOS
 and Linux. The engines additionally need
 [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file scripts) and, for

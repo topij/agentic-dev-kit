@@ -51,9 +51,10 @@ runtime:
     codex: codex
 
 doc_budgets:
-  # Warn-only line-count tripwires (the archival mechanism of Principle #1). A file
-  # over budget is a housekeeping nudge, never a hard block. Read by
-  # scripts/check_doc_budget.py.
+  # Line-count tripwires (the archival mechanism of Principle #1). A file over budget
+  # is a housekeeping nudge: check_doc_budget.py exits 0 by default even when one is
+  # over. It returns 1 only under --strict, and 2 on a usage/config error — so it CAN
+  # gate a pipeline, if you invoke it that way.
   - path: docs/kit-handoff.md
     budget: 400
     archive: docs/kit-handoff-history.md
@@ -68,7 +69,8 @@ vcs:
   protected_branch: main         # never committed to directly; PRs target this
   # Prefix for ISOLATED LANE branches (<prefix>/<scope>) — not for cockpit work.
   # scripts/hooks/pre-push refuses a push from <prefix>/* that touches the narrative
-  # files, so cockpit branches must use chore/* or feat/* instead.
+  # files. Cockpit branches are anything outside that prefix — chore/*, feat/*, a
+  # hand-named PR branch; the hook skips them all, it does not require a name.
   dev_branch_prefix: dev
   # {date} expands to today's ISO date at skill runtime.
   triage_branch_pattern: "chore/triage-{date}"

@@ -84,7 +84,14 @@ and ask the operator.
 
 ## Step 4 — Verify
 
-- Portability tests: run `make test  # or, with no Makefile target: uv run --with pytest --with pyyaml python -m pytest scripts/devkit/lib/state_paths/tests/ scripts/devkit/tests/ -q` (adjust the prefix when engines live directly under `scripts/`).
+- Portability tests: run the kit's suites explicitly — `/adopt` does not install the kit's `Makefile`, and a
+  mature repo's own `make test` will run *its* suite, not these:
+
+  ```sh
+  uv run --with pytest --with pyyaml python -m pytest \
+    scripts/devkit/lib/state_paths/tests/ scripts/devkit/tests/ -q
+  ```
+ (adjust the prefix when engines live directly under `scripts/`).
 - `check_doc_budget`: run it — it should read the configured plan via `config/dev-model.yaml`.
 - Confirm the repo's CI/lint scope **skips** the kit files (or add a kit-dir exclude if lint is repo-wide).
 

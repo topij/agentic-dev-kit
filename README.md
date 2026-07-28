@@ -85,7 +85,7 @@ patterns to rules).
 ## Quickstart
 
 **Prerequisites.** `init.sh` needs POSIX `sh` plus the usual coreutils/text tools it
-shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `head`, `mkdir`, `chmod`, `touch`,
+shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `cat`, `head`, `mkdir`, `chmod`, `touch`,
 `basename`, `dirname`, `date` and `git` — all standard on macOS
 and Linux, none of them a runtime you have to install. The engines need [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file
 scripts), `git`, and — for `pr-watch` / `parallel` — the GitHub CLI `gh`,
@@ -276,8 +276,8 @@ and both runtime adapters. `triage-friction-log` and `post-merge-systemize` docu
 the flywheel's
 triage and pattern-finding mechanism, but their deterministic engines are
 project-specific and left for you to wire — see the banner atop each of those two skill
-files. What is missing, precisely — all five absent from `scripts/`: a tracker client, a notify
-channel, `scripts/fetch_merged_prs.py` (the forge-API fetcher), `scripts/digest_merged_prs.py`
+files. What is missing, precisely — two integrations plus five scripts, every one of the five
+verified absent from `scripts/`: a tracker client, a notify channel, `scripts/fetch_merged_prs.py` (the forge-API fetcher), `scripts/digest_merged_prs.py`
 (the slimmer that consumes it), `scripts/heartbeat_cli.py`, and `triage-friction-log`'s own
 `scripts/triage_friction_log.py` + `scripts/finalize_triage.py`.
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine

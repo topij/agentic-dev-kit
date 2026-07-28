@@ -123,7 +123,7 @@ Repeat until the report says **converged**:
 ## The draft-bit flags — they CORRECT, they do not check
 
 `--assert-draft` and `--assert-ready` are documented in `pr_watch.py`'s own docstring and
-mentioned above under the REST backend, but nothing here says **when** to reach for them,
+noted under the REST backend in the Notes section below, but nothing says **when** to reach for them,
 and their names badly undersell what they do. Read this before using either.
 
 **Both mutate the PR.** Despite "assert", neither is a read-only check. Each reads
