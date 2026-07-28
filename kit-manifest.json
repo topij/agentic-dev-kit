@@ -19,11 +19,11 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "76103e6a227fe47a8a131b899d60bd61910aa700e78eb0cf93e323ac77830db5"
+      "sha256": "cb57ed4b749459aa21be49461d034ea77edaa7163dd83cbf50c8ca4572b79dbb"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
-      "sha256": "cbe1c6f282408a9a1950715909caa2bbbdb4cdba57c574cf9ef0bed37c4c2c2a"
+      "sha256": "f21856cb5210319898d3f8a991a1e8c8916188f60ff2d0a3348fb7289d32b5fe"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",

@@ -166,10 +166,11 @@ The other lever acts on what a round *contains* rather than on when to stop, and
 **replaces none of the above** — step 6's re-run stays not-optional. A separate
 session, whose rounds were classified by whether each change had been *asked for*,
 found the damage concentrated in one place: across five rounds on one feature,
-seven fail-opens — **three of them from hardening nobody asked for**, added
-alongside fixes that were. Every requested fix held. So make each round *smaller*,
-not fewer: `safety-critical-changes.md` rule 3 — a fix round addresses only what
-the review found, and a new mechanism you thought of mid-fix gets filed.
+**three mechanisms were added that no reviewer asked for, and every one became a
+HIGH finding in a later round**. The fixes actually asked for held. So make each
+round *smaller*, not fewer: `safety-critical-changes.md` rule 3 ("a fix round
+addresses only what the review found") — a new mechanism gets filed, however
+squarely a finding prompted it.
 
 ## Degraded mode
 

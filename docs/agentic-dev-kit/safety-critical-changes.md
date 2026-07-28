@@ -33,19 +33,19 @@ skill; do not fork the doctrine into runtime-specific copies.
    observed base rate and for the stopping criterion to use instead — blast
    radius, not round count.
 
-    **A fix round addresses only what the review found.** A new mechanism you
-    thought of mid-fix gets filed, not built: a finding arrives with a reproduction
-    and someone else's judgement attached, while your improvement has been reviewed
-    by nobody and ships in a commit whose message is about the findings — so the
-    next round sees the two merged and cannot weight them differently. This governs
-    what you **add**, not what you repair: a defect in the change under review is
-    the fix round's own business, and leaving one in because no reviewer happened to
-    name it is a different failure, not compliance with this rule. Watch a MED or
-    LOW finding especially — it is often best answered by **documenting the
-    limitation** rather than guarding against it. Two of the three cases behind this
-    paragraph escalated a MED finding into a new mechanism, and both traded a
-    fail-*closed* limitation for a fail-*open* one. State in the PR which changes
-    were requested and which were not.
+    **A fix round addresses only what the review found** — and what it found is the
+    finding, not a licence to build. The minimum that resolves it is the fix; a new
+    mechanism is an *addition* however squarely a finding prompted it, so it gets
+    filed and proposed on its own. That distinction is the rule: across the five
+    rounds behind this paragraph, three mechanisms were added that no reviewer asked
+    for and **every one became a HIGH finding in a later round** — two of them built
+    in direct response to a real MED, which is the trap. The fixes actually asked
+    for held. Your mechanism ships in a commit whose message is about the findings,
+    so the next round sees the two merged and cannot weight them differently.
+    Repairing a defect *in the change under review* is in scope; building something
+    to prevent its class is not. A MED or LOW is often best answered by
+    **documenting the limitation**. State in the PR which changes were requested and
+    which were not.
 
 1. **Kill/recovery paths need an integration test.** Unit tests on the handler are
    insufficient — a kill-path can pass unit tests while the wrapper-level behavior is
