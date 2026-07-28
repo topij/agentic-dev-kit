@@ -27,14 +27,18 @@ paragraph; `#102` is the rule that stops that recurring.
   only what the review found"* — a new mechanism is an addition however squarely a
   finding prompted it, so it gets filed. Plus a paragraph in `fallback-review-panel.md`
   stating that lever replaces none of the stopping criterion.
-- **Both HIGHs on `#101` came from my own fix rounds.** Round 1 added a carve-out that
-  licensed the exact fail-open the rule cites as evidence; round 2 failed to close it;
-  round 3 proved it empirically — two fresh readers, given only the paragraph, both
-  permitted the case, both quoting my clause.
+- **One of `#101`'s two HIGHs came from my own fix rounds — not both.** Round 2's HIGH
+  was a gap the rule inherited: it did not catch two of the three cases it is built on,
+  and `205d0a4`'s own message records that `#100`'s proposed wording has it too — round
+  1's carve-out licensed those cases outright but did not create the gap. Round 3's
+  HIGH was mine: two fresh readers, given only the paragraph, both permitted the case,
+  both quoting my carve-out clause.
 - **`#102` merged (`87dfa83`).** The blast-radius classification now also decides which
-  findings to act on: HIGH always, plus anything at any severity that says the change is
-  a *regression* rather than merely imprecise. New contract item 9 makes lenses report
-  both labels.
+  findings to act on. A gate, send path, destructive operation, or kill/recovery path —
+  plus any change that does not clearly sit in one class — gets **every** finding acted
+  on; only on the second, reported-but-never-acted-on class is the gate HIGH always,
+  plus anything at any severity that says the change is a *regression* rather than
+  merely imprecise. New contract item 9 makes lenses report both labels.
 - **CodeRabbit reviewed neither PR's final state** — one clean pass on `#101`'s first
   head, then a plan quota that no waiting clears. The fallback panel was the independent
   pass throughout: five rounds, ten isolated lenses across the two PRs.
@@ -61,8 +65,8 @@ paragraph; `#102` is the rule that stops that recurring.
   my own launch prompts — the drift the single-source rule exists to stop.
 - **A three-space list continuation is correct CommonMark and broken Python-Markdown**,
   which silently renumbered rule 4 to rule 1 while the header still said "Four rules
-  apply". Six files cite these rules by number. Caught by rendering in both engines, not
-  by review.
+  apply". Nine files cite these rules by number. Caught by rendering in both engines,
+  not by review — a genuine completed bot review of the head carrying it passed clean.
 - **I shipped a false claim in a commit message** (`4ac203e`), retracted in the PR body
   before merge, so it never reached `main`.
 - **`#76` reproduced twice**: neither PR's final head was lens-reviewed, and
