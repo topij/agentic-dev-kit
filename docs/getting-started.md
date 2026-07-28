@@ -43,8 +43,8 @@ It renders the four narrative docs and the root `AGENTS.md` entry point from
 It renders a narrative doc when the target is **missing, or its first line still carries
 the shipped `devkit-template: unrendered` marker** — so a handoff you are actually using
 is left byte-identical, which is what makes re-running it the supported upgrade path. The
-first line specifically: a doc that quotes the marker lower down (this page does) is in
-use, and seeding never touches it. (The older
+first line specifically: a doc whose body quotes the marker lower down is in use, and
+seeding leaves it alone. (The older
 "only if it doesn't already exist" rule couldn't work: the kit *ships* those files, so a
 copy-in always landed them first and the seed step never fired.)
 

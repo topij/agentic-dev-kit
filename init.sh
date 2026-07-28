@@ -6,7 +6,7 @@
 # Idempotent: re-running re-prompts (showing the current value as the default),
 # migrates an older config schema forward without guessing over existing
 # values, and never clobbers a narrative doc that is already in use — only one
-# still carrying the shipped `devkit-template: unrendered` marker.
+# whose FIRST LINE still carries the shipped `devkit-template: unrendered` marker.
 #
 # Requires: sh, awk, grep, mv. No non-stdlib dependencies.
 
@@ -28,9 +28,9 @@ Bootstraps the agentic-dev-kit in the current repo:
   3. Migrates an older config schema forward in place (kit.version) and
      stamps the current generation.
   4. Renders the four narrative docs and the root AGENTS.md entry point from
-     docs/templates/ — but only when a target is missing or still carries
-     the unrendered marker, so a file you are actually using is left
-     byte-identical.
+     docs/templates/ — but only when a target is missing or its FIRST LINE
+     still carries the unrendered marker, so a file you are actually using is
+     left byte-identical.
   5. Appends the kit's state-sandbox paths to .gitignore if they're
      missing (never duplicates a line on re-run).
   6. Installs the pre-push hook as a shim (honoring core.hooksPath).
@@ -866,7 +866,7 @@ fi
 set_field "review:" "" "^  bots:" "$bots_value"
 
 # ── seed narrative docs from templates ───────────────────────────────────
-# Rendered when the target is MISSING or still carries the unrendered marker.
+# Rendered when the target is MISSING or its FIRST LINE carries the unrendered marker.
 # The old "seed only if absent" guard could never fire: the kit ships these
 # files, so a copy-in / template-clone always landed them first and every
 # adopter was left with an unrendered skeleton.
