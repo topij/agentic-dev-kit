@@ -148,13 +148,6 @@ across one session of 13 rounds on three PRs, **every round found something**,
 and seven of those findings were defects introduced by the *previous round's
 fix*. The termination condition may never arrive.
 
-A later session narrowed *which part* of a fix round does that damage: across five
-rounds on one feature, seven merge-gate fail-opens — **three of them from
-hardening nobody asked for**, added alongside fixes that were. Every requested fix
-held. Re-review is the expensive answer to that; the cheap one is
-`safety-critical-changes.md` rule 3's second paragraph — a fix round addresses
-only what the review found, and the rest gets filed.
-
 So the stopping criterion is **blast radius, not round count**:
 
 - A **gate, send path, or destructive operation** — keep going. Worst case is an
@@ -168,6 +161,15 @@ carries what the review did *not* cover (`override`, `bot_signal`,
 `bots_behind_head`) and what it did (`lenses`) — not a prose rationale for
 stopping. "The last round found
 nothing" is not available as a reason if it never happened.
+
+The other lever acts on what a round *contains* rather than on when to stop, and it
+**replaces none of the above** — step 6's re-run stays not-optional. A separate
+session, whose rounds were classified by whether each change had been *asked for*,
+found the damage concentrated in one place: across five rounds on one feature,
+seven fail-opens — **three of them from hardening nobody asked for**, added
+alongside fixes that were. Every requested fix held. So make each round *smaller*,
+not fewer: `safety-critical-changes.md` rule 3 — a fix round addresses only what
+the review found, and a new mechanism you thought of mid-fix gets filed.
 
 ## Degraded mode
 

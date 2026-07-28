@@ -33,15 +33,18 @@ skill; do not fork the doctrine into runtime-specific copies.
    observed base rate and for the stopping criterion to use instead — blast
    radius, not round count.
 
-    **A fix round addresses only what the review found.** Anything else you notice
-    while in there gets filed, not fixed. A finding arrives with a reproduction and
-    someone else's judgement attached; an improvement you thought of mid-fix has
-    been reviewed by nobody, and it ships in a commit whose message is about the
-    findings — so the next round sees the two merged and cannot weight them
-    differently. Watch a MED or LOW finding especially: it is often best answered by
-    **documenting the limitation** rather than building a guard against it, and the
-    cases behind this paragraph each escalated one into a new mechanism that traded
-    a fail-*closed* limitation for a fail-*open* one. State in the PR which changes
+    **A fix round addresses only what the review found.** A new mechanism you
+    thought of mid-fix gets filed, not built: a finding arrives with a reproduction
+    and someone else's judgement attached, while your improvement has been reviewed
+    by nobody and ships in a commit whose message is about the findings — so the
+    next round sees the two merged and cannot weight them differently. This governs
+    what you **add**, not what you repair: a defect in the change under review is
+    the fix round's own business, and leaving one in because no reviewer happened to
+    name it is a different failure, not compliance with this rule. Watch a MED or
+    LOW finding especially — it is often best answered by **documenting the
+    limitation** rather than guarding against it. Two of the three cases behind this
+    paragraph escalated a MED finding into a new mechanism, and both traded a
+    fail-*closed* limitation for a fail-*open* one. State in the PR which changes
     were requested and which were not.
 
 1. **Kill/recovery paths need an integration test.** Unit tests on the handler are
