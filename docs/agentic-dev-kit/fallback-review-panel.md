@@ -65,26 +65,36 @@ author re-reading their own diff.
    killed while nothing behavioural caught anything. One lens's first pass here
    reported 17/17 killed; re-run with that test excluded, 7 had survived.
 
-   **So the mutation-testing invocation is not the plain suite.** Run:
+   **So exclude your repo's drift test before believing a kill** — by node id, by
+   marker, by whatever your suite supports. In *this kit's own* repo that test
+   carries a `driftcheck` marker, so the invocation is:
 
    ```
    pytest -m 'not driftcheck'        # in this repo: make mutation-test
    ```
 
-   Any test that compares bytes against a manifest rather than asserting
-   behaviour carries the `driftcheck` marker and is deselected by that
-   expression. Adopters: the marker is registered in the conftest that ships
-   beside the tests, so it works wherever you vendored them.
+   That marker is this repo's implementation, not a property of your repo. If you
+   vendored these tests, check before relying on it: the marker and the conftest
+   that registers it live under the tests directory, which is **not** tracked by
+   `kit-manifest.json`, so an `/upgrade` will hand you this page without them.
 
-   **A drift test's pass is never evidence either.** Regenerating the manifest
-   after each mutation also yields a truthful result, and is deliberately *not*
-   the recommended route: it is per-mutant bookkeeping that fails silently in
-   the confident direction — forget it once and the mutant reads as killed.
-   Worse, performing it makes the drift check pass while contributing nothing,
-   so a mutant that survived every behavioural test comes back fully green. That
-   is what made this gate read as coverage when it is not (#112). **A kill is
-   only a kill if a test that asserts behaviour is the thing that failed** —
-   check which test failed, not how many.
+   **Check that the exclusion excluded something.** An `-m` expression naming a
+   marker no test carries deselects nothing and warns about nothing — you get a
+   normal-looking green run with the drift test still in it. Confirm the run
+   reports a `deselected` count, or skip the marker and name the test outright
+   with `--deselect <nodeid>`.
+
+   **Regenerating the manifest instead is not the recommended route.** It does
+   yield a truthful result, but it is per-mutant bookkeeping that fails silently
+   in the confident direction — forget it once and the mutant reads as killed.
+   And performing it makes the drift check pass while contributing nothing, so a
+   mutant that survived every behavioural test comes back fully green. That is
+   what made this gate read as coverage when it is not (#112).
+
+   **The rule none of this depends on: a kill is only a kill if a test that
+   asserts behaviour is the thing that failed.** Check *which* test failed, not
+   how many — a test comparing stored text is no more evidence than a test
+   comparing stored hashes.
 6. **Report, do not fix.** A lens that edits loses the disjointness: it starts
    defending its own changes on the next round.
 7. **Mutate in an isolated copy of the repo under review, never the shared

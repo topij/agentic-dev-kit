@@ -238,11 +238,13 @@ def test_kit_repo_self_check_is_clean():
     assert report.drifted == [], (
         "kit-owned files differ from kit-manifest.json: "
         + str([f"{f.path}: {f.state}" for f in report.drifted])
-        + ". This compares bytes, not behaviour. If you are MUTATION-TESTING, "
-        "this failure is a FALSE KILL — nothing behavioural caught your "
-        "mutation. Re-run with `-m 'not driftcheck'` (or `make mutation-test`) "
-        "and read the result again. If you are not, the manifest is stale: run "
-        "`kit_doctor.py --generate-manifest` and commit it with your change."
+        + ". This compares bytes, not behaviour: it fails for ANY edit to a "
+        "kit-owned file. If you are MUTATION-TESTING, this failure on its own "
+        "is NOT evidence your mutation was caught — re-run with "
+        "`-m 'not driftcheck'` (or `make mutation-test`) and check whether a "
+        "test asserting behaviour also failed. If you are not mutating, the "
+        "manifest is stale: run `kit_doctor.py --generate-manifest` and commit "
+        "it with your change."
     )
 
 
