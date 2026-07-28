@@ -156,19 +156,30 @@ So the stopping criterion is **blast radius, not round count**:
   field) — a couple of rounds with the findings decaying in severity is
   proportionate. Worst case is a wrong message.
 
-The same classification decides **which findings to act on before merging**, not
-only when to stop. On the first class, act on every finding or say in the PR why
-you did not. On the second, act on **HIGH** and file the rest: a MED about an
-imprecise count or a LOW about a stale cross-reference is real, but fixing it costs
-a fix round *plus* the re-review that round obliges, and rule 3 has already told
-you what a fix round may contain. Filing is not dismissing.
+The same classification decides **which findings to act on before merging**, and it
+**narrows step 5 rather than replacing it** — "fix real findings, reply-with-reason
+to the rest" still governs. If a change does not clearly sit in one class, it is the
+first one.
 
-**Do not push that gate into the lens prompts.** Severity has to come from a
-reviewer who does not know what you consider low-stakes. The session that produced
-this paragraph drew **two HIGH findings on a docs-only change**, both real and both
+- **Gate, send path, destructive operation, or kill/recovery path** — act on every
+  finding. Reply-with-reason stays what step 5 makes it, an answer to a nitpick, not
+  a disposal route for something a lens called real.
+- **Reported but never acted on** — act on HIGH, and at any severity on a finding
+  saying the change is a *regression* rather than merely imprecise. An imprecise
+  count or a stale cross-reference gets filed. Filing is not dismissing.
+
+Severity alone is the wrong discriminator, and this paragraph's own first review
+proved it: **no HIGH and seven MED**, four of which said the paragraph loosened a
+control it claimed to tighten. Know the trade you are making, too — a round that
+acts on nothing produces no fix round, so step 6's re-run never fires and the floor
+for a low-blast change is genuinely one round.
+
+**Do not push the gate into the lens prompts.** Severity has to come from a reviewer
+who does not know what you consider low-stakes. The change that added rule 3's
+fix-round paragraph was docs-only and drew **two HIGH findings**, both real and both
 acted on; a lens told to calibrate down for "it's only docs" would have downgraded
-precisely the two that mattered. It is also the anchoring contract item 2 forbids.
-Report at full severity; gate at the point of action.
+precisely those two. It is also the anchoring contract item 2 forbids. Report at
+full severity; gate at the point of action.
 
 Say which one you applied **in the PR**, where a human reads it — the receipt
 carries what the review did *not* cover (`override`, `bot_signal`,
@@ -176,8 +187,9 @@ carries what the review did *not* cover (`override`, `bot_signal`,
 stopping. "The last round found
 nothing" is not available as a reason if it never happened.
 
-The other lever acts on what a round *contains* rather than on when to stop, and it
-**replaces none of the above** — step 6's re-run stays not-optional. A separate
+A further lever acts on what a round *contains* rather than on which of its findings
+you act on, and it **replaces none of the above** — step 6's re-run stays
+not-optional. A separate
 session, whose rounds were classified by whether each change had been *asked for*,
 found the damage concentrated in one place: across five rounds on one feature,
 **three mechanisms were added that no reviewer asked for, and every one became a
