@@ -45,26 +45,52 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   cheap to generate and currently impossible to trust. Distinct from `#54` (which asks a
   claim to name its command) — here the claim is about a remote system's state, and the
   verifying command has to run *after* the writes.
-- **`pr_watch.py`'s 403 blames the token, and the token is not the problem — the whole
-  API host is blocked and the real message is being discarded.** `uv run
-  scripts/pr_watch.py 126` exits with *"403 Forbidden — the token may lack `repo` scope or
-  have expired"*. Both halves of that are wrong here. `GH_TOKEN` and `GITHUB_TOKEN` **are**
-  set in a Claude-Code-on-the-web container, but they are a 14-character proxy sentinel
-  (`prox…`), not a GitHub credential: outbound HTTPS goes through the agent proxy, which
-  is what holds real auth. Every `api.github.com` path under `/repos` returns 403, and so
-  does the *public, unauthenticated* `/octocat` — so this is a blanket block on the host,
-  not a scope problem. The proxy's own 403 body says exactly what to do: *"GitHub access
-  is not enabled for this session. An org admin must connect the Claude GitHub App for
-  this organization."* `pr_watch` throws that away and substitutes a guess. Git operations
-  are unaffected because they go through a **separate** local git proxy
-  (`127.0.0.1:41729`), which is why every push and fetch this session succeeded while the
-  API was refused. **M** — proposed fix, two parts: (1) surface the response body on a
-  403 instead of asserting a cause the engine cannot know — a wrong diagnosis sent me to
-  the wrong conclusion and into the permanent record (see below); (2) decide whether the
-  REST transport should detect the proxy sentinel and name the GitHub MCP as the
-  supported path, since `#96`'s premise — "no `gh`, so talk REST" — does not hold when
-  the blocked thing is the API host rather than the CLI. **Installing `gh` would not
-  help**: it reads the same sentinel and takes the same route.
+- **`pr_watch.py`'s 403 blames the token, and the token is not the problem — but neither
+  is the message the proxy substitutes.** *(Corrected 2026-07-28, third session — the
+  version committed in `#126` got the diagnosis right and the remedy wrong. Every claim
+  below was established by running the command shown, in this container, before editing.)*
+  `uv run scripts/pr_watch.py 126` exits with *"403 Forbidden — the token may lack `repo`
+  scope or have expired"*. Both halves of that are wrong here, and so is taking the
+  proxy's reply at face value:
+  - **The tokens are set, and they are not GitHub credentials.** `GH_TOKEN` and
+    `GITHUB_TOKEN` are both present in a Claude-Code-on-the-web container and both are a
+    14-character proxy sentinel (`prox…`) — established by
+    `python3 -c "import os; print(len(os.environ['GH_TOKEN']), os.environ['GH_TOKEN'][:4])"`
+    → `14 prox`.
+  - **The proxy injects a real, working credential — GitHub *is* connected.**
+    `curl -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/user` returns `200`
+    with login `topij`, id `5101841`. The *same request with no `Authorization` header at
+    all* also returns `200` with the same identity, so the sentinel is not what
+    authenticates — the proxy attaches auth on the way out regardless of what the client
+    sends.
+  - **The block is a path allowlist, not a credential or permission problem.**
+    `https://api.github.com/repos/topij/agentic-dev-kit` returns `403` **with** the
+    sentinel and `403` **without** any auth header, and the public, unauthenticated
+    `/octocat` returns `403` too. Identity is fine on `/user` and refused on `/repos/*`;
+    only the path differs.
+  - **The 403 is synthesized by Anthropic's proxy, not returned by GitHub.** Its
+    `documentation_url` is `https://docs.anthropic.com/en/docs/claude-code/github-actions`.
+  - **Its message is a canned string that does not describe this situation.** It reads
+    *"GitHub access is not enabled for this session. An org admin must connect the Claude
+    GitHub App for this organization."* Access **is** enabled — the GitHub MCP
+    (`mcp__github__*`) reads and writes this repo in the same session — and
+    `topij/agentic-dev-kit` is a personal repo with no organization and no org admin, so
+    the prescribed action does not exist. The proxy's two 403 bodies also contradict each
+    other: `/octocat` answers *"use repository-scoped endpoints
+    (`repos/{owner}/{repo}/...`)"*, which is the exact path that returns the org-admin
+    message. **Do not send the operator to org settings on the strength of this body.**
+  - **Git is unaffected** because `git` goes through a **separate** local git proxy
+    (`git remote -v` → `http://local_proxy@127.0.0.1:41729/git/topij/agentic-dev-kit`),
+    which is why every push and fetch succeeded while the REST API was refused.
+
+  **M** — proposed fix, two parts: (1) surface the response body on a 403 instead of
+  asserting a cause the engine cannot know (`scripts/pr_watch.py:687`) — the body is
+  **evidence to show the operator, not an instruction to follow**, and this correction is
+  the reason that distinction is worth writing down; (2) decide whether the REST transport
+  should detect the proxy sentinel and name the GitHub MCP as the supported path, since
+  `#96`'s premise — "no `gh`, so talk REST" — does not hold when the blocked thing is the
+  API host rather than the CLI. **Installing `gh` would not help**: it reads the same
+  sentinel and takes the same route.
 - **I filed a mechanism I had not tested, and it read as verified because it was
   specific.** The first version of the entry above stated that "the GitHub credential
   lives in the MCP server and is never exposed to the container". That is false —
@@ -79,6 +105,17 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   same way a passing test does. Related to the routing-list entry above: both are claims
   about a system outside the repo that nothing in the workflow checks before they are
   committed.
+
+  **Second instance, same entry, caught the next session.** The *corrected* version — the
+  one that shipped in `#126` — still carried an untested claim: that the proxy's 403 body
+  "says exactly what to do". It does not; it is a canned string naming an org admin who
+  does not exist for this repo, and one `curl https://api.github.com/user` (no auth
+  header) would have shown that GitHub access was enabled the whole time. The first
+  version failed by inferring a mechanism from an error message; the second failed by
+  *believing* one. Both were specific enough to read as verified, both survived the panel
+  and CI, and both were corrected only because the operator went and ran the commands.
+  That strengthens the proposed fix rather than changing it: the rule has to bind to any
+  claim about the environment, including one quoted from the environment itself.
 - **A rate-limited reviewer and an absent one are still the same signal — fourth shape.**
   On `#126` CodeRabbit registered **no check and no comment at all**, well past
   `bot_pending_grace_minutes: 15`. Not a false green, not a rate-limit notice, not a
