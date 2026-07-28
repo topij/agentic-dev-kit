@@ -92,6 +92,13 @@ author re-reading their own diff.
    run asserted "you are in an isolated worktree of that repo" and was wrong.
 8. **State what was verified clean, and how.** Absence of findings is only
    evidence if you know what was actually checked.
+9. **Give every finding a severity and say whether it is a regression.** The
+   stopping section below disposes of findings by both, so a lens that reports
+   neither leaves that gate with nothing to read and everything gets filed by
+   default. *Regression* means the change is worse at something than what it
+   replaced; *imprecision* means it is right but overstated, miscounted, or
+   loosely worded. When you cannot tell, say regression — the reviewer is the
+   only party here with no stake in the cheaper answer.
 
 ## Running it
 
@@ -150,29 +157,29 @@ fix*. The termination condition may never arrive.
 
 So the stopping criterion is **blast radius, not round count**:
 
-- A **gate, send path, or destructive operation** — keep going. Worst case is an
-  unreviewed change landing, and the doctrine's operator-merge rule applies.
+- A **gate, send path, destructive operation, or kill/recovery path** — keep going.
+  Worst case is an unreviewed change landing, and the doctrine's operator-merge rule
+  applies.
 - Something **reported but never acted on** (a warning, a log line, a report
-  field) — a couple of rounds with the findings decaying in severity is
-  proportionate. Worst case is a wrong message.
+  field) — a round or two is proportionate. Worst case is a wrong message.
 
-The same classification decides **which findings to act on before merging**, and it
-**narrows step 5 rather than replacing it** — "fix real findings, reply-with-reason
-to the rest" still governs. If a change does not clearly sit in one class, it is the
-first one.
+That same classification decides **which findings to act on before merging**, and it
+**narrows step 5 rather than replacing it**. If a change does not clearly sit in one
+class, it is the first one.
 
-- **Gate, send path, destructive operation, or kill/recovery path** — act on every
-  finding. Reply-with-reason stays what step 5 makes it, an answer to a nitpick, not
-  a disposal route for something a lens called real.
-- **Reported but never acted on** — act on HIGH, and at any severity on a finding
-  saying the change is a *regression* rather than merely imprecise. An imprecise
-  count or a stale cross-reference gets filed. Filing is not dismissing.
+- **First class** — act on every finding. Reply-with-reason stays what step 5 makes
+  it, an answer to a nitpick, not a disposal route for something a lens called real.
+- **Second class** — act on HIGH, and at any severity on a finding contract item 9
+  marks a *regression*. An imprecision — a miscount, a stale cross-reference — may
+  instead be **filed**: replied to on the PR with the reason, as step 5 requires,
+  *and* recorded where your project tracks deferred work, so it is a disposition
+  with an artifact rather than a third option that loses it.
 
 Severity alone is the wrong discriminator, and this paragraph's own first review
-proved it: **no HIGH and seven MED**, four of which said the paragraph loosened a
-control it claimed to tighten. Know the trade you are making, too — a round that
-acts on nothing produces no fix round, so step 6's re-run never fires and the floor
-for a low-blast change is genuinely one round.
+round proved it: no HIGH, and four of its MEDs said the paragraph loosened a control
+it claimed to tighten. Know the trade, too — a round that acts on nothing produces
+no fix round, so step 6's re-run does not fire and that round stands alone. Do not
+read the bullet above it as licence to stop while severity is still rising.
 
 **Do not push the gate into the lens prompts.** Severity has to come from a reviewer
 who does not know what you consider low-stakes. The change that added rule 3's
