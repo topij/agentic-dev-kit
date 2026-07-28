@@ -162,6 +162,16 @@ carries what the review did *not* cover (`override`, `bot_signal`,
 stopping. "The last round found
 nothing" is not available as a reason if it never happened.
 
+The other lever acts on what a round *contains* rather than on when to stop, and it
+**replaces none of the above** — step 6's re-run stays not-optional. A separate
+session, whose rounds were classified by whether each change had been *asked for*,
+found the damage concentrated in one place: across five rounds on one feature,
+**three mechanisms were added that no reviewer asked for, and every one became a
+HIGH finding in a later round**. The fixes actually asked for held. So make each
+round *smaller*, not fewer: `safety-critical-changes.md` rule 3 ("a fix round
+addresses only what the review found") — a new mechanism gets filed, however
+squarely a finding prompted it.
+
 ## Degraded mode
 
 If the runtime cannot run isolated reviewers, fall back to

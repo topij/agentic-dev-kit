@@ -6,7 +6,7 @@ by a real shipped failure that CI-green + full unit tests did not catch (an
 approval-matcher inversion; a send-gate with holes found only in review; a destructive
 operation whose "safety" fix reintroduced the hazard; a kill-path that passed unit
 tests but was broken in integration). See Principle #6 in `PRINCIPLES.md` for the
-full doctrine this rule operationalizes. Agent-specific adapters should bind this
+principle this rule operationalizes. Agent-specific adapters should bind this
 shared doctrine through `.claude/rules/`, `AGENTS.md`, or a triggered repository
 skill; do not fork the doctrine into runtime-specific copies.
 
@@ -32,6 +32,19 @@ skill; do not fork the doctrine into runtime-specific copies.
    arrive: see [`fallback-review-panel.md`](fallback-review-panel.md) for the
    observed base rate and for the stopping criterion to use instead — blast
    radius, not round count.
+
+    **A fix round addresses only what the review found** — and what it found is the
+    finding, not a licence to build. The minimum that resolves it is the fix; a new
+    mechanism is an *addition* however squarely a finding prompted it, so it gets
+    filed and proposed on its own. That distinction is the rule: across the five
+    rounds behind this paragraph, three mechanisms were added that no reviewer asked
+    for and **every one became a HIGH finding in a later round** — two of them built
+    in direct response to a real MED, which is the trap. The fixes actually asked
+    for held. Your mechanism ships in a commit whose message is about the findings,
+    so the next round sees the two merged and cannot weight them differently. A MED
+    or LOW is often best answered by **documenting the limitation**; the harm is
+    trading a fail-*closed* limitation for a fail-*open* mechanism. State in the PR
+    which changes were requested and which were not.
 
 1. **Kill/recovery paths need an integration test.** Unit tests on the handler are
    insufficient — a kill-path can pass unit tests while the wrapper-level behavior is
