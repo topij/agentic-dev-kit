@@ -65,7 +65,8 @@ paragraph; `#102` is the rule that stops that recurring.
   my own launch prompts — the drift the single-source rule exists to stop.
 - **A three-space list continuation is correct CommonMark and broken Python-Markdown**,
   which silently renumbered rule 4 to rule 1 while the header still said "Four rules
-  apply". Nine files cite these rules by number. Caught by rendering in both engines,
+  apply". Ten files outside the session records cite these rules by number (fourteen
+  counting the records themselves). Caught by rendering in both engines,
   not by review — a genuine completed bot review of the head carrying it passed clean.
 - **I shipped a false claim in a commit message** (`4ac203e`), retracted in the PR body
   before merge, so it never reached `main`.

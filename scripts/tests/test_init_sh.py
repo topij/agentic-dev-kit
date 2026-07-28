@@ -576,6 +576,7 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
             "docs/kit-handoff-history.md",
             "docs/kit-friction-log.md",
             "docs/kit-friction-log-archive.md",
+            "AGENTS.md",
         )
     }
     for rel, text in seeded.items():
@@ -589,6 +590,9 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
     assert "kit-handoff.md" in seeded["docs/kit-handoff-history.md"]  # {{HANDOFF}}
     assert "kit-friction-log-archive.md" in seeded["docs/kit-friction-log.md"]  # {{FRICTION_ARCHIVE}}
     assert "tracker.url" in seeded["docs/kit-friction-log.md"]  # {{TRACKER_URL}} fallback
+    # AGENTS.md renders at the repo ROOT, so its handoff link is the repo-relative
+    # configured path, not the sibling-relative form the narrative docs use.
+    assert "docs/kit-handoff.md" in seeded["AGENTS.md"]  # {{HANDOFF_PATH}}
 
 
 def test_render_preserves_backslashes_in_values(tmp_path: Path) -> None:
@@ -619,6 +623,51 @@ def test_seeding_respects_in_use_docs_and_reclaims_marked_ones(tmp_path: Path) -
     reseeded = marked.read_text(encoding="utf-8")
     assert "skeleton" not in reseeded
     assert "{{" not in reseeded
+
+
+def test_agents_md_renders_the_configured_protected_branch(tmp_path: Path) -> None:
+    """{{PROTECTED_BRANCH}} pinned against a DISTINCTIVE value: the shipped config
+    says `main`, which occurs in enough unrelated prose that asserting it would
+    pass even with the substitution deleted (panel, adversarial lens M2)."""
+    config = SHIPPED_CONFIG.replace("protected_branch: main", "protected_branch: trunk-9f2a")
+    repo = _fixture(tmp_path, config=config, templates=True)
+
+    _run_init(repo)
+
+    assert "trunk-9f2a" in (repo / "AGENTS.md").read_text(encoding="utf-8")
+
+
+def test_seeding_leaves_a_doc_that_merely_quotes_the_marker_untouched(tmp_path: Path) -> None:
+    """The marker counts only on line 1, where every shipped skeleton carries it.
+    Matching it anywhere let a hand-written AGENTS.md that documented the marker
+    convention in prose be silently overwritten — content loss, reported as
+    "seeded" (panel, adversarial lens)."""
+    repo = _fixture(tmp_path, config=SHIPPED_CONFIG, templates=True)
+    mine = repo / "AGENTS.md"
+    original = (
+        "# AGENTS.md — hand written\n\n"
+        "The kit's skeletons are marked `devkit-template: unrendered` on line 1;\n"
+        "this file is not one of them.\n"
+    )
+    mine.write_text(original, encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert mine.read_text(encoding="utf-8") == original
+    assert "AGENTS.md already in use — left untouched" in result.stdout
+
+
+def test_kit_ships_no_root_agents_md(tmp_path: Path) -> None:
+    """AGENTS.md is seeded by ABSENCE, not by a marker, so the guard holds only
+    while the kit itself ships no root AGENTS.md — and ./init.sh run in a kit
+    checkout creates one. Committing that would hand every `cp -r` adopter the
+    kit's own rendered file with the guard permanently false and no diagnostic:
+    the #37/#41 failure the marker exists to prevent, re-entering through the one
+    target that has no marker (panel, adversarial lens)."""
+    assert not (REPO_ROOT / "AGENTS.md").exists(), (
+        "the kit tree must not ship a root AGENTS.md — if ./init.sh was run here, "
+        "delete the generated AGENTS.md rather than committing it"
+    )
 
 
 # --------------------------------------------------------------------------- #

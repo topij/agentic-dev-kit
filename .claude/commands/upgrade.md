@@ -87,8 +87,9 @@ The templates have to land **before** `init.sh` runs, not with the other file co
 4: `init.sh` resolves `docs/templates/*.tmpl` relative to the working directory, so without
 them it prints `note: template … missing — skipped` and seeds nothing. For a repo whose
 narrative docs are already in use that is merely noise (they would have been left untouched
-anyway), but a **partially-adopted** repo missing one of the four docs would silently not get
-it seeded.
+anyway), but a **partially-adopted** repo missing one of the seeded docs would silently not
+get it seeded — including the root `AGENTS.md`, which on this upgrade path is how an existing
+adopter first receives one at all.
 
 Note this is also why running `/tmp/agentic-dev-kit/init.sh` in place of the copy is *not*
 equivalent: every path it reads — the config, the templates — resolves against the working

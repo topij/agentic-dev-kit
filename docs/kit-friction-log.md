@@ -197,7 +197,8 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   CommonMark content column and GitHub rendered it correctly — Python-Markdown requires
   four and otherwise closes the list, emitting a fresh `<ol>` that restarts at 1. In
   `safety-critical-changes.md` that turned rule 4 into rule 1 while the header still
-  said *"Four rules apply"*, and nine files cite those rules by number. A bot review of
+  said *"Four rules apply"*, and ten files outside the session records cite those rules
+  by number (fourteen counting the records themselves). A bot review of
   that exact head passed it clean; rendering in both engines caught it. **M** — proposed
   fix: render kit-owned docs in both engines as a check, or fix the convention at
   four-space continuations and say so where the docs are edited.
@@ -221,7 +222,7 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
 - **A fully working bot review missed a defect that renumbered doctrine.** `#101`'s
   first head `d8bf1af` — the one carrying the indentation bug — received a genuine,
   completed CodeRabbit review (walkthrough, five pre-merge checks passed) that
-  reported it clean, while the defect turned rule 4 into rule 1 in a file nine files
+  reported it clean, while the defect turned rule 4 into rule 1 in a file ten others
   cite by number. That is a worse failure mode than the rate-limited false green,
   which reviewed nothing: this review ran and vouched for the head. It was recorded
   nowhere — the entry above had attributed the miss to the rate-limited pass. **M** —

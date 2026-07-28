@@ -605,6 +605,14 @@ migrate_kit_schema() {
 # started with an unrendered skeleton. The marker below is what distinguishes
 # "the pristine file the kit shipped" from "a handoff someone is actually
 # using": a rendered/edited file has no marker and is never touched.
+#
+# The marker is matched on the FIRST LINE ONLY, which is where every shipped
+# skeleton carries it. Matching it anywhere in the body meant a file that merely
+# QUOTED the marker in prose was treated as pristine and silently overwritten —
+# no backup, and the run still reported "seeded". Harmless while every target
+# was a doc the kit ships already marked, but AGENTS.md is the first target
+# whose in-use state is defined by marker ABSENCE, and it is the natural place
+# for an adopter to document this very convention (panel, adversarial lens).
 TEMPLATE_MARKER="devkit-template: unrendered"
 
 # _render <template> <target> — substitute the {{TOKENS}} and write.
@@ -663,7 +671,7 @@ seed_doc() {
     echo "note: template $_tmpl missing — skipped $_target" >&2
     return 0
   fi
-  if [ -f "$_target" ] && ! grep -qF "$TEMPLATE_MARKER" "$_target" 2>/dev/null; then
+  if [ -f "$_target" ] && ! head -n 1 "$_target" 2>/dev/null | grep -qF "$TEMPLATE_MARKER"; then
     echo "$_target already in use — left untouched"
     return 0
   fi
