@@ -42,8 +42,8 @@ explicit-opt-in default was never exercised.
 **Frozen-inbox snapshot:** `state/triage/frozen-inbox_2026-07-28.json` (gitignored),
 `sha256 b3a168a8ba8c18dc7d254fe76d1621b6ae5afff6d757540f1316c398643a6db7` over **14,341 bytes**
 (14,235 characters; 54 non-ASCII — the digest is over the bytes). The snapshot is a *copy of a
-committed blob*: the inbox at `06490a1` is that text, so the digest and every check below
-reproduce from `git` and `gh` alone, in any session.
+committed blob*: the inbox at `06490a1` is that text, so the digest and every check in
+the PR reproduce from `git` and `gh` alone, in any session.
 
 | # | proposal (inbox entry, abridged) | decision | outcome |
 | - | -------------------------------- | -------- | ------- |
@@ -73,8 +73,9 @@ in the archive verbatim modulo heading demotion, are **absent from the pre-chang
 appear **exactly once**; zero entry bullets remain in this file; the prior archive body is
 preserved. `#138`–`#143` exist, are OPEN, are authored by this account, and their titles contain
 the expected fragments. Each of `#45`/`#113`/`#75`/`#73`/`#120` carries exactly one comment from
-this run, matched by **author and timestamp**. `#23` is CLOSED and carries nothing from this run (it has three comments overall, the latest being the previous sweep's). `7 + 7 = 14` against 14
-parsed bullets.
+this run, matched by **author and timestamp**. `#23` is CLOSED and carries nothing from this run
+(it has three comments overall, the latest being the previous sweep's). `7 + 7 = 14` against the
+14 parsed bullets.
 
 **Not established, and worth naming.** The comment checks assert existence, not *content* — a
 correct comment posted to the wrong issue would pass. The block-presence check is a substring
@@ -87,7 +88,14 @@ would have carried. And no automated gate covers any of it
 from the archive and `make mutation-test`, `check_doc_budget` and `kit_doctor` all stayed green.
 
 The swept entries now live in `kit-friction-log-archive.md`, under the section
-`Graduated 2026-07-28 (second sweep)`. *(Named, not linked — deliberately. A relative link here
-becomes a self-reference the moment the next sweep moves this marker into that file, which is the
-[#73](https://github.com/topij/agentic-dev-kit/issues/73) hazard. Two earlier versions of this
-line claimed to have avoided it while still carrying the link; a lens caught both.)*
+`Graduated 2026-07-28 (second sweep)`.
+
+*(On that sentence, which took four tries. Three earlier versions carried a relative link to the
+archive; the third also claimed to be "named, not linked" while doing so, and a lens caught the
+contradiction. The link is now gone — but removing it is a smaller fix than it looked.
+[#73](https://github.com/topij/agentic-dev-kit/issues/73)'s two recorded occurrences are both
+**prose**, not markdown links: a sentence pointing "above" or naming another file, which stops
+being true once the block moves. So the sentence above is still a latent instance — it names a
+file it will sit inside after the next sweep. What removing the link actually bought is that it
+will not also be a broken clickable target. Recorded rather than papered over, because two
+versions of this parenthetical over-claimed the mitigation.)*
