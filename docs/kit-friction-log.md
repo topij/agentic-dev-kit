@@ -45,16 +45,40 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   cheap to generate and currently impossible to trust. Distinct from `#54` (which asks a
   claim to name its command) — here the claim is about a remote system's state, and the
   verifying command has to run *after* the writes.
-- **`pr_watch.py` cannot authenticate in a web session, so the merge gate ran by hand.**
-  `uv run scripts/pr_watch.py 126` exits with *"403 Forbidden — the token may lack `repo`
-  scope or have expired"*. The gh-less REST transport merged as `#96` reads a token from
-  the environment; in this runtime the GitHub credential lives in the MCP server and is
-  never exposed to the container. So the one fully-wired engine that arbitrates
-  `converged` / `mergeable` is unavailable exactly where `gh` is also absent — which is
-  the environment `#96` was built for. Every merge-gate judgement on `#126` was
-  reconstructed from MCP calls by hand. **M** — proposed fix: let the REST transport
-  accept the runtime's GitHub MCP as a transport, or fail with a message that names the
-  MCP fallback instead of implying an expired token.
+- **`pr_watch.py`'s 403 blames the token, and the token is not the problem — the whole
+  API host is blocked and the real message is being discarded.** `uv run
+  scripts/pr_watch.py 126` exits with *"403 Forbidden — the token may lack `repo` scope or
+  have expired"*. Both halves of that are wrong here. `GH_TOKEN` and `GITHUB_TOKEN` **are**
+  set in a Claude-Code-on-the-web container, but they are a 14-character proxy sentinel
+  (`prox…`), not a GitHub credential: outbound HTTPS goes through the agent proxy, which
+  is what holds real auth. Every `api.github.com` path under `/repos` returns 403, and so
+  does the *public, unauthenticated* `/octocat` — so this is a blanket block on the host,
+  not a scope problem. The proxy's own 403 body says exactly what to do: *"GitHub access
+  is not enabled for this session. An org admin must connect the Claude GitHub App for
+  this organization."* `pr_watch` throws that away and substitutes a guess. Git operations
+  are unaffected because they go through a **separate** local git proxy
+  (`127.0.0.1:41729`), which is why every push and fetch this session succeeded while the
+  API was refused. **M** — proposed fix, two parts: (1) surface the response body on a
+  403 instead of asserting a cause the engine cannot know — a wrong diagnosis sent me to
+  the wrong conclusion and into the permanent record (see below); (2) decide whether the
+  REST transport should detect the proxy sentinel and name the GitHub MCP as the
+  supported path, since `#96`'s premise — "no `gh`, so talk REST" — does not hold when
+  the blocked thing is the API host rather than the CLI. **Installing `gh` would not
+  help**: it reads the same sentinel and takes the same route.
+- **I filed a mechanism I had not tested, and it read as verified because it was
+  specific.** The first version of the entry above stated that "the GitHub credential
+  lives in the MCP server and is never exposed to the container". That is false —
+  `GH_TOKEN` is set, and one `env | grep` would have shown it. The claim was inferred
+  from `pr_watch`'s own error text plus the fact that MCP calls worked, and it was written
+  with enough circumstantial detail to pass for a finding. It survived a fallback panel
+  (both lenses reviewed the diff carrying it), CI, and my own review; it was caught only
+  because the operator asked an unrelated question — *"what if we install `gh`?"* — that
+  happened to require testing the claim. **M** — proposed fix: `#54`'s rule should extend
+  to *mechanism* claims, not just verification claims. "X is not available in this
+  environment" is a testable assertion and needs the command that establishes it in the
+  same way a passing test does. Related to the routing-list entry above: both are claims
+  about a system outside the repo that nothing in the workflow checks before they are
+  committed.
 - **A rate-limited reviewer and an absent one are still the same signal — fourth shape.**
   On `#126` CodeRabbit registered **no check and no comment at all**, well past
   `bot_pending_grace_minutes: 15`. Not a false green, not a rate-limit notice, not a
