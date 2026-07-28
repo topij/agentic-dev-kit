@@ -14,10 +14,76 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-28 — `#33`/`#112` shipped (`#131`) and the `pr_watch` 403 entry
-corrected (`#130`); five new tickets (`#132`–`#136`) from four panel rounds.
+Last updated: 2026-07-29 — the inbox graduated a second time (`#144`) and the documentation
+was audited against the shipped tree (`#147`); eight new tickets (`#138`–`#146`).
 
-## Latest session — 2026-07-28 · 4 (the mutation gate shipped; four panel rounds)
+## Latest session — 2026-07-29 (the second sweep, and a documentation audit)
+
+**Theme —** Two merges and seven panel rounds. The deliverables are routine; the durable
+result is a measurement: **across seven rounds and twelve isolated lenses, no HIGH finding
+was ever in executable code.** Every one was in prose — and the prose that kept failing was
+the prose *about* the verification, not the verification.
+
+- **`#144` merged (`cdeae7a`).** Second `triage-friction-log` sweep dated 2026-07-28.
+  Fourteen entries in, fourteen out: seven graduated into six issues (`#138`–`#143`), seven
+  routed as five occurrence comments. Run in LLM-only mode again (`#6` still not vendored).
+  Per `#128`, the graduation marker carries the approval record the DM would have — proposals,
+  decisions, snapshot digest — plus an explicit statement of what its checks do *not* establish.
+  Inbox 196 → 101 against a 150 budget.
+- **`#147` merged (`030f053`).** Every prose surface audited against the engines, config,
+  manifest and Makefile. The one that would have bitten: `CLAUDE.md` told the cockpit to branch
+  `dev/<scope>`, the exact prefix `pre-push` refuses for narrative-file edits. Also corrected:
+  `README`'s pytest command, a lane-sessions dir that does not exist, `path <scope>` documented
+  as printing the sandbox when it prints the worktree, two live hooks and the `.mcp.json` lane
+  copy documented nowhere, and `--assert-draft`/`--assert-ready` described as read-only checks
+  when they *mutate* the PR.
+- **Eight tickets filed:** `#138` (routing claims unverified), `#139` (`pr_watch.py:687`
+  discards the 403 body), `#140` (extend `#54` to mechanism claims), `#141` (removal
+  enumeration must be per-item and executed), `#142` (counterfactual step when a round removes
+  a guard), `#143` (`session-start` overflows at 68 issues), `#145` (three config keys read by
+  no code), `#146` (`parallel-headless.md` linked but untracked).
+
+**Learned**
+
+- **The record about a change is a bigger defect source than the change.** The sweep moved the
+  right bytes on its first commit and no round found otherwise; three rounds went to the record.
+  The audit's edits were nearly all correct; three rounds went to its evidence. One HIGH was in
+  prose that *ships* — `pr-watch.md`'s flag table — which is the case worth separating.
+- **Correction-by-surface is the failure mode.** The same false `#23` sentence was fixed in the
+  friction log (R1), found still live on `#45`'s comment (R2), then still live in `#140`'s issue
+  body (R3). R4 found a fix that had silently matched nothing while its commit message reported
+  it as landed.
+- **Deleting beat correcting.** Two rounds of correcting the verification transcript each added
+  prose and each added defects. Removing it took the file 141 → 93 and the defect surface with it.
+- **A check heading is a claim.** "Every claimed comment exists on the issue it claims" asserted
+  existence, author and timestamp — never content, which is how the `#23` HIGH survived a round.
+  The integrity check was an unanchored substring test; a lens passed it against an archive whose
+  visible text was destroyed and whose real bytes hid in an HTML comment.
+- **`#75` is 12 of 12.** Every lens launch landed on `main` with an empty diff and self-corrected,
+  because the launch prompt made reporting path/sha/diffstat mandatory *before* reviewing.
+- **CodeRabbit: seven consecutive PRs with no check and no comment** (`#126`–`#147`).
+
+**Open, and owned by nothing yet**
+
+- **`#138`–`#146`** — this session's eight. `#138` and `#127` are the pair that would make a
+  sweep's own claims mechanically checkable; both were filed *and then immediately reproduced*
+  inside this session's pilot run of them.
+- **The friction inbox is already back over budget** — 169/150, from this session's seven
+  entries. Another `triage-friction-log` sweep is due, and `#113`'s hazard now has a *state-path*
+  instance: `state/triage/frozen-inbox_{date}.json` collides on a same-day re-run.
+- **`#132`–`#136` from the previous session** — `#132` is **closed** (shipped `2026-07-28`), so
+  the cs-toolkit Phase 2 blockers are `#41`/`#37`/`#134`. `#133`, `#135`, `#136` remain open.
+- **`#33` and `#112` are shipped but still open** — close them deliberately after confirming
+  `#131` is what each asked for.
+
+▶ Next: `session-start` — the threads are diffuse (nine fresh tickets, no in-flight PR), so let
+it re-read the tracker and propose. If you want one now: `triage-friction-log`, because the
+inbox is over budget again and this session's entries are the freshest evidence behind `#120`,
+`#138` and `#127`.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-28 · 4 (the mutation gate shipped; four panel rounds)
 
 **Theme —** Two merges and a review loop that would not converge. The mechanism is small;
 the durable result is a measured account of how a guard test can be defeated four times
@@ -68,16 +134,16 @@ running, and of a general argument being applied to instances it did not cover.
 
 **Open, and owned by nothing yet**
 
-- **`#132`–`#136`** — this session's five. `#132` and `#134` both land squarely on the
-  `scripts/devkit/` layout, so they gate any further cs-toolkit adoption.
+- **`#132`–`#136`** — that session's five. `#132` and `#134` both land on the `scripts/devkit/`
+  layout. *(`#132` has since closed — see the latest session's open list.)*
 - **`#113` gained a third occurrence** — `chore/update-handoff-2026-07-28` already existed
   on the remote again; avoided by hand, still no mechanism.
 - **`#33` and `#112` are shipped but still open** — close them deliberately after
   confirming `#131` is what each asked for.
 
-▶ Next: `session-start` — several independent threads (the cs-toolkit Phase 2 question and
-its blockers `#41`/`#37`/`#132`/`#134`, plus `#93`'s ordering constraint), so let it
-re-read the tracker and propose.
+▶ Next: `session-start` — **discharged**; the following session ran `triage-friction-log` and a
+documentation audit instead. The cs-toolkit Phase 2 blockers named here were
+`#41`/`#37`/`#132`/`#134`; `#132` has since closed.
 
 ______________________________________________________________________
 

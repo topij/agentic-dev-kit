@@ -99,3 +99,72 @@ being true once the block moves. So the sentence above is still a latent instanc
 file it will sit inside after the next sweep. What removing the link actually bought is that it
 will not also be a broken clickable target. Recorded rather than papered over, because two
 versions of this parenthetical over-claimed the mitigation.)*
+
+## 2026-07-29 (session spanning from 2026-07-28)
+
+- **A correction applied to one copy of a claim, while the same claim stands on other surfaces,
+  was the dominant defect shape — four rounds running, on the same PR.** Round 1 found a false
+  `#23` sentence; it was rewritten in `docs/kit-friction-log.md`. Round 2 found the identical
+  sentence still published on `#45`'s occurrence comment — and that the round had amended `#73`'s
+  comment for a LOW in the same window, so the ability was there and the HIGH was the one missed.
+  Round 3 found the same claim still live in **`#140`'s issue body**. Round 4 found a round-3 fix
+  that had *silently matched nothing* (the target phrase wraps mid-sentence, the anchor assumed one
+  line) while its commit message reported it as landed. Each round fixed the surface it was pointed
+  at. **M** — proposed fix: when a claim is corrected, enumerate the surfaces it was published to
+  *at that moment*, rather than discovering them one review at a time. For this workflow the set is
+  fixed and short: the live log, the archive, the issue bodies the run filed, the occurrence
+  comments the run posted, the PR body, the commit messages. Distinct from `#138`, which asks the
+  *routing* to be verified — this asks a *correction* to be propagated. The silent-no-op half also
+  argues that a scripted text replacement should assert it changed something.
+- **Across seven panel rounds and twelve isolated lenses on two PRs, no HIGH was in executable
+  code — every one was in prose.** The sweep moved exactly the right bytes on its first commit and
+  no round ever found otherwise; three rounds went to the record describing it. The documentation
+  audit's edits were almost all correct; three rounds went to its evidence for them. One HIGH was
+  in prose that *ships* (`pr-watch.md` described `--assert-draft`/`--assert-ready` as read-only
+  checks when they issue `gh pr ready` — following it would flip a deliberately drafted PR to
+  ready), which is the case worth separating from the rest. The mechanism is now visible: each
+  correction round *adds prose*, and added prose is where the next round's findings live. What
+  broke the cycle was **deleting** the elaborate verification transcript rather than correcting it
+  a third time — the file went 141 → 93 lines and the defect surface went with it. **No new fix
+  proposed** — occurrence data for `#120`, with the deletion-beats-correction observation attached.
+- **A check whose heading is larger than its assertion reads as coverage.** The sweep's routing
+  check was headed *"every claimed comment exists on the issue it claims"* while asserting only
+  existence, author and timestamp — never content, so a comment carrying a falsehood passes (which
+  is exactly how the `#23` HIGH survived into round 2). Its block-integrity check was an unanchored
+  substring test: a lens built an archive whose visible text is `CORRUPTED` ×200 with the real bytes
+  hidden in an HTML comment at EOF, and **the check passed**. Both headings needed two rewrites to
+  match what the code does. **No new fix proposed** — occurrence data for `#138` (routing) and
+  `#127` (integrity), both filed by this session and both reproduced inside their own pilot run.
+- **`#75` reproduced on 12 of 12 lens launches.** Every isolated reviewer was placed in a worktree
+  at `main` with an empty `git diff main...HEAD`, across two PRs and seven rounds. Every one
+  detected it and fetched the real head, because the launch prompt required reporting path, sha and
+  diffstat *before* reviewing. Largest set recorded, and unanimous. **No new fix proposed** —
+  occurrence data for `#75`, but at 12/12 the contract item should stop saying "verify" and start
+  saying "assume wrong, fetch first".
+- **A closing keyword reached a PR body because the guard ran in the same command as the publish.**
+  The scan for `close|fix|resolve` adjacent to an issue number was run on every PR body this
+  session — but on one invocation the `grep` and the `gh pr edit` were chained in a single shell
+  command, so the edit published regardless of what the scan found. It found a `closed`
+  immediately preceding an issue reference. No
+  `closingIssuesReferences` were created (verified on both PRs) and the body was corrected within a
+  minute. **M** — proposed fix: this is `#71`'s guard, and the instance says where it has to live.
+  A scan that can be sequenced *after* the thing it guards is not a guard; it belongs in a
+  pre-publish hook or a CI check on the PR body, not in the author's own command line.
+- **CodeRabbit registered nothing on a sixth and seventh consecutive PR.** `#126`, `#129`, `#130`,
+  `#131`, `#137`, `#144`, `#147` — no check row, no comment, past grace on every one. The fallback
+  panel was the only independent pass throughout. The occurrence comment recording this pattern was
+  itself posted with an undercount ("four consecutive"), eight minutes after the fifth instance
+  merged. **No new fix proposed** — occurrence data for `#45`.
+- **`#113` has a latent instance in a state path, not just a branch name.** This session ran a
+  *second* sweep on a date that already had one, so both `chore/triage-{date}` and
+  `state/triage/frozen-inbox_{date}.json` would have collided with the first sweep's. The branch was
+  renamed by hand; the snapshot path was not, and nothing warned. **No data was lost** — `stat`
+  reports `frozen-inbox_2026-07-28.json` with `created == modified == Jul 28 23:14:44`, this
+  session's write, and only the `2026-07-27` file predates it, because the first sweep never wrote
+  a snapshot at all. **M** — proposed fix: `#113` should cover date-patterned *state* paths as well
+  as branch names. The hazard is latent only because the engine that would have written the first
+  snapshot is not vendored (`#6`); once it is, a same-day re-run silently overwrites the artifact
+  the previous run's audit trail depends on. *(Recorded as latent after checking. The first draft of
+  this entry asserted the overwrite had happened — inferred from the shared path, with no command
+  run. One `stat` refuted it. That is `#140`'s shape, in the session that filed `#140`, caught this
+  time because the entry was checked before being committed rather than after.)*
