@@ -20,8 +20,8 @@ was audited against the shipped tree (`#147`); eight new tickets (`#138`–`#146
 ## Latest session — 2026-07-29 (the second sweep, and a documentation audit)
 
 **Theme —** Two merges and eight panel rounds. The deliverables are routine; the durable
-result is a measurement: **across eight rounds and fourteen isolated lenses, no HIGH finding
-was ever in executable behaviour.** Every one was in prose — two of them inside `.py`/`.sh`
+result is a measurement: **across eight rounds and at least fifteen isolated lenses, no HIGH finding
+was ever in executable behaviour.** Every one was in prose — some of them inside `.py`/`.sh`
 files, so "prose" means wherever it lives — and the prose that kept failing was the prose
 *about* the verification, not the verification.
 
@@ -56,7 +56,8 @@ files, so "prose" means wherever it lives — and the prose that kept failing wa
   right bytes on its first commit and no round found otherwise; three rounds went to the record.
   The audit's edits were nearly all correct; three rounds went to its evidence. **Three** HIGHs
   were in prose that *ships* — `pr-watch.md`'s flag table, `devmodel_config.py`'s docstring, and
-  `init.sh`'s `# Requires:` header — which is the class worth separating from the rest.
+  the prerequisite list, which was wrong on **two** surfaces (`init.sh`'s `# Requires:` header and
+  `README.md`). That is the class worth separating from the rest.
 - **Correction-by-surface is the failure mode.** The same false `#23` sentence was fixed in the
   friction log (R1), found still live on `#45`'s comment (R2), then still live in `#140`'s issue
   body (R3). R4 found a fix that had silently matched nothing while its commit message reported
@@ -67,21 +68,24 @@ files, so "prose" means wherever it lives — and the prose that kept failing wa
   existence, author and timestamp — never content, which is how the `#23` HIGH survived a round.
   The integrity check was an unanchored substring test; a lens passed it against an archive whose
   visible text was destroyed and whose real bytes hid in an HTML comment.
-- **`#75` is 12 of 12.** Every lens launch landed on `main` with an empty diff and self-corrected,
-  because the launch prompt made reporting path/sha/diffstat mandatory *before* reviewing.
+- **`#75` is unanimous.** *Every* lens launch this session landed on `main` with an empty diff and
+  self-corrected, because the launch prompt made reporting path/sha/diffstat mandatory *before*
+  reviewing. A running count is not worth recording — the lens that reviewed this claim reproduced
+  it too, so any total is stale on arrival. **At least 15, no exceptions** is the durable form.
 - **CodeRabbit: seven consecutive PRs with no check and no comment** (`#126`–`#147`).
 
 **Open, and owned by nothing yet**
 
 - **`#138`, `#139`, `#140`, `#141`, `#142`, `#143`, `#145`, `#146`** — this session's eight,
   enumerated rather than written as a range, because `#138`–`#146` spans `#144` (a PR, not a
-  ticket) and hides any member's state from a `#N` sweep. That is how a closed `#145` sat in this
-  list for six minutes. `#138` and `#127` are the pair that would make a sweep's own claims
-  mechanically checkable — `#138` filed here, `#127` by the previous session — and both were
+  ticket) and hides any member's state from a `#N` sweep. That is how a closed `#145` sat published in this
+  list for ~13 minutes (closed `22:09:27Z`, list pushed `22:15:26Z`, reopened `22:28:07Z`). `#138` and `#127` are the pair that would make a sweep's own claims
+  mechanically checkable — `#138` filed here, `#127` two sessions back — and both were
   reproduced inside this session's pilot run of them.
-- **The friction inbox is well back over budget** — 196/150, from this session's seven
-  entries. Another `triage-friction-log` sweep is due, and `#113`'s hazard now has a *state-path*
-  instance: `state/triage/frozen-inbox_{date}.json` collides on a same-day re-run.
+- **The friction inbox is well back over budget** — 203/150, from this session's seven
+  entries. Another `triage-friction-log` sweep is due, and `#113`'s hazard has a **latent** *state-path*
+  instance: `state/triage/frozen-inbox_{date}.json` would collide on a same-day re-run, and does
+  not today only because the engine that writes it is not vendored (`#6`).
 - **`#132`–`#136` from the previous session** — `#132` is **closed** (shipped `2026-07-28`), so
   the cs-toolkit Phase 2 blockers are `#41`/`#37`/`#134`. `#133`, `#135`, `#136` remain open.
 - **`#33` and `#112` are shipped but still open** — close them deliberately after confirming
@@ -91,7 +95,7 @@ files, so "prose" means wherever it lives — and the prose that kept failing wa
 session, and its seven entries are the freshest evidence behind `#120`, `#138`, `#127` and `#71`.
 Prefer it over `session-start` this time: `#143` (filed here) records that `session-start`'s
 tracker step overflowed its tool limit at 68 open issues and that the remedy it prescribes cannot
-be run on this backend — there are 79 open now, so page at `perPage: 25` and read
+be run on this backend — there are ~80 open now, so page at `perPage: 25` and read
 `number`/`title`/`labels`/`state` only if you do run it.
 
 ______________________________________________________________________

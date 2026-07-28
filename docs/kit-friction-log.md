@@ -116,19 +116,25 @@ versions of this parenthetical over-claimed the mitigation.)*
   comments the run posted, the PR body, the commit messages. Distinct from `#138`, which asks the
   *routing* to be verified — this asks a *correction* to be propagated. The silent-no-op half also
   argues that a scripted text replacement should assert it changed something.
-- **Across eight panel rounds and fourteen isolated lenses on three PRs, no HIGH was in
-  executable *behaviour* — every one was in prose.** Two of them sat inside `.py`/`.sh` files (a
-  module docstring and `init.sh`'s `# Requires:` header), so "prose" here means prose wherever it
-  lives, not "outside the source tree". The sweep moved exactly the right bytes on its first commit and
-  no round ever found otherwise; three rounds went to the record describing it. The documentation
-  audit's edits were almost all correct; three rounds went to its evidence for them. One HIGH was
-  in prose that *ships* (`pr-watch.md` described `--assert-draft`/`--assert-ready` as read-only
-  checks when they issue `gh pr ready` — following it would flip a deliberately drafted PR to
-  ready), which is the case worth separating from the rest. The mechanism is now visible: each
-  correction round *adds prose*, and added prose is where the next round's findings live. What
-  broke the cycle was **deleting** the elaborate verification transcript rather than correcting it
-  a third time — the file went 141 → 93 lines and the defect surface went with it. **No new fix
-  proposed** — occurrence data for `#120`, with the deletion-beats-correction observation attached.
+- **The verification a run writes about itself is a bigger defect source than the work it
+  verifies.** Across eight panel rounds and at least fifteen isolated lenses on three PRs, **no
+  HIGH was in executable behaviour** — every one was in prose. Some of that prose lives inside
+  `.py`/`.sh` files (a module docstring, a `# Requires:` header), so "prose" means wherever it
+  lives, not "outside the source tree". The sweep moved exactly the right bytes on its first
+  commit and no round ever found otherwise; three rounds went to the record describing it. The
+  documentation audit's edits were almost all correct; three rounds went to its evidence for them.
+
+  **Three of the HIGHs were in prose that *ships*** — the class worth separating, because these
+  would reach an adopter: `pr-watch.md`'s flag table (it described `--assert-draft`/`--assert-ready`
+  as read-only checks when they issue `gh pr ready`, so following it flips a deliberately drafted
+  PR to ready), `devmodel_config.py`'s module docstring, and the `init.sh` prerequisite list, which
+  was wrong on **two** surfaces at once (`init.sh`'s own header *and* `README.md`).
+
+  The mechanism is now visible: each correction round *adds prose*, and added prose is where the
+  next round's findings live. What broke the cycle was **deleting** the elaborate verification
+  transcript rather than correcting it a third time — the file went 141 → 93 lines and the defect
+  surface went with it. **No new fix proposed** — occurrence data for `#120`, with the
+  deletion-beats-correction observation attached.
 - **A check whose heading is larger than its assertion reads as coverage.** The sweep's routing
   check was headed *"every claimed comment exists on the issue it claims"* while asserting only
   existence, author and timestamp — never content, so a comment carrying a falsehood passes (which
@@ -136,8 +142,9 @@ versions of this parenthetical over-claimed the mitigation.)*
   substring test: a lens built an archive whose visible text is `CORRUPTED` ×200 with the real bytes
   hidden in an HTML comment at EOF, and **the check passed**. Both headings needed two rewrites to
   match what the code does. **No new fix proposed** — occurrence data for `#138` (routing) and
-  `#127` (integrity). `#138` was filed by this session; `#127` was filed by the previous one
-  (`2026-07-28T13:46:49Z`, during `#126`'s review). Both were reproduced inside this session's
+  `#127` (integrity). `#138` was filed by this session; `#127` was filed two sessions back
+  (`2026-07-28T13:46:49Z`, during `#126`'s review — the inbox-graduation session, not the
+  mutation-gate one between it and this). Both were reproduced inside this session's
   pilot run of the checks they ask for.
 - **`#75` reproduced on 14 of 14 lens launches.** Every isolated reviewer was placed in a worktree
   at `main` with an empty `git diff main...HEAD`, across three PRs and eight rounds. Every one
