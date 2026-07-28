@@ -223,7 +223,8 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   first head `d8bf1af` — the one carrying the indentation bug — received a genuine,
   completed CodeRabbit review (walkthrough, five pre-merge checks passed) that
   reported it clean, while the defect turned rule 4 into rule 1 in a file ten others
-  cite by number. That is a worse failure mode than the rate-limited false green,
+  outside the session records cite by number. That is a worse failure mode than the
+  rate-limited false green,
   which reviewed nothing: this review ran and vouched for the head. It was recorded
   nowhere — the entry above had attributed the miss to the rate-limited pass. **M** —
   no fix proposed beyond the render-in-both-engines check the indentation entry

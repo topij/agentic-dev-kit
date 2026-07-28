@@ -607,12 +607,16 @@ migrate_kit_schema() {
 # using": a rendered/edited file has no marker and is never touched.
 #
 # The marker is matched on the FIRST LINE ONLY, which is where every shipped
-# skeleton carries it. Matching it anywhere in the body meant a file that merely
+# skeleton carries it — a position the suite pins, since this guard now depends
+# on it. Matching it anywhere in the body meant any in-use file that merely
 # QUOTED the marker in prose was treated as pristine and silently overwritten —
-# no backup, and the run still reported "seeded". Harmless while every target
-# was a doc the kit ships already marked, but AGENTS.md is the first target
-# whose in-use state is defined by marker ABSENCE, and it is the natural place
-# for an adopter to document this very convention (panel, adversarial lens).
+# no backup, and the run still reported "seeded". That hit EVERY target, not just
+# AGENTS.md: a rendered, in-use docs/handoff.md mentioning the marker was
+# destroyed the same way (verified against the pre-fix script). The guard defines
+# "in use" identically for all five; what is distinctive about AGENTS.md is only
+# that the kit ships no pre-marked skeleton of it, so it is reached by file
+# absence rather than marker presence — and it is the likeliest file to discuss
+# this convention (panel round 1 adversarial lens; scope corrected round 2).
 TEMPLATE_MARKER="devkit-template: unrendered"
 
 # _render <template> <target> — substitute the {{TOKENS}} and write.

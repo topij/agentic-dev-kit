@@ -416,9 +416,15 @@ def inspect(root: Path, manifest: dict, config: dict) -> Report:
         if not rel:
             continue
         doc = root / str(rel)
-        # "Rendered" = present and no longer carrying the shipped marker.
+        # "Rendered" = present and no longer carrying the shipped marker ON LINE 1.
+        # Must match init.sh's seed guard exactly: init.sh reads only the first
+        # line, so matching anywhere here made the two disagree about the same
+        # file — a doc that merely quotes the marker in prose was reported "still
+        # an unrendered template — run ./init.sh" while init.sh correctly left it
+        # alone, making the prescribed remedy a no-op (panel round 2).
         narrative[str(rel)] = doc.is_file() and (
-            "devkit-template: unrendered" not in doc.read_text(encoding="utf-8", errors="replace")
+            "devkit-template: unrendered"
+            not in doc.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
         )
 
     raw_version = get(config, "kit.version", None)

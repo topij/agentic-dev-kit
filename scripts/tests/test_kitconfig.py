@@ -313,17 +313,31 @@ def test_shipped_skeletons_carry_the_unrendered_marker(skeleton):
     session blocks never ship to adopters, so reading the config here would check
     the kit's live plan (which must NOT carry the marker) instead of the skeleton."""
     doc = REPO_ROOT / "docs" / skeleton
-    assert "devkit-template: unrendered" in doc.read_text(encoding="utf-8"), doc
+    text = doc.read_text(encoding="utf-8")
+    assert "devkit-template: unrendered" in text, doc
+    # Pinned to LINE 1 specifically: init.sh's seed guard reads only the first
+    # line, so a skeleton carrying the marker lower down is invisible to it and
+    # the #8 failure returns silently — a green suite with every adopter back on
+    # a `my-project` header. Proven reachable: moving this marker to line 3 left
+    # the whole suite passing while init.sh reported the skeleton "already in
+    # use" (panel round 2, correctness lens).
+    assert text.splitlines()[0].find("devkit-template: unrendered") != -1, (
+        f"{doc}: the marker must be on line 1 — init.sh's guard reads no further"
+    )
 
 
 def test_kits_own_plan_is_real_not_a_skeleton():
     """The flip side: this repo must actually practise Principle #1. A kit whose
-    own living plan is an unrendered template is not dogfooding it."""
+    own living plan is an unrendered template is not dogfooding it.
+
+    Checked on line 1, matching init.sh's guard and kit_doctor's: these records
+    narrate the marker mechanism, and a plan that merely QUOTES the marker in
+    prose is still a real plan, not a skeleton."""
     config = kitconfig.load_config(SHIPPED_CONFIG)
     for key in ("paths.handoff", "paths.friction_log"):
         doc = REPO_ROOT / kitconfig.get(config, key)
         text = doc.read_text(encoding="utf-8")
-        assert "devkit-template: unrendered" not in text, doc
+        assert "devkit-template: unrendered" not in text.splitlines()[0], doc
         assert "YYYY-MM-DD" not in text, f"{doc} still has placeholder dates"
 
 

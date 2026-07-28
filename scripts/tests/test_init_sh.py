@@ -566,7 +566,7 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
 
     _run_init(repo)
 
-    # Token rendering is asserted for ALL four docs: {{HANDOFF}} appears only in
+    # Token rendering is asserted for ALL five seeded docs: {{HANDOFF}} appears only in
     # the handoff-history template, and with the check on one doc a deleted
     # substitution survived the whole suite (adversarial lens, this change).
     seeded = {
@@ -626,9 +626,15 @@ def test_seeding_respects_in_use_docs_and_reclaims_marked_ones(tmp_path: Path) -
 
 
 def test_agents_md_renders_the_configured_protected_branch(tmp_path: Path) -> None:
-    """{{PROTECTED_BRANCH}} pinned against a DISTINCTIVE value: the shipped config
-    says `main`, which occurs in enough unrelated prose that asserting it would
-    pass even with the substitution deleted (panel, adversarial lens M2)."""
+    """{{PROTECTED_BRANCH}} pinned against a DISTINCTIVE value, because the token
+    has a FALLBACK: `render_protected_branch` defaults to "main" when the config
+    value is empty. Asserting the shipped `main` therefore cannot tell "the
+    configured value was rendered" from "the config was never read and the
+    fallback fired" — a distinctive value separates them. (Round 2's correctness
+    lens disproved this docstring's first version, which claimed asserting `main`
+    would pass with the substitution deleted: the template contains no literal
+    `main`, so that assertion would have failed. The test is right; the reason
+    given for it was not.)"""
     config = SHIPPED_CONFIG.replace("protected_branch: main", "protected_branch: trunk-9f2a")
     repo = _fixture(tmp_path, config=config, templates=True)
 
@@ -662,8 +668,9 @@ def test_kit_ships_no_root_agents_md(tmp_path: Path) -> None:
     while the kit itself ships no root AGENTS.md — and ./init.sh run in a kit
     checkout creates one. Committing that would hand every `cp -r` adopter the
     kit's own rendered file with the guard permanently false and no diagnostic:
-    the #37/#41 failure the marker exists to prevent, re-entering through the one
-    target that has no marker (panel, adversarial lens)."""
+    the #8 failure the marker exists to prevent, re-entering through the one
+    target that has no marker (panel, adversarial lens; #8 corrected from a
+    misattribution to #37/#41 — that is the forgot-a-manifest-row class)."""
     assert not (REPO_ROOT / "AGENTS.md").exists(), (
         "the kit tree must not ship a root AGENTS.md — if ./init.sh was run here, "
         "delete the generated AGENTS.md rather than committing it"
