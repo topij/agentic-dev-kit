@@ -14,10 +14,82 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-28 — fix-round scope (`#101`) and the severity gate it exposed
-(`#102`) both merged; `#92` is the next lane and now lands under both.
+Last updated: 2026-07-28 — `#92` shipped and the record corrections merged (`#104`);
+five panel rounds graduated six new tickets (`#105`–`#110`).
 
-## Latest session — 2026-07-28 (fix-round scope shipped; the severity gate it exposed)
+## Latest session — 2026-07-28 (`#92` shipped; the record corrected; five panel rounds)
+
+**Theme —** Two deliverables, and a five-round panel that spent most of its findings on
+this branch's own claims rather than on the code. The `AGENTS.md` template is the small
+half; the durable result is a data-loss bug caught before it shipped and a much sharper
+picture of where self-review fails.
+
+- **`#104` merged (`985dcd0`), closing `#92`.** `docs/templates/AGENTS.md.tmpl` — the
+  Codex entry point — rendered by `init.sh` through the same seed guard as the narrative
+  docs, with two new tokens (`{{PROTECTED_BRANCH}}`, `{{HANDOFF_PATH}}`, repo-relative).
+  `KIT_OWNED` row in, manifest 25 → 26. The verification command is deliberately a
+  fill-me placeholder, not a token: `init.sh` knows no such value, so rendering one would
+  have meant guessing (`#110` tracks giving it a real config key).
+- **Seven corrections to the permanent record**, each re-verified against its primary
+  source before editing rather than taken from the review that prompted them.
+- **The rule-citation count went six → nine → ten.** Nine was itself wrong; the miss was
+  `scripts/kit_doctor.py:101`. Two isolated lenses reached ten independently.
+- **A live data-loss bug, caught pre-merge.** `seed_doc` matched the unrendered marker
+  *anywhere* in a file, so any in-use doc that merely quoted the marker in prose was
+  silently overwritten — no backup, run still printed "seeded". Reproduced against the
+  pre-fix script on both a hand-written `AGENTS.md` and a rendered `kit-handoff.md`. The
+  marker now counts on line 1 only, in `init.sh`, in `kit_doctor`, and in the tests.
+
+**Learned**
+
+- **Three separate pieces of new behaviour shipped unpinned** — the seeding call, both
+  token substitutions, and later the `kit_doctor` predicate. Each survived the full suite
+  when deleted. The manifest-hash gate reads as coverage and is not: it is discharged by
+  one documented regenerate command, after which the mutant is green.
+- **A fix round introduced a regression while fixing that same class.** Aligning
+  `kit_doctor` with `init.sh` via `Path.read_text()` swapped one divergence for another,
+  because universal-newline translation ends a "first line" at a lone CR where `head -n 1`
+  ends only at LF. Round 3 caught it; round 2 had asserted the two matched "exactly".
+- **A test can certify destroyed data as fine.** The line-1 assertions used
+  `splitlines()[0]`, which breaks on nine separators production does not. A `U+2028`
+  before the marker passed the suite while `init.sh` would seed over the live plan.
+- **Rounds 1–4 each found a false claim in the previous round's fix**, most of them mine:
+  a fabricated rationale in a test docstring, a "harmless" characterisation of a bug that
+  was destroying data, a verification claim whose setup step was omitted, a side-effect
+  claim whose cited command was scoped narrowly enough to hide the difference, and four
+  consecutive sweeps declared complete that were not. The pattern is specific: the errors
+  cluster in prose *about* verification, not in the verification itself.
+- **Two lenses beat one, twice.** Round 3's correctness lens explicitly cleared the CR
+  case as "behaviourally equivalent for all realistic inputs" — it had tested CRLF but not
+  CR-only, where the adversarial lens proved divergence by execution. A lens's "verified
+  clean" is worth exactly the edge cases it ran.
+- **Convergence is visible when it happens.** Round 5 came back clean on the code: 4000
+  randomized byte documents and a 30-cell separator matrix driving the test helper, the
+  `kit_doctor` predicate and the real `head -n 1 | grep -qF` over identical bytes, with
+  zero disagreements. That, not round count, is what ended the loop.
+
+**Open, and owned by nothing yet**
+
+- **`#105`–`#110`** — this session's six: `/adopt` never seeds `AGENTS.md`; `kit_doctor`
+  aborts on unreadable/directory/invalid-UTF-8 docs where `init.sh` fails safe; the marker
+  predicate is duplicated between `kit_doctor` and its tests and kept in sync by a
+  docstring; `AGENTS.md`'s config-derived links freeze at first render; the intermittent
+  `test_portability.py` flake; and the template's fill-me placeholder.
+- **`#77` reproduced** — I edited the shared tree while a lens was reviewing it. The lens
+  caught it on its own initiative, not because the contract asks. Occurrence logged there.
+- **`#47` gained a third instance** — `docs/AGENTS-sections.md` untracked, alongside `#37`
+  and `#41`. Not fixed, because adding one more hand-maintained row is what `#47` exists
+  to stop.
+- **`#93`, `#95`, `#97`, `#98`** unchanged; `#54` is directly relevant after this session.
+- `#50`, `#66`, `#71`, `#72`, `#75`, `#76`, `#86`, `#88` and the rest per `session-start`.
+
+▶ Next: `triage-friction-log` — the inbox is 287 lines against a ~150 budget and an
+archive sweep is overdue; this session added four entries and graduating them is the
+unblocking step before the next feature lane.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-28 (fix-round scope shipped; the severity gate it exposed)
 
 **Theme —** Two doctrine changes, the second existing because the first cost far more
 than it should have. `#101` took three panel rounds and six isolated reviewers for one
@@ -237,150 +309,6 @@ regressions **in my own fix** before they shipped.
 
 ▶ Next: `#47` — derive `KIT_OWNED` from the shipped tree and fail CI on divergence; its
 own body names `#36`/`#37`/`#40`/`#41` as the gap class it closes.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-27 (friction-log inbox graduated; `reports/` contract settled)
-
-**Theme —** Ran the triage sweep the doc-budget warning had been asking for. Thirteen
-entries in, thirteen accounted for. Both PRs merged **without an independent review** —
-CodeRabbit was rate-limited on its plan while its status check reported **pass**, twice.
-
-- **`#78` merged (`8b1d6b2`).** 13 un-graduated entries → 8 issues (`#70`–`#77`) plus one
-  no-ticket. Four of the eight each merge **two** entries recorded on separate days,
-  because the occurrence count is the evidence (`#71` three occurrences, `#75` nine of
-  nine). Friction log 190 → 50 lines, back under its 150 budget.
-- **`#79` filed, `#80` merged (`4e9cad9`).** `reports/` carried two contradictory
-  contracts — `post-merge-systemize` said never commit it, `triage-friction-log` said
-  git-track it, and `.gitignore` matched neither, so the first rule was unenforced. Now
-  ignored here and in `init.sh`, with both skill lines corrected.
-- **The triage engine is still unvendored (`#6`)**, so the sweep ran in the skill's
-  LLM-only mode: marker, archive sweep and finalize done by hand against the same
-  contract, with a frozen-inbox snapshot for window safety.
-
-**Decided**
-
-- **A rate-limited reviewer is not a waiver, but the operator may waive it.** Both
-  waivers were explicit and scoped — the second was re-asked rather than extended,
-  because that diff touched `init.sh` and not only docs — and both are recorded on the
-  PR and in the squash body. **No review receipt was written**: a receipt would flip
-  `mergeable` and let automation merge unreviewed work.
-- **Use closing keywords deliberately rather than avoiding them.** `#80` carried one
-  intended `Closes #79`, linted before push and verified after opening. Across two squash
-  merges: `#79` closed, `#70`–`#77` all still open. The rule forbids *unintended*
-  adjacency, not the mechanism.
-
-**Learned**
-
-- **`make test` exists and runs the whole suite in 22s** (372 passed). I probed
-  `uv run pytest` and `python3 -m pytest`, both failed, and wrote *"tests were not run
-  locally — pytest is not installed"* into `#80`'s body. False; corrected on the PR.
-  Nothing in the repo points at `make test`, and there is no root `CLAUDE.md`. Fourth
-  consecutive session where a claim of mine was the defect.
-- **The kit's own triage skill defaults to a draft PR, and CodeRabbit skips drafts
-  outright.** The workflow's happy path produces a PR its configured reviewer will never
-  read, and the skill says nothing about it.
-- **A rate-limited CodeRabbit reports `pass`** — the `#23` surface, now with two fresh
-  instances in merged PRs and a third in the history file.
-
-**Open, and owned by nothing yet**
-
-- **`#70`–`#77`** — this sweep's output, untouched. `#71` (closing-keyword guard) and
-  `#75` (invert contract item 7, nine of nine) carry the strongest evidence.
-- **`chore/update-handoff-2026-07-27` holds unmerged work and needs an operator call.**
-  `f3d4e6e` ("fix eight claim errors a review lens found in this handoff") and `30ab573`
-  ("fix a cross-reference this sweep broke") are **not ancestors of `main`** — an earlier
-  session's branch that never landed, possibly superseded by `42873d8`. Left intact
-  rather than cleaned up. It is also what `#81` was accidentally opened against.
-- Everything open at the end of the **2026-07-27 `#59` + `#61.1`** session still stands:
-  three `init.sh` defects with no coverage and nothing tracking that gap, `#61`, `#47`,
-  `#50`, `#60`. (Named rather than "the block below" — an archive sweep moves blocks
-  between files and orphans relative pointers; that is `#73`.)
-
-▶ Next: **a root `CLAUDE.md` naming `make test`, then the `init.sh`-coverage issue** —
-today's false "tests not run locally" claim on a merged PR is the second verification-claim
-defect in as many sessions and the fix is one file; then pick up the carry from the
-`#59` + `#61.1` session, where three `init.sh` bugs are open against a file with zero
-coverage and no issue tracking that gap.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-27 (#59 + #61.1 shipped; #61.2 built and reverted)
-
-**Theme —** Fixed what the cs-toolkit adoption found in `kit_doctor`. The review panel
-ran twice; round 1 found **four regressions against `main`** — my change making things
-*worse* than the code it replaced: `--root` on a non-repo answering from the *enclosing*
-repository, an inherited `GIT_DIR` overriding it, an unreadable manifest version
-degrading from a loud crash to a silent `✓`, and `version: 2.0` going from accepted to a
-hard `--generate-manifest` failure. **None were caught** by CI, by the suite as it then
-stood (355 tests), by my own mutation run at that head, or by CodeRabbit.
-
-- **`#65` merged (`a18f085`), closing `#59`.** The engines probe derives from
-  `KIT_OWNED` instead of naming three files; a quoted `kit.version` no longer crashes
-  the report, an unreadable one says so instead of advising a migration, and it exits 2
-  because CI gates on that code.
-- **`#61`'s hook-detection half was deleted, not shipped.** Asking git resolved the
-  false negatives and introduced worse: answering from an *enclosing* repository when
-  `--root` was not one, and honoring an inherited `GIT_DIR`. `_hook_dirs`'s **body** is
-  byte-identical to `main`; the only change is 25 docstring lines stating the gaps as
-  known — including a false POSITIVE the revert does *not* fix (`.git/hooks` is appended
-  unconditionally, so a hook there reports installed even when git reads elsewhere).
-- **`#66`, `#67` filed** — both `init.sh`, both found by the panel while reviewing
-  something else.
-
-**Decided**
-
-- **The detector must resolve the same way as the writer.** Probing settled a
-  disagreement the kit shipped with: `rev-parse --git-path hooks` *does* honor
-  `core.hooksPath` and tilde-expands it; `git config --get` does not. `init.sh`'s
-  comment asserts the opposite, and it installs an **inert hook** for a `~`-form path.
-- **Blast radius, not round count — and say which you applied, in the PR.** A read-only
-  report's worst case is a wrong message, so two panel rounds with decaying severity is
-  proportionate. What that does *not* cover was written down too.
-- **Rule 1 applied to a half, not a PR.** Two failed shapes for hook detection ⇒ revert
-  that half and ship the rest, rather than tightening a third time or holding #59.
-
-**Learned**
-
-- **My claims keep being the defect.** A commit message attributed a defect to the
-  reverted half when it *ships*; a PR table misstated `main`'s behaviour; and the
-  wrap-up's own handoff block then miscited `#36`, overstated a test count, and got a
-  GitHub rule backwards — all caught by a review lens, none by me. This is the third
-  consecutive session where claim-vs-artifact drift is the most common finding.
-- **An under-determined measurement talked me out of a correct rule.** `#68`'s
-  squash-merge closed `#61` (reopened by hand) because I had weakened the standing
-  "never write a closing keyword next to an issue number, even negated" rule after
-  measuring one PR body as inert. That experiment varied **two** things at once —
-  fenced-vs-inline *and* body-vs-commit — so it never established the thing I concluded
-  from it. Three attempts to state the rule precisely have each been wrong; the
-  conservative original would have prevented all three incidents. Stop deriving the
-  mechanism (rule 1).
-- **Two of my tests pinned nothing**, including the one whose stated thesis is "don't
-  restate the list": it re-derived its expectation from the real `KIT_OWNED` with the
-  prefix filter left out, so deleting that filter left the suite green.
-- **A mutation harness must restore in a `finally`.** Mine died parsing pytest output
-  and left the file mutated — `#50`'s hazard by a route `#50` does not describe.
-- **CodeRabbit is incremental**, so a force-pushed or substantially rewritten PR keeps a
-  stale review and reports nothing new. Its pass covered the pre-split head only;
-  `bots_behind_head` recorded that rather than waving it through.
-
-**Open, and owned by nothing yet**
-
-- **Three `init.sh` defects** — `#62` (unquoted YAML stamping), `#66` (inert `~` hook),
-  `#67` (the same hardcoded triple `#59` just fixed, where it *writes* bad config).
-  `init.sh` has no automated test coverage and **no issue tracks that** — `#36` is the
-  `pre-push` twin, and `#67`'s body miscites it for `init.sh`; both need correcting.
-- **`#61`** — open (closed in error by `#68`'s squash-merge, reopened by hand): the
-  hook-detection half, with the panel's
-  evidence, the shape a correct fix needs, and a table of 9 `git config` value forms of
-  which the current scan misparses 5.
-- **`#47`** still the highest-leverage unbuilt thing, and it subsumes `#67`.
-- **`#50`, `#60`** unchanged.
-
-▶ Next: **file the `init.sh`-coverage issue, then `#67` + `#62` behind it** — three
-`init.sh` bugs are open, the file has zero coverage, and nothing tracks that gap, so the
-harness is the unblocking step and it needs a ticket of its own first. `#66` needs the
-`#61` design call and should follow.
 
 ______________________________________________________________________
 

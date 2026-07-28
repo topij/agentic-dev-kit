@@ -245,3 +245,43 @@ Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-a
   to paste and is now incomplete; step 5 gains no forward pointer to the gate that
   narrows it; and class 2's worst-case test (*"a wrong message"*) fits a report field
   better than a doctrine file, which is acted on by every future author. **L**
+- **The manifest-hash gate reads as test coverage and is not.** Three times this session
+  a mutation to new behaviour was "caught" only by `test_kit_repo_self_check_is_clean`,
+  which compares `kit-manifest.json` hashes. That gate is discharged by one documented
+  command (`kit_doctor.py --generate-manifest`) — exactly what a real edit would run —
+  after which the mutant is fully green. Any mutation result on a `KIT_OWNED` file is
+  therefore meaningless unless the manifest is regenerated first, and a reviewer who
+  skips that step will record a kill that did not happen. **H** — proposed fix: have the
+  mutation-testing guidance (and `#33`, which already covers the false-kill direction)
+  state the regenerate-first step as mandatory, and consider making `--generate-manifest`
+  refuse to run against a tree with uncommitted engine edits so the discharge is visible.
+- **A verification claim can be true, name a command, and still mislead through scope.**
+  Two of this session's false claims survived because the command cited was narrower than
+  the claim: `git status --porcelain docs/` supports "docs/ untouched" but was offered as
+  evidence for "the only side effect is a root `AGENTS.md`", which the unscoped command
+  disproves; and "fresh render in a scratch clone → all five docs seeded" omitted the
+  `rm docs/kit-*.md` the run actually began with. `#54` requires naming the command; it
+  does not require that the command's scope match the claim's scope. **M** — proposed
+  fix: extend `#54` to "name the command *and* the setup it ran against", or require the
+  claim to be restated as exactly what the command shows.
+- **Panel rounds converge on the code long before they converge on the prose.** Round 5
+  found zero code regressions after 4000 differential probes, while still returning six
+  imprecisions in the commit message. Every round from 1 to 4 found a false claim in the
+  previous round's fix, and none of those were in shipped behaviour — they were in
+  descriptions of it. The current stopping criterion (blast radius) handles the code well
+  and gives no guidance for prose, so the choice to stop was mine each time rather than
+  the doctrine's. **M** — proposed fix: consider a separate, cheaper terminal check for
+  record accuracy — one lens, message-only, run once before merge — rather than carrying
+  prose review through every full round at full cost.
+- **`#74` reproduced during this very wrap-up.** The budget check reported
+  `docs/kit-handoff.md` at 463/400 and prescribed the archive sweep; the sweep at its
+  default `--keep 6` reported *"nothing to move: 6 session block(s) <= --keep 6"* and the
+  doc stayed at 463. The prescribed remedy is a no-op precisely when the warning fires,
+  because the check counts **lines** and the sweep keeps **blocks**. Getting under budget
+  needed `--keep 4`, chosen by trying `--dry-run` until the projected line count fit —
+  i.e. the operator does the search the tool should do. **No new fix proposed** — third
+  occurrence for `#74`, now with the detail that the workflow text (*"it deterministically
+  keeps the newest ~6 session blocks"*) names the default that fails, so an agent
+  following wrap-up literally will run the no-op, see the warning persist, and have no
+  documented next step. Worth having the sweep accept a target line count, or having the
+  budget check emit the `--keep` that would satisfy it.
