@@ -73,7 +73,7 @@ in the archive verbatim modulo heading demotion, are **absent from the pre-chang
 appear **exactly once**; zero entry bullets remain in this file; the prior archive body is
 preserved. `#138`–`#143` exist, are OPEN, are authored by this account, and their titles contain
 the expected fragments. Each of `#45`/`#113`/`#75`/`#73`/`#120` carries exactly one comment from
-this run, matched by **author and timestamp**. `#23` is CLOSED with none. `7 + 7 = 14` against 14
+this run, matched by **author and timestamp**. `#23` is CLOSED and carries nothing from this run (it has three comments overall, the latest being the previous sweep's). `7 + 7 = 14` against 14
 parsed bullets.
 
 **Not established, and worth naming.** The comment checks assert existence, not *content* — a
@@ -86,8 +86,8 @@ would have carried. And no automated gate covers any of it
 ([#127](https://github.com/topij/agentic-dev-kit/issues/127)): a lens deleted a whole swept block
 from the archive and `make mutation-test`, `check_doc_budget` and `kit_doctor` all stayed green.
 
-The swept entries now live in [`kit-friction-log-archive.md`](kit-friction-log-archive.md), under
-`Graduated 2026-07-28 (second sweep)`. *(Named, not linked: a relative link here becomes a
-self-reference the moment the next sweep moves this marker into that file — the
-[#73](https://github.com/topij/agentic-dev-kit/issues/73) hazard, which the previous version of
-this line reproduced.)*
+The swept entries now live in `kit-friction-log-archive.md`, under the section
+`Graduated 2026-07-28 (second sweep)`. *(Named, not linked — deliberately. A relative link here
+becomes a self-reference the moment the next sweep moves this marker into that file, which is the
+[#73](https://github.com/topij/agentic-dev-kit/issues/73) hazard. Two earlier versions of this
+line claimed to have avoided it while still carrying the link; a lens caught both.)*
