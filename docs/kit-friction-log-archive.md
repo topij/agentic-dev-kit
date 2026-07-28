@@ -8,9 +8,11 @@ Graduated friction entries live here after they have been routed to the tracker
 Swept by the `triage-friction-log` workflow, run in LLM-only mode (the engine tracked
 in [#6](https://github.com/topij/agentic-dev-kit/issues/6) is not vendored yet). This is
 the **second** sweep dated 2026-07-28. The first is the next `## Graduated` section,
-`## Graduated 2026-07-28 — GitHub Issues (#112–#125)` — *not* the `###` block of the same
-name inside this section, which is that sweep's marker swept out of the live log by this one.
-This sweep graduates the two session blocks that accumulated after it.
+`## Graduated 2026-07-28 — GitHub Issues (#112–#125)`. Do not mistake it for the nearer
+`### 2026-07-28 — Backlog migrated to GitHub Issues (#112–#125)` inside *this* section —
+same issue range, different heading, and that one is the first sweep's marker swept out of
+the live log by this one. This sweep graduates the two session blocks that accumulated
+after it.
 
 Fourteen entries in, fourteen accounted for: **seven graduated** into six new issues,
 **seven** routed as occurrence comments on the five issues they are evidence for. The
@@ -29,8 +31,11 @@ The six graduated issues:
   proxy synthesises a 403 naming an org admin that a personal repo does not have.
 - [#140](https://github.com/topij/agentic-dev-kit/issues/140) — extend
   [#54](https://github.com/topij/agentic-dev-kit/issues/54)'s rule to **mechanism**
-  claims. *Two instances, the second inside the correction of the first — both shipped in
-  `#126`; what happened in consecutive sessions is the catching, not the writing.*
+  claims. *Two instances, the second inside the correction of the first. Neither shipped
+  in `#126` — `git show 2d99593:docs/kit-friction-log.md` contains neither; instance 1 was
+  written and caught within one session and never reached `main`, and instance 2 shipped
+  in `#129` and was corrected by `#130`. What ran across consecutive sessions is the
+  catching.*
 - [#141](https://github.com/topij/agentic-dev-kit/issues/141) — the removal enumeration
   in [#56](https://github.com/topij/agentic-dev-kit/issues/56) must be per-item and
   **executed**, not a correct category judgement applied to a group that differs in
@@ -45,8 +50,10 @@ The six graduated issues:
 The seven routed entries became five comments: `#45` (two entries — the fourth shape of
 reviewer absence, and four consecutive PRs with no check and no comment), `#113` (two
 entries — the second and third reproductions), `#75`, `#73`, and `#120`. `#23` is named
-as a routing target by the swept text and deliberately received **nothing**: it is
-closed, and its occurrence data was consolidated on `#45`.
+as a routing target by the swept text and deliberately received nothing **from this
+sweep**: it is closed, and its occurrence data was consolidated on `#45`. It is not
+un-commented — it carries the *previous* sweep's occurrence comment, posted
+`2026-07-28T13:46:17Z`, four minutes before `#126` merged.
 
 The approval record for this sweep — proposals, decisions, frozen-snapshot digest, and
 the post-write verification — lives in **this sweep's graduation marker**, headed
