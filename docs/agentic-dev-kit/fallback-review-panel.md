@@ -148,6 +148,13 @@ across one session of 13 rounds on three PRs, **every round found something**,
 and seven of those findings were defects introduced by the *previous round's
 fix*. The termination condition may never arrive.
 
+A later session narrowed *which part* of a fix round does that damage: across five
+rounds on one feature, seven merge-gate fail-opens — **three of them from
+hardening nobody asked for**, added alongside fixes that were. Every requested fix
+held. Re-review is the expensive answer to that; the cheap one is
+`safety-critical-changes.md` rule 3's second paragraph — a fix round addresses
+only what the review found, and the rest gets filed.
+
 So the stopping criterion is **blast radius, not round count**:
 
 - A **gate, send path, or destructive operation** — keep going. Worst case is an
