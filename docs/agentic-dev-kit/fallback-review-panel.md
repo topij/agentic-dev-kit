@@ -156,6 +156,20 @@ So the stopping criterion is **blast radius, not round count**:
   field) — a couple of rounds with the findings decaying in severity is
   proportionate. Worst case is a wrong message.
 
+The same classification decides **which findings to act on before merging**, not
+only when to stop. On the first class, act on every finding or say in the PR why
+you did not. On the second, act on **HIGH** and file the rest: a MED about an
+imprecise count or a LOW about a stale cross-reference is real, but fixing it costs
+a fix round *plus* the re-review that round obliges, and rule 3 has already told
+you what a fix round may contain. Filing is not dismissing.
+
+**Do not push that gate into the lens prompts.** Severity has to come from a
+reviewer who does not know what you consider low-stakes. The session that produced
+this paragraph drew **two HIGH findings on a docs-only change**, both real and both
+acted on; a lens told to calibrate down for "it's only docs" would have downgraded
+precisely the two that mattered. It is also the anchoring contract item 2 forbids.
+Report at full severity; gate at the point of action.
+
 Say which one you applied **in the PR**, where a human reads it — the receipt
 carries what the review did *not* cover (`override`, `bot_signal`,
 `bots_behind_head`) and what it did (`lenses`) — not a prose rationale for
