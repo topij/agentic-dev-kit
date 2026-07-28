@@ -14,10 +14,77 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-28 — `#92` shipped and the record corrections merged (`#104`);
-five panel rounds graduated six new tickets (`#105`–`#110`).
+Last updated: 2026-07-28 — the friction inbox graduated (`#126`); sixteen new tickets
+(`#112`–`#128`), the inbox down to 28 lines from 287.
 
-## Latest session — 2026-07-28 (`#92` shipped; the record corrected; five panel rounds)
+## Latest session — 2026-07-28 (the inbox graduated; the panel audited the record)
+
+**Theme —** One deliverable, and a review panel that spent almost all of its findings on
+the record rather than the sweep. The graduation is the small half; the durable result is
+that the sweep's own accounting did not survive an audit, and that no gate in the repo can
+tell a sweep from a deletion.
+
+- **`#126` merged (`2d99593`).** The 24 un-graduated entries swept into
+  `kit-friction-log-archive.md` behind a graduation marker; inbox 287 → 28 against a 150
+  budget it had been over for three sessions. Routing: **13 graduated** into `#112`–`#120`
+  and `#122`–`#125`, **10** routed as occurrence comments on issues that already existed,
+  **1** discharged (`make test` discoverability, answered by the root `CLAUDE.md`).
+- **Run in LLM-only mode.** `triage_friction_log.py` and `finalize_triage.py` are not
+  vendored (`#6`), and `notify.user_key` is blank, so parse/draft/sweep were done by hand
+  and the approval loop ran in-session instead of over DM.
+- **`#121` came from running the workflow, not from the inbox** — the `tracker:` block in
+  `dev-model.yaml` is still `init.sh` placeholder pointing at Linear, which `#6`'s engine
+  will read the moment it lands.
+- **CodeRabbit never reviewed `#126`** — no check, no comment, past its grace window. The
+  fallback panel was the only independent pass.
+
+**Learned**
+
+- **The sweep's accounting did not survive an audit, and both lenses found the same
+  defect.** The occurrence list named `#33`, summing to eleven against a stated ten, so an
+  auditor checking "24 in, 24 out" got 25 with one entry double-counted. `#33` had received
+  a cross-reference to `#112` — a *graduated* entry already inside the thirteen. Rated HIGH
+  by the correctness lens; found independently by the adversarial one.
+- **No gate in this repo can distinguish a sweep from a deletion.** Wiping both narrative
+  docs to 3-line stubs leaves `make test` at 495 passed, `kit_doctor` at 0 differ, and
+  `check_doc_budget` **greener** than the real branch (3/150 vs 28/150). Both files are
+  `ADOPTER_OWNED`, so the drift check never compares them. Filed as `#127`.
+- **A documented unconditional stop was bypassed and defended with the wrong rule.** The
+  skill's notify-channel stop is absolute; the justification written into the PR body
+  belonged to the non-interactive execution-context rule instead. Because `state/` and
+  `reports/` are gitignored, no artifact of the proposals or the approval exists. Filed as
+  `#128`, self-reported.
+- **Both panel worktrees pointed at the wrong ref — 2 of 2.** Both lenses detected and
+  corrected it because the launch prompt required verify-before-review. First occurrence
+  set in this repo where *every* launch was wrong rather than right, so it cannot be
+  folded into the earlier "8 of 8 correct" figures.
+- **Four of the panel's ten findings were defects in the PR body itself**, including a
+  verification claim naming no command — in the PR that files the issue about exactly
+  that. Third consecutive session where the prose, not the change, carried the errors
+  (`#120`).
+
+**Open, and owned by nothing yet**
+
+- **`#112`–`#128`** — this session's sixteen. `#112` (the manifest-hash gate is not
+  coverage) is the highest-leverage: it invalidates every mutation claim over a
+  `KIT_OWNED` file until the regenerate-first step is mandatory. `#127` and `#128` are the
+  panel's own.
+- **`#113` gained a second occurrence** — this session was a same-date second session, so
+  `chore/update-handoff-2026-07-28` already existed on the remote. Avoided by branching
+  off fresh `main` under a different name rather than by any mechanism.
+- **`#75` gained a 2-of-2 occurrence set**; `#73` gained an instance the archive now
+  carries deliberately (a swept self-link, left byte-identical to preserve the verbatim
+  property).
+- `#6`, `#33`, `#45`, `#54`, `#74`, `#76`, `#77`, `#93`, `#95`, `#97`, `#98` and the rest
+  per `session-start`.
+
+▶ Next: `session-start` — the threads are diffuse (sixteen fresh tickets, no in-flight PR,
+nothing blocking), so let it re-read the tracker and propose. If you want one now: `#112`,
+because every future mutation-testing claim depends on it.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-28 (`#92` shipped; the record corrected; five panel rounds)
 
 **Theme —** Two deliverables, and a five-round panel that spent most of its findings on
 this branch's own claims rather than on the code. The `AGENTS.md` template is the small
@@ -83,9 +150,9 @@ picture of where self-review fails.
 - **`#93`, `#95`, `#97`, `#98`** unchanged; `#54` is directly relevant after this session.
 - `#50`, `#66`, `#71`, `#72`, `#75`, `#76`, `#86`, `#88` and the rest per `session-start`.
 
-▶ Next: `triage-friction-log` — the inbox is 287 lines against a ~150 budget and an
-archive sweep is overdue; this session added four entries and graduating them is the
-unblocking step before the next feature lane.
+▶ Next: `triage-friction-log` — **discharged**, shipped as `#126` later the same day. The
+inbox is now 28 lines; the 287-line figure above is that session's reading, kept as the
+record of why the sweep was called for.
 
 ______________________________________________________________________
 
