@@ -11,186 +11,91 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
-## 2026-07-28 — Backlog migrated to GitHub Issues (#112–#125)
+## 2026-07-28 (second sweep) — Backlog migrated to GitHub Issues (#138–#143)
 
-The inbox was swept by the `triage-friction-log` workflow. Twenty-four entries in,
-twenty-four accounted for: **thirteen graduated** into new issues
-([#112](https://github.com/topij/agentic-dev-kit/issues/112)–[#120](https://github.com/topij/agentic-dev-kit/issues/120),
-[#122](https://github.com/topij/agentic-dev-kit/issues/122)–[#125](https://github.com/topij/agentic-dev-kit/issues/125)),
-**ten** routed as occurrence comments on the issues they are evidence for
-(#42, #45 ×3, #54, #74 ×2, #75, #76, #118), and **one** — `make test` being
-undiscoverable — recorded as **discharged**, its proposed root `CLAUDE.md` having since
-landed. `13 + 10 + 1 = 24`.
+The inbox was swept by the `triage-friction-log` workflow, run in LLM-only mode (the engine
+tracked in [#6](https://github.com/topij/agentic-dev-kit/issues/6) is still not vendored).
+**Fourteen entries in, fourteen accounted for:** seven graduated into six new issues
+([#138](https://github.com/topij/agentic-dev-kit/issues/138)–[#143](https://github.com/topij/agentic-dev-kit/issues/143)),
+seven routed as five occurrence comments (`#45` ×2 entries, `#113` ×2, `#75`, `#73`, `#120`).
 
-[#121](https://github.com/topij/agentic-dev-kit/issues/121) sits inside that numeric
-range but came from the sweep itself rather than the inbox: this repo's `tracker:` config
-is still `init.sh` placeholder pointing at Linear. #33 also received a comment, but a
-cross-reference to #112 rather than one of the ten — see the archive for why that
-distinction cost this record an audit.
+Two reconciliations, stated rather than left to a reader — mis-stating exactly these is what
+`#138` was filed for: seven graduated entries became **six** issues because the `pr_watch` 403
+defect was recorded in two sessions and both entries went to
+[#139](https://github.com/topij/agentic-dev-kit/issues/139); seven routed entries became **five**
+comments because `#45` and `#113` each carry two.
 
-Everything swept now lives in [`kit-friction-log-archive.md`](kit-friction-log-archive.md).
+`#23` is named as a routing target by the swept text and received nothing **from this sweep** —
+it is closed, and its occurrence data is consolidated on `#45`. It is not un-commented: it
+carries the *previous* sweep's comment, posted `2026-07-28T13:46:17Z`, four minutes before `#126`
+merged, after a panel caught that it had been omitted.
 
-## 2026-07-28 (second session of the day)
+### Approval record — in-session operator, no DM
 
-- **A routing list is a claim about tracker state, and nothing verifies it before it is
-  committed.** The `#126` sweep's record asserted where each un-graduated entry went. Two
-  of those assertions were false at commit time: `#33` was listed among the ten occurrence
-  comments when it had received a cross-reference about a *graduated* entry (making the
-  list sum to eleven against a stated ten, so "24 in, 24 out" audited to 25), and `#23`
-  was named as a routing target by three entries **and by the comment posted to `#45`**
-  while receiving nothing at all. Both survived the sweep, the commit, and CI; both were
-  caught only by the fallback panel, independently, and the miscount was the panel's only
-  HIGH. **M** — proposed fix: before writing the graduation record, re-read the tracker
-  and assert that every claimed comment exists on the issue it claims; a routing table is
-  cheap to generate and currently impossible to trust. Distinct from `#54` (which asks a
-  claim to name its command) — here the claim is about a remote system's state, and the
-  verifying command has to run *after* the writes.
-- **`pr_watch.py`'s 403 blames the token, and the token is not the problem — but neither
-  is the message the proxy substitutes.** *(Corrected 2026-07-28, third session — the
-  version committed in `#126` got the diagnosis right and the remedy wrong. Every claim
-  below was established by running the command shown, in this container, before editing.)*
-  `uv run scripts/pr_watch.py 126` exits with *"403 Forbidden — the token may lack `repo`
-  scope or have expired"*. Both halves of that are wrong here, and so is taking the
-  proxy's reply at face value:
-  - **The tokens are set, and they are not GitHub credentials.** `GH_TOKEN` and
-    `GITHUB_TOKEN` are both present in a Claude-Code-on-the-web container and both are a
-    14-character proxy sentinel (`prox…`) — established by
-    `python3 -c "import os; print(len(os.environ['GH_TOKEN']), os.environ['GH_TOKEN'][:4])"`
-    → `14 prox`.
-  - **The proxy injects a real, working credential — GitHub *is* connected.**
-    `curl -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/user` returns `200`
-    with login `topij`, id `5101841`. The *same request with no `Authorization` header at
-    all* also returns `200` with the same identity, so the sentinel is not what
-    authenticates — the proxy attaches auth on the way out regardless of what the client
-    sends.
-  - **The block is a path allowlist, not a credential or permission problem.**
-    `https://api.github.com/repos/topij/agentic-dev-kit` returns `403` **with** the
-    sentinel and `403` **without** any auth header, and the public, unauthenticated
-    `/octocat` returns `403` too. Identity is fine on `/user` and refused on `/repos/*`;
-    only the path differs.
-  - **The 403 is synthesized by Anthropic's proxy, not returned by GitHub.** Its
-    `documentation_url` is `https://docs.anthropic.com/en/docs/claude-code/github-actions`.
-  - **Its message is a canned string that does not describe this situation.** It reads
-    *"GitHub access is not enabled for this session. An org admin must connect the Claude
-    GitHub App for this organization."* Access **is** enabled — the GitHub MCP
-    (`mcp__github__*`) reads and writes this repo in the same session — and
-    `topij/agentic-dev-kit` is a personal repo with no organization and no org admin, so
-    the prescribed action does not exist. The proxy's two 403 bodies also contradict each
-    other: `/octocat` answers *"use repository-scoped endpoints
-    (`repos/{owner}/{repo}/...`)"*, which is the exact path that returns the org-admin
-    message. **Do not send the operator to org settings on the strength of this body.**
-  - **Git is unaffected** because `git` goes through a **separate** local git proxy
-    (`git remote -v` → `http://local_proxy@127.0.0.1:41729/git/topij/agentic-dev-kit`),
-    which is why every push and fetch succeeded while the REST API was refused.
+This run was **interactive**, so the operator substituted for the DM review surface rather than
+the stop being bypassed. [#128](https://github.com/topij/agentic-dev-kit/issues/128) asks that
+such a substitute leave the approval record somewhere **committed**, since `state/` and
+`reports/` are gitignored. This block is it. Approval was given up front and unconditionally —
+*"I approve all suggestions"* — so every proposal carries the same decision and the
+explicit-opt-in default was never exercised.
 
-  **M** — proposed fix, two parts: (1) surface the response body on a 403 instead of
-  asserting a cause the engine cannot know (`scripts/pr_watch.py:687`) — the body is
-  **evidence to show the operator, not an instruction to follow**, and this correction is
-  the reason that distinction is worth writing down; (2) decide whether the REST transport
-  should detect the proxy sentinel and name the GitHub MCP as the supported path, since
-  `#96`'s premise — "no `gh`, so talk REST" — does not hold when the blocked thing is the
-  API host rather than the CLI. **Installing `gh` would not help**: it reads the same
-  sentinel and takes the same route.
-- **I filed a mechanism I had not tested, and it read as verified because it was
-  specific.** The first version of the entry above stated that "the GitHub credential
-  lives in the MCP server and is never exposed to the container". That is false —
-  `GH_TOKEN` is set, and one `env | grep` would have shown it. The claim was inferred
-  from `pr_watch`'s own error text plus the fact that MCP calls worked, and it was written
-  with enough circumstantial detail to pass for a finding. It survived a fallback panel
-  (both lenses reviewed the diff carrying it), CI, and my own review; it was caught only
-  because the operator asked an unrelated question — *"what if we install `gh`?"* — that
-  happened to require testing the claim. **M** — proposed fix: `#54`'s rule should extend
-  to *mechanism* claims, not just verification claims. "X is not available in this
-  environment" is a testable assertion and needs the command that establishes it in the
-  same way a passing test does. Related to the routing-list entry above: both are claims
-  about a system outside the repo that nothing in the workflow checks before they are
-  committed.
+**Frozen-inbox snapshot:** `state/triage/frozen-inbox_2026-07-28.json` (gitignored),
+`sha256 b3a168a8ba8c18dc7d254fe76d1621b6ae5afff6d757540f1316c398643a6db7` over **14,341 bytes**
+(14,235 characters; 54 non-ASCII — the digest is over the bytes). The snapshot is a *copy of a
+committed blob*: the inbox at `06490a1` is that text, so the digest and every check in
+the PR reproduce from `git` and `gh` alone, in any session.
 
-  **Second instance, same entry, caught the next session.** The *corrected* version — the
-  one that shipped in `#126` — still carried an untested claim: that the proxy's 403 body
-  "says exactly what to do". It does not; it is a canned string naming an org admin who
-  does not exist for this repo, and one `curl https://api.github.com/user` (no auth
-  header) would have shown that GitHub access was enabled the whole time. The first
-  version failed by inferring a mechanism from an error message; the second failed by
-  *believing* one. Both were specific enough to read as verified, both survived the panel
-  and CI, and both were corrected only because the operator went and ran the commands.
-  That strengthens the proposed fix rather than changing it: the rule has to bind to any
-  claim about the environment, including one quoted from the environment itself.
-- **A rate-limited reviewer and an absent one are still the same signal — fourth shape.**
-  On `#126` CodeRabbit registered **no check and no comment at all**, well past
-  `bot_pending_grace_minutes: 15`. Not a false green, not a rate-limit notice, not a
-  pending check. The three shapes recorded before this all left *something* on the PR;
-  this one leaves the PR indistinguishable from one whose reviewer simply has not started.
-  Nothing but an operator's judgement stopped a silent merge. **No new fix proposed** —
-  occurrence data posted to `#45` and `#23`.
-- **`#113` reproduced as a setup condition, one day after being filed.** This was a
-  second session on 2026-07-28, so `chore/update-handoff-2026-07-28` already existed on
-  the remote — the exact precondition that turned `#81` into a 160/249 revert. Avoided by
-  branching off fresh `main` under a different name, i.e. by hand, because no mechanism
-  exists yet. **No new fix proposed** — second occurrence for `#113`, and worth noting
-  that the first occurrence caused damage while this one was caught only because the
-  hazard had been filed hours earlier and was still in mind.
-- **The panel's worktree pointed at the wrong ref on 2 of 2 launches**, both detected and
-  corrected by the lens because the launch prompt required verify-before-review. Recording
-  it as its own set: earlier sessions counted launches that isolated *correctly*, and this
-  is the first set here where every launch was wrong, so the two cannot be summed. **No
-  new fix proposed** — occurrence data for `#75`.
-- **`#73` gained an instance that is being kept on purpose.** The swept text carries the
-  previous sweep's closing line, *"Everything swept now lives in
-  `kit-friction-log-archive.md`"*, which is now a self-link inside the archive it names.
-  Left byte-identical because rewriting swept content would destroy the verbatim property
-  that makes the archive auditable — so the sweep-warns-on-cross-references fix `#73`
-  proposes needs a *warn*, not a rewrite. **No new fix proposed** — occurrence for `#73`,
-  with that constraint attached.
-- **Four of the panel's ten findings were defects in the PR body, not the diff** —
-  including a verification claim that named no command, in the PR filing the issue about
-  exactly that. Third consecutive session where the prose carried the errors and the code
-  did not. **No new fix proposed** — occurrence data for `#120`, which proposes the
-  cheaper message-only terminal check; three sessions of evidence now sit behind it.
+| # | proposal (inbox entry, abridged) | decision | outcome |
+| - | -------------------------------- | -------- | ------- |
+| 1 | A routing list is a claim about tracker state, and nothing verifies it | approve | [#138](https://github.com/topij/agentic-dev-kit/issues/138) |
+| 2 | `pr_watch.py`'s 403 blames the token, and neither the token nor the proxy's message is the problem | approve | [#139](https://github.com/topij/agentic-dev-kit/issues/139) |
+| 3 | I filed a mechanism I had not tested, and it read as verified because it was specific | approve | [#140](https://github.com/topij/agentic-dev-kit/issues/140) |
+| 4 | A rate-limited reviewer and an absent one are the same signal — fourth shape | approve | comment on #45 |
+| 5 | `#113` reproduced as a setup condition, one day after being filed | approve | comment on #113 |
+| 6 | The panel's worktree pointed at the wrong ref on 2 of 2 launches | approve | comment on #75 |
+| 7 | `#73` gained an instance that is being kept on purpose | approve | comment on #73 |
+| 8 | Four of the panel's ten findings were defects in the PR body, not the diff | approve | comment on #120 |
+| 9 | A correct general argument was used to justify deleting instances it did not cover | approve | [#141](https://github.com/topij/agentic-dev-kit/issues/141) |
+| 10 | `safety-critical-changes.md` rule 1 says to stop, not what to do when the change *is* the guard | approve | [#142](https://github.com/topij/agentic-dev-kit/issues/142) |
+| 11 | `pr_watch.py:687` still discards the 403 body — needs a ticket | approve | [#139](https://github.com/topij/agentic-dev-kit/issues/139) (with 2) |
+| 12 | `session-start`'s tracker step overflows its own tool limit at 68 open issues | approve | [#143](https://github.com/topij/agentic-dev-kit/issues/143) |
+| 13 | CodeRabbit registered nothing on a fourth consecutive PR | approve | comment on #45 (with 4) |
+| 14 | `#113` reproduced a third time | approve | comment on #113 (with 5) |
 
-## 2026-07-28 (fourth session of the day)
+### What was verified, and what was not
 
-- **A correct general argument was used to justify deleting instances it did not cover,
-  and the deletion opened the exact hole the change existed to close.** After three panel
-  rounds walked through the same guard tests, the fix round deleted them on the argument
-  that *"a text search over a file cannot be sound, because whoever edits it can read the
-  search."* That argument is true. It did not apply to two of the three tests: they were
-  built on `make -n`, which executes make and reads what it says it would run. With them
-  gone, the `mutation-test` recipe silently losing `-m 'not driftcheck'` was observed by
-  nothing (`make test` → 500 passed), and a behaviour-only mutation then reported a
-  **kill** — `#33` restored inside the command built to escape it. Caught only because the
-  next round's adversarial lens restored the deleted assertions into every bypass and
-  watched them kill each one. **M** — proposed fix: when a fix round *removes* a
-  mechanism, `#56` already asks for an enumeration of what it was rejecting; this says the
-  enumeration must be **per-item and executed**, not a category judgement applied to a
-  group. The deletion rationale here was written once and applied to three tests that
-  differed in exactly the property the rationale turned on.
-- **`safety-critical-changes.md` rule 1 tells you to stop, and does not say what to do
-  instead when the change *is* a guard.** Four rounds, HIGHs every time, severity never
-  below three. Rule 1 prescribes "a deterministic artifact" — but for a guard over an
-  unbounded space of edits, the artifact is the thing under review. Stopping produced a
-  deletion that was too broad; not stopping would have produced a fifth round. What
-  actually resolved it was a reviewer running the *counterfactual* (restore the deleted
-  code into each bypass), which no rule asks for. **M** — proposed fix: add a
-  counterfactual step to the panel contract for any round that removes a guard — restore
-  it and measure, rather than reasoning about whether it was load-bearing.
-- **`pr_watch.py:687` still discards the 403 body and asserts a cause it cannot know.**
-  `#130` corrected the *record* about this; the defect itself has no ticket. In a web
-  container the whole API host is path-blocked, so `pr_watch` cannot arbitrate a merge
-  gate at all — both of this session's merges were reconstructed from MCP calls by hand.
-  **M** — proposed fix: surface the response body, and have the REST transport detect the
-  proxy sentinel and name the GitHub MCP as the supported path. Needs a ticket.
-- **`session-start`'s tracker step overflows its own tool limit at 68 open issues.** The
-  MCP `list_issues` call returned 177k characters and had to be re-read from a spill file
-  and field-filtered by hand. The workflow already warns that a naive "dump everything"
-  call overflows, and prescribes a field-limited call — but the MCP tool exposes no field
-  selection, so the prescription cannot be followed on this backend. **L** — proposed fix:
-  the workflow's tracker step needs a backend-specific note for GitHub-Issues-over-MCP:
-  page at `perPage: 25` and read `number`/`title`/`labels`/`state` only.
-- **CodeRabbit registered nothing on a fourth consecutive PR.** `#126`, `#129`, `#130`,
-  `#131` — no check, no comment, past grace on all four. The fallback panel was the only
-  independent pass every time. **No new fix proposed** — occurrence data for `#45`/`#23`,
-  now with four consecutive instances behind it rather than one.
-- **`#113` reproduced a third time.** `chore/update-handoff-2026-07-28` already existed on
-  the remote, so the wrap-up branched as `chore/wrap-up-2026-07-28-mutation-gate` by hand.
-  **No new fix proposed** — third occurrence, still no mechanism.
+The full six-check script and its unedited output are in PR
+[#144](https://github.com/topij/agentic-dev-kit/pull/144). Summarised honestly, because two
+review rounds went to this block and both found the summary claiming more than the checks did:
+
+**Established.** The snapshot digest reconstructs from `06490a1`. All three swept blocks appear
+in the archive verbatim modulo heading demotion, are **absent from the pre-change archive**, and
+appear **exactly once**; zero entry bullets remain in this file; the prior archive body is
+preserved. `#138`–`#143` exist, are OPEN, are authored by this account, and their titles contain
+the expected fragments. Each of `#45`/`#113`/`#75`/`#73`/`#120` carries exactly one comment from
+this run, matched by **author and timestamp**. `#23` is CLOSED and carries nothing from this run
+(it has three comments overall, the latest being the previous sweep's). `7 + 7 = 14` against the
+14 parsed bullets.
+
+**Not established, and worth naming.** The comment checks assert existence, not *content* — a
+correct comment posted to the wrong issue would pass. The block-presence check is a substring
+test over the whole archive; an adversarial lens showed it passes against an archive whose
+visible text is destroyed while the real bytes hide in an HTML comment, so it rules out "archived
+nothing", not "archived the wrong bytes". Nothing verifies that the approval happened as
+described, or that the proposals shown were the proposals drafted — that is what the DM thread
+would have carried. And no automated gate covers any of it
+([#127](https://github.com/topij/agentic-dev-kit/issues/127)): a lens deleted a whole swept block
+from the archive and `make mutation-test`, `check_doc_budget` and `kit_doctor` all stayed green.
+
+The swept entries now live in `kit-friction-log-archive.md`, under the section
+`Graduated 2026-07-28 (second sweep)`.
+
+*(On that sentence, which took four tries. Three earlier versions carried a relative link to the
+archive; the third also claimed to be "named, not linked" while doing so, and a lens caught the
+contradiction. The link is now gone — but removing it is a smaller fix than it looked.
+[#73](https://github.com/topij/agentic-dev-kit/issues/73)'s two recorded occurrences are both
+**prose**, not markdown links: a sentence pointing "above" or naming another file, which stops
+being true once the block moves. So the sentence above is still a latent instance — it names a
+file it will sit inside after the next sweep. What removing the link actually bought is that it
+will not also be a broken clickable target. Recorded rather than papered over, because two
+versions of this parenthetical over-claimed the mitigation.)*
