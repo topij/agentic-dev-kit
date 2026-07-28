@@ -6,7 +6,7 @@ by a real shipped failure that CI-green + full unit tests did not catch (an
 approval-matcher inversion; a send-gate with holes found only in review; a destructive
 operation whose "safety" fix reintroduced the hazard; a kill-path that passed unit
 tests but was broken in integration). See Principle #6 in `PRINCIPLES.md` for the
-full doctrine this rule operationalizes. Agent-specific adapters should bind this
+principle this rule operationalizes. Agent-specific adapters should bind this
 shared doctrine through `.claude/rules/`, `AGENTS.md`, or a triggered repository
 skill; do not fork the doctrine into runtime-specific copies.
 
@@ -41,11 +41,10 @@ skill; do not fork the doctrine into runtime-specific copies.
     for and **every one became a HIGH finding in a later round** — two of them built
     in direct response to a real MED, which is the trap. The fixes actually asked
     for held. Your mechanism ships in a commit whose message is about the findings,
-    so the next round sees the two merged and cannot weight them differently.
-    Repairing a defect *in the change under review* is in scope; building something
-    to prevent its class is not. A MED or LOW is often best answered by
-    **documenting the limitation**. State in the PR which changes were requested and
-    which were not.
+    so the next round sees the two merged and cannot weight them differently. A MED
+    or LOW is often best answered by **documenting the limitation**; the harm is
+    trading a fail-*closed* limitation for a fail-*open* mechanism. State in the PR
+    which changes were requested and which were not.
 
 1. **Kill/recovery paths need an integration test.** Unit tests on the handler are
    insufficient — a kill-path can pass unit tests while the wrapper-level behavior is
