@@ -226,9 +226,11 @@ def test_kit_repo_self_check_is_clean():
 
     Marked `driftcheck` because this test compares BYTES, not behaviour: any
     edit to a kit-owned file fails it, including a deliberate mutation. Left in
-    a mutation run it reports a kill for every mutant while nothing behavioural
+    a mutation run it reports a kill for every mutation to a KIT_OWNED file — the
+    26 paths in kit-manifest.json, not the whole repo — while nothing behavioural
     caught anything (#33 — one lens once reported 17/17 killed, and 7 had
-    survived when it was excluded; attested by that lens, not measured here). Regenerating the manifest instead makes it
+    survived when it was excluded; attested by that lens, not measured here).
+    Regenerating the manifest instead makes it
     pass and contributes nothing, which is how a gate that is not coverage came
     to be read as coverage (#112).
     """

@@ -2,31 +2,48 @@
 
 `docs/agentic-dev-kit/fallback-review-panel.md` contract item 5 tells a reviewer
 to trust `-m 'not driftcheck'` when deciding whether a mutant died. The tests
-here pin that the exclusion selects the right test, removes exactly it, and that
-the test it removes is really running. Every assertion below reaches its verdict
-by executing pytest and reading what pytest did.
+here pin that the exclusion selects the right test, removes exactly it, that the
+test it removes is really running, and that the documented command still passes
+the flag at all.
 
-**Three earlier tests were deleted rather than fixed, and the reason is worth
-keeping.** They policed the `Makefile` recipes and the doctrine file by
-inspecting their text, to stop the documented command silently rotting. Three
-consecutive review rounds walked through them, each time by a spelling the
-previous round had not used: a literal parked in a `#` comment; the first
-`target:` block read while GNU make runs the last; `--deselect` and `-k` instead
-of `-m`; `-k` with no space after it; `--ignore=`; narrowing both make targets
-symmetrically; and dropping a target from `.PHONY:` so the loop never inspected
-it. Each round's fix was the next round's finding, which is the pattern
-`safety-critical-changes.md` rule 1 names — so they were removed instead of
-tightened a fourth time.
+**What was deleted, and the one thing that was deleted by mistake.** Earlier
+rounds also policed the doctrine file and the workflow by grepping their text.
+Reviewers walked through those every round, each time with a spelling the last
+had not used, so they are gone: a text search cannot be made sound against
+someone who can read it. Deleted with them, and wrongly, were two assertions
+built on `make -n` — an *execution* probe, not a grep. A later review restored
+them into every Makefile bypass and they killed all of them, so they are back as
+`test_the_mutation_target_actually_excludes_the_drift_check`. What stayed
+deleted is `_phony_targets` (text, defeated by a second `.PHONY:` line) and an
+`assert suite in .github/workflows/test.yml` anchor (a bare substring search
+that had been claimed as this file's strongest guarantee and was inert).
 
-The honest statement of what is left: **nothing here stops someone editing the
-Makefile, the workflow, or the doctrine to disable the drift gate.** A text
-search over a file cannot, because whoever edits it can read the search. What
-this file does cover is the mechanism itself — the marker, its registration, and
-the behaviour of the documented command — none of which is text-matched.
+**What is NOT covered — the complete list, because an earlier version of this
+paragraph gave a shorter one and a review caught it:**
+
+- **`conftest.py`, beside this file.** `collect_ignore = [...]` there removes
+  tests from every run — `make test`, `make mutation-test` and CI alike, since
+  CI collects the same paths. Two lines drop this guard file and the drift test
+  together and report `433 passed`. This is #135, and it is the only narrowing
+  vector CI cannot catch.
+- **The doctrine file**, whose prose nothing here checks.
+- **The workflow file**, whose contents nothing here checks.
+- **The `Makefile` beyond the two assertions named above** — those cover the
+  exclusion being dropped, mistyped, moved onto `test:`, or the two targets
+  diverging; they do not cover every possible edit.
+
+All of these are deliberate edits rather than drift, and a repo-level gate
+(CI's separate `kit_doctor` step) still catches a stale manifest regardless.
+
+Most assertions here reach their verdict by executing pytest or make and reading
+what it did. Two do not, and say so in place: the failure-message test runs the
+drift test in-process against a synthetic drift, and the registration test also
+stats `conftest.py`.
 """
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -68,6 +85,39 @@ def _pytest(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _make_would_run(target: str) -> str | None:
+    """What `make` itself says it would execute for a target, or None if absent.
+
+    An execution probe, not a text search: `make -n` resolves variables, never
+    emits comments, and reports the LAST definition of a duplicated target —
+    which is the one that runs. Two hand-parsing predecessors were defeated by
+    text (a literal parked in a `#` comment; the first `target:` block read
+    while make ran the last); this is neither of them.
+
+    Returns None when the target does not exist, so an adopter whose Makefile
+    has no `mutation-test` skips rather than fails. That is a property of the
+    Makefile, not a guess about the repo layout — an earlier version guessed,
+    and an adopter with any Makefile of their own defeated the guess.
+    """
+    if shutil.which("make") is None:
+        return None
+    proc = subprocess.run(  # noqa: S603
+        ["make", "-n", target],  # noqa: S607 — resolved via PATH
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    lines = [
+        line.strip()
+        for line in proc.stdout.splitlines()
+        if line.strip() and not line.startswith("make")
+    ]
+    return " ".join(lines) if lines else None
+
+
 def _collect(*extra: str) -> list[str]:
     """Node ids pytest would collect, via a real subprocess run.
 
@@ -86,10 +136,15 @@ def _collect(*extra: str) -> list[str]:
 
 
 def test_driftcheck_marks_exactly_the_byte_comparison_test():
-    """Exactly one test is excluded from mutation runs, and it is that one.
+    """Exactly one test CARRIES the marker, and it is the byte-comparison one.
 
     A second marked test would leave a mutation run quietly reporting on a
     smaller suite than the reviewer believes they ran.
+
+    Note the precise scope: this pins which test the marker is on. What a given
+    run actually excludes is decided by that run's argv — pinned separately, for
+    the documented command, by
+    `test_the_mutation_target_actually_excludes_the_drift_check`.
     """
     marked = _collect("-m", "driftcheck")
     assert marked == [DRIFTCHECK_NODE], (
@@ -185,6 +240,51 @@ def test_the_drift_failure_message_names_the_escape_hatch(monkeypatch):
     assert "not behaviour" in message or "not behavioural" in message, (
         "the message must say it compares bytes rather than behaviour"
     )
+
+
+def test_the_mutation_target_actually_excludes_the_drift_check():
+    """The documented command must still do the excluding.
+
+    THE failure this whole change exists to prevent, and the only one nothing
+    else here can see. If the `mutation-test` recipe silently loses
+    `-m 'not driftcheck'` — dropped, or the marker mistyped — the command
+    becomes `make test`, every mutant over a kit-owned file reads as killed, and
+    #33 is back. Measured on a tree with the flag removed: the full suite stays
+    green (500 passed, nothing notices), and a behaviour-only mutation to
+    `pr_watch.py` then reports `1 failed` naming only the drift test.
+
+    Worse, the drift test's own failure message tells the reader to "re-run with
+    `make mutation-test`" — so the advice loops back through the broken command
+    and reproduces the same false kill.
+
+    Both assertions read `make -n`, i.e. what make says it would run. An earlier
+    round deleted this test as "text policing"; that was wrong, and a review
+    proved it by restoring the deleted assertions into every Makefile bypass and
+    watching them kill each one.
+    """
+    mutation_cmd = _make_would_run("mutation-test")
+    if mutation_cmd is None:
+        pytest.skip("no `mutation-test` target here (or no make); nothing to pin")
+
+    assert MUTATION_INVOCATION in mutation_cmd, (
+        f"`make mutation-test` no longer passes {MUTATION_INVOCATION}, so it "
+        "excludes nothing and every mutant will read as killed (#33). make "
+        f"would run: {mutation_cmd}"
+    )
+
+    test_cmd = _make_would_run("test")
+    if test_cmd is not None:
+        # Exact equality, not "contains each suite": a substring check passes
+        # when the suite list is REPLACED by a path underneath it
+        # (`scripts/tests` ⊂ `scripts/tests/test_kit_doctor.py`). This also
+        # covers the exclusion appearing on `test:` — it would have to appear
+        # twice on `mutation-test:` for equality to hold.
+        assert mutation_cmd == f"{test_cmd} {MUTATION_INVOCATION}", (
+            "`make mutation-test` must be exactly `make test` plus "
+            f"{MUTATION_INVOCATION}, so neither can quietly cover a different "
+            f"suite than the other.\n  test:          {test_cmd}\n"
+            f"  mutation-test: {mutation_cmd}"
+        )
 
 
 def test_the_marker_is_registered_somewhere_pytest_can_see_it():
