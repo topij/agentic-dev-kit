@@ -7,8 +7,10 @@ Graduated friction entries live here after they have been routed to the tracker
 
 Swept by the `triage-friction-log` workflow, run in LLM-only mode (the engine tracked
 in [#6](https://github.com/topij/agentic-dev-kit/issues/6) is not vendored yet). This is
-the **second** sweep dated 2026-07-28 — the first (`#112`–`#125`) is the section below,
-and this one graduates the two session blocks that accumulated after it.
+the **second** sweep dated 2026-07-28. The first is the next `## Graduated` section,
+`## Graduated 2026-07-28 — GitHub Issues (#112–#125)` — *not* the `###` block of the same
+name inside this section, which is that sweep's marker swept out of the live log by this one.
+This sweep graduates the two session blocks that accumulated after it.
 
 Fourteen entries in, fourteen accounted for: **seven graduated** into six new issues,
 **seven** routed as occurrence comments on the five issues they are evidence for. The
@@ -27,8 +29,8 @@ The six graduated issues:
   proxy synthesises a 403 naming an org admin that a personal repo does not have.
 - [#140](https://github.com/topij/agentic-dev-kit/issues/140) — extend
   [#54](https://github.com/topij/agentic-dev-kit/issues/54)'s rule to **mechanism**
-  claims. *Two instances in consecutive sessions, the second inside the correction of the
-  first.*
+  claims. *Two instances, the second inside the correction of the first — both shipped in
+  `#126`; what happened in consecutive sessions is the catching, not the writing.*
 - [#141](https://github.com/topij/agentic-dev-kit/issues/141) — the removal enumeration
   in [#56](https://github.com/topij/agentic-dev-kit/issues/56) must be per-item and
   **executed**, not a correct category judgement applied to a group that differs in
@@ -47,9 +49,14 @@ as a routing target by the swept text and deliberately received **nothing**: it 
 closed, and its occurrence data was consolidated on `#45`.
 
 The approval record for this sweep — proposals, decisions, frozen-snapshot digest, and
-the post-write routing verification — is in the graduation marker in
-[`kit-friction-log.md`](kit-friction-log.md), per
-[#128](https://github.com/topij/agentic-dev-kit/issues/128).
+the post-write verification — lives in **this sweep's graduation marker**, headed
+`2026-07-28 (second sweep) — Backlog migrated to GitHub Issues (#138–#143)`, per
+[#128](https://github.com/topij/agentic-dev-kit/issues/128). That marker is in
+`kit-friction-log.md` while this is the newest sweep, and moves into this file as a `###`
+block when the next sweep runs — so it is named here rather than linked. A relative link
+would have been a [#73](https://github.com/topij/agentic-dev-kit/issues/73) break authored
+by hand, in the record that reports on #73; the "leave it byte-identical" argument covers
+*swept* text, not text this commit wrote itself.
 
 ### 2026-07-28 — Backlog migrated to GitHub Issues (#112–#125)
 
