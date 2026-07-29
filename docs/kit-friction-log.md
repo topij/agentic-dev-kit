@@ -114,3 +114,20 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
   gave it a worktree of a *different repository* (the OpenKitchen case `#75` records) has no such
   fallback. **Not from the swept inbox:** surfaced by the review panel on this sweep's own PR,
   recorded below the marker for the next pass.
+- **`set -euo pipefail` did not gate the step after a failing check, so a guard that fired was
+  overruled by the write it was guarding.** The keyword scan protecting this sweep's PR body ran
+  as a heredoc'd Python block under `set -euo pipefail`, exited non-zero with three flags — and
+  the `gh pr edit` on the next line ran anyway, publishing the flagged text and printing a success
+  line. Reproduced minimally in the same tool harness (`set -euo pipefail`; failing heredoc'd
+  `python3 - <<'PY'`; the following `echo` still runs), and **not** reproducible by running the
+  identical script under either `bash` or `zsh` directly, where both abort correctly — so it is a
+  property of how the command is executed, not of the shell's `errexit`. Every scan-then-act in
+  this session was therefore ungated; nothing wrong was published as a result only because the
+  output was read each time, which is luck rather than a mechanism. **M** — occurrence data for
+  [#150](https://github.com/topij/agentic-dev-kit/issues/150), and a sharpening of it: that issue
+  and this session's comment on it both frame the danger as a check that *reports* success
+  wrongly. This is a check that reported failure correctly and was ignored, which the same
+  acceptance criterion does not cover. The durable form is that a guard must be **chained** to the
+  action it guards (`check && act`), never merely sequenced before it — sequencing depends on an
+  `errexit` guarantee that does not hold in every execution context. **Not from the swept inbox:**
+  surfaced while writing this PR.
