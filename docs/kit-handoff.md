@@ -25,7 +25,9 @@ the failures are the result worth keeping.
 - **`#153` merged (`b46f794`).** `fallback-review-panel.md` gains one section of *authoring*
   guidance — keep the record short, put detail in the PR, shorten a record that has needed
   repairing twice, and treat adopter-executed prose, commit messages and any record standing in
-  for a control as first class. It loosens no control and says so explicitly.
+  for a control as first class. It loosens no control and says so explicitly. It also gave
+  `workflows/pr-watch.md` the panel's missing precondition — that criterion applies only when the
+  review bot is unavailable — and separated the poll/fix loop bound from per-change review rounds.
 - **Three designs died first**, each killed by a panel on a real hole: a class defined by file
   type inside a section organised by function; the same class with functional tests, which the
   handoff passed while being the file the next session is told to act on; and a class-independent
@@ -47,13 +49,23 @@ the failures are the result worth keeping.
 
 **Open, and owned by nothing yet**
 
-- **The inbox is 179/150** and a sweep is due — this is now the third consecutive session ending
-  over budget.
-- `#149`, `#150`, `#145`, `#146`, `#138`–`#143` and the rest per `session-start`.
+- **The inbox is 179/150** and a sweep is due — the **fourth** consecutive session ending over
+  budget (196, 203, 179, 179 since `06490a1`, against a budget of 150 throughout).
+- **`#120` now carries this session's findings** — it proposes the cheaper terminal check these
+  three designs were attempts at, so the reasons they broke are recorded there rather than only
+  in this block.
+- `#149`, `#150`, `#145`, `#146`, `#138`, `#139`, `#140`, `#141`, `#142`, `#143` and the rest per
+  `session-start`.
 
-▶ Next: `triage-friction-log` — the inbox has been over budget for three sessions. No friction
-entries were added this session on purpose: both lessons above landed in doctrine rather than the
-inbox, which is the guidance `#153` shipped, applied to itself.
+▶ Next: `triage-friction-log` — the inbox has been over budget for four sessions. **Caveat before
+running it unattended:** `notify.user_key` is blank, so the workflow stops at Step 2 by design; the
+in-session-operator path is open regression `#128`, and `#124` records that its default draft PR
+goes to a reviewer that will never read it.
+
+No friction entries were added this session on purpose, and only one of the two lessons is in
+doctrine: the record-length one is in `fallback-review-panel.md`, while *"any rule whose trigger
+the author sets is a control the author can opt out of"* is recorded on `#120` — the tracker, not
+the inbox, because it is the constraint any future attempt at that ticket must satisfy.
 
 ______________________________________________________________________
 
