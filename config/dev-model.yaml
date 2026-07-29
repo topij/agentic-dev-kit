@@ -21,7 +21,9 @@ kit:
 
 project:
   # Human-readable project name, used in skill prompts and doc headers.
-  # STAMPED for this repo (see the note under `tracker:` on stamped-vs-default).
+  # Set for this repo. `paths:` and `doc_budgets:` below are likewise this repo's
+  # own (the `kit-*.md` names, explained in the `paths:` comment); `tracker:` and
+  # `notify:` are NOT — see their comments for where this repo's values live.
   name: agentic-dev-kit
 
 paths:
@@ -79,30 +81,21 @@ vcs:
   systemize_branch_pattern: "chore/systemize-{date}"
 
 tracker:
-  # ── STAMPED vs DEFAULT ───────────────────────────────────────────────────────
-  # This file is BOTH the kit's own live config AND the file adopters receive, so
-  # a placeholder and a deliberate value are otherwise typographically identical —
-  # which is how a sweep re-derived that problem a day after it was filed (#121).
-  # The convention: a value stamped for THIS repo says STAMPED in a comment. It is
-  # applied to `project:`, `tracker:` and `notify:` here; `paths:` and
-  # `doc_budgets:` are ALSO stamped for this repo (the `kit-*.md` names) and say so
-  # in their own block comment rather than per line. Absence of the word is
-  # therefore not proof of a default — read the block comment. (A review lens
-  # caught the first version of this paragraph claiming otherwise, which falsified
-  # the convention inside the file that declares it.)
+  # NOT STAMPED — these are init.sh defaults, and deliberately left unresolvable.
+  # This file is both the kit's own config and the file adopters receive, and
+  # `init.sh` offers the committed value as the prompt default — silently, on a
+  # non-interactive run. Stamping this repo's real board here therefore made every
+  # adopter's default a live, foreign, public tracker that `triage-friction-log`
+  # would file into. A review panel rated that a regression; before it, the
+  # placeholders could not resolve to any board at all.
   #
-  # `init.sh` offers the committed value as the default for the fields below, so an
-  # adopter running it INTERACTIVELY is asked. A non-interactive run — piped,
-  # scripted, or in CI — keeps the committed value silently and prints "no terminal
-  # attached", so this repo's values would be stamped into an adopter's config with
-  # no prompt at all. Replace them for your own project.
-  # ─────────────────────────────────────────────────────────────────────────────
-  backend: github-issues         # STAMPED. linear | github-issues | jira | none
-  project_name: "topij/agentic-dev-kit"   # STAMPED — for github-issues this is the repo
-  url: "https://github.com/topij/agentic-dev-kit/issues"   # STAMPED — board URL
-  # Backend-specific ids (Linear). NOT APPLICABLE to this repo's `github-issues`
-  # backend — kept, blank, because `init.sh` writes into this sub-map when an
-  # adopter selects `linear`, and removing it would leave nothing to write into.
+  # This repo's own values live in the gitignored `config/dev-model.local.yaml`,
+  # which is what `notify.user_key` uses and what `kitconfig.OVERLAYABLE_PREFIXES`
+  # permits. Adopters replace these here; nobody inherits anyone's tracker.
+  backend: linear                # linear | github-issues | jira | none
+  project_name: "My Project Dev"
+  url: ""                        # board URL shown in the friction-log header
+  # Backend-specific ids (Linear). Leave blank for other backends.
   linear:
     team_id: ""
     project_id: ""

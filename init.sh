@@ -931,6 +931,13 @@ touch .gitignore
 add_ignore_line() {
   entry="$1"
   if ! grep -qxF "$entry" .gitignore 2>/dev/null; then
+    # Append a newline first when the file does not end in one, or the new entry
+    # concatenates onto the last line and silently un-ignores it: a .gitignore
+    # ending `.env` (no newline) became `.envstate/`, so `.env` stopped being
+    # ignored by the very helper that exists for secret hygiene (panel).
+    if [ -s .gitignore ] && [ "$(tail -c 1 .gitignore | wc -l)" -eq 0 ]; then
+      printf '\n' >> .gitignore
+    fi
     printf '%s\n' "$entry" >> .gitignore
     echo "added '$entry' to .gitignore"
   fi
@@ -950,7 +957,7 @@ add_ignore_line "reports/"
 # the whole protection: .gitignore is adopter-owned, so without seeding it here an
 # adopter following docs/getting-started.md would write an identity into a tracked
 # path while every doc told them it was ignored (panel, adversarial lens).
-add_ignore_line "config/dev-model.local.yaml"
+add_ignore_line "config/*.local.yaml"
 # dev_session.sh copies a repo-root .mcp.json into each lane worktree so lanes
 # inherit MCP access. If yours holds literal credentials rather than ${ENV}
 # references, that copy must never be committable from a lane.

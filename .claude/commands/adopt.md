@@ -76,7 +76,12 @@ For each piece, **copy only if the target doesn't already exist**:
 - **Lint-containment doctrine** → `docs/agentic-dev-kit/adopting-into-a-linted-repo.md`. Install it whenever Step 1 found repo-wide lint or format, and apply its exclusions **in the same commit as the engines** — an engine that gets autoformatted before the exclusion lands is already drifted. `kit_doctor` tracks this file, so skipping it shows up as a permanent `missing`.
 - **`config/dev-model.yaml`** — stamp the Step-1 values: `paths.handoff` → the existing plan (and `paths.handoff_history` / the `doc_budgets` entry to match), `paths.engines`, `runtime`, `tracker`, `review`, and `models`.
 - **`friction-log.md`** (seed only if absent).
-- Append `state/` and `.devkit_state_root` to `.gitignore` if missing.
+- Append `state/`, `.devkit_state_root`, `reports/`, `.claude/worktrees/` and
+  **`config/*.local.yaml`** to `.gitignore` if missing. The last one is load-bearing:
+  `kitconfig.load_config()` merges a gitignored `config/dev-model.local.yaml` over the
+  tracked config, and `docs/getting-started.md` tells the operator to put their DM id
+  there. `/adopt` does not run `init.sh`, so nothing else seeds these — without this
+  step an identity lands in a tracked path while every doc says it is ignored.
 - Copy `PRINCIPLES.md`, `docs/parallel-dev.md`, and the shared workflow/safety docs under `docs/agentic-dev-kit/` for reference.
 
 **Never overwrite an existing file.** If something you didn't anticipate collides, stop

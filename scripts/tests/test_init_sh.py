@@ -770,7 +770,7 @@ def test_gitignore_entries_added_exactly_once_across_reruns(tmp_path: Path) -> N
         # one. Without this seeded here, docs/getting-started.md instructs adopters
         # to write an identity into a tracked path while asserting it is ignored
         # (panel, adversarial lens — a HIGH on the change that added the overlay).
-        "config/dev-model.local.yaml",
+        "config/*.local.yaml",
     ):
         assert lines.count(entry) == 1, f"{entry!r} appears {lines.count(entry)} times"
 

@@ -319,7 +319,12 @@ def _deep_merge(
 
     Both were found by a review panel on the change that added this: the first as
     a silent no-op, the second as silent destruction of a sibling key the
-    docstring promised was preserved.
+    docstring promised was preserved. A second round found the block rule guarded
+    only *maps*, so a valueless key still wiped a tracked **list** — ``review:``
+    with ``bots:`` blank left ``review.bots`` as ``None``, and ``pr_watch`` then
+    fell back to its built-in defaults with the tracked review gate silently
+    narrowed. The rule is now "``None`` never replaces a tracked value, and a
+    non-map never replaces a map", which covers every container.
     """
     out = dict(base)
     for key, value in overlay.items():
@@ -327,40 +332,88 @@ def _deep_merge(
         if key not in base:
             problems.append(f"  {path} — no such key in the tracked config")
             continue
+        if value is None and base[key] is not None:
+            problems.append(
+                f"  {path} — nothing cannot replace a value; "
+                f"a key with no value is almost always a typo or a stray indent"
+            )
+            continue
         if isinstance(base[key], dict):
             if not isinstance(value, dict):
-                kind = "nothing" if value is None else f"a {type(value).__name__}"
                 problems.append(
-                    f"  {path} — {kind} cannot replace a block; "
+                    f"  {path} — a {type(value).__name__} cannot replace a block; "
                     f"set the keys under it instead"
                 )
                 continue
             out[key] = _deep_merge(base[key], value, path, problems)
+        elif isinstance(value, dict):
+            problems.append(
+                f"  {path} — a block cannot replace a plain value; "
+                f"the tracked file declares this as a single value"
+            )
+            continue
         else:
             out[key] = value
     return out
 
 
-def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
+#: Dotted key prefixes a local overlay may set. **Deliberately tiny.**
+#:
+#: The kit has four config readers: this one, ``devkit_config_scalar`` (awk, used
+#: by ``dev_session.sh`` and ``reconcile_sessions.sh``), the snippet embedded in
+#: ``scripts/hooks/pre-push``, and ``devmodel_config.py``. Only this one merges the
+#: overlay. A key readable by the others would therefore resolve to one value in a
+#: Python engine and another in a shell script — the silent divergence the overlay
+#: exists to prevent, reintroduced one layer down. A review panel demonstrated it:
+#: an overlay on ``vcs.dev_branch_prefix`` left the pre-push guard matching a prefix
+#: nothing is named, so a hard stop CLAUDE.md relies on failed open.
+#:
+#: So the overlay is confined to keys that are (a) identity-bearing, which is the
+#: whole reason it exists, and (b) read by no shell reader. Everything else —
+#: ``vcs.*``, ``paths.*``, ``review.*``, ``doc_budgets``, ``models.*`` — stays
+#: tracked-only, and an overlay naming one is an error rather than a divergence.
+#: Widening this list means checking every reader first.
+OVERLAYABLE_PREFIXES = ("notify.user_key", "tracker.")
+
+
+def _overlay_paths(node: Any, where: str = "") -> list[str]:
+    """Every dotted leaf path an overlay sets, so each can be checked in turn."""
+    if not isinstance(node, dict) or not node:
+        return [where] if where else []
+    out: list[str] = []
+    for key, value in node.items():
+        out.extend(_overlay_paths(value, f"{where}.{key}" if where else key))
+    return out
+
+
+def load_config(path: str | Path = DEFAULT_CONFIG_PATH, *, overlay: bool = True) -> dict[str, Any]:
     """Load and parse the config. A relative path resolves against the repo root.
 
     If a sibling ``<name>.local.<ext>`` exists it is merged **over** the tracked
     file, per leaf. That file is gitignored, so a value which must not enter git —
     an operator's DM id, a tracker team id — lives there while the tracked file
     keeps a blank placeholder and its explanatory comment. The tracked file stays
-    the schema of record (Principle #10); the overlay only supplies values.
+    the schema of record (Principle #10); the overlay only supplies values, and
+    only for the keys in :data:`OVERLAYABLE_PREFIXES`.
 
     ``init.sh`` writes the **tracked** file, so a key set in the overlay keeps
     winning after a re-run of init — deliberate, and the reason the tracked file
     should hold a blank rather than a stale duplicate of the overlay's value.
 
+    Pass ``overlay=False`` to read the tracked file alone. Tests that assert
+    something about the *shipped* config need this: without it a developer's own
+    gitignored overlay can turn the suite red on their machine while CI stays
+    green, which a review panel demonstrated against the repo whose CLAUDE.md
+    names ``make test`` as the verification command.
+
     Raises ``FileNotFoundError`` when the tracked file is absent — a script that
-    needs config has nothing sane to fall back to. A missing overlay is normal
-    and silent. An overlay that exists but cannot be applied **raises**: it may
-    only set keys the tracked file already declares, and may not replace a block
-    with a non-block. Both rules exist because an overlay that silently fails to
-    apply is indistinguishable from a correct one until a workflow acts on the
-    wrong value.
+    needs config has nothing sane to fall back to. A missing overlay is normal and
+    silent. An overlay that exists but cannot be applied **raises** — including on
+    an ``OSError`` from reading it, which is deliberately not caught. It may only
+    set overlayable keys the tracked file already declares, may not replace a value
+    with nothing, and may not swap a block for a plain value or the reverse. Every
+    one of those rules exists because an overlay that silently fails to apply is
+    indistinguishable from a correct one until a workflow acts on the wrong value.
     """
     target = Path(path)
     if not target.is_absolute():
@@ -372,9 +425,9 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
     config = loads(target.read_text(encoding="utf-8"))
 
     overlay_path = target.with_suffix(f".local{target.suffix}")
-    if overlay_path.is_file():
+    if overlay and overlay_path.is_file():
         raw = overlay_path.read_text(encoding="utf-8")
-        overlay = loads(raw)
+        overlay_data = loads(raw)
         # `loads()` yields {} for anything it cannot read as a mapping. Content
         # that produced no keys at all is a syntax error (a line with no colon,
         # say), not an empty overlay — but a file holding only comments or YAML's
@@ -385,13 +438,28 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
             stripped and not stripped.startswith("#") and stripped not in structural
             for stripped in (line.strip() for line in raw.splitlines())
         )
-        if has_content and not overlay:
+        if has_content and not overlay_data:
             raise ValueError(
                 f"local config overlay has content but produced no keys: {overlay_path} "
                 f"(expected a mapping like 'notify:\\n  user_key: \"…\"')"
             )
         problems: list[str] = []
-        merged = _deep_merge(config, overlay, "", problems)
+        for leaf in _overlay_paths(overlay_data):
+            # An ANCESTOR of an overlayable key passes here on purpose — a
+            # valueless `notify:` yields the path `notify`, and the block/None
+            # guards below say something far more useful about it than "not
+            # overlayable" would.
+            allowed = leaf.startswith(OVERLAYABLE_PREFIXES) or any(
+                prefix.rstrip(".").startswith(f"{leaf}.") for prefix in OVERLAYABLE_PREFIXES
+            )
+            if not allowed:
+                problems.append(
+                    f"  {leaf} — not overlayable. Only {', '.join(OVERLAYABLE_PREFIXES)} "
+                    f"may be set locally; everything else is also read by shell "
+                    f"scripts that do not merge this file, so an override here would "
+                    f"apply in Python engines and silently not in them"
+                )
+        merged = _deep_merge(config, overlay_data, "", problems)
         if problems:
             raise ValueError(
                 f"local config overlay cannot be applied: {overlay_path}\n"

@@ -57,10 +57,9 @@ reads its project-specific values, so there's nothing to hardcode elsewhere.
 
 ### Values you don't want in git
 
-Some of those values are identities rather than settings — the operator id the
-approval DM targets, a tracker team id. Put those in
-`config/dev-model.local.yaml`, which is gitignored and merged **over** the tracked
-file per leaf:
+Some values are identities rather than settings — the operator id an approval DM
+targets, this repo's own tracker. Put those in `config/dev-model.local.yaml`,
+gitignored, merged over the tracked file per leaf:
 
 ```yaml
 # config/dev-model.local.yaml
@@ -68,29 +67,21 @@ notify:
   user_key: "U0XXXXXXXXX"
 ```
 
-The tracked file stays the schema of record — it keeps the key, blank, with the
-comment explaining it — so a reader still sees every knob that exists. Only the
-value moves, and sibling keys are preserved: setting `notify.user_key` locally
-does not drop `notify.backend`.
+**Only `notify.user_key` and `tracker.*` may be set there** (`kitconfig.OVERLAYABLE_PREFIXES`).
+The list is deliberately tiny: the kit has four config readers and only
+`kitconfig.load_config()` merges the overlay, so a key the shell readers also
+consume would resolve to one value in a Python engine and another in `sh`. An
+overlay naming anything else is an error rather than a divergence.
 
-An overlay that cannot be applied is an **error**, not a silent no-op, because an
-overlay that quietly fails to apply looks exactly like a correctly-configured repo
-until a workflow messages the wrong person. Three rules, each of which was a
-silent failure before a review panel found it:
+The tracked file keeps every key, blank, with the comment explaining it — it stays
+the schema of record; only values move. An overlay that cannot be applied
+**raises** rather than half-applying, because one that silently fails looks exactly
+like a correct one until a workflow acts on the wrong value.
 
-- it may only set keys the tracked file already **declares** — so a typo'd key, or
-  a dotted key written flat (`notify.user_key:` at the top level), is an error
-  rather than a value applied to nothing;
-- it may not replace a **block** with a non-block — so a tab-indented child (tabs
-  do not indent YAML) or a parent whose only child is commented out is an error
-  rather than a silent deletion of the tracked block;
-- content that parses to **no keys at all** is an error. A file holding only
-  comments, or only `---` / `{}` / `null`, is legitimately empty and applies
-  nothing.
-
-Note that `./init.sh` writes the *tracked* file, so a key you set locally keeps
-winning after a re-run — which is why the tracked file should hold a blank rather
-than a stale copy of the local value.
+Two caveats. `./init.sh` writes the *tracked* file, so a locally-set key keeps
+winning after a re-run — which is why the tracked file should hold a blank, not a
+stale copy. And because the overlay is gitignored, `git worktree add` does not
+materialise it; `dev_session.sh` copies it into each lane for that reason.
 
 ## 2 · Your first briefing — `session-start`
 

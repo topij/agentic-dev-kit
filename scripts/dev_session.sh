@@ -296,6 +296,17 @@ cmd_new() {
         cp "$REPO_ROOT/.mcp.json" "$worktree/.mcp.json"
     fi
 
+    # Same reason, same mechanism: the local config overlay is gitignored, so
+    # `git worktree add` does not materialise it. Without this a lane resolves
+    # `notify.user_key` to the tracked blank and `triage-friction-log` stops at its
+    # approval step — the failure the overlay exists to prevent, reappearing only
+    # in lanes (panel, adversarial lens).
+    for _overlay in "$REPO_ROOT"/config/*.local.yaml; do
+        [[ -f "$_overlay" ]] || continue
+        mkdir -p "$worktree/config"
+        cp "$_overlay" "$worktree/config/$(basename "$_overlay")"
+    done
+
     # Activation snippet: the sandbox is this session's state/ (writes isolate
     # here); DEVKIT_ROOT points the read-cascade's prod twin at the MAIN
     # checkout so the session can still reuse its fresh caches read-only.

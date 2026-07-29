@@ -23,4 +23,4 @@ reports/
 # operator's DM id, a tracker team id — lives here while the tracked file keeps a
 # blank placeholder and its explanatory comment. The tracked file stays the
 # schema of record; this only supplies values.
-config/dev-model.local.yaml
+config/*.local.yaml

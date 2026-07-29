@@ -35,7 +35,7 @@ def test_matches_pyyaml_on_the_shipped_config():
 
 
 def test_loads_the_shipped_config_without_pyyaml():
-    config = kitconfig.load_config(SHIPPED_CONFIG)
+    config = kitconfig.load_config(SHIPPED_CONFIG, overlay=False)
     # A nested string parses to a non-empty string, and the schema stamp to an
     # int. Deliberately NOT `== "main"`: the branch name is adopter-owned, and
     # pinning it makes this test assert something about whoever's config is on
@@ -348,7 +348,7 @@ def test_kits_own_plan_is_real_not_a_skeleton():
     Checked on line 1, matching init.sh's guard and kit_doctor's: these records
     narrate the marker mechanism, and a plan that merely QUOTES the marker in
     prose is still a real plan, not a skeleton."""
-    config = kitconfig.load_config(SHIPPED_CONFIG)
+    config = kitconfig.load_config(SHIPPED_CONFIG, overlay=False)
     for key in ("paths.handoff", "paths.friction_log"):
         doc = REPO_ROOT / kitconfig.get(config, key)
         assert "devkit-template: unrendered" not in _production_first_line(doc), doc
@@ -379,7 +379,7 @@ def test_review_skipped_lives_only_in_unavailable_markers():
     """`is_noise()` checks unavailability FIRST and returns False, so a marker in
     both lists is dead weight in `noise_markers` and reads as a precedence
     ambiguity. Keep it in exactly one place."""
-    config = kitconfig.load_config(SHIPPED_CONFIG)
+    config = kitconfig.load_config(SHIPPED_CONFIG, overlay=False)
     noise = kitconfig.get_str_list(config, "review.noise_markers", [])
     unavailable = kitconfig.get_str_list(config, "review.unavailable_markers", [])
 
@@ -671,11 +671,11 @@ def test_overlay_list_replaces_rather_than_appends(tmp_path):
     concatenating merge could never express that."""
     path = _config_tree(
         tmp_path,
-        "review:\n  bots: [coderabbit]\n",
-        "review:\n  bots: []\n",
+        "tracker:\n  labels: [bug, chore]\n",
+        "tracker:\n  labels: []\n",
     )
     config = kitconfig.load_config(path)
-    assert kitconfig.get(config, "review.bots") == []
+    assert kitconfig.get(config, "tracker.labels") == []
 
 
 def test_missing_tracked_file_still_raises_even_with_an_overlay_present(tmp_path):
@@ -762,7 +762,7 @@ def test_tab_indented_overlay_is_an_error_and_does_not_wipe_the_block(tmp_path):
         'notify:\n  backend: slack\n  user_key: ""\n',
         'notify:\n\tuser_key: "U0LOCAL123"\n',
     )
-    with pytest.raises(ValueError, match="cannot replace a block"):
+    with pytest.raises(ValueError, match="cannot replace"):
         kitconfig.load_config(path)
 
 
@@ -774,7 +774,7 @@ def test_overlay_with_its_only_child_commented_out_is_an_error(tmp_path):
         'notify:\n  backend: slack\n  user_key: ""\n',
         'notify:\n  # user_key: "U0LOCAL123"\n',
     )
-    with pytest.raises(ValueError, match="cannot replace a block"):
+    with pytest.raises(ValueError, match="cannot replace"):
         kitconfig.load_config(path)
 
 
@@ -786,7 +786,7 @@ def test_overlay_flow_mapping_is_an_error(tmp_path):
         'notify:\n  backend: slack\n  user_key: ""\n',
         'notify: {user_key: "U0LOCAL123"}\n',
     )
-    with pytest.raises(ValueError, match="cannot replace a block"):
+    with pytest.raises(ValueError, match="cannot replace"):
         kitconfig.load_config(path)
 
 
@@ -813,3 +813,65 @@ def test_unreadable_overlay_raises_rather_than_falling_back(tmp_path):
             kitconfig.load_config(path)
     finally:
         overlay.chmod(0o644)
+
+
+# ── The overlay allowlist ─────────────────────────────────────────────────────
+#
+# Round 2 of the panel found the general overlay produced divergence: only
+# kitconfig merges it, while dev_session.sh, reconcile_sessions.sh and the
+# pre-push hook read the tracked file directly. An overlay on a key THEY read
+# applies in Python and silently does not in sh — the exact failure the overlay
+# exists to prevent. These pin the narrowing.
+
+
+def test_overlay_cannot_set_a_key_the_shell_readers_consume(tmp_path):
+    """`vcs.dev_branch_prefix` is read by the pre-push hook's own snippet. An
+    overlay on it left that guard matching a prefix nothing is named, so a hard
+    stop CLAUDE.md relies on failed open."""
+    path = _config_tree(
+        tmp_path, "vcs:\n  dev_branch_prefix: dev\n", 'vcs:\n  dev_branch_prefix: "lane"\n'
+    )
+    with pytest.raises(ValueError, match="not overlayable"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_cannot_wipe_a_tracked_list(tmp_path):
+    """The regression this closes: `review:` with `bots:` left blank made
+    `review.bots` None, and pr_watch then fell back to its built-in default with
+    the tracked review gate silently narrowed. Now unreachable two ways over —
+    review.* is not overlayable, and None never replaces a tracked value."""
+    path = _config_tree(tmp_path, "review:\n  bots: [coderabbit]\n", "review:\n  bots:\n")
+    with pytest.raises(ValueError, match="not overlayable"):
+        kitconfig.load_config(path)
+
+
+def test_none_never_replaces_a_tracked_value_even_on_an_overlayable_key(tmp_path):
+    """The allowlist and the None-guard are independent; this pins the second one
+    on a key the first one permits, so neither alone is load-bearing."""
+    path = _config_tree(
+        tmp_path, 'tracker:\n  labels: [bug]\n  url: "x"\n', "tracker:\n  labels:\n"
+    )
+    with pytest.raises(ValueError, match="cannot replace"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_cannot_replace_a_plain_value_with_a_block(tmp_path):
+    """The mirror of the block-over-value rule. Left unguarded, a workflow gets a
+    dict where it expects a Slack id."""
+    path = _config_tree(
+        tmp_path, 'notify:\n  user_key: ""\n', 'notify:\n  user_key:\n    slack_id: "U0"\n'
+    )
+    with pytest.raises(ValueError, match="cannot replace a plain value"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_false_reads_the_tracked_file_alone(tmp_path):
+    """Tests asserting about the SHIPPED config need this: without it a
+    developer's own gitignored overlay turns the suite red on their machine while
+    CI stays green, against a repo whose CLAUDE.md names `make test` as *the*
+    verification command."""
+    path = _config_tree(
+        tmp_path, 'notify:\n  user_key: "tracked"\n', 'notify:\n  user_key: "local"\n'
+    )
+    assert kitconfig.get(kitconfig.load_config(path), "notify.user_key") == "local"
+    assert kitconfig.get(kitconfig.load_config(path, overlay=False), "notify.user_key") == "tracked"
