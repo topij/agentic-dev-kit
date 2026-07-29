@@ -58,8 +58,7 @@ reads its project-specific values, so there's nothing to hardcode elsewhere.
 ### Values you don't want in git
 
 `notify.user_key` is an identity — the operator id an approval DM targets — so it
-belongs in `config/dev-model.local.yaml`, which is gitignored and merged over the
-tracked file:
+goes in `config/dev-model.local.yaml`, gitignored and merged over the tracked file:
 
 ```yaml
 # config/dev-model.local.yaml
@@ -67,21 +66,9 @@ notify:
   user_key: "U0XXXXXXXXX"
 ```
 
-**That key is the only one you may set there** (`kitconfig.OVERLAYABLE_PREFIXES`).
-Everything else stays in the tracked config, because other readers do not merge the
-overlay — shell scripts, `init.sh`, and the workflow docs that tell an agent to read
-`config/dev-model.yaml` directly. `tracker.*` was briefly overlayable and had to be
-removed for exactly that reason. An overlay naming anything else is an error.
-
-An overlay that cannot be applied **raises** rather than half-applying: one that
-silently fails looks exactly like a correct one until a workflow acts on the wrong
-value. `kitconfig.load_config`'s docstring lists what it refuses.
-
-Two caveats. `./init.sh` writes the *tracked* file, so a locally-set key keeps
-winning after a re-run — which is why the tracked file should hold a blank, not a
-stale copy. And because the overlay is gitignored, `git worktree add` does not
-materialise it; `dev_session.sh` copies it into a lane, and declines to if the
-lane's base ref does not ignore it.
+It is the only key you may set there; anything else is an error naming what it
+refused. `./init.sh` writes the *tracked* file, so a locally-set key keeps winning
+after a re-run — leave the tracked value blank rather than duplicating it.
 
 ## 2 · Your first briefing — `session-start`
 

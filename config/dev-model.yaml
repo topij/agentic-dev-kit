@@ -83,22 +83,14 @@ vcs:
   systemize_branch_pattern: "chore/systemize-{date}"
 
 tracker:
-  # Set for THIS repo. These are not overlayable: `tracker.backend` is a setting
-  # rather than an identity, and eight agent-facing docs (`session-start`,
-  # `parallel`, the autonomous playbook, `post-merge-systemize`) instruct the agent
-  # to read this file directly — so a value hidden in the local overlay made
-  # `session-start` query a project literally named "My Project Dev". A review panel
-  # caught that live.
-  #
-  # ADOPTERS: replace all three. `init.sh` prompts with the committed value as the
-  # default, and refuses to keep this repo's board on a non-interactive run rather
-  # than seeding you a live, foreign tracker silently.
+  # This repo's real values, not placeholders. ADOPTERS: replace all three.
+  # `init.sh` prompts with these as defaults and refuses, on a non-interactive run,
+  # to keep a project_name that does not match your origin remote.
   backend: github-issues         # linear | github-issues | jira | none
   project_name: "topij/agentic-dev-kit"
   url: "https://github.com/topij/agentic-dev-kit/issues"
-  # Backend-specific ids (Linear). Not applicable to this repo's github-issues
-  # backend — kept, blank, because `init.sh` writes into this sub-map when an
-  # adopter selects `linear`, and removing it would leave nothing to write into.
+  # Linear-only ids. Kept blank rather than removed: `init.sh` writes into this
+  # sub-map when an adopter selects `linear`, and only rewrites existing lines.
   linear:
     team_id: ""
     project_id: ""
@@ -205,25 +197,11 @@ review:
   require_ci: true
 
 notify:
-  backend: slack                 # STAMPED. slack | none — where skills DM the operator
-  # The operator's DM target — the identifier a notify tool's send call takes (a
-  # Slack user id, say). The kit's original comment called this "a key into your
-  # project's own notify config"; there is no such indirection layer, so the value
-  # is the identifier itself.
-  #
-  # DELIBERATELY BLANK HERE. This is an identity, so it belongs in the gitignored
-  # overlay `config/dev-model.local.yaml`, which `kitconfig.load_config()` merges
-  # over this file per leaf:
-  #
-  #     notify:
-  #       user_key: "U0XXXXXXXXX"
-  #
-  # Blank is therefore not "unstamped" for this key — it is where the value is
-  # supposed to be. Committing a real one publishes an identity in a public repo
-  # AND hands every adopter a default pointing at someone else's workspace, since
-  # `init.sh` offers the committed value as the prompt default.
+  backend: slack                 # slack | none — where skills DM the operator
+  # Blank ON PURPOSE. This is an identity: put it in the gitignored
+  # `config/dev-model.local.yaml`, which is merged over this file. See
+  # docs/getting-started.md.
   user_key: ""
-
 models:
   # Runtime-neutral capability tiers (Principle #7). Workflows assign a tier; an
   # adapter may translate it to a model, effort level, or leave it as guidance when

@@ -362,23 +362,12 @@ def _deep_merge(
     return out
 
 
-#: Dotted key prefixes a local overlay may set. **Deliberately one entry.**
+#: Dotted key prefixes a local overlay may set.
 #:
-#: A key is only safe here if every reader of it merges the overlay. `notify.user_key`
-#: qualifies: at runtime its only readers are the two skill prompts, both of which say
-#: to read the merged view. `init.sh` also reads it (`get_field`, an independent awk
-#: reader) — but only to offer a prompt default before writing the *tracked* file, which
-#: is exactly what it should show, so that read is correct rather than divergent.
-#:
-#: `tracker.*` was here and was removed. It failed on both counts: `tracker.backend` is a
-#: setting rather than an identity, and eight agent-facing docs — `session-start`,
-#: `parallel`, the autonomous playbook, `post-merge-systemize` — instruct the agent to
-#: read `config/dev-model.yaml` directly. With the values in the overlay, `session-start`
-#: on this very repo queried a tracker project literally named "My Project Dev". A review
-#: panel caught it; the divergence was live.
-#:
-#: That is the bar for widening this list: name every reader, including the ones that are
-#: prose instructions to an agent rather than code, and confirm each sees the merged view.
+#: A key belongs here only if EVERY reader of it merges the overlay — including
+#: readers that are prose instructions to an agent rather than code. Widening this
+#: list means enumerating them and checking each. `tracker.*` was here and failed
+#: that bar; `test_tracker_is_not_overlayable` records why.
 OVERLAYABLE_PREFIXES = ("notify.user_key",)
 
 
@@ -395,31 +384,16 @@ def _overlay_paths(node: Any, where: str = "") -> list[str]:
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH, *, overlay: bool = True) -> dict[str, Any]:
     """Load and parse the config. A relative path resolves against the repo root.
 
-    If a sibling ``<name>.local.<ext>`` exists it is merged **over** the tracked
-    file, per leaf. That file is gitignored, so a value which must not enter git —
-    an operator's DM id, a tracker team id — lives there while the tracked file
-    keeps a blank placeholder and its explanatory comment. The tracked file stays
-    the schema of record (Principle #10); the overlay only supplies values, and
-    only for the keys in :data:`OVERLAYABLE_PREFIXES`.
+    Merges a gitignored sibling ``<name>.local.<ext>`` over the tracked file for the
+    keys in :data:`OVERLAYABLE_PREFIXES`, so a value that must not enter git can be
+    supplied without committing it. The tracked file stays the schema of record.
 
-    ``init.sh`` writes the **tracked** file, so a key set in the overlay keeps
-    winning after a re-run of init — deliberate, and the reason the tracked file
-    should hold a blank rather than a stale duplicate of the overlay's value.
+    ``overlay=False`` reads the tracked file alone — what a test asserting something
+    about the *shipped* config needs.
 
-    Pass ``overlay=False`` to read the tracked file alone. Tests that assert
-    something about the *shipped* config need this: without it a developer's own
-    gitignored overlay can turn the suite red on their machine while CI stays
-    green, which a review panel demonstrated against the repo whose CLAUDE.md
-    names ``make test`` as the verification command.
-
-    Raises ``FileNotFoundError`` when the tracked file is absent — a script that
-    needs config has nothing sane to fall back to. A missing overlay is normal and
-    silent. An overlay that exists but cannot be applied **raises** — including on
-    an ``OSError`` from reading it, which is deliberately not caught. It may only
-    set overlayable keys the tracked file already declares, may not replace a value
-    with nothing, and may not swap a block for a plain value or the reverse. Every
-    one of those rules exists because an overlay that silently fails to apply is
-    indistinguishable from a correct one until a workflow acts on the wrong value.
+    Raises ``FileNotFoundError`` if the tracked file is absent. A missing overlay is
+    silent; an overlay that exists and cannot be applied raises ``ValueError`` naming
+    what it refused and why.
     """
     target = Path(path)
     if not target.is_absolute():
