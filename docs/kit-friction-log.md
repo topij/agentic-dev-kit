@@ -134,3 +134,46 @@ The swept entries now live in the archive, under the section `Graduated 2026-07-
   swept inbox:** surfaced during pre-flight, recorded on operator instruction, and
   rewritten after review; it sits below the marker for the next pass, where it should be merged
   into `#121` rather than filed fresh.
+- **An operator's remark was widened into a stronger claim and published as operator-confirmed —
+  on five surfaces, including the tracker.** *"CodeRabbit is currently not available here"* became
+  *"not installed, never exercised, nothing rate-limited, no credit run out"*, which was then used
+  to file a **structurally-never-reviews** verdict onto `#45` — the issue whose whole subject is
+  that such a verdict cannot be made from outside. Both panel lenses caught it independently. **H**
+  — proposed remedy: `#140` asks for the command behind *"X is not available here"*; it needs widening
+  to cover the positive form too, and a remark attributed to the operator should be quoted at its
+  original scope rather than paraphrased into its implications. Distinct from `#149`: that one asks
+  a correction to reach every surface, this asks the claim not to exceed its source in the first
+  place.
+- **Correcting a wrong number with a precise one failed twice, because the number is not
+  recoverable.** The fix above asserted a review count that was really a count of bot comments; a
+  second round caught it, and two independent re-derivations of "how many PRs did CodeRabbit
+  actually review" then disagreed with each other — *reviewed* vs *quota-refused* vs *silent* is
+  not separable from the comment stream without deciding what counts. **M** — proposed fix:
+  withdrawing the count was the only stable move, and the irreducibility is better evidence for
+  `#45` than any count. Occurrence data for `#45`, and an argument that a machine-readable reviewer
+  state is the actual fix.
+- **A check that errored reported a pass, inside the step guarding `#71`.** The closing-keyword
+  scan used a `grep -E` alternation with an empty branch; `ugrep` rejected it, exited non-zero, and
+  the `|| echo clean` branch fired. A later run of the rewritten scan read a **zero-byte** surface
+  (nothing staged) and also reported clean. **M** — occurrence data for `#150`, and a scope note:
+  `#150` is written for text *replacements*, and both instances here are *scans*. The durable form
+  is that any check must assert it examined something — a match count, a byte count, an explicit
+  failure — and `|| <success message>` must never follow a command that can fail for reasons other
+  than the condition being tested. **Third instance, same session, different mechanism:** the
+  rewritten scan's own regex required the keyword and the reference to be adjacent modulo
+  whitespace, so it silently missed the same keyword followed by a **backtick-wrapped** reference —
+  the code-span form `CLAUDE.md` explicitly names and the archive already records firing against
+  `#61`. (Written as prose, not quoted: quoting it puts the live construction into an inbox entry a
+  future sweep will paste into an issue body.) It was caught only because the same
+  text appeared *without* backticks on another surface. A guard written from memory of a rule
+  reproduced the rule's headline and dropped its stated exception.
+- **The wrap-up reinstated a correction that had merged forty minutes earlier.** `#151`'s review
+  changed "third sweep" to "fifth" on every surface it reached, and the handoff written immediately
+  after called it *"the third sweep"* again — in a heading, the `Last updated` line, the commit
+  subject, the PR title and the PR body — while the same block said "Fifth sweep overall" three
+  lines below. Two lenses caught it. **M** — occurrence data for `#149`, and a sharpening of it: the
+  six surfaces `#149` enumerates are the ones a claim *was* published to, which is the wrong
+  frame for this failure. The handoff was written from the session's memory rather than from the
+  merged artifact, so the corrected value never entered the drafting at all. The remedy is narrower
+  than "enumerate surfaces" — **when a session's own review changed a fact, the wrap-up must source
+  that fact from the merged text, not from recollection of the session.**

@@ -4,6 +4,145 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-07-28 (`#92` shipped; the record corrected; five panel rounds)
+
+**Theme —** Two deliverables, and a five-round panel that spent most of its findings on
+this branch's own claims rather than on the code. The `AGENTS.md` template is the small
+half; the durable result is a data-loss bug caught before it shipped and a much sharper
+picture of where self-review fails.
+
+- **`#104` merged (`985dcd0`), closing `#92`.** `docs/templates/AGENTS.md.tmpl` — the
+  Codex entry point — rendered by `init.sh` through the same seed guard as the narrative
+  docs, with two new tokens (`{{PROTECTED_BRANCH}}`, `{{HANDOFF_PATH}}`, repo-relative).
+  `KIT_OWNED` row in, manifest 25 → 26. The verification command is deliberately a
+  fill-me placeholder, not a token: `init.sh` knows no such value, so rendering one would
+  have meant guessing (`#110` tracks giving it a real config key).
+- **Seven corrections to the permanent record**, each re-verified against its primary
+  source before editing rather than taken from the review that prompted them.
+- **The rule-citation count went six → nine → ten.** Nine was itself wrong; the miss was
+  `scripts/kit_doctor.py:101`. Two isolated lenses reached ten independently.
+- **A live data-loss bug, caught pre-merge.** `seed_doc` matched the unrendered marker
+  *anywhere* in a file, so any in-use doc that merely quoted the marker in prose was
+  silently overwritten — no backup, run still printed "seeded". Reproduced against the
+  pre-fix script on both a hand-written `AGENTS.md` and a rendered `kit-handoff.md`. The
+  marker now counts on line 1 only, in `init.sh`, in `kit_doctor`, and in the tests.
+
+**Learned**
+
+- **Three separate pieces of new behaviour shipped unpinned** — the seeding call, both
+  token substitutions, and later the `kit_doctor` predicate. Each survived the full suite
+  when deleted. The manifest-hash gate reads as coverage and is not: it is discharged by
+  one documented regenerate command, after which the mutant is green.
+- **A fix round introduced a regression while fixing that same class.** Aligning
+  `kit_doctor` with `init.sh` via `Path.read_text()` swapped one divergence for another,
+  because universal-newline translation ends a "first line" at a lone CR where `head -n 1`
+  ends only at LF. Round 3 caught it; round 2 had asserted the two matched "exactly".
+- **A test can certify destroyed data as fine.** The line-1 assertions used
+  `splitlines()[0]`, which breaks on nine separators production does not. A `U+2028`
+  before the marker passed the suite while `init.sh` would seed over the live plan.
+- **Rounds 1–4 each found a false claim in the previous round's fix**, most of them mine:
+  a fabricated rationale in a test docstring, a "harmless" characterisation of a bug that
+  was destroying data, a verification claim whose setup step was omitted, a side-effect
+  claim whose cited command was scoped narrowly enough to hide the difference, and four
+  consecutive sweeps declared complete that were not. The pattern is specific: the errors
+  cluster in prose *about* verification, not in the verification itself.
+- **Two lenses beat one, twice.** Round 3's correctness lens explicitly cleared the CR
+  case as "behaviourally equivalent for all realistic inputs" — it had tested CRLF but not
+  CR-only, where the adversarial lens proved divergence by execution. A lens's "verified
+  clean" is worth exactly the edge cases it ran.
+- **Convergence is visible when it happens.** Round 5 came back clean on the code: 4000
+  randomized byte documents and a 30-cell separator matrix driving the test helper, the
+  `kit_doctor` predicate and the real `head -n 1 | grep -qF` over identical bytes, with
+  zero disagreements. That, not round count, is what ended the loop.
+
+**Open, and owned by nothing yet**
+
+- **`#105`–`#110`** — this session's six: `/adopt` never seeds `AGENTS.md`; `kit_doctor`
+  aborts on unreadable/directory/invalid-UTF-8 docs where `init.sh` fails safe; the marker
+  predicate is duplicated between `kit_doctor` and its tests and kept in sync by a
+  docstring; `AGENTS.md`'s config-derived links freeze at first render; the intermittent
+  `test_portability.py` flake; and the template's fill-me placeholder.
+- **`#77` reproduced** — I edited the shared tree while a lens was reviewing it. The lens
+  caught it on its own initiative, not because the contract asks. Occurrence logged there.
+- **`#47` gained a third instance** — `docs/AGENTS-sections.md` untracked, alongside `#37`
+  and `#41`. Not fixed, because adding one more hand-maintained row is what `#47` exists
+  to stop.
+- **`#93`, `#95`, `#97`, `#98`** unchanged; `#54` is directly relevant after this session.
+- `#50`, `#66`, `#71`, `#72`, `#75`, `#76`, `#86`, `#88` and the rest per `session-start`.
+
+▶ Next: `triage-friction-log` — **discharged**, shipped as `#126` later the same day. The
+inbox is now 28 lines; the 287-line figure above is that session's reading, kept as the
+record of why the sweep was called for.
+
+### 2026-07-28 (fix-round scope shipped; the severity gate it exposed)
+
+**Theme —** Two doctrine changes, the second existing because the first cost far more
+than it should have. `#101` took three panel rounds and six isolated reviewers for one
+paragraph; `#102` is the rule that stops that recurring.
+
+- **`#101` merged (`238de25`), closing `#100`.** Rule 3 gains *"a fix round addresses
+  only what the review found"* — a new mechanism is an addition however squarely a
+  finding prompted it, so it gets filed. Plus a paragraph in `fallback-review-panel.md`
+  stating that lever replaces none of the stopping criterion.
+- **One of `#101`'s two HIGHs came from my own fix rounds — not both.** Round 2's HIGH
+  was a gap the rule inherited: it did not catch two of the three cases it is built on,
+  and `205d0a4`'s own message records that `#100`'s proposed wording has it too — round
+  1's carve-out licensed those cases outright but did not create the gap. Round 3's
+  HIGH was mine: two fresh readers, given only the paragraph, both permitted the case,
+  both quoting my carve-out clause.
+- **`#102` merged (`87dfa83`).** The blast-radius classification now also decides which
+  findings to act on. A gate, send path, destructive operation, or kill/recovery path —
+  plus any change that does not clearly sit in one class — gets **every** finding acted
+  on; only on the second, reported-but-never-acted-on class is the gate HIGH always,
+  plus anything at any severity that says the change is a *regression* rather than
+  merely imprecise. New contract item 9 makes lenses report both labels.
+- **CodeRabbit reviewed neither PR's final state** — one clean pass on `#101`'s first
+  head, then a plan quota that no waiting clears. The fallback panel was the independent
+  pass throughout: five rounds, ten isolated lenses across the two PRs.
+
+**Decided**
+
+- **Two failed tightenings ⇒ delete, applied to my own clause.** `#101`'s carve-out was
+  itself an unrequested mechanism added mid-fix-round in response to a MED — the shape
+  the paragraph prohibits, reproduced inside it. Deleted rather than reworded a third
+  time.
+- **Severity level alone is the wrong gate.** `#102`'s own first round returned 0 HIGH /
+  7 MED, four of which said the paragraph loosened a control it claimed to tighten. The
+  discriminator that works is regression-vs-imprecision.
+- **The gate belongs at the act-on stage, never in the lens prompts.** `#101` was
+  docs-only and drew two real HIGHs; a lens told to calibrate down for "it's only docs"
+  would have downgraded exactly those two. It is also the anchoring contract item 2
+  forbids.
+
+**Learned**
+
+- **A gate that reads labels nothing produces is not a gate.** `#102`'s HIGH: "act on
+  HIGH" and "says regression" are lens output, and no contract item or `focus` string
+  ever asked for either. It read as working only because I supplied severity ad hoc in
+  my own launch prompts — the drift the single-source rule exists to stop.
+- **A three-space list continuation is correct CommonMark and broken Python-Markdown**,
+  which silently renumbered rule 4 to rule 1 while the header still said "Four rules
+  apply". Ten files outside the session records cite these rules by number (fourteen
+  counting the records themselves). Caught by rendering in both engines,
+  not by review — a genuine completed bot review of the head carrying it passed clean.
+- **I shipped a false claim in a commit message** (`4ac203e`), retracted in the PR body
+  before merge, so it never reached `main`.
+- **`#76` reproduced twice**: neither PR's final head was lens-reviewed, and
+  `--record-review --head` can only assert the exact head, so both merged with the
+  coverage recorded as PR prose and no receipt.
+
+**Open, and owned by nothing yet**
+
+- **`#92`, `#93`** — untouched; `#92` was the planned follow-on and now lands under both
+  new rules.
+- **`#95`, `#97`, `#98`** — the three panel-found defects on `main`, unchanged.
+- `#47`, `#54`, `#66`, `#71`, `#72`, `#75`, `#76`, `#77`, `#86`, `#88` and the rest per
+  `session-start`.
+
+▶ Next: `#92` — ship `docs/templates/AGENTS.md.tmpl` rendered by `init.sh`, added to
+`KIT_OWNED` and the manifest so `kit_doctor` reports it. Read `#92` for the generic
+spine to lift; note in the template that adopters are expected to extend it.
+
 ### 2026-07-27 · 4 (gh-less REST transport; `#91` closed, `#96` merged)
 
 **Theme —** One feature, five review rounds, two PRs. The first attempt was closed
