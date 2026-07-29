@@ -235,7 +235,7 @@ def test_kit_repo_self_check_is_clean():
     to be read as coverage (#112).
     """
     manifest = json.loads((REPO_ROOT / kit_doctor.MANIFEST_NAME).read_text(encoding="utf-8"))
-    config = kit_doctor.load_config(REPO_ROOT / "config" / "dev-model.yaml")
+    config = kit_doctor.load_config(REPO_ROOT / "config" / "dev-model.yaml", overlay=False)
     report = kit_doctor.inspect(REPO_ROOT, manifest, config)
     assert report.drifted == [], (
         "kit-owned files differ from kit-manifest.json: "

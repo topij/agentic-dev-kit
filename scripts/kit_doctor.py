@@ -599,6 +599,13 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         config = load_config(root / "config" / "dev-model.yaml")
+    except ValueError as exc:
+        # A local config overlay that cannot be applied. Sibling engines already
+        # catch ValueError here; this one caught only FileNotFoundError and so
+        # tracebacked on it, against the repo's own convention that a config error
+        # reports cleanly (panel, adversarial lens).
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     except FileNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
         print(

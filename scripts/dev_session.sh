@@ -296,6 +296,27 @@ cmd_new() {
         cp "$REPO_ROOT/.mcp.json" "$worktree/.mcp.json"
     fi
 
+    # Same reason, same mechanism: the local config overlay is gitignored, so
+    # `git worktree add` does not materialise it, and a lane would resolve
+    # notify.user_key to the tracked blank. Copy only the ONE file load_config
+    # actually reads, never overwrite, and refuse if the lane's base ref does not
+    # ignore it — `--base` takes any ref, and `/adopt` does not run init.sh, so the
+    # pattern may be absent there. The archive records `git add -A` sweeping stray
+    # files into a lane commit; this is an operator identity (panel, adversarial).
+    _overlay="$REPO_ROOT/config/dev-model.local.yaml"
+    if [[ -f "$_overlay" ]]; then
+        if [[ -e "$worktree/config/dev-model.local.yaml" ]]; then
+            echo "note: lane already has config/dev-model.local.yaml — keeping it" >&2
+        elif ! git -C "$worktree" check-ignore -q config/dev-model.local.yaml 2>/dev/null; then
+            echo "warning: lane base does not ignore config/dev-model.local.yaml —" >&2
+            echo "         not copying it, so a lane commit cannot capture it." >&2
+            echo "         Add 'config/*.local.yaml' to .gitignore on the base ref." >&2
+        else
+            mkdir -p "$worktree/config"
+            cp "$_overlay" "$worktree/config/dev-model.local.yaml"
+        fi
+    fi
+
     # Activation snippet: the sandbox is this session's state/ (writes isolate
     # here); DEVKIT_ROOT points the read-cascade's prod twin at the MAIN
     # checkout so the session can still reuse its fresh caches read-only.

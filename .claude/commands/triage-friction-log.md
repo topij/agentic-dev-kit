@@ -82,7 +82,7 @@ patterns — always read from config.
 
 | Key                       | Description                                                                          |
 | ------------------------- | ------------------------------------------------------------------------------------- |
-| `notify_user_key`         | Key under your notify config for the operator DM target                              |
+| `notify_user_key`         | The operator's DM target. Resolved from the **merged** config — `config/dev-model.yaml` with `config/dev-model.local.yaml` (gitignored) overlaid per leaf, which is where an identity belongs. |
 | `state_path`              | Repo-root-relative path for the pipeline's state file                                |
 | `source_path`             | Path to `docs/friction-log.md`                                                       |
 | `report_pattern`          | Output pattern for the parser's report (e.g. `reports/triage_{date}.md`)             |
@@ -160,7 +160,11 @@ state. There's nothing for Session B to do.
 ### Step 2: Resolve the DM target
 
 Read your notify config for the operator's DM identifier (`notify_user_key` from
-Step-0 config, resolved against `config/dev-model.yaml → notify.user_key`). If
+Step-0 config, resolved against `notify.user_key` in the **merged** config —
+`config/dev-model.yaml` with a gitignored `config/dev-model.local.yaml` overlaid
+per leaf. Read the merged view (`kitconfig.load_config()`), not the tracked file
+alone: an identity belongs in the overlay, so the tracked file is often blank by
+design and reading it alone reports a missing id that is actually set). If
 missing, stop with: `"Config error: friction-triage config → notify_user_key resolved
 to no id. Set the corresponding key in your notify config."`
 

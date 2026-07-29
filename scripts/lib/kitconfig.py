@@ -297,11 +297,103 @@ def loads(text: str) -> dict[str, Any]:
     return root
 
 
-def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
+_DANGLING_YAML_TOKENS = {"|", ">", "|-", ">-", "|+", ">+", "&", "*"}
+
+
+def _deep_merge(
+    base: dict[str, Any], overlay: dict[str, Any], where: str, problems: list[str]
+) -> dict[str, Any]:
+    """Overlay wins per leaf; maps merge, everything else replaces.
+
+    Anything it will not merge is appended to ``problems`` rather than applied, and
+    ``load_config`` turns a non-empty ``problems`` into a ``ValueError``. The branches
+    below each carry their own message and the reason it exists — read them there
+    rather than from a summary here, which has drifted from the code in every review
+    round so far (it said "two shapes" while implementing six).
+
+    The through-line: an overlay *supplies values* for keys the tracked file already
+    declares. It is never the schema, and it never deletes.
+    """
+    out = dict(base)
+    for key, value in overlay.items():
+        path = f"{where}.{key}" if where else key
+        if key not in base:
+            problems.append(f"  {path} — no such key in the tracked config")
+            continue
+        if value is None and base[key] is not None:
+            problems.append(
+                f"  {path} — nothing cannot replace a value; "
+                f"a key with no value is almost always a typo or a stray indent"
+            )
+            continue
+        if isinstance(value, dict) and not value:
+            # `notify:` whose child lost its colon parses to an empty block. Merging
+            # it is a clean no-op, so the overlay silently applies nothing — the
+            # failure every other rule here exists to prevent (panel, adversarial).
+            problems.append(
+                f"  {path} — this block sets nothing; its children did not parse "
+                f"(a missing colon, or a tab where spaces are required)"
+            )
+            continue
+        if isinstance(value, str) and value.strip() in _DANGLING_YAML_TOKENS:
+            # A bare `|` / `>` / anchor token is YAML syntax the reader could not
+            # complete, landing verbatim as the value — worse than a no-op.
+            problems.append(
+                f"  {path} — the value is the bare YAML token {value.strip()!r}, "
+                f"which means its block or anchor did not parse"
+            )
+            continue
+        if isinstance(base[key], dict):
+            if not isinstance(value, dict):
+                problems.append(
+                    f"  {path} — a {type(value).__name__} cannot replace a block; "
+                    f"set the keys under it instead"
+                )
+                continue
+            out[key] = _deep_merge(base[key], value, path, problems)
+        elif isinstance(value, dict):
+            problems.append(
+                f"  {path} — a block cannot replace a plain value; "
+                f"the tracked file declares this as a single value"
+            )
+            continue
+        else:
+            out[key] = value
+    return out
+
+
+#: Dotted key prefixes a local overlay may set.
+#:
+#: A key belongs here only if EVERY reader of it merges the overlay — including
+#: readers that are prose instructions to an agent rather than code. Widening this
+#: list means enumerating them and checking each. `tracker.*` was here and failed
+#: that bar; `test_tracker_is_not_overlayable` records why.
+OVERLAYABLE_PREFIXES = ("notify.user_key",)
+
+
+def _overlay_paths(node: Any, where: str = "") -> list[str]:
+    """Every dotted leaf path an overlay sets, so each can be checked in turn."""
+    if not isinstance(node, dict) or not node:
+        return [where] if where else []
+    out: list[str] = []
+    for key, value in node.items():
+        out.extend(_overlay_paths(value, f"{where}.{key}" if where else key))
+    return out
+
+
+def load_config(path: str | Path = DEFAULT_CONFIG_PATH, *, overlay: bool = True) -> dict[str, Any]:
     """Load and parse the config. A relative path resolves against the repo root.
 
-    Raises ``FileNotFoundError`` when absent — a script that needs config has
-    nothing sane to fall back to.
+    Merges a gitignored sibling ``<name>.local.<ext>`` over the tracked file for the
+    keys in :data:`OVERLAYABLE_PREFIXES`, so a value that must not enter git can be
+    supplied without committing it. The tracked file stays the schema of record.
+
+    ``overlay=False`` reads the tracked file alone — what a test asserting something
+    about the *shipped* config needs.
+
+    Raises ``FileNotFoundError`` if the tracked file is absent. A missing overlay is
+    silent; an overlay that exists and cannot be applied raises ``ValueError`` naming
+    what it refused and why.
     """
     target = Path(path)
     if not target.is_absolute():
@@ -310,7 +402,54 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
         raise FileNotFoundError(
             f"dev-model config not found: {target} (run ./init.sh, or pass an explicit path)"
         )
-    return loads(target.read_text(encoding="utf-8"))
+    config = loads(target.read_text(encoding="utf-8"))
+
+    overlay_path = target.with_suffix(f".local{target.suffix}")
+    if overlay and overlay_path.is_file():
+        raw = overlay_path.read_text(encoding="utf-8")
+        overlay_data = loads(raw)
+        # `loads()` yields {} for anything it cannot read as a mapping. Content
+        # that produced no keys at all is a syntax error (a line with no colon,
+        # say), not an empty overlay — but a file holding only comments or YAML's
+        # structural markers legitimately IS empty, so those do not count as
+        # content.
+        structural = {"---", "...", "{}", "null", "~"}
+        has_content = any(
+            stripped and not stripped.startswith("#") and stripped not in structural
+            for stripped in (line.strip() for line in raw.splitlines())
+        )
+        if has_content and not overlay_data:
+            raise ValueError(
+                f"local config overlay has content but produced no keys: {overlay_path} "
+                f"(expected a mapping like 'notify:\\n  user_key: \"…\"')"
+            )
+        problems: list[str] = []
+        for leaf in _overlay_paths(overlay_data):
+            # An ANCESTOR of an overlayable key passes here on purpose — a
+            # valueless `notify:` yields the path `notify`, and the block/None
+            # guards below say something far more useful about it than "not
+            # overlayable" would.
+            allowed = leaf.startswith(OVERLAYABLE_PREFIXES) or any(
+                (prefix.rstrip(".") + ".").startswith(f"{leaf}.") for prefix in OVERLAYABLE_PREFIXES
+            )
+            if not allowed:
+                problems.append(
+                    f"  {leaf} — not overlayable. Only {', '.join(OVERLAYABLE_PREFIXES)} "
+                    f"may be set locally; everything else is also read by shell "
+                    f"scripts that do not merge this file, so an override here would "
+                    f"apply in Python engines and silently not in them"
+                )
+        merged = _deep_merge(config, overlay_data, "", problems)
+        if problems:
+            raise ValueError(
+                f"local config overlay cannot be applied: {overlay_path}\n"
+                + "\n".join(problems)
+                + f"\nThe overlay supplies values for keys {target.name} already declares; "
+                f"it is not the schema. Check indentation (tabs do not indent YAML) "
+                f"and spelling against the tracked file."
+            )
+        config = merged
+    return config
 
 
 def get(config: dict[str, Any], dotted_key: str, default: Any = _MISSING) -> Any:

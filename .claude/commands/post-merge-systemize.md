@@ -89,7 +89,7 @@ patterns, or the pattern threshold — always read from config.
 
 | Key                                                    | Description                                                                            |
 | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `notify_user_key`                                       | Key under your notify config for the DM target.                                        |
+| `notify_user_key`                                       | The operator's DM target, from the **merged** config — `config/dev-model.yaml` with a gitignored `config/dev-model.local.yaml` overlaid per leaf. Read the merged view, not the tracked file alone: an identity belongs in the overlay, so a blank tracked value is often by design. |
 | `lookback_days`                                         | Weekly window size (7). `backfill` overrides to 28.                                     |
 | `pattern_threshold`                                     | Minimum distinct PRs a finding must span to graduate to a rule edit (2).                |
 | `cache_pattern`                                         | Output pattern for the fetcher bundle.                                                  |

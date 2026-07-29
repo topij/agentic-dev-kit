@@ -17,3 +17,10 @@ state/
 # tracker issue and every source entry is verbatim in the archive. Tracking them
 # would also be the kit's one narrative path with no doc_budgets tripwire.
 reports/
+
+# Local config overlay. `kitconfig.load_config()` merges this over
+# config/dev-model.yaml per leaf, so a value that must not enter git — an
+# operator's DM id, a tracker team id — lives here while the tracked file keeps a
+# blank placeholder and its explanatory comment. The tracked file stays the
+# schema of record; this only supplies values.
+config/*.local.yaml

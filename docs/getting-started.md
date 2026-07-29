@@ -55,6 +55,21 @@ Then open `config/dev-model.yaml` and fill in anything you skipped — especiall
 the `tracker` and `models` blocks. That one file is where every skill and script
 reads its project-specific values, so there's nothing to hardcode elsewhere.
 
+### Values you don't want in git
+
+`notify.user_key` is an identity — the operator id an approval DM targets — so it
+goes in `config/dev-model.local.yaml`, gitignored and merged over the tracked file:
+
+```yaml
+# config/dev-model.local.yaml
+notify:
+  user_key: "U0XXXXXXXXX"
+```
+
+It is the only key you may set there; anything else is an error naming what it
+refused. `./init.sh` writes the *tracked* file, so a locally-set key keeps winning
+after a re-run — leave the tracked value blank rather than duplicating it.
+
 ## 2 · Your first briefing — `session-start`
 
 Start your agent and run `session-start`. It reads your handoff, the friction

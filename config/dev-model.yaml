@@ -6,8 +6,10 @@
 # find yourself editing a literal inside a skill or script, that literal belongs
 # here instead (Principle #10 — "No hardcoding").
 #
-# The values below are placeholders. Run `./init.sh` to be prompted through them,
-# or edit this file directly.
+# Run `./init.sh` to be prompted through the main values, or edit this file
+# directly. NOTE: this is also the kit's OWN config, so some blocks hold this
+# repo's real values rather than placeholders — each says which in its comment.
+# Adopters should read every block before assuming a value is a default.
 # ─────────────────────────────────────────────────────────────────────────────
 
 kit:
@@ -21,7 +23,10 @@ kit:
 
 project:
   # Human-readable project name, used in skill prompts and doc headers.
-  name: my-project
+  # Set for this repo. `paths:` and `doc_budgets:` below are likewise this repo's
+  # own (the `kit-*.md` names, explained in the `paths:` comment); `tracker:` and
+  # `notify:` are NOT — see their comments for where this repo's values live.
+  name: agentic-dev-kit
 
 paths:
   # The two canonical narrative files (Principles #1 and #2). The kit ships these
@@ -78,15 +83,18 @@ vcs:
   systemize_branch_pattern: "chore/systemize-{date}"
 
 tracker:
-  backend: linear                # linear | github-issues | jira | none
-  project_name: "My Project Dev"
-  url: ""                        # board URL shown in the friction-log header
-  # Backend-specific ids (Linear). Leave blank for other backends.
+  # This repo's real values, not placeholders. ADOPTERS: replace all three.
+  # `init.sh` prompts with these as defaults and refuses, on a non-interactive run,
+  # to keep a project_name that does not match your origin remote.
+  backend: github-issues         # linear | github-issues | jira | none
+  project_name: "topij/agentic-dev-kit"
+  url: "https://github.com/topij/agentic-dev-kit/issues"
+  # Linear-only ids. Kept blank rather than removed: `init.sh` writes into this
+  # sub-map when an adopter selects `linear`, and only rewrites existing lines.
   linear:
     team_id: ""
     project_id: ""
     label_name: ""
-
 review:
   # Independent review present on this repo (Principle #5). A down bot is not a
   # review waiver; select the current runtime's substitute pass instead.
@@ -190,8 +198,10 @@ review:
 
 notify:
   backend: slack                 # slack | none — where skills DM the operator
-  user_key: ""                   # a key into your project's own notify config
-
+  # Blank ON PURPOSE. This is an identity: put it in the gitignored
+  # `config/dev-model.local.yaml`, which is merged over this file. See
+  # docs/getting-started.md.
+  user_key: ""
 models:
   # Runtime-neutral capability tiers (Principle #7). Workflows assign a tier; an
   # adapter may translate it to a model, effort level, or leave it as guidance when

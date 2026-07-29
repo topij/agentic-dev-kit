@@ -72,7 +72,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "50dd24f5506fc40c55a7007d3e78395beea69b184194faa2fa3c47e883b5d486"
+      "sha256": "7324a1df01ba8aaf9a39a23ee1e00fb488f9a80ceaeac008cf2d40f33f426231"
     },
     "scripts/hooks/pre-push": {
       "role": "hook",
@@ -80,7 +80,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "c27df43c0e5f7162ce17e3c89fa72e7b7ea29e0af4e488e3356a02a9aac11b22"
+      "sha256": "7189dc942ae7ae6188422d8ab671cc72df303b45cfcd4cfc571dde9d691dc35a"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
@@ -88,7 +88,7 @@
     },
     "scripts/lib/kitconfig.py": {
       "role": "engine",
-      "sha256": "d15242d1d59e92d088b6cbbfec9df88f2942e37a01c72ad535cd06e5d1bdd562"
+      "sha256": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6"
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",
@@ -112,7 +112,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "8be333be8a4cb30f4a1c2532518d58b7e554c4bee9309a7d2841447532f1a9e7"
+      "sha256": "dfe79db8e8c97a7bb7d7c51596130075dbf30cf5163411ff73c415d72d284335"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",

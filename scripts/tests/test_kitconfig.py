@@ -13,6 +13,7 @@ Two things are pinned here:
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -34,7 +35,7 @@ def test_matches_pyyaml_on_the_shipped_config():
 
 
 def test_loads_the_shipped_config_without_pyyaml():
-    config = kitconfig.load_config(SHIPPED_CONFIG)
+    config = kitconfig.load_config(SHIPPED_CONFIG, overlay=False)
     # A nested string parses to a non-empty string, and the schema stamp to an
     # int. Deliberately NOT `== "main"`: the branch name is adopter-owned, and
     # pinning it makes this test assert something about whoever's config is on
@@ -347,7 +348,7 @@ def test_kits_own_plan_is_real_not_a_skeleton():
     Checked on line 1, matching init.sh's guard and kit_doctor's: these records
     narrate the marker mechanism, and a plan that merely QUOTES the marker in
     prose is still a real plan, not a skeleton."""
-    config = kitconfig.load_config(SHIPPED_CONFIG)
+    config = kitconfig.load_config(SHIPPED_CONFIG, overlay=False)
     for key in ("paths.handoff", "paths.friction_log"):
         doc = REPO_ROOT / kitconfig.get(config, key)
         assert "devkit-template: unrendered" not in _production_first_line(doc), doc
@@ -378,7 +379,7 @@ def test_review_skipped_lives_only_in_unavailable_markers():
     """`is_noise()` checks unavailability FIRST and returns False, so a marker in
     both lists is dead weight in `noise_markers` and reads as a precedence
     ambiguity. Keep it in exactly one place."""
-    config = kitconfig.load_config(SHIPPED_CONFIG)
+    config = kitconfig.load_config(SHIPPED_CONFIG, overlay=False)
     noise = kitconfig.get_str_list(config, "review.noise_markers", [])
     unavailable = kitconfig.get_str_list(config, "review.unavailable_markers", [])
 
@@ -597,3 +598,327 @@ def test_archive_plan_sessions_reports_a_missing_config_instead_of_crashing(tmp_
     assert "Traceback" not in result.stderr, result.stderr
     assert result.returncode == 2, f"rc={result.returncode}\n{result.stderr}"
     assert "could not resolve configured handoff paths" in result.stderr
+
+
+# ── Local config overlay ──────────────────────────────────────────────────────
+#
+# `load_config()` merges a gitignored `config/dev-model.local.yaml` over the
+# tracked file, so a value that must not enter git (an operator's DM id, a
+# tracker team id) can be supplied without committing it. These pin the merge
+# semantics — the failure that matters is an overlay silently NOT applying, which
+# reads exactly like a correctly-configured repo until a workflow targets the
+# wrong person.
+
+
+def _config_tree(tmp_path: Path, tracked: str, overlay: str | None = None) -> Path:
+    """A minimal repo root holding a tracked config and optionally an overlay."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".git").mkdir()
+    cfg_dir = tmp_path / "config"
+    cfg_dir.mkdir()
+    (cfg_dir / "dev-model.yaml").write_text(tracked, encoding="utf-8")
+    if overlay is not None:
+        (cfg_dir / "dev-model.local.yaml").write_text(overlay, encoding="utf-8")
+    return cfg_dir / "dev-model.yaml"
+
+
+def test_overlay_absent_is_silent_and_returns_the_tracked_file(tmp_path):
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n  backend: slack\n')
+    config = kitconfig.load_config(path)
+    assert kitconfig.get(config, "notify.user_key") == ""
+    assert kitconfig.get(config, "notify.backend") == "slack"
+
+
+def test_overlay_value_wins_over_the_tracked_blank(tmp_path):
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  user_key: ""\n  backend: slack\n',
+        'notify:\n  user_key: "U0LOCAL123"\n',
+    )
+    config = kitconfig.load_config(path)
+    assert kitconfig.get(config, "notify.user_key") == "U0LOCAL123"
+
+
+def test_overlay_merges_per_leaf_and_does_not_drop_siblings(tmp_path):
+    """The regression this guards: a shallow merge replaces the whole `notify`
+    map, silently deleting `backend` because the overlay only mentioned one key."""
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  user_key: ""\n  backend: slack\n'
+        'tracker:\n  backend: github-issues\n  linear:\n    team_id: ""\n',
+        'notify:\n  user_key: "U0LOCAL123"\n',
+    )
+    config = kitconfig.load_config(path)
+    assert kitconfig.get(config, "notify.backend") == "slack"
+    assert kitconfig.get(config, "tracker.backend") == "github-issues"
+    assert kitconfig.get(config, "tracker.linear.team_id") == ""
+
+
+def test_overlay_merges_nested_maps_rather_than_replacing_them(tmp_path):
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  backend: slack\n  user_key: ""\n',
+        'notify:\n  user_key: "U0LOCAL"\n',
+    )
+    config = kitconfig.load_config(path)
+    assert kitconfig.get(config, "notify.user_key") == "U0LOCAL"
+    assert kitconfig.get(config, "notify.backend") == "slack"
+
+
+def test_deep_merge_replaces_a_list_rather_than_appending():
+    """`_deep_merge` replaces lists so an overlay could express "none of these"
+    rather than only ever adding.
+
+    Pinned directly on `_deep_merge`, not through `load_config`: nothing in
+    OVERLAYABLE_PREFIXES is a list, so no overlay can reach this today. The
+    previous version of this test claimed `review.bots: []` as its motivation —
+    a key the same file asserts can never be set (panel, correctness lens). Kept
+    because the merge is general and the allowlist may widen."""
+    problems: list[str] = []
+    out = kitconfig._deep_merge({"a": [1, 2, 3]}, {"a": []}, "", problems)
+    assert out["a"] == []
+    assert problems == []
+
+
+def test_missing_tracked_file_still_raises_even_with_an_overlay_present(tmp_path):
+    """The overlay supplies values, never the schema — it must not stand in for
+    an absent tracked config and let an engine run on a partial map."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "dev-model.local.yaml").write_text(
+        'notify:\n  user_key: "U0LOCAL123"\n', encoding="utf-8"
+    )
+    with pytest.raises(FileNotFoundError):
+        kitconfig.load_config(tmp_path / "config" / "dev-model.yaml")
+
+
+def test_malformed_overlay_raises_rather_than_being_ignored(tmp_path):
+    """Fail loud. A silently-skipped overlay is the failure mode this whole
+    feature has to avoid: the workflow runs, targets the tracked blank, and
+    nothing says the local value never applied."""
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', "- just\n- a list\n")
+    with pytest.raises(ValueError, match="produced no keys"):
+        kitconfig.load_config(path)
+
+
+def test_comments_only_overlay_is_legitimately_empty(tmp_path):
+    """The counterpart to the test above: an overlay a user has commented out is
+    not malformed, and must not become a hard error on every engine start."""
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  user_key: "tracked"\n',
+        "# notify:\n#   user_key: \"U0LOCAL123\"\n\n",
+    )
+    config = kitconfig.load_config(path)
+    assert kitconfig.get(config, "notify.user_key") == "tracked"
+
+
+def test_overlay_with_no_colon_produces_no_keys_and_fails_loudly(tmp_path):
+    """A line with no colon parses to nothing at all. Renamed from
+    ...indented_wrong...: a review lens showed the old name and docstring promised
+    two scenarios (a lost top-level key, a wrong indent) that this input is
+    neither of, and that BOTH were silent no-ops in the implementation. They are
+    now covered by their own tests below."""
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', 'user_key "U0LOCAL123"\n')
+    with pytest.raises(ValueError, match="produced no keys"):
+        kitconfig.load_config(path)
+
+
+# The cases below were all silent in the first version of this feature. Two were
+# worse than silent: they DELETED tracked config. Found by both panel lenses.
+
+
+def test_overlay_key_absent_from_the_tracked_config_is_an_error(tmp_path):
+    """The overlay supplies values for keys the tracked file declares; it is not
+    the schema. A key with no counterpart applies cleanly to nothing."""
+    path = _config_tree(
+        tmp_path, 'notify:\n  user_key: ""\n', 'notifiy:\n  user_key: "U0LOCAL123"\n'
+    )
+    with pytest.raises(ValueError, match="no such key"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_typo_in_a_leaf_key_is_an_error(tmp_path):
+    path = _config_tree(
+        tmp_path, 'notify:\n  user_key: ""\n', 'notify:\n  usr_key: "U0LOCAL123"\n'
+    )
+    with pytest.raises(ValueError, match="notify.usr_key"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_dotted_key_written_flat_is_an_error(tmp_path):
+    """`notify.user_key: "…"` is a natural thing to write and parses as one
+    top-level key with a dot in it — which matches nothing and silently did."""
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', 'notify.user_key: "U0LOCAL"\n')
+    with pytest.raises(ValueError, match="no such key"):
+        kitconfig.load_config(path)
+
+
+def test_tab_indented_overlay_is_an_error_and_does_not_wipe_the_block(tmp_path):
+    """Tabs do not indent YAML. The child parsed as a sibling, leaving the parent
+    valueless — which then REPLACED the tracked block, deleting `notify.backend`.
+    The docstring promised sibling preservation while this route silently broke
+    it (panel, both lenses)."""
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  backend: slack\n  user_key: ""\n',
+        'notify:\n\tuser_key: "U0LOCAL123"\n',
+    )
+    with pytest.raises(ValueError, match="cannot replace"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_with_its_only_child_commented_out_is_an_error(tmp_path):
+    """The operator comments out the leaf but leaves the parent — a valueless
+    parent that would wipe the tracked block."""
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  backend: slack\n  user_key: ""\n',
+        'notify:\n  # user_key: "U0LOCAL123"\n',
+    )
+    with pytest.raises(ValueError, match="cannot replace"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_flow_mapping_is_an_error(tmp_path):
+    """`notify: {user_key: "…"}` parses to a STRING under this reader, which
+    would replace the whole tracked block with that string."""
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  backend: slack\n  user_key: ""\n',
+        'notify: {user_key: "U0LOCAL123"}\n',
+    )
+    with pytest.raises(ValueError, match="cannot replace"):
+        kitconfig.load_config(path)
+
+
+def test_structural_only_overlay_is_legitimately_empty(tmp_path):
+    """`---`, `{}` and `null` are valid ways to write an intentionally-empty
+    overlay. The first version of the guard rejected all three (panel)."""
+    for i, body in enumerate(("---\n", "{}\n", "null\n")):
+        path = _config_tree(tmp_path / f"case{i}", 'notify:\n  user_key: "kept"\n', body)
+        config = kitconfig.load_config(path)
+        assert kitconfig.get(config, "notify.user_key") == "kept"
+
+
+def test_unreadable_overlay_raises_rather_than_falling_back(tmp_path):
+    """The docstring says an overlay that exists but cannot be applied raises. A
+    surviving mutant showed that an `except OSError: return config` would let the
+    feature regress to fail-open with a green suite (panel, adversarial)."""
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', 'notify:\n  user_key: "x"\n')
+    overlay = path.with_name("dev-model.local.yaml")
+    overlay.chmod(0o000)
+    try:
+        if os.access(overlay, os.R_OK):  # running as root — the chmod is a no-op
+            pytest.skip("cannot make a file unreadable as this user")
+        with pytest.raises(OSError):
+            kitconfig.load_config(path)
+    finally:
+        overlay.chmod(0o644)
+
+
+# ── The overlay allowlist ─────────────────────────────────────────────────────
+#
+# Round 2 of the panel found the general overlay produced divergence: only
+# kitconfig merges it, while dev_session.sh, reconcile_sessions.sh and the
+# pre-push hook read the tracked file directly. An overlay on a key THEY read
+# applies in Python and silently does not in sh — the exact failure the overlay
+# exists to prevent. These pin the narrowing.
+
+
+def test_overlay_cannot_set_a_key_the_shell_readers_consume(tmp_path):
+    """`vcs.dev_branch_prefix` is read by the pre-push hook's own snippet. An
+    overlay on it left that guard matching a prefix nothing is named, so a hard
+    stop CLAUDE.md relies on failed open."""
+    path = _config_tree(
+        tmp_path, "vcs:\n  dev_branch_prefix: dev\n", 'vcs:\n  dev_branch_prefix: "lane"\n'
+    )
+    with pytest.raises(ValueError, match="not overlayable"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_cannot_wipe_a_tracked_list(tmp_path):
+    """The regression this closes: `review:` with `bots:` left blank made
+    `review.bots` None, and pr_watch then fell back to its built-in default with
+    the tracked review gate silently narrowed. Now unreachable two ways over —
+    review.* is not overlayable, and None never replaces a tracked value."""
+    path = _config_tree(tmp_path, "review:\n  bots: [coderabbit]\n", "review:\n  bots:\n")
+    with pytest.raises(ValueError, match="not overlayable"):
+        kitconfig.load_config(path)
+
+
+def test_none_never_replaces_a_tracked_value_even_on_an_overlayable_key(tmp_path):
+    """The allowlist and the None-guard are independent; this pins the second one
+    on a key the first one permits, so neither alone is load-bearing."""
+    path = _config_tree(
+        tmp_path, 'tracker:\n  labels: [bug]\n  url: "x"\n', "tracker:\n  labels:\n"
+    )
+    with pytest.raises(ValueError, match="cannot replace"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_cannot_replace_a_plain_value_with_a_block(tmp_path):
+    """The mirror of the block-over-value rule. Left unguarded, a workflow gets a
+    dict where it expects a Slack id."""
+    path = _config_tree(
+        tmp_path, 'notify:\n  user_key: ""\n', 'notify:\n  user_key:\n    slack_id: "U0"\n'
+    )
+    with pytest.raises(ValueError, match="cannot replace a plain value"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_false_reads_the_tracked_file_alone(tmp_path):
+    """Tests asserting about the SHIPPED config need this: without it a
+    developer's own gitignored overlay turns the suite red on their machine while
+    CI stays green, against a repo whose CLAUDE.md names `make test` as *the*
+    verification command."""
+    path = _config_tree(
+        tmp_path, 'notify:\n  user_key: "tracked"\n', 'notify:\n  user_key: "local"\n'
+    )
+    assert kitconfig.get(kitconfig.load_config(path), "notify.user_key") == "local"
+    assert kitconfig.get(kitconfig.load_config(path, overlay=False), "notify.user_key") == "tracked"
+
+
+def test_bare_notify_and_bare_tracker_both_reach_the_useful_guard(tmp_path):
+    """The ancestor clause admits a parent of an overlayable key so the block/None
+    guard can speak, instead of a bare "not overlayable".
+
+    It was asymmetric: `"tracker".startswith("tracker.")` is False, so a bare
+    `tracker:` got the unhelpful message while `notify:` got the useful one — and
+    BOTH mutants of the clause survived the suite, so nothing pinned either
+    direction (panel, adversarial lens)."""
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', "notify:\n")
+    with pytest.raises(ValueError, match="cannot replace a value"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_block_whose_children_did_not_parse_is_an_error(tmp_path):
+    """A child that lost its colon leaves an empty block, which merged as a clean
+    no-op — the overlay silently applied nothing (panel, adversarial lens)."""
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', 'notify:\n  user_key "U0LOCAL"\n')
+    with pytest.raises(ValueError, match="sets nothing"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_dangling_yaml_token_is_an_error(tmp_path):
+    """A bare `|` or `>` lands verbatim as the value — worse than a no-op, since a
+    workflow then acts on the literal token."""
+    for token in ("|", ">"):
+        path = _config_tree(
+            tmp_path / f"t{ord(token)}", 'notify:\n  user_key: ""\n', f"notify:\n  user_key: {token}\n"
+        )
+        with pytest.raises(ValueError, match="bare YAML token"):
+            kitconfig.load_config(path)
+
+
+def test_tracker_is_not_overlayable(tmp_path):
+    """`tracker.*` was overlayable and was removed. Eight agent-facing docs tell the
+    agent to read `config/dev-model.yaml` directly, so hiding the values in the
+    overlay made `session-start` on this repo query a project literally named
+    "My Project Dev" (panel, adversarial lens). Also `tracker.backend` is a setting,
+    not an identity — it failed the allowlist's own stated criterion."""
+    path = _config_tree(
+        tmp_path, 'tracker:\n  backend: linear\n', "tracker:\n  backend: github-issues\n"
+    )
+    with pytest.raises(ValueError, match="not overlayable"):
+        kitconfig.load_config(path)
