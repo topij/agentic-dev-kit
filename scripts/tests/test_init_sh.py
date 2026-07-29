@@ -837,3 +837,54 @@ def test_existing_non_shim_hook_left_untouched(tmp_path: Path) -> None:
 
     assert (hookdir / "pre-push").read_text(encoding="utf-8") == own
     assert "left untouched" in proc.stderr
+
+
+def test_gitignore_append_preserves_a_file_with_no_trailing_newline(tmp_path: Path) -> None:
+    """`add_ignore_line` concatenated onto the last line when `.gitignore` did not
+    end in a newline: a file ending `.env` became `.envstate/`, silently
+    un-ignoring it. Six call sites share the helper, two of them secret hygiene.
+
+    The fix shipped without a test and its mutant survived the whole suite
+    (panel, adversarial lens) — this is that test."""
+    repo = _fixture(tmp_path, config=SHIPPED_CONFIG)
+    (repo / ".gitignore").write_text("node_modules/\n.env", encoding="utf-8")
+
+    _run_init(repo)
+
+    lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert ".env" in lines, f".env was corrupted: {lines}"
+    assert "state/" in lines
+    assert not any(line.startswith(".env") and line != ".env" for line in lines), lines
+
+
+def test_non_interactive_run_refuses_to_inherit_a_foreign_tracker(tmp_path: Path) -> None:
+    """`ask()` keeps the committed value without prompting when stdin is not a tty,
+    so a piped `./init.sh` would seed an adopter this repo's live, public board —
+    which triage-friction-log then files real issues into.
+
+    Fires only when an origin remote exists and disagrees, so the kit's own repo
+    and every fixture here (no remote) are unaffected."""
+    repo = _fixture(tmp_path, config=SHIPPED_CONFIG, git=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/acme/widgets.git"],
+        cwd=repo, check=True, capture_output=True, env=_env(tmp_path),
+    )
+
+    result = subprocess.run(
+        ["sh", "init.sh"], cwd=repo, capture_output=True, text=True,
+        stdin=subprocess.DEVNULL, env=_env(repo.parent), check=False,
+    )
+
+    assert result.returncode == 1, result.stdout
+    assert "does not match this repo's origin" in result.stderr, result.stderr
+
+
+def test_non_interactive_run_is_unaffected_without_an_origin_remote(tmp_path: Path) -> None:
+    """The guard must not fire for the kit's own repo or a fresh copy-in — both
+    reach init.sh before any remote exists. Pins the guard's narrowness, which is
+    what keeps it from wedging the documented install path."""
+    repo = _fixture(tmp_path, config=SHIPPED_CONFIG, git=True)
+
+    _run_init(repo)  # check=True — a non-zero exit fails here
+
+    assert yaml.safe_load(_config(repo))["tracker"]["project_name"] == "topij/agentic-dev-kit"

@@ -823,6 +823,40 @@ cur_tracker_url=$(get_field "tracker:" "" "^  url:")
 tracker_url=$(ask "Tracker board URL (shown in the friction-log header; blank is fine)" "$cur_tracker_url")
 set_field "tracker:" "" "^  url:" "$(quoted_scalar "$tracker_url")"
 
+# Refuse to silently inherit somebody else's tracker.
+#
+# This file ships with the kit carrying the kit's own board, and `ask()` keeps the
+# committed value without prompting when stdin is not a tty — so a piped or scripted
+# `./init.sh` would seed an adopter a live, foreign, public tracker that
+# triage-friction-log then files real issues into. Erroring is the whole point: the
+# silent path is the hazard.
+#
+# Only fires when there is an origin remote to compare against and it disagrees, so
+# the kit's own repo and the test fixtures (which have no remote) are unaffected. No
+# hardcoded owner/repo — the comparison is against whatever this checkout points at.
+if [ ! -t 0 ] && [ -z "${DEVKIT_ALLOW_FOREIGN_TRACKER:-}" ]; then
+  case "$tracker_project_name" in
+    */*)
+      origin_url=$(git remote get-url origin 2>/dev/null || true)
+      if [ -n "$origin_url" ]; then
+        case "$origin_url" in
+          *"$tracker_project_name"*) : ;;
+          *)
+            echo "error: non-interactive run would keep tracker.project_name =" >&2
+            echo "       '$tracker_project_name', which does not match this repo's origin" >&2
+            echo "       ($origin_url). That is another project's tracker, and workflows" >&2
+            echo "       would file issues into it." >&2
+            echo "  Fix: set tracker.project_name in $CONFIG_FILE, or run ./init.sh" >&2
+            echo "       interactively, or set DEVKIT_ALLOW_FOREIGN_TRACKER=1 if this is" >&2
+            echo "       deliberate." >&2
+            exit 1
+            ;;
+        esac
+      fi
+      ;;
+  esac
+fi
+
 cur_branch=$(get_field "vcs:" "" "^  protected_branch:")
 branch=$(ask "Protected branch (PRs target this, never commit to it directly)" "$cur_branch")
 set_field "vcs:" "" "^  protected_branch:" "$(yaml_scalar "$branch")"

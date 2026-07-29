@@ -394,13 +394,17 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         # `load_config` raises this for an absent config file — a standalone
         # engine run. Defaults are exactly right; stay quiet.
         return defaults
-    except ValueError:
-        # An unusable local config overlay. Unlike the read failures below, this
-        # is a config ERROR the operator can fix in seconds, and swallowing it
-        # silently narrows the review gate: with the tracked `review.bots`
-        # discarded, this engine falls back to its built-in default and a
-        # configured reviewer stops being watched. Fail loudly instead (panel).
-        raise
+    except ValueError as exc:
+        # An unusable local config overlay. This branch used to `raise` — but
+        # `_load_review_config()` runs at MODULE IMPORT, so that killed even
+        # `--help` with a raw traceback, and contradicted kit_doctor's handler in
+        # the same change ("a config error reports cleanly"). Both panel lenses
+        # caught it. Warn distinctly instead: the overlay is operator-fixable and
+        # names itself, unlike the read failures below. It cannot narrow the review
+        # gate either — `review.*` is not overlayable.
+        print(f"warning: {exc}", file=sys.stderr)
+        print("warning: using pr_watch's built-in review defaults", file=sys.stderr)
+        return defaults
     except Exception as exc:  # noqa: BLE001 — a config read must never break the loop
         # Anything else means the config (or the reader beside it) IS there and
         # could not be used: an unreadable file, a construct the parser rejects,

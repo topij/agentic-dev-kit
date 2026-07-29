@@ -297,34 +297,22 @@ def loads(text: str) -> dict[str, Any]:
     return root
 
 
+_DANGLING_YAML_TOKENS = {"|", ">", "|-", ">-", "|+", ">+", "&", "*"}
+
+
 def _deep_merge(
     base: dict[str, Any], overlay: dict[str, Any], where: str, problems: list[str]
 ) -> dict[str, Any]:
     """Overlay wins per leaf; maps merge, everything else replaces.
 
-    A list replaces rather than concatenates: ``review.bots: []`` in an overlay
-    must be able to mean "no bots", which appending could never express.
+    Anything it will not merge is appended to ``problems`` rather than applied, and
+    ``load_config`` turns a non-empty ``problems`` into a ``ValueError``. The branches
+    below each carry their own message and the reason it exists — read them there
+    rather than from a summary here, which has drifted from the code in every review
+    round so far (it said "two shapes" while implementing six).
 
-    Two shapes are refused into ``problems`` rather than merged, because the
-    overlay *supplies values* — it is never the schema:
-
-    - **A key the tracked file does not declare.** A typo'd parent (``notifiy:``),
-      a typo'd leaf, a dotted key written flat (``notify.user_key:``), or a
-      tab-indented child that parsed as top-level all produce a key with no
-      counterpart. Each would otherwise apply cleanly to nothing.
-    - **A non-map overwriting a tracked map.** ``notify:`` with its only child
-      commented out parses to ``{'notify': None}``, and a flow mapping parses to a
-      *string* — either would wipe the whole tracked sub-map. Deleting tracked
-      config is never what an overlay is for.
-
-    Both were found by a review panel on the change that added this: the first as
-    a silent no-op, the second as silent destruction of a sibling key the
-    docstring promised was preserved. A second round found the block rule guarded
-    only *maps*, so a valueless key still wiped a tracked **list** — ``review:``
-    with ``bots:`` blank left ``review.bots`` as ``None``, and ``pr_watch`` then
-    fell back to its built-in defaults with the tracked review gate silently
-    narrowed. The rule is now "``None`` never replaces a tracked value, and a
-    non-map never replaces a map", which covers every container.
+    The through-line: an overlay *supplies values* for keys the tracked file already
+    declares. It is never the schema, and it never deletes.
     """
     out = dict(base)
     for key, value in overlay.items():
@@ -336,6 +324,23 @@ def _deep_merge(
             problems.append(
                 f"  {path} — nothing cannot replace a value; "
                 f"a key with no value is almost always a typo or a stray indent"
+            )
+            continue
+        if isinstance(value, dict) and not value:
+            # `notify:` whose child lost its colon parses to an empty block. Merging
+            # it is a clean no-op, so the overlay silently applies nothing — the
+            # failure every other rule here exists to prevent (panel, adversarial).
+            problems.append(
+                f"  {path} — this block sets nothing; its children did not parse "
+                f"(a missing colon, or a tab where spaces are required)"
+            )
+            continue
+        if isinstance(value, str) and value.strip() in _DANGLING_YAML_TOKENS:
+            # A bare `|` / `>` / anchor token is YAML syntax the reader could not
+            # complete, landing verbatim as the value — worse than a no-op.
+            problems.append(
+                f"  {path} — the value is the bare YAML token {value.strip()!r}, "
+                f"which means its block or anchor did not parse"
             )
             continue
         if isinstance(base[key], dict):
@@ -357,23 +362,24 @@ def _deep_merge(
     return out
 
 
-#: Dotted key prefixes a local overlay may set. **Deliberately tiny.**
+#: Dotted key prefixes a local overlay may set. **Deliberately one entry.**
 #:
-#: The kit has four config readers: this one, ``devkit_config_scalar`` (awk, used
-#: by ``dev_session.sh`` and ``reconcile_sessions.sh``), the snippet embedded in
-#: ``scripts/hooks/pre-push``, and ``devmodel_config.py``. Only this one merges the
-#: overlay. A key readable by the others would therefore resolve to one value in a
-#: Python engine and another in a shell script — the silent divergence the overlay
-#: exists to prevent, reintroduced one layer down. A review panel demonstrated it:
-#: an overlay on ``vcs.dev_branch_prefix`` left the pre-push guard matching a prefix
-#: nothing is named, so a hard stop CLAUDE.md relies on failed open.
+#: A key is only safe here if every reader of it merges the overlay. `notify.user_key`
+#: qualifies: at runtime its only readers are the two skill prompts, both of which say
+#: to read the merged view. `init.sh` also reads it (`get_field`, an independent awk
+#: reader) — but only to offer a prompt default before writing the *tracked* file, which
+#: is exactly what it should show, so that read is correct rather than divergent.
 #:
-#: So the overlay is confined to keys that are (a) identity-bearing, which is the
-#: whole reason it exists, and (b) read by no shell reader. Everything else —
-#: ``vcs.*``, ``paths.*``, ``review.*``, ``doc_budgets``, ``models.*`` — stays
-#: tracked-only, and an overlay naming one is an error rather than a divergence.
-#: Widening this list means checking every reader first.
-OVERLAYABLE_PREFIXES = ("notify.user_key", "tracker.")
+#: `tracker.*` was here and was removed. It failed on both counts: `tracker.backend` is a
+#: setting rather than an identity, and eight agent-facing docs — `session-start`,
+#: `parallel`, the autonomous playbook, `post-merge-systemize` — instruct the agent to
+#: read `config/dev-model.yaml` directly. With the values in the overlay, `session-start`
+#: on this very repo queried a tracker project literally named "My Project Dev". A review
+#: panel caught it; the divergence was live.
+#:
+#: That is the bar for widening this list: name every reader, including the ones that are
+#: prose instructions to an agent rather than code, and confirm each sees the merged view.
+OVERLAYABLE_PREFIXES = ("notify.user_key",)
 
 
 def _overlay_paths(node: Any, where: str = "") -> list[str]:
@@ -450,7 +456,7 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH, *, overlay: bool = True)
             # guards below say something far more useful about it than "not
             # overlayable" would.
             allowed = leaf.startswith(OVERLAYABLE_PREFIXES) or any(
-                prefix.rstrip(".").startswith(f"{leaf}.") for prefix in OVERLAYABLE_PREFIXES
+                (prefix.rstrip(".") + ".").startswith(f"{leaf}.") for prefix in OVERLAYABLE_PREFIXES
             )
             if not allowed:
                 problems.append(

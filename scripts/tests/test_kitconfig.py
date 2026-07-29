@@ -657,25 +657,27 @@ def test_overlay_merges_per_leaf_and_does_not_drop_siblings(tmp_path):
 def test_overlay_merges_nested_maps_rather_than_replacing_them(tmp_path):
     path = _config_tree(
         tmp_path,
-        'tracker:\n  backend: linear\n  linear:\n    team_id: ""\n    project_id: "keep-me"\n',
-        'tracker:\n  linear:\n    team_id: "T0LOCAL"\n',
+        'notify:\n  backend: slack\n  user_key: ""\n',
+        'notify:\n  user_key: "U0LOCAL"\n',
     )
     config = kitconfig.load_config(path)
-    assert kitconfig.get(config, "tracker.linear.team_id") == "T0LOCAL"
-    assert kitconfig.get(config, "tracker.linear.project_id") == "keep-me"
-    assert kitconfig.get(config, "tracker.backend") == "linear"
+    assert kitconfig.get(config, "notify.user_key") == "U0LOCAL"
+    assert kitconfig.get(config, "notify.backend") == "slack"
 
 
-def test_overlay_list_replaces_rather_than_appends(tmp_path):
-    """`review.bots: []` in an overlay must be able to mean "no bots" — a
-    concatenating merge could never express that."""
-    path = _config_tree(
-        tmp_path,
-        "tracker:\n  labels: [bug, chore]\n",
-        "tracker:\n  labels: []\n",
-    )
-    config = kitconfig.load_config(path)
-    assert kitconfig.get(config, "tracker.labels") == []
+def test_deep_merge_replaces_a_list_rather_than_appending():
+    """`_deep_merge` replaces lists so an overlay could express "none of these"
+    rather than only ever adding.
+
+    Pinned directly on `_deep_merge`, not through `load_config`: nothing in
+    OVERLAYABLE_PREFIXES is a list, so no overlay can reach this today. The
+    previous version of this test claimed `review.bots: []` as its motivation —
+    a key the same file asserts can never be set (panel, correctness lens). Kept
+    because the merge is general and the allowlist may widen."""
+    problems: list[str] = []
+    out = kitconfig._deep_merge({"a": [1, 2, 3]}, {"a": []}, "", problems)
+    assert out["a"] == []
+    assert problems == []
 
 
 def test_missing_tracked_file_still_raises_even_with_an_overlay_present(tmp_path):
@@ -875,3 +877,48 @@ def test_overlay_false_reads_the_tracked_file_alone(tmp_path):
     )
     assert kitconfig.get(kitconfig.load_config(path), "notify.user_key") == "local"
     assert kitconfig.get(kitconfig.load_config(path, overlay=False), "notify.user_key") == "tracked"
+
+
+def test_bare_notify_and_bare_tracker_both_reach_the_useful_guard(tmp_path):
+    """The ancestor clause admits a parent of an overlayable key so the block/None
+    guard can speak, instead of a bare "not overlayable".
+
+    It was asymmetric: `"tracker".startswith("tracker.")` is False, so a bare
+    `tracker:` got the unhelpful message while `notify:` got the useful one — and
+    BOTH mutants of the clause survived the suite, so nothing pinned either
+    direction (panel, adversarial lens)."""
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', "notify:\n")
+    with pytest.raises(ValueError, match="cannot replace a value"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_block_whose_children_did_not_parse_is_an_error(tmp_path):
+    """A child that lost its colon leaves an empty block, which merged as a clean
+    no-op — the overlay silently applied nothing (panel, adversarial lens)."""
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', 'notify:\n  user_key "U0LOCAL"\n')
+    with pytest.raises(ValueError, match="sets nothing"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_dangling_yaml_token_is_an_error(tmp_path):
+    """A bare `|` or `>` lands verbatim as the value — worse than a no-op, since a
+    workflow then acts on the literal token."""
+    for token in ("|", ">"):
+        path = _config_tree(
+            tmp_path / f"t{ord(token)}", 'notify:\n  user_key: ""\n', f"notify:\n  user_key: {token}\n"
+        )
+        with pytest.raises(ValueError, match="bare YAML token"):
+            kitconfig.load_config(path)
+
+
+def test_tracker_is_not_overlayable(tmp_path):
+    """`tracker.*` was overlayable and was removed. Eight agent-facing docs tell the
+    agent to read `config/dev-model.yaml` directly, so hiding the values in the
+    overlay made `session-start` on this repo query a project literally named
+    "My Project Dev" (panel, adversarial lens). Also `tracker.backend` is a setting,
+    not an identity — it failed the allowlist's own stated criterion."""
+    path = _config_tree(
+        tmp_path, 'tracker:\n  backend: linear\n', "tracker:\n  backend: github-issues\n"
+    )
+    with pytest.raises(ValueError, match="not overlayable"):
+        kitconfig.load_config(path)
