@@ -190,22 +190,35 @@ across one session of 13 rounds on three PRs, **every round found something**,
 and seven of those findings were defects introduced by the *previous round's
 fix*. The termination condition may never arrive.
 
-So the stopping criterion is **blast radius, not round count**:
+So the stopping criterion is **blast radius first** — and, for the third class only, a
+round count too, because blast radius alone gives a prose loop no way to terminate:
 
 - A **gate, send path, destructive operation, or kill/recovery path** — keep going.
   Worst case is an unreviewed change landing, and the doctrine's operator-merge rule
   applies.
 - Something **reported but never acted on** (a warning, a log line, a report
   field) — a round or two is proportionate. Worst case is a wrong message.
-- A **record of work already done** (a graduation marker, a handoff block, a PR body,
-  a commit message, a friction entry) — **one review round, then stop.** See the hard
-  cap below; it is the one class where the rest of this section does not apply.
+- A **record of work already done, that nothing acts on** — **one review round, then
+  stop.** See the hard cap below; it is the one class where the round-count guidance
+  above does not apply. Membership is functional, not a list of file types: a
+  graduation marker, handoff block, friction entry, PR body or commit message qualifies
+  *only* if none of these hold. It belongs in the class **above** when:
+  - **something executes it.** A commit message, squash message or PR body can carry a
+    closing keyword and mutate tracker state — not hypothetical, it is `CLAUDE.md`'s
+    standing rule and it fired in the session that produced this cap.
+  - **it stands in for a control.** When operator approval is substituted, or a
+    receipt's coverage is stated only in prose, the record *is* the control's artifact
+    rather than a description of one.
+  - **it is the only durable evidence a control was satisfied.** If deleting it would
+    leave no way to check the claim, review it like the control.
 
 That same classification decides **which findings to act on before merging**, and it
 **narrows step 5 rather than replacing it**. If a change does not clearly sit in one
-class, it is the first one — *except* that a record is never promoted by the fact that
-its subject was risky. Reviewing the sweep is first-class work; reviewing the
-paragraph describing the sweep is not.
+class, it is the first one — *except* that a record is not promoted by the risk of its
+**subject** alone. Reviewing the sweep is first-class work; reviewing the paragraph
+describing the sweep is not. That exception is about the subject, and it does not
+override the three tests above: a record that carries a control, or is the only
+evidence of one, is promoted on its **own** function however dull its subject.
 
 - **First class** — act on every finding. Reply-with-reason stays what step 5 makes
   it, an answer to a nitpick, not a disposal route for something a lens called real.
@@ -233,8 +246,8 @@ read as licence to run four.
 
 Measured on the session that added this: a friction-log graduation marker drew
 **four panel rounds and eight lenses**; a docs audit drew three more; a wrap-up drew
-two. Across eight rounds and fifteen-plus lenses, **no HIGH was ever in executable
-behaviour** — every one was in prose. Roughly four findings out of sixty would have
+two. Across those nine rounds and fifteen-plus lenses, **no HIGH was ever in executable
+behaviour** — every one was in prose. Roughly four findings out of ~78 would have
 mattered if shipped, and three of those four were in prose that ships to adopters, not
 in the records. The records generated the rest of the work themselves.
 
@@ -250,8 +263,10 @@ Three things follow, and they are the whole content of the cap:
    round 2; round 4 found a round-3 fix that had silently matched nothing while its
    commit message reported it landed. Every round's HIGHs were in claims about a
    surface *that round had not re-read*.
-3. **A record that has accrued two rounds of corrections should be deleted, not
-   corrected a third time.** The session's fix was to delete an elaborate verification
+3. **A record already carrying corrections should be deleted, not corrected again.**
+   Under the cap a record cannot accrue two rounds, so this bites on one that arrives
+   with them — inherited from an earlier session, or carried on a branch reviewed under
+   the first two classes before it was reclassified. The session's fix was to delete an elaborate verification
    transcript rather than amend it again: the file went 141 → 93 lines and the defect
    surface went with it. Keep the record short, state what the checks do *not*
    establish, and put the detail in the PR — read once, not maintained.
