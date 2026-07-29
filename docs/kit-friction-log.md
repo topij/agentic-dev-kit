@@ -10,6 +10,7 @@
 > issue-shaped, or waiting for the next `triage-friction-log` sweep.
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
+
 ## 2026-07-29 (second sweep) — Backlog migrated to GitHub Issues (#155)
 
 Swept by the `triage-friction-log` workflow in LLM-only mode (the engine tracked in
@@ -25,16 +26,25 @@ entry 3 also produced; entry 2 produced both `#155` and the `#140` comment.
 
 Every routing target was read from the live tracker **before** drafting. That is a direct
 response to entry 1, which records the previous sweep re-deriving `#121` — an OPEN issue filed
-by the run before it — without noticing it existed.
+**two sweeps earlier** — without noticing it existed. (The swept entry and this marker's first
+draft both said *"the previous run"*; `#121` was created `2026-07-28T12:57:28Z` and falls in the
+third sweep's `#112`–`#125` range, with the fourth sweep in between. A review lens caught it, and
+the `#138` comment carrying the same error was amended.)
 
 ### Approval record — in-session operator, no DM
 
 `config/dev-model.yaml → notify.user_key` is empty, so there is no DM surface to stop on; the
-operator was present and substituted for it. That is the interactive path
-[#128](https://github.com/topij/agentic-dev-kit/issues/128) asks for, and this block is the
-committed artifact that issue requires, since `state/` and `reports/` are gitignored. Approval
-was bulk and unconditional — *"lgtm"* — so every proposal carries the same decision and the
-explicit-opt-in default for unmentioned proposals was never exercised. This is the **sixth**
+operator was present and substituted for it. **The documented stop is still unconditional** —
+`.claude/commands/triage-friction-log.md` states it at lines 113 and 465 — so this run is in the
+same position as the run [#128](https://github.com/topij/agentic-dev-kit/issues/128) was filed
+against, which the archive records as having *violated* the stop rather than substituted for it.
+What `#128` asks for is an interactive-operator exception that does not exist yet; what it calls
+the load-bearing half is that any substitute leave a **committed** approval record, since
+`state/` and `reports/` are gitignored. This block is that record. It does not make the run
+compliant with a rule the skill has not yet gained.
+
+Approval was bulk and unconditional — *"lgtm"* — so every proposal carries the same decision and
+the explicit-opt-in default for unmentioned proposals was never exercised. This is the **sixth**
 sweep overall; the archive holds the five earlier markers.
 
 **Frozen-inbox snapshot:** `state/triage/frozen-inbox_2026-07-29-b.json` (gitignored),
@@ -69,9 +79,38 @@ into the record.) Proposal 4 gained the literal `#155`, which did not exist when
 The commands and their output are on the PR. Read them there. In summary: the snapshot digest
 reproduces from `c48164c`; the archived block un-demotes to the snapshot byte-for-byte; each of
 the seven comments was fetched back by id and hashes to the text that was sent, on the issue
-claimed for it; `#155` is OPEN with the labels stated. Nothing here verifies that any posted
-comment is *true* — the previous sweep's worst error was caught by a review lens, not by a
-check, and no automated gate covers any of this
+claimed for it; `#155` exists with the title and labels this record claims.
+
+**What these checks do not reach**, restated rather than dropped — the previous marker named
+these about its own checks and they are still true here. The comment check's right-hand side is
+a **local file**, so it is the one thing a third party cannot re-run. Nothing verifies that the
+approval happened as described, which matters most precisely because the DM that normally carries
+that evidence did not exist. The un-demote round-trip is self-inverting, so it would pass on a
+corrupted demotion; the fence count that would catch the realistic corruption is *measured* and
+reported, not asserted as a gate. And nothing here verifies that any posted comment is **true** —
+this sweep's own `#45` comment opens by retracting a claim the previous sweep filed there, and
+four of the errors corrected on this PR were found by a review lens rather than by any check. No
+automated gate covers any of it
 ([#127](https://github.com/topij/agentic-dev-kit/issues/127)).
 
 The swept entries are verbatim in the archive under `Graduated 2026-07-29 (second sweep)`.
+
+## 2026-07-29 (post-sweep, second)
+
+- **Both review lenses were handed a worktree at the wrong ref, and both caught it.** The panel
+  run on the sweep's own PR launched two lenses with runtime-provided worktree isolation. Both
+  worktrees were created at `c48164c` — the PR's *base* — so `git diff origin/main...HEAD` was
+  **empty** in each, and neither HEAD matched the `f33bb488` the launch prompt named. This is
+  [#75](https://github.com/topij/agentic-dev-kit/issues/75)'s subject reproducing exactly: the
+  contract item that tells a lens to assume its worktree points at the wrong ref, and to verify a
+  non-empty diff against an expected head before reviewing. **H** — occurrence data for `#75`,
+  and the strongest available: it is the first instance where the guard is observed *working*
+  rather than the failure being observed after the fact. Two independent lenses, 2/2, each
+  detected it and each recovered differently — one reviewed via read-only plumbing against the
+  shared object store, the other re-pointed its own worktree — so both reviewed the real diff and
+  neither reported all-clear on an empty one. The launch prompt's wording matters and should be
+  kept: it named the expected head and told each lens to stop rather than report clean. Note also
+  that recovery was possible only because the object was reachable locally; a lens whose runtime
+  gave it a worktree of a *different repository* (the OpenKitchen case `#75` records) has no such
+  fallback. **Not from the swept inbox:** surfaced by the review panel on this sweep's own PR,
+  recorded below the marker for the next pass.

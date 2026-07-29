@@ -2,6 +2,7 @@
 
 Graduated friction entries live here after they have been routed to the tracker
 (GitHub Issues on this repo) or promoted into a repeated-pattern rule.
+
 ## Graduated 2026-07-29 (second sweep) — GitHub Issues (#155)
 
 Swept by the `triage-friction-log` workflow, run in LLM-only mode (the engine tracked in
