@@ -197,10 +197,15 @@ So the stopping criterion is **blast radius, not round count**:
   applies.
 - Something **reported but never acted on** (a warning, a log line, a report
   field) — a round or two is proportionate. Worst case is a wrong message.
+- A **record of work already done** (a graduation marker, a handoff block, a PR body,
+  a commit message, a friction entry) — **one review round, then stop.** See the hard
+  cap below; it is the one class where the rest of this section does not apply.
 
 That same classification decides **which findings to act on before merging**, and it
 **narrows step 5 rather than replacing it**. If a change does not clearly sit in one
-class, it is the first one.
+class, it is the first one — *except* that a record is never promoted by the fact that
+its subject was risky. Reviewing the sweep is first-class work; reviewing the
+paragraph describing the sweep is not.
 
 - **First class** — act on every finding. Reply-with-reason stays what step 5 makes
   it, an answer to a nitpick, not a disposal route for something a lens called real.
@@ -210,11 +215,54 @@ class, it is the first one.
   *and* recorded where your project tracks deferred work, so it is a disposition
   with an artifact rather than a third option that loses it.
 
+- **Third class** — act on HIGH and on anything a lens marks a *regression*, then
+  **stop and file the rest**, whatever the severity distribution looks like.
+
 Severity alone is the wrong discriminator, and this paragraph's own first review
 round proved it: no HIGH, and four of its MEDs said the paragraph loosened a control
 it claimed to tighten. Know the trade, too — a round that acts on nothing produces
-no fix round, so step 6's re-run does not fire and that round stands alone. Do not
-read the bullet above it as licence to stop while severity is still rising.
+no fix round, so step 6's re-run does not fire and that round stands alone. In the
+**first two classes**, do not read the bullet above as licence to stop while severity
+is still rising. In the third, rising severity is not a reason to continue — see next.
+
+## The hard cap on reviewing a record
+
+Step 6's re-run is not optional in the first two classes. **For a record it is capped
+at one round**, and this section exists because the rule above, without the cap, was
+read as licence to run four.
+
+Measured on the session that added this: a friction-log graduation marker drew
+**four panel rounds and eight lenses**; a docs audit drew three more; a wrap-up drew
+two. Across eight rounds and fifteen-plus lenses, **no HIGH was ever in executable
+behaviour** — every one was in prose. Roughly four findings out of sixty would have
+mattered if shipped, and three of those four were in prose that ships to adopters, not
+in the records. The records generated the rest of the work themselves.
+
+Three things follow, and they are the whole content of the cap:
+
+1. **Prose has unbounded surface area.** There is no "the test passes" for a
+   paragraph — you can always find another imprecision. A loop pointed at prose does
+   not terminate on its own, so it needs a count, not a quality bar.
+2. **Rising severity in a record is evidence the loop is eating itself, not that the
+   artifact is dangerous.** Each fix round *adds prose*, and added prose is where the
+   next round's findings live. On that session, round 2 found the round-1 fix had
+   shipped four defects of the same species it removed; round 3 found the same of
+   round 2; round 4 found a round-3 fix that had silently matched nothing while its
+   commit message reported it landed. Every round's HIGHs were in claims about a
+   surface *that round had not re-read*.
+3. **A record that has accrued two rounds of corrections should be deleted, not
+   corrected a third time.** The session's fix was to delete an elaborate verification
+   transcript rather than amend it again: the file went 141 → 93 lines and the defect
+   surface went with it. Keep the record short, state what the checks do *not*
+   establish, and put the detail in the PR — read once, not maintained.
+
+**Shipped prose is not a record.** Docs and config an adopter reads and executes
+against — a workflow file, a `# Requires:` header, a docstring, a README instruction —
+are code with worse tooling, and they belong in the first or second class. On that same
+session the panel's genuinely load-bearing catch was exactly there: a workflow table
+described two PR-*mutating* flags as read-only checks, so following it would flip a
+deliberately drafted PR to ready. That round earned its keep. The four rounds spent on
+the marker describing a completed sweep did not.
 
 **Do not push the gate into the lens prompts.** Severity has to come from a reviewer
 who does not know what you consider low-stakes. The change that added rule 3's

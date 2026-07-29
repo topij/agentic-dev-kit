@@ -179,7 +179,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   that needs an operator product/design call). Stop, report the specific blocker, and
   ask. Don't loop forever on something only the operator can unblock.
 - **Bound the loop** — if you've gone ~8–10 rounds without converging, stop and
-  summarize where it stands rather than looping indefinitely.
+  summarize where it stands rather than looping indefinitely. That ceiling is for a
+  gate or a send path. For a **record** — a handoff block, a graduation marker, a PR
+  body — the cap is **one** review round, and
+  [`../fallback-review-panel.md`](../fallback-review-panel.md) says why: prose has no
+  termination condition, and each fix round supplies the next round's findings.
 
 ## Notes
 
