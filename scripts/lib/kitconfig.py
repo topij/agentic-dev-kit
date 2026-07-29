@@ -297,11 +297,37 @@ def loads(text: str) -> dict[str, Any]:
     return root
 
 
+def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Overlay wins per leaf; maps merge, everything else replaces.
+
+    A list replaces rather than concatenates: ``review.bots: []`` in an overlay
+    must be able to mean "no bots", which appending could never express.
+    """
+    out = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
     """Load and parse the config. A relative path resolves against the repo root.
 
-    Raises ``FileNotFoundError`` when absent — a script that needs config has
-    nothing sane to fall back to.
+    If a sibling ``<name>.local.<ext>`` exists it is merged **over** the tracked
+    file, per leaf. That file is gitignored, so a value which must not enter git —
+    an operator's DM id, a tracker team id — lives there while the tracked file
+    keeps a blank placeholder and its explanatory comment. The tracked file stays
+    the schema of record (Principle #10); the overlay only supplies values.
+
+    ``init.sh`` writes the **tracked** file, so a key set in the overlay keeps
+    winning after a re-run of init — deliberate, and the reason the tracked file
+    should hold a blank rather than a stale duplicate of the overlay's value.
+
+    Raises ``FileNotFoundError`` when the tracked file is absent — a script that
+    needs config has nothing sane to fall back to. A missing overlay is normal
+    and silent; an unreadable or malformed one is not, and raises.
     """
     target = Path(path)
     if not target.is_absolute():
@@ -310,7 +336,27 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
         raise FileNotFoundError(
             f"dev-model config not found: {target} (run ./init.sh, or pass an explicit path)"
         )
-    return loads(target.read_text(encoding="utf-8"))
+    config = loads(target.read_text(encoding="utf-8"))
+
+    overlay_path = target.with_suffix(f".local{target.suffix}")
+    if overlay_path.is_file():
+        raw = overlay_path.read_text(encoding="utf-8")
+        overlay = loads(raw)
+        # `loads()` yields {} for anything it cannot read as a mapping — a YAML
+        # list, an indent slip, a stray paste. Merging that is a silent no-op, and
+        # a silently-skipped overlay is indistinguishable from a correct one right
+        # up until a workflow DMs the wrong person. So: content that produced no
+        # keys is an error, while a comments-only file is legitimately empty.
+        has_content = any(
+            line.strip() and not line.lstrip().startswith("#") for line in raw.splitlines()
+        )
+        if has_content and not overlay:
+            raise ValueError(
+                f"local config overlay has content but produced no keys: {overlay_path} "
+                f"(expected a mapping like 'notify:\\n  user_key: \"…\"')"
+            )
+        config = _deep_merge(config, overlay)
+    return config
 
 
 def get(config: dict[str, Any], dotted_key: str, default: Any = _MISSING) -> Any:

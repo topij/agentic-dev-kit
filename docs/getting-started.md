@@ -55,6 +55,31 @@ Then open `config/dev-model.yaml` and fill in anything you skipped — especiall
 the `tracker` and `models` blocks. That one file is where every skill and script
 reads its project-specific values, so there's nothing to hardcode elsewhere.
 
+### Values you don't want in git
+
+Some of those values are identities rather than settings — the operator id the
+approval DM targets, a tracker team id. Put those in
+`config/dev-model.local.yaml`, which is gitignored and merged **over** the tracked
+file per leaf:
+
+```yaml
+# config/dev-model.local.yaml
+notify:
+  user_key: "U0XXXXXXXXX"
+```
+
+The tracked file stays the schema of record — it keeps the key, blank, with the
+comment explaining it — so a reader still sees every knob that exists. Only the
+value moves. Sibling keys are preserved (setting `notify.user_key` locally does
+not drop `notify.backend`), and an overlay that has content but parses to no keys
+is an **error** rather than a silent no-op, because an overlay that quietly fails
+to apply looks exactly like a correctly-configured repo until a workflow messages
+the wrong person.
+
+Note that `./init.sh` writes the *tracked* file, so a key you set locally keeps
+winning after a re-run — which is why the tracked file should hold a blank rather
+than a stale copy of the local value.
+
 ## 2 · Your first briefing — `session-start`
 
 Start your agent and run `session-start`. It reads your handoff, the friction

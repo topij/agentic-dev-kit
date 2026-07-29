@@ -25,6 +25,7 @@ against regression like any other test here.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -237,9 +238,36 @@ def test_degraded_manifest_warns_and_falls_back(tmp_path: Path) -> None:
 
 
 def _shipped_with_name(name_value: str) -> str:
-    needle = "  name: my-project\n"
-    assert needle in SHIPPED_CONFIG, "shipped config's project.name moved — update the needle"
-    return SHIPPED_CONFIG.replace(needle, f"  name: {name_value}\n")
+    """Swap `project.name` in the shipped config, whatever it currently holds.
+
+    This used to match the literal `  name: my-project\\n`. That coupled twelve
+    tests to the config being *unstamped*: the moment a repo set its own project
+    name — which every adopter does, and which this repo did — they all failed on
+    a needle assertion rather than on anything they test. These tests ship to
+    adopters, so the fixture has to be value-independent.
+    """
+    # The replacement is a FUNCTION, not a string: `re.sub` interprets backslash
+    # escapes in a string replacement, so a hostile value like `Acme\nCo` — which
+    # this fixture exists to feed through init.sh — would arrive as a real
+    # newline and silently test the wrong thing. Caught by
+    # test_render_preserves_backslashes_in_values.
+    pattern = re.compile(r"^  name: .*$", re.M)
+    replaced, count = pattern.subn(lambda _m: f"  name: {name_value}", SHIPPED_CONFIG, count=1)
+    assert count == 1, (
+        f"expected exactly one `  name:` line under project: in the shipped config, found {count}"
+    )
+    return replaced
+
+
+def _shipped_with_tracker_url(url_value: str) -> str:
+    """Swap `tracker.url`, whatever it currently holds — same reasoning as
+    `_shipped_with_name`, and the same function-replacement rule for backslashes."""
+    pattern = re.compile(r"^  url: .*$", re.M)
+    replaced, count = pattern.subn(lambda _m: f"  url: {url_value}", SHIPPED_CONFIG, count=1)
+    assert count == 1, (
+        f"expected exactly one `  url:` line under tracker: in the shipped config, found {count}"
+    )
+    return replaced
 
 
 def test_rerun_on_shipped_config_preserves_every_value_and_is_stable(tmp_path: Path) -> None:
@@ -397,7 +425,7 @@ def test_quoted_scalar_prefers_quotes_but_degrades_losslessly(
 def test_rerun_preserves_tracker_url_with_backslash_for_both_readers(tmp_path: Path) -> None:
     """A backslash in an always-quoted field degrades to a raw stamp: quoted,
     PyYAML rejects the escape while kitconfig reads it literally (panel, #87)."""
-    config = SHIPPED_CONFIG.replace('  url: ""', r'  url: "x\py"')
+    config = _shipped_with_tracker_url(r'"x\py"')
     assert r'  url: "x\py"' in config
     repo = _fixture(tmp_path, config=config)
 
@@ -584,15 +612,44 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
     # Token ABSENCE alone lets a substitution that renders to the EMPTY string
     # pass — an uninitialized awk variable is silently "" (adversarial lens,
     # round 2) — so also pin one rendered VALUE per token family, per doc:
-    assert "my-project" in seeded["docs/kit-handoff.md"]  # {{PROJECT_NAME}}
+    # Pin that the token rendered to the CONFIGURED name, read from the config
+    # under test — not to a literal. Asserting `my-project` coupled this to the
+    # config being unstamped, so it failed the moment this repo (or any adopter)
+    # set its own project name, which is not what this test is about.
+    configured_name = yaml.safe_load(SHIPPED_CONFIG)["project"]["name"]
+    assert configured_name, "shipped config has no project.name to render"
+    assert configured_name in seeded["docs/kit-handoff.md"]  # {{PROJECT_NAME}}
     assert "scripts/check_doc_budget.py" in seeded["docs/kit-handoff.md"]  # {{ENGINE_DIR}}
     assert "kit-handoff-history.md" in seeded["docs/kit-handoff.md"]  # {{HANDOFF_HISTORY}}
     assert "kit-handoff.md" in seeded["docs/kit-handoff-history.md"]  # {{HANDOFF}}
     assert "kit-friction-log-archive.md" in seeded["docs/kit-friction-log.md"]  # {{FRICTION_ARCHIVE}}
-    assert "tracker.url" in seeded["docs/kit-friction-log.md"]  # {{TRACKER_URL}} fallback
+    # {{TRACKER_URL}} has two branches (init.sh: a non-empty value renders as-is,
+    # a blank one renders a "set `tracker.url`" instruction). Assert whichever
+    # branch the config under test selects. The blank branch keeps its own test
+    # below, so stamping a real URL here cannot silently delete that coverage —
+    # which is exactly what happened when this assertion was a bare literal.
+    configured_url = yaml.safe_load(SHIPPED_CONFIG)["tracker"]["url"]
+    assert (configured_url or "tracker.url") in seeded["docs/kit-friction-log.md"]
     # AGENTS.md renders at the repo ROOT, so its handoff link is the repo-relative
     # configured path, not the sibling-relative form the narrative docs use.
     assert "docs/kit-handoff.md" in seeded["AGENTS.md"]  # {{HANDOFF_PATH}}
+
+
+def test_blank_tracker_url_renders_the_set_it_instruction(tmp_path: Path) -> None:
+    """The {{TRACKER_URL}} fallback branch, pinned independently of what the
+    shipped config holds.
+
+    Until this existed, the fallback was covered only incidentally — by the
+    shipped config happening to leave `tracker.url` blank. Stamping a real URL
+    silently removed that coverage, and nothing failed to say so.
+    """
+    repo = _fixture(tmp_path, config=_shipped_with_tracker_url('""'), templates=True)
+
+    _run_init(repo)
+
+    friction = (repo / "docs" / "kit-friction-log.md").read_text(encoding="utf-8")
+    assert "tracker.url" in friction, "blank tracker.url should render the set-it instruction"
+    assert "{{" not in friction
 
 
 def test_render_preserves_backslashes_in_values(tmp_path: Path) -> None:

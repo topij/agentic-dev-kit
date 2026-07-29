@@ -597,3 +597,121 @@ def test_archive_plan_sessions_reports_a_missing_config_instead_of_crashing(tmp_
     assert "Traceback" not in result.stderr, result.stderr
     assert result.returncode == 2, f"rc={result.returncode}\n{result.stderr}"
     assert "could not resolve configured handoff paths" in result.stderr
+
+
+# ── Local config overlay ──────────────────────────────────────────────────────
+#
+# `load_config()` merges a gitignored `config/dev-model.local.yaml` over the
+# tracked file, so a value that must not enter git (an operator's DM id, a
+# tracker team id) can be supplied without committing it. These pin the merge
+# semantics — the failure that matters is an overlay silently NOT applying, which
+# reads exactly like a correctly-configured repo until a workflow targets the
+# wrong person.
+
+
+def _config_tree(tmp_path: Path, tracked: str, overlay: str | None = None) -> Path:
+    """A minimal repo root holding a tracked config and optionally an overlay."""
+    (tmp_path / ".git").mkdir()
+    cfg_dir = tmp_path / "config"
+    cfg_dir.mkdir()
+    (cfg_dir / "dev-model.yaml").write_text(tracked, encoding="utf-8")
+    if overlay is not None:
+        (cfg_dir / "dev-model.local.yaml").write_text(overlay, encoding="utf-8")
+    return cfg_dir / "dev-model.yaml"
+
+
+def test_overlay_absent_is_silent_and_returns_the_tracked_file(tmp_path):
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n  backend: slack\n')
+    config = kitconfig.load_config(path)
+    assert kitconfig.get(config, "notify.user_key") == ""
+    assert kitconfig.get(config, "notify.backend") == "slack"
+
+
+def test_overlay_value_wins_over_the_tracked_blank(tmp_path):
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  user_key: ""\n  backend: slack\n',
+        'notify:\n  user_key: "U0LOCAL123"\n',
+    )
+    config = kitconfig.load_config(path)
+    assert kitconfig.get(config, "notify.user_key") == "U0LOCAL123"
+
+
+def test_overlay_merges_per_leaf_and_does_not_drop_siblings(tmp_path):
+    """The regression this guards: a shallow merge replaces the whole `notify`
+    map, silently deleting `backend` because the overlay only mentioned one key."""
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  user_key: ""\n  backend: slack\n'
+        'tracker:\n  backend: github-issues\n  linear:\n    team_id: ""\n',
+        'notify:\n  user_key: "U0LOCAL123"\n',
+    )
+    config = kitconfig.load_config(path)
+    assert kitconfig.get(config, "notify.backend") == "slack"
+    assert kitconfig.get(config, "tracker.backend") == "github-issues"
+    assert kitconfig.get(config, "tracker.linear.team_id") == ""
+
+
+def test_overlay_merges_nested_maps_rather_than_replacing_them(tmp_path):
+    path = _config_tree(
+        tmp_path,
+        'tracker:\n  backend: linear\n  linear:\n    team_id: ""\n    project_id: "keep-me"\n',
+        'tracker:\n  linear:\n    team_id: "T0LOCAL"\n',
+    )
+    config = kitconfig.load_config(path)
+    assert kitconfig.get(config, "tracker.linear.team_id") == "T0LOCAL"
+    assert kitconfig.get(config, "tracker.linear.project_id") == "keep-me"
+    assert kitconfig.get(config, "tracker.backend") == "linear"
+
+
+def test_overlay_list_replaces_rather_than_appends(tmp_path):
+    """`review.bots: []` in an overlay must be able to mean "no bots" — a
+    concatenating merge could never express that."""
+    path = _config_tree(
+        tmp_path,
+        "review:\n  bots: [coderabbit]\n",
+        "review:\n  bots: []\n",
+    )
+    config = kitconfig.load_config(path)
+    assert kitconfig.get(config, "review.bots") == []
+
+
+def test_missing_tracked_file_still_raises_even_with_an_overlay_present(tmp_path):
+    """The overlay supplies values, never the schema — it must not stand in for
+    an absent tracked config and let an engine run on a partial map."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "dev-model.local.yaml").write_text(
+        'notify:\n  user_key: "U0LOCAL123"\n', encoding="utf-8"
+    )
+    with pytest.raises(FileNotFoundError):
+        kitconfig.load_config(tmp_path / "config" / "dev-model.yaml")
+
+
+def test_malformed_overlay_raises_rather_than_being_ignored(tmp_path):
+    """Fail loud. A silently-skipped overlay is the failure mode this whole
+    feature has to avoid: the workflow runs, targets the tracked blank, and
+    nothing says the local value never applied."""
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', "- just\n- a list\n")
+    with pytest.raises(ValueError, match="produced no keys"):
+        kitconfig.load_config(path)
+
+
+def test_comments_only_overlay_is_legitimately_empty(tmp_path):
+    """The counterpart to the test above: an overlay a user has commented out is
+    not malformed, and must not become a hard error on every engine start."""
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  user_key: "tracked"\n',
+        "# notify:\n#   user_key: \"U0LOCAL123\"\n\n",
+    )
+    config = kitconfig.load_config(path)
+    assert kitconfig.get(config, "notify.user_key") == "tracked"
+
+
+def test_overlay_that_is_indented_wrong_fails_loudly(tmp_path):
+    """The realistic malformed case: a paste that lost its top-level key. It
+    parses to nothing, and merging nothing is the silent no-op this guards."""
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', 'user_key "U0LOCAL123"\n')
+    with pytest.raises(ValueError, match="produced no keys"):
+        kitconfig.load_config(path)

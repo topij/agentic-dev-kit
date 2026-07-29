@@ -21,7 +21,8 @@ kit:
 
 project:
   # Human-readable project name, used in skill prompts and doc headers.
-  name: my-project
+  # STAMPED for this repo (see the note under `tracker:` on stamped-vs-default).
+  name: agentic-dev-kit
 
 paths:
   # The two canonical narrative files (Principles #1 and #2). The kit ships these
@@ -78,10 +79,22 @@ vcs:
   systemize_branch_pattern: "chore/systemize-{date}"
 
 tracker:
-  backend: linear                # linear | github-issues | jira | none
-  project_name: "My Project Dev"
-  url: ""                        # board URL shown in the friction-log header
-  # Backend-specific ids (Linear). Leave blank for other backends.
+  # ── STAMPED vs DEFAULT ───────────────────────────────────────────────────────
+  # This file is BOTH the kit's own live config AND the file adopters receive, so
+  # a placeholder and a deliberate value are otherwise typographically identical —
+  # which is how a sweep re-derived that problem a day after it was filed (#121).
+  # The convention, from here on: a value stamped for THIS repo says so in a
+  # comment. Anything without such a comment is still an `init.sh` default.
+  # `init.sh` prompts for every field below and offers the committed value as the
+  # default, so an adopter is always asked — but the value they are offered is
+  # this repo's. Replace them for your own project.
+  # ─────────────────────────────────────────────────────────────────────────────
+  backend: github-issues         # STAMPED. linear | github-issues | jira | none
+  project_name: "topij/agentic-dev-kit"   # STAMPED — for github-issues this is the repo
+  url: "https://github.com/topij/agentic-dev-kit/issues"   # STAMPED — board URL
+  # Backend-specific ids (Linear). NOT APPLICABLE to this repo's `github-issues`
+  # backend — kept, blank, because `init.sh` writes into this sub-map when an
+  # adopter selects `linear`, and removing it would leave nothing to write into.
   linear:
     team_id: ""
     project_id: ""
@@ -189,8 +202,24 @@ review:
   require_ci: true
 
 notify:
-  backend: slack                 # slack | none — where skills DM the operator
-  user_key: ""                   # a key into your project's own notify config
+  backend: slack                 # STAMPED. slack | none — where skills DM the operator
+  # The operator's DM target — the identifier a notify tool's send call takes (a
+  # Slack user id, say). The kit's original comment called this "a key into your
+  # project's own notify config"; there is no such indirection layer, so the value
+  # is the identifier itself.
+  #
+  # DELIBERATELY BLANK HERE. This is an identity, so it belongs in the gitignored
+  # overlay `config/dev-model.local.yaml`, which `kitconfig.load_config()` merges
+  # over this file per leaf:
+  #
+  #     notify:
+  #       user_key: "U0XXXXXXXXX"
+  #
+  # Blank is therefore not "unstamped" for this key — it is where the value is
+  # supposed to be. Committing a real one publishes an identity in a public repo
+  # AND hands every adopter a default pointing at someone else's workspace, since
+  # `init.sh` offers the committed value as the prompt default.
+  user_key: ""
 
 models:
   # Runtime-neutral capability tiers (Principle #7). Workflows assign a tier; an
