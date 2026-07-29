@@ -102,7 +102,8 @@ ______________________________________________________________________
 
 **Theme —** Two merges and nine panel rounds. The deliverables are routine; the durable
 result is a measurement: **across nine rounds and at least fifteen isolated lenses, no HIGH finding
-was ever in executable behaviour.** Every one was in prose — some of them inside `.py`/`.sh`
+was in executable code** — one was in a squash message, which closed an issue before any round
+found it (see below), so prose is not the same as inert. Every one was in prose — some of them inside `.py`/`.sh`
 files, so "prose" means wherever it lives — and the prose that kept failing was the prose
 *about* the verification, not the verification.
 

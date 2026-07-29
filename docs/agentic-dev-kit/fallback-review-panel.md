@@ -200,11 +200,7 @@ So the stopping criterion is **blast radius, not round count**:
 
 That same classification decides **which findings to act on before merging**, and it
 **narrows step 5 rather than replacing it**. If a change does not clearly sit in one
-class, it is the first one — *except* that a record is not promoted by the risk of its
-**subject** alone. Reviewing the sweep is first-class work; reviewing the paragraph
-describing the sweep is not. That exception is about the subject, and it does not
-override the three tests above: a record that carries a control, or is the only
-evidence of one, is promoted on its **own** function however dull its subject.
+class, it is the first one.
 
 - **First class** — act on every finding. Reply-with-reason stays what step 5 makes
   it, an answer to a nitpick, not a disposal route for something a lens called real.
@@ -217,69 +213,8 @@ evidence of one, is promoted on its **own** function however dull its subject.
 Severity alone is the wrong discriminator, and this paragraph's own first review
 round proved it: no HIGH, and four of its MEDs said the paragraph loosened a control
 it claimed to tighten. Know the trade, too — a round that acts on nothing produces
-no fix round, so step 6's re-run does not fire and that round stands alone. Do not read
-the bullet above as licence to stop while severity is still rising — except on the one
-signal below, which is about *where* the findings are rather than how severe they are.
-
-**A finding that disputes the classification is acted on at any severity.** Class is
-chosen by the author, before the round, and the author is the party who benefits from
-the cheaper one. A lens saying "this is load-bearing in a way the class does not
-assume" is usually neither HIGH nor a regression — a newly written artifact replaced
-nothing — so every disposition rule above would file it. Act on it instead, and acting
-on it means re-running under the class it argues for.
-
-## The one stop signal that overrides "severity is still rising"
-
-**Stop when the findings become self-generated.** If a round's findings are
-predominantly in prose the *previous round's fix* introduced — rather than in the
-artifact both rounds were convened to review — the loop has stopped measuring the
-change and started measuring itself. That is a stop signal at any severity and in any
-class. Record what is outstanding, file it, and merge.
-
-This is deliberately not a round cap and not a new blast-radius class. Two earlier
-drafts of this section tried both; a panel showed a class whose membership the author
-decides is a control the author can opt out of, and that the artifact most affected
-would have been the handoff — a file nothing executes, but that the *next session acts
-on* by construction. The signal below is decidable without classifying anything: look
-at whether this round's findings point at text that existed before the last fix, or at
-text the last fix wrote.
-
-Why it is the right cut, measured on the session that produced it — a friction-log
-graduation marker drew four rounds, a docs audit three, a wrap-up two:
-
-1. **Prose has unbounded surface area.** There is no "the test passes" for a paragraph;
-   you can always find another imprecision. A loop pointed at prose does not terminate
-   on its own.
-2. **Each fix round supplies the next round's findings.** Round 2 found the round-1 fix
-   had shipped four defects of the same species it removed; round 3 found the same of
-   round 2; round 4 found a round-3 fix that had silently matched nothing while its
-   commit message reported it landed. Every round's findings were in claims about a
-   surface *that round had not re-read*. That is the loop eating itself, and it reads
-   from the inside exactly like severity refusing to fall.
-3. **The measurement.** Across those nine rounds and fifteen-plus lenses, **no HIGH was
-   in executable code**. One was in a commit message — a closing keyword adjacent to an
-   issue reference, which closed an issue documenting an unfixed defect before any round
-   found it — so "prose" is not the same as "inert", and that one had already done its
-   damage. Every other HIGH was in prose, and roughly four findings out of ~78 would have
-   mattered if shipped. Three of those four were in prose an adopter executes against:
-   a workflow table describing two PR-*mutating* flags as read-only checks. **That round
-   earned its keep.** The rounds spent on the marker describing a completed sweep did
-   not. *(Earlier records of this session say "eight rounds"; nine is the corrected
-   count — 4 + 3 + 2 — and the arithmetic is in this paragraph.)*
-
-**Two corollaries.**
-
-**Prose an adopter reads and executes against is not "just prose."** A workflow file, a
-`# Requires:` header, a docstring, a README instruction — these are code with worse
-tooling and sit in the first class by default. So does any record something acts on: a
-commit or squash message (it can mutate tracker state), a record standing in for a
-control, and the handoff, which the next session is instructed to act on.
-
-**A record already carrying corrections should be deleted, not corrected again.** The
-session's own fix was to delete an elaborate verification transcript rather than amend
-it a third time: the file went 141 → 93 lines and the defect surface went with it. Keep
-the record short, state what its checks do *not* establish, and put the detail in the
-PR — read once, not maintained.
+no fix round, so step 6's re-run does not fire and that round stands alone. Do not
+read the bullet above it as licence to stop while severity is still rising.
 
 **Do not push the gate into the lens prompts.** Severity has to come from a reviewer
 who does not know what you consider low-stakes. The change that added rule 3's
@@ -304,6 +239,37 @@ HIGH finding in a later round**. The fixes actually asked for held. So make each
 round *smaller*, not fewer: `safety-critical-changes.md` rule 3 ("a fix round
 addresses only what the review found") — a new mechanism gets filed, however
 squarely a finding prompted it.
+
+## Keep the record small
+
+A record's defect surface is proportional to its length, and every correction round adds
+to it. Measured across nine rounds on three PRs in one session: **no HIGH was in
+executable code.** One was in a commit message — a closing keyword adjacent to an issue
+reference, which closed an issue documenting an unfixed defect before any round found
+it, so prose is not the same as inert. Every other HIGH was in prose, and the rounds
+that cost the most went to a verification transcript inside a graduation marker, where
+each correction added text the next round then found defects in.
+
+What ended that was **deleting** the transcript rather than amending it again: the file
+went 141 → 93 lines and the defect surface went with it.
+
+So, when writing a record — a graduation marker, a handoff block, a PR body, a commit
+message:
+
+- **State what was done, and what the checks do *not* establish.** Put the detail in the
+  PR, where it is read once, rather than in the record, where it is maintained.
+- **A record already carrying corrections should be shortened, not corrected again.** A
+  claim that has needed repairing twice is doing more work than it can carry; cut it
+  back to what you can stand behind.
+- **Prose an adopter reads and executes against is not a record.** A workflow file, a
+  `# Requires:` header, a docstring, a README instruction — these are code with worse
+  tooling and sit in the first class. So does a commit or squash message, which can
+  mutate tracker state, and so does any record standing in for a control: when the
+  operator-approval step is substituted, the record *is* the control's artifact.
+
+This is guidance on **writing** a record, not on reviewing one. It changes nothing about
+which findings a round acts on, or when a loop stops — three attempts to bound that are
+described in the PR that added this section, and all three opened a hole.
 
 ## Degraded mode
 
