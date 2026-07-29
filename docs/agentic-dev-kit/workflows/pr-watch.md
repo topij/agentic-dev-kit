@@ -180,10 +180,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   ask. Don't loop forever on something only the operator can unblock.
 - **Bound the loop** — if you've gone ~8–10 rounds without converging, stop and
   summarize where it stands rather than looping indefinitely. This bounds *this* loop —
-  poll, fix, acknowledge — and applies whatever the change is. It is not the fallback
-  panel's stopping criterion: that one is per-change, lives in
-  [`../fallback-review-panel.md`](../fallback-review-panel.md), and caps a review of a
-  **record** at one round. Do not read that cap as licence to stop polling a red PR.
+  poll, fix, acknowledge — and applies whatever the change is. It is **not** the fallback
+  panel's stopping criterion, which is per-change, applies only when your review bot is
+  unavailable, and lives in
+  [`../fallback-review-panel.md`](../fallback-review-panel.md). Neither one is licence to
+  stop polling a red PR.
 
 ## Notes
 

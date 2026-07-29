@@ -100,8 +100,8 @@ ______________________________________________________________________
 
 ## Earlier session — 2026-07-29 (the second sweep, and a documentation audit)
 
-**Theme —** Two merges and eight panel rounds. The deliverables are routine; the durable
-result is a measurement: **across eight rounds and at least fifteen isolated lenses, no HIGH finding
+**Theme —** Two merges and nine panel rounds. The deliverables are routine; the durable
+result is a measurement: **across nine rounds and at least fifteen isolated lenses, no HIGH finding
 was ever in executable behaviour.** Every one was in prose — some of them inside `.py`/`.sh`
 files, so "prose" means wherever it lives — and the prose that kept failing was the prose
 *about* the verification, not the verification.
