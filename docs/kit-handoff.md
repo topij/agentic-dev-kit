@@ -14,10 +14,57 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-29 — three attempts to bound record review each opened a hole; shipped
-authoring guidance instead (`#153`, merged `b46f794`).
+Last updated: 2026-07-29 — the sixth sweep, a config overlay narrowed to one key across
+three review rounds, and the same defect in all three (`#156`, `#157`, `#158` merged).
 
-## Latest session — 2026-07-29 (three failed designs, and what shipped instead)
+## Latest session — 2026-07-29 (the sixth sweep, and three rounds that all found the same thing)
+
+**Theme —** Three PRs merged. The result worth keeping is not any of them: across three review
+rounds on one change, **every round's defect was in the prose explaining why the mechanism was
+safe**, never in the mechanism.
+
+- **`#156` merged (`3d503c2`).** Sixth `triage-friction-log` sweep. Five inbox entries in, five
+  accounted for: `#155` filed (a remark attributed to the operator must be quoted at its original
+  scope) plus seven occurrence comments. Friction log 179 → 133 lines.
+- **`#157` merged (`e9773ba`).** `#121`'s two halves. A gitignored `config/dev-model.local.yaml`
+  merged over the tracked config for **`notify.user_key` only**; `tracker.*` stamped in the tracked
+  file with a guard so no adopter inherits it — a non-interactive `init.sh` refuses a
+  `project_name` that does not match the checkout's origin remote. Three adopter-facing defects
+  fixed on the way: `/adopt` never seeded the ignore rule and never runs `init.sh`; the rule
+  covered one filename while the loader derives `<name>.local.<ext>` for any path; and
+  `add_ignore_line` turned a `.gitignore` ending `.env` into `.envstate/` across six call sites.
+- **`#158` merged (`e76dd2c`).** `fallback-review-panel.md` now names the three failed
+  stopping-rule designs instead of pointing at a PR, and separates a question they do not answer:
+  **lens count is not bounded by class**, and the only sanctioned single-lens pass is Degraded
+  mode, conditioned on runtime capability rather than on what the change contains.
+
+**Learned**
+
+- **Justification prose is where the defects live.** `_deep_merge`'s docstring said "two shapes"
+  while implementing six; the overlay allowlist said its keys are "read by no shell reader" while
+  `init.sh` read exactly them; a list rule was motivated by a key the same file asserts can never
+  be set. It is written from *intent*, and intent is the one thing a reviewer cannot check against
+  the code. The fix that held was deleting it — the reasoning now lives in error messages, each
+  pinned by a test, so it cannot drift without something going red.
+- **Rounds 2 and 3 each found one real bug, and both were introduced by the previous round's fix**
+  — a valueless key wiping a tracked list, then `pr_watch` re-raising at module import so `--help`
+  died with a traceback. The original design was not wrong either time.
+- **Generality was the defect, not the merge logic.** A config overlay honoured by one of several
+  readers diverges everywhere. Narrowing to one key closed five findings at once — and `tracker.*`
+  had to be removed after it made `session-start` on this repo query a project named
+  "My Project Dev".
+- **A single lens is a real pass.** One correctness lens on an 18-line docs change found six
+  substantive issues, including a gloss that was roughly the inverse of what it described.
+  Recorded as `fallback:claude`, not `fallback:panel`; the engine's own warning that one lens is
+  not a green light is on the receipt.
+
+▶ Next: `session-start` — several threads are open (`#121` still wants the friction-log header read
+from config; `#124` and the `finalize.pr_draft` default now contradict the stated preference that
+PRs not sit as drafts) and none is obviously first.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-29 (three failed designs, and what shipped instead)
 
 **Theme —** An attempt to stop the previous sessions' review spirals. It failed three times, and
 the failures are the result worth keeping.
@@ -295,79 +342,6 @@ running, and of a general argument being applied to instances it did not cover.
 ▶ Next: `session-start` — **discharged**; the following session ran `triage-friction-log` and a
 documentation audit instead. The cs-toolkit Phase 2 blockers named here were
 `#41`/`#37`/`#132`/`#134`; `#132` has since closed.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-28 (the inbox graduated; the panel audited the record)
-
-**Theme —** One deliverable, and a review panel that spent almost all of its findings on
-the record rather than the sweep. The graduation is the small half; the durable result is
-that the sweep's own accounting did not survive an audit, and that no gate in the repo can
-tell a sweep from a deletion.
-
-- **`#126` merged (`2d99593`).** The 24 un-graduated entries swept into
-  `kit-friction-log-archive.md` behind a graduation marker; inbox 287 → 28 against a 150
-  budget it had been over for three sessions. Routing: **13 graduated** into `#112`–`#120`
-  and `#122`–`#125`, **10** routed as occurrence comments on issues that already existed,
-  **1** discharged (`make test` discoverability, answered by the root `CLAUDE.md`).
-- **Run in LLM-only mode.** `triage_friction_log.py` and `finalize_triage.py` are not
-  vendored (`#6`), and `notify.user_key` is blank, so parse/draft/sweep were done by hand
-  and the approval loop ran in-session instead of over DM.
-- **`#121` came from running the workflow, not from the inbox** — the `tracker:` block in
-  `dev-model.yaml` is still `init.sh` placeholder pointing at Linear, which `#6`'s engine
-  will read the moment it lands.
-- **CodeRabbit never reviewed `#126`** — no check, no comment, past its grace window. The
-  fallback panel was the only independent pass.
-
-**Learned**
-
-- **The sweep's accounting did not survive an audit, and both lenses found the same
-  defect.** The occurrence list named `#33`, summing to eleven against a stated ten, so an
-  auditor checking "24 in, 24 out" got 25 with one entry double-counted. `#33` had received
-  a cross-reference to `#112` — a *graduated* entry already inside the thirteen. Rated HIGH
-  by the correctness lens; found independently by the adversarial one.
-- **No gate in this repo can distinguish a sweep from a deletion.** Wiping both narrative
-  docs to 3-line stubs leaves `make test` at 495 passed, `kit_doctor` at 0 differ, and
-  `check_doc_budget` **greener** than the real branch (3/150 vs 28/150). Both files are
-  `ADOPTER_OWNED`, so the drift check never compares them. Filed as `#127`.
-- **A documented unconditional stop was bypassed and defended with the wrong rule.** The
-  skill's notify-channel stop is absolute; the justification written into the PR body
-  belonged to the non-interactive execution-context rule instead. Because `state/` and
-  `reports/` are gitignored, no artifact of the proposals or the approval exists. Filed as
-  `#128`, self-reported.
-- **Both panel worktrees pointed at the wrong ref — 2 of 2.** Both lenses detected and
-  corrected it because the launch prompt required verify-before-review. First occurrence
-  set in this repo where *every* launch was wrong rather than right, so it cannot be
-  folded into the earlier "8 of 8 correct" figures.
-- **Four of the panel's ten findings were defects in the PR body itself**, including a
-  verification claim naming no command — in the PR that files the issue about exactly
-  that. Third consecutive session where the prose, not the change, carried the errors
-  (`#120`).
-
-**Open, and owned by nothing yet**
-
-- **`#112`–`#128`** — this session's sixteen. `#112` (the manifest-hash gate is not
-  coverage) is the highest-leverage: it invalidates every mutation claim over a
-  `KIT_OWNED` file. `#127` and `#128` are the panel's own.
-  **Superseded remedy —** this line used to end "until the regenerate-first step is
-  mandatory", which is `#112`'s own proposed item 1. A later session took the opposite
-  route: the drift test carries a `driftcheck` marker and is deselected *inside
-  `make mutation-test`*, so there is no manifest gate left to discharge there and
-  regenerate-first is deliberately *not* recommended
-  (`fallback-review-panel.md` item 5 says so). Corrected here because a living plan that
-  points the next session at a rejected remedy is worse than one that says nothing.
-- **`#113` gained a second occurrence** — this session was a same-date second session, so
-  `chore/update-handoff-2026-07-28` already existed on the remote. Avoided by branching
-  off fresh `main` under a different name rather than by any mechanism.
-- **`#75` gained a 2-of-2 occurrence set**; `#73` gained an instance the archive now
-  carries deliberately (a swept self-link, left byte-identical to preserve the verbatim
-  property).
-- `#6`, `#33`, `#45`, `#54`, `#74`, `#76`, `#77`, `#93`, `#95`, `#97`, `#98` and the rest
-  per `session-start`.
-
-▶ Next: `session-start` — the threads are diffuse (sixteen fresh tickets, no in-flight PR,
-nothing blocking), so let it re-read the tracker and propose. If you want one now: `#112`,
-because every future mutation-testing claim depends on it.
 
 ______________________________________________________________________
 

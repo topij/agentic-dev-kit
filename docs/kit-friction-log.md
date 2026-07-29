@@ -102,6 +102,35 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
 
 ## 2026-07-29 (post-sweep, second)
 
+- **The doc-budget remedy is a no-op at the default `--keep`, and the wrap-up workflow prescribes
+  exactly that invocation.** `check_doc_budget` warned the handoff was 423/400 and named
+  `archive_plan_sessions.py` as the remedy; running it as `workflows/wrap-up.md` step 8 instructs
+  reported *"nothing to move: 6 session block(s) <= --keep 6"* and left the file over budget. Only
+  an explicit `--keep 5` moved anything (423 → 352). **M** — occurrence data for
+  [#74](https://github.com/topij/agentic-dev-kit/issues/74), which already records the lines-vs-blocks
+  mismatch. What this adds is that the *workflow doc* hands an agent the invocation that cannot
+  work: a budget expressed in lines cannot be discharged by a remedy bounded in blocks, so either
+  the script should take a line target or `wrap-up.md` should say to lower `--keep` until the
+  budget clears.
+- **`finalize.pr_draft: true` contradicts the operator's stated preference and this repo's own
+  `#124`.** The operator asked that PRs be marked ready as soon as no further changes are expected,
+  because a draft is invisible to the review bot; `#124` records the same thing as a defect of the
+  triage workflow specifically. But `config/dev-model.yaml` still defaults `finalize.pr_draft` to
+  `true`, so every sweep opens a draft and relies on someone remembering to flip it. **M** —
+  proposed fix: flip the default and let an adopter opt into drafts, or state in
+  `triage-friction-log.md` that the PR must be readied before the run reports complete. Distinct
+  from `#124`, which asks for the *reviewer* to see the PR; this is about a default that has to be
+  worked around every time.
+- **Three review rounds on one change found their defect in the same place each time: the prose
+  justifying the mechanism.** `_deep_merge`'s docstring said "two shapes" while implementing six;
+  the overlay allowlist said its keys were "read by no shell reader" while `init.sh` read exactly
+  them; a list-replacement rule was motivated by a key the same file asserts can never be set. The
+  mechanism itself was never wrong — and the two genuine bugs found in rounds 2 and 3 were both
+  introduced by the *previous round's fix*. **H** — proposed fix: this belongs in
+  `fallback-review-panel.md`'s authoring section next to "keep the record small", as a sharper
+  claim than that one makes. Justification prose is written from intent; intent is the one thing a
+  reviewer cannot check against the code, so a "why this is safe" sentence should either cite a
+  test that would fail if it were false, or be deleted. Deleting it is what ended the loop here.
 - **Both review lenses were handed a worktree at the PR's base rather than its head, and both
   caught it.** Runtime-provided isolation created both worktrees at `c48164c`, so
   `git diff origin/main...HEAD` was empty in each and neither HEAD matched the `f33bb488` the
