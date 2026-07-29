@@ -268,8 +268,23 @@ message:
   operator-approval step is substituted, the record *is* the control's artifact.
 
 This is guidance on **writing** a record, not on reviewing one. It changes nothing about
-which findings a round acts on, or when a loop stops — three attempts to bound that are
-described in the PR that added this section, and all three opened a hole.
+which findings a round acts on, or when a loop stops.
+
+**Three attempts to bound that have each opened a hole**, named here rather than left in a
+PR body, because the natural next proposal is one of them and a reader deserves to know it
+has been tried:
+
+- **A class defined by file type** ("docs-only gets a lighter pass") — inside a section
+  organised by *function*. It routes by the wrong property: a docs-only change carrying a
+  record that stands in for a control is first class, and the section above says so.
+- **The same class with functional tests** — which the handoff *passed*, while being the
+  file the next session is told to act on.
+- **A class-independent stop signal** — which beat the first class, and whose trigger the
+  author sets by choosing how verbose the fix round is.
+
+The recurring shape: every bound proposed so far is settable by the author of the change
+being reviewed. That is the property a replacement has to avoid, not merely a detail of
+these three.
 
 ## Degraded mode
 
