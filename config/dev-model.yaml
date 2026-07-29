@@ -83,11 +83,19 @@ tracker:
   # This file is BOTH the kit's own live config AND the file adopters receive, so
   # a placeholder and a deliberate value are otherwise typographically identical —
   # which is how a sweep re-derived that problem a day after it was filed (#121).
-  # The convention, from here on: a value stamped for THIS repo says so in a
-  # comment. Anything without such a comment is still an `init.sh` default.
-  # `init.sh` prompts for every field below and offers the committed value as the
-  # default, so an adopter is always asked — but the value they are offered is
-  # this repo's. Replace them for your own project.
+  # The convention: a value stamped for THIS repo says STAMPED in a comment. It is
+  # applied to `project:`, `tracker:` and `notify:` here; `paths:` and
+  # `doc_budgets:` are ALSO stamped for this repo (the `kit-*.md` names) and say so
+  # in their own block comment rather than per line. Absence of the word is
+  # therefore not proof of a default — read the block comment. (A review lens
+  # caught the first version of this paragraph claiming otherwise, which falsified
+  # the convention inside the file that declares it.)
+  #
+  # `init.sh` offers the committed value as the default for the fields below, so an
+  # adopter running it INTERACTIVELY is asked. A non-interactive run — piped,
+  # scripted, or in CI — keeps the committed value silently and prints "no terminal
+  # attached", so this repo's values would be stamped into an adopter's config with
+  # no prompt at all. Replace them for your own project.
   # ─────────────────────────────────────────────────────────────────────────────
   backend: github-issues         # STAMPED. linear | github-issues | jira | none
   project_name: "topij/agentic-dev-kit"   # STAMPED — for github-issues this is the repo

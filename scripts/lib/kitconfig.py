@@ -297,16 +297,45 @@ def loads(text: str) -> dict[str, Any]:
     return root
 
 
-def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+def _deep_merge(
+    base: dict[str, Any], overlay: dict[str, Any], where: str, problems: list[str]
+) -> dict[str, Any]:
     """Overlay wins per leaf; maps merge, everything else replaces.
 
     A list replaces rather than concatenates: ``review.bots: []`` in an overlay
     must be able to mean "no bots", which appending could never express.
+
+    Two shapes are refused into ``problems`` rather than merged, because the
+    overlay *supplies values* — it is never the schema:
+
+    - **A key the tracked file does not declare.** A typo'd parent (``notifiy:``),
+      a typo'd leaf, a dotted key written flat (``notify.user_key:``), or a
+      tab-indented child that parsed as top-level all produce a key with no
+      counterpart. Each would otherwise apply cleanly to nothing.
+    - **A non-map overwriting a tracked map.** ``notify:`` with its only child
+      commented out parses to ``{'notify': None}``, and a flow mapping parses to a
+      *string* — either would wipe the whole tracked sub-map. Deleting tracked
+      config is never what an overlay is for.
+
+    Both were found by a review panel on the change that added this: the first as
+    a silent no-op, the second as silent destruction of a sibling key the
+    docstring promised was preserved.
     """
     out = dict(base)
     for key, value in overlay.items():
-        if isinstance(value, dict) and isinstance(out.get(key), dict):
-            out[key] = _deep_merge(out[key], value)
+        path = f"{where}.{key}" if where else key
+        if key not in base:
+            problems.append(f"  {path} — no such key in the tracked config")
+            continue
+        if isinstance(base[key], dict):
+            if not isinstance(value, dict):
+                kind = "nothing" if value is None else f"a {type(value).__name__}"
+                problems.append(
+                    f"  {path} — {kind} cannot replace a block; "
+                    f"set the keys under it instead"
+                )
+                continue
+            out[key] = _deep_merge(base[key], value, path, problems)
         else:
             out[key] = value
     return out
@@ -327,7 +356,11 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
 
     Raises ``FileNotFoundError`` when the tracked file is absent — a script that
     needs config has nothing sane to fall back to. A missing overlay is normal
-    and silent; an unreadable or malformed one is not, and raises.
+    and silent. An overlay that exists but cannot be applied **raises**: it may
+    only set keys the tracked file already declares, and may not replace a block
+    with a non-block. Both rules exist because an overlay that silently fails to
+    apply is indistinguishable from a correct one until a workflow acts on the
+    wrong value.
     """
     target = Path(path)
     if not target.is_absolute():
@@ -342,20 +375,32 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
     if overlay_path.is_file():
         raw = overlay_path.read_text(encoding="utf-8")
         overlay = loads(raw)
-        # `loads()` yields {} for anything it cannot read as a mapping — a YAML
-        # list, an indent slip, a stray paste. Merging that is a silent no-op, and
-        # a silently-skipped overlay is indistinguishable from a correct one right
-        # up until a workflow DMs the wrong person. So: content that produced no
-        # keys is an error, while a comments-only file is legitimately empty.
+        # `loads()` yields {} for anything it cannot read as a mapping. Content
+        # that produced no keys at all is a syntax error (a line with no colon,
+        # say), not an empty overlay — but a file holding only comments or YAML's
+        # structural markers legitimately IS empty, so those do not count as
+        # content.
+        structural = {"---", "...", "{}", "null", "~"}
         has_content = any(
-            line.strip() and not line.lstrip().startswith("#") for line in raw.splitlines()
+            stripped and not stripped.startswith("#") and stripped not in structural
+            for stripped in (line.strip() for line in raw.splitlines())
         )
         if has_content and not overlay:
             raise ValueError(
                 f"local config overlay has content but produced no keys: {overlay_path} "
                 f"(expected a mapping like 'notify:\\n  user_key: \"…\"')"
             )
-        config = _deep_merge(config, overlay)
+        problems: list[str] = []
+        merged = _deep_merge(config, overlay, "", problems)
+        if problems:
+            raise ValueError(
+                f"local config overlay cannot be applied: {overlay_path}\n"
+                + "\n".join(problems)
+                + f"\nThe overlay supplies values for keys {target.name} already declares; "
+                f"it is not the schema. Check indentation (tabs do not indent YAML) "
+                f"and spelling against the tracked file."
+            )
+        config = merged
     return config
 
 

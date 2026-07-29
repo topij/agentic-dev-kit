@@ -70,11 +70,23 @@ notify:
 
 The tracked file stays the schema of record — it keeps the key, blank, with the
 comment explaining it — so a reader still sees every knob that exists. Only the
-value moves. Sibling keys are preserved (setting `notify.user_key` locally does
-not drop `notify.backend`), and an overlay that has content but parses to no keys
-is an **error** rather than a silent no-op, because an overlay that quietly fails
-to apply looks exactly like a correctly-configured repo until a workflow messages
-the wrong person.
+value moves, and sibling keys are preserved: setting `notify.user_key` locally
+does not drop `notify.backend`.
+
+An overlay that cannot be applied is an **error**, not a silent no-op, because an
+overlay that quietly fails to apply looks exactly like a correctly-configured repo
+until a workflow messages the wrong person. Three rules, each of which was a
+silent failure before a review panel found it:
+
+- it may only set keys the tracked file already **declares** — so a typo'd key, or
+  a dotted key written flat (`notify.user_key:` at the top level), is an error
+  rather than a value applied to nothing;
+- it may not replace a **block** with a non-block — so a tab-indented child (tabs
+  do not indent YAML) or a parent whose only child is commented out is an error
+  rather than a silent deletion of the tracked block;
+- content that parses to **no keys at all** is an error. A file holding only
+  comments, or only `---` / `{}` / `null`, is legitimately empty and applies
+  nothing.
 
 Note that `./init.sh` writes the *tracked* file, so a key you set locally keeps
 winning after a re-run — which is why the tracked file should hold a blank rather

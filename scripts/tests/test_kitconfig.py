@@ -13,6 +13,7 @@ Two things are pinned here:
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -611,6 +612,7 @@ def test_archive_plan_sessions_reports_a_missing_config_instead_of_crashing(tmp_
 
 def _config_tree(tmp_path: Path, tracked: str, overlay: str | None = None) -> Path:
     """A minimal repo root holding a tracked config and optionally an overlay."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / ".git").mkdir()
     cfg_dir = tmp_path / "config"
     cfg_dir.mkdir()
@@ -709,9 +711,105 @@ def test_comments_only_overlay_is_legitimately_empty(tmp_path):
     assert kitconfig.get(config, "notify.user_key") == "tracked"
 
 
-def test_overlay_that_is_indented_wrong_fails_loudly(tmp_path):
-    """The realistic malformed case: a paste that lost its top-level key. It
-    parses to nothing, and merging nothing is the silent no-op this guards."""
+def test_overlay_with_no_colon_produces_no_keys_and_fails_loudly(tmp_path):
+    """A line with no colon parses to nothing at all. Renamed from
+    ...indented_wrong...: a review lens showed the old name and docstring promised
+    two scenarios (a lost top-level key, a wrong indent) that this input is
+    neither of, and that BOTH were silent no-ops in the implementation. They are
+    now covered by their own tests below."""
     path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', 'user_key "U0LOCAL123"\n')
     with pytest.raises(ValueError, match="produced no keys"):
         kitconfig.load_config(path)
+
+
+# The cases below were all silent in the first version of this feature. Two were
+# worse than silent: they DELETED tracked config. Found by both panel lenses.
+
+
+def test_overlay_key_absent_from_the_tracked_config_is_an_error(tmp_path):
+    """The overlay supplies values for keys the tracked file declares; it is not
+    the schema. A key with no counterpart applies cleanly to nothing."""
+    path = _config_tree(
+        tmp_path, 'notify:\n  user_key: ""\n', 'notifiy:\n  user_key: "U0LOCAL123"\n'
+    )
+    with pytest.raises(ValueError, match="no such key"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_typo_in_a_leaf_key_is_an_error(tmp_path):
+    path = _config_tree(
+        tmp_path, 'notify:\n  user_key: ""\n', 'notify:\n  usr_key: "U0LOCAL123"\n'
+    )
+    with pytest.raises(ValueError, match="notify.usr_key"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_dotted_key_written_flat_is_an_error(tmp_path):
+    """`notify.user_key: "…"` is a natural thing to write and parses as one
+    top-level key with a dot in it — which matches nothing and silently did."""
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', 'notify.user_key: "U0LOCAL"\n')
+    with pytest.raises(ValueError, match="no such key"):
+        kitconfig.load_config(path)
+
+
+def test_tab_indented_overlay_is_an_error_and_does_not_wipe_the_block(tmp_path):
+    """Tabs do not indent YAML. The child parsed as a sibling, leaving the parent
+    valueless — which then REPLACED the tracked block, deleting `notify.backend`.
+    The docstring promised sibling preservation while this route silently broke
+    it (panel, both lenses)."""
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  backend: slack\n  user_key: ""\n',
+        'notify:\n\tuser_key: "U0LOCAL123"\n',
+    )
+    with pytest.raises(ValueError, match="cannot replace a block"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_with_its_only_child_commented_out_is_an_error(tmp_path):
+    """The operator comments out the leaf but leaves the parent — a valueless
+    parent that would wipe the tracked block."""
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  backend: slack\n  user_key: ""\n',
+        'notify:\n  # user_key: "U0LOCAL123"\n',
+    )
+    with pytest.raises(ValueError, match="cannot replace a block"):
+        kitconfig.load_config(path)
+
+
+def test_overlay_flow_mapping_is_an_error(tmp_path):
+    """`notify: {user_key: "…"}` parses to a STRING under this reader, which
+    would replace the whole tracked block with that string."""
+    path = _config_tree(
+        tmp_path,
+        'notify:\n  backend: slack\n  user_key: ""\n',
+        'notify: {user_key: "U0LOCAL123"}\n',
+    )
+    with pytest.raises(ValueError, match="cannot replace a block"):
+        kitconfig.load_config(path)
+
+
+def test_structural_only_overlay_is_legitimately_empty(tmp_path):
+    """`---`, `{}` and `null` are valid ways to write an intentionally-empty
+    overlay. The first version of the guard rejected all three (panel)."""
+    for i, body in enumerate(("---\n", "{}\n", "null\n")):
+        path = _config_tree(tmp_path / f"case{i}", 'notify:\n  user_key: "kept"\n', body)
+        config = kitconfig.load_config(path)
+        assert kitconfig.get(config, "notify.user_key") == "kept"
+
+
+def test_unreadable_overlay_raises_rather_than_falling_back(tmp_path):
+    """The docstring says an overlay that exists but cannot be applied raises. A
+    surviving mutant showed that an `except OSError: return config` would let the
+    feature regress to fail-open with a green suite (panel, adversarial)."""
+    path = _config_tree(tmp_path, 'notify:\n  user_key: ""\n', 'notify:\n  user_key: "x"\n')
+    overlay = path.with_name("dev-model.local.yaml")
+    overlay.chmod(0o000)
+    try:
+        if os.access(overlay, os.R_OK):  # running as root — the chmod is a no-op
+            pytest.skip("cannot make a file unreadable as this user")
+        with pytest.raises(OSError):
+            kitconfig.load_config(path)
+    finally:
+        overlay.chmod(0o644)

@@ -828,7 +828,7 @@ branch=$(ask "Protected branch (PRs target this, never commit to it directly)" "
 set_field "vcs:" "" "^  protected_branch:" "$(yaml_scalar "$branch")"
 
 cur_user_key=$(get_field "notify:" "" "^  user_key:")
-user_key=$(ask "Notify user key (a key into your project's own notify config)" "$cur_user_key")
+user_key=$(ask "Notify user id for approval DMs (blank is fine; see config/dev-model.local.yaml)" "$cur_user_key")
 set_field "notify:" "" "^  user_key:" "$(quoted_scalar "$user_key")"
 
 cur_bots_raw=$(get_field "review:" "" "^  bots:")
@@ -944,6 +944,13 @@ add_ignore_line ".claude/worktrees/"
 # the same runs that write state/, and the workflows commit only the doc/skill/
 # config paths they edited — never reports/.
 add_ignore_line "reports/"
+# The local config overlay. kitconfig.load_config() merges it over
+# config/dev-model.yaml per leaf, so it is where a value that must not enter git
+# lives — the operator id an approval DM targets, a tracker team id. This line is
+# the whole protection: .gitignore is adopter-owned, so without seeding it here an
+# adopter following docs/getting-started.md would write an identity into a tracked
+# path while every doc told them it was ignored (panel, adversarial lens).
+add_ignore_line "config/dev-model.local.yaml"
 # dev_session.sh copies a repo-root .mcp.json into each lane worktree so lanes
 # inherit MCP access. If yours holds literal credentials rather than ${ENV}
 # references, that copy must never be committable from a lane.

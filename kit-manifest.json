@@ -80,7 +80,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "c27df43c0e5f7162ce17e3c89fa72e7b7ea29e0af4e488e3356a02a9aac11b22"
+      "sha256": "7189dc942ae7ae6188422d8ab671cc72df303b45cfcd4cfc571dde9d691dc35a"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
@@ -88,7 +88,7 @@
     },
     "scripts/lib/kitconfig.py": {
       "role": "engine",
-      "sha256": "da64ca0af57056e07cc91f0a7776cc96d48b2d43ac3e535e8488017689b01cac"
+      "sha256": "c696aa44c45f235fe86a2db0ea2ccedca58ab63552d2f6cd7740c3daf2df2c29"
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",

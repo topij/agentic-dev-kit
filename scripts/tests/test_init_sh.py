@@ -252,7 +252,9 @@ def _shipped_with_name(name_value: str) -> str:
     # newline and silently test the wrong thing. Caught by
     # test_render_preserves_backslashes_in_values.
     pattern = re.compile(r"^  name: .*$", re.M)
-    replaced, count = pattern.subn(lambda _m: f"  name: {name_value}", SHIPPED_CONFIG, count=1)
+    # No `count=` cap: capping at 1 would make the assertion below unable to fire
+    # on a duplicate, which is exactly what it claims to guard (panel, correctness).
+    replaced, count = pattern.subn(lambda _m: f"  name: {name_value}", SHIPPED_CONFIG)
     assert count == 1, (
         f"expected exactly one `  name:` line under project: in the shipped config, found {count}"
     )
@@ -263,7 +265,9 @@ def _shipped_with_tracker_url(url_value: str) -> str:
     """Swap `tracker.url`, whatever it currently holds — same reasoning as
     `_shipped_with_name`, and the same function-replacement rule for backslashes."""
     pattern = re.compile(r"^  url: .*$", re.M)
-    replaced, count = pattern.subn(lambda _m: f"  url: {url_value}", SHIPPED_CONFIG, count=1)
+    # No `count=` cap: capping at 1 would make the assertion below unable to fire
+    # on a duplicate, which is exactly what it claims to guard (panel, correctness).
+    replaced, count = pattern.subn(lambda _m: f"  url: {url_value}", SHIPPED_CONFIG)
     assert count == 1, (
         f"expected exactly one `  url:` line under tracker: in the shipped config, found {count}"
     )
@@ -756,7 +760,18 @@ def test_gitignore_entries_added_exactly_once_across_reruns(tmp_path: Path) -> N
     _run_init(repo)
 
     lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
-    for entry in ("state/", ".devkit_state_root", ".claude/worktrees/", "reports/"):
+    for entry in (
+        "state/",
+        ".devkit_state_root",
+        ".claude/worktrees/",
+        "reports/",
+        # The overlay's ignore rule is the ONLY thing keeping an adopter's operator
+        # id out of git, and `.gitignore` is adopter-owned so the kit never ships
+        # one. Without this seeded here, docs/getting-started.md instructs adopters
+        # to write an identity into a tracked path while asserting it is ignored
+        # (panel, adversarial lens — a HIGH on the change that added the overlay).
+        "config/dev-model.local.yaml",
+    ):
         assert lines.count(entry) == 1, f"{entry!r} appears {lines.count(entry)} times"
 
 
