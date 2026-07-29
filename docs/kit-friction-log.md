@@ -77,43 +77,43 @@ into the record.) Proposal 4 gained the literal `#155`, which did not exist when
 ### What was verified
 
 The commands and their output are on the PR. Read them there. In summary: the snapshot digest
-reproduces from `c48164c`; the archived block un-demotes to the snapshot byte-for-byte; each of
-the seven comments was fetched back by id and hashes to the text that was sent, on the issue
-claimed for it; `#155` exists with the title and labels this record claims.
+reproduces from `c48164c`, and the snapshot file's own text field hashes to the same value; the
+archived block un-demotes to the snapshot byte-for-byte; each of the seven comments sits on the
+issue claimed for it; `#155` exists with the title and labels this record claims. **Several of
+those comments have since been amended** — corrections from the review rounds on this PR — so they
+no longer hash to the text originally sent, and the check compares placement rather than content.
 
-**What these checks do not reach**, restated rather than dropped — the previous marker named
-these about its own checks and they are still true here. The comment check's right-hand side is
-a **local file**, so it is the one thing a third party cannot re-run. Nothing verifies that the
-approval happened as described, which matters most precisely because the DM that normally carries
-that evidence did not exist. The un-demote round-trip is self-inverting, so it would pass on a
-corrupted demotion; the fence count that would catch the realistic corruption is *measured* and
-reported, not asserted as a gate. And nothing here verifies that any posted comment is **true** —
-this sweep's own `#45` comment opens by retracting a claim the previous sweep filed there, and
-four of the errors corrected on this PR were found by a review lens rather than by any check. No
-automated gate covers any of it
-([#127](https://github.com/topij/agentic-dev-kit/issues/127)).
+**What these checks do not reach.** Two are carried over from the previous marker: nothing
+verifies that the approval happened as described — which matters most precisely because the DM
+that normally carries that evidence did not exist — and no automated gate covers any of this
+([#127](https://github.com/topij/agentic-dev-kit/issues/127)). The previous marker's third gap,
+that checks 1 and 2 shared no trust chain because the snapshot's text field was never hashed, is
+now **closed** rather than restated: the check hashes that field. One gap is new, found by a review
+lens: the un-demote round-trip is self-inverting and would pass on a corrupted demotion, and the
+fence count that would catch the realistic corruption is measured, not asserted as a gate.
+
+Above all, nothing here verifies that any posted comment is **true**. Four review lenses across two
+rounds found defects on this PR in every round, and **every one was in prose describing the work
+rather than in the work** — the mechanical core has not been wrong once, under every negative test
+four lenses could construct. That asymmetry is the honest summary of what these checks are worth,
+and the argument for keeping the record short: the prose is where the defects live.
 
 The swept entries are verbatim in the archive under `Graduated 2026-07-29 (second sweep)`.
 
 ## 2026-07-29 (post-sweep, second)
 
-- **Both review lenses were handed a worktree at the wrong ref, and both caught it.** The panel
-  run on the sweep's own PR launched two lenses with runtime-provided worktree isolation. Both
-  worktrees were created at `c48164c` — the PR's *base* — so `git diff origin/main...HEAD` was
-  **empty** in each, and neither HEAD matched the `f33bb488` the launch prompt named. This is
-  [#75](https://github.com/topij/agentic-dev-kit/issues/75)'s subject reproducing exactly: the
-  contract item that tells a lens to assume its worktree points at the wrong ref, and to verify a
-  non-empty diff against an expected head before reviewing. **H** — occurrence data for `#75`,
-  and the strongest available: it is the first instance where the guard is observed *working*
-  rather than the failure being observed after the fact. Two independent lenses, 2/2, each
-  detected it and each recovered differently — one reviewed via read-only plumbing against the
-  shared object store, the other re-pointed its own worktree — so both reviewed the real diff and
-  neither reported all-clear on an empty one. The launch prompt's wording matters and should be
-  kept: it named the expected head and told each lens to stop rather than report clean. Note also
-  that recovery was possible only because the object was reachable locally; a lens whose runtime
-  gave it a worktree of a *different repository* (the OpenKitchen case `#75` records) has no such
-  fallback. **Not from the swept inbox:** surfaced by the review panel on this sweep's own PR,
-  recorded below the marker for the next pass.
+- **Both review lenses were handed a worktree at the PR's base rather than its head, and both
+  caught it.** Runtime-provided isolation created both worktrees at `c48164c`, so
+  `git diff origin/main...HEAD` was empty in each and neither HEAD matched the `f33bb488` the
+  launch prompt named. Both detected it and reviewed the real diff — one via read-only plumbing
+  against the shared object store, the other by re-pointing its own worktree. **M** — occurrence
+  data for [#75](https://github.com/topij/agentic-dev-kit/issues/75), continuing its recorded
+  detection rate rather than adding anything new to it. A first draft of this entry called it "the
+  first instance where the guard is observed working"; `#75`'s own body says **9 of 9 across two
+  sessions**, and the previous sweep recorded 14 of 14, so that claim inverted the record it cited.
+  A lens caught it. What this run does add is narrower: recovery was possible only because the
+  object was reachable locally, which is not true of the cross-repository case `#75` also records.
+  **Not from the swept inbox:** surfaced by the review panel on this sweep's own PR.
 - **`set -euo pipefail` did not gate the step after a failing check, so a guard that fired was
   overruled by the write it was guarding.** The keyword scan protecting this sweep's PR body ran
   as a heredoc'd Python block under `set -euo pipefail`, exited non-zero with three flags — and
