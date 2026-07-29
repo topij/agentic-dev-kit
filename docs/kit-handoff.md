@@ -14,10 +14,50 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-29 — the inbox graduated for the fifth time (`#151`, merged `494b9eb`); two new
-tickets (`#149`, `#150`) and a HIGH whose own fix produced a second HIGH.
+Last updated: 2026-07-29 — three attempts to bound record review each opened a hole; shipped
+authoring guidance instead (`#153`, merged `b46f794`).
 
-## Latest session — 2026-07-29 (the fifth sweep, and a claim that was wrong in both directions)
+## Latest session — 2026-07-29 (three failed designs, and what shipped instead)
+
+**Theme —** An attempt to stop the previous sessions' review spirals. It failed three times, and
+the failures are the result worth keeping.
+
+- **`#153` merged (`b46f794`).** `fallback-review-panel.md` gains one section of *authoring*
+  guidance — keep the record short, put detail in the PR, shorten a record that has needed
+  repairing twice, and treat adopter-executed prose, commit messages and any record standing in
+  for a control as first class. It loosens no control and says so explicitly.
+- **Three designs died first**, each killed by a panel on a real hole: a class defined by file
+  type inside a section organised by function; the same class with functional tests, which the
+  handoff passed while being the file the next session is told to act on; and a class-independent
+  stop signal that beat the first class and whose trigger the author sets by choosing how verbose
+  the fix round is.
+- **Global git identity corrected** — `user.email` was `topi.jarvinen@gmail..com` (double dot) and
+  `user.name` lacked its umlaut. Five commits from 2026-07-05/15 carry it; nothing from these
+  sessions does, because GitHub's squash attribution used the account identity. Not rewritten.
+
+**Learned**
+
+- **Any rule whose trigger the author sets is a control the author can opt out of.** All three
+  designs were versions of that, and the third one self-immunised: the commit proposing it
+  rewrote the section, which by its own test made every later finding "prose the last fix wrote".
+- **The premise was wrong.** "The record rounds did not earn their keep" does not survive: they
+  caught a falsely closed issue, a false claim published to two tracker surfaces, and a falsified
+  operator-approval record. The waste came from records being *elaborate*, not from being
+  reviewed — and deleting prose (141 → 93 lines) is the only intervention that provably worked.
+
+**Open, and owned by nothing yet**
+
+- **The inbox is 179/150** and a sweep is due — this is now the third consecutive session ending
+  over budget.
+- `#149`, `#150`, `#145`, `#146`, `#138`–`#143` and the rest per `session-start`.
+
+▶ Next: `triage-friction-log` — the inbox has been over budget for three sessions. No friction
+entries were added this session on purpose: both lessons above landed in doctrine rather than the
+inbox, which is the guidance `#153` shipped, applied to itself.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-29 (the fifth sweep, and a claim that was wrong in both directions)
 
 **Theme —** One merge, four panel rounds, seven isolated lenses (two rounds on `#151`, two on the
 wrap-up PR that records it). The sweep itself was never contested by any lens. The durable result is a failure mode the previous session's measurement
