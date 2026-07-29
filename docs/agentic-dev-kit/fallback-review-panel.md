@@ -268,8 +268,34 @@ message:
   operator-approval step is substituted, the record *is* the control's artifact.
 
 This is guidance on **writing** a record, not on reviewing one. It changes nothing about
-which findings a round acts on, or when a loop stops — three attempts to bound that are
-described in the PR that added this section, and all three opened a hole.
+which findings a round acts on, or when a loop stops.
+
+**Three attempts to bound that have each opened a hole.** Named because the natural next
+proposal is usually one of them:
+
+- **A class for a record of work already done**, defined by file type — marker, handoff
+  block, PR body, commit message, friction entry. It explicitly did *not* give docs a
+  lighter pass: its own rule said shipped prose an adopter reads and executes against is
+  code with worse tooling. It died on the class boundary, not on the idea.
+- **The same class with functional tests** — which the handoff *qualified for*, while being
+  the file the next session is told to act on.
+- **A class-independent stop signal** — whose trigger the author sets by choosing how
+  verbose the fix round is.
+
+Their shared shape: each bound is settable by the author of the change under review. The
+live two-class gate has that property too — the author picks the class — so it is a
+weakness to design against, not a disqualifier on its own. What the shipped gate adds is
+that the choice is stated in the PR, where a reviewer can dispute it.
+
+Full accounts, with the evidence: the comment on issue `#120` dated 2026-07-29, and the PR
+that added this section.
+
+**A separate question, often confused with these: how many lenses.** None of the three
+touched it. Lens count is not bounded by class at all — `safety-critical-changes.md`
+rule 2 wants two disjoint lenses, and the only sanctioned single-lens pass is **Degraded
+mode** below, which is conditioned on the runtime being unable to isolate reviewers rather
+than on what the change contains. A proposal to run fewer lenses for a "smaller" change is
+therefore an argument against that rule, not against these three.
 
 ## Degraded mode
 
