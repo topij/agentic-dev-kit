@@ -104,14 +104,17 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
 
 - **The doc-budget remedy is a no-op at the default `--keep`, and the wrap-up workflow prescribes
   exactly that invocation.** `check_doc_budget` warned the handoff was 423/400 and named
-  `archive_plan_sessions.py` as the remedy; running it as `workflows/wrap-up.md` step 8 instructs
+  `archive_plan_sessions.py` as the remedy; running it as
+  `docs/agentic-dev-kit/workflows/wrap-up.md` step 7 instructs
   reported *"nothing to move: 6 session block(s) <= --keep 6"* and left the file over budget. Only
-  an explicit `--keep 5` moved anything (423 → 352). **M** — occurrence data for
+  an explicit `--keep 5` moved anything (425 → 352; a first draft of this entry said 423, which
+  cannot be right — 425 − 73 = 352). **M** — occurrence data for
   [#74](https://github.com/topij/agentic-dev-kit/issues/74), which already records the lines-vs-blocks
-  mismatch. What this adds is that the *workflow doc* hands an agent the invocation that cannot
-  work: a budget expressed in lines cannot be discharged by a remedy bounded in blocks, so either
-  the script should take a line target or `wrap-up.md` should say to lower `--keep` until the
-  budget clears.
+  mismatch. The archive already records this recurrence, including that the workflow tells the
+  operator to run a sweep that does nothing at its default — so this is at least the fifth
+  occurrence, not a new observation. What it can still add is the concrete remedy shape: a budget
+  expressed in lines cannot be discharged by a remedy bounded in blocks, so either the script takes
+  a line target or `wrap-up.md` says to lower `--keep` until the budget clears.
 - **`finalize.pr_draft: true` contradicts the operator's stated preference and this repo's own
   `#124`.** The operator asked that PRs be marked ready as soon as no further changes are expected,
   because a draft is invisible to the review bot; `#124` records the same thing as a defect of the
@@ -126,11 +129,14 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
   the overlay allowlist said its keys were "read by no shell reader" while `init.sh` read exactly
   them; a list-replacement rule was motivated by a key the same file asserts can never be set. The
   mechanism itself was never wrong — and the two genuine bugs found in rounds 2 and 3 were both
-  introduced by the *previous round's fix*. **H** — proposed fix: this belongs in
-  `fallback-review-panel.md`'s authoring section next to "keep the record small", as a sharper
-  claim than that one makes. Justification prose is written from intent; intent is the one thing a
-  reviewer cannot check against the code, so a "why this is safe" sentence should either cite a
-  test that would fail if it were false, or be deleted. Deleting it is what ended the loop here.
+  introduced by the *previous round's fix*. **M** — downgraded from H after a lens refuted the
+  absolute form: the mechanism *was* wrong in every round too, including three adopter-facing
+  defects. The claim that survives is narrower and still useful — justification prose is written
+  from intent, which neither a reviewer nor a test can check against the code, so it recurs while
+  mechanism defects get fixed once. Proposed fix for `fallback-review-panel.md`'s authoring
+  section: a "why this is safe" sentence should cite a test that would fail if it were false, or be
+  deleted. **Do not promote the absolute version** — it was queued for doctrine here and was
+  false.
 - **Both review lenses were handed a worktree at the PR's base rather than its head, and both
   caught it.** Runtime-provided isolation created both worktrees at `c48164c`, so
   `git diff origin/main...HEAD` was empty in each and neither HEAD matched the `f33bb488` the

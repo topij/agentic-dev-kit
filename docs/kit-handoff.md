@@ -19,9 +19,10 @@ three review rounds, and the same defect in all three (`#156`, `#157`, `#158` me
 
 ## Latest session — 2026-07-29 (the sixth sweep, and three rounds that all found the same thing)
 
-**Theme —** Three PRs merged. The result worth keeping is not any of them: across three review
-rounds on one change, **every round's defect was in the prose explaining why the mechanism was
-safe**, never in the mechanism.
+**Theme —** Three PRs merged. The result worth keeping is narrower than it first looked: across
+three review rounds on one change, **justification prose was wrong in every round** — a recurring
+defect category the mechanism's own tests cannot catch. Mechanism defects were found in every round
+too; the first draft of this block claimed otherwise and a lens refuted it from the commits.
 
 - **`#156` merged (`3d503c2`).** Sixth `triage-friction-log` sweep. Five inbox entries in, five
   accounted for: `#155` filed (a remark attributed to the operator must be quoted at its original
@@ -34,21 +35,25 @@ safe**, never in the mechanism.
   covered one filename while the loader derives `<name>.local.<ext>` for any path; and
   `add_ignore_line` turned a `.gitignore` ending `.env` into `.envstate/` across six call sites.
 - **`#158` merged (`e76dd2c`).** `fallback-review-panel.md` now names the three failed
-  stopping-rule designs instead of pointing at a PR, and separates a question they do not answer:
+  stopping-rule designs, in addition to pointing at the fuller accounts, and separates a question they do not answer:
   **lens count is not bounded by class**, and the only sanctioned single-lens pass is Degraded
   mode, conditioned on runtime capability rather than on what the change contains.
 
 **Learned**
 
-- **Justification prose is where the defects live.** `_deep_merge`'s docstring said "two shapes"
-  while implementing six; the overlay allowlist said its keys are "read by no shell reader" while
-  `init.sh` read exactly them; a list rule was motivated by a key the same file asserts can never
-  be set. It is written from *intent*, and intent is the one thing a reviewer cannot check against
-  the code. The fix that held was deleting it — the reasoning now lives in error messages, each
-  pinned by a test, so it cannot drift without something going red.
-- **Rounds 2 and 3 each found one real bug, and both were introduced by the previous round's fix**
-  — a valueless key wiping a tracked list, then `pr_watch` re-raising at module import so `--help`
-  died with a traceback. The original design was not wrong either time.
+- **Justification prose was wrong in all three rounds.** `_deep_merge`'s docstring said "two
+  shapes" while implementing six; the overlay allowlist said its keys are "read by no shell reader"
+  while `init.sh` read exactly them; a list rule was motivated by a key the same file asserts can
+  never be set. It is written from *intent*, and intent is the one thing a reviewer cannot check
+  against the code — nor can a test, which is why it recurred while the mechanism's defects were
+  each fixed once. Correcting it added surface the next round then found defects in; **deleting it
+  ended the loop**. That is the claim, and it is narrower than "the mechanism was never wrong",
+  which a lens refuted: every round also found real mechanism defects, including three
+  adopter-facing ones this block lists above.
+- **One of the two late bugs was a regression from the previous round's fix, not both.**
+  `pr_watch` re-raising at module import came from round 2's change and killed `--help`. The
+  valueless-key-wipes-a-list hazard did not: round 1's guard was map-only from the start, so that
+  route predates round 1 and survived it. The first draft claimed both, on four surfaces.
 - **Generality was the defect, not the merge logic.** A config overlay honoured by one of several
   readers diverges everywhere. Narrowing to one key closed five findings at once — and `tracker.*`
   had to be removed after it made `session-start` on this repo query a project named
