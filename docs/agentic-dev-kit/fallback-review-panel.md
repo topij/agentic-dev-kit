@@ -240,6 +240,37 @@ round *smaller*, not fewer: `safety-critical-changes.md` rule 3 ("a fix round
 addresses only what the review found") — a new mechanism gets filed, however
 squarely a finding prompted it.
 
+## Keep the record small
+
+A record's defect surface is proportional to its length, and every correction round adds
+to it. Measured across nine rounds on three PRs in one session: **no HIGH was in
+executable code.** One was in a commit message — a closing keyword adjacent to an issue
+reference, which closed an issue documenting an unfixed defect before any round found
+it, so prose is not the same as inert. Every other HIGH was in prose, and the rounds
+that cost the most went to a verification transcript inside a graduation marker, where
+each correction added text the next round then found defects in.
+
+What ended that was **deleting** the transcript rather than amending it again: the file
+went 141 → 93 lines and the defect surface went with it.
+
+So, when writing a record — a graduation marker, a handoff block, a PR body, a commit
+message:
+
+- **State what was done, and what the checks do *not* establish.** Put the detail in the
+  PR, where it is read once, rather than in the record, where it is maintained.
+- **A record already carrying corrections should be shortened, not corrected again.** A
+  claim that has needed repairing twice is doing more work than it can carry; cut it
+  back to what you can stand behind.
+- **Prose an adopter reads and executes against is not a record.** A workflow file, a
+  `# Requires:` header, a docstring, a README instruction — these are code with worse
+  tooling and sit in the first class. So does a commit or squash message, which can
+  mutate tracker state, and so does any record standing in for a control: when the
+  operator-approval step is substituted, the record *is* the control's artifact.
+
+This is guidance on **writing** a record, not on reviewing one. It changes nothing about
+which findings a round acts on, or when a loop stops — three attempts to bound that are
+described in the PR that added this section, and all three opened a hole.
+
 ## Degraded mode
 
 If the runtime cannot run isolated reviewers, fall back to

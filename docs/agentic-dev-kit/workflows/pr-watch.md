@@ -179,7 +179,12 @@ Self-pace on a bounded cadence — don't busy-wait:
   that needs an operator product/design call). Stop, report the specific blocker, and
   ask. Don't loop forever on something only the operator can unblock.
 - **Bound the loop** — if you've gone ~8–10 rounds without converging, stop and
-  summarize where it stands rather than looping indefinitely.
+  summarize where it stands rather than looping indefinitely. This bounds *this* loop —
+  poll, fix, acknowledge — and applies whatever the change is. It is **not** the fallback
+  panel's stopping criterion, which is per-change, applies only when your review bot is
+  unavailable, and lives in
+  [`../fallback-review-panel.md`](../fallback-review-panel.md). Neither one is licence to
+  stop polling a red PR.
 
 ## Notes
 
