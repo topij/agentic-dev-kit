@@ -108,16 +108,22 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
   the `gh pr merge` whose squash body mentioned it all produced a MANDATORY watch-loop demand with
   no PR in existence. **M** — the guard it implements is real (`PRINCIPLES.md` #5/#8), which is
   what makes this expensive: a hook that cries wolf on documentation trains the agent to skim the
-  one message that is sometimes load-bearing. Proposed fix: gate on the tool *result* (a PR URL,
-  or `gh pr view` confirming a new number) rather than on the command string, or exclude commands
-  whose match falls inside a heredoc/quoted body.
-- **`gh pr merge --subject` silently suppresses GitHub's `(#NNN)` append.** `eeef647` is the only
-  commit on `main` without its PR number, so commit→PR traceability is broken for exactly the
-  merge where an explicit subject was passed to get a better squash message than the four
-  concatenated commit messages. Discovered only by diffing it against neighbours afterwards; the
-  next merge worked around it by writing `(#168)` into the subject by hand. **L** — proposed fix:
-  whichever workflow documents `gh pr merge` should say that `--subject` replaces the whole
-  subject line, append included.
+  one message that is sometimes load-bearing. **Two gates, and a fix must address both:**
+  `.claude/settings.json` pre-filters on `Bash(gh pr *)`, then `pr_followup_hook.py:41` matches
+  `\bgh\s+pr\s+(create|ready)\b` against `.tool_input.command` (`:181-182`) with no heredoc or
+  quote awareness. Proposed fix: gate on the tool *result* (a PR URL, or `gh pr view` confirming a
+  new number) rather than on the command string. A review lens reproduced a seventh occurrence
+  live while checking this entry.
+- **`gh pr merge --subject` suppresses GitHub's `(#NNN)` append — and the repo already had the
+  problem.** `eeef647` landed without its number, worked around on the next merge by writing
+  `(#168)` into the subject by hand. But a review lens then measured the base rate: **15 of 75
+  commits on `main` have an associated PR and no `(#N)`**, among them `cdeae7a` (#144), `c48164c`
+  (#154), `b46f794` (#153), `0b82ff2` (#148), `42873d8` (#69), `9c6ab3a` (#68). So `--subject`
+  explains *this* instance and is **not established** as the cause of the others. **M** — raised
+  from L because it is recurring rather than a one-off, and a ticket drafted from the first
+  version of this entry would have carried the wrong scope. Proposed fix: whichever workflow
+  documents `gh pr merge` should say `--subject` replaces the whole subject line, append included
+  — and something should check the suffix at merge time, since seven sessions did not notice.
 - **Two isolated lenses stalled identically at the 600s watchdog, mid-run.** Same session, same
   prompt shape, both killed with partial output. Re-running with a tighter scope succeeded. **M**
   — the hazard is not the stall but its shape: a stalled lens returns *nothing*, which is
@@ -131,8 +137,9 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
   the actual launches gave **eight rounds and sixteen completed runs** (eighteen launched, two
   stalled). Both figures were wrong in the direction that makes the measurement sound stronger, and
   the sentence carrying them was the block's own thesis — that explanatory prose is where defects
-  live. Caught only because the wrap-up recounted before opening the PR; no check exists that would
-  have. **M** — occurrence data for [#54](https://github.com/topij/agentic-dev-kit/issues/54), and
+  live. **It reached a published surface before it was caught:** the PR opened at 15:08:13Z carrying
+  the inflated figures, and the correction landed at 15:10:58Z — after, not before. No check exists
+  that would have caught it at all; the recount was voluntary. **M** — occurrence data for [#54](https://github.com/topij/agentic-dev-kit/issues/54), and
   a sharpening of it: `#163`'s comment already records that unreconciled restatements *"moved in the
   author's favour"*. This is the same drift with no restatement involved — the first statement was
   already inflated. Proposed fix: a count of one's own work is a verification claim like any other,

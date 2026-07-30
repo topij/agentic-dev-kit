@@ -14,15 +14,18 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-30 — `#75`/`#163` Sink 1/`#136` and `#124` both shipped; eight review
-rounds measured the same thing about themselves, and the review bot woke up.
+Last updated: 2026-07-30 — two PRs merged against `#75`/`#163` Sink 1/`#136` and `#124`; all four
+issues **stay open**, eight review rounds ran, and the review bot woke up.
 
 ## Latest session — 2026-07-30 (two merges, eight rounds, and where every defect lived)
 
-**Theme —** Both PRs landed. The durable result is a measurement neither PR set out to make:
-**across eight panel rounds and sixteen completed lens runs, every HIGH finding was in prose
-written to explain the change — never in the change.** Both deliverables went uncontested by every lens
-and by the bot; the explanations around them failed repeatedly.
+**Theme —** Both PRs landed after eight panel rounds (18 lens runs launched, 16 completed — the
+merged bodies publish 6 and 12, which count launches). The result worth keeping is narrower than
+this block first claimed, and a lens refuted the wider version: **no round ever disputed what the
+tickets asked for** — flip a documented default, drop a hardcoded `--draft`, diff the named sha —
+but nearly every HIGH was in a justification or a guard added around those edits. Both are the
+deliverable, so "the change was never contested" is false; what held was the *ask*, and what failed
+was everything written to support it.
 
 - **`#166` merged (`eeef647`).** `fallback-review-panel.md` contract item 7: `#75`'s inversion
   (*assume* the worktree points at the wrong ref, not *verify* it), `#163` Sink 1's recovery
@@ -71,16 +74,25 @@ and by the bot; the explanations around them failed repeatedly.
 
 - **`#124` stays open** — what shipped is prose only. For `triage-friction-log` nothing an adopter
   runs changed, because `#6`'s engine is unvendored and still hardcodes a draft.
-- **`046e9ce` carries its `(#168)` suffix; `eeef647` does not.** Passing `--subject` to
-  `gh pr merge` suppresses GitHub's auto-append, breaking commit→PR traceability for that one
-  commit. Not repairable without rewriting protected `main`.
-- The inbox is **206/150** and well over budget — this session added four entries to a file that
-  was already over. `#167`, `#169`, `#170` are this session's three tickets.
+- **`#33`/`#112` still want confirming against `#131`** before either is deliberately marked done —
+  the block naming `#131` went to history in this session's sweep, taking the qualifier with it.
+- **`eeef647` landed without its `(#166)` suffix**, and it is not alone: **15 of 75 commits on
+  `main` have an associated PR and no `(#N)`**, including `cdeae7a` (#144), `c48164c` (#154) and
+  `b46f794` (#153). `--subject` suppressing the append explains this session's instance; it is not
+  established as the cause of the others. Recurring, not a one-off, and not repairable in place.
+- The inbox is **217/150** and well over budget — this session added **five** entries to a file
+  already over. (This line first said 206/four: the fifth entry landed in the very commit that
+  corrected an inflated self-count, and invalidated the count beside it.) `#167`, `#169`, `#170`
+  are this session's three tickets.
 
-▶ Next: **`session-start`** — three fresh tickets, an over-budget inbox, and no single obvious
-thread. `#170` is the sharpest of the three (it blocks nothing but has a complete spec and three
-recorded failures), `#164` remains unfixed and the wrap-up sweep touches that code every session,
-and the cs-toolkit Phase 2 blockers (`#41`/`#37`/`#134`) are untouched.
+▶ Next: **`session-start`** — three fresh tickets, an inbox at 217/150, and no single obvious
+thread. **Page the tracker at `perPage: 25` reading `number`/`title`/`labels`/`state` only:**
+`#143` records `session-start` overflowing its tool limit at 68 open issues and is still open;
+there are **89** now. `#170` is the sharpest of the three tickets (it blocks nothing but has a
+complete spec and three recorded failures), `#164` remains unfixed and the wrap-up sweep touches
+that code every session, and the cs-toolkit Phase 2 blockers (`#41`/`#37`/`#134`) are untouched.
+`triage-friction-log` is the alternative, and the inbox is further over budget than when the
+previous session chose it.
 
 ______________________________________________________________________
 
