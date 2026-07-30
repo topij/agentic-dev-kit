@@ -19,8 +19,9 @@ operator. Seven review rounds; one defect class produced five findings across th
 
 ## Latest session — 2026-07-30 (one bug, seven review rounds, and the same defect five times)
 
-**Theme —** `#172` merged (`b82eba9`), repairing `#164` and settling `#162`. The bug itself was one
-line. What the session actually measured is where the *fix* kept going wrong: **a fix, or its
+**Theme —** `#172` merged (`b82eba9`), repairing `#164` and settling `#162`. The bug was one *call*
+— `Path.write_text` truncating before it writes — at three sites in the engine.
+What the session actually measured is where the *fix* kept going wrong: **a fix, or its
 written rationale, applied to one of two symmetric locations — five findings, three of them inside
 the fix for that very pattern.** (Three are literally one-of-two *call sites*; the fourth is a test
 covering one site only, the fifth a `BaseException` argument written in one method's docstring and
@@ -41,8 +42,9 @@ recovery paths were collapsed into one function used by both sites.
   documents, which is the part that was missing.
 - **`#162` settled the other way, deliberately.** The `\x1c` half was genuine content loss and is
   repaired (a bare `str.strip()` eats `\v \f \x1c \x1d \x1e \x1f \x85 \xa0`). Line endings
-  **normalise**, the docstring says so instead of claiming the sweep "only ever moves content", and
-  a test pins it — including what that test *cannot* see on POSIX.
+  **normalise**, and a test pins it — including what that test *cannot* see on POSIX. The docstring
+  still opens with "only ever moves content" and now **qualifies** it with the normalisation as a
+  named exception; it was not replaced, and this line said "instead of" until a lens read the file.
 - **Seven review rounds**: CodeRabbit ×3 (rate-limited on every head in between), fallback panel ×4.
   Tests 564 → 599, both counts reproduced by `make test`. The mutant total (25 across three batches,
   all reported killed by named behaviour tests) is **attested, not reproducible**: only round 1's ten
@@ -59,12 +61,14 @@ recovery paths were collapsed into one function used by both sites.
   anything else that removes it reads identically. Hedging the wording made the message honest
   without making the outcome better. What worked was **reading the destination back** and comparing
   it to what the run intended to write — a real check replacing an inference.
-- **Three of my own checks reported success without examining anything.** A persisted `cd` into a
-  scratch clone made `ruff`/`make test`/manifest all pass against the wrong tree; the same drift put
-  a `sed` rename in the clone, leaving a test whose docstring claimed a rename that never happened;
-  and a verification probe reported five clean passes because it compared an unresolved path against
-  a `realpath`-resolved one. All three are `#150`'s class, all three caught by reading output rather
-  than trusting an exit code.
+- **Three separate episodes of my own checks reporting success without examining anything.** A
+  persisted `cd` into a scratch clone made `ruff`/`make test`/manifest all pass against the wrong
+  tree (three checks, one episode); the same drift put a `sed` rename in the clone, leaving a test
+  whose docstring claimed a rename that never happened; and a verification probe reported five clean
+  passes because it compared an unresolved path against a `realpath`-resolved one. Only the `sed` one
+  is literally `#150`'s subject (a scripted text replacement that matches nothing); the other two
+  share its **root cause** — a check whose target was never reached — which is the widening the
+  friction entries propose. All three were caught by reading output, not by an exit code.
 - **A kill you cannot attribute is not evidence.** Four mutants needed a second attempt: one test
   raised from an f-string argument (evaluated before the function was entered), one guard was
   invisible to content assertions, one hazard had been fixed twice so the symptoms were gone either

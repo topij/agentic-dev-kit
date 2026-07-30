@@ -114,8 +114,11 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
   verification section worthless, and both instances were in the same session as a PR *about*
   trustworthy failure reporting. Proposed fix: any command whose result is quoted as verification
   should establish its own directory (`git -C`, absolute paths, or a leading `cd <repo>`), and a
-  verification claim should name the directory it ran in. Occurrence data for
-  [#150](https://github.com/topij/agentic-dev-kit/issues/150).
+  verification claim should name the directory it ran in. Routes to
+  [#150](https://github.com/topij/agentic-dev-kit/issues/150) as a **widening**, not as occurrence
+  data: only the `sed` half is literally a scripted text replacement, which is that issue's stated
+  subject. The three falsely-green *checks* share its root cause — the target was never reached —
+  and that is the class the issue would have to grow to cover.
 - **A verification probe reported five clean passes and had exercised nothing.** Written to re-drive
   a review lens's five measured data-loss scenarios against the fixed code, it compared the raw
   `--plan` path against the path `os.replace` was called with — while the engine resolves targets
