@@ -2833,34 +2833,81 @@ def test_the_temp_is_fsynced_before_the_rename_not_after(tmp_path: Path) -> None
     assert events[-1] == "fsync", f"the parent directory is fsynced after; got {events}"
 
 
-def test_an_interrupt_during_staging_leaves_no_temp(tmp_path: Path) -> None:
+def test_an_interrupt_during_staging_leaves_no_temp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """`except BaseException` in the staging cleanup — narrowing it leaks a temp.
 
     The docstring promises temps are "removed on every path this module
     controls, including exceptions", and `except Exception` satisfies neither
     that sentence nor the reason for it: debris lands beside the living handoff,
     where the next wrap-up step stages files for commit.
+
+    Injected at the staging `os.fsync`, which is inside the guarded block. A
+    first version of this test raised from an f-string argument instead — which
+    is evaluated at the *call site*, before `stage_text` runs, so it never
+    entered the handler and the narrowing mutant survived it.
     """
     aw = _atomic_write()
     target = tmp_path / "doc.md"
     target.write_text("original\n", encoding="utf-8")
 
-    class Exploding:
-        def __str__(self) -> str:
-            raise KeyboardInterrupt
+    def interrupting_fsync(fd: int) -> None:
+        raise KeyboardInterrupt
 
+    monkeypatch.setattr(os, "fsync", interrupting_fsync)
     with pytest.raises(KeyboardInterrupt):
-        aw.stage_text(target, f"{Exploding()}")
+        aw.stage_text(target, "replacement\n")
+    monkeypatch.undo()
 
     assert not list(tmp_path.glob("*.devkit-tmp")), "an interrupt leaked a staged temp"
+    assert target.read_text(encoding="utf-8") == "original\n"
 
 
-def test_commit_and_abort_are_idempotent_as_documented(tmp_path: Path) -> None:
+def test_an_interrupt_in_the_durability_step_cannot_escape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """"Nothing here may raise. Ever." — and `except OSError` did not achieve it.
+
+    `os.open`/`os.fsync` on a directory are blocking syscalls, so they are the
+    realistic landing spot for an interactive Ctrl-C. An escape here reaches the
+    caller's cleanup and unlinks the staged rollback, losing the swept blocks
+    over a document that was in fact published.
+
+    The sibling interrupt tests inject at `os.replace` and so cannot see this:
+    narrowing the handler back to `OSError` survived all of them.
+    """
+    aw = _atomic_write()
+    target = tmp_path / "doc.md"
+    target.write_text("original\n", encoding="utf-8")
+    staged = aw.stage_text(target, "published\n")
+
+    real_open = os.open
+
+    def interrupting_open(path: object, flags: int, *a: object, **k: object) -> int:
+        if Path(str(path)) == tmp_path:
+            raise KeyboardInterrupt
+        return real_open(path, flags, *a, **k)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "open", interrupting_open)
+    staged.commit()  # must not raise
+    monkeypatch.undo()
+
+    assert target.read_text(encoding="utf-8") == "published\n"
+
+
+def test_commit_and_abort_are_idempotent_as_documented(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The class docstring tells callers to use `finally: abort()` after a commit.
 
-    That shape is only safe because both are idempotent, and both guards were
-    deletable with the suite still green — at which point the documented usage
-    unlinks the published document's successor or double-publishes.
+    That shape is only safe because both are idempotent. Asserted on the CALLS,
+    not only on the resulting bytes: after a commit the temp path no longer
+    exists, so a missing guard just unlinks nothing and every content assertion
+    still passes — which is how the `abort()` guard survived a first attempt at
+    this test. What it would really cost is the temp name being reused by a
+    concurrent run in between, at which point the no-op deletes someone else's
+    staged file.
     """
     aw = _atomic_write()
     target = tmp_path / "doc.md"
@@ -2868,12 +2915,30 @@ def test_commit_and_abort_are_idempotent_as_documented(tmp_path: Path) -> None:
 
     staged = aw.stage_text(target, "published\n")
     staged.commit()
-    staged.commit()  # second commit must be a no-op, not a second rename
+
+    replaces: list[object] = []
+    unlinks: list[object] = []
+    real_replace, real_unlink = os.replace, Path.unlink
+
+    def spy_replace(src: object, dst: object, **k: object) -> None:
+        replaces.append(dst)
+        return real_replace(src, dst, **k)  # type: ignore[arg-type]
+
+    def spy_unlink(self: Path, **k: object) -> None:
+        unlinks.append(self)
+        return real_unlink(self, **k)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "replace", spy_replace)
+    monkeypatch.setattr(Path, "unlink", spy_unlink)
+    staged.commit()  # second commit: must not rename again
     staged.abort()  # the documented `finally: abort()` after a good commit
+    monkeypatch.undo()
+
+    assert replaces == [], "a settled write published a second time"
+    assert unlinks == [], "abort() after commit() tried to delete the temp path"
     assert target.read_text(encoding="utf-8") == "published\n"
 
     other = aw.stage_text(target, "discarded\n")
-    other.abort()
     other.abort()
     other.commit()  # after an abort, commit must not resurrect anything
     assert target.read_text(encoding="utf-8") == "published\n"
