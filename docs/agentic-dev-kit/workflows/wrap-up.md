@@ -82,14 +82,18 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    messages are worth reading carefully rather than acting on reflex:
 
    - **"refusing to write"** — the sweep declined; nothing was attempted. The
-     usual causes are a read-only handoff or history, a hard link to one, or a
-     read-only directory containing one. Fix the cause and re-run; there is
-     nothing to restore.
+     two causes are a **read-only** `<handoff>` or `<handoff-history>`, and a
+     **hard link** to one. Fix the cause and re-run; there is nothing to restore.
+     (A read-only *directory* is not this message: it reports `write failed`
+     with a `Permission denied` on a temp path you have never seen, because the
+     sweep publishes by renaming a temp into that directory. Nothing was applied
+     there either.)
    - **The one message that reports damage** names both documents explicitly,
-     says the history is intact, and **lists the swept blocks** — they are in
-     neither file at that point. Only then restore `<handoff>` from git, and
-     re-apply this session's block and `▶ Next:` line by hand. It needs a second
-     rename to fail after the first succeeded, so you are unlikely to see it.
+     says the history is intact, and lists the swept blocks' **titles** — enough
+     to know what is missing, not enough to retype them. They are in neither
+     file at that point, so restore `<handoff>` from git and re-apply this
+     session's block and `▶ Next:` line by hand. It needs a second rename to
+     fail after the first succeeded, so you are unlikely to see it.
 
    `git checkout -- <handoff>` is still never a safe reflex: you edited that file
    in steps 3 and 5, so it would discard this session's block.

@@ -2074,7 +2074,7 @@ def test_a_brace_in_a_session_title_does_not_crash_the_report(
 
 
 @_needs_permission_enforcement
-def test_a_failed_history_write_rolls_the_handoff_back(
+def test_a_failed_history_stage_never_touches_the_handoff(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A failing HISTORY write must not cost the swept blocks (issue #164).
@@ -2713,6 +2713,170 @@ def test_abort_never_raises_out_of_the_callers_finally(
     monkeypatch.undo()
 
     assert target.read_text(encoding="utf-8") == "original\n"
+
+
+def test_an_interrupt_while_publishing_the_handoff_restores_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The SECOND call site — the one the first interrupt fix missed.
+
+    Found by the adversarial lens on round 2. `staged_plan.commit()` was wrapped
+    in `except OSError` while `staged_history.commit()` had already been widened
+    to `BaseException`, so an interrupt landing during the handoff's publish
+    escaped, the `finally` unlinked the staged rollback, and the swept blocks
+    were lost — with no message at all, unlike the history path. A fix applied to
+    one of two sites is this repo's signature defect.
+
+    The interrupt is injected so that the rename **succeeds and then** the
+    exception arrives — the state the handler must get right. `_fsync_parent` no
+    longer lets one out (that was the same finding's other half), so the reachable
+    window is between `os.replace` returning and any Python bookkeeping, which is
+    exactly what makes `published` a filesystem question rather than a flag.
+    """
+    archive = _load_module("archive_sigint_plan", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original_plan = plan.read_text(encoding="utf-8")
+    original_history = history.read_text(encoding="utf-8")
+
+    real_replace = os.replace
+
+    def publish_then_interrupt(src: object, dst: object, **kwargs: object) -> None:
+        real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+        if Path(str(dst)) == plan:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(os, "replace", publish_then_interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)])
+    monkeypatch.undo()
+
+    assert plan.read_text(encoding="utf-8") == original_plan, (
+        "the handoff was published and its rollback discarded"
+    )
+    assert history.read_text(encoding="utf-8") == original_history
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+def test_an_interrupt_after_the_history_lands_does_not_duplicate_the_blocks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rolling back a COMPLETED move puts the blocks in both documents.
+
+    The other half of the same finding. An interrupt can arrive after
+    `os.replace` has already published the history, so a handler that infers
+    "raised here ⇒ not published" restores the handoff over a finished move —
+    blocks in both files, and a re-run appends them to the history a second time,
+    which is exactly what the plan-first ordering exists to prevent.
+
+    So the decision is read from the filesystem (`staged.published`), not from
+    the exception's position.
+    """
+    archive = _load_module("archive_sigint_after", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    real_replace = os.replace
+
+    def publish_then_interrupt(src: object, dst: object, **kwargs: object) -> None:
+        real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+        if Path(str(dst)) == history:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(os, "replace", publish_then_interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)])
+    monkeypatch.undo()
+
+    live = plan.read_text(encoding="utf-8")
+    archived = history.read_text(encoding="utf-8")
+    assert "## Earlier session — First" not in live, "the completed move was rolled back"
+    assert "First" in archived
+    assert archived.count("First body line 1.") == 1, "the blocks landed in history twice"
+    assert live.count("First body line 1.") == 0, "the blocks are in BOTH documents"
+
+
+def test_the_temp_is_fsynced_before_the_rename_not_after(tmp_path: Path) -> None:
+    """The module's central durability claim, and deleting it cost no test.
+
+    "The bytes have to be on the medium before a directory entry points at
+    them" — without the pre-rename fsync a crash can publish a name for content
+    that was never written. Asserted as an ordering, which is what the claim is.
+    """
+    aw = _atomic_write()
+    target = tmp_path / "doc.md"
+    target.write_text("original\n", encoding="utf-8")
+
+    events: list[str] = []
+    real_fsync, real_replace = os.fsync, os.replace
+
+    def spy_fsync(fd: int) -> None:
+        events.append("fsync")
+        return real_fsync(fd)
+
+    def spy_replace(src: object, dst: object, **k: object) -> None:
+        events.append("replace")
+        return real_replace(src, dst, **k)  # type: ignore[arg-type]
+
+    os.fsync, os.replace = spy_fsync, spy_replace  # type: ignore[assignment]
+    try:
+        aw.stage_text(target, "published\n").commit()
+    finally:
+        os.fsync, os.replace = real_fsync, real_replace  # type: ignore[assignment]
+
+    assert "replace" in events, "fixture check: the publish happened"
+    assert events.index("fsync") < events.index("replace"), (
+        f"the temp must be fsynced before it is renamed into place; got {events}"
+    )
+    assert events[-1] == "fsync", f"the parent directory is fsynced after; got {events}"
+
+
+def test_an_interrupt_during_staging_leaves_no_temp(tmp_path: Path) -> None:
+    """`except BaseException` in the staging cleanup — narrowing it leaks a temp.
+
+    The docstring promises temps are "removed on every path this module
+    controls, including exceptions", and `except Exception` satisfies neither
+    that sentence nor the reason for it: debris lands beside the living handoff,
+    where the next wrap-up step stages files for commit.
+    """
+    aw = _atomic_write()
+    target = tmp_path / "doc.md"
+    target.write_text("original\n", encoding="utf-8")
+
+    class Exploding:
+        def __str__(self) -> str:
+            raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        aw.stage_text(target, f"{Exploding()}")
+
+    assert not list(tmp_path.glob("*.devkit-tmp")), "an interrupt leaked a staged temp"
+
+
+def test_commit_and_abort_are_idempotent_as_documented(tmp_path: Path) -> None:
+    """The class docstring tells callers to use `finally: abort()` after a commit.
+
+    That shape is only safe because both are idempotent, and both guards were
+    deletable with the suite still green — at which point the documented usage
+    unlinks the published document's successor or double-publishes.
+    """
+    aw = _atomic_write()
+    target = tmp_path / "doc.md"
+    target.write_text("original\n", encoding="utf-8")
+
+    staged = aw.stage_text(target, "published\n")
+    staged.commit()
+    staged.commit()  # second commit must be a no-op, not a second rename
+    staged.abort()  # the documented `finally: abort()` after a good commit
+    assert target.read_text(encoding="utf-8") == "published\n"
+
+    other = aw.stage_text(target, "discarded\n")
+    other.abort()
+    other.abort()
+    other.commit()  # after an abort, commit must not resurrect anything
+    assert target.read_text(encoding="utf-8") == "published\n"
 
 
 def test_a_directory_target_is_named_as_one(tmp_path: Path) -> None:

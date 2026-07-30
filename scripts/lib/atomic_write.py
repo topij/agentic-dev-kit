@@ -71,7 +71,24 @@ either carried across or refused loudly, and never discovered after the fact:
 * **Ownership that cannot be carried is refused**, rather than silently
   reassigning the document to whoever ran the tool.
 
+* **A non-regular target is refused** — FIFO, socket, device. A rename replaces
+  such a file with a regular one where ``write_text`` would have written
+  *through* it.
+
 Every one of these checks runs during staging, before anything is published.
+
+**Two limits of those checks, stated rather than left to be discovered:**
+
+* The read-only test is ``os.access(target, os.W_OK)``, which consults the
+  **real** uid/gid and returns true for **root whatever the mode**. Running as
+  root — routine in devcontainers — the ``0444`` refusal does not fire and the
+  rename removes the read-only bit. ``write_text`` as root would also have
+  written the file, so this is not a regression; it is a guard that does not
+  guard for that user, which is a different thing from one that does.
+* ``_default_mode()`` reads the umask by setting and restoring it, a
+  process-global side effect. It runs only when the target does not exist, so
+  the sweep never reaches it, but a threaded caller creating a new file races
+  it.
 
 Durability
 ----------
@@ -135,18 +152,33 @@ class StagedWrite:
     def __init__(self, target: Path, temp: Path) -> None:
         self.target = target
         self.temp = temp
-        self._done = False
+        self._settled = False
+
+    @property
+    def published(self) -> bool:
+        """Whether the rename actually happened — **observed, not remembered**.
+
+        ``os.replace`` removes the temp, so its absence is the fact. A stored
+        flag is not good enough: an interrupt can land between ``os.replace``
+        returning and the assignment that records it, leaving a flag that says
+        "not published" for a document that was. A caller choosing whether to
+        roll back has to read the filesystem, or it will roll back a completed
+        move and put the content in both documents.
+
+        Only meaningful before :meth:`abort`, which also removes the temp.
+        """
+        return not self.temp.exists()
 
     def commit(self) -> None:
         """Publish the staged content over the target. Atomic; no allocation.
 
-        Raises only if the *publish* failed. Once ``os.replace`` returns, this
-        method cannot raise — see below.
+        Raises only if the *publish* itself failed. Once ``os.replace`` returns,
+        nothing this method does afterwards can raise — see :meth:`_fsync_parent`.
         """
-        if self._done:
+        if self._settled:
             return
         os.replace(self.temp, self.target)
-        self._done = True
+        self._settled = True
         self._fsync_parent()
 
     def _fsync_parent(self) -> None:
@@ -157,19 +189,30 @@ class StagedWrite:
         document that was in fact published — the false all-clear that #164
         exists to eliminate, reintroduced one call later.
 
-        A first version guarded ``os.open`` and suppressed ``os.fsync`` but left
-        ``os.close`` in a bare ``finally``. ``close(2)`` returns EIO on NFS and
-        other network filesystems, and injecting it there produced exactly the
-        original bug: the handoff swept, the history untouched, the staged
-        rollback discarded, and ``no changes applied`` on stderr. So the
-        suppression is around the whole block, not around the calls that looked
-        risky. Directory fsync is also simply unsupported on some platforms.
+        Two review rounds landed here, and the second is why the handler catches
+        ``BaseException`` rather than ``OSError``:
+
+        * A first version guarded ``os.open`` and suppressed ``os.fsync`` but
+          left the descriptor teardown in a bare ``finally``. That syscall
+          returns EIO on NFS, and injecting it there produced exactly the
+          original bug: handoff swept, history untouched, staged rollback
+          discarded, ``no changes applied`` on stderr.
+        * Narrowing to ``OSError`` still left the realistic case open. ``os.open``
+          and ``os.fsync`` on a directory are *blocking* syscalls — the likeliest
+          landing spot for an interactive Ctrl-C, and this tool's caller is
+          interactive. An escaping ``KeyboardInterrupt`` here reached the
+          caller's cleanup and unlinked the staged rollback, losing the swept
+          blocks with no message at all.
+
+        Swallowing an interrupt is the lesser harm: the window is microseconds,
+        the document is already correct, and a second Ctrl-C still works.
+        Directory fsync is also simply unsupported on some platforms.
         """
         dir_fd = None
         try:
             dir_fd = os.open(self.target.parent, os.O_RDONLY)
             os.fsync(dir_fd)
-        except OSError:
+        except BaseException:  # noqa: BLE001 — see the docstring; this cannot raise
             pass
         finally:
             if dir_fd is not None:
@@ -178,9 +221,9 @@ class StagedWrite:
 
     def abort(self) -> None:
         """Discard the staged content. Never touches the target."""
-        if self._done:
+        if self._settled:
             return
-        self._done = True
+        self._settled = True
         # OSError, not just FileNotFoundError. The documented shape is
         # `finally: abort()`, so anything raised here escapes from a `finally`
         # and replaces the caller's real outcome with a traceback — turning a
@@ -215,11 +258,18 @@ def stage_text(
         existing = target.lstat()
 
     if existing is not None:
-        if stat_module.S_ISDIR(existing.st_mode):
+        if not stat_module.S_ISREG(existing.st_mode):
             # Named before the hardlink check, which every directory trips
             # (`.` and `..` give nlink >= 2) — so a directory used to be
             # diagnosed as a hardlink problem and told to remove links.
-            raise AtomicWriteRefused(f"{target} is a directory, not a document.")
+            # Widened from directories to every non-regular file: a rename over
+            # a FIFO, socket or device REPLACES it with a regular file, where
+            # `write_text` would have written through it. Measured on a FIFO.
+            kind = "a directory" if stat_module.S_ISDIR(existing.st_mode) else "not a regular file"
+            raise AtomicWriteRefused(
+                f"{target} is {kind}. Publishing by rename would replace it with "
+                "a regular file rather than writing through it."
+            )
         if existing.st_nlink > 1:
             raise AtomicWriteRefused(
                 f"{target} has {existing.st_nlink} hard links; publishing by rename "

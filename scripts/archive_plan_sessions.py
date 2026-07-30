@@ -27,7 +27,11 @@ NORMALISES LINE ENDINGS.** Both documents are read and written as text with
 universal newlines, so a CRLF or classic-Mac (lone CR) document comes back with
 every line ending as ``\\n`` — the whole file, not only the blocks that moved
 (issue #162). This is deliberate rather than an accident of the default
-``newline`` argument, and it is pinned by a test:
+``newline`` argument — ``main()`` passes ``newline="\\n"`` explicitly, since
+``newline=None`` writes ``os.linesep`` and would be LF here only because this is
+POSIX. **A test pins the normalisation; nothing pins the explicitness**, because
+the two are indistinguishable on a POSIX host, and that test says so in its own
+docstring. The reasons for choosing to normalise:
 
 * These are Markdown documents the kit itself writes — ``init.sh`` renders them
   from ``docs/templates/`` with ``\\n``, and every other kit tool reads them as
@@ -95,8 +99,9 @@ Exit codes:
 
         Exactly one branch cannot promise it, and it names both documents with
         the states it can actually vouch for: the handoff published, the history
-        untouched, and the swept blocks listed so they can be recovered by hand.
-        It is reachable only if a second ``os.replace`` fails after the first
+        untouched, and the swept blocks' **titles** — enough to know what is
+        missing, not enough to retype it, so recovery is still from git. It is
+        reachable only if a second ``os.replace`` fails after the first
         succeeded — allocation is finished by then, so the ordinary out-of-space
         route does not lead here.
 
@@ -119,6 +124,14 @@ Exit codes:
            writable file. A document that is writable inside a read-only
            directory could be swept before and cannot now. There is no way to
            publish atomically without it.
+    130 — interrupted (``KeyboardInterrupt``), the shell's usual 128+SIGINT.
+        Listed because this module *deliberately* lets an interrupt out rather
+        than converting it: an interrupt arriving between the two publishes is
+        recovered from first — the handoff is restored from its staged copy —
+        and only then re-raised. Suppressing it would report a completed sweep
+        for a run the operator cancelled. Anything reading "non-zero means the
+        documents may be damaged" would be wrong here: they are not.
+
     3 — ``--target-lines`` specifically: the target cannot be reached without
         sweeping the last remaining block, or there is no block to sweep at all.
         Distinct from 2 so a caller can tell this apart from the unrelated
@@ -667,22 +680,50 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
             return 2
 
+        # BOTH publishes catch `BaseException`, and both ask the FILESYSTEM
+        # whether the rename happened rather than inferring it from where the
+        # exception was raised. Two review rounds got this wrong in two
+        # different ways:
+        #
+        #   - Catching `OSError` here and `BaseException` only below fixed one
+        #     of the two call sites. An interrupt during the *handoff* publish
+        #     escaped, the `finally` unlinked the staged rollback, and the blocks
+        #     were lost with no message at all — the same defect the round
+        #     before had just fixed one line further down.
+        #   - Trusting the exception's position is wrong even so: an interrupt
+        #     can land after `os.replace` has returned, so a handler that assumes
+        #     "raised here ⇒ not published" rolls back a *completed* move and
+        #     leaves the blocks in BOTH documents, which a re-run then appends to
+        #     the history a second time.
+        #
+        # `staged.published` reads the temp's absence, which is the fact.
         try:
             staged_plan.commit()
-        except OSError as exc:
-            print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
-            return 2
+        except BaseException as exc:
+            if staged_plan.published:
+                staged_rollback.commit()
+            if isinstance(exc, OSError):
+                print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
+                return 2
+            raise
 
         try:
             staged_history.commit()
         except BaseException as history_exc:
-            # BaseException, not OSError. Between the two publishes the handoff
-            # is swept and the history has not received the blocks, so ANY escape
-            # here — `KeyboardInterrupt` above all, since `wrap-up` is
-            # interactive — leaves them in neither document. Worse, the `finally`
-            # below would then unlink the very copy staged to recover them: a
-            # Ctrl-C destroyed data that a SIGKILL at the same instant survives,
-            # because SIGKILL runs no handler. Restore first, re-raise after.
+            if staged_history.published:
+                # The rename DID happen and something after it failed. The move
+                # is complete in both documents — restoring the handoff now is
+                # precisely the duplication the plan-first ordering exists to
+                # prevent, so leave both alone and report.
+                if isinstance(history_exc, OSError):
+                    print(
+                        f"error: {args.history} was published, but the step after "
+                        f"it failed ({history_exc}). BOTH documents are correct "
+                        "and the move is complete; nothing needs restoring.",
+                        file=sys.stderr,
+                    )
+                    return 2
+                raise
             try:
                 staged_rollback.commit()
             except OSError as rollback_exc:
@@ -710,7 +751,11 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 if isinstance(history_exc, OSError):
                     return 2
-                raise
+                # `raise history_exc`, not a bare `raise`: a bare one re-raises
+                # the ROLLBACK's OSError from this handler, so a cancelled run
+                # stopped looking cancelled and the process no longer terminated
+                # as interrupted.
+                raise history_exc from rollback_exc
             if isinstance(history_exc, OSError):
                 print(
                     f"error: publishing {args.history} failed ({history_exc}); "
