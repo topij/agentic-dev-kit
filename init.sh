@@ -978,8 +978,9 @@ add_ignore_line() {
 }
 add_ignore_line "state/"
 add_ignore_line ".devkit_state_root"
-# Isolated review lenses (fallback-review-panel.md contract item 7) run in their
-# own worktrees; those must never be committed back into the repo.
+# Isolated review lenses (fallback-review-panel.md contract item 7) work in their
+# own scratch — a worktree here when the runtime provides one, which item 7 warns
+# it may not; either way those trees must never be committed back into the repo.
 add_ignore_line ".claude/worktrees/"
 # Pipeline reports (triage proposals, systemize digests) are derived scratch from
 # the same runs that write state/, and the workflows commit only the doc/skill/
