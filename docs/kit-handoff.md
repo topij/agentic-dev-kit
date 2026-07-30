@@ -14,10 +14,78 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-30 — two PRs merged against `#75`/`#163` Sink 1/`#136` and `#124`; all four
-issues **stay open**, eight review rounds ran, and the review bot woke up.
+Last updated: 2026-07-30 — `#164` fixed and `#162` settled in one PR; both **stay open** for the
+operator, seven review rounds ran, and one defect class accounted for five of them.
 
-## Latest session — 2026-07-30 (two merges, eight rounds, and where every defect lived)
+## Latest session — 2026-07-30 (one bug, seven review rounds, and the same defect five times)
+
+**Theme —** `#172` merged (`b82eba9`), fixing `#164` and settling `#162`. The bug itself was one
+line. What the session actually measured is where the *fix* kept going wrong: **"applied to one of
+two call sites" appeared five times in this PR, three of them inside the fix for that very
+pattern.** Severity ranking missed it every time — each instance looked like an isolated miss — and
+the fix that worked was structural, not another guard: the two hand-written recovery paths were
+collapsed into one function used by both sites.
+
+- **`#164` fixed.** `Path.write_text` truncates before writing, so a failed write destroyed the
+  living handoff while the tool printed *"no changes applied"*. Measured with `RLIMIT_FSIZE`
+  against the **real 28,518-byte handoff**: before, 28,518 → 1,024 bytes at exit 2 under that
+  message; after, both documents byte-identical and the message true. New `scripts/lib/atomic_write.py`
+  stages to a random sibling temp (`mkstemp`, `O_EXCL`), fsyncs, publishes with `os.replace` —
+  and stages **both documents plus the rollback** before publishing either, which is what dissolves
+  the objection that reverted the first attempt on `#160`: the rollback's cost is paid up front,
+  while failing is still free.
+- **`#162` settled the other way, deliberately.** The `\x1c` half was genuine content loss and is
+  fixed (a bare `str.strip()` eats `\v \f \x1c \x1d \x1e \x1f \x85 \xa0`). Line endings **normalise**,
+  the docstring says so instead of claiming the sweep "only ever moves content", and a test pins it
+  — including what that test *cannot* see on POSIX.
+- **Seven review rounds**: CodeRabbit ×3 (rate-limited on every head in between), fallback panel ×4.
+  **All eight lens runs were placed at the base, not the head; all eight detected it** and diffed
+  the named sha. 25 mutants across three batches, all killed by named behaviour tests. Tests 564 → 599.
+
+**Learned**
+
+- **Ctrl-C was more destructive than SIGKILL.** At the same instant: SIGKILL runs no handler, so the
+  staged rollback survived on disk and the data was recoverable; Ctrl-C ran the `finally`, which
+  unlinked the copy staged for exactly that moment. On a tool whose caller is interactive. Nothing
+  about severity or code review suggests looking there — only executing it did.
+- **A proxy documented as "the fact".** The staged temp's absence is *evidence* the rename happened;
+  anything else that removes it reads identically. Hedging the wording made the message honest
+  without making the outcome better. What worked was **reading the destination back** and comparing
+  it to what the run intended to write — a real check replacing an inference.
+- **Three of my own checks reported success without examining anything.** A persisted `cd` into a
+  scratch clone made `ruff`/`make test`/manifest all pass against the wrong tree; the same drift put
+  a `sed` rename in the clone, leaving a test whose docstring claimed a rename that never happened;
+  and a verification probe reported five clean passes because it compared an unresolved path against
+  a `realpath`-resolved one. All three are `#150`'s class, all three caught by reading output rather
+  than trusting an exit code.
+- **A kill you cannot attribute is not evidence.** Four mutants needed a second attempt: one test
+  raised from an f-string argument (evaluated before the function was entered), one guard was
+  invisible to content assertions, one hazard had been fixed twice so the symptoms were gone either
+  way, and one kill aborted the pytest session instead of naming a test.
+
+**Open, and owned by nothing yet**
+
+- **`#164` and `#162` stay open** — the operator decides their state. The scope note on `#164` asks
+  that `kit_doctor.py:636` and `pr_watch.py:2201` be considered with it; they were, and **neither was
+  converted**: both write machine-regenerated artifacts, so the refuse-on-read-only/hardlink semantics
+  would add failure modes with no benefit. The helper is a library so converting later is an import.
+- **Neither the merged tree nor its last two commits were reviewed by anything.** Panel round 4 saw
+  `e5cb29f`; the fixes for its findings, their tests, and CodeRabbit's last two nitpicks all landed
+  after. CodeRabbit's final review was of `342f437`. `#27`'s gap, live again and stated on the PR.
+- **The one-of-two-call-sites pattern belongs in doctrine, not just this block.** `#163` records it;
+  this session is the first time it was observed recurring *inside its own fix*, five times, with the
+  structural remedy (collapse the duplication) working where guards did not.
+- The inbox is **still over budget** and grew again this session.
+
+▶ Next: **`session-start`** — `#164`/`#162` need an operator decision on closing, the inbox is well
+over budget and un-swept for several sessions, and the five-instance one-of-two-sites finding wants
+routing (doctrine change vs. a comment on `#163`). Page the tracker with
+`gh issue list --state open --limit 25 --json number,title,labels,state`; `#143` is still open and
+there are ~89 issues.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-30 (two merges, eight rounds, and where every defect lived)
 
 **Theme —** Both PRs landed after eight panel rounds: **18 lens runs launched, 16 completed**, two
 stalled at the watchdog and re-run. Each figure published elsewhere is *lower* than 16 — they count
@@ -291,87 +359,6 @@ No friction entries were added this session on purpose, and only one of the two 
 doctrine: the record-length one is in `fallback-review-panel.md`, while *"any rule whose trigger
 the author sets is a control the author can opt out of"* is recorded on `#120` — the tracker, not
 the inbox, because it is the constraint any future attempt at that ticket must satisfy.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-29 (the fifth sweep, and a claim that was wrong in both directions)
-
-**Theme —** One merge, four panel rounds, seven isolated lenses (two rounds on `#151`, two on the
-wrap-up PR that records it). The sweep itself was never contested by any lens. The durable result is a failure mode the previous session's measurement
-predicted but did not name: **an operator's narrow remark, inflated into a stronger claim and
-published as operator-confirmed.** The fix for it then over-corrected, and round 2 caught that.
-
-- **`#151` merged (`494b9eb`).** Fifth `triage-friction-log` sweep overall, dated 2026-07-29.
-  Seven entries in, seven out: one graduated into two issues (`#149`, `#150`), six routed as
-  seven occurrence comments (`#120`, `#138`, `#127`, `#75`, `#71`, `#45`, `#113`). LLM-only mode
-  again (`#6` still not vendored). Inbox 203 → 136 against a 150 budget.
-- **Two tickets filed:** `#149` (when a claim is corrected, enumerate every surface it was
-  published to *at that moment*), `#150` (a scripted text replacement that matches nothing must
-  fail, not report success).
-- **The HIGH, and the HIGH inside its fix.** The operator said CodeRabbit is *currently* not
-  available here. That was published as *"not installed, never exercised, nothing rate-limited"* —
-  and then used to file a **structurally-never-reviews** verdict onto `#45`, the issue whose
-  entire subject is that such a verdict cannot be made from outside. Both lenses found it
-  independently. `#45`'s own body records a **Pro Plus** plan; `Review limit reached` notices sit
-  on `#89` and `#99`. The correction then asserted a review count that was really a count of bot
-  comments, and round 2 found *that*. Two independent re-derivations of "how many PRs did it
-  actually review" disagreed with each other, so **no count was published**.
-- **The silent run is twelve PRs, not seven** — `#102`, `#103`, `#104`, `#111` and `#148` were
-  never counted. Third consecutive undercount in that series (four → six → seven → twelve). And
-  `#151` merged silent too, so it is **thirteen** by the same rule — a lens caught the tally going
-  stale inside the sentence announcing it was stale.
-
-**Learned**
-
-- **An operator's remark has a scope, and widening it is the same defect as inventing it.**
-  "Currently not available" is not "never installed". The wider version was published on five
-  surfaces and read as operator-confirmed on all of them, which is what made it durable.
-  `#140` already asks for the command behind *"X is not available here"*; it arguably needs
-  widening to cover *"X **is** available here, this much"* — round 2's finding.
-- **Correcting a wrong number with a right one is a trap when the number is not recoverable.**
-  Reviewed vs. quota-refused vs. silent is not cleanly separable from the comment stream without
-  deciding what counts, and each attempt decided differently. Withdrawing the count was the only
-  stable move — and the irreducibility is *better* evidence for `#45` than any count.
-- **Deleting beat correcting, again — and it is now two-for-two.** Five review rounds across two
-  sweeps have gone to the marker's verification section, every one finding the prose claiming more
-  than the checks did. This session cut it rather than correct it a third time.
-- **A check that errors can report a pass.** A closing-keyword scan built on a `grep -E`
-  alternation with an empty branch was rejected by `ugrep`, exited non-zero, and the `|| echo
-  clean` branch fired — printing a clean result from a check that never ran, inside the step
-  guarding `#71`. A second run scanned a zero-byte surface and also read clean.
-- **`#75`: 4 of 4 lens launches again**, all self-corrected. No running total is claimed; the
-  addendum posted this session declares the existing tallies approximate and unreconcilable.
-- **The check harness was left unfixed on purpose.** Round 2 showed checks 4/5 have headings
-  larger than their assertions and that checks 1+2 share no trust chain (a forged snapshot yields
-  byte-identical output). Documented, not repaired — building a harness inside a fix round is the
-  mechanism-creep the panel doctrine warns against, and `#138`/`#127` exist to ask for it.
-
-**Open, and owned by nothing yet**
-
-- **`#149` and `#150`** — this session's two. `#149`'s own six-surface list **omits PR comments**,
-  found by a lens after a retracted claim survived on one; that gap is unrecorded on the issue.
-- **`#121` should absorb the config-placeholder question** rather than have it re-filed. This
-  session re-derived `#121` from scratch without noticing it, and the rewrite of that entry then
-  made a *larger* false claim than the one it corrected. The live inbox entry now routes there.
-- **`#138` and `#127` are still the pair that would make a sweep's claims mechanically checkable**,
-  and both were reproduced *again* inside this session's pilot run of them.
-- **`#73` gained a *new* instance from this session's own archive sweep**, in the other direction:
-  `kit-handoff-history.md` now says *"the 287-line figure **above**"* while that figure stayed in the
-  live handoff. A lens found it; an earlier draft of this bullet claimed the *predicted* instance
-  instead, which was the previous session's. Recorded in no routing row.
-- **`#33`, `#112`, `#132` housekeeping is unchanged** from the previous session; `#132` is closed,
-  so cs-toolkit Phase 2 blockers remain `#41`/`#37`/`#134`.
-- **The inbox is back over budget the same day it was swept** — 179/150. The sweep took it 203 →
-  136; wrapping up added four more entries and took it to 179. Not swept inline, per the
-  wrap-up contract: graduating needs tracker writes and operator approval. Worth noting that a
-  sweep now buys roughly one session of headroom, which is an argument for `#6` (vendor the
-  engine) becoming urgent rather than merely open.
-
-▶ Next: `session-start` — the threads are genuinely diffuse (two fresh tickets, two observations
-recorded nowhere but here, and unchanged housekeeping), and nothing in the inbox is urgent despite it
-being over budget. Page the tracker at `perPage: 25` reading `number`/`title`/`labels`/`state`
-only — `#143` records `session-start` overflowing its tool limit at 68 open issues, and there are
-~82 now.
 
 ______________________________________________________________________
 
