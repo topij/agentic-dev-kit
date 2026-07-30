@@ -701,7 +701,27 @@ def main(argv: list[str] | None = None) -> int:
             staged_plan.commit()
         except BaseException as exc:
             if staged_plan.published:
-                staged_rollback.commit()
+                # Guarded exactly like the history side below. Unguarded, a
+                # failing rollback here replaced `exc`, escaped through the
+                # `finally` and ended the run as a traceback — exit 1, outside
+                # the documented contract, with the handoff swept and no
+                # message. That is the one-of-two-call-sites defect a round
+                # earlier, committed inside the fix for it.
+                try:
+                    staged_rollback.commit()
+                except OSError as rollback_exc:
+                    print(
+                        f"error: publishing {args.plan} failed ({exc}), AND "
+                        f"restoring it failed ({rollback_exc}). {args.history} is "
+                        f"unchanged and intact, but {args.plan} has been swept, "
+                        f"so these blocks are in NEITHER document:\n"
+                        + "\n".join(f"  - {title[:88]}" for title in moved_titles)
+                        + f"\nRestore {args.plan} from git before continuing.",
+                        file=sys.stderr,
+                    )
+                    if isinstance(exc, OSError):
+                        return 2
+                    raise exc from rollback_exc
             if isinstance(exc, OSError):
                 print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
                 return 2

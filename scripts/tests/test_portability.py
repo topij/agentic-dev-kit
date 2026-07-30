@@ -2759,6 +2759,48 @@ def test_an_interrupt_while_publishing_the_handoff_restores_it(
     assert not list(tmp_path.glob("*.devkit-tmp"))
 
 
+def test_a_failed_rollback_on_the_handoff_publish_is_reported_not_a_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The handoff-side rollback was unguarded while the history side was guarded.
+
+    Found by the review bot, and it is the one-of-two-call-sites defect again —
+    committed inside the fix for that very pattern. An `OSError` from this
+    rollback replaced the original exception, escaped through the `finally`, and
+    ended the run as a traceback: exit 1, outside the documented 0/2/3/130
+    contract, with the handoff swept and no operator message at all.
+    """
+    archive = _load_module("archive_plan_rb_fail", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    real_replace = os.replace
+    seen: list[Path] = []
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        target = Path(str(dst))
+        seen.append(target)
+        if target == plan and seen.count(plan) == 2:  # the rollback
+            raise OSError(28, "No space left on device")
+        real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+        if target == plan and seen.count(plan) == 1:
+            raise OSError(5, "Input/output error")  # fails AFTER publishing
+
+    monkeypatch.setattr(os, "replace", spy)
+    result = archive.main(
+        ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+    )
+    monkeypatch.undo()
+
+    assert result == 2, "must be the documented failure code, not a traceback"
+    err = capsys.readouterr().err
+    assert str(plan) in err and str(history) in err, err
+    assert "NEITHER document" in err, err
+    assert "First" in err, "the swept titles must be named"
+    assert "moved" not in err, "no past-tense success line"
+
+
 def test_an_interrupt_after_the_history_lands_does_not_duplicate_the_blocks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

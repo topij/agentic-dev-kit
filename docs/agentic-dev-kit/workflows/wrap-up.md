@@ -81,22 +81,26 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    likelier casualty — described a failure mode that no longer exists. Two
    messages are worth reading carefully rather than acting on reflex:
 
-   - **"refusing to write"** — the sweep declined; nothing was attempted. The
-     two causes are a **read-only** `<handoff>` or `<handoff-history>`, and a
-     **hard link** to one. Fix the cause and re-run; there is nothing to restore.
+   - **"refusing to write"** — the sweep declined; nothing was attempted. **The
+     message names the cause**; read it rather than guessing. The class is
+     "publishing by rename would lose a property of the document" — a
+     **read-only** `<handoff>` or `<handoff-history>`, a **hard link** to one, a
+     target that is **not a regular file**, or **ownership that cannot be
+     carried**. Fix what it names and re-run; there is nothing to restore.
      (A read-only *directory* is not this message: it reports `write failed`
      with a `Permission denied` on a temp path you have never seen, because the
      sweep publishes by renaming a temp into that directory. Nothing was applied
      there either.)
    - **The one message that reports damage** names both documents explicitly,
      says the history is intact, and lists the swept blocks' **titles** — enough
-     to know what is missing, not enough to retype them. They are in neither
-     file at that point, so restore `<handoff>` from git and re-apply this
-     session's block and `▶ Next:` line by hand. It needs a second rename to
-     fail after the first succeeded, so you are unlikely to see it.
-
-   `git checkout -- <handoff>` is still never a safe reflex: you edited that file
-   in steps 3 and 5, so it would discard this session's block.
+     to know what is missing, not enough to retype them. It needs a second
+     rename to fail after the first succeeded, so you are unlikely to see it.
+     To recover: **copy `<handoff>` aside first**, then use git as the *source
+     of the swept blocks only* — `git show HEAD:<handoff>` — and paste them back
+     into your copy. Do **not** `git checkout -- <handoff>`: that discards every
+     uncommitted edit in the file, which at this point in the workflow is this
+     whole session's block, its `▶ Next:` line, and anything else you changed in
+     steps 3 and 5.
 
    Do not continue to the commit step until the sweep reported success. Stage
    **both** files (`<handoff>` + `<handoff-history>`) into this commit. If
