@@ -2655,6 +2655,43 @@ def test_a_failed_open_leaves_no_temp_and_reports_its_real_cause(
     assert target.read_text(encoding="utf-8") == "original\n"
 
 
+def test_a_failed_open_does_not_close_a_descriptor_it_no_longer_owns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The half of the double-close fix that the symptoms do not reveal.
+
+    Suppressing the cleanup's `os.close` error already stops EBADF masking the
+    real exception and aborting the unlink — so the sibling test above passes
+    even if the descriptor is closed twice. What it cannot see is the actual
+    hazard: by then the number may have been reused, and the second close lands
+    on an unrelated file. Nothing recovers from that and no assertion about
+    `stage_text`'s own outputs can detect it.
+
+    So observe the call itself. Retiring `fd` unconditionally means the handler
+    makes no `os.close` at all on this path.
+    """
+    aw = _atomic_write()
+    target = tmp_path / "doc.md"
+    target.write_text("original\n", encoding="utf-8")
+
+    closed: list[int] = []
+    real_close = os.close
+
+    def recording_close(fd: int) -> None:
+        closed.append(fd)
+        real_close(fd)
+
+    monkeypatch.setattr(os, "close", recording_close)
+    with pytest.raises(ValueError, match="newline"):
+        aw.stage_text(target, "replacement\n", newline="not-a-valid-newline")
+    monkeypatch.undo()
+
+    assert closed == [], (
+        "`open` already closed the descriptor when it failed; closing it again "
+        f"can close an unrelated file. Saw os.close{closed}"
+    )
+
+
 def test_abort_never_raises_out_of_the_callers_finally(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
