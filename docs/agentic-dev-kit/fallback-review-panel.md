@@ -111,20 +111,77 @@ author re-reading their own diff.
    nearly destroyed live work. Give each lens a scratch copy or its own git
    worktree, and require it to leave the shared tree byte-identical.
 
-   **Of the repo under review — check, don't assume.** A runtime's built-in
-   isolation usually clones *the session's* repo, which is not the target when
-   the cockpit is reviewing a different one (an adopter repo, a sibling
-   checkout). On the OpenKitchen upgrade both lenses were handed a worktree of
-   the *kit* while reviewing the *adopter*: `git diff <base>...HEAD` was empty in
-   both. Both noticed and cloned the real target themselves — but a lens that
-   did not would have reviewed an empty diff and reported all-clear, which is
-   the worst failure available to a review mechanism.
+   **Never write inside a tree you did not create yourself.** A runtime may hand a
+   lens the live checkout, or a worktree holding somebody's in-progress work — on
+   this repo `dev_session.sh` builds lanes with `git worktree add -b`, so "this is
+   a linked worktree" does not mean "this is disposable". No git command answers
+   *is this tree mine*; that is the launcher's knowledge, not yours. So do not
+   re-point, detach, check out or edit what you were given — and do not put your
+   scratch inside it either: a *relative* extract path lands in the repo root,
+   where it sits untracked until some later `git add -A` commits it. Use an
+   absolute path outside the given tree.
 
-   So: name the target repo explicitly in the launch prompt, tell the lens to
-   **verify it is looking at the right thing before reviewing** (a non-empty diff
-   with the expected head), and never state in the prompt that isolation has
-   already been arranged unless you have confirmed it. The launch prompt on that
-   run asserted "you are in an isolated worktree of that repo" and was wrong.
+   Attest to it in your report — name the scratch path you used, and give
+   `git status --short` for the tree you were handed. Be precise about what that
+   proves: it catches the untracked-scratch case above, and it does **not** catch a
+   detach at the reviewed sha, which changes no byte and no HEAD. It is evidence
+   for one of the two failures, not both (`#136`).
+
+   **Isolating the repo does not isolate the scratch path.** Two lenses with their
+   own worktrees both put mutation copies under one shared scratch root, both
+   reached for `mut/`, and one reported having deleted the other's (`#136`).
+   Namespace by **lens and revision** — `mut-adversarial-<short-sha>/` — not by
+   lens alone, or the panel's own re-run collides with your previous round's copy
+   at a different head (`#75`). If a file changes underneath you, rule out a
+   colliding lens, then treat it as a finding: `#136` exists *because* a lens
+   reported it, and a change that writes into the tree looks identical.
+
+   **Assume the worktree points at the wrong ref.** A lens that does not check
+   would review an empty diff and report all-clear — the worst failure available to
+   a review mechanism, and reason enough on its own. (`#75` and `#163` hold the
+   occurrence data; read it there rather than restating a figure here. Its own
+   comments record that the tallies were counted by hand, that different ones count
+   different populations, and that two of them do not reconcile.)
+
+   So the launch prompt names the **repo, the branch and the head sha**, and never
+   claims isolation has been arranged unless that was confirmed — one prompt
+   asserted "you are in an isolated worktree of that repo" and was wrong. Diff
+   against the named sha, not `HEAD`:
+
+   ```sh
+   git diff <base>...<sha>
+   git show <sha>:<path>
+   ```
+
+   Both work from a wrong-ref worktree with no copy and no write access, because it
+   shares the object database with the checkout it was made from. A branch name
+   resolves there too; the reason to pin the **sha** is that a branch *moves*, so a
+   stale copy of the right branch passes silently (`#75`).
+
+   Three things the sha alone does not settle. Each says what has to be true rather
+   than which command gets you there: what an invocation actually does here depends
+   on how your runtime built the tree, so establish and report your own route.
+
+   - **A writable tree**, which mutation testing needs, has to be a copy you made.
+     Extracting an archive and cloning with `--no-hardlinks` both reach the
+     revision from a source you cannot write to. If your sandbox refuses every
+     route, report mutation testing as **not performed** rather than skipping it
+     quietly: item 5 is then unmet and the cockpit needs to know.
+   - **`<base>` has to be current.** A stale base yields a large, non-empty, wrong
+     diff that satisfies every other check here. Establish it against the *remote*,
+     not against your local ref — and note that an ancestry test does not do this,
+     since a stale base is still an ancestor. Say in your report how you
+     established it.
+   - **An unreachable sha does not tell you why it is unreachable.** A shallow or
+     partial clone of the *right* repo merely lacks the object; a tree of the
+     *wrong* repo never had it — the OpenKitchen case, where both lenses got the
+     *kit* while reviewing the *adopter*, and both fetched the real target.
+     Comparing your remote's URL against the target distinguishes them. Either way,
+     bring the objects into a copy you made instead of fetching into the tree you
+     were handed: a fetch writes refs, and that tree is not yours.
+
+   Which of these a sandbox permits is **not** doctrine: it varies by runtime and
+   has flipped between panels here. Establish what yours allows, and report it.
 8. **State what was verified clean, and how.** Absence of findings is only
    evidence if you know what was actually checked.
 9. **Give every finding a severity and say whether it is a regression.** The
@@ -134,19 +191,48 @@ author re-reading their own diff.
    replaced; *imprecision* means it is right but overstated, miscounted, or
    loosely worded. When you cannot tell, say regression — the reviewer is the
    only party here with no stake in the cheaper answer.
+10. **State what you reviewed before you state any finding** — required, and not as
+    a closing note. Give the repo path; the `HEAD` you were **actually placed at**,
+    which is the only one of these that observes your environment, since the sha you
+    were handed is already in your prompt and echoing it back proves nothing (the
+    found HEAD is what produced every occurrence record on `#75` and `#163`); the
+    sha you reviewed, with its diffstat; how you established that `<base>` is
+    current; which routes your sandbox allowed **and refused**, the refusals being
+    the half that otherwise goes unrecorded anywhere; and item 7's attestation —
+    your scratch path, or that you wrote nothing. A lens that cannot show a
+    non-empty diff at the named sha **has not reviewed anything**, and must say so
+    rather than report a clean pass, because the two are otherwise
+    indistinguishable. Non-empty is necessary and not sufficient: a diff against a
+    stale base is large and wrong.
 
 ## Running it
 
-1. Read the change: `git diff <base>...HEAD`.
+1. Read the change and resolve the revision you will hand every lens:
+   `git diff <base>...HEAD`, then `git rev-parse HEAD`. `HEAD` is right *here* —
+   this is the cockpit's own checkout. Item 7 forbids it to a **lens**, whose HEAD
+   was chosen by the runtime rather than by anyone who knows the target. Refresh
+   `<base>` while you are at it: a stale base here miscalibrates step 3's
+   plausibility check as well as every lens's diff.
 2. Launch **one isolated reviewer per lens**, concurrently, each with the
    contract above and its lens focus. Use whatever isolation your runtime has
    (a subagent, a separate session, a second person). If it has none, see
-   *Degraded mode*. State the **repo and branch under review** explicitly — see
-   contract item 7 on why the runtime's own isolation may not point at it.
-3. **Confirm each lens reviewed the right code** before you read its findings: a
-   lens reporting a clean pass over an empty or wrong diff looks exactly like a
-   lens reporting a clean pass. A finding count of zero is a result only once you
-   know what was in front of it.
+   *Degraded mode*. State the **repo, branch and head sha under review**
+   explicitly — see contract item 7 on why the runtime's own isolation may not
+   point at them, and why the sha is the field that lets a lens recover on its
+   own.
+3. **Confirm each lens reviewed the right code** before you read its findings,
+   against item 10's required fields: the sha reviewed is the sha you named, and the
+   diffstat is non-empty *and* plausible for the change. Compare the reported **repo
+   path against your own** — not merely against "is it the target repo", which your
+   live checkout satisfies too, being the target repo. That comparison is the only
+   thing that catches a lens placed in your working tree; the found HEAD cannot,
+   because a correctly isolated worktree reports the same sha. Read the scratch
+   attestation and the refused routes as well: the first is your evidence the tree
+   was left alone, and the second is how a sandbox limit reaches you instead of
+   being silently absorbed — including a lens that could not obtain a writable tree,
+   whose pass therefore did not satisfy item 5. A lens reporting a clean pass over
+   an empty or wrong diff looks exactly like a lens reporting a clean pass. A
+   finding count of zero is a result only once you know what was in front of it.
 4. Triage every finding against the *current* code — some go stale across
    rounds.
 5. Fix real findings, reply-with-reason to the rest.
