@@ -154,20 +154,35 @@ class StagedWrite:
         self.temp = temp
         self._settled = False
 
-    @property
-    def published(self) -> bool:
-        """Whether the rename actually happened — **observed, not remembered**.
+    def publish_state(self) -> str:
+        """``"published"``, ``"pending"`` or ``"unknown"`` — **observed, not remembered**.
 
-        ``os.replace`` removes the temp, so its absence is the fact. A stored
-        flag is not good enough: an interrupt can land between ``os.replace``
-        returning and the assignment that records it, leaving a flag that says
-        "not published" for a document that was. A caller choosing whether to
-        roll back has to read the filesystem, or it will roll back a completed
-        move and put the content in both documents.
+        ``os.replace`` removes the temp, so the temp's absence is the best
+        available evidence that the rename happened. A stored flag is not good
+        enough: an interrupt can land between ``os.replace`` returning and the
+        assignment that records it, leaving a flag that says "not published" for
+        a document that was. A caller choosing whether to roll back has to read
+        the filesystem, or it will roll back a completed move and put the
+        content in both documents.
+
+        Two honesty caveats, both from review, because an earlier version of
+        this returned a plain bool documented as "the fact":
+
+        * It is **evidence, not the fact**. Anything else that removes the temp
+          — a tmp reaper, an operator, another tool — reads as published. So the
+          caller must not turn a positive reading into an unqualified all-clear.
+        * It can be **indeterminate**. ``Path.exists()`` propagates ``EACCES``
+          rather than swallowing it, so a parent directory that becomes
+          unsearchable mid-run made this *raise* — from inside an exception
+          handler, which replaced the real exception, skipped the rollback and
+          let the cleanup delete it. Hence ``"unknown"`` rather than a guess.
 
         Only meaningful before :meth:`abort`, which also removes the temp.
         """
-        return not self.temp.exists()
+        try:
+            return "pending" if self.temp.exists() else "published"
+        except OSError:
+            return "unknown"
 
     def commit(self) -> None:
         """Publish the staged content over the target. Atomic; no allocation.

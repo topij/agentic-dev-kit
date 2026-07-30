@@ -136,8 +136,14 @@ Exit codes:
         recovered from first — the handoff is restored from its staged copy if
         it had already been published — and only then re-raised. Suppressing it
         would report a completed sweep for a run the operator cancelled.
-        Anything reading "non-zero means the documents may be damaged" would be
-        wrong here: they are not.
+
+        **A 130 does not by itself mean the documents are fine.** An earlier
+        version of this paragraph said it did, and a review lens falsified it
+        with two measured paths, both needing a *second* interrupt during the
+        recovery. Those now print the same damage message the other
+        double-failure paths do, so the rule is the one that holds everywhere
+        here: **read the message, not the exit code.** A cancelled run that
+        damaged nothing says nothing on stderr.
 """
 
 from __future__ import annotations
@@ -701,7 +707,12 @@ def main(argv: list[str] | None = None) -> int:
         try:
             staged_plan.commit()
         except BaseException as exc:
-            if staged_plan.published:
+            # "unknown" is treated as published, and that is safe *here*: the
+            # rollback writes the original bytes over a document that either was
+            # swept (so it needs them) or was never touched (so they are what is
+            # already there). At the history site below the same ambiguity is not
+            # symmetric, and is handled differently.
+            if staged_plan.publish_state() in ("published", "unknown"):
                 # Guarded exactly like the history side below. Unguarded, a
                 # failing rollback here replaced `exc`, escaped through the
                 # `finally` and ended the run as a traceback — exit 1, outside
@@ -710,7 +721,7 @@ def main(argv: list[str] | None = None) -> int:
                 # earlier, committed inside the fix for it.
                 try:
                     staged_rollback.commit()
-                except OSError as rollback_exc:
+                except BaseException as rollback_exc:
                     print(
                         f"error: publishing {args.plan} failed ({exc}), AND "
                         f"restoring it failed ({rollback_exc}). {args.history} is "
@@ -731,23 +742,35 @@ def main(argv: list[str] | None = None) -> int:
         try:
             staged_history.commit()
         except BaseException as history_exc:
-            if staged_history.published:
+            history_state = staged_history.publish_state()
+            if history_state == "published":
                 # The rename DID happen and something after it failed. The move
                 # is complete in both documents — restoring the handoff now is
                 # precisely the duplication the plan-first ordering exists to
                 # prevent, so leave both alone and report.
+                #
+                # The wording stops short of "both documents are correct": the
+                # evidence is the staged temp's absence, and something other
+                # than the rename could in principle have removed it. Say what
+                # was observed and what it implies, and let the operator check.
                 if isinstance(history_exc, OSError):
                     print(
-                        f"error: {args.history} was published, but the step after "
-                        f"it failed ({history_exc}). BOTH documents are correct "
-                        "and the move is complete; nothing needs restoring.",
+                        f"error: {args.history} appears to have been published — "
+                        f"its staged file is gone — but the step after it failed "
+                        f"({history_exc}). On that reading the move is complete "
+                        f"and nothing needs restoring. Confirm the swept blocks "
+                        f"are in {args.history} before continuing.",
                         file=sys.stderr,
                     )
                     return 2
                 raise
             try:
                 staged_rollback.commit()
-            except OSError as rollback_exc:
+            except BaseException as rollback_exc:
+                # BaseException, not OSError: a SECOND interrupt landing during
+                # the rollback used to escape here uncaught, leaving the blocks
+                # in neither document with no message — while the exit-code
+                # contract's own paragraph promised a 130 meant no damage.
                 # Never claim "no changes applied" when the rollback failed too.
                 # Both remaining claims are ones this branch can actually make:
                 # the history was published by rename or not at all, so it is
@@ -777,6 +800,22 @@ def main(argv: list[str] | None = None) -> int:
                 # stopped looking cancelled and the process no longer terminated
                 # as interrupted.
                 raise history_exc from rollback_exc
+            if history_state == "unknown":
+                # The handoff is back, and whether the history also received the
+                # blocks could not be determined. Restoring is the right side to
+                # err on — duplicates are visible and fixable, blocks in neither
+                # document are gone — but the operator has to be told to look.
+                print(
+                    f"error: publishing {args.history} failed ({history_exc}), and "
+                    f"this run could not determine whether it landed. {args.plan} "
+                    f"has been restored, so the blocks are definitely there — but "
+                    f"CHECK {args.history} for duplicates of:\n"
+                    + "\n".join(f"  - {title[:88]}" for title in moved_titles),
+                    file=sys.stderr,
+                )
+                if isinstance(history_exc, OSError):
+                    return 2
+                raise
             if isinstance(history_exc, OSError):
                 print(
                     f"error: publishing {args.history} failed ({history_exc}); "

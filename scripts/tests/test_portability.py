@@ -2801,6 +2801,117 @@ def test_a_failed_rollback_on_the_handoff_publish_is_reported_not_a_traceback(
     assert "moved" not in err, "no past-tense success line"
 
 
+def test_publish_state_never_raises_out_of_a_failure_handler(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`Path.exists()` propagates EACCES; it does not swallow it.
+
+    Found by the adversarial lens. The publish check is consulted from *inside*
+    an `except` handler, so a raise there replaced the real exception, skipped
+    the rollback entirely and let the cleanup delete it: blocks in neither
+    document, no message, and two temps leaked beside the living handoff.
+    Reachable when the parent directory becomes unsearchable mid-run.
+
+    So the answer is a tri-state, and the indeterminate case is named rather
+    than guessed.
+    """
+    aw = _atomic_write()
+    target = tmp_path / "doc.md"
+    target.write_text("original\n", encoding="utf-8")
+    staged = aw.stage_text(target, "replacement\n")
+
+    def denied(self: Path) -> bool:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "exists", denied)
+    assert staged.publish_state() == "unknown"
+    monkeypatch.undo()
+
+    assert staged.publish_state() == "pending"
+    staged.commit()
+    assert staged.publish_state() == "published"
+
+
+def test_an_indeterminate_history_publish_restores_and_warns_of_duplicates(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When it cannot tell whether the history landed, it must err toward keeping.
+
+    Duplicated blocks are visible and fixable; blocks in neither document are
+    gone. So the handoff is restored — and because that risks the history
+    holding them too, the operator is told to check for duplicates by name
+    rather than being given a clean "no changes applied".
+    """
+    archive = _load_module("archive_unknown", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original_plan = plan.read_text(encoding="utf-8")
+
+    real_replace, real_exists = os.replace, Path.exists
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        if Path(str(dst)) == history:
+            raise OSError(5, "Input/output error")
+        return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    def flaky_exists(self: Path) -> bool:
+        if self.name.endswith(".devkit-tmp") and history.name in self.name:
+            raise PermissionError(13, "Permission denied")
+        return real_exists(self)
+
+    monkeypatch.setattr(os, "replace", spy)
+    monkeypatch.setattr(Path, "exists", flaky_exists)
+    result = archive.main(
+        ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+    )
+    monkeypatch.undo()
+
+    assert result == 2
+    err = capsys.readouterr().err
+    assert "could not determine" in err, err
+    assert "duplicates" in err, err
+    assert "First" in err, "the titles to look for must be named"
+    assert plan.read_text(encoding="utf-8") == original_plan, "the handoff was not restored"
+
+
+def test_a_second_interrupt_during_the_rollback_still_reports_the_damage(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Ctrl-C during the recovery must not exit silently on a swept handoff.
+
+    The rollback handlers caught `OSError`, so a second interrupt — landing
+    while the first one is being recovered from — escaped uncaught: exit 130,
+    blocks in neither document, nothing on stderr, and the exit-code contract's
+    own paragraph promising that a 130 meant no damage.
+    """
+    archive = _load_module("archive_double_ki", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    real_replace = os.replace
+    seen: list[Path] = []
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        target = Path(str(dst))
+        seen.append(target)
+        if target == history:
+            raise KeyboardInterrupt
+        if target == plan and seen.count(plan) == 2:
+            raise KeyboardInterrupt  # again, during the recovery
+        return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "replace", spy)
+    with pytest.raises(KeyboardInterrupt):
+        archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)])
+    monkeypatch.undo()
+
+    err = capsys.readouterr().err
+    assert "NEITHER document" in err, f"a cancelled run damaged both docs silently: {err!r}"
+    assert "First" in err
+
+
 def test_a_cancelled_run_still_terminates_as_cancelled(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
