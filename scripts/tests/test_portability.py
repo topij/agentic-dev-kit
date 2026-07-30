@@ -2841,7 +2841,14 @@ def test_publish_state_never_raises_out_of_a_failure_handler(
         # enough, and nothing caught that until a review lens measured it.
         with monkeypatch.context() as m:
             m.setattr(Path, "exists", injected)
-            state = staged.publish_state()
+            try:
+                state = staged.publish_state()
+            except BaseException as exc:  # noqa: BLE001 — that is the regression
+                # Caught and converted rather than allowed to propagate: pytest
+                # aborts the whole session on a KeyboardInterrupt, so the mutant
+                # this pins would kill the run instead of naming a failed test —
+                # and "a kill is only a kill if you can see which test failed".
+                pytest.fail(f"publish_state() must never raise; got {exc!r}")
         assert state == "unknown", injected.__name__
 
     assert staged.publish_state() == "pending"
