@@ -377,10 +377,17 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
         # Sweep oldest-first, one block at a time (never the last remaining block —
-        # range stops at len(blocks) - 1), stopping at the first count that reaches
-        # the target. Each additional swept block only ever removes lines (see
-        # rebuild_plan), so the achieved line count is monotonically non-increasing
-        # in moved_count and this finds the smallest sweep that suffices.
+        # range stops at len(blocks) - 1), stopping at the FIRST count that reaches
+        # the target, which is therefore the smallest sweep that suffices.
+        #
+        # Deliberately does NOT assume the line count falls monotonically as
+        # moved_count grows. It need not: this script always (re)writes a
+        # fixed-size history pointer, which can outweigh one small swept block.
+        # The loop does not rely on monotonicity — it measures each candidate's
+        # real rendered length — and the failure branch below is sound for the
+        # same reason: never breaking means no candidate reached the target.
+        # `_write_four_block_plan` in the tests documents the non-monotonic case
+        # and is sized specifically to avoid it.
         new_plan = keep_blocks = moved = None
         for moved_count in range(1, len(blocks)):
             keep_blocks = blocks[: len(blocks) - moved_count]

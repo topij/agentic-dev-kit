@@ -64,11 +64,11 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "0bc433f925e438c617e2a106bab58dc6793a1a155e31372f84d2f8610763fcd0"
+      "sha256": "1e6990de5d03863220f203128506108e8f68cde04ebbe7717bdbd1e3e8bc3318"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
-      "sha256": "f6f44bc62dbb134c44e00590f184ee737468c1774f15987e37b00855eae98231"
+      "sha256": "013c1fa1e20763c9d99c8c2153b07723b1cda9a7b8c2dd9c2e78a6ed6a9d007c"
     },
     "scripts/dev_session.sh": {
       "role": "engine",

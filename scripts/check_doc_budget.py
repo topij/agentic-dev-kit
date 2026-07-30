@@ -63,6 +63,18 @@ class DocStatus:
     def over(self) -> bool:
         return self.lines > self.budget
 
+    @property
+    def remedy_text(self) -> str:
+        """``remedy`` with ``{budget}`` substituted from this entry's own budget.
+
+        The handoff remedy names a concrete ``--target-lines`` value, and that
+        value *is* this entry's ``budget``. Substituting keeps it in one place:
+        a remedy that restated the number as a literal would silently go stale
+        the moment the budget moved, leaving the warning prescribing a sweep to
+        the old target (Principle #10 — no hardcoding).
+        """
+        return self.remedy.replace("{budget}", str(self.budget))
+
 
 def _line_count(path: Path) -> int:
     """Count lines without slurping the whole file into one string."""
@@ -106,7 +118,7 @@ def render(statuses: list[DocStatus], *, quiet: bool) -> str:
         if s.over:
             lines.append(
                 f"⚠ {s.path} is {s.lines} lines (budget ~{s.budget}) — an archive "
-                f"sweep into {s.archive} is overdue: {s.remedy}."
+                f"sweep into {s.archive} is overdue: {s.remedy_text}."
             )
         elif not quiet:
             lines.append(f"✓ {s.path} {s.lines}/{s.budget} lines")

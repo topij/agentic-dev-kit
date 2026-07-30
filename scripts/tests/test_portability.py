@@ -1612,3 +1612,76 @@ def test_engines_avoid_datetime_utc_alias() -> None:
         "use `timezone.utc` — `datetime.UTC` raises ImportError below 3.11:\n"
         + "\n".join(offenders)
     )
+
+
+def _load_dataclass_module(name: str, path: Path) -> ModuleType:
+    """Like `_load_module`, but registers the module in `sys.modules` while exec'ing.
+
+    `@dataclass` class creation reads `sys.modules[cls.__module__].__dict__`, so an
+    engine holding a dataclass — `check_doc_budget.py`'s `DocStatus` — raises
+    `AttributeError` under the unregistered `_load_module`. Registration is popped
+    again afterwards: it is only needed during `exec_module`, and leaving it would
+    leak a fake module name into every later test in the session.
+    """
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(name, None)
+    return module
+
+def test_doc_budget_remedy_substitutes_the_budget_placeholder(tmp_path: Path) -> None:
+    """`{budget}` in a remedy is filled from that entry's own `budget:`.
+
+    The remedy has to name a concrete `--target-lines` value, and that value is
+    the budget. Substitution is what lets the config state the number once.
+    """
+    repo = tmp_path / "project"
+    config_path = repo / "config" / "dev-model.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        """doc_budgets:
+  - path: plan.md
+    budget: 3
+    archive: history.md
+    remedy: "sweep it (archive_plan_sessions.py --target-lines {budget})"
+""",
+        encoding="utf-8",
+    )
+    (repo / "plan.md").write_text("a\nb\nc\nd\ne\n", encoding="utf-8")
+
+    budget = _load_dataclass_module(
+        "check_doc_budget_subst", ENGINE_DIR / "check_doc_budget.py"
+    )
+    statuses = budget.evaluate(repo, config_path)
+    report = budget.render(statuses, quiet=True)
+
+    assert "--target-lines 3" in report, report
+    assert "{budget}" not in report, "placeholder leaked into the operator-facing warning"
+
+
+def test_shipped_doc_budget_remedies_never_restate_the_budget_as_a_literal() -> None:
+    """A remedy naming `--target-lines` must use `{budget}`, never a digit.
+
+    This is the test that fails if someone writes `--target-lines 400` beside
+    `budget: 400`: the two would then drift silently the moment the budget moves,
+    and the warning would prescribe a sweep to the stale target.
+    """
+    budget = _load_dataclass_module(
+        "check_doc_budget_literal", ENGINE_DIR / "check_doc_budget.py"
+    )
+    repo = _find_repo_root(Path(__file__).resolve())
+    statuses = budget.evaluate(repo, repo / "config" / "dev-model.yaml")
+
+    offenders = [
+        f"{s.path}: {s.remedy}"
+        for s in statuses
+        if re.search(r"--target-lines\s+\d", s.remedy)
+    ]
+    assert not offenders, (
+        "write `--target-lines {budget}`, not a literal — it goes stale when the "
+        "budget moves:\n" + "\n".join(offenders)
+    )
