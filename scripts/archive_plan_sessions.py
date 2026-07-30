@@ -51,10 +51,10 @@ Exit codes:
         file, unparseable handoff structure, history doc with no session-log
         section, or a failed write
     3 — ``--target-lines`` specifically: the target cannot be reached without
-        sweeping the last remaining block. Distinct from 2 so a caller can tell
-        this apart from the unrelated failures above without parsing the message;
-        anything reading only "non-zero" would report all of them as an
-        exhausted sweep.
+        sweeping the last remaining block, or there is no block to sweep at all.
+        Distinct from 2 so a caller can tell this apart from the unrelated
+        failures above without parsing the message; anything reading only
+        "non-zero" would report all of them as an exhausted sweep.
 """
 
 from __future__ import annotations
@@ -312,13 +312,9 @@ def main(argv: list[str] | None = None) -> int:
     ``--target-lines`` is the mutually-exclusive alternative: sweep oldest-first
     until the plan doc is at or under N lines, rather than a fixed block count.
 
-    Returns 0 on success / no-op / dry-run; 3 when ``--target-lines`` cannot be
-    reached without sweeping the last remaining block; 2 on every other failure
-    (usage error, unresolvable configured paths, missing file, unparseable
-    handoff structure, history doc with no session-log section, or a failed
-    write — the handoff doc is rolled back in that last case).
-
-    See the module docstring for why the unreachable case has its own code.
+    Exit codes are documented once, in the module docstring. Do not restate them
+    here: a second copy has drifted from the first in three separate rounds of
+    review on this function.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -396,8 +392,18 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: not found: {path}", file=sys.stderr)
             return 2
 
-    plan = args.plan.read_text(encoding="utf-8").splitlines(keepends=True)
-    history = args.history.read_text(encoding="utf-8").splitlines(keepends=True)
+    # Decoding failure is a documented exit 2, not an uncaught traceback. Both
+    # docs are read as UTF-8, and a single stray byte from a cp1252 round-trip —
+    # an em-dash, which these headings are full of — used to raise
+    # UnicodeDecodeError straight out of main() and exit 1. That is a code the
+    # module's own exit-code contract does not list and `wrap-up.md` has no branch
+    # for, so it landed the caller outside its decision table.
+    try:
+        plan = args.plan.read_text(encoding="utf-8").splitlines(keepends=True)
+        history = args.history.read_text(encoding="utf-8").splitlines(keepends=True)
+    except UnicodeDecodeError as exc:
+        print(f"error: not valid UTF-8: {exc}", file=sys.stderr)
+        return 2
 
     try:
         head, region, tail = split_plan(plan)
@@ -518,13 +524,30 @@ def main(argv: list[str] | None = None) -> int:
     # This is a *move*: a partial write (handoff doc trimmed but history write
     # fails) would drop the moved blocks. Write the handoff doc, then the history
     # doc; if the history write fails, roll the handoff doc back so nothing is lost.
+    #
+    # The plan is written FIRST and rolled back if the history write fails. The
+    # order is load-bearing, not incidental: writing history first and failing on
+    # the plan would leave the blocks in *both* files, and a re-run would append
+    # them to history a second time.
     original_plan = "".join(plan)
     try:
         args.plan.write_text("".join(new_plan), encoding="utf-8")
         try:
             args.history.write_text("".join(new_history), encoding="utf-8")
         except OSError:
-            args.plan.write_text(original_plan, encoding="utf-8")
+            try:
+                args.plan.write_text(original_plan, encoding="utf-8")
+            except OSError as rollback_exc:
+                # Never claim "no changes applied" when the rollback itself
+                # failed: the plan is truncated and the blocks reached neither
+                # file. Say so, and name where the original text still is.
+                print(
+                    f"error: history write failed, AND rolling the handoff back "
+                    f"failed ({rollback_exc}). {args.plan} is truncated and the "
+                    f"swept blocks are in neither file — restore it from git.",
+                    file=sys.stderr,
+                )
+                return 2
             raise
     except OSError as exc:
         print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
