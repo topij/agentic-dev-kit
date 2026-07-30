@@ -54,9 +54,8 @@ header to the source markdown.
 > - `scripts/triage_friction_log.py` — parser + LLM proposer + report writer.
 > - `scripts/finalize_triage.py` — graduation-marker prepend + inbox-sweep-by-
 >   frozen-list into the archive (`--frozen-inbox`) + branch/commit/push/open-PR
->   (Session B only). Not vendored here, and its draft-PR behaviour does not yet match
->   this file — see the note at Step 5's script list, which is the one statement of
->   that ([#6](https://github.com/topij/agentic-dev-kit/issues/6)).
+>   (Session B only). Not vendored here ([#6](https://github.com/topij/agentic-dev-kit/issues/6)); Step 5 records where its
+>   behaviour and this file diverge.
 > - your tracker's client library or MCP — for filing approved proposals. By backend:
 >   `github-issues` → `gh issue create --title "…" --body "…" --label <your label>`
 >   (the id in the output is the ticket ref); `linear` → the Linear MCP / client with
@@ -357,9 +356,8 @@ list later. At the end, if any creates failed, include them in the failure-DM ta
 Once at least one ticket has been filed successfully, invoke the finalize helper to
 prepend a graduation marker to `docs/friction-log.md`, **sweep the graduated
 (frozen-at-draft-time) inbox into `docs/friction-log-archive.md`**, commit both edits
-on a fresh branch off the protected branch's origin ref, push, and open a PR — ready
-for review unless `finalize.pr_draft` is explicitly `true`, which the vendored engine
-does not honour yet (see the note below).
+on a fresh branch off the protected branch's origin ref, push, and open a PR as
+`finalize.pr_draft` directs.
 
 Pass the filed tickets via stdin as JSON, and pass `--frozen-inbox` pointing at the
 snapshot path from state's `extra.frozen_inbox_path` (Step 4):
