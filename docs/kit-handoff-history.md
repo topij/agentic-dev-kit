@@ -4,6 +4,88 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-07-29 (the second sweep, and a documentation audit)
+
+**Theme —** Two merges and nine panel rounds. The deliverables are routine; the durable
+result is a measurement: **across nine rounds and at least fifteen isolated lenses, no HIGH finding
+was in executable code** — one was in a squash message, which closed an issue before any round
+found it (see below), so prose is not the same as inert. Every one was in prose — some of them inside `.py`/`.sh`
+files, so "prose" means wherever it lives — and the prose that kept failing was the prose
+*about* the verification, not the verification.
+
+- **`#144` merged (`cdeae7a`).** Second `triage-friction-log` sweep dated 2026-07-28.
+  Fourteen entries in, fourteen out: seven graduated into six issues (`#138`–`#143`), seven
+  routed as five occurrence comments. Run in LLM-only mode again (`#6` still not vendored).
+  Per `#128`, the graduation marker carries the approval record the DM would have — proposals,
+  decisions, snapshot digest — plus an explicit statement of what its checks do *not* establish.
+  Inbox 196 → 101 against a 150 budget.
+- **`#147` merged (`030f053`).** Every prose surface audited against the engines, config,
+  manifest and Makefile. The one that would have bitten: `CLAUDE.md` told the cockpit to branch
+  `dev/<scope>`, the exact prefix `pre-push` refuses for narrative-file edits. Also corrected:
+  `README`'s pytest command, a lane-sessions dir that does not exist, `path <scope>` documented
+  as printing the sandbox when it prints the worktree, two live hooks and the `.mcp.json` lane
+  copy documented nowhere, and `--assert-draft`/`--assert-ready` described as read-only checks
+  when they *mutate* the PR.
+- **Eight tickets filed:** `#138` (routing claims unverified), `#139` (`pr_watch.py:687`
+  discards the 403 body), `#140` (extend `#54` to mechanism claims), `#141` (removal
+  enumeration must be per-item and executed), `#142` (counterfactual step when a round removes
+  a guard), `#143` (`session-start` overflows at 68 issues), `#145` (three config keys read by
+  no code), `#146` (`parallel-headless.md` linked but untracked).
+- **`#145` was closed by accident and reopened.** `#147`'s squash message read *"Filed rather
+  than fixed:"* followed directly by the reference; GitHub matched it and closed the issue
+  (`events` shows
+  `closed commit_id=030f053`). The sentence asserted the opposite. This is `CLAUDE.md`'s
+  closing-keyword ground rule and `#71`, firing in a session that was scanning for it — the scan
+  never ran on a squash message. Occurrence data on `#71`.
+
+**Learned**
+
+- **The record about a change is a bigger defect source than the change.** The sweep moved the
+  right bytes on its first commit and no round found otherwise; three rounds went to the record.
+  The audit's edits were nearly all correct; three rounds went to its evidence. **Three** HIGHs
+  were in prose that *ships* — `pr-watch.md`'s flag table, `devmodel_config.py`'s docstring, and
+  the prerequisite list, which was wrong on **two** surfaces (`init.sh`'s `# Requires:` header and
+  `README.md`). That is the class worth separating from the rest.
+- **Correction-by-surface is the failure mode.** The same false `#23` sentence was fixed in the
+  friction log (R1), found still live on `#45`'s comment (R2), then still live in `#140`'s issue
+  body (R3). R4 found a fix that had silently matched nothing while its commit message reported
+  it as landed.
+- **Deleting beat correcting.** Two rounds of correcting the verification transcript each added
+  prose and each added defects. Removing it took the file 141 → 93 and the defect surface with it.
+- **A check heading is a claim.** "Every claimed comment exists on the issue it claims" asserted
+  existence, author and timestamp — never content, which is how the `#23` HIGH survived a round.
+  The integrity check was an unanchored substring test; a lens passed it against an archive whose
+  visible text was destroyed and whose real bytes hid in an HTML comment.
+- **`#75` is unanimous.** *Every* lens launch this session landed on `main` with an empty diff and
+  self-corrected, because the launch prompt made reporting path/sha/diffstat mandatory *before*
+  reviewing. A running count is not worth recording — the lens that reviewed this claim reproduced
+  it too, so any total is stale on arrival. **At least 15, no exceptions** is the durable form.
+- **CodeRabbit: seven consecutive PRs with no check and no comment** (`#126`–`#147`).
+
+**Open, and owned by nothing yet**
+
+- **`#138`, `#139`, `#140`, `#141`, `#142`, `#143`, `#145`, `#146`** — this session's eight,
+  enumerated rather than written as a range, because `#138`–`#146` spans `#144` (a PR, not a
+  ticket) and hides any member's state from a `#N` sweep. That is how a closed `#145` sat published in this
+  list for ~13 minutes (closed `22:09:27Z`, list pushed `22:15:26Z`, reopened `22:28:07Z`). `#138` and `#127` are the pair that would make a sweep's own claims
+  mechanically checkable — `#138` filed here, `#127` two sessions back — and both were
+  reproduced inside this session's pilot run of them.
+- **The friction inbox is well back over budget** — 203/150, from this session's seven
+  entries. Another `triage-friction-log` sweep is due, and `#113`'s hazard has a **latent** *state-path*
+  instance: `state/triage/frozen-inbox_{date}.json` would collide on a same-day re-run, and does
+  not today only because the engine that writes it is not vendored (`#6`).
+- **`#132`–`#136` from the previous session** — `#132` is **closed** (shipped `2026-07-28`), so
+  the cs-toolkit Phase 2 blockers are `#41`/`#37`/`#134`. `#133`, `#135`, `#136` remain open.
+- **`#33` and `#112` are shipped but still open** — close them deliberately after confirming
+  `#131` is what each asked for.
+
+▶ Next: `triage-friction-log` — **discharged** (`#151`). The inbox was 196/150, the same tripwire that opened this
+session, and its seven entries are the freshest evidence behind `#120`, `#138`, `#127` and `#71`.
+Prefer it over `session-start` this time: `#143` (filed here) records that `session-start`'s
+tracker step overflowed its tool limit at 68 open issues and that the remedy it prescribes cannot
+be run on this backend — there are ~80 open now, so page at `perPage: 25` and read
+`number`/`title`/`labels`/`state` only if you do run it.
+
 ### 2026-07-28 · 4 (the mutation gate shipped; four panel rounds)
 
 **Theme —** Two merges and a review loop that would not converge. The mechanism is small;

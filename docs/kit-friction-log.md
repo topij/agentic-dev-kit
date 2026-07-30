@@ -100,6 +100,67 @@ and the argument for keeping the record short: the prose is where the defects li
 
 The swept entries are verbatim in the archive under `Graduated 2026-07-29 (second sweep)`.
 
+## 2026-07-30 (post-merge)
+
+- **`pr_followup_hook.py` fires on command *text*, not on PR-opens — six false positives in one
+  session.** Its trigger matches `.tool_input.command`, so any heredoc containing `gh pr create`
+  or `gh pr ready` trips it: writing a doc *about* the command, filing an issue quoting it, and
+  the `gh pr merge` whose squash body mentioned it all produced a MANDATORY watch-loop demand with
+  no PR in existence. **M** — the guard it implements is real (`PRINCIPLES.md` #5/#8), which is
+  what makes this expensive: a hook that cries wolf on documentation trains the agent to skim the
+  one message that is sometimes load-bearing. **Two gates, and a fix must address both:**
+  `.claude/settings.json` pre-filters on `Bash(gh pr *)`, then `pr_followup_hook.py:41` matches
+  `\bgh\s+pr\s+(create|ready)\b` against `.tool_input.command` (`:181-182`) with no heredoc or
+  quote awareness. Proposed fix: gate on the tool *result* rather than the command string — and with a
+  **predicate per command**, since the two differ: `gh pr create` succeeds by yielding a *new* PR
+  number, while `gh pr ready` acts on an existing one and succeeds by that PR reading
+  non-draft afterwards. A single new-PR-URL test would silently drop every valid `ready` event. A review lens reproduced a seventh occurrence
+  live while checking this entry.
+- **`gh pr merge --subject` suppresses GitHub's `(#NNN)` append — and the repo already had the
+  problem.** `eeef647` landed without its number, worked around on the next merge by writing
+  `(#168)` into the subject by hand. But a review lens then measured the base rate: **15 of 75
+  commits on `main` have an associated PR and no `(#N)`** — though 8 of those predate the squash
+  convention and carry their number in a merge-commit subject instead, so the comparable figure is
+  **7 of 67** (75 minus 5 constituent commits of PRs #1–#3 and their 3 merge commits): `cdeae7a` (#144), `c48164c` (#154), `b46f794` (#153), `0b82ff2` (#148), `42873d8`
+  (#69), `9c6ab3a` (#68), and this session's. So `--subject`
+  explains *this* instance and is **not established** as the cause of the others. **M** — raised
+  from L because it is recurring rather than a one-off, and a ticket drafted from the first
+  version of this entry would have carried the wrong scope. Proposed fix: whichever workflow
+  documents `gh pr merge` should say `--subject` replaces the whole subject line, append included
+  — and something should check the suffix at merge time, since it went unnoticed across several
+  sessions. (No session count is offered: two review lenses counted this same population and got
+  four and five. Neither is independently reconstructible, which is the condition under which `#75`
+  says to publish the invariant and not the figure.)
+- **Two isolated lenses stalled identically at the 600s watchdog, mid-run.** Same session, same
+  prompt shape, both killed with partial output. Re-running with a tighter scope succeeded. **M**
+  — the hazard is not the stall but its shape: a stalled lens returns *nothing*, which is
+  indistinguishable from a lens that ran and found nothing unless the cockpit checks the task
+  status. `fallback-review-panel.md` item 10 requires the lens to open with what it reviewed,
+  which catches a wrong-ref lens but not a dead one — the report never arrives at all. Proposed
+  fix: the panel's step 3 should confirm each lens reached a **successful terminal status**, and
+  record the exit/watchdog state — not merely that something came back. "Returned" is too weak, and
+  this session proves it: both stalled lenses emitted partial text before the watchdog killed them,
+  so a returned-output test would have passed them.
+- **A self-reported count of your own effort drifts upward, and nothing checks it.** This session's
+  handoff block was written claiming *"nine panel rounds and twenty isolated lens runs"*. Recounting
+  the actual launches gave **eight rounds and sixteen completed runs** (eighteen launched, two
+  stalled). Both figures were wrong in the direction that makes the measurement sound stronger, and
+  the sentence carrying them was the block's own thesis — that explanatory prose is where defects
+  live. **It reached a published surface before it was caught:** the PR opened at 15:08:13Z carrying
+  the inflated figures, and the correction landed at 15:10:58Z — after, not before. No check exists
+  that would have caught it at all; the recount was voluntary. **M** — occurrence data for [#54](https://github.com/topij/agentic-dev-kit/issues/54), and
+  a sharpening of it: `#163`'s comment already records that unreconciled restatements *"moved in the
+  author's favour"*. This is the same drift with no restatement involved — the first statement was
+  already inflated. Proposed fix: a count of one's own work is a verification claim like any other,
+  so it needs the enumeration behind it, not just the number.
+- **A citation and its quotation can drift apart, and only the citation goes wrong.** A comment on
+  `#170` quoted that issue's third constraint verbatim while numbering it the fourth, twice, and
+  the same wrong ordinal reached a commit message. The quote read as corroboration for the number
+  beside it. **L** — occurrence data for [#54](https://github.com/topij/agentic-dev-kit/issues/54)
+  and [#140](https://github.com/topij/agentic-dev-kit/issues/140): "name the command that
+  establishes it" covers a claim, but an ordinal into someone else's list is a claim too, and the
+  cheapest check is to re-read the list rather than the sentence.
+
 ## 2026-07-29 (post-sweep, second)
 
 - **The doc-budget remedy is a no-op at the default `--keep`, and the wrap-up workflow prescribes

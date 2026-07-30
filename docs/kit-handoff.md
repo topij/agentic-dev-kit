@@ -14,10 +14,94 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-30 — `#74` shipped after six review rounds; a latent data-loss bug
-found in the handoff's own custodian (`#164`), and a mechanism reverted (`#160` merged).
+Last updated: 2026-07-30 — two PRs merged against `#75`/`#163` Sink 1/`#136` and `#124`; all four
+issues **stay open**, eight review rounds ran, and the review bot woke up.
 
-## Latest session — 2026-07-30 (one flag, six rounds, and a bug older than the PR)
+## Latest session — 2026-07-30 (two merges, eight rounds, and where every defect lived)
+
+**Theme —** Both PRs landed after eight panel rounds: **18 lens runs launched, 16 completed**, two
+stalled at the watchdog and re-run. Each figure published elsewhere is *lower* than 16 — they count
+one PR each, or a subset of rounds — and only their sum, 18, exceeds it. None is wrong. The result
+worth keeping is narrower than
+this block first claimed, and a lens refuted the wider version: **no round ever disputed what the
+tickets asked for** — flip a documented default, invert a contract item, diff the named sha — but
+nearly every HIGH was in a justification or a guard added around those edits. Both are the
+deliverable, so "the change was never contested" is false; what held was the *ask*, and what failed
+was everything written to support it.
+
+- **`#166` merged (`eeef647`).** `fallback-review-panel.md` contract item 7: `#75`'s inversion
+  (*assume* the worktree points at the wrong ref, not *verify* it), `#163` Sink 1's recovery
+  (diff the **named sha** — verified working from a wrong-ref worktree by four lenses, including
+  against a `chmod -R a-w` source), and `#136`'s scratch-path isolation. `#75`'s second half had
+  no home in the contract, so it is **item 10**, appended rather than renumbered.
+- **`#168` merged (`046e9ce`).** `#124`'s documented default flipped to `false` — and the key
+  turned out to be in **no config file and read by no code**. The larger find:
+  `post-merge-systemize.md` **hardcoded `gh pr create --draft`**, so the key it documents in its
+  own table had no effect on the one place that workflow opens a PR (Principle #10).
+- **Filed:** `#167` (item 7 now carries four requirements under one number; stable numbering
+  blocks splitting it), `#169` (`/adopt`+`/upgrade` drafts, plus the shipped CLAUDE.md template's
+  draft-first baseline with no scheduled-run carve-out), `#170` (draft-bit verification, with all
+  three failed attempts recorded). Occurrence comments on `#44`, `#45`, `#116`, `#140`.
+
+**Learned**
+
+- **A lens cannot know whether a tree is its own.** `git switch --detach` was documented as the
+  cheapest route to a writable tree; every lens run was placed in the **live checkout** instead,
+  so literal compliance would have detached a real branch — invisibly, since detaching at the same
+  sha changes no byte. The guard added next **failed open from any subdirectory** (`--git-dir`
+  absolute, `--git-common-dir` relative-to-cwd) and asked the wrong question anyway, because
+  `dev_session.sh` builds lanes as worktrees. No git command answers *is this tree mine*. The rule
+  that survived needs no discrimination: never write inside a tree you did not create.
+- **A command menu in doctrine is a defect generator.** Every menu item 7 carried had a measured
+  defect — routes documented as "blocked outright" that all three worked, `--is-shallow-repository`
+  returning false for a partial clone, `merge-base --is-ancestor` passing on a stale base,
+  `ls-remote origin origin/main` returning empty. What a given invocation does depends on how the
+  runtime built the tree, so the bullets now state what must be **true** and make each lens
+  establish its own route.
+- **Deleting beat correcting, now four-for-four.** The two rounds across both PRs that *shrank*
+  the text are the two that produced no follow-on HIGH. Every round that added an explanation
+  produced the next round's finding — including three attempts at one comparative claim, each
+  narrowing the quantifier while keeping the class, and a "de-duplicate" commit that took the
+  duplicate count from two to three.
+- **A check heading is a claim, and a metric can be blind by construction.** The rendering check
+  counted `<pre>` elements — but a correctly rendered fence *adds* one, so `0` reads identically
+  for "no fence" and "mangled fence". A true measurement supporting a false conclusion, under a
+  "Verified" heading. Withdrawn rather than repaired (`#116`).
+- **The review bot was throttled, not absent.** CodeRabbit reviewed after 13+ silent PRs, then
+  rate-limited, then returned clean — all on one PR. That settles `#45` for this repo, and the
+  clean pass reproduced `#44` exactly: it created **no review object**, so `coverage` reported the
+  bot three heads behind while its commit status said `Review completed` on head.
+
+**Open, and owned by nothing yet**
+
+- **`#124` stays open** — what shipped is prose only. For `triage-friction-log` nothing an adopter
+  runs changed, because `#6`'s engine is unvendored and still hardcodes a draft.
+- **`#33`/`#112` still want confirming against `#131`** before either is deliberately marked done —
+  the block naming `#131` went to history in this session's sweep, taking the qualifier with it.
+- **`eeef647` landed without its `(#166)` suffix**, and it is not alone: 15 of 75 commits on
+  `main` have an associated PR and no `(#N)` — 8 of those predate the squash convention, so the
+  comparable figure is **7 of 67**, among them `cdeae7a` (#144), `c48164c` (#154), `b46f794`
+  (#153). `--subject` explains this session's instance and is **not** established as the cause of
+  the others. Recurring, not a one-off, and not repairable in place.
+- The inbox is **well over budget** and grew again — five entries added to a file already over.
+  **This line deliberately carries no number:** `check_doc_budget.py` prints the current one, and
+  the hand-written figure went stale three times (206 → 217 → 224), each time inside the commit
+  correcting its predecessor. `#167`, `#169`, `#170` are this session's three tickets.
+
+▶ Next: **`session-start`** — three fresh tickets, an inbox well over budget, and no single
+obvious thread. **Page the tracker rather than dumping it** —
+`gh issue list --state open --limit 25 --json number,title,labels,state` is the form that works
+here. `#143` records `session-start` overflowing at 68 open issues and is still open; there are
+**89** now. (That issue's own remedy names `perPage`, a GitHub-MCP parameter; no MCP server is
+configured in this checkout, so the `gh` form above is the executable one.) `#170` is the sharpest of the three tickets (it blocks nothing but has a
+complete spec and three recorded failures), `#164` remains unfixed and the wrap-up sweep touches
+that code every session, and the cs-toolkit Phase 2 blockers (`#41`/`#37`/`#134`) are untouched.
+`triage-friction-log` is the alternative, and the inbox is further over budget than when the
+previous session chose it.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-30 (one flag, six rounds, and a bug older than the PR)
 
 **Theme —** `#74` shipped. The durable results are two: the review found a **pre-existing
 data-loss bug in the tool that owns this file**, and it measured where six rounds of its own
@@ -288,90 +372,6 @@ recorded nowhere but here, and unchanged housekeeping), and nothing in the inbox
 being over budget. Page the tracker at `perPage: 25` reading `number`/`title`/`labels`/`state`
 only — `#143` records `session-start` overflowing its tool limit at 68 open issues, and there are
 ~82 now.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-29 (the second sweep, and a documentation audit)
-
-**Theme —** Two merges and nine panel rounds. The deliverables are routine; the durable
-result is a measurement: **across nine rounds and at least fifteen isolated lenses, no HIGH finding
-was in executable code** — one was in a squash message, which closed an issue before any round
-found it (see below), so prose is not the same as inert. Every one was in prose — some of them inside `.py`/`.sh`
-files, so "prose" means wherever it lives — and the prose that kept failing was the prose
-*about* the verification, not the verification.
-
-- **`#144` merged (`cdeae7a`).** Second `triage-friction-log` sweep dated 2026-07-28.
-  Fourteen entries in, fourteen out: seven graduated into six issues (`#138`–`#143`), seven
-  routed as five occurrence comments. Run in LLM-only mode again (`#6` still not vendored).
-  Per `#128`, the graduation marker carries the approval record the DM would have — proposals,
-  decisions, snapshot digest — plus an explicit statement of what its checks do *not* establish.
-  Inbox 196 → 101 against a 150 budget.
-- **`#147` merged (`030f053`).** Every prose surface audited against the engines, config,
-  manifest and Makefile. The one that would have bitten: `CLAUDE.md` told the cockpit to branch
-  `dev/<scope>`, the exact prefix `pre-push` refuses for narrative-file edits. Also corrected:
-  `README`'s pytest command, a lane-sessions dir that does not exist, `path <scope>` documented
-  as printing the sandbox when it prints the worktree, two live hooks and the `.mcp.json` lane
-  copy documented nowhere, and `--assert-draft`/`--assert-ready` described as read-only checks
-  when they *mutate* the PR.
-- **Eight tickets filed:** `#138` (routing claims unverified), `#139` (`pr_watch.py:687`
-  discards the 403 body), `#140` (extend `#54` to mechanism claims), `#141` (removal
-  enumeration must be per-item and executed), `#142` (counterfactual step when a round removes
-  a guard), `#143` (`session-start` overflows at 68 issues), `#145` (three config keys read by
-  no code), `#146` (`parallel-headless.md` linked but untracked).
-- **`#145` was closed by accident and reopened.** `#147`'s squash message read *"Filed rather
-  than fixed:"* followed directly by the reference; GitHub matched it and closed the issue
-  (`events` shows
-  `closed commit_id=030f053`). The sentence asserted the opposite. This is `CLAUDE.md`'s
-  closing-keyword ground rule and `#71`, firing in a session that was scanning for it — the scan
-  never ran on a squash message. Occurrence data on `#71`.
-
-**Learned**
-
-- **The record about a change is a bigger defect source than the change.** The sweep moved the
-  right bytes on its first commit and no round found otherwise; three rounds went to the record.
-  The audit's edits were nearly all correct; three rounds went to its evidence. **Three** HIGHs
-  were in prose that *ships* — `pr-watch.md`'s flag table, `devmodel_config.py`'s docstring, and
-  the prerequisite list, which was wrong on **two** surfaces (`init.sh`'s `# Requires:` header and
-  `README.md`). That is the class worth separating from the rest.
-- **Correction-by-surface is the failure mode.** The same false `#23` sentence was fixed in the
-  friction log (R1), found still live on `#45`'s comment (R2), then still live in `#140`'s issue
-  body (R3). R4 found a fix that had silently matched nothing while its commit message reported
-  it as landed.
-- **Deleting beat correcting.** Two rounds of correcting the verification transcript each added
-  prose and each added defects. Removing it took the file 141 → 93 and the defect surface with it.
-- **A check heading is a claim.** "Every claimed comment exists on the issue it claims" asserted
-  existence, author and timestamp — never content, which is how the `#23` HIGH survived a round.
-  The integrity check was an unanchored substring test; a lens passed it against an archive whose
-  visible text was destroyed and whose real bytes hid in an HTML comment.
-- **`#75` is unanimous.** *Every* lens launch this session landed on `main` with an empty diff and
-  self-corrected, because the launch prompt made reporting path/sha/diffstat mandatory *before*
-  reviewing. A running count is not worth recording — the lens that reviewed this claim reproduced
-  it too, so any total is stale on arrival. **At least 15, no exceptions** is the durable form.
-- **CodeRabbit: seven consecutive PRs with no check and no comment** (`#126`–`#147`).
-
-**Open, and owned by nothing yet**
-
-- **`#138`, `#139`, `#140`, `#141`, `#142`, `#143`, `#145`, `#146`** — this session's eight,
-  enumerated rather than written as a range, because `#138`–`#146` spans `#144` (a PR, not a
-  ticket) and hides any member's state from a `#N` sweep. That is how a closed `#145` sat published in this
-  list for ~13 minutes (closed `22:09:27Z`, list pushed `22:15:26Z`, reopened `22:28:07Z`). `#138` and `#127` are the pair that would make a sweep's own claims
-  mechanically checkable — `#138` filed here, `#127` two sessions back — and both were
-  reproduced inside this session's pilot run of them.
-- **The friction inbox is well back over budget** — 203/150, from this session's seven
-  entries. Another `triage-friction-log` sweep is due, and `#113`'s hazard has a **latent** *state-path*
-  instance: `state/triage/frozen-inbox_{date}.json` would collide on a same-day re-run, and does
-  not today only because the engine that writes it is not vendored (`#6`).
-- **`#132`–`#136` from the previous session** — `#132` is **closed** (shipped `2026-07-28`), so
-  the cs-toolkit Phase 2 blockers are `#41`/`#37`/`#134`. `#133`, `#135`, `#136` remain open.
-- **`#33` and `#112` are shipped but still open** — close them deliberately after confirming
-  `#131` is what each asked for.
-
-▶ Next: `triage-friction-log` — **discharged** (`#151`). The inbox was 196/150, the same tripwire that opened this
-session, and its seven entries are the freshest evidence behind `#120`, `#138`, `#127` and `#71`.
-Prefer it over `session-start` this time: `#143` (filed here) records that `session-start`'s
-tracker step overflowed its tool limit at 68 open issues and that the remedy it prescribes cannot
-be run on this backend — there are ~80 open now, so page at `perPage: 25` and read
-`number`/`title`/`labels`/`state` only if you do run it.
 
 ______________________________________________________________________
 
