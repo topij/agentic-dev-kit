@@ -6,8 +6,9 @@ End-of-session wrap-up. Update the living handoff and commit.
 
 Read `config/dev-model.yaml` first. In this workflow, `<handoff>`,
 `<handoff-history>`, and `<friction-log>` mean the corresponding values under
-`paths`; `<engine-dir>` means `paths.engines`. A workflow invocation means the
-current agent's native adapter (`/name` in Claude or `$name` in Codex).
+`paths`; `<engine-dir>` means `paths.engines`; `<handoff-budget>` means the
+`budget` field of `<handoff>`'s entry under `doc_budgets`. A workflow invocation
+means the current agent's native adapter (`/name` in Claude or `$name` in Codex).
 
 ## Steps
 
@@ -54,13 +55,22 @@ current agent's native adapter (`/name` in Claude or `$name` in Codex).
 
 1. **Keep the handoff docs lean.** After adding this session's block, run
    `uv run <engine-dir>/check_doc_budget.py`. If it warns that `<handoff>` is over
-   budget, run `uv run <engine-dir>/archive_plan_sessions.py` — it deterministically keeps
-   the newest ~6 session blocks live, moves the rest into `<handoff-history>`,
-   and trims the megaline. Stage **both** files (`<handoff>` +
-   `<handoff-history>`) into this commit. If `<friction-log>` is over
-   budget, don't sweep it inline — note it and recommend the `triage-friction-log` workflow
-   (graduating the inbox needs tracker writes + operator approval). This is what
-   stops the handoff docs from ballooning between archive sweeps.
+   budget, run `uv run <engine-dir>/archive_plan_sessions.py --target-lines
+   <handoff-budget>` — it sweeps oldest-first, one block at a time, until
+   `<handoff>` is at or under that line budget, moves the swept blocks into
+   `<handoff-history>`, and trims the megaline. **Do not use plain `--keep`
+   here** (or run the script with no flags, which defaults to `--keep 6`):
+   `check_doc_budget.py` measures **lines** while `--keep` counts **blocks**, so
+   the default can report "nothing to move" while `<handoff>` stays over budget
+   ([#74](https://github.com/topij/agentic-dev-kit/issues/74)). If
+   `--target-lines` itself exits non-zero, it ran out of blocks to sweep
+   (short of the last remaining one) without reaching the target — report the
+   achieved line count against the budget; do not treat that as done. Stage
+   **both** files (`<handoff>` + `<handoff-history>`) into this commit. If
+   `<friction-log>` is over budget, don't sweep it inline — note it and
+   recommend the `triage-friction-log` workflow (graduating the inbox needs
+   tracker writes + operator approval). This is what stops the handoff docs
+   from ballooning between archive sweeps.
 
 1. **Commit + PR the handoff update — never commit to your protected branch
    directly.** Commit as `chore: update handoff — [one-line summary of session work]`

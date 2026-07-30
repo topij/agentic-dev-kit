@@ -64,7 +64,11 @@ doc_budgets:
   - path: docs/kit-handoff.md
     budget: 400
     archive: docs/kit-handoff-history.md
-    remedy: "run the wrap-up workflow to sweep old session blocks into the history file"
+    # This budget is in LINES; archive_plan_sessions.py's --keep is in BLOCKS, so
+    # --keep at its default can be a no-op against this budget (issue #74: 5 blocks
+    # under --keep 6 while still over on lines). --target-lines closes that gap by
+    # sweeping to a line count directly — name it here, not --keep.
+    remedy: "run the wrap-up workflow to sweep old session blocks into the history file (archive_plan_sessions.py --target-lines 400, not --keep — this budget is in lines, not blocks)"
   - path: docs/kit-friction-log.md
     budget: 150
     archive: docs/kit-friction-log-archive.md

@@ -26,12 +26,24 @@ Usage:
 
     uv run scripts/archive_plan_sessions.py                  # keep 6, apply
     uv run scripts/archive_plan_sessions.py --keep 5
+    uv run scripts/archive_plan_sessions.py --target-lines 400  # sweep to a line budget
     uv run scripts/archive_plan_sessions.py --dry-run         # report only
     uv run scripts/archive_plan_sessions.py --plan docs/handoff.md --history docs/handoff-history.md
 
+``--keep`` and ``--target-lines`` are mutually exclusive. ``check_doc_budget.py``
+measures the handoff doc in *lines*; this script's ``--keep`` counts *blocks* — so
+a block-count remedy can be a no-op against a line budget (5 blocks under a
+``--keep 6`` floor, but still over a 400-line budget). ``--target-lines`` closes
+that gap: it sweeps oldest-first, one block at a time, until the doc is at or
+under the target, and never sweeps the last remaining block. If it runs out of
+sweepable blocks while still over the target, it fails loudly (exit 2) rather
+than reporting success — a step that did not accomplish what it was asked must
+say so.
+
 Exit codes:
     0 — applied (or nothing to do, or dry-run)
-    2 — usage error / unparseable handoff-doc structure
+    2 — usage error / unparseable handoff-doc structure / ``--target-lines`` could
+        not be reached without sweeping the last remaining block
 """
 
 from __future__ import annotations
@@ -254,12 +266,27 @@ def insert_into_history(history: list[str], moved: list[list[str]]) -> list[str]
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point: keep the newest ``--keep`` session blocks, archive the rest.
 
+    ``--target-lines`` is the mutually-exclusive alternative: sweep oldest-first
+    until the plan doc is at or under N lines, rather than a fixed block count.
+
     Returns 0 on success / no-op / dry-run, 2 on usage error, unparseable handoff
-    structure, or a failed write (the handoff doc is rolled back in that case).
+    structure, an unreachable ``--target-lines``, or a failed write (the handoff
+    doc is rolled back in that case).
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--keep", type=int, default=DEFAULT_KEEP, help="live blocks to keep"
+        "--keep",
+        type=int,
+        default=None,
+        help=f"live blocks to keep (default {DEFAULT_KEEP}; mutually exclusive with "
+        "--target-lines)",
+    )
+    parser.add_argument(
+        "--target-lines",
+        type=int,
+        default=None,
+        help="sweep oldest-first, one block at a time, until the live handoff doc is "
+        "at or under N lines (mutually exclusive with --keep)",
     )
     parser.add_argument("--plan", type=Path, default=None, help="living handoff doc")
     parser.add_argument(
@@ -301,9 +328,22 @@ def main(argv: list[str] | None = None) -> int:
         args.history if args.history.is_absolute() else Path.cwd() / args.history
     )
 
-    if args.keep < 1:
-        print("error: --keep must be >= 1", file=sys.stderr)
+    if args.keep is not None and args.target_lines is not None:
+        print("error: --keep and --target-lines are mutually exclusive", file=sys.stderr)
         return 2
+
+    target_lines: int | None = args.target_lines
+    keep: int | None = None
+    if target_lines is not None:
+        if target_lines < 1:
+            print("error: --target-lines must be >= 1", file=sys.stderr)
+            return 2
+    else:
+        keep = args.keep if args.keep is not None else DEFAULT_KEEP
+        if keep < 1:
+            print("error: --keep must be >= 1", file=sys.stderr)
+            return 2
+
     for path in (args.plan, args.history):
         if not path.is_file():
             print(f"error: not found: {path}", file=sys.stderr)
@@ -319,22 +359,66 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    if len(blocks) <= args.keep:
-        print(f"nothing to move: {len(blocks)} session block(s) <= --keep {args.keep}.")
-        return 0
-
-    keep_blocks, moved = blocks[: args.keep], blocks[args.keep :]
     history_link = os.path.relpath(args.history, start=args.plan.parent).replace(
         os.sep, "/"
     )
-    new_plan = rebuild_plan(
-        head,
-        keep_blocks,
-        tail,
-        args.keep,
-        history_link=history_link,
-        history_label=args.history.name,
-    )
+
+    if target_lines is not None:
+        if len(plan) <= target_lines:
+            print(f"nothing to move: {len(plan)} line(s) <= --target-lines {target_lines}.")
+            return 0
+        if len(blocks) <= 1:
+            print(
+                f"error: cannot reach --target-lines {target_lines}: only "
+                f"{len(blocks)} session block(s) remain, and the last live block is "
+                f"never swept (still {len(plan)} lines).",
+                file=sys.stderr,
+            )
+            return 2
+
+        # Sweep oldest-first, one block at a time (never the last remaining block —
+        # range stops at len(blocks) - 1), stopping at the first count that reaches
+        # the target. Each additional swept block only ever removes lines (see
+        # rebuild_plan), so the achieved line count is monotonically non-increasing
+        # in moved_count and this finds the smallest sweep that suffices.
+        new_plan = keep_blocks = moved = None
+        for moved_count in range(1, len(blocks)):
+            keep_blocks = blocks[: len(blocks) - moved_count]
+            moved = blocks[len(blocks) - moved_count :]
+            new_plan = rebuild_plan(
+                head,
+                keep_blocks,
+                tail,
+                len(keep_blocks),
+                history_link=history_link,
+                history_label=args.history.name,
+            )
+            if len(new_plan) <= target_lines:
+                break
+
+        if len(new_plan) > target_lines:
+            print(
+                f"error: swept to {len(keep_blocks)} live block(s) (the floor — the "
+                f"last block is never swept) and still {len(new_plan)} lines, over "
+                f"--target-lines {target_lines}.",
+                file=sys.stderr,
+            )
+            return 2
+    else:
+        if len(blocks) <= keep:
+            print(f"nothing to move: {len(blocks)} session block(s) <= --keep {keep}.")
+            return 0
+
+        keep_blocks, moved = blocks[:keep], blocks[keep:]
+        new_plan = rebuild_plan(
+            head,
+            keep_blocks,
+            tail,
+            keep,
+            history_link=history_link,
+            history_label=args.history.name,
+        )
+
     try:
         new_history = insert_into_history(history, moved)
     except ValueError as exc:

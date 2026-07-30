@@ -864,6 +864,195 @@ Old.
     assert "](saved/handoff-history.md)" in plan.read_text(encoding="utf-8")
 
 
+def _write_four_block_plan(plan: Path, history: Path) -> None:
+    """A 4-block, 46-line handoff doc shared by the ``--target-lines`` tests below.
+
+    Bodies are 8 lines each (except the newest, 3) so that sweeping one block at
+    a time actually shrinks the doc — with 1-line bodies the fixed ~5-line
+    history pointer this script always (re)writes can outweigh a single small
+    swept block, which would make the line count non-monotonic in a fixture
+    this small and defeat the point of these tests.
+    """
+    plan.write_text(
+        "# Handoff\n"
+        "\n"
+        "Last updated: 2026-07-30 — testing\n"
+        "\n"
+        "## Latest session — New\n"
+        "\n"
+        "New body line 1.\n"
+        "New body line 2.\n"
+        "New body line 3.\n"
+        "\n"
+        "## Earlier session — Third\n"
+        "\n"
+        + "".join(f"Third body line {i}.\n" for i in range(1, 9))
+        + "\n"
+        "## Earlier session — Second\n"
+        "\n"
+        + "".join(f"Second body line {i}.\n" for i in range(1, 9))
+        + "\n"
+        "## Earlier session — First\n"
+        "\n"
+        + "".join(f"First body line {i}.\n" for i in range(1, 9))
+        + "\n"
+        "## Standing section\n"
+        "\n"
+        "Standing content.\n",
+        encoding="utf-8",
+    )
+    history.write_text(
+        "# History\n\n## Session log\n\n### existing entry\n\nexisting.\n",
+        encoding="utf-8",
+    )
+
+
+def test_target_lines_sweeps_more_than_one_block_to_reach_the_target(
+    tmp_path: Path,
+) -> None:
+    """``--target-lines`` sweeps oldest-first, one block at a time, until the doc fits.
+
+    The fixture is 46 lines; sweeping just the oldest block ("First") leaves it
+    at 46 lines (a swept block's own lines are offset by the pointer this
+    script always rewrites), so a target of 35 is unreachable after one block
+    and requires sweeping two ("Second" then "First") to land at 33.
+    """
+    archive = _load_module(
+        "archive_target_lines_sweep", ENGINE_DIR / "archive_plan_sessions.py"
+    )
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    result = archive.main(
+        ["--target-lines", "35", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result == 0
+    updated_plan = plan.read_text(encoding="utf-8")
+    updated_lines = updated_plan.splitlines()
+    assert len(updated_lines) <= 35
+    assert "## Latest session — New" in updated_plan
+    assert "## Earlier session — Third" in updated_plan
+    assert "## Earlier session — Second" not in updated_plan
+    assert "## Earlier session — First" not in updated_plan
+    assert "## Standing section\n\nStanding content." in updated_plan
+    updated_history = history.read_text(encoding="utf-8")
+    assert "### Second" in updated_history
+    assert "### First" in updated_history
+    assert updated_history.index("### Second") < updated_history.index("### First")
+    assert updated_history.index("### First") < updated_history.index(
+        "### existing entry"
+    )
+
+
+def test_target_lines_already_met_is_a_clean_noop(tmp_path: Path) -> None:
+    """A doc already at or under the target is left untouched (like the ``--keep`` no-op)."""
+    archive = _load_module(
+        "archive_target_lines_noop", ENGINE_DIR / "archive_plan_sessions.py"
+    )
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original_plan = plan.read_text(encoding="utf-8")
+    original_history = history.read_text(encoding="utf-8")
+
+    result = archive.main(
+        ["--target-lines", "46", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result == 0
+    assert plan.read_text(encoding="utf-8") == original_plan
+    assert history.read_text(encoding="utf-8") == original_history
+
+
+def test_target_lines_unreachable_fails_loudly_instead_of_reporting_success(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Issue #150's doctrine: a step that did not accomplish its ask must fail, not warn-and-0.
+
+    Sweeping down to the floor (1 live block — the last block is never swept)
+    still leaves this fixture at 20 lines, so a target of 5 can never be
+    reached. That must be a non-zero exit with an honest message naming both
+    the achieved count and the target, not a silent success.
+    """
+    archive = _load_module(
+        "archive_target_lines_unreachable", ENGINE_DIR / "archive_plan_sessions.py"
+    )
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original_plan = plan.read_text(encoding="utf-8")
+    original_history = history.read_text(encoding="utf-8")
+
+    result = archive.main(
+        ["--target-lines", "5", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result != 0
+    err = capsys.readouterr().err
+    assert "20" in err
+    assert "--target-lines 5" in err
+    assert "1 live block" in err
+    # Nothing is written on failure — same rollback discipline as a failed write.
+    assert plan.read_text(encoding="utf-8") == original_plan
+    assert history.read_text(encoding="utf-8") == original_history
+
+
+def test_target_lines_and_keep_are_mutually_exclusive(tmp_path: Path) -> None:
+    archive = _load_module(
+        "archive_target_lines_conflict", ENGINE_DIR / "archive_plan_sessions.py"
+    )
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original_plan = plan.read_text(encoding="utf-8")
+
+    result = archive.main(
+        [
+            "--keep",
+            "2",
+            "--target-lines",
+            "35",
+            "--plan",
+            str(plan),
+            "--history",
+            str(history),
+        ]
+    )
+
+    assert result != 0
+    assert plan.read_text(encoding="utf-8") == original_plan
+
+
+def test_keep_alone_is_unchanged_by_the_target_lines_addition(tmp_path: Path) -> None:
+    """Regression guard: plain ``--keep`` must behave exactly as it did before.
+
+    Asserts against the exact pre-existing output shape (message, moved
+    blocks, resulting line count) so a change to the shared ``--keep`` path
+    that this feature must not touch would be caught here.
+    """
+    archive = _load_module(
+        "archive_keep_alone_regression", ENGINE_DIR / "archive_plan_sessions.py"
+    )
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    result = archive.main(
+        ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result == 0
+    updated_plan = plan.read_text(encoding="utf-8")
+    assert len(updated_plan.splitlines()) == 33
+    assert "## Earlier session — Second" not in updated_plan
+    assert "## Earlier session — First" not in updated_plan
+    assert "## Earlier session — Third" in updated_plan
+    updated_history = history.read_text(encoding="utf-8")
+    assert updated_history.index("### Second") < updated_history.index("### First")
+
+
 def test_init_migrates_the_previous_runtime_schema(tmp_path: Path) -> None:
     repo = tmp_path / "project"
     (repo / "config").mkdir(parents=True)
