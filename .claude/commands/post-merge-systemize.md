@@ -20,7 +20,7 @@ Weekly pattern-finding across the last 7 days of merged PRs: read each PR's revi
 comments (review bots, an operator review pass, human) + originating tracker tickets,
 then ask **"what pattern shows up in ≥2 PRs this week that a CLAUDE.md rule,
 skill-prompt, or config change would have prevented?"** Route findings: ≥2-PR patterns
-→ a small draft CLAUDE.md/skill PR; single-incident → a `docs/friction-log.md`
+→ a small CLAUDE.md/skill PR; single-incident → a `docs/friction-log.md`
 append; single-incident-but-high-severity → a tracker ticket. No pattern → a one-line
 status DM and exit. The pattern-finding half of the friction flywheel (Principle #2 in
 `PRINCIPLES.md`).
@@ -41,8 +41,11 @@ status DM and exit. The pattern-finding half of the friction flywheel (Principle
 >   required tool is down, stop with a clear error so your runner's failure-alert path
 >   surfaces it; never wait for input that will never arrive.
 > - **Single-session.** Unlike `/triage-friction-log`, there is no DM approval
->   round-trip. The draft PR *is* the review surface — the operator reviews and
->   merges (or closes) it via your forge. The skill never blocks on approval.
+>   round-trip. The PR *is* the review surface — the operator reviews and merges (or
+>   closes) it via your forge, and the skill never blocks on approval. Open it
+>   **ready**: that argues for ready rather than draft, because a draft is a review
+>   surface for the operator only, while a ready PR is one for the configured review
+>   bot as well (`#124`).
 > - **Test mode is signalled explicitly.** This run is in test mode if, and only if,
 >   the invocation contained the `test` keyword. Nothing else counts (worktree path,
 >   branch name, etc.). In test mode the skill writes no PR, no tracker ticket, and no
@@ -100,7 +103,7 @@ patterns, or the pattern threshold — always read from config.
 | `review_sources` / `operator_login`                     | Comment-source classification (consumed by the fetcher).                                |
 | `friction_log_path`                                     | Where single-incident findings land (`docs/friction-log.md`).                           |
 | `tracker.linear.team_id` / `tracker.linear.project_id` / `tracker.linear.label_name` | Config for high-severity single-incident tickets — `tracker.linear.project_id` should match `config/dev-model.yaml → tracker.project_name`. |
-| `finalize.branch_pattern` / `commit_subject` / `pr_draft` | The ≥2-PR-pattern CLAUDE.md/skill-prompt PR (`vcs.systemize_branch_pattern`).           |
+| `finalize.branch_pattern` / `commit_subject` / `pr_draft` | The ≥2-PR-pattern CLAUDE.md/skill-prompt PR (`vcs.systemize_branch_pattern`). `pr_draft` defaults to **`false`** — see `/triage-friction-log`'s table for why a draft registers as reviewer-unavailable rather than merely unreviewed. |
 
 ______________________________________________________________________
 
@@ -271,8 +274,8 @@ Append a provenance marker to each rule so the impact loop is greppable later:
 <!-- systemize:YYYY-MM-DD ≥2PR shape; PRs #a,#b -->
 ```
 
-Then open the draft PR (mirrors `scripts/finalize_triage.py`'s proven order — fetch,
-branch off the protected branch's origin ref, commit scoped paths, push, draft PR).
+Then open the PR (mirrors `scripts/finalize_triage.py`'s proven order — fetch, branch
+off the protected branch's origin ref, commit scoped paths, push, open PR).
 Substitute the literal UTC date for `<today>`:
 
 ```bash
@@ -289,7 +292,9 @@ changed — never `reports/`, `state/`, or data files:
 git add CLAUDE.md path/to/scoped/CLAUDE.md   # only the files you actually edited
 git commit -m "docs(systemize): N cross-PR pattern(s) -> CLAUDE.md/skill rules"
 git push --set-upstream origin chore/systemize-<today>
-gh pr create --draft --title "docs(systemize): N cross-PR pattern(s) -> rules" --body "<body>"
+# Ready, not draft: `finalize.pr_draft` defaults to false. Add --draft ONLY if your
+# config sets it true — a hardcoded --draft here ignored that key entirely (#124).
+gh pr create --title "docs(systemize): N cross-PR pattern(s) -> rules" --body "<body>"
 ```
 
 PR body: one section per pattern — the shape, the PRs it spanned, the review

@@ -118,12 +118,17 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
 - **`finalize.pr_draft: true` contradicts the operator's stated preference and this repo's own
   `#124`.** The operator asked that PRs be marked ready as soon as no further changes are expected,
   because a draft is invisible to the review bot; `#124` records the same thing as a defect of the
-  triage workflow specifically. But `config/dev-model.yaml` still defaults `finalize.pr_draft` to
-  `true`, so every sweep opens a draft and relies on someone remembering to flip it. **M** —
-  proposed fix: flip the default and let an adopter opt into drafts, or state in
-  `triage-friction-log.md` that the PR must be readied before the run reports complete. Distinct
-  from `#124`, which asks for the *reviewer* to see the PR; this is about a default that has to be
-  worked around every time.
+  triage workflow specifically. **M** — **addressed 2026-07-30**, and one claim in this entry was
+  wrong: `config/dev-model.yaml` never defaulted `finalize.pr_draft` at all. The key is absent from
+  that file *and read by no code in this repo* — it documents the config of the triage engine that
+  `#6` tracks as not-yet-vendored, so the only default that existed was prose in
+  `.claude/commands/triage-friction-log.md`'s config table. Flipped there to `false`, with the
+  reason recorded. The larger find while doing it: `post-merge-systemize.md` **hardcoded
+  `gh pr create --draft`**, so the config key it documents had no effect on the one place that
+  workflow opens a PR — a Principle #10 violation, not a default that needed flipping. And a draft
+  is worse than unreviewed: CodeRabbit's *"Review skipped: draft pull request"* matches
+  `review.unavailable_markers`, so a draft registers as **reviewer-unavailable** and demands a
+  `fallback_panel` pass the sweep never asked for.
 - **Three review rounds on one change found their defect in the same place each time: the prose
   justifying the mechanism.** `_deep_merge`'s docstring said "two shapes" while implementing six;
   the overlay allowlist said its keys were "read by no shell reader" while `init.sh` read exactly

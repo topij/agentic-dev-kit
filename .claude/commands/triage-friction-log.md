@@ -1,5 +1,5 @@
 ---
-description: Triage the friction-log inbox into tracker tickets — draft tracker-issue payloads from un-graduated entries, get operator approval via DM, then file approved tickets and open a draft PR sweeping them into the archive. Use to graduate accumulated friction-log entries into the tracker.
+description: Triage the friction-log inbox into tracker tickets — draft tracker-issue payloads from un-graduated entries, get operator approval via DM, then file approved tickets and open a PR sweeping them into the archive. Use to graduate accumulated friction-log entries into the tracker.
 argument-hint: "[resume|new|test]"
 ---
 
@@ -19,14 +19,14 @@ argument-hint: "[resume|new|test]"
 Triage the `docs/friction-log.md` inbox: turn the current un-graduated inbox entries
 (everything not yet swept to the archive) into LLM-drafted tracker-issue payloads, DM
 the operator a numbered approval list, then file the approved ones in your tracker
-(project `tracker.project_name`) and open a draft PR prepending a new graduation
+(project `tracker.project_name`) and open a PR prepending a new graduation
 header to the source markdown.
 
 - **Session A (draft):** parse → LLM-draft proposals → DM operator numbered list →
   save state → end
 - **Session B (finalize, a later scheduled run OR a manual `resume`):** read DM
   thread → parse approve/skip/modify grammar → file tracker issues → prepend
-  graduation marker + sweep the graduated inbox into the archive + open draft PR →
+  graduation marker + sweep the graduated inbox into the archive + open PR →
   delete state. If run on a schedule and the operator hasn't replied yet, Session B
   posts a "still waiting" reminder and exits 0 with state intact for the next sweep or
   manual run.
@@ -53,7 +53,7 @@ header to the source markdown.
 > - an approval-keyword / cancel-keyword detector over the DM thread text.
 > - `scripts/triage_friction_log.py` — parser + LLM proposer + report writer.
 > - `scripts/finalize_triage.py` — graduation-marker prepend + inbox-sweep-by-
->   frozen-list into the archive (`--frozen-inbox`) + branch/commit/push/draft-PR
+>   frozen-list into the archive (`--frozen-inbox`) + branch/commit/push/open-PR
 >   (Session B only).
 > - your tracker's client library or MCP — for filing approved proposals. By backend:
 >   `github-issues` → `gh issue create --title "…" --body "…" --label <your label>`
@@ -93,7 +93,7 @@ patterns — always read from config.
 | `cancel_keywords`         | Bulk-cancel keywords                                                                  |
 | `finalize.branch_pattern` | Branch name format (default `chore/triage-{date}`, `vcs.triage_branch_pattern`)       |
 | `finalize.commit_subject` | Commit-message subject template                                                      |
-| `finalize.pr_draft`       | Open the PR as a draft on first push (default `true`)                                |
+| `finalize.pr_draft`       | Open the PR as a draft on first push (default **`false`**). A draft is invisible to a configured review bot — CodeRabbit answers *"Review skipped: draft pull request"*, which `review.unavailable_markers` matches, so a draft does not merely go unreviewed: it registers as **reviewer-unavailable** and demands a `review.fallback_panel` pass the sweep never asked for. Every other kit workflow opens ready, and `pr_watch`'s merge gate assumes the reviewer can see the PR (`#124`). Set `true` only if you have a reason that survives that. |
 
 ______________________________________________________________________
 
@@ -355,7 +355,8 @@ list later. At the end, if any creates failed, include them in the failure-DM ta
 Once at least one ticket has been filed successfully, invoke the finalize helper to
 prepend a graduation marker to `docs/friction-log.md`, **sweep the graduated
 (frozen-at-draft-time) inbox into `docs/friction-log-archive.md`**, commit both edits
-on a fresh branch off the protected branch's origin ref, push, and open a draft PR.
+on a fresh branch off the protected branch's origin ref, push, and open a PR —
+ready for review unless `finalize.pr_draft` is explicitly `true`.
 
 Pass the filed tickets via stdin as JSON, and pass `--frozen-inbox` pointing at the
 snapshot path from state's `extra.frozen_inbox_path` (Step 4):
@@ -394,7 +395,9 @@ gathered in Step 4. The script:
    the protected branch's origin ref.
 1. Commits **both** doc edits (no other paths).
 1. Pushes the branch.
-1. Opens a draft PR.
+1. Opens a PR — **ready for review**, per `finalize.pr_draft`'s `false` default. If
+   you override it to `true`, the PR must be readied before the run reports
+   complete, or the configured reviewer never sees it (`#124`).
 
 It prints a JSON summary to stdout with `branch`, `commit_subject`, `header_line`,
 `ticket_range`, `pr_url`, `filed_count`. Capture this for the success DM.
@@ -437,7 +440,7 @@ DM the operator:
 • <url|identifier> — fix Y
 …
 
-Source doc updated on draft PR: <pr_url|chore/triage-YYYY-MM-DD>
+Source doc updated on PR: <pr_url|chore/triage-YYYY-MM-DD>
 ```
 
 If any creates failed in Step 4, list them with their error in a separate thread
