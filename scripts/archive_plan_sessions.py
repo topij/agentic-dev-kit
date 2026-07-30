@@ -752,17 +752,13 @@ def main(argv: list[str] | None = None) -> int:
         try:
             staged_plan.commit()
         except BaseException as exc:
-            # "unknown" is treated as published, and that is safe *here*: the
-            # rollback writes the original bytes over a document that either was
-            # swept (so it needs them) or was never touched (so they are what is
-            # already there). At the history site below the same ambiguity is not
-            # symmetric, and is handled differently.
             plan_state = staged_plan.publish_state()
             # "unknown" is treated as published, and that is safe *here*: the
             # rollback writes the original bytes over a document that either was
             # swept (so it needs them) or was never touched (so they are what is
             # already there). At the history site the same ambiguity is not
-            # symmetric, and is handled differently.
+            # symmetric, and is handled differently. The message still must not
+            # claim a sweep it could not establish — hence `swept=`.
             if plan_state in ("published", "unknown") and not restore_handoff(
                 cause=exc, swept=plan_state == "published"
             ):

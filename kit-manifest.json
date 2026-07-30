@@ -64,7 +64,7 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "fb466eaf4cc31a1c0164bdf4ac32d4ce491635a8be8bad447a57f2509a2e4c04"
+      "sha256": "7d27ff31f4eaa7edef57e35a15f8745318cec41ca1228812207a9812f3b4e37b"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
@@ -84,7 +84,7 @@
     },
     "scripts/lib/atomic_write.py": {
       "role": "engine",
-      "sha256": "5e1516fdfda640a757fb443fadac83560a1cf82491e3d5f38d054b8a43bea634"
+      "sha256": "f9657f36f8bbcf3741382b616ae19be19cf516fc5fa4f36c53384579e96202b3"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",

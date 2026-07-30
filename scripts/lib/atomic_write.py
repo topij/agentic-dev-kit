@@ -122,6 +122,7 @@ import os
 import stat as stat_module
 import tempfile
 from pathlib import Path
+from typing import Literal
 
 TEMP_SUFFIX = ".devkit-tmp"
 """Suffix for staged temp files. Mirrored by the ``*.devkit-tmp`` .gitignore rule."""
@@ -157,7 +158,7 @@ class StagedWrite:
         self.temp = temp
         self._settled = False
 
-    def publish_state(self) -> str:
+    def publish_state(self) -> Literal["published", "pending", "unknown"]:
         """``"published"``, ``"pending"`` or ``"unknown"`` — **observed, not remembered**.
 
         ``os.replace`` removes the temp, so the temp's absence is the best
