@@ -922,8 +922,10 @@ def test_target_lines_sweeps_more_than_one_block_to_reach_the_target(
     """``--target-lines`` sweeps oldest-first, one block at a time, until the doc fits.
 
     The fixture is 46 lines; sweeping just the oldest block ("First") leaves it
-    at 46 lines (a swept block's own lines are offset by the pointer this
-    script always rewrites), so a target of 35 is unreachable after one block
+    at 46 lines — the 11 lines the block occupied are offset by the 5-line
+    history pointer plus 6 lines of separator normalisation across the kept
+    blocks, not by the pointer alone — so a target of 35 is unreachable after one
+    block
     and requires sweeping two ("Second" then "First") to land at 33.
     """
     archive = _load_module(
@@ -982,8 +984,8 @@ def test_target_lines_unreachable_fails_loudly_instead_of_reporting_success(
 
     Sweeping down to the floor (1 live block — the last block is never swept)
     still leaves this fixture at 20 lines, so a target of 5 can never be
-    reached. That must be a non-zero exit with an honest message naming both
-    the achieved count and the target, not a silent success.
+    reached. That must be exit 3 with a message naming the target and the doc's
+    UNCHANGED length — never an "achieved" count, because nothing is written.
     """
     archive = _load_module(
         "archive_target_lines_unreachable", ENGINE_DIR / "archive_plan_sessions.py"
@@ -998,8 +1000,9 @@ def test_target_lines_unreachable_fails_loudly_instead_of_reporting_success(
         ["--target-lines", "5", "--plan", str(plan), "--history", str(history)]
     )
 
-    # Exit 3, not 2: 2 covers five unrelated failures (bad value, missing file,
-    # unparseable handoff, history with no session-log section, failed write), and
+    # Exit 3, not 2: 2 covers six unrelated failures (bad flag value,
+    # unresolvable configured paths, missing file, unparseable handoff, history
+    # with no session-log section, failed write), and
     # `wrap-up.md` tells the operator to diagnose an exhausted sweep from this
     # exit. Sharing 2 made every one of those misreport as "ran out of blocks".
     assert result == 3
@@ -1707,8 +1710,10 @@ def test_shipped_doc_budget_remedies_never_restate_the_budget_as_a_literal() -> 
     statuses = budget.evaluate(repo, repo / "config" / "dev-model.yaml")
 
     # `[=\s]`, not `\s`: `--target-lines=400` is a fully valid invocation and
-    # reaches exactly the staleness this guard exists to prevent. The earlier
-    # `\s+` form let that one keystroke through — mutation-confirmed.
+    # reaches exactly the staleness this guard exists to prevent. The positive
+    # half below now catches the equals form too, so weakening this regex alone
+    # no longer lets it through; kept because it names the literal directly and
+    # gives the clearer failure message.
     offenders = [
         f"{s.path}: {s.remedy}"
         for s in statuses
@@ -1759,8 +1764,7 @@ def test_line_counters_agree_on_exotic_separators(tmp_path: Path) -> None:
 
     `check_doc_budget` counts by iterating a text handle, which breaks only on
     `\\n`. `archive_plan_sessions` parses structure with `str.splitlines()`, which
-    ALSO breaks on \\v \\f \\x1c \\x1d \\x1e \\x85 \\u2028 \\u2029. That divergence
-    was inert while `splitlines()` fed structural parsing alone; `--target-lines`
+    ALSO breaks on \\v \\f \\x1c \\x1d \\x1e \\x85 \\u2028 \\u2029. `--target-lines`
     is the first path to compare a count against the budget, which makes the
     disagreement reachable — a doc over budget by one counter and under by the
     other, with the sweep refusing a target that is genuinely achievable.
@@ -1844,7 +1848,9 @@ def test_target_lines_stops_at_the_first_candidate_that_reaches_the_target(
 ) -> None:
     """`<=`, not `<` — "at or under the target" mirrors `over = lines > budget`.
 
-    The fixture's candidates are 59 / 46 / 33 / 20 lines. A target of exactly 33
+    The candidates the loop builds are 46 / 33 / 20 lines, for 3 / 2 / 1 live
+    blocks (59 is the keep-everything rebuild, which `range(1, len(blocks))` never
+    constructs, and 12 is the 0-block floor). A target of exactly 33
     must stop at 2 live blocks. Mutating the break condition to `<` sweeps one
     block further (33 -> 20), silently discarding a live session block, and
     survived the whole suite: the pre-loop no-op guard's `<=` was pinned, this
@@ -2027,3 +2033,127 @@ def test_a_failed_write_prints_no_past_tense_success_line(
     assert "plan lines" not in captured.out, captured.out
     assert "write failed" in captured.err
     assert plan.read_text(encoding="utf-8") == original
+
+
+def test_a_brace_in_a_session_title_does_not_crash_the_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Session titles are DATA in the report, never a format string.
+
+    The report was briefly rendered with `"\\n".join(report).format(verb=...)`,
+    and the joined string contains the swept titles — so a heading carrying a
+    brace raised `KeyError` (or `ValueError` for a lone brace) *after* both files
+    had been written, exiting 1 with the move already on disk and no report line.
+    Exit 1 is not in the documented set, so the workflow's "read the exit code"
+    rule had no branch for it.
+
+    Braces in headings are ordinary here: this very repo's recent sessions are
+    about a `{budget}` placeholder.
+    """
+    archive = _load_module("archive_brace_title", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    text = plan.read_text(encoding="utf-8").replace(
+        "## Earlier session — First",
+        "## Earlier session — First (substituting {budget}, and a lone { brace)",
+    )
+    plan.write_text(text, encoding="utf-8")
+
+    result = archive.main(
+        ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result == 0
+    out = capsys.readouterr().out
+    assert "{budget}" in out, "the title must be reported verbatim, not interpolated"
+    assert "First (substituting" in out
+    assert "{budget}" in history.read_text(encoding="utf-8")
+
+
+def test_a_failed_history_write_rolls_the_handoff_back(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The rollback branch itself — asserted in two docstrings, entered by no test.
+
+    The existing failed-write test chmods the *plan*, so the FIRST write fails and
+    the rollback is never reached; its `plan == original` assertion passes
+    trivially. Making the *history* write fail is what exercises the branch that
+    exists to stop a move from dropping the swept blocks: handoff already
+    truncated, history write refused, blocks recoverable from neither.
+    """
+    archive = _load_module("archive_rollback", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original_plan = plan.read_text(encoding="utf-8")
+    original_history = history.read_text(encoding="utf-8")
+    history.chmod(0o444)
+    try:
+        result = archive.main(
+            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+        )
+    finally:
+        history.chmod(0o644)
+
+    assert result == 2
+    captured = capsys.readouterr()
+    assert "write failed" in captured.err
+    assert "moved" not in captured.out
+    # The whole point: the handoff is back to its original content, so the blocks
+    # that were about to move still exist somewhere.
+    assert plan.read_text(encoding="utf-8") == original_plan
+    assert "## Earlier session — First" in plan.read_text(encoding="utf-8")
+    assert history.read_text(encoding="utf-8") == original_history
+
+
+def test_keep_floor_refuses_to_empty_the_handoff(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--keep`'s floor is the same data-loss guard as `--target-lines`'.
+
+    `--target-lines`' floor got pinned when a review found it unpinned; the
+    symmetric guard on the older `--keep` path was left uncovered in the same
+    commit that touched its line. Mutating `keep < 1` to `keep < 0` survived the
+    suite, and `--keep 0` then swept every block: `rc=0`, `keeping 0 live`, a
+    handoff with no session blocks at all.
+    """
+    archive = _load_module("archive_keep_floor", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original = plan.read_text(encoding="utf-8")
+
+    result = archive.main(
+        ["--keep", "0", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result == 2
+    captured = capsys.readouterr()
+    assert "--keep must be >= 1" in captured.err
+    assert "keeping 0 live" not in captured.out
+    assert plan.read_text(encoding="utf-8") == original
+    assert "## Latest session — New" in plan.read_text(encoding="utf-8")
+
+
+def test_target_lines_rejects_a_value_below_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--target-lines 0` is a usage error (exit 2), not an unreachable target (3).
+
+    Mutating `target_lines < 1` to `< 0` survived: the flag's only input
+    validation had no test, and losing it silently reroutes a bad value into the
+    exit-3 refusal, which claims the document is too short to sweep rather than
+    that the argument is nonsense.
+    """
+    archive = _load_module("archive_tl_floor", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    result = archive.main(
+        ["--target-lines", "0", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result == 2, "a nonsense argument is a usage error, not an unreachable target"
+    assert "--target-lines must be >= 1" in capsys.readouterr().err

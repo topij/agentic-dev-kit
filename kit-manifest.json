@@ -64,7 +64,7 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "1e82b5162f52f01cebe687e1ed5bec5c1354c4321ca6a7dd18b51120228b6fea"
+      "sha256": "d0f99f4ae07c5a2f9216ab144d4688f2f9f86ba19baba90ca39b5ee092d3f286"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",

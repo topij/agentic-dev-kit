@@ -42,7 +42,11 @@ over the target, it fails loudly (exit **3**) rather than reporting success — 
 step that did not accomplish what it was asked must say so.
 
 Exit codes:
-    0 — applied (or nothing to do, or dry-run)
+    0 — applied, or nothing to do, or a dry-run that would have succeeded.
+        NOT every dry-run: ``--dry-run`` still reports 3 for an unreachable
+        ``--target-lines``, because reachability is decided before the dry-run
+        branch. That is the point — a dry-run exists to report what the real run
+        would do.
     2 — every other failure: usage error, unresolvable configured paths, missing
         file, unparseable handoff structure, history doc with no session-log
         section, or a failed write
@@ -484,20 +488,31 @@ def main(argv: list[str] | None = None) -> int:
     # check_doc_budget's budget, so they have to be the same measure. Pinned by
     # test_report_figures_use_the_budget_counter_not_splitlines, which uses a doc
     # containing separators the two counters disagree about.
-    report = [
-        f"{{verb}} {len(moved)} block(s) to {args.history.name}, "
-        f"keeping {len(keep_blocks)} live "
-        f"({budget_line_count(''.join(plan))} -> "
-        f"{budget_line_count(''.join(new_plan))} plan lines):"
-    ] + [f"  - {title[:88]}" for title in moved_titles]
+    # The verb is interpolated HERE, not left as a `{verb}` field for a later
+    # `str.format()`. That earlier shape called `.format()` on a string containing
+    # the swept session TITLES, so a heading with a brace in it — `… substituting
+    # {budget} in the remedy`, which is exactly what this branch's own commits are
+    # titled — raised KeyError/IndexError/ValueError AFTER both files were written:
+    # exit 1 (a code nothing documents), no report, the move already on disk, and a
+    # retry reporting "nothing to move". Session titles are DATA, never a template.
+    verb = "would move" if args.dry_run else "moved"
+    report = "\n".join(
+        [
+            f"{verb} {len(moved)} block(s) to {args.history.name}, "
+            f"keeping {len(keep_blocks)} live "
+            f"({budget_line_count(''.join(plan))} -> "
+            f"{budget_line_count(''.join(new_plan))} plan lines):"
+        ]
+        + [f"  - {title[:88]}" for title in moved_titles]
+    )
 
     if args.dry_run:
-        print("\n".join(report).format(verb="would move"))
+        print(report)
         return 0
 
     # The report is printed only AFTER a successful write, and never before one.
     # It used to be printed first, so a failed write emitted
-    # "moved 2 block(s) ... (51 -> 38 plan lines)" and *then* an error, leaving a
+    # "moved 2 block(s) ... (46 -> 33 plan lines)" and *then* an error, leaving a
     # past-tense success line on stdout describing a file that was never touched.
     #
     # This is a *move*: a partial write (handoff doc trimmed but history write
@@ -515,7 +530,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
         return 2
 
-    print("\n".join(report).format(verb="moved"))
+    print(report)
     return 0
 
 
