@@ -14,14 +14,14 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-30 — `#75`/`#163` Sink 1/`#136` and `#124` both shipped; nine review
+Last updated: 2026-07-30 — `#75`/`#163` Sink 1/`#136` and `#124` both shipped; eight review
 rounds measured the same thing about themselves, and the review bot woke up.
 
-## Latest session — 2026-07-30 (two merges, nine rounds, and where every defect lived)
+## Latest session — 2026-07-30 (two merges, eight rounds, and where every defect lived)
 
 **Theme —** Both PRs landed. The durable result is a measurement neither PR set out to make:
-**across nine panel rounds and twenty isolated lens runs, every HIGH finding was in prose written
-to explain the change — never in the change.** Both deliverables went uncontested by every lens
+**across eight panel rounds and sixteen completed lens runs, every HIGH finding was in prose
+written to explain the change — never in the change.** Both deliverables went uncontested by every lens
 and by the bot; the explanations around them failed repeatedly.
 
 - **`#166` merged (`eeef647`).** `fallback-review-panel.md` contract item 7: `#75`'s inversion

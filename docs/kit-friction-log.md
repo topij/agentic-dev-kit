@@ -126,6 +126,17 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
   which catches a wrong-ref lens but not a dead one — the report never arrives at all. Proposed
   fix: the panel's step 3 should confirm each lens *returned*, not only that what returned looks
   right.
+- **A self-reported count of your own effort drifts upward, and nothing checks it.** This session's
+  handoff block was written claiming *"nine panel rounds and twenty isolated lens runs"*. Recounting
+  the actual launches gave **eight rounds and sixteen completed runs** (eighteen launched, two
+  stalled). Both figures were wrong in the direction that makes the measurement sound stronger, and
+  the sentence carrying them was the block's own thesis — that explanatory prose is where defects
+  live. Caught only because the wrap-up recounted before opening the PR; no check exists that would
+  have. **M** — occurrence data for [#54](https://github.com/topij/agentic-dev-kit/issues/54), and
+  a sharpening of it: `#163`'s comment already records that unreconciled restatements *"moved in the
+  author's favour"*. This is the same drift with no restatement involved — the first statement was
+  already inflated. Proposed fix: a count of one's own work is a verification claim like any other,
+  so it needs the enumeration behind it, not just the number.
 - **A citation and its quotation can drift apart, and only the citation goes wrong.** A comment on
   `#170` quoted that issue's third constraint verbatim while numbering it the fourth, twice, and
   the same wrong ordinal reached a commit message. The quote read as corroboration for the number
