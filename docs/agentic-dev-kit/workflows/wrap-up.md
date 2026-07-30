@@ -68,26 +68,33 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    session blocks to sweep at all. Nothing was written, so report `<handoff>`'s
    *unchanged* length against the budget and do not treat it as done. Exit **2**
    is something else entirely (unreadable or non-UTF-8 file, missing file,
-   unparseable handoff, a history doc with no session-log section, a failed
-   write); read the message and fix that instead of reporting an exhausted sweep.
-   The script's own `--help` carries the authoritative list. **On a failed write,
-   check BOTH documents before you continue, and check them differently** — the
-   write truncates before it fails, so a full disk or quota can leave a document
-   empty or cut mid-line while the message still says "no changes applied"
-   ([#164](https://github.com/topij/agentic-dev-kit/issues/164)).
+   unparseable handoff, a history doc with no session-log section, a **refused**
+   write, or a failed one); read the message and fix that instead of reporting an
+   exhausted sweep. The script's own `--help` carries the authoritative list.
 
-   - `<handoff-history>` — **nothing but the sweep touches this file**, so
-     `git diff --stat <handoff-history>` is a true damage signal: any output at
-     all after a failed write means it was part-written. `git checkout --
-     <handoff-history>` is safe here, and it is the likelier casualty, because
-     the history *grows* while the handoff shrinks and gets rolled back.
-   - `<handoff>` — you edited it in steps 3 and 5, so **a diff is expected and
-     proves nothing**, and `git checkout -- <handoff>` would throw away this
-     session's block and `▶ Next:` line. Open it instead: a truncated file ends
-     mid-line and has lost its standing sections. Only if it is actually damaged,
-     restore it and re-apply your session block by hand.
+   **A failed write no longer damages either document, and the message is now
+   trustworthy** ([#164](https://github.com/topij/agentic-dev-kit/issues/164)).
+   Neither file is opened for truncation: each is published by renaming a
+   fully-written temp over it, and both are written before either is published.
+   So "no changes applied" means what it says, and the old instructions here —
+   inspect both files, `git checkout -- <handoff-history>` because it is the
+   likelier casualty — described a failure mode that no longer exists. Two
+   messages are worth reading carefully rather than acting on reflex:
 
-   Do not continue to the commit step until both are known good. Stage
+   - **"refusing to write"** — the sweep declined; nothing was attempted. The
+     usual causes are a read-only handoff or history, a hard link to one, or a
+     read-only directory containing one. Fix the cause and re-run; there is
+     nothing to restore.
+   - **The one message that reports damage** names both documents explicitly,
+     says the history is intact, and **lists the swept blocks** — they are in
+     neither file at that point. Only then restore `<handoff>` from git, and
+     re-apply this session's block and `▶ Next:` line by hand. It needs a second
+     rename to fail after the first succeeded, so you are unlikely to see it.
+
+   `git checkout -- <handoff>` is still never a safe reflex: you edited that file
+   in steps 3 and 5, so it would discard this session's block.
+
+   Do not continue to the commit step until the sweep reported success. Stage
    **both** files (`<handoff>` + `<handoff-history>`) into this commit. If
    `<friction-log>` is over budget, don't sweep it inline — note it and
    recommend the `triage-friction-log` workflow (graduating the inbox needs

@@ -54,8 +54,16 @@ either carried across or refused loudly, and never discovered after the fact:
 * **A read-only target is refused** (``AtomicWriteRefused``). ``os.replace``
   needs write permission on the *directory*, not on the file, so a ``0444``
   document would otherwise be replaceable — deleting the read-only bit and the
-  guard it stands for. Refusing preserves exactly what ``write_text`` does
-  today: ``PermissionError``, nothing written.
+  guard it stands for. The *outcome* matches ``write_text`` (nothing written),
+  but the exception does **not**: ``AtomicWriteRefused`` is not an ``OSError``,
+  so a caller porting from ``write_text`` on the strength of this bullet and
+  catching ``OSError`` alone would get an uncaught traceback where it used to
+  get a handled ``PermissionError``. Catch both.
+* **A non-writable parent directory is refused too**, and this is a capability
+  ``write_text`` had that publishing by rename cannot: it writes the file, while
+  a rename needs to create an entry in the directory. A document that is
+  writable inside a ``0555`` directory could be swept before and cannot now.
+  It surfaces as an ordinary ``OSError`` from the temp creation.
 * **A hardlinked target is refused.** After a rename the other names for that
   inode keep the old content, so an alias silently stops tracking the document.
   There is no way to publish atomically *and* keep the alias, so the caller is
@@ -130,24 +138,43 @@ class StagedWrite:
         self._done = False
 
     def commit(self) -> None:
-        """Publish the staged content over the target. Atomic; no allocation."""
+        """Publish the staged content over the target. Atomic; no allocation.
+
+        Raises only if the *publish* failed. Once ``os.replace`` returns, this
+        method cannot raise — see below.
+        """
         if self._done:
             return
         os.replace(self.temp, self.target)
         self._done = True
-        # After the replace, not before: this makes the *rename* durable. It is
-        # best-effort by design — the write has already succeeded at this point,
-        # so raising here would report a failure that did not occur, and some
-        # filesystems and platforms do not support fsync on a directory at all.
+        self._fsync_parent()
+
+    def _fsync_parent(self) -> None:
+        """Make the rename durable. **Nothing here may raise. Ever.**
+
+        This runs after ``os.replace`` has already succeeded, so an exception
+        escaping it would be reported by the caller as a failed write over a
+        document that was in fact published — the false all-clear that #164
+        exists to eliminate, reintroduced one call later.
+
+        A first version guarded ``os.open`` and suppressed ``os.fsync`` but left
+        ``os.close`` in a bare ``finally``. ``close(2)`` returns EIO on NFS and
+        other network filesystems, and injecting it there produced exactly the
+        original bug: the handoff swept, the history untouched, the staged
+        rollback discarded, and ``no changes applied`` on stderr. So the
+        suppression is around the whole block, not around the calls that looked
+        risky. Directory fsync is also simply unsupported on some platforms.
+        """
+        dir_fd = None
         try:
             dir_fd = os.open(self.target.parent, os.O_RDONLY)
+            os.fsync(dir_fd)
         except OSError:
-            return
-        try:
-            with contextlib.suppress(OSError):
-                os.fsync(dir_fd)
+            pass
         finally:
-            os.close(dir_fd)
+            if dir_fd is not None:
+                with contextlib.suppress(OSError):
+                    os.close(dir_fd)
 
     def abort(self) -> None:
         """Discard the staged content. Never touches the target."""
@@ -188,6 +215,11 @@ def stage_text(
         existing = target.lstat()
 
     if existing is not None:
+        if stat_module.S_ISDIR(existing.st_mode):
+            # Named before the hardlink check, which every directory trips
+            # (`.` and `..` give nlink >= 2) — so a directory used to be
+            # diagnosed as a hardlink problem and told to remove links.
+            raise AtomicWriteRefused(f"{target} is a directory, not a document.")
         if existing.st_nlink > 1:
             raise AtomicWriteRefused(
                 f"{target} has {existing.st_nlink} hard links; publishing by rename "
@@ -195,9 +227,17 @@ def stage_text(
                 "Remove the extra link(s), or write this document some other way."
             )
         if not os.access(target, os.W_OK):
+            # `os.access` reports "cannot write", not "the mode bits forbid it":
+            # a read-only MOUNT (EROFS) and a symlink loop (ELOOP) land here too,
+            # for which "check the permissions" is the wrong remedy. So the
+            # message states what was observed and offers the read-only case as
+            # the likely reading rather than the diagnosis.
             raise AtomicWriteRefused(
-                f"{target} is not writable. Refusing rather than replacing it by "
-                "rename, which would succeed and delete the read-only bit."
+                f"{target} is not writable by this process — most often a "
+                "read-only file, but a read-only mount or an unresolvable path "
+                "reports the same way. Refusing rather than replacing it by "
+                "rename, which for the read-only-file case would succeed and "
+                "delete the read-only bit."
             )
 
     fd, temp_name = tempfile.mkstemp(
@@ -223,11 +263,22 @@ def stage_text(
         else:
             os.fchmod(fd, _default_mode())
 
-        # `open` on a file descriptor takes ownership of it, so the descriptor
-        # must not also be closed by the handler below once this succeeds —
-        # hence the reassignment before anything else can raise.
-        with open(fd, "w", encoding=encoding, newline=newline) as handle:
+        # `open` on a descriptor takes ownership of it — and closes it even when
+        # it FAILS (a bad `encoding` or `newline` raises LookupError/ValueError
+        # after the descriptor is gone). So `fd` is retired either way, before
+        # the handler can double-close it. A double close raised EBADF from the
+        # cleanup path, which both replaced the real exception with a bogus
+        # "Bad file descriptor" and aborted the handler before `temp.unlink()`,
+        # leaking the temp this module promises to remove — and closing a stale
+        # descriptor number is the classic route to closing an unrelated file.
+        try:
+            handle = open(fd, "w", encoding=encoding, newline=newline)  # noqa: SIM115
+        finally:
+            # Unconditionally, and before the `with` below: `open` owns the
+            # descriptor on success AND has already closed it on failure, so in
+            # neither case may the handler close it again.
             fd = -1
+        with handle:
             handle.write(text)
             handle.flush()
             # Before the rename, not after: the bytes have to be on the medium
@@ -239,24 +290,13 @@ def stage_text(
         # would otherwise leave a temp file next to the document, in the very
         # directory the caller's next step stages for commit.
         if fd != -1:
-            os.close(fd)
-        with contextlib.suppress(FileNotFoundError):
+            with contextlib.suppress(OSError):
+                os.close(fd)
+        # OSError, not just FileNotFoundError, for the same reason `abort` uses
+        # it: this runs while an exception is already propagating, and raising
+        # here would replace the real cause with a cleanup failure.
+        with contextlib.suppress(OSError):
             temp.unlink()
         raise
 
     return StagedWrite(target, temp)
-
-
-def atomic_write_text(
-    path: str | os.PathLike[str],
-    text: str,
-    *,
-    encoding: str = "utf-8",
-    newline: str | None = None,
-) -> None:
-    """Stage and publish in one step — the single-document form of :func:`stage_text`."""
-    staged = stage_text(path, text, encoding=encoding, newline=newline)
-    try:
-        staged.commit()
-    finally:
-        staged.abort()

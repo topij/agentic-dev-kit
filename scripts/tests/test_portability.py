@@ -2079,6 +2079,11 @@ def test_a_failed_history_write_rolls_the_handoff_back(
 ) -> None:
     """A failing HISTORY write must not cost the swept blocks (issue #164).
 
+    Renamed from `..._rolls_the_handoff_back`: no rollback is entered here, as
+    the paragraph below explains, and the name claimed coverage that lives in
+    `test_a_failed_history_publish_restores_the_handoff_from_its_staged_copy`.
+
+
     The failed-write test above kills the *plan* write, so the second document is
     never reached and its `plan == original` assertion passes trivially. Killing
     the *history* write is what exercises the move's real hazard: handoff already
@@ -2212,7 +2217,7 @@ def test_the_plan_is_written_before_the_history_doc(
 ) -> None:
     """The write ORDER, not merely the end state.
 
-    `test_a_failed_history_write_rolls_the_handoff_back` asserts the plan ends up
+    `test_a_failed_history_stage_never_touches_the_handoff` asserts the plan ends up
     unchanged — which passes trivially against a variant that writes history
     first and has no rollback at all, because then the plan is never written. That
     is the same "passes trivially" weakness it was written to replace, one axis
@@ -2389,7 +2394,16 @@ def test_a_failed_history_publish_restores_the_handoff_from_its_staged_copy(
     Distinct from the staging-failure test above, which never publishes anything.
     Here the handoff HAS been replaced, and the recovery is the third staged
     write — the one written up front precisely so this step needs no allocation
-    on a disk that has just refused one (#164).
+    on a disk that has just refused one (#164). That the copy is staged up front
+    rather than built here is pinned separately, by
+    `test_the_rollback_is_staged_before_anything_is_published`; this test would
+    pass against either, which is what let the late-staging shape survive.
+
+    The message deliberately does NOT say "both documents are intact": a review
+    lens measured a CRLF handoff coming back 49 bytes shorter than it went in,
+    because the restored bytes are the normalised text this run read. The
+    document is whole and holds every block; it is not byte-identical, and the
+    wording now says which.
     """
     archive = _load_module("archive_rollback_ok", ENGINE_DIR / "archive_plan_sessions.py")
     plan = tmp_path / "handoff.md"
@@ -2412,7 +2426,8 @@ def test_a_failed_history_publish_restores_the_handoff_from_its_staged_copy(
 
     assert result == 2
     err = capsys.readouterr().err
-    assert "Both documents are intact." in err, err
+    assert "was restored and no changes were applied" in err, err
+    assert "no partial write" in err or "Neither document holds a partial write" in err, err
     assert plan.read_text(encoding="utf-8") == original_plan
     assert history.read_text(encoding="utf-8") == original_history
     assert not list(tmp_path.glob("*.devkit-tmp")), "staged temps must be cleaned up"
@@ -2546,6 +2561,154 @@ def test_a_sweep_preserves_the_handoffs_permissions(tmp_path: Path) -> None:
     assert stat.S_IMODE(history.stat().st_mode) == 0o640
 
 
+def _atomic_write() -> ModuleType:
+    return _load_module("atomic_write_lib", ENGINE_DIR / "lib" / "atomic_write.py")
+
+
+def test_commit_cannot_raise_once_the_replace_has_succeeded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The durability step must never turn a published write into a reported failure.
+
+    Found by the correctness lens. `commit()` guarded `os.open` and suppressed
+    `os.fsync`, but left `os.close(dir_fd)` in a bare `finally` — and `close(2)`
+    returns EIO on NFS. Injecting it there reproduced #164's exact shape from one
+    call later: the handoff swept, the history untouched, the staged rollback
+    discarded by the caller's cleanup, and `no changes applied` on stderr.
+    """
+    aw = _atomic_write()
+    target = tmp_path / "doc.md"
+    target.write_text("original\n", encoding="utf-8")
+
+    real_close = os.close
+
+    def exploding_close(fd: int) -> None:
+        real_close(fd)
+        raise OSError(5, "Input/output error")
+
+    staged = aw.stage_text(target, "published\n")
+    monkeypatch.setattr(os, "close", exploding_close)
+    staged.commit()  # must not raise
+    monkeypatch.undo()
+
+    assert target.read_text(encoding="utf-8") == "published\n"
+
+
+def test_ownership_that_cannot_be_carried_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The module states this as a guarantee; deleting it cost no test.
+
+    Mutation: replace the `raise AtomicWriteRefused` in the `os.fchown` handler
+    with `pass`. Survived the full suite, while the docstring promises ownership
+    "is refused, rather than silently reassigning the document to whoever ran the
+    tool". Reached here by making `fchown` fail rather than by needing a
+    differently-owned file, which no unprivileged test can create.
+    """
+    aw = _atomic_write()
+    target = tmp_path / "doc.md"
+    target.write_text("original\n", encoding="utf-8")
+
+    real_stat = os.stat_result
+    monkeypatch.setattr(
+        os, "fchown", lambda *a: (_ for _ in ()).throw(PermissionError(1, "nope"))
+    )
+    # Make the carried ownership differ from ours so the fchown branch is taken.
+    real_lstat = Path.lstat
+
+    def foreign_owner(self: Path) -> object:
+        st = real_lstat(self)
+        fields = list(st)
+        fields[4] = st.st_uid + 1  # st_uid
+        return real_stat(fields)
+
+    monkeypatch.setattr(Path, "lstat", foreign_owner)
+
+    with pytest.raises(aw.AtomicWriteRefused, match="ownership"):
+        aw.stage_text(target, "replacement\n")
+
+    assert target.read_text(encoding="utf-8") == "original\n"
+    assert not list(tmp_path.glob("*.devkit-tmp")), "the refusal leaked a temp"
+
+
+def test_a_failed_open_leaves_no_temp_and_reports_its_real_cause(
+    tmp_path: Path,
+) -> None:
+    """`open(fd, ...)` closes the descriptor even when it FAILS.
+
+    Found by the adversarial lens. `fd = -1` was set inside the `with` body, so
+    a bad `newline`/`encoding` — which the module docstring explicitly invites a
+    caller to pass — raised before the reassignment, and the cleanup handler then
+    double-closed. That EBADF replaced the real `ValueError` and aborted the
+    handler before `temp.unlink()`, leaking the temp the module promises to
+    remove. Closing a stale descriptor number is also how an unrelated file gets
+    closed.
+    """
+    aw = _atomic_write()
+    target = tmp_path / "doc.md"
+    target.write_text("original\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="newline"):
+        aw.stage_text(target, "replacement\n", newline="not-a-valid-newline")
+
+    assert not list(tmp_path.glob("*.devkit-tmp")), "the failed stage leaked a temp"
+    assert target.read_text(encoding="utf-8") == "original\n"
+
+
+def test_abort_never_raises_out_of_the_callers_finally(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`abort()` runs in a `finally`; raising there costs the caller its exit code.
+
+    Narrowing its `suppress(OSError)` back to `FileNotFoundError` survived the
+    suite, while a six-line comment justified the width. The engine's documented
+    contract admits 0/2/3, and an escape here produces 1.
+    """
+    aw = _atomic_write()
+    target = tmp_path / "doc.md"
+    target.write_text("original\n", encoding="utf-8")
+    staged = aw.stage_text(target, "replacement\n")
+
+    monkeypatch.setattr(
+        Path, "unlink", lambda *a, **k: (_ for _ in ()).throw(PermissionError(1, "nope"))
+    )
+    staged.abort()  # must not raise
+    monkeypatch.undo()
+
+    assert target.read_text(encoding="utf-8") == "original\n"
+
+
+def test_a_directory_target_is_named_as_one(tmp_path: Path) -> None:
+    """A directory has nlink >= 2, so it was diagnosed as a hardlink problem.
+
+    The refusal told the operator to "remove the extra link(s)" for something
+    that is not a document at all. Unreachable from the sweep, which guards with
+    `is_file()`; latent in the library.
+    """
+    aw = _atomic_write()
+    with pytest.raises(aw.AtomicWriteRefused, match="is a directory"):
+        aw.stage_text(tmp_path, "replacement\n")
+
+
+def test_a_new_file_gets_the_mode_write_text_would_have_given_it(
+    tmp_path: Path,
+) -> None:
+    """`_default_mode()` is the nonexistent-target branch, and it was unpinned.
+
+    `mkstemp` creates `0600`, so without this the first write of a document would
+    silently be private where `write_text` would have made it `0666 & ~umask`.
+    Mutating it to a constant survived the suite.
+    """
+    aw = _atomic_write()
+    reference = tmp_path / "reference.md"
+    reference.write_text("x\n", encoding="utf-8")  # what write_text produces
+    target = tmp_path / "new.md"
+
+    aw.stage_text(target, "y\n").commit()
+
+    assert stat.S_IMODE(target.stat().st_mode) == stat.S_IMODE(reference.stat().st_mode)
+
+
 def test_a_lone_control_character_survives_the_sweep(tmp_path: Path) -> None:
     """`"\\x1c".strip() == ""`, so the trailing-blank strip ate it (issue #162).
 
@@ -2575,6 +2738,151 @@ def test_a_lone_control_character_survives_the_sweep(tmp_path: Path) -> None:
         "the swept block lost a character the sweep promised to move"
     )
     assert "\x1c" not in plan.read_text(encoding="utf-8")
+
+
+def test_a_separator_like_line_with_a_control_character_is_content(
+    tmp_path: Path,
+) -> None:
+    """The OTHER half of the #162 fix, and mutation showed it was unpinned.
+
+    The fix touched two deciders: `parse_blocks`' trailing strip and `_is_sep`.
+    Only the first had a test — reverting `_is_sep` to a bare `str.strip()`
+    survived the whole suite. It is not a no-op: `"\\x1c___\\x1c"` then reads as a
+    separator and is popped off the end of a swept block, so the tool exits 0
+    with a success report having silently dropped content. That is the #162
+    failure exactly, in the sibling function of the one that got covered.
+    """
+    archive = _load_module("archive_is_sep", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    text = plan.read_text(encoding="utf-8").replace(
+        "First body line 8.\n", "First body line 8.\n\x1c___\x1c\n", 1
+    )
+    assert "\x1c___\x1c" in text, "fixture check: the planted line is there"
+    plan.write_text(text, encoding="utf-8")
+
+    assert archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)]) == 0
+
+    assert "\x1c___\x1c" in history.read_text(encoding="utf-8"), (
+        "_is_sep treated a control character as separator whitespace and the "
+        "line was dropped"
+    )
+
+
+def test_an_interrupt_between_the_two_publishes_restores_the_handoff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ctrl-C at the one unsafe instant must not cost the swept blocks.
+
+    Found by the adversarial lens of the review panel. `main()`'s cleanup is
+    `finally: abort()` over every staged write, and it ran on ANY exception — so
+    a `KeyboardInterrupt` landing after the handoff was published and during the
+    history publish unlinked the rollback copy staged precisely to recover it.
+    Blocks in neither document, no message, exit 1.
+
+    The measured contrast is what makes it a HIGH: a **SIGKILL** at the same
+    instant is survivable, because no handler runs and the rollback temp is left
+    on disk. The interactive interrupt — the likely one, since `wrap-up` is
+    interactive — was the destructive case.
+    """
+    archive = _load_module("archive_sigint", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original_plan = plan.read_text(encoding="utf-8")
+    original_history = history.read_text(encoding="utf-8")
+
+    real_replace = os.replace
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        if Path(str(dst)) == history:
+            raise KeyboardInterrupt
+        return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "replace", spy)
+    with pytest.raises(KeyboardInterrupt):
+        archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)])
+
+    assert plan.read_text(encoding="utf-8") == original_plan, (
+        "the handoff was left swept and the rollback copy deleted"
+    )
+    assert history.read_text(encoding="utf-8") == original_history
+    assert "## Earlier session — First" in plan.read_text(encoding="utf-8")
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+def test_the_rollback_is_staged_before_anything_is_published(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The load-bearing property of the redesign, and it was pinned by nothing.
+
+    Both docstrings justify the whole shape by it: the rollback copy is written
+    UP FRONT so recovery costs an `os.replace` rather than a full-size write on
+    the disk that just refused one — the failure that reverted the first attempt
+    on #160. Moving that `stage_text` call into the failure handler, i.e. back to
+    the reverted shape, passed the entire suite (571 passed, 1 deselected).
+
+    Asserted on ordering directly: by the time the first publish happens, three
+    temps exist. A late-staging implementation has two.
+    """
+    archive = _load_module("archive_stage_order", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    real_replace = os.replace
+    temps_at_first_publish: list[int] = []
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        if not temps_at_first_publish:
+            temps_at_first_publish.append(len(list(tmp_path.glob("*.devkit-tmp"))))
+        return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "replace", spy)
+    assert archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)]) == 0
+
+    assert temps_at_first_publish == [3], (
+        "expected the new handoff, the new history AND the rollback all staged "
+        f"before the first publish; saw {temps_at_first_publish}"
+    )
+
+
+def test_the_disaster_message_carries_no_past_tense_success_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Both review lenses found this independently, on stderr.
+
+    The both-failed branch appended the whole `report`, whose header reads
+    `moved N block(s) to <history>` — a past-tense success line inside the
+    message saying the move did not happen, and the exact string the engine's own
+    comment records as removed in #160. The standing guard only covered stdout,
+    and the sibling test's `"First" in err` was satisfied by the offending line
+    itself, so it pinned the contradiction in place.
+    """
+    archive = _load_module("archive_no_success_line", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    real_replace = os.replace
+    seen: list[Path] = []
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        target = Path(str(dst))
+        seen.append(target)
+        if target == history or (target == plan and seen.count(plan) == 2):
+            raise OSError(28, "No space left on device")
+        return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "replace", spy)
+    assert archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)]) == 2
+
+    err = capsys.readouterr().err
+    assert "moved" not in err, f"a past-tense success line survived on stderr: {err}"
+    assert "plan lines" not in err, err
+    # The titles themselves must still be there — that is what the branch is for.
+    assert "First" in err and "Second" in err, err
 
 
 def test_the_sweep_normalises_line_endings_deliberately(tmp_path: Path) -> None:
@@ -2655,7 +2963,8 @@ def test_a_read_failure_names_the_document_that_failed(
     assert str(other) not in err, f"only the failing document should be named: {err}"
 
 
-def test_the_write_failure_message_wrap_up_quotes_is_pinned(
+@_needs_permission_enforcement
+def test_the_no_changes_applied_literal_wrap_up_quotes_is_pinned(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """`wrap-up.md` quotes "no changes applied" to the operator — pin the literal.
@@ -2663,6 +2972,12 @@ def test_the_write_failure_message_wrap_up_quotes_is_pinned(
     Only a NEGATIVE assertion existed (`"no changes applied" not in err` on the
     rollback path), so rewording it to anything else survived the whole suite
     while the workflow kept quoting the old text at the operator.
+
+    Renamed from `..._write_failure_message_...`: since #164 a `0444` handoff
+    takes the **refusal** branch, not the write-failure one, and the old name
+    said otherwise. It passes because both messages end in this literal, which is
+    exactly the property being pinned — so both branches are asserted below
+    rather than leaving the branch identity to the name.
     """
     archive = _load_module("archive_wf_literal", ENGINE_DIR / "archive_plan_sessions.py")
     plan_dir = tmp_path / "live"
@@ -2679,7 +2994,24 @@ def test_the_write_failure_message_wrap_up_quotes_is_pinned(
         plan.chmod(0o644)
 
     assert result == 2
-    assert "no changes applied" in capsys.readouterr().err
+    refused = capsys.readouterr().err
+    assert "no changes applied" in refused
+    assert "refusing to write" in refused, "a read-only doc is refused, not attempted"
+
+    # And the same literal on the genuine write-failure branch, which is a
+    # different code path reached a different way.
+    plan_dir.chmod(0o555)
+    try:
+        result = archive.main(
+            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+        )
+    finally:
+        plan_dir.chmod(0o755)
+
+    assert result == 2
+    failed = capsys.readouterr().err
+    assert "no changes applied" in failed
+    assert "write failed" in failed
 
 
 def test_the_target_lines_noop_message_is_pinned(

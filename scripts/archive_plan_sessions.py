@@ -33,19 +33,28 @@ every line ending as ``\\n`` — the whole file, not only the blocks that moved
   from ``docs/templates/`` with ``\\n``, and every other kit tool reads them as
   text — so ``\\n`` is already the repo's convention rather than a choice made
   here.
-* ``budget_line_count`` (below) exists so this tool and ``check_doc_budget``
-  measure a "line" identically, and it requires already-translated text.
-  Preserving raw bytes would put untranslated ``\\r`` into that counter and
-  break the parity ``--target-lines`` depends on.
-* Git makes the diff noise mostly theoretical for a tracked document: under
-  ``core.autocrlf`` or a ``.gitattributes eol=`` policy the index holds ``\\n``
-  either way, so the sweep's commit shows the moved blocks and not the file.
+* ``budget_line_count`` (below) requires already-translated text, so the *read*
+  must stay universal-newline for this tool and ``check_doc_budget`` to measure
+  a "line" identically. Strictly that settles the read side only — the counter
+  never sees written bytes — but a tool that read translated and wrote raw could
+  not round-trip its own document, so the write side follows from it.
+* The diff noise a whole-file rewrite causes is bounded wherever a repo sets a
+  ``.gitattributes eol=`` policy or ``core.autocrlf``, since the index then
+  holds ``\\n`` either way. **Neither is configured in this repo** — checked, not
+  assumed — so a CRLF handoff swept *here* would produce exactly that whole-file
+  diff. The mitigation is available to an adopter; it is not in force by default,
+  and this bullet previously implied it was.
 
 What the sweep does **not** do is drop characters it does not recognise. A line
-whose only content is an exotic control character (``\\x1c``, ``\\v``, …) used to
-be discarded by the trailing-blank strip, because ``str.strip()`` removes those
-too — silent content loss in an archival tool. Only ``_LAYOUT_WS`` is stripped
-now.
+whose only content is an exotic character used to be discarded by the
+trailing-blank strip, because a bare ``str.strip()`` removes much more than
+layout whitespace — ``\\v \\f \\x1c \\x1d \\x1e \\x1f \\x85 \\xa0`` and the
+U+2000-range spaces among them. So a lone file separator vanished out of a swept
+block, and so did a non-breaking space, which is not a control character at all.
+The two places that decide a line is blank *within a block* — the trailing strip
+and ``_is_sep`` — now strip ``_LAYOUT_WS`` and nothing else.
+``insert_into_history`` still uses a bare ``strip()``, deliberately: it only
+advances a cursor to find an insertion point and drops nothing.
 
 Usage:
 
@@ -82,23 +91,34 @@ Exit codes:
         renaming a fully-written temporary file over it, and both are written
         before either is published (issue #164 — ``Path.write_text`` truncates
         first, and a 26,807-byte handoff was measured going to 0 bytes under
-        ENOSPC while this tool printed "no changes applied"). The one branch
-        that cannot promise this names the documents and their exact states
-        rather than reporting a clean failure.
+        ENOSPC while this tool printed "no changes applied").
+
+        Exactly one branch cannot promise it, and it names both documents with
+        the states it can actually vouch for: the handoff published, the history
+        untouched, and the swept blocks listed so they can be recovered by hand.
+        It is reachable only if a second ``os.replace`` fails after the first
+        succeeded — allocation is finished by then, so the ordinary out-of-space
+        route does not lead here.
 
         A *refused* write is different from a failed one and is worded
         differently: the sweep declines to publish over a read-only or
         hardlinked document, because replacing one by rename would succeed while
         deleting the read-only bit or silently orphaning the alias. See
-        ``lib/atomic_write.py``.
+        ``lib/atomic_write.py`` for the full list and for why the exception is
+        not an ``OSError``.
 
-        **The trade this makes, stated because it is a real cost:** publishing by
-        rename needs room for the new content *beside* the old, where truncating
-        first frees the old blocks before writing. A sweep on a nearly-full disk
-        can now fail where it once succeeded. That is deliberate — a sweep that
-        "succeeds" by destroying the archive it was writing to is not a remedy —
-        but it means an out-of-space handoff needs space freed before the sweep
-        that would shrink it can run.
+        **Two trades, both real costs, stated rather than discovered:**
+
+        1. Publishing by rename needs room for the new content *beside* the old,
+           where truncating first frees the old blocks. A sweep on a nearly-full
+           disk can now fail where it once succeeded. Deliberate — a sweep that
+           "succeeds" by destroying the archive it writes to is not a remedy —
+           but an out-of-space handoff now needs space freed before the sweep
+           that would shrink it can run.
+        2. A rename needs a writable *directory*, where a write needed only a
+           writable file. A document that is writable inside a read-only
+           directory could be swept before and cannot now. There is no way to
+           publish atomically without it.
     3 — ``--target-lines`` specifically: the target cannot be reached without
         sweeping the last remaining block, or there is no block to sweep at all.
         Distinct from 2 so a caller can tell this apart from the unrelated
@@ -380,7 +400,13 @@ def main(argv: list[str] | None = None) -> int:
     here: a second copy has drifted from the first in three separate rounds of
     review on this function.
     """
-    parser = argparse.ArgumentParser(description=__doc__)
+    # RawDescriptionHelpFormatter, because `wrap-up.md` cites `--help` as the
+    # authoritative exit-code list and the default formatter re-wraps
+    # `description`, collapsing the bullets into inline `*` markers mid-paragraph
+    # and running the numbered exit codes together into one block of prose.
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
         "--keep",
         type=int,
@@ -649,7 +675,14 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             staged_history.commit()
-        except OSError as history_exc:
+        except BaseException as history_exc:
+            # BaseException, not OSError. Between the two publishes the handoff
+            # is swept and the history has not received the blocks, so ANY escape
+            # here — `KeyboardInterrupt` above all, since `wrap-up` is
+            # interactive — leaves them in neither document. Worse, the `finally`
+            # below would then unlink the very copy staged to recover them: a
+            # Ctrl-C destroyed data that a SIGKILL at the same instant survives,
+            # because SIGKILL runs no handler. Restore first, re-raise after.
             try:
                 staged_rollback.commit()
             except OSError as rollback_exc:
@@ -658,27 +691,44 @@ def main(argv: list[str] | None = None) -> int:
                 # the history was published by rename or not at all, so it is
                 # INTACT rather than part-written, and the handoff is the
                 # already-swept document whose rollback did not land.
+                #
+                # The swept titles are listed bare. An earlier version appended
+                # the whole `report`, whose header reads "moved N block(s) to
+                # <history>" — a past-tense success line, inside the message
+                # saying the move did not happen, and the exact string the
+                # comment above records as removed in #160. Both lenses of the
+                # review panel found it independently.
                 print(
                     f"error: publishing {args.history} failed ({history_exc}), AND "
                     f"restoring {args.plan} failed ({rollback_exc}). "
                     f"{args.history} is unchanged and intact — it was never "
-                    f"truncated — but {args.plan} has been swept, so the blocks "
-                    f"listed below are in NEITHER document. Restore {args.plan} "
-                    f"from git before continuing.\n{report}",
+                    f"truncated — but {args.plan} has been swept, so these blocks "
+                    f"are in NEITHER document:\n"
+                    + "\n".join(f"  - {title[:88]}" for title in moved_titles)
+                    + f"\nRestore {args.plan} from git before continuing.",
+                    file=sys.stderr,
+                )
+                if isinstance(history_exc, OSError):
+                    return 2
+                raise
+            if isinstance(history_exc, OSError):
+                print(
+                    f"error: publishing {args.history} failed ({history_exc}); "
+                    f"{args.plan} was restored and no changes were applied. "
+                    "Neither document holds a partial write; the handoff's bytes "
+                    "are the text this run read, which for a CRLF document is its "
+                    "normalised form (see the module docstring).",
                     file=sys.stderr,
                 )
                 return 2
-            print(
-                f"error: publishing {args.history} failed ({history_exc}); "
-                f"{args.plan} was restored and no changes were applied. Both "
-                "documents are intact.",
-                file=sys.stderr,
-            )
-            return 2
+            # Not an OSError — an interrupt. The handoff is back; let it out.
+            raise
     finally:
-        # Idempotent: `abort` on a committed write is a no-op, so this only ever
-        # removes temps that were never published — including on the paths above
-        # that return early, and on an unexpected exception.
+        # `abort` on a committed write is a no-op, so this only ever removes
+        # temps that were never published — including on the paths above that
+        # return early, and on an unexpected exception. The rollback is committed
+        # by the handler above BEFORE this runs, which is what stops it being
+        # deleted at the one moment it is needed.
         for item in staged:
             item.abort()
 
