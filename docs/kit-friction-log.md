@@ -120,13 +120,11 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
   because a draft is invisible to the review bot; `#124` records the same thing as a defect of the
   triage workflow specifically. **M** — **addressed 2026-07-30**, and one claim in this entry was
   wrong: `config/dev-model.yaml` never defaulted `finalize.pr_draft` at all. The key is absent from
-  that file *and read by no code in this repo* — it documents two unvendored pipelines' configs,
-  the triage engine `#6` tracks and the systemize one `#7` does, so the only default that existed
-  was prose in
-  `.claude/commands/triage-friction-log.md`'s config table. Flipped there to `false`, with the
-  reason recorded. The larger find while doing it: `post-merge-systemize.md` **hardcoded
-  `gh pr create --draft`**, so the config key it documents had no effect on the one place that
-  workflow opens a PR — a Principle #10 violation, not a default that needed flipping. And a draft
+  that file and read by no code here — before the fix the only default anywhere was prose in
+  `.claude/commands/triage-friction-log.md`'s config table, now `false`. The larger find while
+  doing it: `post-merge-systemize.md` **hardcoded `gh pr create --draft`**, so the config key it
+  documents had no effect on the one place that workflow opens a PR — a Principle #10 violation,
+  not a default that needed flipping. And a draft
   is worse than unreviewed: CodeRabbit's *"Review skipped: draft pull request"* matches
   `review.unavailable_markers`, so a draft registers as **reviewer-unavailable** and demands a
   `fallback_panel` pass the sweep never asked for.

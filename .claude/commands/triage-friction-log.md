@@ -96,7 +96,7 @@ patterns — always read from config.
 | `cancel_keywords`         | Bulk-cancel keywords                                                                  |
 | `finalize.branch_pattern` | Branch name format (default `chore/triage-{date}`, `vcs.triage_branch_pattern`)       |
 | `finalize.commit_subject` | Commit-message subject template                                                      |
-| `finalize.pr_draft`       | Open the PR as a draft on first push (default **`false`**). A draft is invisible to a configured review bot — CodeRabbit answers *"Review skipped: draft pull request"*, which `review.unavailable_markers` matches, so a draft does not merely go unreviewed: it registers as **reviewer-unavailable** and demands a `review.fallback_panel` pass the sweep never asked for. Every *other* kit workflow that opens a PR expects the configured reviewer to see it, and `pr_watch`'s merge gate assumes as much (`#124`). Some workflows do open drafts on purpose — for a bounded window while commits are still landing, or to hand the merge to a human — and each records its reason where it applies; no count is offered here, because three review rounds falsified three attempts at one. An unattended sweep has no such reason. Set `true` only if you have one; the key then means what it says, and the PR stays a draft. |
+| `finalize.pr_draft`       | Open the PR as a draft on first push (default **`false`**). A draft is invisible to a configured review bot — CodeRabbit answers *"Review skipped: draft pull request"*, which `review.unavailable_markers` matches, so a draft does not merely go unreviewed: it registers as **reviewer-unavailable** and demands a `review.fallback_panel` pass the sweep never asked for. `pr_watch`'s merge gate assumes the reviewer can see the PR (`#124`). Other kit workflows do open drafts, for reasons of their own; this is a claim about an unattended sweep only, which has none of them. Set `true` if you have one — the key then means what it says and the PR stays a draft. Verifying that the bit actually landed either way is `#170`, and is not done today. |
 
 ______________________________________________________________________
 
@@ -399,16 +399,10 @@ gathered in Step 4. The script:
 1. Commits **both** doc edits (no other paths).
 1. Pushes the branch.
 1. Opens a PR, **ready for review** under `finalize.pr_draft`'s `false` default and a
-   draft when it is `true`.
-
-   Then confirm the bit landed the way it was asked for, in whichever direction that
-   was: `gh`'s draft flag is flaky both ways. The canonical both-directions recipe is
-   the lane contract in `<engine-dir>/dev_session.sh` and the flag notes in
-   [`../../docs/agentic-dev-kit/workflows/pr-watch.md`](../../docs/agentic-dev-kit/workflows/pr-watch.md)
-   — follow it there rather than trusting a copy here, since a half-copy of it is what
-   the review round on this change caught. A draft that stays a draft is not merely
-   unreviewed: the bot's *"Review skipped"* registers as reviewer-unavailable, so the
-   gate then wants a `fallback_panel` pass this sweep never asked for (`#124`).
+   draft when it is `true`. **Not yet true of the engine `#6` will vendor** — the
+   implementation that issue describes hardcodes a draft PR, so honouring the default
+   is a change it still needs, and this step is the spec rather than a description.
+   Nothing verifies the bit landed as asked (`#170`).
 
 It prints a JSON summary to stdout with `branch`, `commit_subject`, `header_line`,
 `ticket_range`, `pr_url`, `filed_count`. Capture this for the success DM.

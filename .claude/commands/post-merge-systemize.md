@@ -274,8 +274,9 @@ Append a provenance marker to each rule so the impact loop is greppable later:
 <!-- systemize:YYYY-MM-DD ≥2PR shape; PRs #a,#b -->
 ```
 
-Then open the PR (mirrors `scripts/finalize_triage.py`'s proven order — fetch, branch
-off the protected branch's origin ref, commit scoped paths, push, open PR).
+Then open the PR, following `scripts/finalize_triage.py`'s proven order — fetch, branch
+off the protected branch's origin ref, commit scoped paths, push, PR. (That script opens
+a *draft* PR today per `#6`; the order is what is being borrowed, not the draft state.)
 Substitute the literal UTC date for `<today>`:
 
 ```bash
@@ -296,13 +297,11 @@ git push --set-upstream origin chore/systemize-<today>
 # `finalize.pr_draft` entirely. Add it back only if your pipeline config sets that
 # key true.
 gh pr create --title "docs(systemize): N cross-PR pattern(s) -> rules" --body "<body>"
-
-# gh's draft bit is flaky in BOTH directions, so confirm it landed the way you asked
-# — in whichever direction that was. The canonical recipe is the lane contract in
-# scripts/dev_session.sh plus the flag notes in
-# docs/agentic-dev-kit/workflows/pr-watch.md; follow it there rather than a copy
-# here. Note --assert-ready MUTATES: run on a deliberate draft it flips it ready.
 ```
+
+Nothing here verifies the draft bit landed as asked; `gh`'s flag is flaky in both
+directions and getting that instruction right has failed three times, so it is tracked
+in `#170` rather than attempted again here.
 
 PR body: one section per pattern — the shape, the PRs it spanned, the review
 source(s) that caught it, and the exact rule added (file + section). Make the
