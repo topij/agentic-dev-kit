@@ -2801,6 +2801,44 @@ def test_a_failed_rollback_on_the_handoff_publish_is_reported_not_a_traceback(
     assert "moved" not in err, "no past-tense success line"
 
 
+def test_a_cancelled_run_still_terminates_as_cancelled(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A bare `raise` in the disaster handler re-raises the ROLLBACK's error.
+
+    The handler catches the history publish's exception, tries the rollback, and
+    on a double failure must surface the *original*. A bare `raise` inside
+    `except OSError as rollback_exc` surfaces the rollback's `OSError` instead —
+    so an interrupted run stops looking interrupted, and the documented 130
+    becomes a traceback exit 1. Reported by a review lens as pinned by nothing,
+    which it was.
+    """
+    archive = _load_module("archive_cancel_code", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    real_replace = os.replace
+    seen: list[Path] = []
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        target = Path(str(dst))
+        seen.append(target)
+        if target == history:
+            raise KeyboardInterrupt  # the operator cancels
+        if target == plan and seen.count(plan) == 2:
+            raise OSError(28, "No space left on device")  # and the rollback fails
+        return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "replace", spy)
+    with pytest.raises(KeyboardInterrupt):
+        archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)])
+    monkeypatch.undo()
+
+    # The damage report is still emitted — the operator needs it either way.
+    assert "NEITHER document" in capsys.readouterr().err
+
+
 def test_an_interrupt_after_the_history_lands_does_not_duplicate_the_blocks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

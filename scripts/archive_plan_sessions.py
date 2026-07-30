@@ -124,19 +124,20 @@ Exit codes:
            writable file. A document that is writable inside a read-only
            directory could be swept before and cannot now. There is no way to
            publish atomically without it.
-    130 — interrupted (``KeyboardInterrupt``), the shell's usual 128+SIGINT.
-        Listed because this module *deliberately* lets an interrupt out rather
-        than converting it: an interrupt arriving between the two publishes is
-        recovered from first — the handoff is restored from its staged copy —
-        and only then re-raised. Suppressing it would report a completed sweep
-        for a run the operator cancelled. Anything reading "non-zero means the
-        documents may be damaged" would be wrong here: they are not.
-
     3 — ``--target-lines`` specifically: the target cannot be reached without
         sweeping the last remaining block, or there is no block to sweep at all.
         Distinct from 2 so a caller can tell this apart from the unrelated
         failures above without parsing the message; anything reading only
         "non-zero" would report all of them as an exhausted sweep.
+
+    130 — interrupted (``KeyboardInterrupt``), the shell's usual 128+SIGINT.
+        Listed because this module *deliberately* lets an interrupt out rather
+        than converting it: an interrupt arriving around either publish is
+        recovered from first — the handoff is restored from its staged copy if
+        it had already been published — and only then re-raised. Suppressing it
+        would report a completed sweep for a run the operator cancelled.
+        Anything reading "non-zero means the documents may be damaged" would be
+        wrong here: they are not.
 """
 
 from __future__ import annotations
