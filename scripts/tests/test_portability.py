@@ -2826,21 +2826,23 @@ def test_publish_state_never_raises_out_of_a_failure_handler(
     def denied(self: Path) -> bool:
         raise PermissionError(13, "Permission denied")
 
-    monkeypatch.setattr(Path, "exists", denied)
-    assert staged.publish_state() == "unknown"
-    monkeypatch.undo()
-
-    # And an INTERRUPT, not only an OSError. `Path.exists()` calls `os.stat`, a
-    # blocking syscall, and every caller of this is a failure handler — so an
-    # escape here skips the recovery it was about to run and the caller's
-    # cleanup then deletes the copy staged for it. `except OSError` was not
-    # enough, and nothing caught that until a review lens measured it.
+    # `monkeypatch.context()`, not bare `setattr`: if the call under test raises
+    # — which is exactly the regression — the patch has to come off anyway, or
+    # pytest's own teardown calls the poisoned `Path.exists` and the session
+    # dies during cleanup instead of reporting a failed test.
     def cancelled(self: Path) -> bool:
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(Path, "exists", cancelled)
-    assert staged.publish_state() == "unknown"
-    monkeypatch.undo()
+    for injected in (denied, cancelled):
+        # An INTERRUPT, not only an OSError: `Path.exists()` calls `os.stat`, a
+        # blocking syscall, and every caller of this is a failure handler — so
+        # an escape here skips the recovery it was about to run and the caller's
+        # cleanup then deletes the copy staged for it. `except OSError` was not
+        # enough, and nothing caught that until a review lens measured it.
+        with monkeypatch.context() as m:
+            m.setattr(Path, "exists", injected)
+            state = staged.publish_state()
+        assert state == "unknown", injected.__name__
 
     assert staged.publish_state() == "pending"
     staged.commit()
