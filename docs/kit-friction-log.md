@@ -100,6 +100,56 @@ and the argument for keeping the record short: the prose is where the defects li
 
 The swept entries are verbatim in the archive under `Graduated 2026-07-29 (second sweep)`.
 
+## 2026-07-30 (post-merge, second)
+
+- **A `cd` in one Bash call silently rebased every later command, and three checks reported green
+  against the wrong tree.** Mid-session I ran `cd <scratch>/m15 && pytest` to reproduce a mutant.
+  The working directory persists across calls, so the next `ruff check scripts/`, `make test` and
+  `kit_doctor --generate-manifest` all ran **inside the mutated clone** and reported clean. It
+  surfaced only because a `grep` for test names I had just written returned nothing. Re-run from the
+  repository, a real `ruff` failure appeared that the false green had hidden. The same drift then
+  put a `sed -i ''` rename into the clone instead of the repo, leaving a test whose `def` kept its
+  old name while its docstring claimed the rename and a sibling cited an identifier that did not
+  exist — found by a review lens, not by me. **H** — this is the shape that makes a whole
+  verification section worthless, and both instances were in the same session as a PR *about*
+  trustworthy failure reporting. Proposed fix: any command whose result is quoted as verification
+  should establish its own directory (`git -C`, absolute paths, or a leading `cd <repo>`), and a
+  verification claim should name the directory it ran in. Routes to
+  [#150](https://github.com/topij/agentic-dev-kit/issues/150) as a **widening**, not as occurrence
+  data: only the `sed` half is literally a scripted text replacement, which is that issue's stated
+  subject. The three falsely-green *checks* share its root cause — the target was never reached —
+  and that is the class the issue would have to grow to cover.
+- **A verification probe reported five clean passes and had exercised nothing.** Written to re-drive
+  a review lens's five measured data-loss scenarios against the fixed code, it compared the raw
+  `--plan` path against the path `os.replace` was called with — while the engine resolves targets
+  with `os.path.realpath`, and on macOS `/var` is a symlink to `/private/var`. No injection ever
+  fired; every scenario "passed". **H** — a probe that exercises nothing is indistinguishable from a
+  probe that finds nothing, and this one was written *specifically* to check that a data-loss fix
+  worked. Caught only by noticing that exit 0 with no stderr was implausible for a scenario that was
+  supposed to fail. Proposed fix: a negative-control run belongs in any probe of this kind — assert
+  the injection fires at least once before trusting the pass. Occurrence data for
+  [#150](https://github.com/topij/agentic-dev-kit/issues/150) and a sharpening of it: `#150` covers a
+  check that *reports* success wrongly; this is a check whose subject was never reached.
+- **"Applied to one of two call sites" appeared five times in one PR, three of them inside the fix
+  for that pattern.** Round 1 widened one publish handler and not its twin; the review bot then found
+  the twin's rollback unguarded; round 4 found both rollback handlers making the unsound inference
+  the forward publishes had just been fixed to avoid; round 4 also found the plan-site widening
+  tested only at the history site; and a `BaseException` argument written down in one method's
+  docstring was not carried to the method one call away. **H** — every instance was individually
+  low-severity and the class is not: severity ranking cannot see it, and four rounds of reviewers
+  each found one more. What ended it was **collapsing the duplication into a single
+  `restore_handoff()`**, after which shared-code mutants died to tests from both sites. Proposed fix:
+  route to [#163](https://github.com/topij/agentic-dev-kit/issues/163) — its enumeration is of
+  occurrences; what this adds is that the remedy is structural (remove the second site) rather than
+  another guard, and that a fix round should check its own twin before the reviewer does.
+- **A mutation kill that aborts the test session names no test.** One mutant let a `KeyboardInterrupt`
+  escape, and pytest aborts the whole run on that signal — so the driver reported `killed by ?` and,
+  in an earlier variant, `EXCLUSION EXCLUDED NOTHING` because the summary line never printed. Both
+  read as tooling noise rather than as the kill they were. **M** — `fallback-review-panel.md` item 5
+  already says a kill counts only if a behaviour-asserting test failed; it does not say the test must
+  be *identifiable*, and an unattributable kill is not evidence. Proposed fix: a test pinning
+  "must not raise" should catch and `pytest.fail`, not let the exception propagate.
+
 ## 2026-07-30 (post-merge)
 
 - **`pr_followup_hook.py` fires on command *text*, not on PR-opens — six false positives in one
