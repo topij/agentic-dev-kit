@@ -20,7 +20,7 @@ Weekly pattern-finding across the last 7 days of merged PRs: read each PR's revi
 comments (review bots, an operator review pass, human) + originating tracker tickets,
 then ask **"what pattern shows up in ≥2 PRs this week that a CLAUDE.md rule,
 skill-prompt, or config change would have prevented?"** Route findings: ≥2-PR patterns
-→ a small draft CLAUDE.md/skill PR; single-incident → a `docs/friction-log.md`
+→ a small CLAUDE.md/skill PR; single-incident → a `docs/friction-log.md`
 append; single-incident-but-high-severity → a tracker ticket. No pattern → a one-line
 status DM and exit. The pattern-finding half of the friction flywheel (Principle #2 in
 `PRINCIPLES.md`).
@@ -41,8 +41,11 @@ status DM and exit. The pattern-finding half of the friction flywheel (Principle
 >   required tool is down, stop with a clear error so your runner's failure-alert path
 >   surfaces it; never wait for input that will never arrive.
 > - **Single-session.** Unlike `/triage-friction-log`, there is no DM approval
->   round-trip. The draft PR *is* the review surface — the operator reviews and
->   merges (or closes) it via your forge. The skill never blocks on approval.
+>   round-trip. The PR *is* the review surface — the operator reviews and merges (or
+>   closes) it via your forge, and the skill never blocks on approval. **Open it ready**
+>   unless `finalize.pr_draft` says otherwise. A draft is a review surface for the
+>   operator only; a ready PR is one for the configured review bot as well — so being
+>   the review surface argues for ready, not for draft ([#124](https://github.com/topij/agentic-dev-kit/issues/124)).
 > - **Test mode is signalled explicitly.** This run is in test mode if, and only if,
 >   the invocation contained the `test` keyword. Nothing else counts (worktree path,
 >   branch name, etc.). In test mode the skill writes no PR, no tracker ticket, and no
@@ -100,7 +103,7 @@ patterns, or the pattern threshold — always read from config.
 | `review_sources` / `operator_login`                     | Comment-source classification (consumed by the fetcher).                                |
 | `friction_log_path`                                     | Where single-incident findings land (`docs/friction-log.md`).                           |
 | `tracker.linear.team_id` / `tracker.linear.project_id` / `tracker.linear.label_name` | Config for high-severity single-incident tickets — `tracker.linear.project_id` should match `config/dev-model.yaml → tracker.project_name`. |
-| `finalize.branch_pattern` / `commit_subject` / `pr_draft` | The ≥2-PR-pattern CLAUDE.md/skill-prompt PR (`vcs.systemize_branch_pattern`).           |
+| `finalize.branch_pattern` / `commit_subject` / `pr_draft` | The ≥2-PR-pattern CLAUDE.md/skill-prompt PR (`vcs.systemize_branch_pattern`). `pr_draft` defaults to **`false`**: a draft is invisible to a configured review bot, whose *"Review skipped: draft pull request"* reply matches `review.unavailable_markers`, so it registers as **reviewer-unavailable** rather than merely unreviewed ([#124](https://github.com/topij/agentic-dev-kit/issues/124)). No code reads this key: the PR is opened by the `gh` call in Step 3A, which the agent runs, so the key binds only whoever follows this file. |
 
 ______________________________________________________________________
 
@@ -228,7 +231,7 @@ quote.
 
 | Spans                         | Severity                                                     | Route →                                                |
 | ------------------------------ | -------------------------------------------------------------- | ---------------------------------------------------------- |
-| **≥ `pattern_threshold` PRs** | any                                                            | **(A)** Draft CLAUDE.md / skill-prompt edit (Step 3A). |
+| **≥ `pattern_threshold` PRs** | any                                                            | **(A)** CLAUDE.md / skill-prompt edit (Step 3A).       |
 | 1 PR                           | high (a bug that would clearly recur / data-loss / security) | **(C)** Tracker ticket (Step 3C).                      |
 | 1 PR                           | normal                                                         | **(B)** friction-log append (Step 3B).                  |
 
@@ -257,7 +260,7 @@ most weeks.
 
 ______________________________________________________________________
 
-## Step 3A — Draft the CLAUDE.md / skill-prompt PR (≥2-PR patterns only)
+## Step 3A — Write the CLAUDE.md / skill-prompt PR (≥2-PR patterns only)
 
 For each qualifying pattern, make the **smallest** edit that would have caught it —
 usually one tightening sentence in the most-specific CLAUDE.md/rule file (prefer a
@@ -271,8 +274,10 @@ Append a provenance marker to each rule so the impact loop is greppable later:
 <!-- systemize:YYYY-MM-DD ≥2PR shape; PRs #a,#b -->
 ```
 
-Then open the draft PR (mirrors `scripts/finalize_triage.py`'s proven order — fetch,
-branch off the protected branch's origin ref, commit scoped paths, push, draft PR).
+Then open the PR, following the proven order of `scripts/finalize_triage.py` — which is
+not vendored here either ([#6](https://github.com/topij/agentic-dev-kit/issues/6)) — fetch, branch off the protected branch's origin
+ref, commit scoped paths, push, open the PR. The order is what is borrowed; that script
+still opens a *draft*.
 Substitute the literal UTC date for `<today>`:
 
 ```bash
@@ -289,8 +294,14 @@ changed — never `reports/`, `state/`, or data files:
 git add CLAUDE.md path/to/scoped/CLAUDE.md   # only the files you actually edited
 git commit -m "docs(systemize): N cross-PR pattern(s) -> CLAUDE.md/skill rules"
 git push --set-upstream origin chore/systemize-<today>
-gh pr create --draft --title "docs(systemize): N cross-PR pattern(s) -> rules" --body "<body>"
+# Ready, not draft (issue 124): the --draft that used to be hardcoded here ignored
+# `finalize.pr_draft` entirely. Add it back only if your pipeline config sets that
+# key true.
+gh pr create --title "docs(systemize): N cross-PR pattern(s) -> rules" --body "<body>"
 ```
+
+Nothing here verifies the draft bit landed as asked, and `gh`'s flag is flaky in both
+directions — tracked in [#170](https://github.com/topij/agentic-dev-kit/issues/170), with the constraints a fix has to satisfy.
 
 PR body: one section per pattern — the shape, the PRs it spanned, the review
 source(s) that caught it, and the exact rule added (file + section). Make the
@@ -347,7 +358,7 @@ No ≥2-PR pattern this week. [k single-incident note(s) → friction-log.md.]
 Scanned [N] merged PRs. Found [p] cross-PR pattern(s):
 • <shape 1> — PRs #a, #b
 • <shape 2> — PRs #c, #d, #e
-→ Draft PR: <pr_url>
+→ PR: <pr_url>
 [Single-incident: k → friction-log.md, m → tracker (…).]
 [Rule-citation: pattern X recurred despite CLAUDE.md §Y.]
 ```
