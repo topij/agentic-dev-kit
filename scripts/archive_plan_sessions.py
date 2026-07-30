@@ -48,8 +48,11 @@ Exit codes:
         branch. That is the point — a dry-run exists to report what the real run
         would do.
     2 — every other failure: usage error, unresolvable configured paths, missing
-        file, unparseable handoff structure, history doc with no session-log
-        section, or a failed write
+        file, a file that cannot be read (unreadable or not valid UTF-8),
+        unparseable handoff structure, history doc with no session-log section,
+        or a failed write. On a failed write the handoff doc is rolled back, so
+        neither document is left half-written — unless the rollback ALSO fails,
+        which says so explicitly and names git as the recovery.
     3 — ``--target-lines`` specifically: the target cannot be reached without
         sweeping the last remaining block, or there is no block to sweep at all.
         Distinct from 2 so a caller can tell this apart from the unrelated
@@ -392,17 +395,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: not found: {path}", file=sys.stderr)
             return 2
 
-    # Decoding failure is a documented exit 2, not an uncaught traceback. Both
-    # docs are read as UTF-8, and a single stray byte from a cp1252 round-trip —
-    # an em-dash, which these headings are full of — used to raise
-    # UnicodeDecodeError straight out of main() and exit 1. That is a code the
-    # module's own exit-code contract does not list and `wrap-up.md` has no branch
-    # for, so it landed the caller outside its decision table.
+    # A read that fails is a documented exit 2, not an uncaught traceback.
+    # BOTH classes, deliberately: `is_file()` above passes for a file that exists
+    # and cannot be opened, so `PermissionError` reaches these lines just as a
+    # cp1252 em-dash reaches them as `UnicodeDecodeError`. Catching only the
+    # decode error left exit 1 producible while the module's exit-code contract
+    # says 0/2/3 and `wrap-up.md` branches on 2 and 3 alone.
+    # `check_memory_budget.py` already catches this exact pair for the same
+    # reason; keep them in agreement.
     try:
         plan = args.plan.read_text(encoding="utf-8").splitlines(keepends=True)
         history = args.history.read_text(encoding="utf-8").splitlines(keepends=True)
-    except UnicodeDecodeError as exc:
-        print(f"error: not valid UTF-8: {exc}", file=sys.stderr)
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"error: could not read: {exc}", file=sys.stderr)
         return 2
 
     try:

@@ -874,14 +874,7 @@ def _write_four_block_plan(plan: Path, history: Path) -> None:
     (A keep-everything rebuild would be 59, but ``range(1, len(blocks))`` never
     constructs it.)
 
-    An earlier version of this docstring claimed 1-line bodies would make the
-    count "non-monotonic in moved_count". That is false: the history pointer is
-    written into *every* candidate, so it is constant across the sequence and
-    cannot outweigh a swept block. A later version then claimed the "one real
-    step-up" was between the original file and the first candidate — also false,
-    and both are 46 lines here. The count simply decreases with ``moved_count``;
-    no test relies on that, because the loop measures each candidate.
-    """
+"""
     plan.write_text(
         "# Handoff\n"
         "\n"
@@ -1057,9 +1050,7 @@ def test_keep_alone_is_unchanged_by_the_target_lines_addition(
 ) -> None:
     """Regression guard: plain ``--keep`` must behave exactly as it did before.
 
-    Asserts the stdout report as well as the resulting state. Note this pins the
-    ``moved …`` line only; the ``nothing to move: … <= --keep N`` message is
-    covered by ``test_no_flags_keeps_the_documented_default_of_six_blocks``.
+    Asserts the stdout report as well as the resulting state.
     """
     archive = _load_module(
         "archive_keep_alone_regression", ENGINE_DIR / "archive_plan_sessions.py"
@@ -1727,8 +1718,9 @@ def test_shipped_doc_budget_remedies_never_restate_the_budget_as_a_literal() -> 
         if "--target-lines" in s.remedy and "{budget}" not in s.remedy
     ]
     assert not missing, "a remedy naming --target-lines must use {budget}:\n" + "\n".join(missing)
-    # And the SHIPPED config's substitution must actually resolve: any brace left
-    # in the rendered text is a command that dies with `invalid int value`.
+    # And no configured remedy may render with a brace still in it — an
+    # unsubstituted placeholder is at best confusing and, in the --target-lines
+    # remedy specifically, a command that dies with `invalid int value`.
     unresolved = [f"{s.path}: {s.remedy_text}" for s in statuses if "{" in s.remedy_text]
     assert not unresolved, (
         "placeholder left unsubstituted in the rendered remedy:\n" + "\n".join(unresolved)
@@ -2173,7 +2165,8 @@ def test_dry_run_writes_nothing_and_says_would_move(
     assert result == 0
     out = capsys.readouterr().out
     assert "would move 2 block(s)" in out, out
-    assert "moved 2 block(s)" not in out.replace("would moved", ""), (
+    assert "would move 2 block(s)" in out
+    assert not re.search(r"(?<!would )moved 2 block\(s\)", out), (
         "a dry run must not report in the past tense"
     )
     assert plan.read_text(encoding="utf-8") == original_plan, "--dry-run wrote the plan"
@@ -2245,4 +2238,95 @@ def test_a_non_utf8_doc_is_a_documented_exit_2_not_a_traceback(
     )
 
     assert result == 2, "must be the documented usage/IO failure code, not a traceback"
-    assert "not valid UTF-8" in capsys.readouterr().err
+    assert "could not read" in capsys.readouterr().err
+
+
+def test_an_unreadable_doc_is_a_documented_exit_2_not_a_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`PermissionError` reaches the same two lines as `UnicodeDecodeError`.
+
+    `path.is_file()` passes for a file that exists and cannot be opened, so a
+    guard catching only the decode error left exit 1 producible — while the
+    module's exit-code contract says 0/2/3 and `wrap-up.md` branches on 2 and 3
+    alone. `check_memory_budget.py` already catches `(OSError, UnicodeDecodeError)`
+    for exactly this reason.
+    """
+    archive = _load_module("archive_unreadable", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    plan.chmod(0o000)
+    try:
+        result = archive.main(
+            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+        )
+    finally:
+        plan.chmod(0o644)
+
+    assert result == 2, "an unreadable file must not traceback out of main()"
+    assert "could not read" in capsys.readouterr().err
+
+
+def test_the_keep_early_exit_message_is_asserted_somewhere(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`nothing to move: N session block(s) <= --keep M` was pinned by nothing.
+
+    Two docstrings claimed another test covered it; neither did — every `--keep`
+    test takes the successful-sweep path. Replacing the whole message with a
+    literal survived the suite.
+    """
+    archive = _load_module("archive_keep_noop", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original = plan.read_text(encoding="utf-8")
+
+    result = archive.main(
+        ["--keep", "6", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result == 0
+    assert "nothing to move: 4 session block(s) <= --keep 6." in capsys.readouterr().out
+    assert plan.read_text(encoding="utf-8") == original
+
+
+def test_a_failed_rollback_does_not_claim_no_changes_applied(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """When the rollback itself fails, the plan IS truncated — say so.
+
+    The handler added for this was pinned by nothing: reverting it to the bare
+    `write_text(original_plan); raise` survived the suite. "no changes applied"
+    would then be printed while the blocks sit in neither file.
+    """
+    archive = _load_module("archive_bad_rollback", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    real_write = Path.write_text
+    calls: list[Path] = []
+
+    def spy(self: Path, data: str, *args: object, **kwargs: object) -> int:
+        calls.append(self)
+        if self == history:
+            raise OSError(28, "No space left on device")
+        if self == plan and calls.count(plan) == 2:  # the rollback write
+            raise OSError(28, "No space left on device")
+        return real_write(self, data, *args, **kwargs)
+
+    Path.write_text = spy  # type: ignore[method-assign]
+    try:
+        result = archive.main(
+            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+        )
+    finally:
+        Path.write_text = real_write  # type: ignore[method-assign]
+
+    assert result == 2
+    err = capsys.readouterr().err
+    assert "no changes applied" not in err, "the plan is truncated — do not claim otherwise"
+    assert "truncated" in err
+    assert "restore it from git" in err
