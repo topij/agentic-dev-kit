@@ -54,10 +54,9 @@ header to the source markdown.
 > - `scripts/triage_friction_log.py` — parser + LLM proposer + report writer.
 > - `scripts/finalize_triage.py` — graduation-marker prepend + inbox-sweep-by-
 >   frozen-list into the archive (`--frozen-inbox`) + branch/commit/push/open-PR
->   (Session B only). **Note for whoever vendors `#6`:** the existing implementation
->   that issue describes opens a *draft* PR. Honouring `finalize.pr_draft`'s `false`
->   default is a change that engine still needs; this file is the spec, not a
->   description of what the unvendored script does today.
+>   (Session B only). Not vendored here, and its draft-PR behaviour does not yet match
+>   this file — see the note at Step 5's script list, which is the one statement of
+>   that ([#6](https://github.com/topij/agentic-dev-kit/issues/6)).
 > - your tracker's client library or MCP — for filing approved proposals. By backend:
 >   `github-issues` → `gh issue create --title "…" --body "…" --label <your label>`
 >   (the id in the output is the ticket ref); `linear` → the Linear MCP / client with
@@ -96,7 +95,7 @@ patterns — always read from config.
 | `cancel_keywords`         | Bulk-cancel keywords                                                                  |
 | `finalize.branch_pattern` | Branch name format (default `chore/triage-{date}`, `vcs.triage_branch_pattern`)       |
 | `finalize.commit_subject` | Commit-message subject template                                                      |
-| `finalize.pr_draft`       | Open the PR as a draft on first push (default **`false`**). A draft is invisible to a configured review bot — CodeRabbit answers *"Review skipped: draft pull request"*, which `review.unavailable_markers` matches, so a draft does not merely go unreviewed: it registers as **reviewer-unavailable** and demands a `review.fallback_panel` pass the sweep never asked for. `pr_watch`'s merge gate assumes the reviewer can see the PR (`#124`). Other kit workflows do open drafts, for reasons of their own; this is a claim about an unattended sweep only, which has none of them. Set `true` if you have one — the key then means what it says and the PR stays a draft. Verifying that the bit actually landed either way is `#170`, and is not done today. |
+| `finalize.pr_draft`       | Open the PR as a draft on first push (default **`false`**). A draft is invisible to a configured review bot — CodeRabbit answers *"Review skipped: draft pull request"*, which `review.unavailable_markers` matches, so a draft does not merely go unreviewed: it registers as **reviewer-unavailable** and demands a `review.fallback_panel` pass the sweep never asked for. `pr_watch`'s merge gate assumes the reviewer can see the PR ([#124](https://github.com/topij/agentic-dev-kit/issues/124)). Other kit workflows do open drafts for reasons of their own; an unattended sweep has none of them, so set `true` **only** if you have one — the key then means what it says and the PR stays a draft. Verifying that the bit actually landed either way is [#170](https://github.com/topij/agentic-dev-kit/issues/170), and is not done today. |
 
 ______________________________________________________________________
 
@@ -358,8 +357,9 @@ list later. At the end, if any creates failed, include them in the failure-DM ta
 Once at least one ticket has been filed successfully, invoke the finalize helper to
 prepend a graduation marker to `docs/friction-log.md`, **sweep the graduated
 (frozen-at-draft-time) inbox into `docs/friction-log-archive.md`**, commit both edits
-on a fresh branch off the protected branch's origin ref, push, and open a PR —
-ready for review unless `finalize.pr_draft` is explicitly `true`.
+on a fresh branch off the protected branch's origin ref, push, and open a PR — ready
+for review unless `finalize.pr_draft` is explicitly `true`, which the vendored engine
+does not honour yet (see the note below).
 
 Pass the filed tickets via stdin as JSON, and pass `--frozen-inbox` pointing at the
 snapshot path from state's `extra.frozen_inbox_path` (Step 4):
@@ -399,10 +399,10 @@ gathered in Step 4. The script:
 1. Commits **both** doc edits (no other paths).
 1. Pushes the branch.
 1. Opens a PR, **ready for review** under `finalize.pr_draft`'s `false` default and a
-   draft when it is `true`. **Not yet true of the engine `#6` will vendor** — the
+   draft when it is `true`. **Not yet true of the engine [#6](https://github.com/topij/agentic-dev-kit/issues/6) will vendor** — the
    implementation that issue describes hardcodes a draft PR, so honouring the default
    is a change it still needs, and this step is the spec rather than a description.
-   Nothing verifies the bit landed as asked (`#170`).
+   Nothing verifies the bit landed as asked ([#170](https://github.com/topij/agentic-dev-kit/issues/170)).
 
 It prints a JSON summary to stdout with `branch`, `commit_subject`, `header_line`,
 `ticket_range`, `pr_url`, `filed_count`. Capture this for the success DM.

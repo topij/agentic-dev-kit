@@ -45,7 +45,7 @@ status DM and exit. The pattern-finding half of the friction flywheel (Principle
 >   closes) it via your forge, and the skill never blocks on approval. **Open it ready**
 >   unless `finalize.pr_draft` says otherwise. A draft is a review surface for the
 >   operator only; a ready PR is one for the configured review bot as well — so being
->   the review surface argues for ready, not for draft (`#124`).
+>   the review surface argues for ready, not for draft ([#124](https://github.com/topij/agentic-dev-kit/issues/124)).
 > - **Test mode is signalled explicitly.** This run is in test mode if, and only if,
 >   the invocation contained the `test` keyword. Nothing else counts (worktree path,
 >   branch name, etc.). In test mode the skill writes no PR, no tracker ticket, and no
@@ -103,7 +103,7 @@ patterns, or the pattern threshold — always read from config.
 | `review_sources` / `operator_login`                     | Comment-source classification (consumed by the fetcher).                                |
 | `friction_log_path`                                     | Where single-incident findings land (`docs/friction-log.md`).                           |
 | `tracker.linear.team_id` / `tracker.linear.project_id` / `tracker.linear.label_name` | Config for high-severity single-incident tickets — `tracker.linear.project_id` should match `config/dev-model.yaml → tracker.project_name`. |
-| `finalize.branch_pattern` / `commit_subject` / `pr_draft` | The ≥2-PR-pattern CLAUDE.md/skill-prompt PR (`vcs.systemize_branch_pattern`). `pr_draft` defaults to **`false`**: a draft is invisible to a configured review bot, whose *"Review skipped: draft pull request"* reply matches `review.unavailable_markers`, so it registers as **reviewer-unavailable** rather than merely unreviewed (`#124`). No code reads this key: the PR is opened by the `gh` call in Step 3A, which the agent runs, so the key binds only whoever follows this file. |
+| `finalize.branch_pattern` / `commit_subject` / `pr_draft` | The ≥2-PR-pattern CLAUDE.md/skill-prompt PR (`vcs.systemize_branch_pattern`). `pr_draft` defaults to **`false`**: a draft is invisible to a configured review bot, whose *"Review skipped: draft pull request"* reply matches `review.unavailable_markers`, so it registers as **reviewer-unavailable** rather than merely unreviewed ([#124](https://github.com/topij/agentic-dev-kit/issues/124)). No code reads this key: the PR is opened by the `gh` call in Step 3A, which the agent runs, so the key binds only whoever follows this file. |
 
 ______________________________________________________________________
 
@@ -274,9 +274,10 @@ Append a provenance marker to each rule so the impact loop is greppable later:
 <!-- systemize:YYYY-MM-DD ≥2PR shape; PRs #a,#b -->
 ```
 
-Then open the PR, following `scripts/finalize_triage.py`'s proven order — fetch, branch
-off the protected branch's origin ref, commit scoped paths, push, PR. (That script opens
-a *draft* PR today per `#6`; the order is what is being borrowed, not the draft state.)
+Then open the PR, following the proven order of `scripts/finalize_triage.py` — which is
+not vendored here either ([#6](https://github.com/topij/agentic-dev-kit/issues/6)) — fetch, branch off the protected branch's origin
+ref, commit scoped paths, push, open the PR. The order is what is borrowed; that script
+still opens a *draft*.
 Substitute the literal UTC date for `<today>`:
 
 ```bash
@@ -293,15 +294,14 @@ changed — never `reports/`, `state/`, or data files:
 git add CLAUDE.md path/to/scoped/CLAUDE.md   # only the files you actually edited
 git commit -m "docs(systemize): N cross-PR pattern(s) -> CLAUDE.md/skill rules"
 git push --set-upstream origin chore/systemize-<today>
-# Ready, not draft (#124): the --draft that used to be hardcoded here ignored
+# Ready, not draft (issue 124): the --draft that used to be hardcoded here ignored
 # `finalize.pr_draft` entirely. Add it back only if your pipeline config sets that
 # key true.
 gh pr create --title "docs(systemize): N cross-PR pattern(s) -> rules" --body "<body>"
 ```
 
-Nothing here verifies the draft bit landed as asked; `gh`'s flag is flaky in both
-directions and getting that instruction right has failed three times, so it is tracked
-in `#170` rather than attempted again here.
+Nothing here verifies the draft bit landed as asked, and `gh`'s flag is flaky in both
+directions — tracked in [#170](https://github.com/topij/agentic-dev-kit/issues/170), with the constraints a fix has to satisfy.
 
 PR body: one section per pattern — the shape, the PRs it spanned, the review
 source(s) that caught it, and the exact rule added (file + section). Make the
