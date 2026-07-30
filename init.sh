@@ -983,6 +983,11 @@ add_ignore_line ".devkit_state_root"
 # did not create, so this is not lens scratch — it is somebody else's tree, and
 # either way it must never be committed back into the repo.
 add_ignore_line ".claude/worktrees/"
+# Staged writes from scripts/lib/atomic_write.py, which publishes a narrative doc
+# by renaming a temp over it rather than truncating it (#164). The module removes
+# its own temp on every path it controls, but SIGKILL runs no handler — and the
+# debris lands beside the living handoff, which is where wrap-up stages files.
+add_ignore_line "*.devkit-tmp"
 # Pipeline reports (triage proposals, systemize digests) are derived scratch from
 # the same runs that write state/, and the workflows commit only the doc/skill/
 # config paths they edited — never reports/.

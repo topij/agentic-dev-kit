@@ -12,6 +12,12 @@ state/
 # Agent worktrees (created by isolated review lenses) are never committed.
 .claude/worktrees/
 
+# Staged writes from scripts/lib/atomic_write.py. Every path that module
+# controls removes its own temp, but SIGKILL runs no handler — and the debris
+# lands next to the living handoff, which is exactly where the next wrap-up step
+# stages files for commit.
+*.devkit-tmp
+
 # Pipeline reports (triage proposals, systemize digests). Derived scratch from
 # the same runs that write state/: once a sweep lands, every proposal is a
 # tracker issue and every source entry is verbatim in the archive. Tracking them

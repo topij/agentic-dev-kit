@@ -22,6 +22,44 @@ commit shas, …) is preserved. Standing sections (Security, Next up, Backlog,
 …) below the session region are left untouched. Running it when there is
 nothing to move is a clean no-op.
 
+**One documented exception to "moves", and it is not byte-for-byte: the sweep
+NORMALISES LINE ENDINGS.** Both documents are read and written as text with
+universal newlines, so a CRLF or classic-Mac (lone CR) document comes back with
+every line ending as ``\\n`` — the whole file, not only the blocks that moved
+(issue #162). This is deliberate rather than an accident of the default
+``newline`` argument — ``main()`` passes ``newline="\\n"`` explicitly, since
+``newline=None`` writes ``os.linesep`` and would be LF here only because this is
+POSIX. **A test pins the normalisation; nothing pins the explicitness**, because
+the two are indistinguishable on a POSIX host, and that test says so in its own
+docstring. The reasons for choosing to normalise:
+
+* These are Markdown documents the kit itself writes — ``init.sh`` renders them
+  from ``docs/templates/`` with ``\\n``, and every other kit tool reads them as
+  text — so ``\\n`` is already the repo's convention rather than a choice made
+  here.
+* ``budget_line_count`` (below) requires already-translated text, so the *read*
+  must stay universal-newline for this tool and ``check_doc_budget`` to measure
+  a "line" identically. Strictly that settles the read side only — the counter
+  never sees written bytes — but a tool that read translated and wrote raw could
+  not round-trip its own document, so the write side follows from it.
+* The diff noise a whole-file rewrite causes is bounded wherever a repo sets a
+  ``.gitattributes eol=`` policy or ``core.autocrlf``, since the index then
+  holds ``\\n`` either way. **Neither is configured in this repo** — checked, not
+  assumed — so a CRLF handoff swept *here* would produce exactly that whole-file
+  diff. The mitigation is available to an adopter; it is not in force by default,
+  and this bullet previously implied it was.
+
+What the sweep does **not** do is drop characters it does not recognise. A line
+whose only content is an exotic character used to be discarded by the
+trailing-blank strip, because a bare ``str.strip()`` removes much more than
+layout whitespace — ``\\v \\f \\x1c \\x1d \\x1e \\x1f \\x85 \\xa0`` and the
+U+2000-range spaces among them. So a lone file separator vanished out of a swept
+block, and so did a non-breaking space, which is not a control character at all.
+The two places that decide a line is blank *within a block* — the trailing strip
+and ``_is_sep`` — now strip ``_LAYOUT_WS`` and nothing else.
+``insert_into_history`` still uses a bare ``strip()``, deliberately: it only
+advances a cursor to find an insertion point and drops nothing.
+
 Usage:
 
     uv run scripts/archive_plan_sessions.py                  # keep 6, apply
@@ -50,25 +88,66 @@ Exit codes:
     2 — every other failure: usage error, unresolvable configured paths, missing
         file, a file that cannot be read (unreadable or not valid UTF-8),
         unparseable handoff structure, history doc with no session-log section,
-        or a failed write.
+        a refused write, or a failed one.
 
-        **A failed write does NOT mean the documents are intact, and the
-        HISTORY doc is the likelier casualty.** ``Path.write_text`` truncates
-        before writing, so whichever write fails leaves that document empty or
-        partial while the message still reads "no changes applied" (issue #164).
-        Out of disk space it is usually the history that goes: the handoff
-        *shrinks* on a sweep, so truncating frees more than the new text needs,
-        while the history *grows*. And when the history write fails the handoff
-        is rolled back — so the handoff looks clean, which is exactly why
-        checking only the handoff gives a false all-clear.
+        **A failed write leaves both documents intact, and the message says so.**
+        Neither document is ever opened for truncation: each is published by
+        renaming a fully-written temporary file over it, and both are written
+        before either is published (issue #164 — ``Path.write_text`` truncates
+        first, and a 26,807-byte handoff was measured going to 0 bytes under
+        ENOSPC while this tool printed "no changes applied").
 
-        After any exit 2 naming a write failure, check **both** documents with
-        ``git diff --stat`` before doing anything else.
+        The exceptions are the branches where a **publish and its rollback both
+        fail**, and they say so rather than reporting cleanly. Each names both
+        documents, the state it can actually vouch for, and the swept blocks'
+        **titles** — enough to know what is missing, not enough to retype it,
+        so recovery is from git. When the run could not establish whether the
+        handoff was published, the message says that too instead of picking the
+        confident reading. Allocation is finished before any of this, so the
+        ordinary out-of-space route does not lead here.
+
+        A *refused* write is different from a failed one and is worded
+        differently: the sweep declines to publish over a read-only or
+        hardlinked document, because replacing one by rename would succeed while
+        deleting the read-only bit or silently orphaning the alias. See
+        ``lib/atomic_write.py`` for the full list and for why the exception is
+        not an ``OSError``.
+
+        **Two trades, both real costs, stated rather than discovered:**
+
+        1. Publishing by rename needs room for the new content *beside* the old,
+           where truncating first frees the old blocks. A sweep on a nearly-full
+           disk can now fail where it once succeeded. Deliberate — a sweep that
+           "succeeds" by destroying the archive it writes to is not a remedy —
+           but an out-of-space handoff now needs space freed before the sweep
+           that would shrink it can run.
+        2. A rename needs a writable *directory*, where a write needed only a
+           writable file. A document that is writable inside a read-only
+           directory could be swept before and cannot now. There is no way to
+           publish atomically without it.
     3 — ``--target-lines`` specifically: the target cannot be reached without
         sweeping the last remaining block, or there is no block to sweep at all.
         Distinct from 2 so a caller can tell this apart from the unrelated
         failures above without parsing the message; anything reading only
         "non-zero" would report all of them as an exhausted sweep.
+
+    130 — interrupted (``KeyboardInterrupt``), the shell's usual 128+SIGINT.
+        Listed because this module *deliberately* lets an interrupt out rather
+        than converting it: an interrupt arriving around a publish is recovered
+        from first — the handoff is restored from its staged copy if it had
+        already been published, and left alone if the move had already completed,
+        since restoring it then would duplicate the blocks — and only then
+        re-raised. Suppressing it would report a completed sweep for a run the
+        operator cancelled.
+
+        **A 130 does not by itself tell you the state of the documents**, in
+        either direction. An earlier version of this paragraph said it meant no
+        damage; a review lens falsified that with two measured paths. A later
+        version said a harmless cancellation prints nothing, and that is wrong
+        too — Python prints a traceback for any escaping ``KeyboardInterrupt``,
+        so stderr is never empty here. The rule that does hold: **read the
+        message above the traceback.** Every path that changed a document, or
+        could not establish whether it had, prints one.
 """
 
 from __future__ import annotations
@@ -80,6 +159,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from atomic_write import AtomicWriteRefused, stage_text  # noqa: E402
 from kitconfig import load_config, repo_root, resolve_path  # noqa: E402
 
 REPO_ROOT = repo_root()
@@ -161,8 +241,17 @@ def _is_session_heading(line: str) -> bool:
     return line.startswith(SESSION_PREFIXES) or bool(_DATED_SESSION_RE.match(line))
 
 
+# Whitespace a Markdown document treats as layout, and the ONLY characters this
+# module may strip when deciding a line is blank. `str.strip()` with no argument
+# also removes \x1c \x1d \x1e \x85 \v \f — so `"\x1c".strip() == ""`, and the
+# trailing-strip in `parse_blocks` silently dropped a lone file separator out of
+# a swept block (issue #162). A sweep is an archival move; a character it does
+# not recognise is content, not layout.
+_LAYOUT_WS = " \t\r\n"
+
+
 def _is_sep(line: str) -> bool:
-    stripped = line.strip()
+    stripped = line.strip(_LAYOUT_WS)
     return len(stripped) >= 3 and set(stripped) in ({"_"}, {"-"})
 
 
@@ -215,6 +304,9 @@ def parse_blocks(region: list[str]) -> list[list[str]]:
 
     Trailing blank/separator/pointer (``>``) lines are stripped from each block,
     so the pointer the previous run wrote never gets absorbed into a block.
+    "Blank" means ``_LAYOUT_WS`` only — a line whose sole content is an exotic
+    control character is kept, because this is a move and that character is
+    content (issue #162).
     """
     blocks: list[list[str]] = []
     uses_recent_sections = not any(_is_session_heading(line) for line in region)
@@ -236,7 +328,9 @@ def parse_blocks(region: list[str]) -> list[list[str]]:
         blocks.append(cur)
     for block in blocks:
         while block and (
-            block[-1].strip() == "" or _is_sep(block[-1]) or block[-1].startswith(">")
+            block[-1].strip(_LAYOUT_WS) == ""
+            or _is_sep(block[-1])
+            or block[-1].startswith(">")
         ):
             block.pop()
     return blocks
@@ -330,7 +424,13 @@ def main(argv: list[str] | None = None) -> int:
     here: a second copy has drifted from the first in three separate rounds of
     review on this function.
     """
-    parser = argparse.ArgumentParser(description=__doc__)
+    # RawDescriptionHelpFormatter, because `wrap-up.md` cites `--help` as the
+    # authoritative exit-code list and the default formatter re-wraps
+    # `description`, collapsing the bullets into inline `*` markers mid-paragraph
+    # and running the numbered exit codes together into one block of prose.
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
         "--keep",
         type=int,
@@ -544,43 +644,217 @@ def main(argv: list[str] | None = None) -> int:
     # "moved 2 block(s) ... (46 -> 33 plan lines)" and *then* an error, leaving a
     # past-tense success line on stdout describing a file that was never touched.
     #
-    # This is a *move*: a partial write (handoff doc trimmed but history write
-    # fails) would drop the moved blocks. Write the handoff doc, then the history
-    # doc; if the history write fails, roll the handoff doc back so nothing is lost.
+    # This is a *move* across two documents, so it has two hazards, and they are
+    # closed by two different properties of `atomic_write`:
     #
-    # The plan is written FIRST and rolled back if the history write fails. The
-    # order is load-bearing, not incidental: writing history first and failing on
-    # the plan would leave the blocks in *both* files, and a re-run would append
-    # them to history a second time.
+    #   1. A failed write must not destroy the document it was writing. Neither
+    #      document is opened for truncation at all; each is published by
+    #      renaming a fully-written temp over it (issue #164).
+    #   2. A partial *move* — handoff trimmed, history write fails — would drop
+    #      the swept blocks. So BOTH documents are staged first, and only when
+    #      both are safely on disk is either published. Everything that can fail
+    #      for want of space or a bad sector now happens while nothing has been
+    #      published and aborting costs nothing.
+    #
+    # The rollback is staged UP FRONT, for the same reason. The previous attempt
+    # at this (reverted from #160) rebuilt the original handoff from memory
+    # *after* the history write failed — needing more free space, on the disk
+    # that had just refused a smaller write, than the write it was undoing.
+    # Staging it here means the recovery path is an `os.replace` whose cost was
+    # paid while failing was still free.
+    #
+    # The plan is published FIRST. The order is load-bearing, not incidental:
+    # publishing history first and failing on the plan would leave the blocks in
+    # *both* files, and a re-run would append them to history a second time.
     original_plan = "".join(plan)
+    staged = []
     try:
-        args.plan.write_text("".join(new_plan), encoding="utf-8")
         try:
-            args.history.write_text("".join(new_history), encoding="utf-8")
-        except OSError as history_exc:
+            # `newline="\n"` states the normalisation the docstring documents
+            # instead of inheriting it from the platform. `newline=None` writes
+            # `os.linesep`, which is LF here only because this is POSIX — the
+            # claim above would have been true by accident and false on Windows.
+            # Reading is still universal-newline, so the text reaching this point
+            # already holds `\n` alone; this pins how it lands on disk.
+            staged_plan = stage_text(args.plan, "".join(new_plan), newline="\n")
+            staged.append(staged_plan)
+            staged_history = stage_text(args.history, "".join(new_history), newline="\n")
+            staged.append(staged_history)
+            staged_rollback = stage_text(args.plan, original_plan, newline="\n")
+            staged.append(staged_rollback)
+        except AtomicWriteRefused as exc:
+            # Not an OSError and not phrased as one: nothing was attempted and
+            # failed, the tool declined to publish this way. See atomic_write.
+            print(f"error: refusing to write ({exc}); no changes applied", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
+            return 2
+
+        # BOTH publishes catch `BaseException`, and both ask the FILESYSTEM
+        # whether the rename happened rather than inferring it from where the
+        # exception was raised. Two review rounds got this wrong in two
+        # different ways:
+        #
+        #   - Catching `OSError` here and `BaseException` only below fixed one
+        #     of the two call sites. An interrupt during the *handoff* publish
+        #     escaped, the `finally` unlinked the staged rollback, and the blocks
+        #     were lost with no message at all — the same defect the round
+        #     before had just fixed one line further down.
+        #   - Trusting the exception's position is wrong even so: an interrupt
+        #     can land after `os.replace` has returned, so a handler that assumes
+        #     "raised here ⇒ not published" rolls back a *completed* move and
+        #     leaves the blocks in BOTH documents, which a re-run then appends to
+        #     the history a second time.
+        #
+        # `publish_state()` reads the temp's absence, which is evidence.
+        #
+        # ONE recovery routine serves both sites. Three separate review findings
+        # were "the guard/message/test exists at one site and not the other", so
+        # the duplication was the defect generator rather than any single miss.
+        def restore_handoff(*, cause: BaseException, swept: bool) -> bool:
+            """Put the handoff back. ``True`` if it is now intact, else report.
+
+            ``swept`` says whether the handoff is known to have been published;
+            when it is not, the damage message must not assert that it was.
+            """
             try:
-                args.plan.write_text(original_plan, encoding="utf-8")
-            except OSError as rollback_exc:
-                # Never claim "no changes applied" when the rollback itself
-                # failed. Name BOTH documents: the history write failed part-way,
-                # so the append-only archive is damaged too, and an operator told
-                # only about the handoff will restore one and commit the other.
-                # Do not assert a specific state for the handoff — whether it is
-                # truncated or a complete already-swept file depends on where the
-                # rollback died, and this branch cannot tell. Say what is certain.
+                staged_rollback.commit()
+            except BaseException as rollback_exc:
+                # The rollback may have landed anyway: an interrupt can arrive
+                # after its `os.replace` returns, and judging it by "did commit()
+                # raise" is the same unsound inference the forward publishes use
+                # `publish_state()` to avoid. Reported as damage, this sends the
+                # operator to restore a file that is already correct — and at
+                # this point in wrap-up that file holds their uncommitted block.
+                if staged_rollback.publish_state() == "published":
+                    return True
+                state = (
+                    f"{args.plan} has been swept, so these blocks are in NEITHER "
+                    "document"
+                    if swept
+                    else f"{args.plan} could not be confirmed either way, so these "
+                    "blocks may be in NEITHER document"
+                )
                 print(
-                    f"error: history write failed ({history_exc}), AND rolling "
-                    f"the handoff back failed ({rollback_exc}). BOTH documents "
-                    f"are damaged: {args.history} was part-written, and "
-                    f"{args.plan} is in an unknown state — the swept blocks are "
-                    f"in neither. Restore both from git before continuing.",
+                    f"error: publishing failed ({cause}), AND restoring "
+                    f"{args.plan} failed ({rollback_exc}). {args.history} is "
+                    f"unchanged and intact — it is never truncated — but {state}:\n"
+                    + "\n".join(f"  - {title[:88]}" for title in moved_titles)
+                    + f"\nRecover {args.plan} with `git show HEAD:{args.plan.name}` "
+                    "— do NOT `git checkout`, which discards this session's own "
+                    "edits.",
+                    file=sys.stderr,
+                )
+                return False
+            return True
+
+        try:
+            staged_plan.commit()
+        except BaseException as exc:
+            plan_state = staged_plan.publish_state()
+            # "unknown" is treated as published, and that is safe *here*: the
+            # rollback writes the original bytes over a document that either was
+            # swept (so it needs them) or was never touched (so they are what is
+            # already there). At the history site the same ambiguity is not
+            # symmetric, and is handled differently. The message still must not
+            # claim a sweep it could not establish — hence `swept=`.
+            if plan_state in ("published", "unknown") and not restore_handoff(
+                cause=exc, swept=plan_state == "published"
+            ):
+                if isinstance(exc, OSError):
+                    return 2
+                raise
+            if isinstance(exc, OSError):
+                print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
+                return 2
+            raise
+
+        try:
+            staged_history.commit()
+        except BaseException as history_exc:
+            history_state = staged_history.publish_state()
+            if history_state == "published":
+                # The temp's absence is only EVIDENCE that the rename happened —
+                # anything else that removes it reads the same way, and a review
+                # lens measured exactly that: temp removed externally, rename
+                # failed, and this branch reported the move complete while the
+                # blocks were in neither document. Here the destination itself
+                # can be consulted, which settles it outright, so do that rather
+                # than trust the proxy. An unreadable destination is not a
+                # confirmation either, and falls through to `unknown`.
+                try:
+                    landed = args.history.read_text(encoding="utf-8") == "".join(new_history)
+                except (OSError, UnicodeDecodeError):
+                    landed = False
+                if not landed:
+                    history_state = "unknown"
+            if history_state == "published":
+                # The rename DID happen and something after it failed. The move
+                # is complete in both documents — restoring the handoff now is
+                # precisely the duplication the plan-first ordering exists to
+                # prevent, so leave both alone and report.
+                #
+                # Reaching here means the destination was read back and matches
+                # what this run intended to write, so the claim below is checked
+                # rather than inferred.
+                # Printed for an interrupt too, not only an OSError: this is the
+                # one path the code has already established is COMPLETE, and
+                # exiting 130 in silence over it reads as "cancelled, nothing
+                # happened" when the sweep in fact succeeded.
+                print(
+                    f"error: {args.history} was published — its content was "
+                    f"read back and matches — but the step after it failed "
+                    f"({history_exc}). The move is complete in both documents "
+                    "and nothing needs restoring.",
+                    file=sys.stderr,
+                )
+                if isinstance(history_exc, OSError):
+                    return 2
+                raise
+            if not restore_handoff(cause=history_exc, swept=True):
+                if isinstance(history_exc, OSError):
+                    return 2
+                # `raise history_exc`, not a bare `raise`: a bare one re-raises
+                # the ROLLBACK's error, so a cancelled run stopped looking
+                # cancelled and the process no longer terminated as interrupted.
+                raise history_exc
+            if history_state == "unknown":
+                # The handoff is back, and whether the history also received the
+                # blocks could not be determined. Restoring is the right side to
+                # err on — duplicates are visible and fixable, blocks in neither
+                # document are gone — but the operator has to be told to look.
+                print(
+                    f"error: publishing {args.history} failed ({history_exc}), and "
+                    f"this run could not determine whether it landed. {args.plan} "
+                    f"has been restored, so the blocks are definitely there — but "
+                    f"CHECK {args.history} for duplicates of:\n"
+                    + "\n".join(f"  - {title[:88]}" for title in moved_titles),
+                    file=sys.stderr,
+                )
+                if isinstance(history_exc, OSError):
+                    return 2
+                raise
+            if isinstance(history_exc, OSError):
+                print(
+                    f"error: publishing {args.history} failed ({history_exc}); "
+                    f"{args.plan} was restored and no changes were applied. "
+                    "Neither document holds a partial write; the handoff's bytes "
+                    "are the text this run read, which for a CRLF document is its "
+                    "normalised form (see the module docstring).",
                     file=sys.stderr,
                 )
                 return 2
+            # Not an OSError — an interrupt. The handoff is back; let it out.
             raise
-    except OSError as exc:
-        print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
-        return 2
+    finally:
+        # `abort` on a committed write is a no-op, so this only ever removes
+        # temps that were never published — including on the paths above that
+        # return early, and on an unexpected exception. The rollback is committed
+        # by the handler above BEFORE this runs, which is what stops it being
+        # deleted at the one moment it is needed.
+        for item in staged:
+            item.abort()
 
     print(report)
     return 0

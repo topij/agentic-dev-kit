@@ -84,6 +84,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/reconcile_sessions.sh", "engine"),
     ("scripts/kit_doctor.py", "engine"),
     ("scripts/lib/kitconfig.py", "engine"),
+    ("scripts/lib/atomic_write.py", "engine"),
     ("scripts/lib/devmodel_config.py", "engine"),
     ("scripts/lib/repo_root.sh", "engine"),
     ("scripts/lib/state_paths/__init__.py", "engine"),

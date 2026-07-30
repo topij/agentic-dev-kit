@@ -584,7 +584,15 @@ def test_archive_plan_sessions_reports_a_missing_config_instead_of_crashing(tmp_
 
     (tmp_path / "scripts" / "lib").mkdir(parents=True)
     (tmp_path / ".git").mkdir()
-    for rel in ("scripts/archive_plan_sessions.py", "scripts/lib/kitconfig.py"):
+    # Every module the engine imports at load time. `atomic_write` joined this
+    # list with #164 — omit it and the copied tree tracebacks on the import
+    # rather than reaching the handler under test, which is a false pass waiting
+    # to become a false failure.
+    for rel in (
+        "scripts/archive_plan_sessions.py",
+        "scripts/lib/kitconfig.py",
+        "scripts/lib/atomic_write.py",
+    ):
         (tmp_path / rel).write_bytes((REPO_ROOT / rel).read_bytes())
 
     result = subprocess.run(  # noqa: S603

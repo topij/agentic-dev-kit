@@ -68,26 +68,46 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    session blocks to sweep at all. Nothing was written, so report `<handoff>`'s
    *unchanged* length against the budget and do not treat it as done. Exit **2**
    is something else entirely (unreadable or non-UTF-8 file, missing file,
-   unparseable handoff, a history doc with no session-log section, a failed
-   write); read the message and fix that instead of reporting an exhausted sweep.
-   The script's own `--help` carries the authoritative list. **On a failed write,
-   check BOTH documents before you continue, and check them differently** — the
-   write truncates before it fails, so a full disk or quota can leave a document
-   empty or cut mid-line while the message still says "no changes applied"
-   ([#164](https://github.com/topij/agentic-dev-kit/issues/164)).
+   unparseable handoff, a history doc with no session-log section, a **refused**
+   write, or a failed one); read the message and fix that instead of reporting an
+   exhausted sweep. The script's own `--help` carries the authoritative list.
 
-   - `<handoff-history>` — **nothing but the sweep touches this file**, so
-     `git diff --stat <handoff-history>` is a true damage signal: any output at
-     all after a failed write means it was part-written. `git checkout --
-     <handoff-history>` is safe here, and it is the likelier casualty, because
-     the history *grows* while the handoff shrinks and gets rolled back.
-   - `<handoff>` — you edited it in steps 3 and 5, so **a diff is expected and
-     proves nothing**, and `git checkout -- <handoff>` would throw away this
-     session's block and `▶ Next:` line. Open it instead: a truncated file ends
-     mid-line and has lost its standing sections. Only if it is actually damaged,
-     restore it and re-apply your session block by hand.
+   **A failed write no longer truncates either document**
+   ([#164](https://github.com/topij/agentic-dev-kit/issues/164)). Neither file
+   is opened for truncation: each is published by renaming a fully-written temp
+   over it, and both are written before either is published. So the old
+   instructions here — inspect both files, `git checkout -- <handoff-history>`
+   because it is the likelier casualty — described a failure mode that no longer
+   exists. **Read the message rather than the exit code**; three of them are
+   worth acting on differently:
 
-   Do not continue to the commit step until both are known good. Stage
+   - **"refusing to write"** — the sweep declined; nothing was attempted. **The
+     message names the cause**; read it rather than guessing. The class is
+     "publishing by rename would lose a property of the document" — in practice
+     a **read-only** `<handoff>` or `<handoff-history>`, a **hard link** to one,
+     or **ownership that cannot be carried** (a doc left root-owned by an
+     earlier `sudo`). Fix what it names and re-run; there is nothing to restore.
+     (A read-only *directory* is not this message: it reports `write failed`
+     with a `Permission denied` on a temp path you have never seen, because the
+     sweep publishes by renaming a temp into that directory. Nothing was applied
+     there either.)
+   - **"could not determine whether it landed"** — the archive write failed and
+     the run could not tell whether it had already taken effect, so it restored
+     `<handoff>` and stopped. Your session blocks are safe in `<handoff>`. **Open
+     `<handoff-history>` and check for duplicates of the titles listed**, delete
+     any, then re-run the sweep.
+   - **The messages that report damage** name both documents, the state the run
+     can actually vouch for, and the swept blocks' **titles** — enough to know
+     what is missing, not enough to retype them. They need a publish *and* its
+     rollback to fail together, so you are unlikely to see one. To recover:
+     **copy `<handoff>` aside first**, then use git as the *source of the swept
+     blocks only* — `git show HEAD:<handoff>` — and paste them back into your
+     copy. Do **not** `git checkout -- <handoff>`: that discards every
+     uncommitted edit in the file, which at this point in the workflow is this
+     whole session's block, its `▶ Next:` line, and anything else you changed in
+     steps 3 and 5.
+
+   Do not continue to the commit step until the sweep reported success. Stage
    **both** files (`<handoff>` + `<handoff-history>`) into this commit. If
    `<friction-log>` is over budget, don't sweep it inline — note it and
    recommend the `triage-friction-log` workflow (graduating the inbox needs
