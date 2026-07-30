@@ -744,22 +744,35 @@ def main(argv: list[str] | None = None) -> int:
         except BaseException as history_exc:
             history_state = staged_history.publish_state()
             if history_state == "published":
+                # The temp's absence is only EVIDENCE that the rename happened —
+                # anything else that removes it reads the same way, and a review
+                # lens measured exactly that: temp removed externally, rename
+                # failed, and this branch reported the move complete while the
+                # blocks were in neither document. Here the destination itself
+                # can be consulted, which settles it outright, so do that rather
+                # than trust the proxy. An unreadable destination is not a
+                # confirmation either, and falls through to `unknown`.
+                try:
+                    landed = args.history.read_text(encoding="utf-8") == "".join(new_history)
+                except (OSError, UnicodeDecodeError):
+                    landed = False
+                if not landed:
+                    history_state = "unknown"
+            if history_state == "published":
                 # The rename DID happen and something after it failed. The move
                 # is complete in both documents — restoring the handoff now is
                 # precisely the duplication the plan-first ordering exists to
                 # prevent, so leave both alone and report.
                 #
-                # The wording stops short of "both documents are correct": the
-                # evidence is the staged temp's absence, and something other
-                # than the rename could in principle have removed it. Say what
-                # was observed and what it implies, and let the operator check.
+                # Reaching here means the destination was read back and matches
+                # what this run intended to write, so the claim below is checked
+                # rather than inferred.
                 if isinstance(history_exc, OSError):
                     print(
-                        f"error: {args.history} appears to have been published — "
-                        f"its staged file is gone — but the step after it failed "
-                        f"({history_exc}). On that reading the move is complete "
-                        f"and nothing needs restoring. Confirm the swept blocks "
-                        f"are in {args.history} before continuing.",
+                        f"error: {args.history} was published — its content was "
+                        f"read back and matches — but the step after it failed "
+                        f"({history_exc}). The move is complete in both documents "
+                        "and nothing needs restoring.",
                         file=sys.stderr,
                     )
                     return 2

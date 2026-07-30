@@ -2875,6 +2875,52 @@ def test_an_indeterminate_history_publish_restores_and_warns_of_duplicates(
     assert plan.read_text(encoding="utf-8") == original_plan, "the handoff was not restored"
 
 
+def test_a_vanished_history_temp_is_not_mistaken_for_a_published_move(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The temp's absence is evidence; the destination's content is the fact.
+
+    A review lens measured the proxy failing: with the staged temp removed by
+    something other than the rename, and the rename then failing, this branch
+    reported the move complete while the blocks were in neither document — the
+    false all-clear #164 exists to eliminate, one branch over. Hedging the
+    wording was the first fix; reading the destination back and comparing it to
+    what the run intended to write settles it outright.
+    """
+    archive = _load_module("archive_readback", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original_plan = plan.read_text(encoding="utf-8")
+    original_history = history.read_text(encoding="utf-8")
+
+    real_replace, real_exists = os.replace, Path.exists
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        if Path(str(dst)).name == history.name:
+            raise OSError(5, "Input/output error")
+        return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    def vanished(self: Path) -> bool:
+        if self.name.endswith(".devkit-tmp") and history.name in self.name:
+            return False  # something else removed it
+        return real_exists(self)
+
+    monkeypatch.setattr(os, "replace", spy)
+    monkeypatch.setattr(Path, "exists", vanished)
+    result = archive.main(
+        ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+    )
+    monkeypatch.undo()
+
+    assert result == 2
+    err = capsys.readouterr().err
+    assert "move is complete" not in err, f"a false all-clear over lost blocks: {err!r}"
+    assert plan.read_text(encoding="utf-8") == original_plan, "the handoff was not restored"
+    assert history.read_text(encoding="utf-8") == original_history
+    assert "## Earlier session — First" in plan.read_text(encoding="utf-8")
+
+
 def test_a_second_interrupt_during_the_rollback_still_reports_the_damage(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
