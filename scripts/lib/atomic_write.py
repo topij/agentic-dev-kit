@@ -154,7 +154,13 @@ class StagedWrite:
         if self._done:
             return
         self._done = True
-        with contextlib.suppress(FileNotFoundError):
+        # OSError, not just FileNotFoundError. The documented shape is
+        # `finally: abort()`, so anything raised here escapes from a `finally`
+        # and replaces the caller's real outcome with a traceback — turning a
+        # clean exit 2 into an exit 1, outside the exit-code contract its caller
+        # publishes. A temp that cannot be removed is not something a caller can
+        # act on, and leaving it is what `*.devkit-tmp` in .gitignore covers.
+        with contextlib.suppress(OSError):
             self.temp.unlink()
 
 

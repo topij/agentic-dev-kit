@@ -865,6 +865,19 @@ Old.
     assert "](saved/handoff-history.md)" in plan.read_text(encoding="utf-8")
 
 
+# `CAP_DAC_OVERRIDE` — root ignores the permission bits these tests deny with, so
+# `chmod 0555` on a directory does not stop the staging write and
+# `os.access(target, os.W_OK)` returns true for a `chmod 0444` file. The tests
+# would then FAIL rather than pass vacuously, which is the better direction, but
+# a red suite in an adopter's root container says nothing about the kit. GitHub
+# Actions runs as `runner`, so this skips nothing in this repo's own CI.
+_is_root = hasattr(os, "geteuid") and os.geteuid() == 0
+_needs_permission_enforcement = pytest.mark.skipif(
+    _is_root,
+    reason="root bypasses the permission bits this test denies with (CAP_DAC_OVERRIDE)",
+)
+
+
 def _write_four_block_plan(plan: Path, history: Path) -> None:
     """A 4-block, 46-line handoff doc shared by the ``--target-lines`` tests below.
 
@@ -1986,6 +1999,7 @@ def test_report_figures_use_the_budget_counter_not_splitlines(
     assert f"-> {archive.budget_line_count(written)} plan lines" in out, out
 
 
+@_needs_permission_enforcement
 def test_a_failed_write_prints_no_past_tense_success_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -2059,6 +2073,7 @@ def test_a_brace_in_a_session_title_does_not_crash_the_report(
     assert "{budget}" in history.read_text(encoding="utf-8")
 
 
+@_needs_permission_enforcement
 def test_a_failed_history_write_rolls_the_handoff_back(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -2192,7 +2207,9 @@ def test_dry_run_writes_nothing_and_says_would_move(
     )
 
 
-def test_the_plan_is_written_before_the_history_doc(tmp_path: Path) -> None:
+def test_the_plan_is_written_before_the_history_doc(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The write ORDER, not merely the end state.
 
     `test_a_failed_history_write_rolls_the_handoff_back` asserts the plan ends up
@@ -2222,13 +2239,10 @@ def test_the_plan_is_written_before_the_history_doc(tmp_path: Path) -> None:
             order.append("history")
         return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
 
-    os.replace = spy  # type: ignore[assignment]
-    try:
-        result = archive.main(
-            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
-        )
-    finally:
-        os.replace = real_replace  # type: ignore[assignment]
+    monkeypatch.setattr(os, "replace", spy)
+    result = archive.main(
+        ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+    )
 
     assert result == 0
     assert order == ["plan", "history"], (
@@ -2313,7 +2327,7 @@ def test_the_keep_early_exit_message_is_asserted_somewhere(
 
 
 def test_a_failed_rollback_does_not_claim_no_changes_applied(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """When the rollback itself fails, say which document is in which state.
 
@@ -2345,13 +2359,10 @@ def test_a_failed_rollback_does_not_claim_no_changes_applied(
             raise OSError(28, "No space left on device")
         return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
 
-    os.replace = spy  # type: ignore[assignment]
-    try:
-        result = archive.main(
-            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
-        )
-    finally:
-        os.replace = real_replace  # type: ignore[assignment]
+    monkeypatch.setattr(os, "replace", spy)
+    result = archive.main(
+        ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+    )
 
     assert result == 2
     err = capsys.readouterr().err
@@ -2371,7 +2382,7 @@ def test_a_failed_rollback_does_not_claim_no_changes_applied(
 
 
 def test_a_failed_history_publish_restores_the_handoff_from_its_staged_copy(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The rollback path's happy case: history publish fails, handoff comes back.
 
@@ -2394,13 +2405,10 @@ def test_a_failed_history_publish_restores_the_handoff_from_its_staged_copy(
             raise OSError(28, "No space left on device")
         return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
 
-    os.replace = spy  # type: ignore[assignment]
-    try:
-        result = archive.main(
-            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
-        )
-    finally:
-        os.replace = real_replace  # type: ignore[assignment]
+    monkeypatch.setattr(os, "replace", spy)
+    result = archive.main(
+        ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+    )
 
     assert result == 2
     err = capsys.readouterr().err
@@ -2455,6 +2463,7 @@ def test_a_symlinked_handoff_is_written_through_not_replaced(tmp_path: Path) -> 
     assert "First" in history.read_text(encoding="utf-8")
 
 
+@_needs_permission_enforcement
 def test_a_read_only_handoff_is_refused_rather_than_replaced(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -2579,6 +2588,13 @@ def test_the_sweep_normalises_line_endings_deliberately(tmp_path: Path) -> None:
     an accident of the default `newline` argument, which is what makes it worth
     a test either way. If the sweep is ever made byte-preserving, this test is
     the one that must be deliberately rewritten.
+
+    **What this test cannot see, stated rather than left implied.** It runs on
+    POSIX, where `os.linesep` is `\\n` — so it passes identically whether the
+    sweep writes with `newline="\\n"` or inherits `newline=None`. The two differ
+    only on Windows, where the inherited form emits CRLF and the docstring's
+    claim would be false. The explicit `newline="\\n"` in `main()` is what makes
+    the guarantee real; this test pins the POSIX half of it, and no more.
     """
     archive = _load_module("archive_eol", ENGINE_DIR / "archive_plan_sessions.py")
     plan = tmp_path / "handoff.md"

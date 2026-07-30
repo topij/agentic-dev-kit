@@ -620,11 +620,17 @@ def main(argv: list[str] | None = None) -> int:
     staged = []
     try:
         try:
-            staged_plan = stage_text(args.plan, "".join(new_plan))
+            # `newline="\n"` states the normalisation the docstring documents
+            # instead of inheriting it from the platform. `newline=None` writes
+            # `os.linesep`, which is LF here only because this is POSIX — the
+            # claim above would have been true by accident and false on Windows.
+            # Reading is still universal-newline, so the text reaching this point
+            # already holds `\n` alone; this pins how it lands on disk.
+            staged_plan = stage_text(args.plan, "".join(new_plan), newline="\n")
             staged.append(staged_plan)
-            staged_history = stage_text(args.history, "".join(new_history))
+            staged_history = stage_text(args.history, "".join(new_history), newline="\n")
             staged.append(staged_history)
-            staged_rollback = stage_text(args.plan, original_plan)
+            staged_rollback = stage_text(args.plan, original_plan, newline="\n")
             staged.append(staged_rollback)
         except AtomicWriteRefused as exc:
             # Not an OSError and not phrased as one: nothing was attempted and
