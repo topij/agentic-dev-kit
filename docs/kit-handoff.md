@@ -19,8 +19,9 @@ issues **stay open**, eight review rounds ran, and the review bot woke up.
 
 ## Latest session — 2026-07-30 (two merges, eight rounds, and where every defect lived)
 
-**Theme —** Both PRs landed after eight panel rounds (18 lens runs launched, 16 completed — the
-merged bodies publish 6 and 12, which count launches). The result worth keeping is narrower than
+**Theme —** Both PRs landed after eight panel rounds: **18 lens runs launched, 16 completed**, two
+stalled at the watchdog and re-run. Figures published on the PRs themselves count launches, and one
+was written mid-PR, so they are higher and none is wrong. The result worth keeping is narrower than
 this block first claimed, and a lens refuted the wider version: **no round ever disputed what the
 tickets asked for** — flip a documented default, drop a hardcoded `--draft`, diff the named sha —
 but nearly every HIGH was in a justification or a guard added around those edits. Both are the
