@@ -62,10 +62,13 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    here** (or run the script with no flags, which defaults to `--keep 6`):
    `check_doc_budget.py` measures **lines** while `--keep` counts **blocks**, so
    the default can report "nothing to move" while `<handoff>` stays over budget
-   ([#74](https://github.com/topij/agentic-dev-kit/issues/74)). If
-   `--target-lines` itself exits non-zero, it ran out of blocks to sweep
-   (short of the last remaining one) without reaching the target — report the
-   achieved line count against the budget; do not treat that as done. Stage
+   ([#74](https://github.com/topij/agentic-dev-kit/issues/74)). **Read the exit
+   code, not merely "non-zero":** exit **3** is the one case where it ran out of
+   blocks to sweep short of the last remaining one — nothing was written, so
+   report `<handoff>`'s *unchanged* length against the budget and do not treat it
+   as done. Exit **2** is something else entirely (missing file, unparseable
+   handoff, a history doc with no session-log section, a failed write); read the
+   message and fix that instead of reporting an exhausted sweep. Stage
    **both** files (`<handoff>` + `<handoff-history>`) into this commit. If
    `<friction-log>` is over budget, don't sweep it inline — note it and
    recommend the `triage-friction-log` workflow (graduating the inbox needs

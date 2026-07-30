@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "954e112f969b068c8de40d6757d9c07ae780c7ac57477f1408b365c96e6c4be2"
+      "sha256": "8434faa775e544da658b913bf05ef4cfac24ccdc835f7f28b06768645dd34cb5"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
@@ -64,7 +64,7 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "212333c783e005e1801ea4f4d1c57416fbb068fae8470e206701b4963b935ffd"
+      "sha256": "1e82b5162f52f01cebe687e1ed5bec5c1354c4321ca6a7dd18b51120228b6fea"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",

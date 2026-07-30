@@ -868,15 +868,19 @@ def _write_four_block_plan(plan: Path, history: Path) -> None:
     """A 4-block, 46-line handoff doc shared by the ``--target-lines`` tests below.
 
     Bodies are 8 lines each (except the newest, 3) so the candidate line counts
-    (59 / 46 / 33 / 20) are far enough apart to write exact-value assertions
-    against.
+    are far enough apart to write exact-value assertions against. The candidates
+    the sweep actually builds — ``moved_count`` 1..3, i.e. 3 / 2 / 1 live blocks —
+    measure **46 / 33 / 20** lines, and the floor with no blocks left would be 12.
+    (A keep-everything rebuild would be 59, but ``range(1, len(blocks))`` never
+    constructs it.)
 
     An earlier version of this docstring claimed 1-line bodies would make the
-    count "non-monotonic in moved_count". That is false and was measured false:
-    the history pointer is written into *every* candidate, so it is a constant
-    across the sequence and cannot outweigh a swept block. The one real step-up
-    is between the original file and the first rebuilt candidate, which is not
-    a property of ``moved_count`` at all.
+    count "non-monotonic in moved_count". That is false: the history pointer is
+    written into *every* candidate, so it is constant across the sequence and
+    cannot outweigh a swept block. A later version then claimed the "one real
+    step-up" was between the original file and the first candidate — also false,
+    and both are 46 lines here. The count simply decreases with ``moved_count``;
+    no test relies on that, because the loop measures each candidate.
     """
     plan.write_text(
         "# Handoff\n"
@@ -1037,7 +1041,11 @@ def test_target_lines_and_keep_are_mutually_exclusive(tmp_path: Path) -> None:
         ]
     )
 
-    assert result != 0
+    # `== 2`, not `!= 0`: exit 3 means specifically 'target unreachable', and a
+    # usage error is not that. Asserting only non-zero re-creates the very
+    # conflation the distinct code exists to remove — and `return 2` mutated to
+    # `return 3` passed the suite while it did.
+    assert result == 2
     assert plan.read_text(encoding="utf-8") == original_plan
 
 
@@ -1782,6 +1790,29 @@ def test_line_counters_agree_on_exotic_separators(tmp_path: Path) -> None:
     # And the naive form really does disagree — otherwise this test is vacuous.
     assert len(text.splitlines()) != budget._line_count(doc)
 
+    # The OTHER divergence class, which this test could not previously reach.
+    # `_line_count` reads a text handle, so universal newlines turns \r and \r\n
+    # into \n before it counts; `budget_line_count` splits on \n alone and is
+    # therefore correct only for ALREADY-TRANSLATED text. Reading with
+    # `newline=""` anywhere upstream silently breaks parity by one line per CR.
+    # Asserted in both directions so that change fails here rather than in the field.
+    for raw in ("a\rb\rc\n", "a\rb\r", "a\rb\nc\rd\n", "a\r\nb\r\nc\n", "a\nb\n"):
+        crdoc = doc.parent / "cr.md"
+        crdoc.write_text(raw, encoding="utf-8", newline="")
+        translated = crdoc.read_text(encoding="utf-8")
+        assert archive.budget_line_count(translated) == budget._line_count(crdoc), raw
+
+    # Only a LONE \r diverges when left untranslated — \r\n already carries the
+    # \n this counter splits on, which is why the precondition bites exactly on
+    # classic-Mac endings and is invisible in a CRLF document.
+    for lone_cr in ("a\rb\rc\n", "a\rb\r", "a\rb\nc\rd\n"):
+        crdoc = doc.parent / "cr.md"
+        crdoc.write_text(lone_cr, encoding="utf-8", newline="")
+        assert archive.budget_line_count(lone_cr) != budget._line_count(crdoc), (
+            "untranslated lone-CR text must NOT be passed to budget_line_count; "
+            "if this stops holding, the precondition has changed"
+        )
+
 
 def test_no_flags_keeps_the_documented_default_of_six_blocks(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -1844,6 +1875,11 @@ def test_target_lines_on_a_one_block_doc_fails_without_crashing(
     between a 1-block doc and `range(1, 1)` leaving `new_plan = None`, then
     `TypeError: object of type 'NoneType' has no len()`. No test exercised a
     1-block doc under `--target-lines` at all.
+
+    The concrete failure is `TypeError: can only join an iterable`, raised at
+    `budget_line_count("".join(new_plan))`. (An earlier version of this
+    docstring said `object of type 'NoneType' has no len()`, which was the
+    error before the line-counter change landed in the same commit.)
     """
     archive = _load_module("archive_one_block", ENGINE_DIR / "archive_plan_sessions.py")
     plan = tmp_path / "handoff.md"
@@ -1885,3 +1921,109 @@ def test_target_lines_on_a_zero_block_doc_does_not_claim_a_last_block(
     assert "no session blocks to sweep" in err
     assert "last live block" not in err
     assert "1 remaining session block" not in err
+
+
+def test_target_lines_never_sweeps_the_last_remaining_block(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The floor invariant, which was asserted in four prose sites and no test.
+
+    Mutating the loop bound `range(1, len(blocks))` -> `range(1, len(blocks) + 1)`
+    let the sweep empty the handoff of every session block and report SUCCESS
+    (`rc=0`, `keeping 0 live`). It survived the whole suite.
+
+    The target has to sit between the 0-block candidate and the 1-block candidate
+    to force the extra iteration. For this fixture the candidates are 46 / 33 / 20
+    for 3 / 2 / 1 live blocks, and 12 with none — so 15 is reachable ONLY by
+    sweeping the last block, and must be refused. An earlier test used
+    `--target-lines 5`, which is below 12 and therefore exits 3 either way.
+    """
+    archive = _load_module("archive_floor", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original = plan.read_text(encoding="utf-8")
+
+    result = archive.main(
+        ["--target-lines", "15", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result == 3, "a target reachable only by emptying the doc must be refused"
+    out = capsys.readouterr()
+    assert "keeping 0 live" not in out.out
+    # The doc is untouched, and in particular still has a session block.
+    assert plan.read_text(encoding="utf-8") == original
+    assert "## Latest session — New" in plan.read_text(encoding="utf-8")
+
+
+def test_report_figures_use_the_budget_counter_not_splitlines(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The reported `(N -> M plan lines)` must be in the budget's units.
+
+    Every other fixture is separator-free, where `len(splitlines())` and
+    `budget_line_count` agree — so reverting the report to `len()` survived the
+    suite. This fixture puts a form feed and a vertical tab in a body line, which
+    `splitlines()` counts as extra lines and the budget does not. The operator
+    reads these numbers against `check_doc_budget`'s budget, so an overstatement
+    here is a number that does not exist anywhere else.
+    """
+    archive = _load_module("archive_report_units", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    body = "# Handoff\n\nLast updated: 2026-07-30 — testing\n\n"
+    for i in range(3):
+        heading = "## Latest session" if i == 0 else "## Earlier session"
+        body += f"{heading} — Block{i}\n\n"
+        # \f and \v are line breaks to splitlines() and not to the budget counter.
+        body += f"Block{i} line with \f form feed and \v vertical tab.\n"
+        body += "".join(f"Block{i} line {j}.\n" for j in range(1, 8)) + "\n"
+    body += "## Standing section\n\nStanding content.\n"
+    plan.write_text(body, encoding="utf-8")
+    history.write_text(
+        "# History\n\n## Session log\n\n### existing entry\n\nexisting.\n",
+        encoding="utf-8",
+    )
+    real_lines = archive.budget_line_count(body)
+    assert real_lines != len(body.splitlines()), "fixture must distinguish the counters"
+
+    result = archive.main(
+        ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result == 0
+    out = capsys.readouterr().out
+    assert f"({real_lines} -> " in out, out
+    written = plan.read_text(encoding="utf-8")
+    assert f"-> {archive.budget_line_count(written)} plan lines" in out, out
+
+
+def test_a_failed_write_prints_no_past_tense_success_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """stdout must not claim the move happened when the write failed.
+
+    The report used to be printed BEFORE the write, so a read-only handoff
+    emitted `moved 2 block(s) ... (46 -> 33 plan lines)` and then an error — and
+    `wrap-up.md` tells the operator to report the line count it sees. That is a
+    figure for a file that was never touched.
+    """
+    archive = _load_module("archive_failed_write", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original = plan.read_text(encoding="utf-8")
+    plan.chmod(0o444)
+    try:
+        result = archive.main(
+            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+        )
+    finally:
+        plan.chmod(0o644)
+
+    assert result == 2
+    captured = capsys.readouterr()
+    assert "moved" not in captured.out, captured.out
+    assert "plan lines" not in captured.out, captured.out
+    assert "write failed" in captured.err
+    assert plan.read_text(encoding="utf-8") == original
