@@ -14,10 +14,99 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-29 — the sixth sweep, a config overlay narrowed to one key across
-three review rounds, and the same defect in all three (`#156`, `#157`, `#158` merged).
+Last updated: 2026-07-30 — `#74` shipped after six review rounds; a latent data-loss bug
+found in the handoff's own custodian (`#164`), and a mechanism reverted (`#160` merged).
 
-## Latest session — 2026-07-29 (the sixth sweep, and three rounds that all found the same thing)
+## Latest session — 2026-07-30 (one flag, six rounds, and a bug older than the PR)
+
+**Theme —** `#74` shipped. The durable results are two: the review found a **pre-existing
+data-loss bug in the tool that owns this file**, and it measured where six rounds of its own
+effort actually went.
+
+- **`#160` merged (`85cdeb0`).** `archive_plan_sessions.py --target-lines N` sweeps oldest-first
+  until the handoff is at or under a *line* budget, so the remedy `check_doc_budget` names can
+  actually discharge it — `--keep` counts blocks and was a no-op at its default. `budget_line_count`
+  makes both tools measure a line the same way; `check_doc_budget` substitutes `{budget}` so the
+  number lives in one place. **28 new test functions / 31 cases** (`--collect-only`: 56 → 87).
+  Verified in production at this wrap-up: 419 → 355 lines.
+- **`#164` filed — the find of the session, and it is NOT fixed.** `Path.write_text` truncates
+  before writing, so a failed write destroys the document and the handler still prints *"no changes
+  applied"*. Measured on a real full filesystem: a **26,807-byte handoff went to 0 bytes** while the
+  tool reported nothing had happened. Latent in the archive engine all along.
+- **`atomic_write` was attempted for it and REVERTED** — four HIGH regressions, found independently
+  by both lenses: `os.replace` replaces a symlinked doc rather than writing through it, file
+  mode/ownership reset every sweep, a fixed temp name lets concurrent runs publish each other's
+  bytes, and a pre-existing temp symlink becomes an arbitrary-file clobber. All silent, all at
+  exit 0.
+- **The mitigation that shipped instead was itself defective three times, which is the session's own
+  thesis biting the session.** `02c70ac` — `--help` still promised a rollback the first write never
+  gets, a sentence true only while `atomic_write` existed and left standing through the revert.
+  `15c8651` — the check named `<handoff>`, but under ENOSPC the *history* fails and the handoff
+  rolls back clean, so the instruction **green-lit the damage it was written to catch** (measured:
+  an archive committed at 12 of 39 sessions). `37aebd9` — the recovery said
+  `git checkout -- <handoff>`, which discards this session's own block.
+- **Also filed:** `#161` (LOW imprecisions; **two mutants still survive** — the megaline trim and
+  `--target-lines < 1`), `#162` (the sweep is not byte-preserving), `#163` (where the review cycles
+  went).
+
+**Learned**
+
+- **A fix stops at the first site**, and it is not a prose problem. The sharpest was
+  `(OSError, UnicodeDecodeError)` applied to one of two exception classes *on the same line*,
+  leaving exit 1 producible against a contract admitting only 0/2/3 — with the correct fix already
+  sitting in `check_memory_budget.py:192-197` under a comment giving the reason. `#163` enumerates
+  five occurrences; the PR's 13 commits carry more, **twice inside a fix for this very pattern**.
+  Counts on `#163` predate rounds 5–6 and were not refreshed — treat the issue as the record and
+  this line as a pointer.
+- **A fix round that adds a new mechanism is where the next HIGH comes from.** Three times across
+  seven review passes: round 2's `.format()` template → round 3's crash; round 5's `atomic_write` →
+  round 6's four HIGHs → reverted; round 6's mitigation paragraph → the confirmation pass. The
+  doctrine already says a new mechanism gets filed however squarely a finding prompted it; this is
+  the measured version of why.
+- **A hypothesis was stated as falsifiable and refuted within one round.** Apparent lens
+  specialisation (adversarial finds mechanism, correctness finds prose) was coincidence — round 5's
+  correctness lens led with a mechanism defect. On `#163` rather than dropped, because doctrine
+  built on it would have rested on nothing.
+- **Execution found the bugs that mattered; reading found more of them.** The filled ramdisk,
+  `RLIMIT_FSIZE` and a planted symlink produced `#164` and the `atomic_write` HIGHs — nothing else
+  would have. But the one-of-two-sites class, which is most of the session's fixes, was found by
+  reading. The fuzz harnesses lived in session scratch and are gone: those runs are attestations,
+  not reproducible evidence.
+
+**Open, and owned by nothing yet**
+
+- **This handoff block was itself panel-reviewed, and both lenses found it flattering.** It
+  originally described the fallback mitigation in one sentence while three commits fixed defects in
+  it, carried a stale test count, and asserted `#163` figures that contradicted `#163`. Corrected
+  here. **The merged tree of `#160` was never seen by a lens** — the final panel reviewed `84dc129`,
+  three doc/test commits followed, and the PR's review record says so explicitly (`#27`).
+- **`#42` reproduced at merge time** on `#160`: posting the review record un-converged it
+  (`review_evidence.valid: true`, blockers empty, `mergeable: false`) and needed `--mark-seen`.
+  Occurrence data on the issue, not the inbox.
+- **`#73` gained a new instance from this session's sweep** — the moved block says *"see the latest
+  session's open list"* about `#132`, which resolves to nothing inside the history file. Not
+  repaired here; recorded so the count is honest.
+- The inbox is **168/150** and unchanged: today's friction went to the tracker (`#161`–`#164`),
+  the routing Principle #2 prescribes. The guard-chaining rule (`check && act`) is the one entry
+  that lives only there.
+
+▶ Next: **`#163` Sink 1 + `#75`** — every lens run this session (18 of 18) sat on the base commit
+with an empty `origin/main...HEAD` diff and re-derived a workaround. But the cheap fix is not the
+`git archive` recipe: worktrees share the object store, so `git diff origin/main...<sha>` and
+`git show <sha>:<path>` work directly, and the archive recipe was *refused by the sandbox* for one
+lens. So: teach the launch prompt to diff against the **named sha** rather than `HEAD` (`#163`
+Sink 1), and invert contract item 7 as `#75` actually asks. Then `#124`.
+
+**Then the cs-toolkit thread, and note the vocabulary:** Phase 2's blockers remain
+`#41`/`#37`/`#134` as the live blocks below state — all three still open, nothing discharged them.
+What this session added is the argument that `#47` is their common cause, and that a prerequisite
+slice (`#112`, `#33`, `#133`, `#135`, `#107` — the mutation/drift gate) should land first so the
+verification everything after it relies on is trustworthy. That slice is a proposal, not an
+established gate; `#164` also remains unfixed and the wrap-up sweep touches that code every session.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-29 (the sixth sweep, and three rounds that all found the same thing)
 
 **Theme —** Three PRs merged. The result worth keeping is narrower than it first looked: across
 three review rounds on one change, **justification prose was wrong in every round** — a recurring
@@ -283,70 +372,6 @@ Prefer it over `session-start` this time: `#143` (filed here) records that `sess
 tracker step overflowed its tool limit at 68 open issues and that the remedy it prescribes cannot
 be run on this backend — there are ~80 open now, so page at `perPage: 25` and read
 `number`/`title`/`labels`/`state` only if you do run it.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-28 · 4 (the mutation gate shipped; four panel rounds)
-
-**Theme —** Two merges and a review loop that would not converge. The mechanism is small;
-the durable result is a measured account of how a guard test can be defeated four times
-running, and of a general argument being applied to instances it did not cover.
-
-- **`#130` merged (`e8e7789`).** The `pr_watch` 403 entry from `#126` had the diagnosis
-  right and the remedy wrong: it treated the proxy's *"an org admin must connect the
-  Claude GitHub App"* body as actionable. It is a canned string — this is a personal repo
-  with no org admin, and GitHub access was enabled throughout. Established by running the
-  commands: `GET /user` returns `topij` **with the sentinel and with no auth header at
-  all**; `/repos/*` and the public `/octocat` both 403; `documentation_url` is
-  `docs.anthropic.com`. A path allowlist, not a credential problem.
-- **`#131` merged (`9fb4baa`).** `driftcheck` marker on the byte-comparison test,
-  registered in a new `scripts/tests/conftest.py` so it travels with vendored tests;
-  `make mutation-test`; `fallback-review-panel.md` item 5 rewritten repo-agnostic with the
-  rule that does not depend on any of it — **a kill is only a kill if a test asserting
-  behaviour is what failed**. `#112`'s item 1 satisfied by construction; item 2 declined
-  with reasons on the issue.
-- **Five tickets filed:** `#132` (`/upgrade` cannot deliver anything under
-  `scripts/tests/`), `#133` (the converse marker guard, with live instances on `main`),
-  `#134` (kit tests hardcode `parents[2]`, so they fail in the `scripts/devkit/` layout),
-  `#135` (a conftest `collect_ignore` is the one narrowing vector CI cannot catch),
-  `#136` (panel lenses collide in the shared scratchpad, and copying a worktree is not
-  isolation).
-
-**Learned**
-
-- **A guard test over an unbounded space cannot be finished.** Four rounds, four sets of
-  HIGHs: a literal parked in a `#` comment; the first `target:` block read while make runs
-  the last; `--deselect`/`-k`/`-k` with no space/`--ignore=`; symmetric narrowing; a
-  dropped `.PHONY:` token. Every round's fix was the next round's finding — `rule 1`'s
-  pattern, and severity never fell below three HIGHs.
-- **But the general argument was applied to instances it did not cover.** "A text search
-  cannot be sound" is true, and two of the three tests deleted on that basis were built on
-  `make -n` — an *execution* probe. Deleting them opened the one hole the change existed
-  to close: with the flag silently dropped from the recipe, the full suite stays green and
-  a behaviour-only mutation then reads as a **kill**. The adversarial lens proved it by
-  restoring the deleted assertions into every bypass and watching them kill each one.
-- **My commit messages were the dominant defect, again — fourth session running.** Two
-  measured figures were real and their write-ups under-specified what produced them (a
-  "single module" narrowing that was partial; a `.PHONY` mutant needing an unstated
-  flag duplication). Also promoted an *attested* 17/17 figure to "measured" **in the same
-  commit that demoted it elsewhere**.
-- **CodeRabbit registered nothing on four consecutive PRs** (`#126`, `#129`, `#130`,
-  `#131`). The fallback panel was the only independent pass on all of them.
-- **`pr_watch` cannot arbitrate the merge gate in a web container at all** — the whole
-  API host is path-blocked — so both merges were reconstructed from MCP calls.
-
-**Open, and owned by nothing yet**
-
-- **`#132`–`#136`** — that session's five. `#132` and `#134` both land on the `scripts/devkit/`
-  layout. *(`#132` has since closed — see the latest session's open list.)*
-- **`#113` gained a third occurrence** — `chore/update-handoff-2026-07-28` already existed
-  on the remote again; avoided by hand, still no mechanism.
-- **`#33` and `#112` are shipped but still open** — close them deliberately after
-  confirming `#131` is what each asked for.
-
-▶ Next: `session-start` — **discharged**; the following session ran `triage-friction-log` and a
-documentation audit instead. The cs-toolkit Phase 2 blockers named here were
-`#41`/`#37`/`#132`/`#134`; `#132` has since closed.
 
 ______________________________________________________________________
 
