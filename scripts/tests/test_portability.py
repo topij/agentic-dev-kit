@@ -2890,6 +2890,82 @@ def test_an_indeterminate_history_publish_restores_and_warns_of_duplicates(
     assert plan.read_text(encoding="utf-8") == original_plan, "the handoff was not restored"
 
 
+def test_an_unconfirmed_handoff_publish_is_not_reported_as_a_sweep(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the run cannot tell, the damage message must not pick the confident side.
+
+    Measured by a review lens with a real EACCES: the handoff publish and its
+    rollback both failed for the same reason — an unsearchable parent, which is
+    also the one condition that makes the publish state indeterminate, so the
+    two are not independent. The operator was told the blocks were in NEITHER
+    document and to restore from git, while the handoff sat byte-identical on
+    disk still holding them.
+    """
+    archive = _load_module("archive_unconfirmed", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original_plan = plan.read_text(encoding="utf-8")
+
+    real_exists = Path.exists
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        raise OSError(13, "Permission denied")  # nothing publishes, ever
+
+    def indeterminate(self: Path) -> bool:
+        if self.name.endswith(".devkit-tmp") and plan.name in self.name:
+            raise PermissionError(13, "Permission denied")
+        return real_exists(self)
+
+    monkeypatch.setattr(os, "replace", spy)
+    monkeypatch.setattr(Path, "exists", indeterminate)
+    result = archive.main(
+        ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+    )
+    monkeypatch.undo()
+
+    assert result == 2
+    err = capsys.readouterr().err
+    assert plan.read_text(encoding="utf-8") == original_plan, "fixture check: untouched"
+    # It must reach the recovery at all (the "unknown" arm), and must not assert
+    # a sweep it could not establish.
+    assert "has been swept" not in err, f"asserted a sweep that never happened: {err!r}"
+    assert "could not be confirmed either way" in err, err
+
+
+def test_a_completed_move_interrupted_afterwards_still_says_so(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exit 130 in silence over a sweep that fully succeeded reads as "nothing happened".
+
+    This is the one path the code has already established is COMPLETE — the
+    history was read back and matches. Its `OSError` twin prints a careful
+    message; the interrupt twin printed nothing at all, which is #164's false
+    all-clear pointing the other way.
+    """
+    archive = _load_module("archive_done_interrupt", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    real_replace = os.replace
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+        if Path(str(dst)) == history:
+            raise KeyboardInterrupt  # lands, then cancelled
+
+    monkeypatch.setattr(os, "replace", spy)
+    with pytest.raises(KeyboardInterrupt):
+        archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)])
+    monkeypatch.undo()
+
+    err = capsys.readouterr().err
+    assert "move is complete" in err, f"a completed sweep exited silently: {err!r}"
+    assert "First" in history.read_text(encoding="utf-8"), "fixture check: it did complete"
+
+
 @pytest.mark.parametrize("fail_at", ["plan", "history"])
 def test_a_rollback_that_landed_is_not_reported_as_damage(
     tmp_path: Path,
