@@ -100,6 +100,40 @@ and the argument for keeping the record short: the prose is where the defects li
 
 The swept entries are verbatim in the archive under `Graduated 2026-07-29 (second sweep)`.
 
+## 2026-07-30 (post-merge)
+
+- **`pr_followup_hook.py` fires on command *text*, not on PR-opens — six false positives in one
+  session.** Its trigger matches `.tool_input.command`, so any heredoc containing `gh pr create`
+  or `gh pr ready` trips it: writing a doc *about* the command, filing an issue quoting it, and
+  the `gh pr merge` whose squash body mentioned it all produced a MANDATORY watch-loop demand with
+  no PR in existence. **M** — the guard it implements is real (`PRINCIPLES.md` #5/#8), which is
+  what makes this expensive: a hook that cries wolf on documentation trains the agent to skim the
+  one message that is sometimes load-bearing. Proposed fix: gate on the tool *result* (a PR URL,
+  or `gh pr view` confirming a new number) rather than on the command string, or exclude commands
+  whose match falls inside a heredoc/quoted body.
+- **`gh pr merge --subject` silently suppresses GitHub's `(#NNN)` append.** `eeef647` is the only
+  commit on `main` without its PR number, so commit→PR traceability is broken for exactly the
+  merge where an explicit subject was passed to get a better squash message than the four
+  concatenated commit messages. Discovered only by diffing it against neighbours afterwards; the
+  next merge worked around it by writing `(#168)` into the subject by hand. **L** — proposed fix:
+  whichever workflow documents `gh pr merge` should say that `--subject` replaces the whole
+  subject line, append included.
+- **Two isolated lenses stalled identically at the 600s watchdog, mid-run.** Same session, same
+  prompt shape, both killed with partial output. Re-running with a tighter scope succeeded. **M**
+  — the hazard is not the stall but its shape: a stalled lens returns *nothing*, which is
+  indistinguishable from a lens that ran and found nothing unless the cockpit checks the task
+  status. `fallback-review-panel.md` item 10 requires the lens to open with what it reviewed,
+  which catches a wrong-ref lens but not a dead one — the report never arrives at all. Proposed
+  fix: the panel's step 3 should confirm each lens *returned*, not only that what returned looks
+  right.
+- **A citation and its quotation can drift apart, and only the citation goes wrong.** A comment on
+  `#170` quoted that issue's third constraint verbatim while numbering it the fourth, twice, and
+  the same wrong ordinal reached a commit message. The quote read as corroboration for the number
+  beside it. **L** — occurrence data for [#54](https://github.com/topij/agentic-dev-kit/issues/54)
+  and [#140](https://github.com/topij/agentic-dev-kit/issues/140): "name the command that
+  establishes it" covers a claim, but an ordinal into someone else's list is a claim too, and the
+  cheapest check is to re-read the list rather than the sentence.
+
 ## 2026-07-29 (post-sweep, second)
 
 - **The doc-budget remedy is a no-op at the default `--keep`, and the wrap-up workflow prescribes
