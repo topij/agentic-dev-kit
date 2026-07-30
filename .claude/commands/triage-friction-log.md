@@ -54,7 +54,10 @@ header to the source markdown.
 > - `scripts/triage_friction_log.py` — parser + LLM proposer + report writer.
 > - `scripts/finalize_triage.py` — graduation-marker prepend + inbox-sweep-by-
 >   frozen-list into the archive (`--frozen-inbox`) + branch/commit/push/open-PR
->   (Session B only).
+>   (Session B only). **Note for whoever vendors `#6`:** the existing implementation
+>   that issue describes opens a *draft* PR. Honouring `finalize.pr_draft`'s `false`
+>   default is a change that engine still needs; this file is the spec, not a
+>   description of what the unvendored script does today.
 > - your tracker's client library or MCP — for filing approved proposals. By backend:
 >   `github-issues` → `gh issue create --title "…" --body "…" --label <your label>`
 >   (the id in the output is the ticket ref); `linear` → the Linear MCP / client with
@@ -93,7 +96,7 @@ patterns — always read from config.
 | `cancel_keywords`         | Bulk-cancel keywords                                                                  |
 | `finalize.branch_pattern` | Branch name format (default `chore/triage-{date}`, `vcs.triage_branch_pattern`)       |
 | `finalize.commit_subject` | Commit-message subject template                                                      |
-| `finalize.pr_draft`       | Open the PR as a draft on first push (default **`false`**). A draft is invisible to a configured review bot — CodeRabbit answers *"Review skipped: draft pull request"*, which `review.unavailable_markers` matches, so a draft does not merely go unreviewed: it registers as **reviewer-unavailable** and demands a `review.fallback_panel` pass the sweep never asked for. Every kit workflow that opens a PR expects the configured reviewer to see it, and `pr_watch`'s merge gate assumes as much (`#124`). `/adopt` and `/upgrade` are the two that *do* open drafts, and both record why — they hand the merge to a human on purpose. An unattended sweep has no such reason. Set `true` only if you have one; the key then means what it says, and the PR stays a draft. |
+| `finalize.pr_draft`       | Open the PR as a draft on first push (default **`false`**). A draft is invisible to a configured review bot — CodeRabbit answers *"Review skipped: draft pull request"*, which `review.unavailable_markers` matches, so a draft does not merely go unreviewed: it registers as **reviewer-unavailable** and demands a `review.fallback_panel` pass the sweep never asked for. Every *other* kit workflow that opens a PR expects the configured reviewer to see it, and `pr_watch`'s merge gate assumes as much (`#124`). Some workflows do open drafts on purpose — for a bounded window while commits are still landing, or to hand the merge to a human — and each records its reason where it applies; no count is offered here, because three review rounds falsified three attempts at one. An unattended sweep has no such reason. Set `true` only if you have one; the key then means what it says, and the PR stays a draft. |
 
 ______________________________________________________________________
 
@@ -395,13 +398,17 @@ gathered in Step 4. The script:
    the protected branch's origin ref.
 1. Commits **both** doc edits (no other paths).
 1. Pushes the branch.
-1. Opens a PR — **ready for review**, per `finalize.pr_draft`'s `false` default, then
-   confirms the bit actually landed: `gh`'s draft flag is flaky in both directions, so
-   run `uv run <engine-dir>/pr_watch.py <PR#> --assert-ready` after the create. That
-   call *corrects* a drifted bit rather than merely reporting it. With the key set to
-   `true` the PR stays a draft and this step is skipped — but then the review gate
-   cannot close on it, because the bot's *"Review skipped"* registers as
-   reviewer-unavailable and you owe a `fallback_panel` pass (`#124`).
+1. Opens a PR, **ready for review** under `finalize.pr_draft`'s `false` default and a
+   draft when it is `true`.
+
+   Then confirm the bit landed the way it was asked for, in whichever direction that
+   was: `gh`'s draft flag is flaky both ways. The canonical both-directions recipe is
+   the lane contract in `<engine-dir>/dev_session.sh` and the flag notes in
+   [`../../docs/agentic-dev-kit/workflows/pr-watch.md`](../../docs/agentic-dev-kit/workflows/pr-watch.md)
+   — follow it there rather than trusting a copy here, since a half-copy of it is what
+   the review round on this change caught. A draft that stays a draft is not merely
+   unreviewed: the bot's *"Review skipped"* registers as reviewer-unavailable, so the
+   gate then wants a `fallback_panel` pass this sweep never asked for (`#124`).
 
 It prints a JSON summary to stdout with `branch`, `commit_subject`, `header_line`,
 `ticket_range`, `pr_url`, `filed_count`. Capture this for the success DM.

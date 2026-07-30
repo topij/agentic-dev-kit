@@ -42,10 +42,10 @@ status DM and exit. The pattern-finding half of the friction flywheel (Principle
 >   surfaces it; never wait for input that will never arrive.
 > - **Single-session.** Unlike `/triage-friction-log`, there is no DM approval
 >   round-trip. The PR *is* the review surface — the operator reviews and merges (or
->   closes) it via your forge, and the skill never blocks on approval. **Open it ready.**
->   A draft is a review surface for the operator only; a ready PR is one for the
->   configured review bot as well — so being the review surface is an argument for
->   ready, not for draft (`#124`).
+>   closes) it via your forge, and the skill never blocks on approval. **Open it ready**
+>   unless `finalize.pr_draft` says otherwise. A draft is a review surface for the
+>   operator only; a ready PR is one for the configured review bot as well — so being
+>   the review surface argues for ready, not for draft (`#124`).
 > - **Test mode is signalled explicitly.** This run is in test mode if, and only if,
 >   the invocation contained the `test` keyword. Nothing else counts (worktree path,
 >   branch name, etc.). In test mode the skill writes no PR, no tracker ticket, and no
@@ -103,7 +103,7 @@ patterns, or the pattern threshold — always read from config.
 | `review_sources` / `operator_login`                     | Comment-source classification (consumed by the fetcher).                                |
 | `friction_log_path`                                     | Where single-incident findings land (`docs/friction-log.md`).                           |
 | `tracker.linear.team_id` / `tracker.linear.project_id` / `tracker.linear.label_name` | Config for high-severity single-incident tickets — `tracker.linear.project_id` should match `config/dev-model.yaml → tracker.project_name`. |
-| `finalize.branch_pattern` / `commit_subject` / `pr_draft` | The ≥2-PR-pattern CLAUDE.md/skill-prompt PR (`vcs.systemize_branch_pattern`). `pr_draft` defaults to **`false`**: a draft is invisible to a configured review bot, whose *"Review skipped: draft pull request"* reply matches `review.unavailable_markers`, so it registers as **reviewer-unavailable** rather than merely unreviewed (`#124`). This pipeline's engine is tracked in `#7`, so the key is documented here and read by nothing yet. |
+| `finalize.branch_pattern` / `commit_subject` / `pr_draft` | The ≥2-PR-pattern CLAUDE.md/skill-prompt PR (`vcs.systemize_branch_pattern`). `pr_draft` defaults to **`false`**: a draft is invisible to a configured review bot, whose *"Review skipped: draft pull request"* reply matches `review.unavailable_markers`, so it registers as **reviewer-unavailable** rather than merely unreviewed (`#124`). No code reads this key: the PR is opened by the `gh` call in Step 3A, which the agent runs, so the key binds only whoever follows this file. |
 
 ______________________________________________________________________
 
@@ -260,7 +260,7 @@ most weeks.
 
 ______________________________________________________________________
 
-## Step 3A — Draft the CLAUDE.md / skill-prompt PR (≥2-PR patterns only)
+## Step 3A — Write the CLAUDE.md / skill-prompt PR (≥2-PR patterns only)
 
 For each qualifying pattern, make the **smallest** edit that would have caught it —
 usually one tightening sentence in the most-specific CLAUDE.md/rule file (prefer a
@@ -297,9 +297,11 @@ git push --set-upstream origin chore/systemize-<today>
 # key true.
 gh pr create --title "docs(systemize): N cross-PR pattern(s) -> rules" --body "<body>"
 
-# gh's draft bit is flaky in BOTH directions (see workflows/pr-watch.md), so confirm
-# rather than assume. This CORRECTS a drifted bit, it does not merely report it:
-uv run <engine-dir>/pr_watch.py <PR#> --assert-ready
+# gh's draft bit is flaky in BOTH directions, so confirm it landed the way you asked
+# — in whichever direction that was. The canonical recipe is the lane contract in
+# scripts/dev_session.sh plus the flag notes in
+# docs/agentic-dev-kit/workflows/pr-watch.md; follow it there rather than a copy
+# here. Note --assert-ready MUTATES: run on a deliberate draft it flips it ready.
 ```
 
 PR body: one section per pattern — the shape, the PRs it spanned, the review
