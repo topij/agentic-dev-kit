@@ -2381,3 +2381,52 @@ def test_a_read_failure_names_the_document_that_failed(
     err = capsys.readouterr().err
     assert str(target) in err, f"the failing document must be named: {err}"
     assert str(other) not in err, f"only the failing document should be named: {err}"
+
+
+def test_the_write_failure_message_wrap_up_quotes_is_pinned(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`wrap-up.md` quotes "no changes applied" to the operator — pin the literal.
+
+    Only a NEGATIVE assertion existed (`"no changes applied" not in err` on the
+    rollback path), so rewording it to anything else survived the whole suite
+    while the workflow kept quoting the old text at the operator.
+    """
+    archive = _load_module("archive_wf_literal", ENGINE_DIR / "archive_plan_sessions.py")
+    plan_dir = tmp_path / "live"
+    plan_dir.mkdir()
+    plan = plan_dir / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    plan.chmod(0o444)
+    try:
+        result = archive.main(
+            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+        )
+    finally:
+        plan.chmod(0o644)
+
+    assert result == 2
+    assert "no changes applied" in capsys.readouterr().err
+
+
+def test_the_target_lines_noop_message_is_pinned(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The `--target-lines` early-exit wording had no assertion anywhere.
+
+    Its `--keep` twin is pinned; this one was reworded freely with the suite
+    green. The branch and its exit code were already covered — only the text a
+    human reads was not.
+    """
+    archive = _load_module("archive_tl_noop_msg", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    result = archive.main(
+        ["--target-lines", "46", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result == 0
+    assert "nothing to move: 46 line(s) <= --target-lines 46." in capsys.readouterr().out

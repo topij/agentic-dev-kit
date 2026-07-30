@@ -71,16 +71,23 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    unparseable handoff, a history doc with no session-log section, a failed
    write); read the message and fix that instead of reporting an exhausted sweep.
    The script's own `--help` carries the authoritative list. **On a failed write,
-   check BOTH documents before you continue** —
-   `git diff --stat <handoff> <handoff-history>` — and do not trust the "no
-   changes applied" wording: the write truncates before it fails, so a full disk
-   or a quota can leave a document empty or partial while that message claims
-   otherwise ([#164](https://github.com/topij/agentic-dev-kit/issues/164)).
-   **Checking only `<handoff>` gives a false all-clear**, because the history doc
-   is the likelier casualty — it *grows* while the handoff shrinks — and when the
-   history write fails the handoff is rolled back, so it reads clean while the
-   append-only archive has been gutted. If either is damaged, restore it with
-   `git checkout -- <path>` and stop. Stage
+   check BOTH documents before you continue, and check them differently** — the
+   write truncates before it fails, so a full disk or quota can leave a document
+   empty or cut mid-line while the message still says "no changes applied"
+   ([#164](https://github.com/topij/agentic-dev-kit/issues/164)).
+
+   - `<handoff-history>` — **nothing but the sweep touches this file**, so
+     `git diff --stat <handoff-history>` is a true damage signal: any output at
+     all after a failed write means it was part-written. `git checkout --
+     <handoff-history>` is safe here, and it is the likelier casualty, because
+     the history *grows* while the handoff shrinks and gets rolled back.
+   - `<handoff>` — you edited it in steps 3 and 5, so **a diff is expected and
+     proves nothing**, and `git checkout -- <handoff>` would throw away this
+     session's block and `▶ Next:` line. Open it instead: a truncated file ends
+     mid-line and has lost its standing sections. Only if it is actually damaged,
+     restore it and re-apply your session block by hand.
+
+   Do not continue to the commit step until both are known good. Stage
    **both** files (`<handoff>` + `<handoff-history>`) into this commit. If
    `<friction-log>` is over budget, don't sweep it inline — note it and
    recommend the `triage-friction-log` workflow (graduating the inbox needs
