@@ -42,10 +42,10 @@ status DM and exit. The pattern-finding half of the friction flywheel (Principle
 >   surfaces it; never wait for input that will never arrive.
 > - **Single-session.** Unlike `/triage-friction-log`, there is no DM approval
 >   round-trip. The PR *is* the review surface — the operator reviews and merges (or
->   closes) it via your forge, and the skill never blocks on approval. Open it
->   **ready**: that argues for ready rather than draft, because a draft is a review
->   surface for the operator only, while a ready PR is one for the configured review
->   bot as well (`#124`).
+>   closes) it via your forge, and the skill never blocks on approval. **Open it ready.**
+>   A draft is a review surface for the operator only; a ready PR is one for the
+>   configured review bot as well — so being the review surface is an argument for
+>   ready, not for draft (`#124`).
 > - **Test mode is signalled explicitly.** This run is in test mode if, and only if,
 >   the invocation contained the `test` keyword. Nothing else counts (worktree path,
 >   branch name, etc.). In test mode the skill writes no PR, no tracker ticket, and no
@@ -103,7 +103,7 @@ patterns, or the pattern threshold — always read from config.
 | `review_sources` / `operator_login`                     | Comment-source classification (consumed by the fetcher).                                |
 | `friction_log_path`                                     | Where single-incident findings land (`docs/friction-log.md`).                           |
 | `tracker.linear.team_id` / `tracker.linear.project_id` / `tracker.linear.label_name` | Config for high-severity single-incident tickets — `tracker.linear.project_id` should match `config/dev-model.yaml → tracker.project_name`. |
-| `finalize.branch_pattern` / `commit_subject` / `pr_draft` | The ≥2-PR-pattern CLAUDE.md/skill-prompt PR (`vcs.systemize_branch_pattern`). `pr_draft` defaults to **`false`** — see `/triage-friction-log`'s table for why a draft registers as reviewer-unavailable rather than merely unreviewed. |
+| `finalize.branch_pattern` / `commit_subject` / `pr_draft` | The ≥2-PR-pattern CLAUDE.md/skill-prompt PR (`vcs.systemize_branch_pattern`). `pr_draft` defaults to **`false`**: a draft is invisible to a configured review bot, whose *"Review skipped: draft pull request"* reply matches `review.unavailable_markers`, so it registers as **reviewer-unavailable** rather than merely unreviewed (`#124`). This pipeline's engine is tracked in `#7`, so the key is documented here and read by nothing yet. |
 
 ______________________________________________________________________
 
@@ -231,7 +231,7 @@ quote.
 
 | Spans                         | Severity                                                     | Route →                                                |
 | ------------------------------ | -------------------------------------------------------------- | ---------------------------------------------------------- |
-| **≥ `pattern_threshold` PRs** | any                                                            | **(A)** Draft CLAUDE.md / skill-prompt edit (Step 3A). |
+| **≥ `pattern_threshold` PRs** | any                                                            | **(A)** CLAUDE.md / skill-prompt edit (Step 3A).       |
 | 1 PR                           | high (a bug that would clearly recur / data-loss / security) | **(C)** Tracker ticket (Step 3C).                      |
 | 1 PR                           | normal                                                         | **(B)** friction-log append (Step 3B).                  |
 
@@ -292,9 +292,14 @@ changed — never `reports/`, `state/`, or data files:
 git add CLAUDE.md path/to/scoped/CLAUDE.md   # only the files you actually edited
 git commit -m "docs(systemize): N cross-PR pattern(s) -> CLAUDE.md/skill rules"
 git push --set-upstream origin chore/systemize-<today>
-# Ready, not draft: `finalize.pr_draft` defaults to false. Add --draft ONLY if your
-# config sets it true — a hardcoded --draft here ignored that key entirely (#124).
+# Ready, not draft (#124): the --draft that used to be hardcoded here ignored
+# `finalize.pr_draft` entirely. Add it back only if your pipeline config sets that
+# key true.
 gh pr create --title "docs(systemize): N cross-PR pattern(s) -> rules" --body "<body>"
+
+# gh's draft bit is flaky in BOTH directions (see workflows/pr-watch.md), so confirm
+# rather than assume. This CORRECTS a drifted bit, it does not merely report it:
+uv run <engine-dir>/pr_watch.py <PR#> --assert-ready
 ```
 
 PR body: one section per pattern — the shape, the PRs it spanned, the review
@@ -352,7 +357,7 @@ No ≥2-PR pattern this week. [k single-incident note(s) → friction-log.md.]
 Scanned [N] merged PRs. Found [p] cross-PR pattern(s):
 • <shape 1> — PRs #a, #b
 • <shape 2> — PRs #c, #d, #e
-→ Draft PR: <pr_url>
+→ PR: <pr_url>
 [Single-incident: k → friction-log.md, m → tracker (…).]
 [Rule-citation: pattern X recurred despite CLAUDE.md §Y.]
 ```
