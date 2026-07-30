@@ -50,9 +50,17 @@ Exit codes:
     2 — every other failure: usage error, unresolvable configured paths, missing
         file, a file that cannot be read (unreadable or not valid UTF-8),
         unparseable handoff structure, history doc with no session-log section,
-        or a failed write. On a failed write the handoff doc is rolled back, so
-        neither document is left half-written — unless the rollback ALSO fails,
-        which says so explicitly and names git as the recovery.
+        or a failed write.
+
+        **A failed write does NOT mean the documents are intact.**
+        ``Path.write_text`` truncates before writing, so a failure part-way
+        through leaves that document empty or partial while the message still
+        reads "no changes applied" — the handoff itself is the likely casualty,
+        since it is written first and gets no rollback (issue #164). If the
+        *history* write fails the handoff IS rolled back, but that rollback is
+        another truncating write and can fail in turn, which the message then
+        says explicitly. After any exit 2 naming a write failure, check the
+        handoff with ``git diff --stat`` before doing anything else.
     3 — ``--target-lines`` specifically: the target cannot be reached without
         sweeping the last remaining block, or there is no block to sweep at all.
         Distinct from 2 so a caller can tell this apart from the unrelated
