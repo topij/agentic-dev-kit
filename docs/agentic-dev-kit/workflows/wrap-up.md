@@ -70,7 +70,13 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    is something else entirely (unreadable or non-UTF-8 file, missing file,
    unparseable handoff, a history doc with no session-log section, a failed
    write); read the message and fix that instead of reporting an exhausted sweep.
-   The script's own `--help` carries the authoritative list. Stage
+   The script's own `--help` carries the authoritative list. **On a failed write,
+   check `<handoff>` before you continue** — `git diff --stat <handoff>` — and do
+   not trust the "no changes applied" wording: the write truncates before it
+   fails, so a full disk or a quota can leave the handoff empty or partial while
+   that message claims otherwise
+   ([#164](https://github.com/topij/agentic-dev-kit/issues/164)). If it is
+   damaged, restore it with `git checkout -- <handoff>` and stop. Stage
    **both** files (`<handoff>` + `<handoff-history>`) into this commit. If
    `<friction-log>` is over budget, don't sweep it inline — note it and
    recommend the `triage-friction-log` workflow (graduating the inbox needs
