@@ -14,10 +14,72 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-29 — the sixth sweep, a config overlay narrowed to one key across
-three review rounds, and the same defect in all three (`#156`, `#157`, `#158` merged).
+Last updated: 2026-07-30 — `#74` shipped after six review rounds; a latent data-loss bug
+found in the handoff's own custodian (`#164`), and a mechanism reverted (`#160` merged).
 
-## Latest session — 2026-07-29 (the sixth sweep, and three rounds that all found the same thing)
+## Latest session — 2026-07-30 (one flag, six rounds, and a bug older than the PR)
+
+**Theme —** `#74` shipped. The durable results are two: the review found a **pre-existing
+data-loss bug in the tool that owns this file**, and it measured where six rounds of its own
+effort actually went.
+
+- **`#160` merged (`85cdeb0`).** `archive_plan_sessions.py --target-lines N` sweeps oldest-first
+  until the handoff is at or under a *line* budget, so the remedy `check_doc_budget` names can
+  actually discharge it — `--keep` counts blocks and was a no-op at its default. `budget_line_count`
+  makes both tools measure a line the same way; `check_doc_budget` substitutes `{budget}` so the
+  number lives in one place. 26 new test functions / 29 cases; every guard mutation-confirmed.
+- **`#164` filed — and it is the find of the session.** `Path.write_text` truncates before writing,
+  so a failed write destroys the document and the handler still prints *"no changes applied"*.
+  Measured on a real full filesystem: a **26,807-byte handoff went to 0 bytes** while the tool
+  reported nothing had happened. Latent in the archive engine all along; no amount of reading would
+  have surfaced it.
+- **`atomic_write` was attempted for it and REVERTED.** Both lenses independently found four HIGH
+  regressions — `os.replace` replaces a symlinked doc rather than writing through it, file
+  mode/ownership reset every sweep, a fixed temp name lets concurrent runs publish each other's
+  bytes, and a pre-existing temp symlink becomes an arbitrary-file clobber. All silent, all at
+  exit 0. What shipped instead is a caller-side mitigation in `--help` and `wrap-up.md`.
+- **Also filed:** `#161` (LOW imprecisions + surviving-mutant status), `#162` (the sweep is not
+  byte-preserving), `#163` (where the review cycles went).
+
+**Learned**
+
+- **A fix stops at the first site. Nine occurrences on one PR**, and it is not a prose problem —
+  the sharpest was `(OSError, UnicodeDecodeError)` applied to one of two exception classes *on the
+  same line*, leaving exit 1 producible against an exit-code contract that admits only 0/2/3. The
+  correct fix was already sitting in `check_memory_budget.py:192-197` with a comment giving the
+  reason. **Twice the defect was inside a fix for that very pattern.**
+- **A fix round that adds a new mechanism is where the next HIGH comes from — 3 of 6 here.**
+  `atomic_write` is the clean case: added at round 5, four HIGHs at round 6, reverted. The doctrine
+  already says a new mechanism gets filed however squarely a finding prompted it; this is the
+  measured version of why.
+- **A hypothesis was stated as falsifiable and refuted within one round.** Four rounds of apparent
+  lens specialisation (adversarial finds mechanism, correctness finds prose) was coincidence —
+  round 5's correctness lens led with a mechanism defect. Recorded on `#163` rather than dropped,
+  because doctrine built on it would have rested on nothing.
+- **Only execution found the real bugs.** Every HIGH that mattered came from running the code
+  against hostile conditions — a filled ramdisk, `RLIMIT_FSIZE`, a planted symlink — never from
+  re-reading it. Two 1200-trial fuzzes found the shipped mechanism correct both times.
+
+**Open, and owned by nothing yet**
+
+- **`#42` reproduced at merge time**, on this very PR: posting the review record un-converged it
+  (`review_evidence.valid: true`, blockers empty, `mergeable: false`) and needed a `--mark-seen`.
+  Occurrence data added to the issue rather than the inbox.
+- **`#74` is shipped but still open** — close it deliberately after confirming `#160` is what it
+  asked for.
+- The inbox is **168/150** and unchanged this session: today's friction went straight to the tracker
+  (`#161`–`#164`), which is the routing Principle #2 prescribes. The guard-chaining rule
+  (`check && act`, never merely sequenced) is still the one entry that lives nowhere else.
+
+▶ Next: `#75` — put the worktree recovery recipe into `fallback-review-panel.md` contract item 7
+(`git archive <sha> | tar -x`, plus the two alternatives blocked under worktree isolation). **16 of
+16 lens runs this session** hit the base-commit worktree and each re-derived a workaround; it is the
+cheapest sink in `#163` and it taxes every round of Slice 0. Then `#124`, then Slice 0 (`#112`,
+`#33`, `#133`, `#135`, `#107`) — the gate for cs-toolkit Phase 2.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-29 (the sixth sweep, and three rounds that all found the same thing)
 
 **Theme —** Three PRs merged. The result worth keeping is narrower than it first looked: across
 three review rounds on one change, **justification prose was wrong in every round** — a recurring
@@ -283,70 +345,6 @@ Prefer it over `session-start` this time: `#143` (filed here) records that `sess
 tracker step overflowed its tool limit at 68 open issues and that the remedy it prescribes cannot
 be run on this backend — there are ~80 open now, so page at `perPage: 25` and read
 `number`/`title`/`labels`/`state` only if you do run it.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-28 · 4 (the mutation gate shipped; four panel rounds)
-
-**Theme —** Two merges and a review loop that would not converge. The mechanism is small;
-the durable result is a measured account of how a guard test can be defeated four times
-running, and of a general argument being applied to instances it did not cover.
-
-- **`#130` merged (`e8e7789`).** The `pr_watch` 403 entry from `#126` had the diagnosis
-  right and the remedy wrong: it treated the proxy's *"an org admin must connect the
-  Claude GitHub App"* body as actionable. It is a canned string — this is a personal repo
-  with no org admin, and GitHub access was enabled throughout. Established by running the
-  commands: `GET /user` returns `topij` **with the sentinel and with no auth header at
-  all**; `/repos/*` and the public `/octocat` both 403; `documentation_url` is
-  `docs.anthropic.com`. A path allowlist, not a credential problem.
-- **`#131` merged (`9fb4baa`).** `driftcheck` marker on the byte-comparison test,
-  registered in a new `scripts/tests/conftest.py` so it travels with vendored tests;
-  `make mutation-test`; `fallback-review-panel.md` item 5 rewritten repo-agnostic with the
-  rule that does not depend on any of it — **a kill is only a kill if a test asserting
-  behaviour is what failed**. `#112`'s item 1 satisfied by construction; item 2 declined
-  with reasons on the issue.
-- **Five tickets filed:** `#132` (`/upgrade` cannot deliver anything under
-  `scripts/tests/`), `#133` (the converse marker guard, with live instances on `main`),
-  `#134` (kit tests hardcode `parents[2]`, so they fail in the `scripts/devkit/` layout),
-  `#135` (a conftest `collect_ignore` is the one narrowing vector CI cannot catch),
-  `#136` (panel lenses collide in the shared scratchpad, and copying a worktree is not
-  isolation).
-
-**Learned**
-
-- **A guard test over an unbounded space cannot be finished.** Four rounds, four sets of
-  HIGHs: a literal parked in a `#` comment; the first `target:` block read while make runs
-  the last; `--deselect`/`-k`/`-k` with no space/`--ignore=`; symmetric narrowing; a
-  dropped `.PHONY:` token. Every round's fix was the next round's finding — `rule 1`'s
-  pattern, and severity never fell below three HIGHs.
-- **But the general argument was applied to instances it did not cover.** "A text search
-  cannot be sound" is true, and two of the three tests deleted on that basis were built on
-  `make -n` — an *execution* probe. Deleting them opened the one hole the change existed
-  to close: with the flag silently dropped from the recipe, the full suite stays green and
-  a behaviour-only mutation then reads as a **kill**. The adversarial lens proved it by
-  restoring the deleted assertions into every bypass and watching them kill each one.
-- **My commit messages were the dominant defect, again — fourth session running.** Two
-  measured figures were real and their write-ups under-specified what produced them (a
-  "single module" narrowing that was partial; a `.PHONY` mutant needing an unstated
-  flag duplication). Also promoted an *attested* 17/17 figure to "measured" **in the same
-  commit that demoted it elsewhere**.
-- **CodeRabbit registered nothing on four consecutive PRs** (`#126`, `#129`, `#130`,
-  `#131`). The fallback panel was the only independent pass on all of them.
-- **`pr_watch` cannot arbitrate the merge gate in a web container at all** — the whole
-  API host is path-blocked — so both merges were reconstructed from MCP calls.
-
-**Open, and owned by nothing yet**
-
-- **`#132`–`#136`** — that session's five. `#132` and `#134` both land on the `scripts/devkit/`
-  layout. *(`#132` has since closed — see the latest session's open list.)*
-- **`#113` gained a third occurrence** — `chore/update-handoff-2026-07-28` already existed
-  on the remote again; avoided by hand, still no mechanism.
-- **`#33` and `#112` are shipped but still open** — close them deliberately after
-  confirming `#131` is what each asked for.
-
-▶ Next: `session-start` — **discharged**; the following session ran `triage-friction-log` and a
-documentation audit instead. The cs-toolkit Phase 2 blockers named here were
-`#41`/`#37`/`#132`/`#134`; `#132` has since closed.
 
 ______________________________________________________________________
 

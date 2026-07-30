@@ -4,6 +4,68 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-07-28 · 4 (the mutation gate shipped; four panel rounds)
+
+**Theme —** Two merges and a review loop that would not converge. The mechanism is small;
+the durable result is a measured account of how a guard test can be defeated four times
+running, and of a general argument being applied to instances it did not cover.
+
+- **`#130` merged (`e8e7789`).** The `pr_watch` 403 entry from `#126` had the diagnosis
+  right and the remedy wrong: it treated the proxy's *"an org admin must connect the
+  Claude GitHub App"* body as actionable. It is a canned string — this is a personal repo
+  with no org admin, and GitHub access was enabled throughout. Established by running the
+  commands: `GET /user` returns `topij` **with the sentinel and with no auth header at
+  all**; `/repos/*` and the public `/octocat` both 403; `documentation_url` is
+  `docs.anthropic.com`. A path allowlist, not a credential problem.
+- **`#131` merged (`9fb4baa`).** `driftcheck` marker on the byte-comparison test,
+  registered in a new `scripts/tests/conftest.py` so it travels with vendored tests;
+  `make mutation-test`; `fallback-review-panel.md` item 5 rewritten repo-agnostic with the
+  rule that does not depend on any of it — **a kill is only a kill if a test asserting
+  behaviour is what failed**. `#112`'s item 1 satisfied by construction; item 2 declined
+  with reasons on the issue.
+- **Five tickets filed:** `#132` (`/upgrade` cannot deliver anything under
+  `scripts/tests/`), `#133` (the converse marker guard, with live instances on `main`),
+  `#134` (kit tests hardcode `parents[2]`, so they fail in the `scripts/devkit/` layout),
+  `#135` (a conftest `collect_ignore` is the one narrowing vector CI cannot catch),
+  `#136` (panel lenses collide in the shared scratchpad, and copying a worktree is not
+  isolation).
+
+**Learned**
+
+- **A guard test over an unbounded space cannot be finished.** Four rounds, four sets of
+  HIGHs: a literal parked in a `#` comment; the first `target:` block read while make runs
+  the last; `--deselect`/`-k`/`-k` with no space/`--ignore=`; symmetric narrowing; a
+  dropped `.PHONY:` token. Every round's fix was the next round's finding — `rule 1`'s
+  pattern, and severity never fell below three HIGHs.
+- **But the general argument was applied to instances it did not cover.** "A text search
+  cannot be sound" is true, and two of the three tests deleted on that basis were built on
+  `make -n` — an *execution* probe. Deleting them opened the one hole the change existed
+  to close: with the flag silently dropped from the recipe, the full suite stays green and
+  a behaviour-only mutation then reads as a **kill**. The adversarial lens proved it by
+  restoring the deleted assertions into every bypass and watching them kill each one.
+- **My commit messages were the dominant defect, again — fourth session running.** Two
+  measured figures were real and their write-ups under-specified what produced them (a
+  "single module" narrowing that was partial; a `.PHONY` mutant needing an unstated
+  flag duplication). Also promoted an *attested* 17/17 figure to "measured" **in the same
+  commit that demoted it elsewhere**.
+- **CodeRabbit registered nothing on four consecutive PRs** (`#126`, `#129`, `#130`,
+  `#131`). The fallback panel was the only independent pass on all of them.
+- **`pr_watch` cannot arbitrate the merge gate in a web container at all** — the whole
+  API host is path-blocked — so both merges were reconstructed from MCP calls.
+
+**Open, and owned by nothing yet**
+
+- **`#132`–`#136`** — that session's five. `#132` and `#134` both land on the `scripts/devkit/`
+  layout. *(`#132` has since closed — see the latest session's open list.)*
+- **`#113` gained a third occurrence** — `chore/update-handoff-2026-07-28` already existed
+  on the remote again; avoided by hand, still no mechanism.
+- **`#33` and `#112` are shipped but still open** — close them deliberately after
+  confirming `#131` is what each asked for.
+
+▶ Next: `session-start` — **discharged**; the following session ran `triage-friction-log` and a
+documentation audit instead. The cs-toolkit Phase 2 blockers named here were
+`#41`/`#37`/`#132`/`#134`; `#132` has since closed.
+
 ### 2026-07-28 (the inbox graduated; the panel audited the record)
 
 **Theme —** One deliverable, and a review panel that spent almost all of its findings on
