@@ -14,33 +14,40 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-30 — `#164` fixed and `#162` settled in one PR; both **stay open** for the
-operator, seven review rounds ran, and one defect class accounted for five of them.
+Last updated: 2026-07-30 — `#164` repaired and `#162` settled in one PR; both **stay open** for the
+operator. Seven review rounds; one defect class produced five findings across three of them.
 
 ## Latest session — 2026-07-30 (one bug, seven review rounds, and the same defect five times)
 
-**Theme —** `#172` merged (`b82eba9`), fixing `#164` and settling `#162`. The bug itself was one
-line. What the session actually measured is where the *fix* kept going wrong: **"applied to one of
-two call sites" appeared five times in this PR, three of them inside the fix for that very
-pattern.** Severity ranking missed it every time — each instance looked like an isolated miss — and
-the fix that worked was structural, not another guard: the two hand-written recovery paths were
-collapsed into one function used by both sites.
+**Theme —** `#172` merged (`b82eba9`), repairing `#164` and settling `#162`. The bug itself was one
+line. What the session actually measured is where the *fix* kept going wrong: **a fix, or its
+written rationale, applied to one of two symmetric locations — five findings, three of them inside
+the fix for that very pattern.** (Three are literally one-of-two *call sites*; the fourth is a test
+covering one site only, the fifth a `BaseException` argument written in one method's docstring and
+not carried to the method one call away. The wider class is the honest one.) Severity ranking missed
+every instance, and what ended it was structural rather than another guard: the two hand-written
+recovery paths were collapsed into one function used by both sites.
 
-- **`#164` fixed.** `Path.write_text` truncates before writing, so a failed write destroyed the
+- **`#164` repaired.** `Path.write_text` truncates before writing, so a failed write destroyed the
   living handoff while the tool printed *"no changes applied"*. Measured with `RLIMIT_FSIZE`
   against the **real 28,518-byte handoff**: before, 28,518 → 1,024 bytes at exit 2 under that
   message; after, both documents byte-identical and the message true. New `scripts/lib/atomic_write.py`
   stages to a random sibling temp (`mkstemp`, `O_EXCL`), fsyncs, publishes with `os.replace` —
   and stages **both documents plus the rollback** before publishing either, which is what dissolves
   the objection that reverted the first attempt on `#160`: the rollback's cost is paid up front,
-  while failing is still free.
+  while failing is still free. **Not total:** of five failure scenarios a lens measured as silent
+  data loss, two now recover and three do not — those three force a publish *and* its rollback to
+  fail together, so nothing is left to recover from. All five now print a message naming both
+  documents, which is the part that was missing.
 - **`#162` settled the other way, deliberately.** The `\x1c` half was genuine content loss and is
-  fixed (a bare `str.strip()` eats `\v \f \x1c \x1d \x1e \x1f \x85 \xa0`). Line endings **normalise**,
-  the docstring says so instead of claiming the sweep "only ever moves content", and a test pins it
-  — including what that test *cannot* see on POSIX.
+  repaired (a bare `str.strip()` eats `\v \f \x1c \x1d \x1e \x1f \x85 \xa0`). Line endings
+  **normalise**, the docstring says so instead of claiming the sweep "only ever moves content", and
+  a test pins it — including what that test *cannot* see on POSIX.
 - **Seven review rounds**: CodeRabbit ×3 (rate-limited on every head in between), fallback panel ×4.
-  **All eight lens runs were placed at the base, not the head; all eight detected it** and diffed
-  the named sha. 25 mutants across three batches, all killed by named behaviour tests. Tests 564 → 599.
+  Tests 564 → 599, both counts reproduced by `make test`. The mutant total (25 across three batches,
+  all reported killed by named behaviour tests) is **attested, not reproducible**: only round 1's ten
+  are enumerated on the PR, the driver scripts lived in session scratch, and `Makefile` already warns
+  that an unenumerated kill count is exactly the figure that does not survive scrutiny.
 
 **Learned**
 
@@ -69,19 +76,36 @@ collapsed into one function used by both sites.
   that `kit_doctor.py:636` and `pr_watch.py:2201` be considered with it; they were, and **neither was
   converted**: both write machine-regenerated artifacts, so the refuse-on-read-only/hardlink semantics
   would add failure modes with no benefit. The helper is a library so converting later is an import.
-- **Neither the merged tree nor its last two commits were reviewed by anything.** Panel round 4 saw
-  `e5cb29f`; the fixes for its findings, their tests, and CodeRabbit's last two nitpicks all landed
-  after. CodeRabbit's final review was of `342f437`. `#27`'s gap, live again and stated on the PR.
-- **The one-of-two-call-sites pattern belongs in doctrine, not just this block.** `#163` records it;
-  this session is the first time it was observed recurring *inside its own fix*, five times, with the
-  structural remedy (collapse the duplication) working where guards did not.
-- The inbox is **still over budget** and grew again this session.
+- **The merged tree was reviewed by nothing, and the unreviewed tail is 5 commits, not 2.** Panel
+  round 4 saw `e5cb29f` (7 commits back); CodeRabbit's last review was `342f437` (5 back). That tail
+  is `+106/-12` and is **not** all test hygiene — `6d7eb28` touches both engine files. The first
+  draft of this bullet said "last two commits", which was the PR receipt's error reproduced into the
+  durable record. `#27`'s gap, live again.
+- **`#75` again: 8 of 8 lens runs were placed at the base rather than the head.** All eight detected
+  it and diffed the named sha, so the contract works — but a 100% harness failure rate is an open
+  defect, not a rigor statistic, and belongs here rather than in the round-count bullet where the
+  first draft put it. The 8/8 figure is **self-reported by the lenses** and unverifiable from outside
+  (`#32`), like every `--lenses` claim on every receipt this repo records.
+- **The wider one-of-two-symmetric-locations pattern belongs in doctrine, not just this block.**
+  `#163` records occurrences; what this session adds is that it recurred *inside its own fix* and
+  that the remedy is **structural** — remove the second site — where guards and severity ranking both
+  failed. Caveat against the thesis: the de-duplication commit itself left a duplicated comment
+  block, caught by the review bot, which is the same trap this repo's history already records.
+- **`#127` and `#138` are still the pair that would make a sweep's claims mechanically checkable**,
+  carried forward from the block this session archived. Both OPEN. Recorded here because the sweep
+  that moved that block **dropped them** from the live handoff, which the file's own closing line
+  promises does not happen — and `#127` is the ticket about a sweep being indistinguishable from a
+  deletion. Found by a review lens, not by the sweep.
+- The inbox is **280/150** and grew by 47 lines this session — the largest it has been in the
+  recorded series (168 → 179 → 233 → 280).
 
-▶ Next: **`session-start`** — `#164`/`#162` need an operator decision on closing, the inbox is well
-over budget and un-swept for several sessions, and the five-instance one-of-two-sites finding wants
-routing (doctrine change vs. a comment on `#163`). Page the tracker with
-`gh issue list --state open --limit 25 --json number,title,labels,state`; `#143` is still open and
-there are ~89 issues.
+▶ Next: **`triage-friction-log`** — the inbox is 280/150, nearly double budget, and un-swept for
+several sessions; four of this session's entries are ready to graduate, three of them one class
+(`#150`: a check that reports success without having examined anything). Then `session-start` for
+the rest: `#164`/`#162` need an operator decision, and the five-finding
+one-of-two-symmetric-locations result wants routing — doctrine change vs. a comment on `#163`.
+Caveat before running the sweep unattended: `notify.user_key` is blank, so `triage-friction-log`
+stops at Step 2 by design (`#128`).
 
 ______________________________________________________________________
 
