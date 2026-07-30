@@ -20,11 +20,12 @@ issues **stay open**, eight review rounds ran, and the review bot woke up.
 ## Latest session — 2026-07-30 (two merges, eight rounds, and where every defect lived)
 
 **Theme —** Both PRs landed after eight panel rounds: **18 lens runs launched, 16 completed**, two
-stalled at the watchdog and re-run. Figures published on the PRs themselves count launches, and one
-was written mid-PR, so they are higher and none is wrong. The result worth keeping is narrower than
+stalled at the watchdog and re-run. Each figure published elsewhere is *lower* than 16 — they count
+one PR each, or a subset of rounds — and only their sum, 18, exceeds it. None is wrong. The result
+worth keeping is narrower than
 this block first claimed, and a lens refuted the wider version: **no round ever disputed what the
-tickets asked for** — flip a documented default, drop a hardcoded `--draft`, diff the named sha —
-but nearly every HIGH was in a justification or a guard added around those edits. Both are the
+tickets asked for** — flip a documented default, invert a contract item, diff the named sha — but
+nearly every HIGH was in a justification or a guard added around those edits. Both are the
 deliverable, so "the change was never contested" is false; what held was the *ask*, and what failed
 was everything written to support it.
 
@@ -77,19 +78,22 @@ was everything written to support it.
   runs changed, because `#6`'s engine is unvendored and still hardcodes a draft.
 - **`#33`/`#112` still want confirming against `#131`** before either is deliberately marked done —
   the block naming `#131` went to history in this session's sweep, taking the qualifier with it.
-- **`eeef647` landed without its `(#166)` suffix**, and it is not alone: **15 of 75 commits on
-  `main` have an associated PR and no `(#N)`**, including `cdeae7a` (#144), `c48164c` (#154) and
-  `b46f794` (#153). `--subject` suppressing the append explains this session's instance; it is not
-  established as the cause of the others. Recurring, not a one-off, and not repairable in place.
-- The inbox is **217/150** and well over budget — this session added **five** entries to a file
-  already over. (This line first said 206/four: the fifth entry landed in the very commit that
-  corrected an inflated self-count, and invalidated the count beside it.) `#167`, `#169`, `#170`
-  are this session's three tickets.
+- **`eeef647` landed without its `(#166)` suffix**, and it is not alone: 15 of 75 commits on
+  `main` have an associated PR and no `(#N)` — 8 of those predate the squash convention, so the
+  comparable figure is **7 of 62**, among them `cdeae7a` (#144), `c48164c` (#154), `b46f794`
+  (#153). `--subject` explains this session's instance and is **not** established as the cause of
+  the others. Recurring, not a one-off, and not repairable in place.
+- The inbox is **well over budget** and grew again — five entries added to a file already over.
+  **This line deliberately carries no number:** `check_doc_budget.py` prints the current one, and
+  the hand-written figure went stale three times (206 → 217 → 224), each time inside the commit
+  correcting its predecessor. `#167`, `#169`, `#170` are this session's three tickets.
 
-▶ Next: **`session-start`** — three fresh tickets, an inbox at 217/150, and no single obvious
-thread. **Page the tracker at `perPage: 25` reading `number`/`title`/`labels`/`state` only:**
-`#143` records `session-start` overflowing its tool limit at 68 open issues and is still open;
-there are **89** now. `#170` is the sharpest of the three tickets (it blocks nothing but has a
+▶ Next: **`session-start`** — three fresh tickets, an inbox well over budget, and no single
+obvious thread. **Page the tracker rather than dumping it** —
+`gh issue list --state open --limit 25 --json number,title,labels,state` is the form that works
+here. `#143` records `session-start` overflowing at 68 open issues and is still open; there are
+**89** now. (That issue's own remedy names `perPage`, a GitHub-MCP parameter; no MCP server is
+configured in this checkout, so the `gh` form above is the executable one.) `#170` is the sharpest of the three tickets (it blocks nothing but has a
 complete spec and three recorded failures), `#164` remains unfixed and the wrap-up sweep touches
 that code every session, and the cs-toolkit Phase 2 blockers (`#41`/`#37`/`#134`) are untouched.
 `triage-friction-log` is the alternative, and the inbox is further over budget than when the

@@ -117,13 +117,18 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
 - **`gh pr merge --subject` suppresses GitHub's `(#NNN)` append — and the repo already had the
   problem.** `eeef647` landed without its number, worked around on the next merge by writing
   `(#168)` into the subject by hand. But a review lens then measured the base rate: **15 of 75
-  commits on `main` have an associated PR and no `(#N)`**, among them `cdeae7a` (#144), `c48164c`
-  (#154), `b46f794` (#153), `0b82ff2` (#148), `42873d8` (#69), `9c6ab3a` (#68). So `--subject`
+  commits on `main` have an associated PR and no `(#N)`** — though 8 of those predate the squash
+  convention and carry their number in a merge-commit subject instead, so the comparable figure is
+  **7 of 62**: `cdeae7a` (#144), `c48164c` (#154), `b46f794` (#153), `0b82ff2` (#148), `42873d8`
+  (#69), `9c6ab3a` (#68), and this session's. So `--subject`
   explains *this* instance and is **not established** as the cause of the others. **M** — raised
   from L because it is recurring rather than a one-off, and a ticket drafted from the first
   version of this entry would have carried the wrong scope. Proposed fix: whichever workflow
   documents `gh pr merge` should say `--subject` replaces the whole subject line, append included
-  — and something should check the suffix at merge time, since seven sessions did not notice.
+  — and something should check the suffix at merge time, since it went unnoticed across several
+  sessions. (No session count is offered: two review lenses counted this same population and got
+  four and five. Neither is independently reconstructible, which is the condition under which `#75`
+  says to publish the invariant and not the figure.)
 - **Two isolated lenses stalled identically at the 600s watchdog, mid-run.** Same session, same
   prompt shape, both killed with partial output. Re-running with a tighter scope succeeded. **M**
   — the hazard is not the stall but its shape: a stalled lens returns *nothing*, which is
