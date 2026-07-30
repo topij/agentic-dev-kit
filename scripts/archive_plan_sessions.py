@@ -52,15 +52,18 @@ Exit codes:
         unparseable handoff structure, history doc with no session-log section,
         or a failed write.
 
-        **A failed write does NOT mean the documents are intact.**
-        ``Path.write_text`` truncates before writing, so a failure part-way
-        through leaves that document empty or partial while the message still
-        reads "no changes applied" — the handoff itself is the likely casualty,
-        since it is written first and gets no rollback (issue #164). If the
-        *history* write fails the handoff IS rolled back, but that rollback is
-        another truncating write and can fail in turn, which the message then
-        says explicitly. After any exit 2 naming a write failure, check the
-        handoff with ``git diff --stat`` before doing anything else.
+        **A failed write does NOT mean the documents are intact, and the
+        HISTORY doc is the likelier casualty.** ``Path.write_text`` truncates
+        before writing, so whichever write fails leaves that document empty or
+        partial while the message still reads "no changes applied" (issue #164).
+        Out of disk space it is usually the history that goes: the handoff
+        *shrinks* on a sweep, so truncating frees more than the new text needs,
+        while the history *grows*. And when the history write fails the handoff
+        is rolled back — so the handoff looks clean, which is exactly why
+        checking only the handoff gives a false all-clear.
+
+        After any exit 2 naming a write failure, check **both** documents with
+        ``git diff --stat`` before doing anything else.
     3 — ``--target-lines`` specifically: the target cannot be reached without
         sweeping the last remaining block, or there is no block to sweep at all.
         Distinct from 2 so a caller can tell this apart from the unrelated
@@ -554,17 +557,23 @@ def main(argv: list[str] | None = None) -> int:
         args.plan.write_text("".join(new_plan), encoding="utf-8")
         try:
             args.history.write_text("".join(new_history), encoding="utf-8")
-        except OSError:
+        except OSError as history_exc:
             try:
                 args.plan.write_text(original_plan, encoding="utf-8")
             except OSError as rollback_exc:
                 # Never claim "no changes applied" when the rollback itself
-                # failed: the plan is truncated and the blocks reached neither
-                # file. Say so, and name where the original text still is.
+                # failed. Name BOTH documents: the history write failed part-way,
+                # so the append-only archive is damaged too, and an operator told
+                # only about the handoff will restore one and commit the other.
+                # Do not assert a specific state for the handoff — whether it is
+                # truncated or a complete already-swept file depends on where the
+                # rollback died, and this branch cannot tell. Say what is certain.
                 print(
-                    f"error: history write failed, AND rolling the handoff back "
-                    f"failed ({rollback_exc}). {args.plan} is truncated and the "
-                    f"swept blocks are in neither file — restore it from git.",
+                    f"error: history write failed ({history_exc}), AND rolling "
+                    f"the handoff back failed ({rollback_exc}). BOTH documents "
+                    f"are damaged: {args.history} was part-written, and "
+                    f"{args.plan} is in an unknown state — the swept blocks are "
+                    f"in neither. Restore both from git before continuing.",
                     file=sys.stderr,
                 )
                 return 2

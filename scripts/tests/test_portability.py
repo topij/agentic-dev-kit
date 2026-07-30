@@ -2295,7 +2295,7 @@ def test_the_keep_early_exit_message_is_asserted_somewhere(
 def test_a_failed_rollback_does_not_claim_no_changes_applied(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """When the rollback itself fails, the plan IS truncated — say so.
+    """When the rollback itself fails, BOTH documents are damaged — say so.
 
     The handler added for this was pinned by nothing: reverting it to the bare
     `write_text(original_plan); raise` survived the suite. "no changes applied"
@@ -2327,6 +2327,57 @@ def test_a_failed_rollback_does_not_claim_no_changes_applied(
 
     assert result == 2
     err = capsys.readouterr().err
-    assert "no changes applied" not in err, "the plan is truncated — do not claim otherwise"
-    assert "truncated" in err
-    assert "restore it from git" in err
+    assert "no changes applied" not in err, "both docs are damaged — don't claim otherwise"
+    # BOTH documents named: an operator told only about the handoff restores one
+    # and commits the other. The history doc is the append-only archive.
+    assert str(history) in err, err
+    assert str(plan) in err, err
+    assert "Restore both from git" in err
+    # And no claim about a state this branch cannot know: whether the handoff is
+    # truncated or a complete already-swept file depends on where the rollback
+    # died. Here the spy raises before writing, so it is NOT truncated.
+    assert "is truncated" not in err, err
+    assert plan.read_text(encoding="utf-8") != "", "fixture check: not truncated here"
+
+
+@pytest.mark.parametrize("damaged", ["plan", "history"])
+@pytest.mark.parametrize("how", ["unreadable", "non_utf8"])
+def test_a_read_failure_names_the_document_that_failed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], damaged: str, how: str
+) -> None:
+    """Exit 2 must name WHICH document could not be read.
+
+    `UnicodeDecodeError` carries no filename, and `wrap-up.md`'s exit-2 branch
+    tells the operator to read this message and act on it — with two documents in
+    play, a message that names neither is not actionable.
+
+    Parametrized over both documents on purpose: the earlier tests damaged only
+    the plan, so collapsing the per-file reads back into one combined `try` (and
+    losing the path entirely) survived the whole suite. Both axes, because
+    "unreadable" and "non-UTF-8" arrive as different exception types.
+    """
+    archive = _load_module(
+        f"archive_read_names_{damaged}_{how}", ENGINE_DIR / "archive_plan_sessions.py"
+    )
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    target = plan if damaged == "plan" else history
+    other = history if damaged == "plan" else plan
+
+    if how == "unreadable":
+        target.chmod(0o000)
+    else:
+        target.write_bytes(target.read_bytes().replace(b"##", b"#\xff", 1))
+
+    try:
+        result = archive.main(
+            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+        )
+    finally:
+        target.chmod(0o644)
+
+    assert result == 2
+    err = capsys.readouterr().err
+    assert str(target) in err, f"the failing document must be named: {err}"
+    assert str(other) not in err, f"only the failing document should be named: {err}"
