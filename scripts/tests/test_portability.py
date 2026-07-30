@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import json
 import os
@@ -2340,7 +2341,8 @@ def test_a_failed_rollback_does_not_claim_no_changes_applied(
     `write_text(original_plan); raise` survived the suite. "no changes applied"
     would then be printed while the blocks sit in neither file.
 
-    Since #164 this is the ONLY branch that can still leave the sweep half-done,
+    Since #164 this is one of two branches that can still leave the sweep
+    half-done — its handoff-side twin is covered separately —
     and it is far narrower than it was: everything that can fail for want of
     space now fails during staging, before anything is published. Reaching it
     takes two failing `os.replace` calls — the publish of the history, and the
@@ -2377,7 +2379,8 @@ def test_a_failed_rollback_does_not_claim_no_changes_applied(
     # other.
     assert str(history) in err, err
     assert str(plan) in err, err
-    assert "Restore" in err and str(plan) in err
+    assert "git show HEAD:" in err, "the recovery must not be a destructive checkout"
+    assert "do NOT `git checkout`" in err, err
     # The history is published by rename or not at all, so "part-written" is a
     # state it can no longer be in and the message must not invent it.
     assert "part-written" not in err, err
@@ -2875,6 +2878,67 @@ def test_an_indeterminate_history_publish_restores_and_warns_of_duplicates(
     assert plan.read_text(encoding="utf-8") == original_plan, "the handoff was not restored"
 
 
+@pytest.mark.parametrize("fail_at", ["plan", "history"])
+def test_a_rollback_that_landed_is_not_reported_as_damage(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    fail_at: str,
+) -> None:
+    """The recovery must judge itself by evidence, exactly as the publishes do.
+
+    Both review lenses found this independently. The forward publishes consult
+    `publish_state()` precisely because "raised here ⇒ not published" is unsound
+    — and both rollback handlers then made that same inference about themselves.
+    An interrupt in the documented window, after the rollback's own `os.replace`
+    returns, produced a full damage report over a handoff that was correctly
+    restored, sending the operator to recover a file that already holds this
+    session's uncommitted block.
+
+    Parametrised over both publish sites: three separate findings this session
+    were "the guard, message or test exists at one site and not the other".
+    """
+    archive = _load_module(f"archive_rb_landed_{fail_at}", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original_plan = plan.read_text(encoding="utf-8")
+
+    real_replace = os.replace
+    seen: list[Path] = []
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        target = Path(str(dst))
+        seen.append(target)
+        if fail_at == "plan" and target == plan and seen.count(plan) == 1:
+            real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+            raise KeyboardInterrupt  # published, then cancelled
+        if fail_at == "history" and target == history:
+            raise OSError(28, "No space left on device")
+        if target == plan and seen.count(plan) == 2:
+            # The rollback lands, and only THEN is interrupted.
+            real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+            raise KeyboardInterrupt
+        return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "replace", spy)
+    # How the run TERMINATES differs by site and is not the point: on the plan
+    # site the interrupt is the only cause and propagates; on the history site
+    # the interrupt arrives during recovery from an ENOSPC that recovery then
+    # completed, so the ENOSPC is what gets reported. The invariant under test is
+    # the same either way — a restored handoff is never called damage.
+    with contextlib.suppress(KeyboardInterrupt):
+        archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)])
+    monkeypatch.undo()
+
+    assert plan.read_text(encoding="utf-8") == original_plan, "fixture check: it did land"
+    err = capsys.readouterr().err
+    assert "NEITHER document" not in err, (
+        f"reported damage over a handoff that was restored: {err!r}"
+    )
+    assert "may be in NEITHER" not in err, err
+
+
 def test_a_vanished_history_temp_is_not_mistaken_for_a_published_move(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3007,7 +3071,7 @@ def test_an_interrupt_after_the_history_lands_does_not_duplicate_the_blocks(
     blocks in both files, and a re-run appends them to the history a second time,
     which is exactly what the plan-first ordering exists to prevent.
 
-    So the decision is read from the filesystem (`staged.published`), not from
+    So the decision is read from the filesystem (`publish_state()`), not from
     the exception's position.
     """
     archive = _load_module("archive_sigint_after", ENGINE_DIR / "archive_plan_sessions.py")

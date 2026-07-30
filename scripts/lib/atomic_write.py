@@ -103,10 +103,13 @@ fsync is also not supported everywhere.
 Debris
 ------
 
-Temp files are named ``.<document>.<random>.devkit-tmp`` and removed on every
-path this module controls, including exceptions. ``SIGKILL`` runs no handler,
-so a hard kill can still leave one beside the document — which is why
-``.gitignore`` carries ``*.devkit-tmp``. The name is randomised via
+Temp files are named ``.<document>.<random>.devkit-tmp`` and every path this
+module controls *attempts* to remove them, exceptions included. Two routes still
+leave one behind, which is why ``.gitignore`` carries ``*.devkit-tmp``:
+``SIGKILL`` runs no handler at all, and an ``unlink`` that itself fails is
+deliberately swallowed rather than allowed to escape a caller's ``finally``
+(see :meth:`StagedWrite.abort`) — so a directory that has become unwritable
+leaves the debris it also caused. The name is randomised via
 ``tempfile.mkstemp`` (``O_EXCL``): a fixed name would let two concurrent runs
 write each other's bytes, and would let a pre-existing symlink at that name
 turn the write into an arbitrary-file clobber (CWE-59/CWE-377).
@@ -177,11 +180,21 @@ class StagedWrite:
           handler, which replaced the real exception, skipped the rollback and
           let the cleanup delete it. Hence ``"unknown"`` rather than a guess.
 
+        **This method must never raise**, and ``except OSError`` was not enough
+        to achieve that. ``Path.exists()`` calls ``os.stat``, a blocking
+        syscall, and every caller is a failure handler — so an interrupt landing
+        here escapes the handler, skips the recovery it was about to run, and
+        the caller's cleanup then deletes the copy staged for it. Measured at
+        both of this kit's call sites: swept blocks in neither document, nothing
+        on stderr. Same reasoning, and the same trade, as
+        :meth:`_fsync_parent` — swallowing a second interrupt is the lesser
+        harm.
+
         Only meaningful before :meth:`abort`, which also removes the temp.
         """
         try:
             return "pending" if self.temp.exists() else "published"
-        except OSError:
+        except BaseException:  # noqa: BLE001 — see the docstring; this cannot raise
             return "unknown"
 
     def commit(self) -> None:

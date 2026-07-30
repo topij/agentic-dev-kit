@@ -97,13 +97,14 @@ Exit codes:
         first, and a 26,807-byte handoff was measured going to 0 bytes under
         ENOSPC while this tool printed "no changes applied").
 
-        Exactly one branch cannot promise it, and it names both documents with
-        the states it can actually vouch for: the handoff published, the history
-        untouched, and the swept blocks' **titles** — enough to know what is
-        missing, not enough to retype it, so recovery is still from git. It is
-        reachable only if a second ``os.replace`` fails after the first
-        succeeded — allocation is finished by then, so the ordinary out-of-space
-        route does not lead here.
+        The exceptions are the branches where a **publish and its rollback both
+        fail**, and they say so rather than reporting cleanly. Each names both
+        documents, the state it can actually vouch for, and the swept blocks'
+        **titles** — enough to know what is missing, not enough to retype it,
+        so recovery is from git. When the run could not establish whether the
+        handoff was published, the message says that too instead of picking the
+        confident reading. Allocation is finished before any of this, so the
+        ordinary out-of-space route does not lead here.
 
         A *refused* write is different from a failed one and is worded
         differently: the sweep declines to publish over a read-only or
@@ -132,18 +133,21 @@ Exit codes:
 
     130 — interrupted (``KeyboardInterrupt``), the shell's usual 128+SIGINT.
         Listed because this module *deliberately* lets an interrupt out rather
-        than converting it: an interrupt arriving around either publish is
-        recovered from first — the handoff is restored from its staged copy if
-        it had already been published — and only then re-raised. Suppressing it
-        would report a completed sweep for a run the operator cancelled.
+        than converting it: an interrupt arriving around a publish is recovered
+        from first — the handoff is restored from its staged copy if it had
+        already been published, and left alone if the move had already completed,
+        since restoring it then would duplicate the blocks — and only then
+        re-raised. Suppressing it would report a completed sweep for a run the
+        operator cancelled.
 
-        **A 130 does not by itself mean the documents are fine.** An earlier
-        version of this paragraph said it did, and a review lens falsified it
-        with two measured paths, both needing a *second* interrupt during the
-        recovery. Those now print the same damage message the other
-        double-failure paths do, so the rule is the one that holds everywhere
-        here: **read the message, not the exit code.** A cancelled run that
-        damaged nothing says nothing on stderr.
+        **A 130 does not by itself tell you the state of the documents**, in
+        either direction. An earlier version of this paragraph said it meant no
+        damage; a review lens falsified that with two measured paths. A later
+        version said a harmless cancellation prints nothing, and that is wrong
+        too — Python prints a traceback for any escaping ``KeyboardInterrupt``,
+        so stderr is never empty here. The rule that does hold: **read the
+        message above the traceback.** Every path that changed a document, or
+        could not establish whether it had, prints one.
 """
 
 from __future__ import annotations
@@ -703,7 +707,48 @@ def main(argv: list[str] | None = None) -> int:
         #     leaves the blocks in BOTH documents, which a re-run then appends to
         #     the history a second time.
         #
-        # `staged.published` reads the temp's absence, which is the fact.
+        # `publish_state()` reads the temp's absence, which is evidence.
+        #
+        # ONE recovery routine serves both sites. Three separate review findings
+        # were "the guard/message/test exists at one site and not the other", so
+        # the duplication was the defect generator rather than any single miss.
+        def restore_handoff(*, cause: BaseException, swept: bool) -> bool:
+            """Put the handoff back. ``True`` if it is now intact, else report.
+
+            ``swept`` says whether the handoff is known to have been published;
+            when it is not, the damage message must not assert that it was.
+            """
+            try:
+                staged_rollback.commit()
+            except BaseException as rollback_exc:
+                # The rollback may have landed anyway: an interrupt can arrive
+                # after its `os.replace` returns, and judging it by "did commit()
+                # raise" is the same unsound inference the forward publishes use
+                # `publish_state()` to avoid. Reported as damage, this sends the
+                # operator to restore a file that is already correct — and at
+                # this point in wrap-up that file holds their uncommitted block.
+                if staged_rollback.publish_state() == "published":
+                    return True
+                state = (
+                    f"{args.plan} has been swept, so these blocks are in NEITHER "
+                    "document"
+                    if swept
+                    else f"{args.plan} could not be confirmed either way, so these "
+                    "blocks may be in NEITHER document"
+                )
+                print(
+                    f"error: publishing failed ({cause}), AND restoring "
+                    f"{args.plan} failed ({rollback_exc}). {args.history} is "
+                    f"unchanged and intact — it is never truncated — but {state}:\n"
+                    + "\n".join(f"  - {title[:88]}" for title in moved_titles)
+                    + f"\nRecover {args.plan} with `git show HEAD:{args.plan.name}` "
+                    "— do NOT `git checkout`, which discards this session's own "
+                    "edits.",
+                    file=sys.stderr,
+                )
+                return False
+            return True
+
         try:
             staged_plan.commit()
         except BaseException as exc:
@@ -712,28 +757,18 @@ def main(argv: list[str] | None = None) -> int:
             # swept (so it needs them) or was never touched (so they are what is
             # already there). At the history site below the same ambiguity is not
             # symmetric, and is handled differently.
-            if staged_plan.publish_state() in ("published", "unknown"):
-                # Guarded exactly like the history side below. Unguarded, a
-                # failing rollback here replaced `exc`, escaped through the
-                # `finally` and ended the run as a traceback — exit 1, outside
-                # the documented contract, with the handoff swept and no
-                # message. That is the one-of-two-call-sites defect a round
-                # earlier, committed inside the fix for it.
-                try:
-                    staged_rollback.commit()
-                except BaseException as rollback_exc:
-                    print(
-                        f"error: publishing {args.plan} failed ({exc}), AND "
-                        f"restoring it failed ({rollback_exc}). {args.history} is "
-                        f"unchanged and intact, but {args.plan} has been swept, "
-                        f"so these blocks are in NEITHER document:\n"
-                        + "\n".join(f"  - {title[:88]}" for title in moved_titles)
-                        + f"\nRestore {args.plan} from git before continuing.",
-                        file=sys.stderr,
-                    )
-                    if isinstance(exc, OSError):
-                        return 2
-                    raise exc from rollback_exc
+            plan_state = staged_plan.publish_state()
+            # "unknown" is treated as published, and that is safe *here*: the
+            # rollback writes the original bytes over a document that either was
+            # swept (so it needs them) or was never touched (so they are what is
+            # already there). At the history site the same ambiguity is not
+            # symmetric, and is handled differently.
+            if plan_state in ("published", "unknown") and not restore_handoff(
+                cause=exc, swept=plan_state == "published"
+            ):
+                if isinstance(exc, OSError):
+                    return 2
+                raise
             if isinstance(exc, OSError):
                 print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
                 return 2
@@ -767,52 +802,27 @@ def main(argv: list[str] | None = None) -> int:
                 # Reaching here means the destination was read back and matches
                 # what this run intended to write, so the claim below is checked
                 # rather than inferred.
-                if isinstance(history_exc, OSError):
-                    print(
-                        f"error: {args.history} was published — its content was "
-                        f"read back and matches — but the step after it failed "
-                        f"({history_exc}). The move is complete in both documents "
-                        "and nothing needs restoring.",
-                        file=sys.stderr,
-                    )
-                    return 2
-                raise
-            try:
-                staged_rollback.commit()
-            except BaseException as rollback_exc:
-                # BaseException, not OSError: a SECOND interrupt landing during
-                # the rollback used to escape here uncaught, leaving the blocks
-                # in neither document with no message — while the exit-code
-                # contract's own paragraph promised a 130 meant no damage.
-                # Never claim "no changes applied" when the rollback failed too.
-                # Both remaining claims are ones this branch can actually make:
-                # the history was published by rename or not at all, so it is
-                # INTACT rather than part-written, and the handoff is the
-                # already-swept document whose rollback did not land.
-                #
-                # The swept titles are listed bare. An earlier version appended
-                # the whole `report`, whose header reads "moved N block(s) to
-                # <history>" — a past-tense success line, inside the message
-                # saying the move did not happen, and the exact string the
-                # comment above records as removed in #160. Both lenses of the
-                # review panel found it independently.
+                # Printed for an interrupt too, not only an OSError: this is the
+                # one path the code has already established is COMPLETE, and
+                # exiting 130 in silence over it reads as "cancelled, nothing
+                # happened" when the sweep in fact succeeded.
                 print(
-                    f"error: publishing {args.history} failed ({history_exc}), AND "
-                    f"restoring {args.plan} failed ({rollback_exc}). "
-                    f"{args.history} is unchanged and intact — it was never "
-                    f"truncated — but {args.plan} has been swept, so these blocks "
-                    f"are in NEITHER document:\n"
-                    + "\n".join(f"  - {title[:88]}" for title in moved_titles)
-                    + f"\nRestore {args.plan} from git before continuing.",
+                    f"error: {args.history} was published — its content was "
+                    f"read back and matches — but the step after it failed "
+                    f"({history_exc}). The move is complete in both documents "
+                    "and nothing needs restoring.",
                     file=sys.stderr,
                 )
                 if isinstance(history_exc, OSError):
                     return 2
+                raise
+            if not restore_handoff(cause=history_exc, swept=True):
+                if isinstance(history_exc, OSError):
+                    return 2
                 # `raise history_exc`, not a bare `raise`: a bare one re-raises
-                # the ROLLBACK's OSError from this handler, so a cancelled run
-                # stopped looking cancelled and the process no longer terminated
-                # as interrupted.
-                raise history_exc from rollback_exc
+                # the ROLLBACK's error, so a cancelled run stopped looking
+                # cancelled and the process no longer terminated as interrupted.
+                raise history_exc
             if history_state == "unknown":
                 # The handoff is back, and whether the history also received the
                 # blocks could not be determined. Restoring is the right side to
