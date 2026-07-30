@@ -35,15 +35,21 @@ measures the handoff doc in *lines*; this script's ``--keep`` counts *blocks* �
 a block-count remedy can be a no-op against a line budget (5 blocks under a
 ``--keep 6`` floor, but still over a 400-line budget). ``--target-lines`` closes
 that gap: it sweeps oldest-first, one block at a time, until the doc is at or
-under the target, and never sweeps the last remaining block. If it runs out of
-sweepable blocks while still over the target, it fails loudly (exit 2) rather
-than reporting success — a step that did not accomplish what it was asked must
-say so.
+under the target, and never sweeps the last remaining block. Its line count is
+``budget_line_count`` — deliberately the same rule ``check_doc_budget`` uses, not
+this module's ``splitlines()``. If it runs out of sweepable blocks while still
+over the target, it fails loudly (exit **3**) rather than reporting success — a
+step that did not accomplish what it was asked must say so.
 
 Exit codes:
     0 — applied (or nothing to do, or dry-run)
-    2 — usage error / unparseable handoff-doc structure / ``--target-lines`` could
-        not be reached without sweeping the last remaining block
+    2 — usage error / unparseable handoff-doc structure / write failure
+    3 — ``--target-lines`` specifically: the target cannot be reached without
+        sweeping the last remaining block. Distinct from 2 on purpose — 2 covers
+        five unrelated failures (bad flag value, missing file, unparseable
+        handoff, history doc with no session-log section, failed write), and a
+        caller told to diagnose "ran out of blocks" from a non-zero exit would
+        misreport every one of them as an exhausted sweep.
 """
 
 from __future__ import annotations
@@ -58,6 +64,34 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import load_config, repo_root, resolve_path  # noqa: E402
 
 REPO_ROOT = repo_root()
+
+
+def budget_line_count(text: str) -> int:
+    """Count lines the way ``check_doc_budget.py`` counts them: on ``\\n`` only.
+
+    This exists because the two tools MUST agree. ``check_doc_budget`` counts by
+    iterating an open text handle, which (with universal newlines) breaks only on
+    ``\\n``. This module parses structure with ``str.splitlines()``, which
+    additionally breaks on ``\\v \\f \\x1c \\x1d \\x1e \\x85 \\u2028 \\u2029`` —
+    so a doc containing any of those measures LONGER here than in the budget the
+    sweep is trying to reach.
+
+    That divergence was inert while ``splitlines()`` output fed structural
+    parsing alone. ``--target-lines`` is the first path to compare a count
+    against ``check_doc_budget``'s number, which makes the disagreement
+    reachable: a doc could be under budget by one counter and over by the other,
+    and the sweep would refuse to act on a target that is genuinely achievable.
+
+    Pinned by ``test_line_counters_agree_on_exotic_separators``, which fails if
+    this is swapped back to ``len(splitlines())``.
+    """
+    if not text:
+        return 0
+    count = text.count("\n")
+    # A trailing fragment with no final newline is still a line to both counters.
+    return count if text.endswith("\n") else count + 1
+
+
 SEP = "______________________________________________________________________\n"
 SESSION_PREFIXES = ("## Latest session", "## Earlier session", "## Session — ")
 # Recent sessions may write *dated* headings (`## June 5 Fri (cont.) — …`) or a
@@ -364,30 +398,30 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if target_lines is not None:
-        if len(plan) <= target_lines:
-            print(f"nothing to move: {len(plan)} line(s) <= --target-lines {target_lines}.")
+        plan_lines = budget_line_count("".join(plan))
+        if plan_lines <= target_lines:
+            print(f"nothing to move: {plan_lines} line(s) <= --target-lines {target_lines}.")
             return 0
         if len(blocks) <= 1:
+            # Both the 0-block and 1-block cases land here, and they need
+            # different wording: with 0 blocks there is no "last live block" to
+            # decline to sweep, and claiming one describes a document that does
+            # not exist.
+            reason = (
+                "there are no session blocks to sweep"
+                if not blocks
+                else "its 1 remaining session block is never swept"
+            )
             print(
-                f"error: cannot reach --target-lines {target_lines}: only "
-                f"{len(blocks)} session block(s) remain, and the last live block is "
-                f"never swept (still {len(plan)} lines).",
+                f"error: cannot reach --target-lines {target_lines}: {reason}. "
+                f"Nothing was written; the doc is unchanged at {plan_lines} lines.",
                 file=sys.stderr,
             )
-            return 2
+            return 3
 
         # Sweep oldest-first, one block at a time (never the last remaining block —
-        # range stops at len(blocks) - 1), stopping at the FIRST count that reaches
+        # range stops at len(blocks) - 1), breaking at the FIRST count that reaches
         # the target, which is therefore the smallest sweep that suffices.
-        #
-        # Deliberately does NOT assume the line count falls monotonically as
-        # moved_count grows. It need not: this script always (re)writes a
-        # fixed-size history pointer, which can outweigh one small swept block.
-        # The loop does not rely on monotonicity — it measures each candidate's
-        # real rendered length — and the failure branch below is sound for the
-        # same reason: never breaking means no candidate reached the target.
-        # `_write_four_block_plan` in the tests documents the non-monotonic case
-        # and is sized specifically to avoid it.
         new_plan = keep_blocks = moved = None
         for moved_count in range(1, len(blocks)):
             keep_blocks = blocks[: len(blocks) - moved_count]
@@ -400,17 +434,21 @@ def main(argv: list[str] | None = None) -> int:
                 history_link=history_link,
                 history_label=args.history.name,
             )
-            if len(new_plan) <= target_lines:
+            if budget_line_count("".join(new_plan)) <= target_lines:
                 break
 
-        if len(new_plan) > target_lines:
+        if budget_line_count("".join(new_plan)) > target_lines:
+            # Past tense would be wrong here: nothing has been written, and the
+            # figures below describe the *rejected* candidate, not the file.
             print(
-                f"error: swept to {len(keep_blocks)} live block(s) (the floor — the "
-                f"last block is never swept) and still {len(new_plan)} lines, over "
-                f"--target-lines {target_lines}.",
+                f"error: cannot reach --target-lines {target_lines}: even sweeping "
+                f"down to {len(keep_blocks)} live block(s) — the floor, since the "
+                f"last block is never swept — would leave "
+                f"{budget_line_count(''.join(new_plan))} lines. Nothing was "
+                f"written; the doc is unchanged at {plan_lines} lines.",
                 file=sys.stderr,
             )
-            return 2
+            return 3
     else:
         if len(blocks) <= keep:
             print(f"nothing to move: {len(blocks)} session block(s) <= --keep {keep}.")
@@ -434,9 +472,12 @@ def main(argv: list[str] | None = None) -> int:
 
     moved_titles = [b[0].rstrip("\n").split(" — ", 1)[-1] for b in moved]
     verb = "would move" if args.dry_run else "moved"
+    # Report in budget_line_count's units, not len(): these numbers are read
+    # against check_doc_budget's budget, so they have to be the same measure.
     print(
         f"{verb} {len(moved)} block(s) to {args.history.name}, keeping {len(keep_blocks)} live "
-        f"({len(plan)} -> {len(new_plan)} plan lines):"
+        f"({budget_line_count(''.join(plan))} -> "
+        f"{budget_line_count(''.join(new_plan))} plan lines):"
     )
     for title in moved_titles:
         print(f"  - {title[:88]}")
