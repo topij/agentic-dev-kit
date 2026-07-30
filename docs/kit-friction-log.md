@@ -111,15 +111,17 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
   one message that is sometimes load-bearing. **Two gates, and a fix must address both:**
   `.claude/settings.json` pre-filters on `Bash(gh pr *)`, then `pr_followup_hook.py:41` matches
   `\bgh\s+pr\s+(create|ready)\b` against `.tool_input.command` (`:181-182`) with no heredoc or
-  quote awareness. Proposed fix: gate on the tool *result* (a PR URL, or `gh pr view` confirming a
-  new number) rather than on the command string. A review lens reproduced a seventh occurrence
+  quote awareness. Proposed fix: gate on the tool *result* rather than the command string — and with a
+  **predicate per command**, since the two differ: `gh pr create` succeeds by yielding a *new* PR
+  number, while `gh pr ready` acts on an existing one and succeeds by that PR reading
+  non-draft afterwards. A single new-PR-URL test would silently drop every valid `ready` event. A review lens reproduced a seventh occurrence
   live while checking this entry.
 - **`gh pr merge --subject` suppresses GitHub's `(#NNN)` append — and the repo already had the
   problem.** `eeef647` landed without its number, worked around on the next merge by writing
   `(#168)` into the subject by hand. But a review lens then measured the base rate: **15 of 75
   commits on `main` have an associated PR and no `(#N)`** — though 8 of those predate the squash
   convention and carry their number in a merge-commit subject instead, so the comparable figure is
-  **7 of 62**: `cdeae7a` (#144), `c48164c` (#154), `b46f794` (#153), `0b82ff2` (#148), `42873d8`
+  **7 of 67** (75 minus 5 constituent commits of PRs #1–#3 and their 3 merge commits): `cdeae7a` (#144), `c48164c` (#154), `b46f794` (#153), `0b82ff2` (#148), `42873d8`
   (#69), `9c6ab3a` (#68), and this session's. So `--subject`
   explains *this* instance and is **not established** as the cause of the others. **M** — raised
   from L because it is recurring rather than a one-off, and a ticket drafted from the first
@@ -135,8 +137,10 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-29 (secon
   indistinguishable from a lens that ran and found nothing unless the cockpit checks the task
   status. `fallback-review-panel.md` item 10 requires the lens to open with what it reviewed,
   which catches a wrong-ref lens but not a dead one — the report never arrives at all. Proposed
-  fix: the panel's step 3 should confirm each lens *returned*, not only that what returned looks
-  right.
+  fix: the panel's step 3 should confirm each lens reached a **successful terminal status**, and
+  record the exit/watchdog state — not merely that something came back. "Returned" is too weak, and
+  this session proves it: both stalled lenses emitted partial text before the watchdog killed them,
+  so a returned-output test would have passed them.
 - **A self-reported count of your own effort drifts upward, and nothing checks it.** This session's
   handoff block was written claiming *"nine panel rounds and twenty isolated lens runs"*. Recounting
   the actual launches gave **eight rounds and sixteen completed runs** (eighteen launched, two

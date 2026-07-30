@@ -80,7 +80,7 @@ was everything written to support it.
   the block naming `#131` went to history in this session's sweep, taking the qualifier with it.
 - **`eeef647` landed without its `(#166)` suffix**, and it is not alone: 15 of 75 commits on
   `main` have an associated PR and no `(#N)` — 8 of those predate the squash convention, so the
-  comparable figure is **7 of 62**, among them `cdeae7a` (#144), `c48164c` (#154), `b46f794`
+  comparable figure is **7 of 67**, among them `cdeae7a` (#144), `c48164c` (#154), `b46f794`
   (#153). `--subject` explains this session's instance and is **not** established as the cause of
   the others. Recurring, not a one-off, and not repairable in place.
 - The inbox is **well over budget** and grew again — five entries added to a file already over.
