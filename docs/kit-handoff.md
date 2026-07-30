@@ -100,10 +100,12 @@ recovery paths were collapsed into one function used by both sites.
   that moved that block **dropped them** from the live handoff, which the file's own closing line
   promises does not happen — and `#127` is the ticket about a sweep being indistinguishable from a
   deletion. Found by a review lens, not by the sweep.
-- The inbox is **280/150** and grew by 47 lines this session — the largest it has been in the
-  recorded series (168 → 179 → 233 → 280).
+- The inbox was **283/150 at this wrap-up** — the largest in the recorded series
+  (168 → 179 → 233 → 283). Stated as a measurement with its moment, not a running figure: the
+  previous block dropped the number precisely because a hand-written one went stale three times,
+  each time inside the commit correcting its predecessor. `check_doc_budget.py` prints the live one.
 
-▶ Next: **`triage-friction-log`** — the inbox is 280/150, nearly double budget, and un-swept for
+▶ Next: **`triage-friction-log`** — the inbox is near double budget and un-swept for
 several sessions; four of this session's entries are ready to graduate, three of them one class
 (`#150`: a check that reports success without having examined anything). Then `session-start` for
 the rest: `#164`/`#162` need an operator decision, and the five-finding
