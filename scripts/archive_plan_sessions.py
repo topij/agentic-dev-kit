@@ -26,12 +26,49 @@ Usage:
 
     uv run scripts/archive_plan_sessions.py                  # keep 6, apply
     uv run scripts/archive_plan_sessions.py --keep 5
+    uv run scripts/archive_plan_sessions.py --target-lines <budget>  # sweep to a line budget
     uv run scripts/archive_plan_sessions.py --dry-run         # report only
     uv run scripts/archive_plan_sessions.py --plan docs/handoff.md --history docs/handoff-history.md
 
+``--keep`` and ``--target-lines`` are mutually exclusive. ``check_doc_budget.py``
+measures the handoff doc in *lines*; this script's ``--keep`` counts *blocks* — so
+a block-count remedy can be a no-op against a line budget (fewer blocks than the
+``--keep`` floor, yet still over on lines). ``--target-lines`` closes that gap: it
+sweeps oldest-first, one block at a time, until the doc is at or under the target,
+and never sweeps the last remaining block. Its line count is
+``budget_line_count`` — deliberately the same rule ``check_doc_budget`` uses, not
+this module's ``splitlines()``. If it runs out of sweepable blocks while still
+over the target, it fails loudly (exit **3**) rather than reporting success — a
+step that did not accomplish what it was asked must say so.
+
 Exit codes:
-    0 — applied (or nothing to do, or dry-run)
-    2 — usage error / unparseable handoff-doc structure
+    0 — applied, or nothing to do, or a dry-run that would have succeeded.
+        NOT every dry-run: ``--dry-run`` still reports 3 for an unreachable
+        ``--target-lines``, because reachability is decided before the dry-run
+        branch. That is the point — a dry-run exists to report what the real run
+        would do.
+    2 — every other failure: usage error, unresolvable configured paths, missing
+        file, a file that cannot be read (unreadable or not valid UTF-8),
+        unparseable handoff structure, history doc with no session-log section,
+        or a failed write.
+
+        **A failed write does NOT mean the documents are intact, and the
+        HISTORY doc is the likelier casualty.** ``Path.write_text`` truncates
+        before writing, so whichever write fails leaves that document empty or
+        partial while the message still reads "no changes applied" (issue #164).
+        Out of disk space it is usually the history that goes: the handoff
+        *shrinks* on a sweep, so truncating frees more than the new text needs,
+        while the history *grows*. And when the history write fails the handoff
+        is rolled back — so the handoff looks clean, which is exactly why
+        checking only the handoff gives a false all-clear.
+
+        After any exit 2 naming a write failure, check **both** documents with
+        ``git diff --stat`` before doing anything else.
+    3 — ``--target-lines`` specifically: the target cannot be reached without
+        sweeping the last remaining block, or there is no block to sweep at all.
+        Distinct from 2 so a caller can tell this apart from the unrelated
+        failures above without parsing the message; anything reading only
+        "non-zero" would report all of them as an exhausted sweep.
 """
 
 from __future__ import annotations
@@ -46,6 +83,38 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import load_config, repo_root, resolve_path  # noqa: E402
 
 REPO_ROOT = repo_root()
+
+
+def budget_line_count(text: str) -> int:
+    """Count lines the way ``check_doc_budget.py`` counts them.
+
+    The two tools MUST agree: ``--target-lines`` is the first path to compare a
+    count against ``check_doc_budget``'s number, so a disagreement means the sweep
+    can refuse a target that is genuinely achievable.
+
+    ``check_doc_budget`` counts by iterating an open text handle.
+    ``str.splitlines()`` — which this module uses for structural parsing — breaks
+    on ``\\v \\f \\x1c \\x1d \\x1e \\x85 \\u2028 \\u2029`` as well, so a doc
+    containing any of those measures LONGER under ``splitlines()`` than in the
+    budget.
+
+    **Precondition, and it is the caller's:** ``text`` must already have had
+    universal-newline translation applied — i.e. come from ``read_text()`` /
+    ``open()`` in text mode, which turns ``\\r`` and ``\\r\\n`` into ``\\n``. This
+    function splits on ``\\n`` alone, so it does NOT reproduce a text handle's
+    count for untranslated bytes: on raw ``a\\rb\\rc\\n`` a handle sees 3 lines and
+    this sees 1. Reading with ``newline=""`` anywhere upstream breaks parity by
+    one line per CR, and ``test_line_counters_agree_on_exotic_separators`` covers
+    both classes so that change fails there rather than in the field.
+
+    Pinned by that test, which also asserts the naive ``len(splitlines())`` form
+    genuinely disagrees, so it cannot pass vacuously.
+    """
+    count = text.count("\n")
+    # A trailing fragment with no final newline is still a line to both counters.
+    return count if text.endswith("\n") or not text else count + 1
+
+
 SEP = "______________________________________________________________________\n"
 SESSION_PREFIXES = ("## Latest session", "## Earlier session", "## Session — ")
 # Recent sessions may write *dated* headings (`## June 5 Fri (cont.) — …`) or a
@@ -254,12 +323,27 @@ def insert_into_history(history: list[str], moved: list[list[str]]) -> list[str]
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point: keep the newest ``--keep`` session blocks, archive the rest.
 
-    Returns 0 on success / no-op / dry-run, 2 on usage error, unparseable handoff
-    structure, or a failed write (the handoff doc is rolled back in that case).
+    ``--target-lines`` is the mutually-exclusive alternative: sweep oldest-first
+    until the plan doc is at or under N lines, rather than a fixed block count.
+
+    Exit codes are documented once, in the module docstring. Do not restate them
+    here: a second copy has drifted from the first in three separate rounds of
+    review on this function.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--keep", type=int, default=DEFAULT_KEEP, help="live blocks to keep"
+        "--keep",
+        type=int,
+        default=None,
+        help=f"live blocks to keep (default {DEFAULT_KEEP}; mutually exclusive with "
+        "--target-lines)",
+    )
+    parser.add_argument(
+        "--target-lines",
+        type=int,
+        default=None,
+        help="sweep oldest-first, one block at a time, until the live handoff doc is "
+        "at or under N lines (mutually exclusive with --keep)",
     )
     parser.add_argument("--plan", type=Path, default=None, help="living handoff doc")
     parser.add_argument(
@@ -301,16 +385,48 @@ def main(argv: list[str] | None = None) -> int:
         args.history if args.history.is_absolute() else Path.cwd() / args.history
     )
 
-    if args.keep < 1:
-        print("error: --keep must be >= 1", file=sys.stderr)
+    if args.keep is not None and args.target_lines is not None:
+        print("error: --keep and --target-lines are mutually exclusive", file=sys.stderr)
         return 2
+
+    target_lines: int | None = args.target_lines
+    keep: int | None = None
+    if target_lines is not None:
+        if target_lines < 1:
+            print("error: --target-lines must be >= 1", file=sys.stderr)
+            return 2
+    else:
+        keep = args.keep if args.keep is not None else DEFAULT_KEEP
+        if keep < 1:
+            print("error: --keep must be >= 1", file=sys.stderr)
+            return 2
+
     for path in (args.plan, args.history):
         if not path.is_file():
             print(f"error: not found: {path}", file=sys.stderr)
             return 2
 
-    plan = args.plan.read_text(encoding="utf-8").splitlines(keepends=True)
-    history = args.history.read_text(encoding="utf-8").splitlines(keepends=True)
+    # A read that fails is a documented exit 2, not an uncaught traceback.
+    # BOTH classes, deliberately: `is_file()` above passes for a file that exists
+    # and cannot be opened, so `PermissionError` reaches these lines just as a
+    # cp1252 em-dash reaches them as `UnicodeDecodeError`. Catching only the
+    # decode error left exit 1 producible while the module's exit-code contract
+    # says 0/2/3 and `wrap-up.md` branches on 2 and 3 alone.
+    # `check_memory_budget.py` already catches this exact pair for the same
+    # reason; keep them in agreement.
+    #
+    # Read one at a time so the message can name WHICH document failed:
+    # UnicodeDecodeError carries no filename, and `wrap-up.md`'s exit-2 branch
+    # tells the operator to read this text and act on it.
+    texts: list[str] = []
+    for path in (args.plan, args.history):
+        try:
+            texts.append(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"error: could not read {path}: {exc}", file=sys.stderr)
+            return 2
+    plan = texts[0].splitlines(keepends=True)
+    history = texts[1].splitlines(keepends=True)
 
     try:
         head, region, tail = split_plan(plan)
@@ -319,22 +435,77 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    if len(blocks) <= args.keep:
-        print(f"nothing to move: {len(blocks)} session block(s) <= --keep {args.keep}.")
-        return 0
-
-    keep_blocks, moved = blocks[: args.keep], blocks[args.keep :]
     history_link = os.path.relpath(args.history, start=args.plan.parent).replace(
         os.sep, "/"
     )
-    new_plan = rebuild_plan(
-        head,
-        keep_blocks,
-        tail,
-        args.keep,
-        history_link=history_link,
-        history_label=args.history.name,
-    )
+
+    if target_lines is not None:
+        plan_lines = budget_line_count("".join(plan))
+        if plan_lines <= target_lines:
+            print(f"nothing to move: {plan_lines} line(s) <= --target-lines {target_lines}.")
+            return 0
+        if len(blocks) <= 1:
+            # Both the 0-block and 1-block cases land here, and they need
+            # different wording: with 0 blocks there is no "last live block" to
+            # decline to sweep, and claiming one describes a document that does
+            # not exist.
+            reason = (
+                "there are no session blocks to sweep"
+                if not blocks
+                else "its 1 remaining session block is never swept"
+            )
+            print(
+                f"error: cannot reach --target-lines {target_lines}: {reason}. "
+                f"Nothing was written; the doc is unchanged at {plan_lines} lines.",
+                file=sys.stderr,
+            )
+            return 3
+
+        # Sweep oldest-first, one block at a time (never the last remaining block —
+        # range stops at len(blocks) - 1), breaking at the FIRST count that reaches
+        # the target, which is therefore the smallest sweep that suffices.
+        new_plan = keep_blocks = moved = None
+        for moved_count in range(1, len(blocks)):
+            keep_blocks = blocks[: len(blocks) - moved_count]
+            moved = blocks[len(blocks) - moved_count :]
+            new_plan = rebuild_plan(
+                head,
+                keep_blocks,
+                tail,
+                len(keep_blocks),
+                history_link=history_link,
+                history_label=args.history.name,
+            )
+            if budget_line_count("".join(new_plan)) <= target_lines:
+                break
+
+        if budget_line_count("".join(new_plan)) > target_lines:
+            # Past tense would be wrong here: nothing has been written, and the
+            # figures below describe the *rejected* candidate, not the file.
+            print(
+                f"error: cannot reach --target-lines {target_lines}: even sweeping "
+                f"down to {len(keep_blocks)} live block(s) — the floor, since the "
+                f"last block is never swept — would leave "
+                f"{budget_line_count(''.join(new_plan))} lines. Nothing was "
+                f"written; the doc is unchanged at {plan_lines} lines.",
+                file=sys.stderr,
+            )
+            return 3
+    else:
+        if len(blocks) <= keep:
+            print(f"nothing to move: {len(blocks)} session block(s) <= --keep {keep}.")
+            return 0
+
+        keep_blocks, moved = blocks[:keep], blocks[keep:]
+        new_plan = rebuild_plan(
+            head,
+            keep_blocks,
+            tail,
+            keep,
+            history_link=history_link,
+            history_label=args.history.name,
+        )
+
     try:
         new_history = insert_into_history(history, moved)
     except ValueError as exc:
@@ -342,31 +513,76 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     moved_titles = [b[0].rstrip("\n").split(" — ", 1)[-1] for b in moved]
+    # Figures in budget_line_count's units, not len(): these are read against
+    # check_doc_budget's budget, so they have to be the same measure. Pinned by
+    # test_report_figures_use_the_budget_counter_not_splitlines, which uses a doc
+    # containing separators the two counters disagree about.
+    # The verb is interpolated HERE, not left as a `{verb}` field for a later
+    # `str.format()`. That earlier shape called `.format()` on a string containing
+    # the swept session TITLES, so a heading with a brace in it — `… substituting
+    # {budget} in the remedy`, which is exactly what this branch's own commits are
+    # titled — raised KeyError/IndexError/ValueError AFTER both files were written:
+    # exit 1 (a code nothing documents), no report, the move already on disk, and a
+    # retry reporting "nothing to move". Session titles are DATA, never a template.
     verb = "would move" if args.dry_run else "moved"
-    print(
-        f"{verb} {len(moved)} block(s) to {args.history.name}, keeping {len(keep_blocks)} live "
-        f"({len(plan)} -> {len(new_plan)} plan lines):"
+    report = "\n".join(
+        [
+            f"{verb} {len(moved)} block(s) to {args.history.name}, "
+            f"keeping {len(keep_blocks)} live "
+            f"({budget_line_count(''.join(plan))} -> "
+            f"{budget_line_count(''.join(new_plan))} plan lines):"
+        ]
+        + [f"  - {title[:88]}" for title in moved_titles]
     )
-    for title in moved_titles:
-        print(f"  - {title[:88]}")
 
-    if not args.dry_run:
-        # This is a *move*: a partial write (handoff doc trimmed but history write
-        # fails) would drop the moved blocks. Write the handoff doc, then the
-        # history doc; if the history write fails, roll the handoff doc back so
-        # nothing is lost.
-        original_plan = "".join(plan)
+    if args.dry_run:
+        print(report)
+        return 0
+
+    # The report is printed only AFTER a successful write, and never before one.
+    # It used to be printed first, so a failed write emitted
+    # "moved 2 block(s) ... (46 -> 33 plan lines)" and *then* an error, leaving a
+    # past-tense success line on stdout describing a file that was never touched.
+    #
+    # This is a *move*: a partial write (handoff doc trimmed but history write
+    # fails) would drop the moved blocks. Write the handoff doc, then the history
+    # doc; if the history write fails, roll the handoff doc back so nothing is lost.
+    #
+    # The plan is written FIRST and rolled back if the history write fails. The
+    # order is load-bearing, not incidental: writing history first and failing on
+    # the plan would leave the blocks in *both* files, and a re-run would append
+    # them to history a second time.
+    original_plan = "".join(plan)
+    try:
+        args.plan.write_text("".join(new_plan), encoding="utf-8")
         try:
-            args.plan.write_text("".join(new_plan), encoding="utf-8")
+            args.history.write_text("".join(new_history), encoding="utf-8")
+        except OSError as history_exc:
             try:
-                args.history.write_text("".join(new_history), encoding="utf-8")
-            except OSError:
                 args.plan.write_text(original_plan, encoding="utf-8")
-                raise
-        except OSError as exc:
-            print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
-            return 2
+            except OSError as rollback_exc:
+                # Never claim "no changes applied" when the rollback itself
+                # failed. Name BOTH documents: the history write failed part-way,
+                # so the append-only archive is damaged too, and an operator told
+                # only about the handoff will restore one and commit the other.
+                # Do not assert a specific state for the handoff — whether it is
+                # truncated or a complete already-swept file depends on where the
+                # rollback died, and this branch cannot tell. Say what is certain.
+                print(
+                    f"error: history write failed ({history_exc}), AND rolling "
+                    f"the handoff back failed ({rollback_exc}). BOTH documents "
+                    f"are damaged: {args.history} was part-written, and "
+                    f"{args.plan} is in an unknown state — the swept blocks are "
+                    f"in neither. Restore both from git before continuing.",
+                    file=sys.stderr,
+                )
+                return 2
+            raise
+    except OSError as exc:
+        print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
+        return 2
 
+    print(report)
     return 0
 
 

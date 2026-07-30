@@ -6,8 +6,9 @@ End-of-session wrap-up. Update the living handoff and commit.
 
 Read `config/dev-model.yaml` first. In this workflow, `<handoff>`,
 `<handoff-history>`, and `<friction-log>` mean the corresponding values under
-`paths`; `<engine-dir>` means `paths.engines`. A workflow invocation means the
-current agent's native adapter (`/name` in Claude or `$name` in Codex).
+`paths`; `<engine-dir>` means `paths.engines`; `<handoff-budget>` means the
+`budget` field of `<handoff>`'s entry under `doc_budgets`. A workflow invocation
+means the current agent's native adapter (`/name` in Claude or `$name` in Codex).
 
 ## Steps
 
@@ -54,13 +55,44 @@ current agent's native adapter (`/name` in Claude or `$name` in Codex).
 
 1. **Keep the handoff docs lean.** After adding this session's block, run
    `uv run <engine-dir>/check_doc_budget.py`. If it warns that `<handoff>` is over
-   budget, run `uv run <engine-dir>/archive_plan_sessions.py` — it deterministically keeps
-   the newest ~6 session blocks live, moves the rest into `<handoff-history>`,
-   and trims the megaline. Stage **both** files (`<handoff>` +
-   `<handoff-history>`) into this commit. If `<friction-log>` is over
-   budget, don't sweep it inline — note it and recommend the `triage-friction-log` workflow
-   (graduating the inbox needs tracker writes + operator approval). This is what
-   stops the handoff docs from ballooning between archive sweeps.
+   budget, run `uv run <engine-dir>/archive_plan_sessions.py --target-lines
+   <handoff-budget>` — it sweeps oldest-first, one block at a time, until
+   `<handoff>` is at or under that line budget, moves the swept blocks into
+   `<handoff-history>`, and trims the megaline. **Do not use plain `--keep`
+   here** (or run the script with no flags, which defaults to `--keep 6`):
+   `check_doc_budget.py` measures **lines** while `--keep` counts **blocks**, so
+   the default can report "nothing to move" while `<handoff>` stays over budget
+   ([#74](https://github.com/topij/agentic-dev-kit/issues/74)). **Read the exit
+   code, not merely "non-zero":** exit **3** means the target is unreachable —
+   either it would require sweeping the last remaining block, or there are no
+   session blocks to sweep at all. Nothing was written, so report `<handoff>`'s
+   *unchanged* length against the budget and do not treat it as done. Exit **2**
+   is something else entirely (unreadable or non-UTF-8 file, missing file,
+   unparseable handoff, a history doc with no session-log section, a failed
+   write); read the message and fix that instead of reporting an exhausted sweep.
+   The script's own `--help` carries the authoritative list. **On a failed write,
+   check BOTH documents before you continue, and check them differently** — the
+   write truncates before it fails, so a full disk or quota can leave a document
+   empty or cut mid-line while the message still says "no changes applied"
+   ([#164](https://github.com/topij/agentic-dev-kit/issues/164)).
+
+   - `<handoff-history>` — **nothing but the sweep touches this file**, so
+     `git diff --stat <handoff-history>` is a true damage signal: any output at
+     all after a failed write means it was part-written. `git checkout --
+     <handoff-history>` is safe here, and it is the likelier casualty, because
+     the history *grows* while the handoff shrinks and gets rolled back.
+   - `<handoff>` — you edited it in steps 3 and 5, so **a diff is expected and
+     proves nothing**, and `git checkout -- <handoff>` would throw away this
+     session's block and `▶ Next:` line. Open it instead: a truncated file ends
+     mid-line and has lost its standing sections. Only if it is actually damaged,
+     restore it and re-apply your session block by hand.
+
+   Do not continue to the commit step until both are known good. Stage
+   **both** files (`<handoff>` + `<handoff-history>`) into this commit. If
+   `<friction-log>` is over budget, don't sweep it inline — note it and
+   recommend the `triage-friction-log` workflow (graduating the inbox needs
+   tracker writes + operator approval). This is what stops the handoff docs
+   from ballooning between archive sweeps.
 
 1. **Commit + PR the handoff update — never commit to your protected branch
    directly.** Commit as `chore: update handoff — [one-line summary of session work]`
