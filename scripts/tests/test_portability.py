@@ -1996,17 +1996,21 @@ def test_a_failed_write_prints_no_past_tense_success_line(
     figure for a file that was never touched.
     """
     archive = _load_module("archive_failed_write", ENGINE_DIR / "archive_plan_sessions.py")
-    plan = tmp_path / "handoff.md"
+    plan_dir = tmp_path / "live"
+    plan_dir.mkdir()
+    plan = plan_dir / "handoff.md"
     history = tmp_path / "handoff-history.md"
     _write_four_block_plan(plan, history)
     original = plan.read_text(encoding="utf-8")
-    plan.chmod(0o444)
+    # The DIRECTORY, not the file: `atomic_write` replaces via a sibling temp, and
+    # rename honours the directory's permissions rather than the target file's.
+    plan_dir.chmod(0o555)
     try:
         result = archive.main(
             ["--keep", "2", "--plan", str(plan), "--history", str(history)]
         )
     finally:
-        plan.chmod(0o644)
+        plan_dir.chmod(0o755)
 
     assert result == 2
     captured = capsys.readouterr()
@@ -2066,16 +2070,24 @@ def test_a_failed_history_write_rolls_the_handoff_back(
     archive = _load_module("archive_rollback", ENGINE_DIR / "archive_plan_sessions.py")
     plan = tmp_path / "handoff.md"
     history = tmp_path / "handoff-history.md"
+    hist_dir = tmp_path / "hist"
+    hist_dir.mkdir()
+    history = hist_dir / "handoff-history.md"
     _write_four_block_plan(plan, history)
     original_plan = plan.read_text(encoding="utf-8")
     original_history = history.read_text(encoding="utf-8")
-    history.chmod(0o444)
+    # NOTE: chmod on the FILE no longer blocks the write. `atomic_write` creates a
+    # sibling temp and `os.replace`s it, and rename cares about the DIRECTORY's
+    # permissions, not the target file's. That is a deliberate behaviour change
+    # from this commit — the data-loss fix is worth it — so block the directory,
+    # which is what genuinely fails now.
+    hist_dir.chmod(0o555)
     try:
         result = archive.main(
             ["--keep", "2", "--plan", str(plan), "--history", str(history)]
         )
     finally:
-        history.chmod(0o644)
+        hist_dir.chmod(0o755)
 
     assert result == 2
     captured = capsys.readouterr()
@@ -2140,6 +2152,19 @@ def test_target_lines_rejects_a_value_below_one(
     assert "--target-lines must be >= 1" in capsys.readouterr().err
 
 
+def _atomic_target(path: Path) -> str:
+    """Map `.handoff.md.archive-tmp` back to `handoff.md`.
+
+    `archive_plan_sessions.atomic_write` writes a sibling temp file and
+    `os.replace`s it, so a `Path.write_text` spy sees the temp name, not the
+    target. Tests that care about WHICH document is being written have to look
+    through that.
+    """
+    name = path.name
+    if name.startswith(".") and name.endswith(".archive-tmp"):
+        return name[1:-len(".archive-tmp")]
+    return name
+
 def test_dry_run_writes_nothing_and_says_would_move(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -2196,9 +2221,10 @@ def test_the_plan_is_written_before_the_history_doc(tmp_path: Path) -> None:
     real_write = Path.write_text
 
     def spy(self: Path, data: str, *args: object, **kwargs: object) -> int:
-        if self == plan:
+        target = _atomic_target(self)
+        if target == plan.name:
             order.append("plan")
-        elif self == history:
+        elif target == history.name:
             order.append("history")
         return real_write(self, data, *args, **kwargs)
 
@@ -2307,13 +2333,14 @@ def test_a_failed_rollback_does_not_claim_no_changes_applied(
     _write_four_block_plan(plan, history)
 
     real_write = Path.write_text
-    calls: list[Path] = []
+    calls: list[str] = []
 
     def spy(self: Path, data: str, *args: object, **kwargs: object) -> int:
-        calls.append(self)
-        if self == history:
+        target = _atomic_target(self)
+        calls.append(target)
+        if target == history.name:
             raise OSError(28, "No space left on device")
-        if self == plan and calls.count(plan) == 2:  # the rollback write
+        if target == plan.name and calls.count(plan.name) == 2:  # the rollback
             raise OSError(28, "No space left on device")
         return real_write(self, data, *args, **kwargs)
 
@@ -2327,6 +2354,54 @@ def test_a_failed_rollback_does_not_claim_no_changes_applied(
 
     assert result == 2
     err = capsys.readouterr().err
-    assert "no changes applied" not in err, "the plan is truncated — do not claim otherwise"
-    assert "truncated" in err
-    assert "restore it from git" in err
+    assert "no changes applied" not in err, "the blocks are in neither doc — don't claim otherwise"
+    assert "ALREADY SWEPT" in err
+    assert "Restore it from git" in err
+    # Both causes, not just the last one: a full disk fails twice, and the first
+    # failure is usually what explains the second.
+    assert err.count("No space left on device") == 2, err
+
+
+def test_a_failed_write_leaves_the_handoff_byte_identical(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """"no changes applied" must be TRUE, not aspirational.
+
+    `Path.write_text` opens mode 'w', which truncates before the first byte is
+    written — so a failure between the open and the flush (ENOSPC, EIO, quota)
+    left the handoff empty or half-written while the handler printed "no changes
+    applied". Demonstrated on a real full filesystem: a 26,807-byte living
+    handoff became 0 bytes and the tool reported that nothing had happened, at
+    which point `wrap-up.md` routes the operator straight on to the commit step.
+
+    `atomic_write` writes a sibling temp file and `os.replace`s it, so any
+    failure before the replace leaves the original untouched.
+    """
+    archive = _load_module("archive_atomic", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original = plan.read_bytes()
+
+    real_write = Path.write_text
+
+    def spy(self: Path, data: str, *args: object, **kwargs: object) -> int:
+        # Fail the way a full disk does: during the write, after the open.
+        if self.name.startswith(".handoff.md"):
+            real_write(self, data[: len(data) // 2], *args, **kwargs)
+            raise OSError(28, "No space left on device")
+        return real_write(self, data, *args, **kwargs)
+
+    Path.write_text = spy  # type: ignore[method-assign]
+    try:
+        result = archive.main(
+            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+        )
+    finally:
+        Path.write_text = real_write  # type: ignore[method-assign]
+
+    assert result == 2
+    assert "no changes applied" in capsys.readouterr().err
+    assert plan.read_bytes() == original, "the handoff was modified despite the failure"
+    # And no debris left behind for the next run to trip over.
+    assert not list(tmp_path.glob(".*archive-tmp")), "temp file survived the failure"

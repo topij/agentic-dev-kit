@@ -74,6 +74,33 @@ from kitconfig import load_config, repo_root, resolve_path  # noqa: E402
 REPO_ROOT = repo_root()
 
 
+def atomic_write(path: Path, text: str) -> None:
+    """Replace ``path``'s contents, or leave them exactly as they were.
+
+    ``Path.write_text`` opens mode ``'w'``, which **truncates before the first
+    byte is written**. So any failure between the open and the flush — ENOSPC,
+    EIO, a quota — leaves the file empty or half-written. That is how a failed
+    sweep destroyed a 26,807-byte handoff and still reported "no changes
+    applied": the message was written for the exception, and the truncation had
+    already happened underneath it.
+
+    Writing to a sibling temp file and ``os.replace``-ing it is atomic on POSIX
+    and Windows, so a failure anywhere before the replace leaves the original
+    untouched and the caller's "no changes applied" is TRUE rather than
+    aspirational. The temp file is removed on any failure, including
+    ``KeyboardInterrupt``.
+
+    Sibling, not ``/tmp``: ``os.replace`` is only atomic within a filesystem.
+    """
+    tmp = path.with_name(f".{path.name}.archive-tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def budget_line_count(text: str) -> int:
     """Count lines the way ``check_doc_budget.py`` counts them.
 
@@ -403,12 +430,18 @@ def main(argv: list[str] | None = None) -> int:
     # says 0/2/3 and `wrap-up.md` branches on 2 and 3 alone.
     # `check_memory_budget.py` already catches this exact pair for the same
     # reason; keep them in agreement.
-    try:
-        plan = args.plan.read_text(encoding="utf-8").splitlines(keepends=True)
-        history = args.history.read_text(encoding="utf-8").splitlines(keepends=True)
-    except (OSError, UnicodeDecodeError) as exc:
-        print(f"error: could not read: {exc}", file=sys.stderr)
-        return 2
+    # Read one at a time so the error can name WHICH document failed:
+    # UnicodeDecodeError carries no filename, and the exit-2 branch in
+    # `wrap-up.md` tells the operator to read this message and act on it.
+    texts: list[str] = []
+    for path in (args.plan, args.history):
+        try:
+            texts.append(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"error: could not read {path}: {exc}", file=sys.stderr)
+            return 2
+    plan = texts[0].splitlines(keepends=True)
+    history = texts[1].splitlines(keepends=True)
 
     try:
         head, region, tail = split_plan(plan)
@@ -536,25 +569,31 @@ def main(argv: list[str] | None = None) -> int:
     # them to history a second time.
     original_plan = "".join(plan)
     try:
-        args.plan.write_text("".join(new_plan), encoding="utf-8")
+        atomic_write(args.plan, "".join(new_plan))
         try:
-            args.history.write_text("".join(new_history), encoding="utf-8")
-        except OSError:
+            atomic_write(args.history, "".join(new_history))
+        except OSError as history_exc:
             try:
-                args.plan.write_text(original_plan, encoding="utf-8")
+                atomic_write(args.plan, original_plan)
             except OSError as rollback_exc:
-                # Never claim "no changes applied" when the rollback itself
-                # failed: the plan is truncated and the blocks reached neither
-                # file. Say so, and name where the original text still is.
+                # Both writes failed, so the swept blocks are in neither
+                # document. Say what is actually on disk: `atomic_write` never
+                # truncates, so the handoff is a COMPLETE, already-swept file —
+                # which looks entirely normal, and is the reason to say so
+                # loudly. Report both causes; the first one explains the second
+                # more often than not (a full disk fails twice).
                 print(
-                    f"error: history write failed, AND rolling the handoff back "
-                    f"failed ({rollback_exc}). {args.plan} is truncated and the "
-                    f"swept blocks are in neither file — restore it from git.",
+                    f"error: the history write failed ({history_exc}), AND "
+                    f"rolling the handoff back failed ({rollback_exc}). "
+                    f"{args.plan} is intact but ALREADY SWEPT: the moved blocks "
+                    f"are in neither document. Restore it from git.",
                     file=sys.stderr,
                 )
                 return 2
             raise
     except OSError as exc:
+        # True, not aspirational: `atomic_write` replaces or leaves alone, so a
+        # failure here cannot have left either document half-written.
         print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
         return 2
 
