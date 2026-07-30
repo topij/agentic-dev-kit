@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -1994,19 +1995,25 @@ def test_a_failed_write_prints_no_past_tense_success_line(
     emitted `moved 2 block(s) ... (46 -> 33 plan lines)` and then an error — and
     `wrap-up.md` tells the operator to report the line count it sees. That is a
     figure for a file that was never touched.
+
+    Uses a genuine OS-level write failure rather than a monkeypatch: the handoff
+    lives in a directory the process cannot create a file in, so the staging
+    write fails inside the real code path.
     """
     archive = _load_module("archive_failed_write", ENGINE_DIR / "archive_plan_sessions.py")
-    plan = tmp_path / "handoff.md"
+    plan_dir = tmp_path / "live"
+    plan_dir.mkdir()
+    plan = plan_dir / "handoff.md"
     history = tmp_path / "handoff-history.md"
     _write_four_block_plan(plan, history)
     original = plan.read_text(encoding="utf-8")
-    plan.chmod(0o444)
+    plan_dir.chmod(0o555)
     try:
         result = archive.main(
             ["--keep", "2", "--plan", str(plan), "--history", str(history)]
         )
     finally:
-        plan.chmod(0o644)
+        plan_dir.chmod(0o755)
 
     assert result == 2
     captured = capsys.readouterr()
@@ -2055,37 +2062,47 @@ def test_a_brace_in_a_session_title_does_not_crash_the_report(
 def test_a_failed_history_write_rolls_the_handoff_back(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The rollback branch itself — asserted in two docstrings, entered by no test.
+    """A failing HISTORY write must not cost the swept blocks (issue #164).
 
-    The existing failed-write test chmods the *plan*, so the FIRST write fails and
-    the rollback is never reached; its `plan == original` assertion passes
-    trivially. Making the *history* write fail is what exercises the branch that
-    exists to stop a move from dropping the swept blocks: handoff already
-    truncated, history write refused, blocks recoverable from neither.
+    The failed-write test above kills the *plan* write, so the second document is
+    never reached and its `plan == original` assertion passes trivially. Killing
+    the *history* write is what exercises the move's real hazard: handoff already
+    swept, history not written, blocks recoverable from neither.
+
+    Since #164 the handoff is not merely rolled back — it is never modified at
+    all, because both documents are staged before either is published and this
+    failure happens during staging. Asserted on the INODE as well as the bytes:
+    an implementation that wrote the handoff and restored it byte-for-byte would
+    pass a content-only check, and it is precisely the one that loses the file if
+    the restore fails too.
     """
     archive = _load_module("archive_rollback", ENGINE_DIR / "archive_plan_sessions.py")
     plan = tmp_path / "handoff.md"
-    history = tmp_path / "handoff-history.md"
+    history_dir = tmp_path / "archive"
+    history_dir.mkdir()
+    history = history_dir / "handoff-history.md"
     _write_four_block_plan(plan, history)
     original_plan = plan.read_text(encoding="utf-8")
     original_history = history.read_text(encoding="utf-8")
-    history.chmod(0o444)
+    plan_inode = plan.stat().st_ino
+    history_dir.chmod(0o555)
     try:
         result = archive.main(
             ["--keep", "2", "--plan", str(plan), "--history", str(history)]
         )
     finally:
-        history.chmod(0o644)
+        history_dir.chmod(0o755)
 
     assert result == 2
     captured = capsys.readouterr()
     assert "write failed" in captured.err
+    assert "no changes applied" in captured.err
     assert "moved" not in captured.out
-    # The whole point: the handoff is back to its original content, so the blocks
-    # that were about to move still exist somewhere.
+    # The whole point: the blocks that were about to move still exist somewhere.
     assert plan.read_text(encoding="utf-8") == original_plan
     assert "## Earlier session — First" in plan.read_text(encoding="utf-8")
     assert history.read_text(encoding="utf-8") == original_history
+    assert plan.stat().st_ino == plan_inode, "the handoff was replaced and put back"
 
 
 def test_keep_floor_refuses_to_empty_the_handoff(
@@ -2185,7 +2202,10 @@ def test_the_plan_is_written_before_the_history_doc(tmp_path: Path) -> None:
     over. Under that variant a failing plan write leaves the blocks in BOTH files
     and a re-run appends them to history twice.
 
-    So record the order directly.
+    So record the order directly. Since #164 the ordering that matters is the
+    order the documents are PUBLISHED in — each is renamed over its target, and
+    the rename is the only moment a reader can observe a change — so the spy sits
+    on `os.replace` rather than on the write.
     """
     archive = _load_module("archive_write_order", ENGINE_DIR / "archive_plan_sessions.py")
     plan = tmp_path / "handoff.md"
@@ -2193,26 +2213,26 @@ def test_the_plan_is_written_before_the_history_doc(tmp_path: Path) -> None:
     _write_four_block_plan(plan, history)
 
     order: list[str] = []
-    real_write = Path.write_text
+    real_replace = os.replace
 
-    def spy(self: Path, data: str, *args: object, **kwargs: object) -> int:
-        if self == plan:
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        if Path(str(dst)) == plan:
             order.append("plan")
-        elif self == history:
+        elif Path(str(dst)) == history:
             order.append("history")
-        return real_write(self, data, *args, **kwargs)
+        return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
 
-    Path.write_text = spy  # type: ignore[method-assign]
+    os.replace = spy  # type: ignore[assignment]
     try:
         result = archive.main(
             ["--keep", "2", "--plan", str(plan), "--history", str(history)]
         )
     finally:
-        Path.write_text = real_write  # type: ignore[method-assign]
+        os.replace = real_replace  # type: ignore[assignment]
 
     assert result == 0
     assert order == ["plan", "history"], (
-        f"the plan must be written first so a history failure can roll it back; got {order}"
+        f"the plan must be published first so a history failure can roll it back; got {order}"
     )
 
 
@@ -2295,49 +2315,285 @@ def test_the_keep_early_exit_message_is_asserted_somewhere(
 def test_a_failed_rollback_does_not_claim_no_changes_applied(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """When the rollback itself fails, BOTH documents are damaged — say so.
+    """When the rollback itself fails, say which document is in which state.
 
     The handler added for this was pinned by nothing: reverting it to the bare
     `write_text(original_plan); raise` survived the suite. "no changes applied"
     would then be printed while the blocks sit in neither file.
+
+    Since #164 this is the ONLY branch that can still leave the sweep half-done,
+    and it is far narrower than it was: everything that can fail for want of
+    space now fails during staging, before anything is published. Reaching it
+    takes two failing `os.replace` calls — the publish of the history, and the
+    publish of the rollback that was staged for exactly this.
     """
     archive = _load_module("archive_bad_rollback", ENGINE_DIR / "archive_plan_sessions.py")
     plan = tmp_path / "handoff.md"
     history = tmp_path / "handoff-history.md"
     _write_four_block_plan(plan, history)
+    original_history = history.read_text(encoding="utf-8")
 
-    real_write = Path.write_text
-    calls: list[Path] = []
+    real_replace = os.replace
+    seen: list[Path] = []
 
-    def spy(self: Path, data: str, *args: object, **kwargs: object) -> int:
-        calls.append(self)
-        if self == history:
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        target = Path(str(dst))
+        seen.append(target)
+        if target == history:
             raise OSError(28, "No space left on device")
-        if self == plan and calls.count(plan) == 2:  # the rollback write
+        if target == plan and seen.count(plan) == 2:  # the staged rollback
             raise OSError(28, "No space left on device")
-        return real_write(self, data, *args, **kwargs)
+        return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
 
-    Path.write_text = spy  # type: ignore[method-assign]
+    os.replace = spy  # type: ignore[assignment]
     try:
         result = archive.main(
             ["--keep", "2", "--plan", str(plan), "--history", str(history)]
         )
     finally:
-        Path.write_text = real_write  # type: ignore[method-assign]
+        os.replace = real_replace  # type: ignore[assignment]
 
     assert result == 2
     err = capsys.readouterr().err
-    assert "no changes applied" not in err, "both docs are damaged — don't claim otherwise"
-    # BOTH documents named: an operator told only about the handoff restores one
-    # and commits the other. The history doc is the append-only archive.
+    assert "no changes applied" not in err, "the handoff WAS swept — don't claim otherwise"
+    # BOTH documents named, each with the state this branch can actually vouch
+    # for: an operator told only about the handoff restores one and commits the
+    # other.
     assert str(history) in err, err
     assert str(plan) in err, err
-    assert "Restore both from git" in err
-    # And no claim about a state this branch cannot know: whether the handoff is
-    # truncated or a complete already-swept file depends on where the rollback
-    # died. Here the spy raises before writing, so it is NOT truncated.
-    assert "is truncated" not in err, err
-    assert plan.read_text(encoding="utf-8") != "", "fixture check: not truncated here"
+    assert "Restore" in err and str(plan) in err
+    # The history is published by rename or not at all, so "part-written" is a
+    # state it can no longer be in and the message must not invent it.
+    assert "part-written" not in err, err
+    assert history.read_text(encoding="utf-8") == original_history
+    # And the swept blocks are named, so the operator knows what to look for.
+    assert "First" in err, err
+
+
+def test_a_failed_history_publish_restores_the_handoff_from_its_staged_copy(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The rollback path's happy case: history publish fails, handoff comes back.
+
+    Distinct from the staging-failure test above, which never publishes anything.
+    Here the handoff HAS been replaced, and the recovery is the third staged
+    write — the one written up front precisely so this step needs no allocation
+    on a disk that has just refused one (#164).
+    """
+    archive = _load_module("archive_rollback_ok", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original_plan = plan.read_text(encoding="utf-8")
+    original_history = history.read_text(encoding="utf-8")
+
+    real_replace = os.replace
+
+    def spy(src: object, dst: object, **kwargs: object) -> None:
+        if Path(str(dst)) == history:
+            raise OSError(28, "No space left on device")
+        return real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    os.replace = spy  # type: ignore[assignment]
+    try:
+        result = archive.main(
+            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+        )
+    finally:
+        os.replace = real_replace  # type: ignore[assignment]
+
+    assert result == 2
+    err = capsys.readouterr().err
+    assert "Both documents are intact." in err, err
+    assert plan.read_text(encoding="utf-8") == original_plan
+    assert history.read_text(encoding="utf-8") == original_history
+    assert not list(tmp_path.glob("*.devkit-tmp")), "staged temps must be cleaned up"
+
+
+def test_a_successful_sweep_leaves_no_staged_temp_behind(tmp_path: Path) -> None:
+    """Debris lands beside the handoff, which is where wrap-up stages files.
+
+    A temp left in `docs/` is a file the very next `git add` picks up. The
+    `*.devkit-tmp` .gitignore rule exists for the SIGKILL case that no handler
+    can cover; it is not a licence to leak one on the ordinary path.
+    """
+    archive = _load_module("archive_no_debris", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+
+    assert archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)]) == 0
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "handoff-history.md",
+        "handoff.md",
+    ]
+
+
+def test_a_symlinked_handoff_is_written_through_not_replaced(tmp_path: Path) -> None:
+    """`os.replace` replaces the LINK; the real document would keep every block.
+
+    Finding 1 of the four HIGHs that reverted the first attempt at #164, and the
+    worst shape available: exit 0, a success report, the swept blocks appended to
+    history — and a handoff whose real file still holds them, so a re-run appends
+    them again. The fix is to resolve the target before staging.
+    """
+    archive = _load_module("archive_symlink", ENGINE_DIR / "archive_plan_sessions.py")
+    real_dir = tmp_path / "real"
+    real_dir.mkdir()
+    real_plan = real_dir / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(real_plan, history)
+    link = tmp_path / "handoff.md"
+    link.symlink_to(real_plan)
+
+    assert archive.main(["--keep", "2", "--plan", str(link), "--history", str(history)]) == 0
+
+    assert link.is_symlink(), "the symlink itself was replaced by a regular file"
+    assert "## Earlier session — First" not in real_plan.read_text(encoding="utf-8"), (
+        "the real document kept the swept block"
+    )
+    assert "First" in history.read_text(encoding="utf-8")
+
+
+def test_a_read_only_handoff_is_refused_rather_than_replaced(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`os.replace` needs the DIRECTORY writable, not the file.
+
+    So a `chmod 0444` document is replaceable by rename — and the replacement
+    carries the temp's mode, which deletes the read-only bit permanently after
+    one run. Finding 2 of the four that reverted the first attempt. Refusing
+    preserves exactly what `write_text` did: nothing written, exit 2.
+    """
+    archive = _load_module("archive_readonly", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original = plan.read_text(encoding="utf-8")
+    plan.chmod(0o444)
+    try:
+        result = archive.main(
+            ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+        )
+        mode_after = stat.S_IMODE(plan.stat().st_mode)
+    finally:
+        plan.chmod(0o644)
+
+    assert result == 2
+    err = capsys.readouterr().err
+    assert "refusing to write" in err, err
+    assert "not writable" in err, err
+    assert "no changes applied" in err, err
+    assert plan.read_text(encoding="utf-8") == original
+    assert mode_after == 0o444, "the read-only bit was deleted"
+
+
+def test_a_hardlinked_handoff_is_refused_rather_than_orphaning_the_alias(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """After a rename the other name keeps the OLD content — silently.
+
+    Finding 2's third limb. There is no way to publish atomically and keep the
+    alias, so the operator is told rather than having one of the two chosen for
+    them.
+    """
+    archive = _load_module("archive_hardlink", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    original = plan.read_text(encoding="utf-8")
+    alias = tmp_path / "alias.md"
+    os.link(plan, alias)
+
+    result = archive.main(
+        ["--keep", "2", "--plan", str(plan), "--history", str(history)]
+    )
+
+    assert result == 2
+    err = capsys.readouterr().err
+    assert "refusing to write" in err, err
+    assert "hard link" in err, err
+    assert plan.read_text(encoding="utf-8") == original
+    assert alias.read_text(encoding="utf-8") == original
+
+
+def test_a_sweep_preserves_the_handoffs_permissions(tmp_path: Path) -> None:
+    """Mode is carried onto the staged temp, so a 0600 doc is not widened.
+
+    Finding 2 of the four: `mkstemp` creates 0600 and the replaced file inherits
+    the TEMP's metadata, so without an explicit carry every sweep rewrites the
+    document's permissions — in either direction, silently.
+    """
+    archive = _load_module("archive_mode", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    plan.chmod(0o640)
+    history.chmod(0o640)
+
+    assert archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)]) == 0
+
+    assert stat.S_IMODE(plan.stat().st_mode) == 0o640
+    assert stat.S_IMODE(history.stat().st_mode) == 0o640
+
+
+def test_a_lone_control_character_survives_the_sweep(tmp_path: Path) -> None:
+    """`"\\x1c".strip() == ""`, so the trailing-blank strip ate it (issue #162).
+
+    Measured on the real tool: a lone file separator on a swept block's last line
+    did not reach the history document. Silent content loss in a tool whose
+    contract is that it moves content — the worst shape for it, however exotic
+    the character.
+    """
+    archive = _load_module("archive_control_char", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    # On the LAST line of the oldest block, which is where the trailing-blank
+    # strip runs — planted anywhere else it survives regardless and the test is
+    # vacuous.
+    text = plan.read_text(encoding="utf-8").replace(
+        "First body line 8.\n",
+        "First body line 8.\n\x1c\n",
+        1,
+    )
+    assert "\x1c" in text, "fixture check: the separator was actually planted"
+    plan.write_text(text, encoding="utf-8")
+
+    assert archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)]) == 0
+
+    assert "\x1c" in history.read_text(encoding="utf-8"), (
+        "the swept block lost a character the sweep promised to move"
+    )
+    assert "\x1c" not in plan.read_text(encoding="utf-8")
+
+
+def test_the_sweep_normalises_line_endings_deliberately(tmp_path: Path) -> None:
+    """The other half of #162 — pinned as a decision, not left as a default.
+
+    Reading and writing as text translates on the way in and normalises on the
+    way out, so a CRLF handoff comes back all-LF: the whole file, not only the
+    blocks that moved. That is the documented choice (these are Markdown
+    documents the kit renders with `\\n`, and `budget_line_count`'s parity with
+    `check_doc_budget` requires already-translated text) — but it was previously
+    an accident of the default `newline` argument, which is what makes it worth
+    a test either way. If the sweep is ever made byte-preserving, this test is
+    the one that must be deliberately rewritten.
+    """
+    archive = _load_module("archive_eol", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "handoff-history.md"
+    _write_four_block_plan(plan, history)
+    plan.write_bytes(plan.read_bytes().replace(b"\n", b"\r\n"))
+    history.write_bytes(history.read_bytes().replace(b"\n", b"\r\n"))
+    assert b"\r\n" in plan.read_bytes(), "fixture check"
+
+    assert archive.main(["--keep", "2", "--plan", str(plan), "--history", str(history)]) == 0
+
+    assert b"\r" not in plan.read_bytes(), "CRLF survived — the docstring says it does not"
+    assert b"\r" not in history.read_bytes()
+    assert "## Earlier session — First" not in plan.read_text(encoding="utf-8")
+    assert "First" in history.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("damaged", ["plan", "history"])
