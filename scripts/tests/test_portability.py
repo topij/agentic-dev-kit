@@ -2830,6 +2830,18 @@ def test_publish_state_never_raises_out_of_a_failure_handler(
     assert staged.publish_state() == "unknown"
     monkeypatch.undo()
 
+    # And an INTERRUPT, not only an OSError. `Path.exists()` calls `os.stat`, a
+    # blocking syscall, and every caller of this is a failure handler — so an
+    # escape here skips the recovery it was about to run and the caller's
+    # cleanup then deletes the copy staged for it. `except OSError` was not
+    # enough, and nothing caught that until a review lens measured it.
+    def cancelled(self: Path) -> bool:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(Path, "exists", cancelled)
+    assert staged.publish_state() == "unknown"
+    monkeypatch.undo()
+
     assert staged.publish_state() == "pending"
     staged.commit()
     assert staged.publish_state() == "published"
