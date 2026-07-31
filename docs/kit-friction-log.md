@@ -27,8 +27,11 @@ entries, and the `#54` comment carries two, one of which is also the whole of th
 
 **Reading the tracker before drafting changed the routing twice, and both changes were
 subtractions.** The doc-budget entry proposed occurrence data for `#74` — but `#74` is no longer
-open (completed 2026-07-30), `scripts/archive_plan_sessions.py:442` now implements
-`--target-lines`, and `docs/agentic-dev-kit/workflows/wrap-up.md:58` prescribes it by name. Both
+open (completed 2026-07-30), `scripts/archive_plan_sessions.py` now implements
+`--target-lines`, and `docs/agentic-dev-kit/workflows/wrap-up.md` step 8 prescribes it by name.
+(Both were cited by line number when this marker was written — `:442` and `:58`. `#176` landed
+hours later and inserted above the second, making that citation false without touching it. The
+line numbers are dropped rather than refreshed: the next commit would stale them again.) Both
 halves of that entry had landed, including the half the entry itself said was still missing. The
 `finalize.pr_draft` entry had already recorded its own resolution inline on 2026-07-30. A sweep
 that drafted from the entries alone would have filed two tickets for work that was already done,
@@ -92,7 +95,7 @@ The commands and their output are on the PR. Read them there. In summary: the sn
 reproduces from `abbd62f`; all six issues exist with the titles and labels this record claims,
 re-read from the tracker after filing; each of the four comments was re-read **by body** on the
 issue claimed for it, not merely by the URL the create call returned; `#74` is no longer open and
-the `--target-lines` mode it asked for is present at `archive_plan_sessions.py:442`.
+the `--target-lines` mode it asked for is present in `archive_plan_sessions.py`.
 
 The sweep itself ran under five assertions that abort before any write — snapshot equality, fence
 parity, no alteration inside a fenced block, an un-demote round-trip, and per-line survival. The

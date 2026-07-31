@@ -31,8 +31,11 @@ entry text, which was the only surface claiming otherwise.
   table, the approval record, and the verification statement are in the marker in
   `docs/kit-friction-log.md`; this line is a pointer, not a copy.
 - **Two entries needed no ticket, established against the repo rather than against the entry.**
-  `#74` is no longer open and `--target-lines` ships at `archive_plan_sessions.py:442`, prescribed
-  by `wrap-up.md:58`; the `finalize.pr_draft` entry had recorded its own resolution inline.
+  `#74` is no longer open, `archive_plan_sessions.py` implements `--target-lines`, and `wrap-up.md`
+  step 8 prescribes it by name; the `finalize.pr_draft` entry had recorded its own resolution
+  inline. **Cited without line numbers on purpose** — the merged marker says `wrap-up.md:58`, which
+  `#176` made false by inserting above it hours later. A line number into a living file is a
+  citation with an expiry date.
 - **`#179` and `#180` were filed beside `#150`, not folded into it.** That issue's subject is a
   scripted text replacement that matches nothing; a check run in the wrong directory and a guard
   that reported failure and was then ignored are neither. `#150` is unchanged — a judgement call
@@ -48,9 +51,9 @@ entry text, which was the only surface claiming otherwise.
 - **The review's one finding was record prose, refuted by execution.** The marker claimed the
   frozen-inbox digest reproduces *"from `git` alone"*; the command also needs a SHA-256 utility,
   and the reviewer established that by running it where none existed. Corrected in `e5bd82b`. The
-  same wording survives verbatim in two archived markers — correcting those would falsify the
-  un-demote round-trip the sweep verifies — so **three consecutive markers carry the claim**.
-  `#140`'s shape, and now its occurrence data.
+  same wording still stands in **two archived markers** — correcting those would falsify the
+  un-demote round-trip the sweep verifies — so three consecutive sweeps *made* the claim and two
+  still carry it. `#140`'s shape, and now its occurrence data.
 - **`make test` is red under `uid 0` and green in CI.** Three tests `chmod 000` a doc and assert
   exit 2, which root bypasses. Established by running `make test` from the repository root twice,
   once with the session's edits stashed, and getting identical results both times. In the inbox
