@@ -634,16 +634,17 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
         manifest = generate_manifest(root, version)
-        # Deliberately a truncating write, not `lib/atomic_write.py`. The decision,
-        # its measurements, and the objections to it live on #174 — deliberately
-        # there and not restated here, because five review rounds found a defect in
-        # every enumerated version of the argument that was kept at this site.
+        # Truncating write, deliberately: #174 carries the decision, the
+        # measurements and the objections. Not restated here — four review rounds
+        # found a defect in every version of the argument kept at this site, and an
+        # argument that long belongs on the issue.
         #
-        # What matters at the call: `write_text` truncates before its first byte,
-        # but this call is unwrapped and the "wrote ..." line below follows it, so
-        # a failed write cannot report success. That is the property #164 lacked.
-        # Recovery is a re-run, and for the default `kit-manifest.json` also
-        # `git checkout` — but not for a `--manifest` target outside the repo.
+        # The one local fact: this call is unwrapped and the "wrote ..." line below
+        # follows it, so a failure here makes **no claim about damage**. #164's
+        # defect was making a FALSE one — it exited 2 saying "no changes applied"
+        # over a destroyed document. Recovery is a re-run; for a manifest inside
+        # the repo also `git checkout`, which `--manifest` and `--root` can both
+        # move it outside of.
         manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         holes = [p for p, e in manifest["files"].items() if e["sha256"] is None]
         print(f"wrote {manifest_path} ({len(manifest['files'])} files, kit_version={version})")
