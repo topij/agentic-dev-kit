@@ -28,10 +28,10 @@ entries, and the `#54` comment carries two, one of which is also the whole of th
 **Reading the tracker before drafting changed the routing twice, and both changes were
 subtractions.** The doc-budget entry proposed occurrence data for `#74` — but `#74` is no longer
 open (completed 2026-07-30), `scripts/archive_plan_sessions.py` now implements
-`--target-lines`, and `docs/agentic-dev-kit/workflows/wrap-up.md` step 8 prescribes it by name.
-(Both were cited by line number when this marker was written — `:442` and `:58`. `#176` landed
-hours later and inserted above the second, making that citation false without touching it. The
-line numbers are dropped rather than refreshed: the next commit would stale them again.) Both
+`--target-lines`, and `docs/agentic-dev-kit/workflows/wrap-up.md`'s *"Keep the handoff docs lean"*
+step prescribes it by name. (Cited by heading because position failed twice: `:58` was true when
+written and `#176` invalidated it hours later, then the repair said "step 8" when it is step 7.)
+Both
 halves of that entry had landed, including the half the entry itself said was still missing. The
 `finalize.pr_draft` entry had already recorded its own resolution inline on 2026-07-30. A sweep
 that drafted from the entries alone would have filed two tickets for work that was already done,

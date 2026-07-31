@@ -31,11 +31,12 @@ entry text, which was the only surface claiming otherwise.
   table, the approval record, and the verification statement are in the marker in
   `docs/kit-friction-log.md`; this line is a pointer, not a copy.
 - **Two entries needed no ticket, established against the repo rather than against the entry.**
-  `#74` is no longer open, `archive_plan_sessions.py` implements `--target-lines`, and `wrap-up.md`
-  step 8 prescribes it by name; the `finalize.pr_draft` entry had recorded its own resolution
-  inline. **Cited without line numbers on purpose** — the merged marker says `wrap-up.md:58`, which
-  `#176` made false by inserting above it hours later. A line number into a living file is a
-  citation with an expiry date.
+  `#74` is no longer open, `archive_plan_sessions.py` implements `--target-lines`, and
+  `wrap-up.md`'s *"Keep the handoff docs lean"* step prescribes it by name; the `finalize.pr_draft`
+  entry had recorded its own resolution inline. **Cited by name, not by position** — the merged
+  marker says `wrap-up.md:58`, which `#176` invalidated by inserting above it hours later, and the
+  first repair of that said "step 8" when it is step 7. A position into a living document expires;
+  a heading does not.
 - **`#179` and `#180` were filed beside `#150`, not folded into it.** That issue's subject is a
   scripted text replacement that matches nothing; a check run in the wrong directory and a guard
   that reported failure and was then ignored are neither. `#150` is unchanged — a judgement call
