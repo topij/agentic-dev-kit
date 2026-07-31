@@ -14,11 +14,73 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-30 — `#164` repaired and `#162` settled in one PR, both since **closed** by
-the operator; `#174` carries what was left. Seven review rounds; one defect class produced five
-findings across three of them.
+Last updated: 2026-07-31 — the seventh friction-log sweep merged (`#185`). Reading the tracker
+before drafting was the only step that caught anything, and what it caught was two entries asking
+for work that had already landed.
 
-## Latest session — 2026-07-30 (one bug, seven review rounds, and the same defect five times)
+## Latest session — 2026-07-31 (the seventh sweep, and the only step that caught anything)
+
+**Theme —** `#185` merged (`e8b145f`), graduating the inbox. The result worth keeping is not the
+sweep's accounting — that lives in the graduation marker — but **which step earned its keep**:
+reading the live tracker *before* drafting was the only one that found anything, and what it found
+was two entries asking for work already done. Both would have become tickets if drafted from the
+entry text, which was the only surface claiming otherwise.
+
+- **`#185` merged (`e8b145f`).** Seventh `triage-friction-log` sweep, LLM-only (`#6` unvendored).
+  Filed `#178`–`#183`; occurrence comments on `#163`, `#54`, `#140`, `#75`. The per-entry routing
+  table, the approval record, and the verification statement are in the marker in
+  `docs/kit-friction-log.md`; this line is a pointer, not a copy.
+- **Two entries needed no ticket, established against the repo rather than against the entry.**
+  `#74` is no longer open, `archive_plan_sessions.py` implements `--target-lines`, and
+  `wrap-up.md`'s *"Keep the handoff docs lean"* step prescribes it by name; the `finalize.pr_draft`
+  entry had recorded its own resolution inline. **Cited by name, not by position** — the merged
+  marker says `wrap-up.md:58`, which `#176` invalidated by inserting above it hours later, and the
+  first repair of that said "step 8" when it is step 7. A position into a living document expires;
+  a heading does not.
+- **`#179` and `#180` were filed beside `#150`, not folded into it.** That issue's subject is a
+  scripted text replacement that matches nothing; a check run in the wrong directory and a guard
+  that reported failure and was then ignored are neither. `#150` is unchanged — a judgement call
+  worth revisiting while the three are fresh.
+
+**Learned**
+
+- **A gate promoted in this sweep passed over an empty set.** Fence-parity went from measured to
+  asserted, then printed `0 fences preserved` — this inbox has no fenced blocks, so the assertion
+  and its companion never reached a subject. `#179`, occurring inside the sweep that filed it. It
+  is visible only because the script prints the count it asserts on; had it printed `ok`, the
+  vacuous pass would have read as a real one. That is `#179`'s negative-control ask in one line.
+- **The review's one finding was record prose, refuted by execution.** The marker claimed the
+  frozen-inbox digest reproduces *"from `git` alone"*; the command also needs a SHA-256 utility,
+  and the reviewer established that by running it where none existed. Corrected in `e5bd82b`. The
+  same wording still stands in **two archived markers** — correcting those would falsify the
+  un-demote round-trip the sweep verifies — so three consecutive sweeps *made* the claim and two
+  still carry it. `#140`'s shape, and now its occurrence data.
+- **`make test` is red under `uid 0` and green in CI.** Three tests `chmod 000` a doc and assert
+  exit 2, which root bypasses. Established by running `make test` from the repository root twice,
+  once with the session's edits stashed, and getting identical results both times. In the inbox
+  below the marker, deliberately un-swept.
+
+**Open, and owned by nothing yet**
+
+- **A parallel session ran alongside this one and wraps up after it.** `#176` (`65c9ee4`) is its
+  work; its own block will carry it. That block lands on top of this one in this file.
+- **The merge receipt covers `7d95da8`, not head.** `e5bd82b` — the correction the reviewer itself
+  asked for — merged unreviewed, on the operator's explicit call after the bot rate-limited a
+  third time. `#27`'s gap, live again, and this time chosen rather than missed.
+- **The reviewer was rate-limited on two of three attempts**, holding the merge about an hour.
+  Re-triggering after the stated window produced a real review — `#118`'s proposed behaviour,
+  performed by hand. Occurrence data is on that issue.
+- Inbox length: `check_doc_budget.py` prints the live figure. No number here.
+
+▶ Next: **`session-start`** — six fresh tickets and no single obvious thread. The sharpest
+candidates: `#179`/`#180` want the beside-vs-inside-`#150` call confirmed while the reasoning is
+fresh; `#176` and `#177` want folding into the handoff; `#174` still wants a deliberate yes/no on
+the two remaining truncating writes. `#178` is the most self-contained fix (gate the hook on the
+tool result, with a predicate per command).
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-30 (one bug, seven review rounds, and the same defect five times)
 
 **Theme —** `#172` merged (`b82eba9`), repairing `#164` and settling `#162`. The bug was one *call*
 — `Path.write_text` truncating before it writes — at three sites in the engine.
@@ -291,58 +353,6 @@ What this session added is the argument that `#47` is their common cause, and th
 slice (`#112`, `#33`, `#133`, `#135`, `#107` — the mutation/drift gate) should land first so the
 verification everything after it relies on is trustworthy. That slice is a proposal, not an
 established gate; `#164` also remains unfixed and the wrap-up sweep touches that code every session.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-29 (the sixth sweep, and three rounds that all found the same thing)
-
-**Theme —** Three PRs merged. The result worth keeping is narrower than it first looked: across
-three review rounds on one change, **justification prose was wrong in every round** — a recurring
-defect category the mechanism's own tests cannot catch. Mechanism defects were found in every round
-too; the first draft of this block claimed otherwise and a lens refuted it from the commits.
-
-- **`#156` merged (`3d503c2`).** Sixth `triage-friction-log` sweep. Five inbox entries in, five
-  accounted for: `#155` filed (a remark attributed to the operator must be quoted at its original
-  scope) plus seven occurrence comments. Friction log 179 → 133 lines.
-- **`#157` merged (`e9773ba`).** `#121`'s two halves. A gitignored `config/dev-model.local.yaml`
-  merged over the tracked config for **`notify.user_key` only**; `tracker.*` stamped in the tracked
-  file with a guard so no adopter inherits it — a non-interactive `init.sh` refuses a
-  `project_name` that does not match the checkout's origin remote. Three adopter-facing defects
-  fixed on the way: `/adopt` never seeded the ignore rule and never runs `init.sh`; the rule
-  covered one filename while the loader derives `<name>.local.<ext>` for any path; and
-  `add_ignore_line` turned a `.gitignore` ending `.env` into `.envstate/` across six call sites.
-- **`#158` merged (`e76dd2c`).** `fallback-review-panel.md` now names the three failed
-  stopping-rule designs, in addition to pointing at the fuller accounts, and separates a question they do not answer:
-  **lens count is not bounded by class**, and the only sanctioned single-lens pass is Degraded
-  mode, conditioned on runtime capability rather than on what the change contains.
-
-**Learned**
-
-- **Justification prose was wrong in all three rounds.** `_deep_merge`'s docstring said "two
-  shapes" while implementing six; the overlay allowlist said its keys are "read by no shell reader"
-  while `init.sh` read exactly them; a list rule was motivated by a key the same file asserts can
-  never be set. It is written from *intent*, and intent is the one thing a reviewer cannot check
-  against the code — nor can a test, which is why it recurred while the mechanism's defects were
-  each fixed once. Correcting it added surface the next round then found defects in; **deleting it
-  ended the loop**. That is the claim, and it is narrower than "the mechanism was never wrong",
-  which a lens refuted: every round also found real mechanism defects, including three
-  adopter-facing ones this block lists above.
-- **One of the two late bugs was a regression from the previous round's fix, not both.**
-  `pr_watch` re-raising at module import came from round 2's change and killed `--help`. The
-  valueless-key-wipes-a-list hazard did not: round 1's guard was map-only from the start, so that
-  route predates round 1 and survived it. The first draft claimed both, on four surfaces.
-- **Generality was the defect, not the merge logic.** A config overlay honoured by one of several
-  readers diverges everywhere. Narrowing to one key closed five findings at once — and `tracker.*`
-  had to be removed after it made `session-start` on this repo query a project named
-  "My Project Dev".
-- **A single lens is a real pass.** One correctness lens on an 18-line docs change found six
-  substantive issues, including a gloss that was roughly the inverse of what it described.
-  Recorded as `fallback:claude`, not `fallback:panel`; the engine's own warning that one lens is
-  not a green light is on the receipt.
-
-▶ Next: `session-start` — several threads are open (`#121` still wants the friction-log header read
-from config; `#124` and the `finalize.pr_draft` default now contradict the stated preference that
-PRs not sit as drafts) and none is obviously first.
 
 ______________________________________________________________________
 
