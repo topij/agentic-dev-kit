@@ -58,12 +58,8 @@ entry text, which was the only surface claiming otherwise.
 
 **Open, and owned by nothing yet**
 
-- **A parallel session ran alongside this one and wraps up separately.** `#176` (`65c9ee4`) is
-  its work, not this session's — it changed `fallback-review-panel.md`, `pr-watch.md`,
-  `wrap-up.md` and `config/dev-model.yaml`, including the record-prose authoring rules this block
-  was written under. Not a gap in the record and not summarised here; its own block will carry it.
-  **Both sessions edit this file, so whichever wrap-up merges second will conflict on it** —
-  resolve by keeping both session blocks rather than taking either side whole.
+- **A parallel session ran alongside this one and wraps up after it.** `#176` (`65c9ee4`) is its
+  work; its own block will carry it. That block lands on top of this one in this file.
 - **The merge receipt covers `7d95da8`, not head.** `e5bd82b` — the correction the reviewer itself
   asked for — merged unreviewed, on the operator's explicit call after the bot rate-limited a
   third time. `#27`'s gap, live again, and this time chosen rather than missed.
