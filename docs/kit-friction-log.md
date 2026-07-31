@@ -62,8 +62,14 @@ sweep overall; the archive holds the six earlier markers.
 **Frozen-inbox snapshot:** `state/triage/frozen-inbox_2026-07-31.txt` (gitignored),
 `sha256 33ad2f7260690df2104e199bfa6f824b38d64df741eb93ee0be027ed31079d3f` over **23,145 bytes**.
 Taken before any write, and over a *committed* blob — the inbox at `abbd62f` is that text, so
-`git show abbd62f:docs/kit-friction-log.md | tail -n +14 | sha256sum` reproduces the digest from
-`git` alone, in any session, with no reliance on the gitignored file surviving.
+`git show abbd62f:docs/kit-friction-log.md | tail -n +14 | sha256sum` reproduces the digest in any
+session that has **`git` and a SHA-256 utility**, with no reliance on the gitignored file
+surviving. An earlier draft of this block said *"from `git` alone, in any session"*. The reviewer
+on this PR refuted it by running the command: its environment had none of `sha256sum`, `shasum`,
+`openssl`, `busybox` or `cksum`, so it could confirm the blob and its 23,145 bytes but not the
+digest. That is an untested mechanism claim of exactly the shape
+[#140](https://github.com/topij/agentic-dev-kit/issues/140) governs, written from intent about an
+environment other than the one it ran in.
 
 | # | proposal (abridged) | from entry | decision | outcome |
 | - | ------------------- | ---------- | -------- | ------- |
