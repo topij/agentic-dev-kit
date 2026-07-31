@@ -159,9 +159,11 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-31`.
   poll-and-read first" — the violation was convenience chaining, so the documented rule did not
   hold where it mattered. **M** — proposed fix: `--mark-seen` should print an excerpt of every key
   it promotes, making the ack surface itself a read; until then, never redirect a poll whose
-  pending set a mark-seen will promote. Occurrence data for
-  [#150](https://github.com/topij/agentic-dev-kit/issues/150): a check — the poll — whose output
-  was never examined.
+  pending set a mark-seen will promote. Routes to
+  [#180](https://github.com/topij/agentic-dev-kit/issues/180) as a sharpening, not to `#150`,
+  which the latest sweep deliberately kept narrow: the ack *was* chained to the poll, and
+  chaining gates on exit status — a check whose signal lives in its output, not its exit code,
+  is unguarded by chaining unless the output reaches a reader.
 - **The keyword-adjacency scan covered the diff and not the commit message committed beside it.**
   Two banned constructions (described, not quoted, per this file's own precedent) reached the
   pushed branch inside a fix-round message; the amend was prepared and scanned clean, the
