@@ -2186,10 +2186,9 @@ def load_state(pr: int) -> dict:
     of the most recently *reported* plain poll, present only between a poll and
     the ``--mark-seen`` that consumes it (see :func:`mark_seen`) — and
     ``review_receipt``, the current-head independent-review evidence written by
-    ``--record-review`` and consumed by the merge gate (see :func:`persist_poll`).
-    That last one was missing from this list until #189, while `save_state`'s
-    own comment reasoned about it; a key the docstring omits reads as a key the
-    file does not carry.
+    :func:`record_review` and read by :func:`build_report`. (:func:`persist_poll`
+    only carries an existing receipt forward, and its own docstring omits the key
+    while calling itself the persistence contract — worth fixing there too.)
     """
     path = _seen_path(pr)
     if not path.is_file():
@@ -2212,19 +2211,22 @@ def save_state(pr: int, state: dict) -> None:
     # -> False, `converged` False -> True. The receipt is dropped too, so
     # `mergeable` blocks; but only until the next `--record-review`, which merges
     # a receipt back into the emptied file and leaves the guard off. Measured on
-    # one PR with 3 of 12 checks registered: `mergeable` false with the state
-    # file, TRUE without it. That is #190, and it belongs to the merge gate
-    # rather than to this call — `state/` is gitignored and disposable, so an
-    # empty state file has routes no choice of write can close.
+    # one PR with 3 of 12 checks registered: `mergeable` is false with the state
+    # file, still false without it, and TRUE once a receipt is re-recorded over
+    # the emptied one. That is #190. It belongs to the merge gate rather than to
+    # this call — `state/` is gitignored and disposable, so an empty state file
+    # has routes no choice of write can close. `seen` goes too, so every earlier
+    # acknowledgement resurfaces.
     #
-    # What decides this call is narrower. The loss costs a re-poll, and
-    # publishing by rename would add refusals `write_text` does not have:
+    # What decides this call is narrower, and it is not the size of the loss:
+    # publishing by rename would add refusals `write_text` does not have —
     # hardlinked, non-regular, un-carryable ownership, and a non-writable parent
     # directory. (Not read-only — `write_text` already fails on that.) Nothing
     # enforces any of those properties between runs, in either direction: the
     # `mkdir` below tolerates a pre-existing STATE_DIR whose mode it never
-    # checks, and `_seen_path(pr)` outlives the run that created it. So the trade
-    # is a cheap re-poll against a poll that cannot record state at all.
+    # checks, and `_seen_path(pr)` outlives the run that created it. A poll that
+    # refuses to record at all is the worse failure, and #190 is where the loss
+    # itself is being addressed.
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     _seen_path(pr).write_text(
         json.dumps(state, indent=1, sort_keys=True), encoding="utf-8"

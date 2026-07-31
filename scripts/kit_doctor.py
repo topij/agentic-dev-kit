@@ -644,20 +644,24 @@ def main(argv: list[str] | None = None) -> int:
         # write is unwrapped (`main` catches config errors and the manifest
         # *read*, not this) and the "wrote ..." line prints only after it
         # returns, so no such claim is reachable. A SIGKILL mid-write still
-        # truncates with no message at all: a real gap, costing a re-run of a
-        # release-time command rather than a document.
+        # truncates with no message at all: a real gap, costing a re-run of this
+        # command rather than a document. (Not a rare one — the drift gate in
+        # `test_kit_repo_self_check_is_clean` fails on any byte change to a
+        # kit-owned file, so this is re-run on every engine edit, not only at
+        # release.)
         #
         # Recovery is cheap at the DEFAULT path only: `kit-manifest.json` is
-        # tracked. `--manifest` (`:595`) takes any path, and one outside the repo
+        # tracked. The `--manifest` flag takes any path, and one outside the repo
         # has none.
         #
         # Converting would add refusals `write_text` does not have: hardlinked,
         # non-regular, un-carryable ownership, and a non-writable parent
         # directory — that last the one real capability loss, since `write_text`
-        # succeeds there. A read-only target is NOT among them; `write_text`
-        # already fails on one. None is reachable for the default manifest in a
-        # writable checkout, though nothing enforces `nlink == 1` on a tracked
-        # file either.
+        # can still rewrite an EXISTING file in a `0555` parent where a rename
+        # cannot (on a new file both fail). A read-only target is NOT among them;
+        # `write_text` already fails on one. None is reachable for the default
+        # manifest in a writable checkout, though nothing enforces `nlink == 1`
+        # on a tracked file either.
         manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         holes = [p for p, e in manifest["files"].items() if e["sha256"] is None]
         print(f"wrote {manifest_path} ({len(manifest['files'])} files, kit_version={version})")
