@@ -256,7 +256,7 @@ author re-reading their own diff.
 5. Fix real findings, reply-with-reason to the rest.
 6. **Re-run after the fix round.** Not optional — whether it is the full panel
    or one lens over the delta is decided below: first by whether the change
-   sits under `safety-critical-changes.md`, which always takes the full panel,
+   sits under `safety-critical-changes.md`, which never takes the delta pass,
    then by what the fix round's delta contains.
 7. Record the receipt with the lenses that actually ran:
 
@@ -353,7 +353,10 @@ findings were prose about the work — is: **does anything execute this text?**
   it must live outside the repo tree. **A logged finding produces no commit** —
   that is the mechanism, not a convenience: no commit leaves the current-head
   receipt standing and gives step 6 no fix round to re-review, which is the
-  only exit this loop has that does not cost a round. The log lives on the PR
+  only exit this loop has that does not cost a round. In a mixed round, other
+  findings force a commit anyway and that mechanism lapses; the logged
+  finding still stays out of the commit — there, "Keep the record small"
+  carries the rule alone. The log lives on the PR
   and the tracker, never in a committed file: a committed log would invalidate
   the receipt it exists to preserve, and become one more budgeted record to
   keep true.
@@ -371,7 +374,7 @@ default the two classes above already use. The author still *applies* the
 discriminator, so each logged disposition is stated in the PR, where a reviewer
 can dispute the classification. Full-panel lens prompts are untouched by all
 of this — the next paragraph stands. The one exception is the delta lens
-below, handed the author's classification precisely in order to dispute it:
+below, handed the author's stated draws precisely in order to dispute them:
 an anchoring accepted deliberately, like the delta boundary itself.
 
 **Do not push the gate into the lens prompts.** Severity has to come from a reviewer
@@ -436,14 +439,22 @@ executed prose by class, so the test on it is what executing it does: the
 pass requires messages that act on nothing — no closing keyword near a
 reference, no instruction to a future reader, no claim a process consumes.
 The delta lens reads both surfaces, and its first duty is to dispute both
-stated draws — the prose class and the safety-critical boundary. **Its
-verdict — confirmed or disputed — is posted on the PR by the cockpit, from
-the lens's report, before any `fallback:delta` receipt is recorded**: neither
-verdict appears in git history, and the posted verdict is what makes "no
-verdict yet" distinguishable from "confirmed" — so it gets the same
-outside-the-tree artifact rule the logged disposition carries. **A disputed classification is a behaviour-containing
-delta** — the full panel is owed, and no `fallback:delta` receipt may be
-recorded over the dispute. A logged disposition that produced no commit
+stated draws — the prose class and the safety-critical boundary; "confirmed"
+means both are confirmed, and either dispute forbids the receipt. **Its
+verdict — confirmed or disputed — is posted on the PR by the cockpit,
+quoting the lens's own verdict sentence verbatim, before any
+`fallback:delta` receipt is recorded** — self-reported, like the receipt:
+neither verdict appears in git history, and the posted verdict is what makes
+"no verdict yet" distinguishable from "confirmed" — so it gets the same
+outside-the-tree artifact rule the logged disposition carries. **A disputed
+prose class is a behaviour-containing delta** — the full panel is owed. **A
+disputed safety-critical boundary is stronger**: treat the change as sitting
+under `safety-critical-changes.md` until the dispute is resolved — the panel
+at the merging head, and operator-merge, never a self-merge over it. Know
+also what the engine retains: it keeps one receipt per PR, so recording
+`fallback:delta` replaces the panel receipt that evidenced the initial full
+panel — the posted verdict and the PR record become the surviving evidence
+that the floor was met. A logged disposition that produced no commit
 needs less still: there is no new head, so there is nothing to re-review.
 This is the second sanctioned single-lens pass, beside Degraded mode —
 conditioned on what the delta contains, not on what the author considers
