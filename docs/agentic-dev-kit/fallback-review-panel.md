@@ -255,8 +255,9 @@ author re-reading their own diff.
    rounds.
 5. Fix real findings, reply-with-reason to the rest.
 6. **Re-run after the fix round.** Not optional — whether it is the full panel
-   or one lens over the delta is decided below, by what the fix round's delta
-   contains.
+   or one lens over the delta is decided below: first by whether the change
+   sits under `safety-critical-changes.md`, which always takes the full panel,
+   then by what the fix round's delta contains.
 7. Record the receipt with the lenses that actually ran:
 
    ```sh
@@ -309,12 +310,14 @@ That same classification decides **which findings to act on before merging**, an
 class, it is the first one.
 
 - **First class** — act on every finding, with the one carve-out defined below: a
-  record-prose *imprecision below HIGH, as the lens marked it,* may be logged. A
+  record-prose *imprecision below HIGH, as the lens marked it,* is logged
+  rather than fixed. A
   HIGH is acted on in every class; for record prose the act is deletion or
   shortening. Reply-with-reason stays what step 5 makes it, an answer to a
   nitpick, not a disposal route for something a lens called real.
 - **Second class** — act on HIGH, and at any severity on a finding contract item 9
-  marks a *regression*. An imprecision — a miscount, a stale cross-reference — may
+  marks a *regression*. An imprecision below HIGH — a miscount, a stale
+  cross-reference — may
   instead be **filed**: replied to on the PR with the reason, as step 5 requires,
   *and* recorded where your project tracks deferred work, so it is a disposition
   with an artifact rather than a third option that loses it.
@@ -432,12 +435,13 @@ diff plus the commit messages that land it** (`git log
 executed prose by class, so the test on it is what executing it does: the
 pass requires messages that act on nothing — no closing keyword near a
 reference, no instruction to a future reader, no claim a process consumes.
-The delta lens reads both surfaces, and its first duty is to dispute the
-classification. **Its verdict — confirmed or disputed — is posted on the PR
-before any `fallback:delta` receipt is recorded**: the diff and its messages
-are auditable from history, but the dispute is the one event no history
-shows, so it gets the same outside-the-tree artifact rule the logged
-disposition carries. **A disputed classification is a behaviour-containing
+The delta lens reads both surfaces, and its first duty is to dispute both
+stated draws — the prose class and the safety-critical boundary. **Its
+verdict — confirmed or disputed — is posted on the PR by the cockpit, from
+the lens's report, before any `fallback:delta` receipt is recorded**: neither
+verdict appears in git history, and the posted verdict is what makes "no
+verdict yet" distinguishable from "confirmed" — so it gets the same
+outside-the-tree artifact rule the logged disposition carries. **A disputed classification is a behaviour-containing
 delta** — the full panel is owed, and no `fallback:delta` receipt may be
 recorded over the dispute. A logged disposition that produced no commit
 needs less still: there is no new head, so there is nothing to re-review.
