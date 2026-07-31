@@ -445,13 +445,15 @@ prompt requires the lens to end its report with **one verdict line per
 draw**. **Both lines are posted on the PR by the cockpit, verbatim, before
 any `fallback:delta` receipt is recorded** — quoting both is what closes
 selective quotation, and the posting is self-reported, like the receipt:
-neither verdict appears in git history, and the posted verdict is what makes
-"no verdict yet" distinguishable from "confirmed" — so it gets the same
+the verdict lines appear nowhere in git history, and the posted lines are
+what make "no verdict yet" distinguishable from "confirmed" — so they get the same
 outside-the-tree artifact rule the logged disposition carries. **A disputed
 prose class is a behaviour-containing delta** — the full panel is owed. **A
 disputed safety-critical boundary is stronger**: treat the change as sitting
 under `safety-critical-changes.md` until the dispute is resolved — and the
-resolver is the operator, never the party that drew the boundary — with the
+resolution is an artifact the operator authors on the PR, existing before
+any receipt or merge, never a relayed account by the party that drew the
+boundary — with the
 panel at the merging head, and operator-merge, never a self-merge over it. Know
 also what the engine retains: it keeps one receipt per PR, so recording
 `fallback:delta` replaces the panel receipt that evidenced the initial full
