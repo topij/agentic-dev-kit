@@ -14,71 +14,74 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-01 — `#174` settled and closed by `#189`: both truncating writes stay,
+Last updated: 2026-08-01 — `#189` settled `#174`, which is now closed: both truncating writes stay,
 documented at each site. The result that outlives it is `#190`, a merge-gate fail-open the review
 found by executing a claim I had verified by reading.
 
 ## Latest session — 2026-08-01 (a documentation PR, and the defect it found in the merge gate)
 
-**Theme —** `#189` merged (`13afb19`), closing `#174`: `kit_doctor.main`'s `--generate-manifest`
+**Theme —** `#189` merged (`13afb19`) and settled `#174`: `kit_doctor.main`'s `--generate-manifest`
 branch and `pr_watch.save_state` keep `Path.write_text`, each with a short comment pointing at the
-issue. The diff has **no executable surface** — two lenses established that independently by
-token-stream and AST comparison — and the review still ran long enough to be the story. Every
-review round found a defect in some version of the argument kept at the call sites, including two
-rounds whose findings were regressions introduced by the previous round's fixes. Per-round
-dispositions are on `#189`; this block does not recount them.
+issue. **No behavioural delta at either site** — the scope a lens established by token-stream and
+AST comparison, and deliberately not the wider "nothing here executes", which that same lens
+disputed and I upheld against myself: the regenerated `kit-manifest.json` is consumed by a
+build-failing drift gate. Every review round found a defect in some version of the argument kept at
+the call sites, and some rounds' findings were regressions introduced by the round before. Per-round
+dispositions are on `#189`; this block points at them rather than recounting them.
 
-- **`#190` filed, and it is the durable result.** Losing `pr_watch`'s per-PR state file disables
-  the false-settle guard, and a receipt recorded afterwards makes `mergeable` true while checks are
-  still registering. Pre-existing on `main`, reachable without any failed write (`state/` is
-  gitignored, so a fresh clone reaches `load_state() == {}`), and **not closed by converting the
-  write** — which is why `#174` settled as *leave both* despite the discovery.
+- **`#190` filed, and it is the durable result.** A receipt recorded against a lost false-settle
+  baseline makes `mergeable` true while checks are still registering. Pre-existing on `main` and
+  **not closed by converting the write**, which is why `#174` settled as *leave both* despite the
+  discovery. The mechanism, the measurement and the suggested direction are on `#190`.
 - **The decision's stated basis changed completely; the decision did not.** `#174`'s own reasoning
-  was wrong in three places: `#164` was not silent (it exited 2 printing `no changes applied` — a
-  **false** claim, which is the property that matters), a read-only target was never an added
-  refusal (`write_text` already fails on one), and losing the state file is not safe. The
-  superseding comment on `#174` carries what survived; the site comments point there rather than
-  restating it.
+  was wrong in three places, and the superseding comment there carries what survived. The site
+  comments point at it rather than restating it — which is only honest because that comment was
+  written; an earlier draft pointed at a thread still carrying refuted claims.
 - **Merged with an explicit squash body**, because the repo squashes with `COMMIT_MESSAGES` and the
   default would have published the withdrawn safety claim onto `main` as this change's recorded
-  rationale. Found by a lens reading the commit messages as a reviewed surface — it appears in no
-  diff.
+  rationale. Found by a lens reading commit messages as a reviewed surface — it appears in no diff.
 
 **Learned**
 
 - **Delegation is only honest if the target is current.** Shortening the site comments to "the
-  argument lives on `#174`" left the deciding reason existing nowhere: `#174` still carried two
-  claims the review had already refuted. A pointer inherits the accuracy of what it points at.
-- **Deleting beats correcting — but not blindly.** Cutting the comments in half repaired most of
-  one round's findings and simultaneously threw away a *correct* repair, putting the `#164`
-  criterion wrong for the third time. Deletion is a scalpel, and the load-bearing sentence is the
-  one most easily cut with the verbose ones.
+  argument lives on `#174`" left the deciding reason existing nowhere, because that issue still
+  carried claims the review had already refuted. A pointer inherits the accuracy of what it points
+  at.
+- **Deleting beats correcting — but not blindly.** Cutting the comments in half repaired most of one
+  round's findings and simultaneously threw away a *correct* repair, putting the `#164` criterion
+  wrong again. Deletion is a scalpel, and the load-bearing sentence is the one most easily cut with
+  the verbose ones.
 - **A guard sequenced before an action is not chained to it, and I proved `#180` on myself.** The
-  closing-keyword scanner printed a violation and the comment posted anyway, because the scan ran
-  before the `gh` call rather than gating it. Rewired to gate on exit status, it caught a second
-  instance immediately. Nothing was closed. Occurrence data on `#180` and `#71`.
+  closing-keyword scan printed a violation and the comment posted anyway, because the scan ran
+  before the `gh` call rather than gating it. Rewired to gate on exit status it began refusing
+  publishes, including on this block. Nothing was closed. **No such scanner exists in `scripts/`** —
+  `#71` is the ask to build one, and each of these was an ad-hoc command. Occurrence data for `#180`
+  and `#71` is in the inbox, un-graduated, not on those issues.
 - **Two of my own checks reported success without examining their subject.** A CI-wait loop printed
   its exit condition and then crashed in its reporting line; a scripted comment edit matched its
   patterns and produced mangled text in both files. Both caught by reading output rather than an
-  exit code — `#179`'s shape, twice, in the session that merged a PR about unverified claims.
+  exit code — `#179`'s shape, in the session that merged a PR about unverified claims.
 
 **Open, and owned by nothing yet**
 
-- **`#190` is unowned and is the sharpest thing on the board.** Its suggested direction is making an
-  absent baseline distinct from a satisfied one in `decide_mergeable`, with the negative-control
-  test `#179` asks for.
+- **`#190` is unowned and is the sharpest thing on the board**, and the `▶ Next` below sends the
+  next session at it. Its ask is on the issue.
 - **`#189` merged with a single-lens receipt (`fallback:delta`, correctness) and a one-commit
-  unreviewed tail**, both disclosed on the PR before merge and both `#27`'s gap, chosen rather than
-  missed. The engine's own warnings about the one-lens pass and the reviewer's stale coverage are in
-  the record command's output.
+  unreviewed tail**, both disclosed on the PR before merge. The tail is `#27`'s gap; the one-lens
+  receipt is `#76`'s. Chosen rather than missed, and the engine's own warnings are in the record
+  command's output.
 - **`#187` is now live rather than theoretical**: `check_doc_budget.py` warns that the friction log
-  is over budget, and the graduation marker is what consumes it, so the prescribed remedy would not
-  clear the warning.
+  is over budget. Both the graduation marker and the inbox contribute, and `#187`'s own measurement
+  is that a sweep lands the file back just under budget — so the warning clears, narrowly, and
+  returns. Read `#187` before assuming either half is sufficient on its own.
+- **Carried forward from the block this session swept to history, because all are still open and
+  the sweep would otherwise drop them:** `#124` (documented default flipped, prose only — nothing an
+  adopter runs changed while `#6`'s engine is unvendored), `#167`, `#169`, `#170` from the draft-bit
+  and contract-numbering thread, and `#33`/`#112`, which still want confirming against `#131` before
+  either is deliberately marked done.
 - Inbox length: `check_doc_budget.py` prints the live figure.
 
-▶ Next: **`session-start`** — `#190` is the one clear thread and the rest is diffuse. If `#190` is
-taken directly, its ask is a merge-gate guard plus a negative-control test, and `#179` is its
-sibling.
+▶ Next: **`session-start`** — `#190` is the one clear thread and the rest is diffuse.
 
 ______________________________________________________________________
 

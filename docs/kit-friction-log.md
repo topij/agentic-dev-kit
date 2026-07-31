@@ -150,19 +150,23 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-31`.
 
 ## 2026-08-01
 
-- **`pr_watch` cannot tell a bot announcing an outage from a human quoting one.** A PR comment of
-  mine *describing* CodeRabbit's rate-limiting matched `review.unavailable_markers`, so the poll
-  reported an `unavailable` entry with `bot: None` attributed to `@topij`. It gates nothing
-  (unavailable never blocks), but it pollutes the signal the merge gate reports, and the cockpit
-  writing about an outage is the *normal* case during a fallback panel, not an edge one. **M** —
-  proposed fix: match `unavailable_markers` on a comment only when the author matches a configured
-  `review.bots` prefix, which is the same identity test the engine already applies elsewhere;
-  otherwise a bot's outage and the prose about it are indistinguishable. Occurrence data for
-  [#23](https://github.com/topij/agentic-dev-kit/issues/23).
+- **One `unavailable_markers` list serves two surfaces, so a check-surface phrase matches comment
+  bodies.** A PR comment of mine *describing* CodeRabbit's rate-limiting produced an `unavailable`
+  entry with `bot: None` attributed to `@topij`. **The engine is not confused** — `resolve_review_bots`'
+  docstring states this case exactly (`bot` is `None` when a marker matches but the author matches no
+  configured bot, "reported (the operator should see it) and attributed to nobody, so it can never
+  suppress anything"), and an earlier draft of this entry called that a defect and proposed deleting
+  the property the docstring names as its rationale. **L, not M**, and the real observation is
+  narrower: the phrase that fired is `"review rate limited"`, which `config/dev-model.yaml` annotates
+  as *the status-check wording* of the comment-surface marker. It matched a comment body only because
+  both surfaces read one list. Proposed: let a marker declare which surface it belongs to, so a
+  check-phrase cannot match a comment. Filed as a new proposal — **not** occurrence data for
+  [#23](https://github.com/topij/agentic-dev-kit/issues/23), which is closed and is the mirror-image
+  defect (a check-surface outage that was *not* being read).
 - **The closing-keyword scan ran as a separate command before the publish, so a printed violation
   did not stop it.** The comment posted with a banned construction in it; nothing was closed
   (GitHub auto-closes from PR bodies and commits, not issue comments), and the re-post gated on the
-  scanner's exit status caught a second instance immediately. **M** — this is
+  scan's exit status then began refusing publishes that carried the same shape. **M** — this is
   [#180](https://github.com/topij/agentic-dev-kit/issues/180) occurring in the session after it was
   filed, by the agent that filed it, so the entry is occurrence data rather than a new proposal. The
   fix that worked: `scan && publish` as one chained command, never two sequenced ones. Also
