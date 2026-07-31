@@ -634,6 +634,18 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
         manifest = generate_manifest(root, version)
+        # Deliberately a truncating write, not `lib/atomic_write.py` — decided on
+        # #174, which exists so this is not rediscovered as an oversight.
+        # `write_text` truncates before its first byte, the hazard #164 was filed
+        # for. What made #164 destructive was that the failure was SILENT: it was
+        # caught and reported as "no changes applied". None of that holds here.
+        # This call is unwrapped — `main` catches config errors and the manifest
+        # *read* below, not this — so a failure tracebacks, and the "wrote ..."
+        # line prints only after it returns. `kit-manifest.json` is also TRACKED,
+        # so a corrupt one is dirty in `git status` and `git checkout` restores
+        # it. Publishing by rename would in exchange add refusals (read-only,
+        # hardlinked, non-regular, un-carryable ownership) of which not one can
+        # fire on a writable regular file in a writable repo root.
         manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         holes = [p for p, e in manifest["files"].items() if e["sha256"] is None]
         print(f"wrote {manifest_path} ({len(manifest['files'])} files, kit_version={version})")

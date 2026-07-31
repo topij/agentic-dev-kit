@@ -2197,6 +2197,22 @@ def load_state(pr: int) -> dict:
 
 
 def save_state(pr: int, state: dict) -> None:
+    # Deliberately a truncating write, not `lib/atomic_write.py` — decided on
+    # #174, which exists so this is not rediscovered as an oversight.
+    #
+    # Losing this file is NOT free, and the first draft of that decision said it
+    # was. `write_text` truncates before its first byte, and `load_state` returns
+    # {} for an empty or partial file, which takes `head`/`max_total` with it and
+    # so disables the false-settle guard: measured through `main`, `settling`
+    # goes True -> False and `converged` False -> True.
+    #
+    # It is safe anyway, for a reason worth stating rather than re-deriving: the
+    # review receipt lives in this same file and is lost with it, so `mergeable`
+    # gains the missing-review-evidence blocker in the same breath — and
+    # `dev_session.sh` gates a merge on `mergeable`, never on `converged` (its
+    # own comment says so). Every key here fails toward demanding a fresh review.
+    # Publishing by rename would add refusals of which not one can fire on a file
+    # this tool creates inside a directory it creates on the line above.
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     _seen_path(pr).write_text(
         json.dumps(state, indent=1, sort_keys=True), encoding="utf-8"
