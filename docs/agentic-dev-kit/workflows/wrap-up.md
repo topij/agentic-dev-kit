@@ -27,6 +27,23 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    - Update the "Last updated" date to today
    - Keep it concise — the handoff is a handoff document, not a changelog
 
+   **Author record prose defensively** — review findings concentrate in
+   narration of work already done, so write claims a later round cannot refute:
+
+   - **The invariant, not the figure.** No hand-written counts of your own work
+     (rounds run, tests added, lens runs): recounts have found them wrong,
+     and restated figures go stale. If a number matters, name the
+     command that prints the live one, or link the artifact that carries it.
+   - **A verification claim names its command and the directory it ran in.**
+     "Verified" with neither is the claim a later review round exists to find.
+   - **A "why this is safe" sentence cites a test that would fail if it were
+     false** — or is deleted.
+   - **Point, don't restate.** The tracker issue is the record; the handoff
+     carries a pointer. Every restatement is a fresh copy to go stale.
+   - **Shorten, don't correct.** A claim that has needed repair twice gets cut
+     to what you can stand behind (`fallback-review-panel.md`, "Keep the
+     record small").
+
 1. **Capture friction** — if this session surfaced any bug, friction, or idea specific
    to a workflow (a skill, a cron/CI job, a pipeline), append a short entry to
    `<friction-log>` under a dated `## YYYY-MM-DD`
