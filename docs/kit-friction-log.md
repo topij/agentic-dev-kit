@@ -133,26 +133,11 @@ from them would have surfaced it.
 
 The swept entries are verbatim in the archive under `Graduated 2026-07-31`.
 
-## 2026-07-31 (post-sweep)
-
-- **`make test` fails three tests as root, and the failure reads as a regression rather than as an
-  environment fact.** `test_an_unreadable_doc_is_a_documented_exit_2_not_a_traceback` and both
-  `test_a_read_failure_names_the_document_that_failed` cases make a doc unreadable with `chmod 000`
-  and assert exit 2. Under `uid 0` that permission is a no-op — root reads the file anyway — so the
-  tool succeeds and the assertion sees `assert 0 == 2`. **M** — the hazard is the *reading*, not the
-  failure: `make test` is the verification command this repo's `CLAUDE.md` names, and an agent that
-  runs it in a root container sees three red tests with no signal that they are environmental. The
-  honest options are to skip them under `os.geteuid() == 0` with a stated reason, or to make the
-  file unreadable by a means root cannot bypass. Established by running `make test` twice from
-  `/home/user/agentic-dev-kit` — once with this sweep's two doc edits and once with them stashed —
-  and getting the identical three failures and `589 passed` both times; `id -u` reports `0`. Noted
-  during the 2026-07-31 sweep and deliberately left below the marker, so the next pass proposes it.
-
 ## 2026-08-01
 
 - **One `unavailable_markers` list serves two surfaces, so a check-surface phrase matches comment
   bodies.** A PR comment of mine *describing* CodeRabbit's rate-limiting produced an `unavailable`
-  entry with `bot: None` attributed to `@topij`. **The engine is not confused** — `resolve_review_bots`'
+  entry with `bot: None` attributed to `@topij`. **The engine is not confused** — `summarize_review_bots`'
   docstring states this case exactly (`bot` is `None` when a marker matches but the author matches no
   configured bot, "reported (the operator should see it) and attributed to nobody, so it can never
   suppress anything"), and an earlier draft of this entry called that a defect and proposed deleting
@@ -189,6 +174,21 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-31`.
   a receipt field, or a documented disclosure shape, for "stopped on blast radius" — currently it
   lives only in a PR comment an autonomous merge path never reads
   ([#32](https://github.com/topij/agentic-dev-kit/issues/32)'s territory).
+
+## 2026-07-31 (post-sweep)
+
+- **`make test` fails three tests as root, and the failure reads as a regression rather than as an
+  environment fact.** `test_an_unreadable_doc_is_a_documented_exit_2_not_a_traceback` and both
+  `test_a_read_failure_names_the_document_that_failed` cases make a doc unreadable with `chmod 000`
+  and assert exit 2. Under `uid 0` that permission is a no-op — root reads the file anyway — so the
+  tool succeeds and the assertion sees `assert 0 == 2`. **M** — the hazard is the *reading*, not the
+  failure: `make test` is the verification command this repo's `CLAUDE.md` names, and an agent that
+  runs it in a root container sees three red tests with no signal that they are environmental. The
+  honest options are to skip them under `os.geteuid() == 0` with a stated reason, or to make the
+  file unreadable by a means root cannot bypass. Established by running `make test` twice from
+  `/home/user/agentic-dev-kit` — once with this sweep's two doc edits and once with them stashed —
+  and getting the identical three failures and `589 passed` both times; `id -u` reports `0`. Noted
+  during the 2026-07-31 sweep and deliberately left below the marker, so the next pass proposes it.
 
 ## 2026-07-31 (post-merge, review-loop doctrine)
 

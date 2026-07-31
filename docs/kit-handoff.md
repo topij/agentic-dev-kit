@@ -22,12 +22,12 @@ found by executing a claim I had verified by reading.
 
 **Theme —** `#189` merged (`13afb19`) and settled `#174`: `kit_doctor.main`'s `--generate-manifest`
 branch and `pr_watch.save_state` keep `Path.write_text`, each with a short comment pointing at the
-issue. **No behavioural delta at either site** — the scope a lens established by token-stream and
-AST comparison, and deliberately not the wider "nothing here executes", which that same lens
-disputed and I upheld against myself: the regenerated `kit-manifest.json` is consumed by a
-build-failing drift gate. Every review round found a defect in some version of the argument kept at
-the call sites, and some rounds' findings were regressions introduced by the round before. Per-round
-dispositions are on `#189`; this block points at them rather than recounting them.
+issue. **No behavioural delta at either site** — the scope independently corroborated by lens
+token-stream and AST comparison, and deliberately narrower than the wider claim an earlier draft
+made, which a lens disputed and I upheld against myself: the regenerated `kit-manifest.json` is
+consumed by a build-failing drift gate. Every review round found a defect in some version of the
+argument kept at the call sites, and some rounds' findings were regressions introduced by the round
+before. Per-round dispositions are on `#189`; this block points at them rather than recounting them.
 
 - **`#190` filed, and it is the durable result.** A receipt recorded against a lost false-settle
   baseline makes `mergeable` true while checks are still registering. Pre-existing on `main` and
@@ -77,11 +77,18 @@ dispositions are on `#189`; this block points at them rather than recounting the
 - **Carried forward from the block this session swept to history, because all are still open and
   the sweep would otherwise drop them:** `#124` (documented default flipped, prose only — nothing an
   adopter runs changed while `#6`'s engine is unvendored), `#167`, `#169`, `#170` from the draft-bit
-  and contract-numbering thread, and `#33`/`#112`, which still want confirming against `#131` before
-  either is deliberately marked done.
+  and contract-numbering thread, `#33`/`#112`, which still want confirming against `#131` before
+  either is deliberately marked done, `#181` (a merge that lands without its `(#N)` suffix —
+  recurring, and not repairable in place), and the cs-toolkit Phase 2 blockers `#41`/`#37`/`#134`,
+  still untouched. **A first pass at this bullet folded only the issue-numbered items and dropped
+  these**, which is the same invariant failing twice in one PR.
 - Inbox length: `check_doc_budget.py` prints the live figure.
 
-▶ Next: **`session-start`** — `#190` is the one clear thread and the rest is diffuse.
+▶ Next: **`session-start`** — `#190` is the one clear thread and the rest is diffuse. **Page the
+tracker rather than dumping it:** `#143` records `session-start` overflowing its tool limit above 68
+open issues and is still open; `gh issue list --state open --limit 25 --json number,title,labels,state`
+is the form that works here. That issue's own remedy names a GitHub-MCP parameter, and no MCP server
+is configured in this checkout, so the `gh` form is the executable one.
 
 ______________________________________________________________________
 
