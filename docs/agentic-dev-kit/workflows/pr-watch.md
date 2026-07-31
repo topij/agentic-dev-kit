@@ -86,7 +86,12 @@ Repeat until the report says **converged**:
      distinguishable from a panel in the audit trail. It is **self-reported** —
      the engine records it and shows it at merge time, but cannot verify it. If your
      runtime cannot isolate a reviewer, run `review.fallback_commands` instead
-     and record it as `fallback:<runtime>` with the single lens named. For a
+     and record it as `fallback:<runtime>` with the single lens named. The
+     other single-lens receipt is the record-prose **delta pass** (the panel
+     doc's stopping section): an isolated lens over a fix round's delta,
+     recorded as the literal `fallback:delta` with its one lens named — never
+     `fallback:<runtime>`, which is reserved for the author-context degraded
+     run. For a
      lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same flags.
 
    - **Real finding** (a bug, a missing guard, a correctness/clarity issue): fix it in

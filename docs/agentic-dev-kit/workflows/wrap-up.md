@@ -31,8 +31,8 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    narration of work already done, so write claims a later round cannot refute:
 
    - **The invariant, not the figure.** No hand-written counts of your own work
-     (rounds run, tests added, lens runs): recounts have found them drifted
-     upward, and restated figures go stale. If a number matters, name the
+     (rounds run, tests added, lens runs): recounts have found them wrong,
+     and restated figures go stale. If a number matters, name the
      command that prints the live one, or link the artifact that carries it.
    - **A verification claim names its command and the directory it ran in.**
      "Verified" with neither is the claim a later review round exists to find.
