@@ -641,11 +641,21 @@ def main(argv: list[str] | None = None) -> int:
         # caught and reported as "no changes applied". None of that holds here.
         # This call is unwrapped — `main` catches config errors and the manifest
         # *read* below, not this — so a failure tracebacks, and the "wrote ..."
-        # line prints only after it returns. `kit-manifest.json` is also TRACKED,
-        # so a corrupt one is dirty in `git status` and `git checkout` restores
-        # it. Publishing by rename would in exchange add refusals (read-only,
-        # hardlinked, non-regular, un-carryable ownership) of which not one can
-        # fire on a writable regular file in a writable repo root.
+        # line prints only after it returns.
+        #
+        # At the DEFAULT path the loss is cheap too: `kit-manifest.json` is
+        # tracked, so a corrupt one is dirty in `git status` and `git checkout`
+        # restores it. That does NOT generalise, and an earlier draft of this
+        # comment claimed it unqualified — `--manifest` (`:595`) takes any path,
+        # and a target outside the repo has no such recovery. What carries the
+        # decision is that the failure is LOUD either way; the tracked-file
+        # recovery is a bonus only the default enjoys.
+        #
+        # Publishing by rename would in exchange add refusals (read-only,
+        # hardlinked, non-regular, un-carryable ownership). None is reachable
+        # for the default manifest in a writable checkout — and for an arbitrary
+        # `--manifest` target they are new ways to fail a release-time command
+        # that today simply writes.
         manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         holes = [p for p, e in manifest["files"].items() if e["sha256"] is None]
         print(f"wrote {manifest_path} ({len(manifest['files'])} files, kit_version={version})")

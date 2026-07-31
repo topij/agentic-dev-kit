@@ -2211,8 +2211,16 @@ def save_state(pr: int, state: dict) -> None:
     # gains the missing-review-evidence blocker in the same breath — and
     # `dev_session.sh` gates a merge on `mergeable`, never on `converged` (its
     # own comment says so). Every key here fails toward demanding a fresh review.
-    # Publishing by rename would add refusals of which not one can fire on a file
-    # this tool creates inside a directory it creates on the line above.
+    #
+    # Publishing by rename would in exchange add refusals (read-only, hardlinked,
+    # non-regular, un-carryable ownership). An earlier draft of this comment said
+    # not one of them could fire, on the grounds that the tool creates this file
+    # itself. That is an assumed invariant, not an enforced one: the `mkdir` below
+    # creates the DIRECTORY, while `_seen_path(pr)` persists across runs, so a
+    # state file that has since been hardlinked or made read-only would make a
+    # poll REFUSE to record state. That trade points the same way as the rest of
+    # this comment — a refusal here is a new failure mode on a cache whose loss
+    # already fails closed.
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     _seen_path(pr).write_text(
         json.dumps(state, indent=1, sort_keys=True), encoding="utf-8"
