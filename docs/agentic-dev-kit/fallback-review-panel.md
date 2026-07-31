@@ -231,9 +231,10 @@ author re-reading their own diff.
 
    — and name that path in the launch prompt (remove the worktrees when the
    round ends). The cockpit is the only party that knows the target;
-   runtime-provided isolation has been placed at the wrong ref in every run
-   `#75` records. A cockpit-built tree turns that per-lens recovery burden into
-   a confirmation. Nothing in items 7 and 10 relaxes: the tree is still not one
+   runtime-provided isolation routinely lands at the wrong ref (`#75` holds
+   the occurrence data — read it there rather than a figure here; its own
+   tallies say they are approximate). A cockpit-built tree turns that per-lens
+   recovery burden into a confirmation. Nothing in items 7 and 10 relaxes: the tree is still not one
    the lens created (its mutation copies stay its own), and it still reports the
    HEAD it actually found — the defence that remains for a sandbox that re-homes
    the lens anyway.
@@ -307,8 +308,10 @@ That same classification decides **which findings to act on before merging**, an
 **narrows step 5 rather than replacing it**. If a change does not clearly sit in one
 class, it is the first one.
 
-- **First class** — act on every finding. Reply-with-reason stays what step 5 makes
-  it, an answer to a nitpick, not a disposal route for something a lens called real.
+- **First class** — act on every finding, with the one carve-out defined below: a
+  record-prose *imprecision, as the lens marked it,* may be logged. Reply-with-reason
+  stays what step 5 makes it, an answer to a nitpick, not a disposal route for
+  something a lens called real.
 - **Second class** — act on HIGH, and at any severity on a finding contract item 9
   marks a *regression*. An imprecision — a miscount, a stale cross-reference — may
   instead be **filed**: replied to on the PR with the reason, as step 5 requires,
@@ -335,9 +338,12 @@ findings were prose about the work — is: **does anything execute this text?**
   executes it, in either class — a gate PR's record prose is still record. A
   *regression* here is repaired by **deleting or shortening** the claim, not by
   amending it ("Keep the record small" below has the measured base). An
-  *imprecision* — a miscount, a drifted ordinal — is **logged, not fixed**:
-  reply-with-reason on the PR, plus an occurrence comment on the tracker issue
-  that owns the class, if one exists. **A logged finding produces no commit** —
+  *imprecision* — a miscount, a drifted ordinal — is **logged, not fixed**, and
+  only under the label the reviewing lens gave it (item 9): a lens-marked
+  *regression* is never logged. Logging means reply-with-reason on the PR,
+  plus an occurrence comment on the tracker issue that owns the class — opened
+  if none exists, the same artifact requirement the second class's filing
+  route carries. **A logged finding produces no commit** —
   that is the mechanism, not a convenience: no commit leaves the current-head
   receipt standing and gives step 6 no fix round to re-review, which is the
   only exit this loop has that does not cost a round. The log lives on the PR
@@ -347,8 +353,8 @@ findings were prose about the work — is: **does anything execute this text?**
 
 Classify the **claim, not the file** — the handoff carries both kinds in
 adjacent sentences: its `▶ Next:` line is executed by the next session; the
-round count beside it is record. The buried class-by-file-type design below
-died on exactly that boundary. Whether anything reads a string is a fact about
+round count beside it is record. The first two buried designs below — both
+scoped by file — died on exactly that boundary. Whether anything reads a string is a fact about
 the repo and its consumers, not a bound the author sets — which is the property
 all three buried designs lacked. Establish it fail-closed: a repository search
 finds consumers, but a missing match does not prove there are none (a runtime
@@ -383,30 +389,43 @@ round *smaller*, not fewer: `safety-critical-changes.md` rule 3 ("a fix round
 addresses only what the review found") — a new mechanism gets filed, however
 squarely a finding prompted it.
 
-**Batch the fix round into one commit, and aim the re-run at the delta.** Each
-push invalidates the current-head receipt, so each new head costs another
-required review — a fix round landed as four commits buys four times the
-review its content needs. Land the round's accepted fixes together, then
-hand the next round `git diff <last-reviewed-sha>...<head>` as its highest-risk
-surface with the full diff still in scope. Telling a lens what a prior round
-verified is the anchoring item 2 forbids; naming which lines are new since the
-last review is a fact about the diff, not about the findings (`#163` Sink 2,
-trialed on `#160` from round 4).
+**Batch the fix round into one commit and one push, and aim the re-run at the
+delta.** Each push invalidates the current-head receipt, so each new head
+costs another required review — a fix round landed as four pushes buys four
+times the review its content needs. Land the round's accepted fixes together,
+then hand the next round `git diff <last-reviewed-sha>...<head>` as its
+highest-risk surface with the full diff still in scope. Naming that boundary
+reveals what a prior round covered — anchoring of a kind, accepted
+deliberately because the full diff stays in scope, and bounded by taking
+`<last-reviewed-sha>` from the recorded receipt's `--head` rather than from
+the author's memory. (`#163` Sink 2 asked for a cost measurement before this
+became doctrine; none exists. Promoted here deliberately, with the
+full-diff-in-scope clause carrying that risk. Trialed on `#160` from round 4.)
 
 **Step 6's full panel is for a delta that contains behaviour.** A fix round
-that touched executable code or executed prose gets the full re-run, unchanged.
-A fix round whose delta is record prose only — deletions, trims — has nothing
-in it that can act, and the proportionate re-check is **one lens over that
-delta**: isolated, fresh-context, recorded honestly as a single-lens receipt —
-source `fallback:<runtime>` as in Degraded mode, never
-`review.fallback_panel.receipt_source`, with `--lenses` naming the one that ran
-and `--head` the polled sha — with the delta's classification stated in the PR
-where a reviewer can dispute it. A logged disposition that produced
-no commit needs less still: there is no new head, so there is nothing to
-re-review. This is the second sanctioned single-lens pass, beside Degraded
-mode — conditioned on what the delta contains, which is diff-inspectable, not
-on what the author considers low-stakes. The dual-lens floor on a PR's initial
-review does not move.
+that touched executable code or executed prose gets the full re-run,
+unchanged — and a change under `safety-critical-changes.md` never takes this
+exit at all: rule 2 requires both lenses **before merge**, so on a gate PR the
+pass standing at the merging head is the panel, whatever the last delta
+contained. Elsewhere, a fix round whose delta is record prose only —
+deletions, trims — has nothing in it that can act, and the proportionate
+re-check is **one lens over that delta**: isolated, fresh-context, recorded
+honestly as a single-lens receipt — source the literal `fallback:delta`,
+never Degraded mode's `fallback:<runtime>` (an author-context run the audit
+trail must stay able to tell apart) and never
+`review.fallback_panel.receipt_source` — with `--lenses` naming the one that
+ran and `--head` the polled sha. **The delta is the diff plus the commit
+messages that land it** (`git log <last-reviewed-sha>..<head>` — a message is
+executed prose and appears in no diff), so the delta lens reads both, and its
+first duty is to dispute the classification: confirm neither contains executed
+prose before reviewing. A logged disposition that produced no commit needs
+less still: there is no new head, so there is nothing to re-review. This is
+the second sanctioned single-lens pass, beside Degraded mode — conditioned on
+what the delta contains, which is auditable from the repo after the fact, not
+on what the author considers low-stakes. The author still draws the class,
+states it in the PR, and can draw it wrong — the same design-against weakness
+the live two-class gate above carries. The dual-lens floor on a PR's initial
+review — this file's floor, not a reading of rule 2 — does not move.
 
 ## Keep the record small
 
@@ -460,13 +479,16 @@ that added this section.
 
 **A separate question, often confused with these: how many lenses.** None of the three
 touched it. Lens count is not bounded by class — `safety-critical-changes.md`
-rule 2 wants two disjoint lenses on a PR's initial review, and the sanctioned
-single-lens passes are two: **Degraded mode** below, conditioned on the runtime
-being unable to isolate reviewers, and the **record-prose delta pass** in the
-stopping section, conditioned on what a fix round's delta contains. Each condition
-is a fact about the environment or the diff, not about what the change is worth. A
-proposal to run fewer lenses for a "smaller" change is still an argument against
-that rule, not against these three.
+rule 2 wants two disjoint lenses **before merge**, and the two sanctioned
+single-lens passes are this file's own refinements, not readings of that rule:
+**Degraded mode** below, conditioned on the runtime being unable to isolate
+reviewers, and the **record-prose delta pass** in the stopping section,
+conditioned on what a fix round's delta contains — and excluded outright for a
+change under `safety-critical-changes.md`, whose merging head needs both
+lenses whatever the last delta contained. Each condition is a fact about the
+environment or the repo, not about what the change is worth. A proposal to run
+fewer lenses for a "smaller" change is still an argument against that rule,
+not against these three.
 
 ## Degraded mode
 
