@@ -148,6 +148,44 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-31`.
   and getting the identical three failures and `589 passed` both times; `id -u` reports `0`. Noted
   during the 2026-07-31 sweep and deliberately left below the marker, so the next pass proposes it.
 
+## 2026-08-01
+
+- **`pr_watch` cannot tell a bot announcing an outage from a human quoting one.** A PR comment of
+  mine *describing* CodeRabbit's rate-limiting matched `review.unavailable_markers`, so the poll
+  reported an `unavailable` entry with `bot: None` attributed to `@topij`. It gates nothing
+  (unavailable never blocks), but it pollutes the signal the merge gate reports, and the cockpit
+  writing about an outage is the *normal* case during a fallback panel, not an edge one. **M** —
+  proposed fix: match `unavailable_markers` on a comment only when the author matches a configured
+  `review.bots` prefix, which is the same identity test the engine already applies elsewhere;
+  otherwise a bot's outage and the prose about it are indistinguishable. Occurrence data for
+  [#23](https://github.com/topij/agentic-dev-kit/issues/23).
+- **The closing-keyword scan ran as a separate command before the publish, so a printed violation
+  did not stop it.** The comment posted with a banned construction in it; nothing was closed
+  (GitHub auto-closes from PR bodies and commits, not issue comments), and the re-post gated on the
+  scanner's exit status caught a second instance immediately. **M** — this is
+  [#180](https://github.com/topij/agentic-dev-kit/issues/180) occurring in the session after it was
+  filed, by the agent that filed it, so the entry is occurrence data rather than a new proposal. The
+  fix that worked: `scan && publish` as one chained command, never two sequenced ones. Also
+  occurrence data for [#71](https://github.com/topij/agentic-dev-kit/issues/71), whose guard would
+  have caught it at authoring time.
+- **`git add -A` in a fix round committed a `.DS_Store`, and no gate would have caught it.** Not in
+  `.gitignore`, not on the protected branch, invisible to CI and to the drift gate. Found only
+  because resolving the review panel's revision meant diffing against a freshly fetched base and
+  reading the diffstat. **L** — fixed in-session by adding the entry to `.gitignore`, so the
+  specific recurrence is closed; the general shape is that a fix round's `git add -A` stages
+  whatever the working tree happens to hold, and the panel's revision-resolution step was the only
+  thing that looked.
+- **A one-lens receipt at the merging head is honest but the loop has no cheaper way to earn a
+  two-lens one.** The full panel's last head was two fix rounds behind the merge, and each fix round
+  invalidates the receipt, so converging fully would have meant a panel per round indefinitely. The
+  merge disclosed the gap and recorded `fallback:delta` rather than stamping `fallback:panel`.
+  **M** — the doctrine's stopping criterion is blast radius rather than round count, but nothing in
+  `pr-watch` or the panel doc tells an agent how to *record* a stop taken on blast-radius grounds;
+  the receipt vocabulary only describes what ran, not why stopping was proportionate. Proposed:
+  a receipt field, or a documented disclosure shape, for "stopped on blast radius" — currently it
+  lives only in a PR comment an autonomous merge path never reads
+  ([#32](https://github.com/topij/agentic-dev-kit/issues/32)'s territory).
+
 ## 2026-07-31 (post-merge, review-loop doctrine)
 
 - **A comment-then-ack chain piped the poll to `/dev/null`, and a bot finding was acknowledged

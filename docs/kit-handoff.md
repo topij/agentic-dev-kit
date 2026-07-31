@@ -14,11 +14,75 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-31 — `#176` merged: prose findings are now disposed of by whether anything
-executes the text, and a record-prose fix round takes one lens, not the panel. The PR itself could
-never use its own exits — every one of its deltas was doctrine.
+Last updated: 2026-08-01 — `#174` settled and closed by `#189`: both truncating writes stay,
+documented at each site. The result that outlives it is `#190`, a merge-gate fail-open the review
+found by executing a claim I had verified by reading.
 
-## Latest session — 2026-07-31 (the loop got its exits, reviewed under the rules it replaces)
+## Latest session — 2026-08-01 (a documentation PR, and the defect it found in the merge gate)
+
+**Theme —** `#189` merged (`13afb19`), closing `#174`: `kit_doctor.main`'s `--generate-manifest`
+branch and `pr_watch.save_state` keep `Path.write_text`, each with a short comment pointing at the
+issue. The diff has **no executable surface** — two lenses established that independently by
+token-stream and AST comparison — and the review still ran long enough to be the story. Every
+review round found a defect in some version of the argument kept at the call sites, including two
+rounds whose findings were regressions introduced by the previous round's fixes. Per-round
+dispositions are on `#189`; this block does not recount them.
+
+- **`#190` filed, and it is the durable result.** Losing `pr_watch`'s per-PR state file disables
+  the false-settle guard, and a receipt recorded afterwards makes `mergeable` true while checks are
+  still registering. Pre-existing on `main`, reachable without any failed write (`state/` is
+  gitignored, so a fresh clone reaches `load_state() == {}`), and **not closed by converting the
+  write** — which is why `#174` settled as *leave both* despite the discovery.
+- **The decision's stated basis changed completely; the decision did not.** `#174`'s own reasoning
+  was wrong in three places: `#164` was not silent (it exited 2 printing `no changes applied` — a
+  **false** claim, which is the property that matters), a read-only target was never an added
+  refusal (`write_text` already fails on one), and losing the state file is not safe. The
+  superseding comment on `#174` carries what survived; the site comments point there rather than
+  restating it.
+- **Merged with an explicit squash body**, because the repo squashes with `COMMIT_MESSAGES` and the
+  default would have published the withdrawn safety claim onto `main` as this change's recorded
+  rationale. Found by a lens reading the commit messages as a reviewed surface — it appears in no
+  diff.
+
+**Learned**
+
+- **Delegation is only honest if the target is current.** Shortening the site comments to "the
+  argument lives on `#174`" left the deciding reason existing nowhere: `#174` still carried two
+  claims the review had already refuted. A pointer inherits the accuracy of what it points at.
+- **Deleting beats correcting — but not blindly.** Cutting the comments in half repaired most of
+  one round's findings and simultaneously threw away a *correct* repair, putting the `#164`
+  criterion wrong for the third time. Deletion is a scalpel, and the load-bearing sentence is the
+  one most easily cut with the verbose ones.
+- **A guard sequenced before an action is not chained to it, and I proved `#180` on myself.** The
+  closing-keyword scanner printed a violation and the comment posted anyway, because the scan ran
+  before the `gh` call rather than gating it. Rewired to gate on exit status, it caught a second
+  instance immediately. Nothing was closed. Occurrence data on `#180` and `#71`.
+- **Two of my own checks reported success without examining their subject.** A CI-wait loop printed
+  its exit condition and then crashed in its reporting line; a scripted comment edit matched its
+  patterns and produced mangled text in both files. Both caught by reading output rather than an
+  exit code — `#179`'s shape, twice, in the session that merged a PR about unverified claims.
+
+**Open, and owned by nothing yet**
+
+- **`#190` is unowned and is the sharpest thing on the board.** Its suggested direction is making an
+  absent baseline distinct from a satisfied one in `decide_mergeable`, with the negative-control
+  test `#179` asks for.
+- **`#189` merged with a single-lens receipt (`fallback:delta`, correctness) and a one-commit
+  unreviewed tail**, both disclosed on the PR before merge and both `#27`'s gap, chosen rather than
+  missed. The engine's own warnings about the one-lens pass and the reviewer's stale coverage are in
+  the record command's output.
+- **`#187` is now live rather than theoretical**: `check_doc_budget.py` warns that the friction log
+  is over budget, and the graduation marker is what consumes it, so the prescribed remedy would not
+  clear the warning.
+- Inbox length: `check_doc_budget.py` prints the live figure.
+
+▶ Next: **`session-start`** — `#190` is the one clear thread and the rest is diffuse. If `#190` is
+taken directly, its ask is a merge-gate guard plus a negative-control test, and `#179` is its
+sibling.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-31 (the loop got its exits, reviewed under the rules it replaces)
 
 **Theme —** `#176` merged (`65c9ee4`): a prose finding is disposed of by whether anything
 **executes** the text; a record-prose imprecision below HIGH is **logged** — reply on the PR plus
@@ -243,90 +307,6 @@ the rest: the five-finding one-of-two-symmetric-locations result wants routing �
 a comment on `#163` — and `#174` wants a deliberate yes/no on the two remaining truncating writes.
 Caveat before running the sweep unattended: `notify.user_key` is blank, so `triage-friction-log`
 stops at Step 2 by design (`#128`).
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-30 (two merges, eight rounds, and where every defect lived)
-
-**Theme —** Both PRs landed after eight panel rounds: **18 lens runs launched, 16 completed**, two
-stalled at the watchdog and re-run. Each figure published elsewhere is *lower* than 16 — they count
-one PR each, or a subset of rounds — and only their sum, 18, exceeds it. None is wrong. The result
-worth keeping is narrower than
-this block first claimed, and a lens refuted the wider version: **no round ever disputed what the
-tickets asked for** — flip a documented default, invert a contract item, diff the named sha — but
-nearly every HIGH was in a justification or a guard added around those edits. Both are the
-deliverable, so "the change was never contested" is false; what held was the *ask*, and what failed
-was everything written to support it.
-
-- **`#166` merged (`eeef647`).** `fallback-review-panel.md` contract item 7: `#75`'s inversion
-  (*assume* the worktree points at the wrong ref, not *verify* it), `#163` Sink 1's recovery
-  (diff the **named sha** — verified working from a wrong-ref worktree by four lenses, including
-  against a `chmod -R a-w` source), and `#136`'s scratch-path isolation. `#75`'s second half had
-  no home in the contract, so it is **item 10**, appended rather than renumbered.
-- **`#168` merged (`046e9ce`).** `#124`'s documented default flipped to `false` — and the key
-  turned out to be in **no config file and read by no code**. The larger find:
-  `post-merge-systemize.md` **hardcoded `gh pr create --draft`**, so the key it documents in its
-  own table had no effect on the one place that workflow opens a PR (Principle #10).
-- **Filed:** `#167` (item 7 now carries four requirements under one number; stable numbering
-  blocks splitting it), `#169` (`/adopt`+`/upgrade` drafts, plus the shipped CLAUDE.md template's
-  draft-first baseline with no scheduled-run carve-out), `#170` (draft-bit verification, with all
-  three failed attempts recorded). Occurrence comments on `#44`, `#45`, `#116`, `#140`.
-
-**Learned**
-
-- **A lens cannot know whether a tree is its own.** `git switch --detach` was documented as the
-  cheapest route to a writable tree; every lens run was placed in the **live checkout** instead,
-  so literal compliance would have detached a real branch — invisibly, since detaching at the same
-  sha changes no byte. The guard added next **failed open from any subdirectory** (`--git-dir`
-  absolute, `--git-common-dir` relative-to-cwd) and asked the wrong question anyway, because
-  `dev_session.sh` builds lanes as worktrees. No git command answers *is this tree mine*. The rule
-  that survived needs no discrimination: never write inside a tree you did not create.
-- **A command menu in doctrine is a defect generator.** Every menu item 7 carried had a measured
-  defect — routes documented as "blocked outright" that all three worked, `--is-shallow-repository`
-  returning false for a partial clone, `merge-base --is-ancestor` passing on a stale base,
-  `ls-remote origin origin/main` returning empty. What a given invocation does depends on how the
-  runtime built the tree, so the bullets now state what must be **true** and make each lens
-  establish its own route.
-- **Deleting beat correcting, now four-for-four.** The two rounds across both PRs that *shrank*
-  the text are the two that produced no follow-on HIGH. Every round that added an explanation
-  produced the next round's finding — including three attempts at one comparative claim, each
-  narrowing the quantifier while keeping the class, and a "de-duplicate" commit that took the
-  duplicate count from two to three.
-- **A check heading is a claim, and a metric can be blind by construction.** The rendering check
-  counted `<pre>` elements — but a correctly rendered fence *adds* one, so `0` reads identically
-  for "no fence" and "mangled fence". A true measurement supporting a false conclusion, under a
-  "Verified" heading. Withdrawn rather than repaired (`#116`).
-- **The review bot was throttled, not absent.** CodeRabbit reviewed after 13+ silent PRs, then
-  rate-limited, then returned clean — all on one PR. That settles `#45` for this repo, and the
-  clean pass reproduced `#44` exactly: it created **no review object**, so `coverage` reported the
-  bot three heads behind while its commit status said `Review completed` on head.
-
-**Open, and owned by nothing yet**
-
-- **`#124` stays open** — what shipped is prose only. For `triage-friction-log` nothing an adopter
-  runs changed, because `#6`'s engine is unvendored and still hardcodes a draft.
-- **`#33`/`#112` still want confirming against `#131`** before either is deliberately marked done —
-  the block naming `#131` went to history in this session's sweep, taking the qualifier with it.
-- **`eeef647` landed without its `(#166)` suffix**, and it is not alone: 15 of 75 commits on
-  `main` have an associated PR and no `(#N)` — 8 of those predate the squash convention, so the
-  comparable figure is **7 of 67**, among them `cdeae7a` (#144), `c48164c` (#154), `b46f794`
-  (#153). `--subject` explains this session's instance and is **not** established as the cause of
-  the others. Recurring, not a one-off, and not repairable in place.
-- The inbox is **well over budget** and grew again — five entries added to a file already over.
-  **This line deliberately carries no number:** `check_doc_budget.py` prints the current one, and
-  the hand-written figure went stale three times (206 → 217 → 224), each time inside the commit
-  correcting its predecessor. `#167`, `#169`, `#170` are this session's three tickets.
-
-▶ Next: **`session-start`** — three fresh tickets, an inbox well over budget, and no single
-obvious thread. **Page the tracker rather than dumping it** —
-`gh issue list --state open --limit 25 --json number,title,labels,state` is the form that works
-here. `#143` records `session-start` overflowing at 68 open issues and is still open; there are
-**89** now. (That issue's own remedy names `perPage`, a GitHub-MCP parameter; no MCP server is
-configured in this checkout, so the `gh` form above is the executable one.) `#170` is the sharpest of the three tickets (it blocks nothing but has a
-complete spec and three recorded failures), `#164` remains unfixed and the wrap-up sweep touches
-that code every session, and the cs-toolkit Phase 2 blockers (`#41`/`#37`/`#134`) are untouched.
-`triage-friction-log` is the alternative, and the inbox is further over budget than when the
-previous session chose it.
 
 ______________________________________________________________________
 
