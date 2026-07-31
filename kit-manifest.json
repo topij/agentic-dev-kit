@@ -80,7 +80,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "70b874efd438454a79649f0366705cea7078c9980ed913adaba099dcdd57ce07"
+      "sha256": "b5ca68893bdfacd9ea6d4c54e553be16e1c7f024653796daa4103c1b028903e5"
     },
     "scripts/lib/atomic_write.py": {
       "role": "engine",
@@ -116,7 +116,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "6345f478807648d70f429b06aadea5892b00949fe7adc24fa71bd53ef16598ee"
+      "sha256": "366efe77a347e432642abdd78864955bc574ef71fcb76f42a2d48512f6b8d953"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",

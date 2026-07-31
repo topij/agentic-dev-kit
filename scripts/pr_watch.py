@@ -2203,8 +2203,8 @@ def load_state(pr: int) -> dict:
 
 def save_state(pr: int, state: dict) -> None:
     # Truncating write, deliberately: #174 carries the decision, the measurements
-    # and the objections. Not restated here — four review rounds found a defect in
-    # every version of the argument kept at this site.
+    # and the objections. Not restated here — every review round so far has found
+    # a defect in some version of the argument kept at this site.
     #
     # Two local facts, each established by execution, because a reader who has
     # only one of them will reach the wrong conclusion.
@@ -2925,6 +2925,7 @@ def persist_poll(pr: int, report: dict, seen: set[str]) -> dict:
       prior unconsumed pending set: the contract is "ack what the *last
       reported* poll showed."
     - ``seen`` itself only grows via :func:`mark_seen`, never here.
+    - ``bot_pending_since`` is set here too, via :func:`write_pending_since`.
     - ``review_receipt`` is **carried forward**, not created: an existing dict is
       copied onto the new state so a poll never drops the evidence, and only
       :func:`record_review` ever originates one. It is not head-checked here —
