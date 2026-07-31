@@ -30,3 +30,6 @@ reports/
 # blank placeholder and its explanatory comment. The tracked file stays the
 # schema of record; this only supplies values.
 config/*.local.yaml
+
+# macOS directory metadata — never belongs in the repo
+.DS_Store

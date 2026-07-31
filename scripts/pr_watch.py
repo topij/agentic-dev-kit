@@ -2182,9 +2182,14 @@ def load_state(pr: int) -> dict:
     Keys: ``seen`` (acked comment keys), ``head`` / ``max_total`` (false-settle
     guard, see :func:`build_report`), ``bot_pending_since`` (the head-scoped
     fallback grace clock for a review bot whose check carries no usable
-    timestamp, see :func:`read_pending_since`), and ``pending_seen`` — the ``all_seen_keys``
+    timestamp, see :func:`read_pending_since`), ``pending_seen`` — the ``all_seen_keys``
     of the most recently *reported* plain poll, present only between a poll and
-    the ``--mark-seen`` that consumes it (see :func:`mark_seen`).
+    the ``--mark-seen`` that consumes it (see :func:`mark_seen`) — and
+    ``review_receipt`` — independent-review evidence **stamped with the head it
+    was taken at**, written by :func:`record_review` and carried forward by
+    :func:`persist_poll`. Its presence is not evidence for the current head:
+    :func:`build_report` decides that at read time by comparing
+    ``receipt["head"]`` against the polled head, and a push invalidates it.
     """
     path = _seen_path(pr)
     if not path.is_file():
@@ -2197,6 +2202,27 @@ def load_state(pr: int) -> dict:
 
 
 def save_state(pr: int, state: dict) -> None:
+    # Truncating write, deliberately: #174 carries the decision, the measurements
+    # and the objections. Not restated here — every review round so far has found
+    # a defect in some version of the argument kept at this site.
+    #
+    # Two local facts, each established by execution, because a reader who has
+    # only one of them will reach the wrong conclusion.
+    #
+    # Why not convert: nothing enforces this file's properties between runs — the
+    # `mkdir` below tolerates a pre-existing STATE_DIR whose mode it never checks,
+    # and `_seen_path(pr)` outlives the run that made it — so rename-publishing
+    # could refuse (hardlink, non-regular, un-carryable ownership, non-writable
+    # parent). A poll that cannot record state at all is the worse failure.
+    #
+    # Why not relax: losing this file is NOT safe, and two earlier drafts of this
+    # comment claimed it was. `load_state` returns {} for a missing, empty or
+    # corrupt file, dropping `head`/`max_total` and disabling the false-settle
+    # guard; a receipt recorded afterwards makes `mergeable` true while checks are
+    # still registering and green, and `seen` is gone so every acknowledgement
+    # resurfaces. That is #190 — a merge-gate defect this call can neither complete
+    # alone (the fail-open needs the later `--record-review`) nor prevent (a fresh
+    # clone reaches `load_state() == {}` with no failed write anywhere).
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     _seen_path(pr).write_text(
         json.dumps(state, indent=1, sort_keys=True), encoding="utf-8"
@@ -2899,6 +2925,12 @@ def persist_poll(pr: int, report: dict, seen: set[str]) -> dict:
       prior unconsumed pending set: the contract is "ack what the *last
       reported* poll showed."
     - ``seen`` itself only grows via :func:`mark_seen`, never here.
+    - ``bot_pending_since`` is set here too, via :func:`write_pending_since`.
+    - ``review_receipt`` is **carried forward**, not created: an existing dict is
+      copied onto the new state so a poll never drops the evidence, and only
+      :func:`record_review` ever originates one. It is not head-checked here —
+      :func:`build_report` compares its stamped head against the polled head, so
+      a receipt surviving a push is expected and is invalidated at read time.
     """
     new_state = {
         "seen": sorted(seen),
