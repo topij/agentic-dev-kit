@@ -14,8 +14,9 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-30 — `#164` repaired and `#162` settled in one PR; both **stay open** for the
-operator. Seven review rounds; one defect class produced five findings across three of them.
+Last updated: 2026-07-30 — `#164` repaired and `#162` settled in one PR, both since **closed** by
+the operator; `#174` carries what was left. Seven review rounds; one defect class produced five
+findings across three of them.
 
 ## Latest session — 2026-07-30 (one bug, seven review rounds, and the same defect five times)
 
@@ -76,10 +77,15 @@ recovery paths were collapsed into one function used by both sites.
 
 **Open, and owned by nothing yet**
 
-- **`#164` and `#162` stay open** — the operator decides their state. The scope note on `#164` asks
-  that `kit_doctor.py:636` and `pr_watch.py:2201` be considered with it; they were, and **neither was
-  converted**: both write machine-regenerated artifacts, so the refuse-on-read-only/hardlink semantics
-  would add failure modes with no benefit. The helper is a library so converting later is an import.
+- **`#164` and `#162` are CLOSED**, both with the reasoning posted on them rather than a bare state
+  change — `#162`'s records that the decision is *normalising* and exactly what would justify
+  reopening it. **`#174` is the successor**: `kit_doctor.py:637` and `pr_watch.py:2201` still
+  truncate on write. `#164`'s scope note asked they be considered together; they were, and **neither
+  was converted** (both write machine-regenerated artifacts, so the refuse-on-read-only/hardlink
+  semantics add failure modes with no benefit). `#174` carries that reasoning *and the objection to
+  it* — the decision lived in a PR body, so no review lens ever examined it, and `atomic_write` has
+  one consumer, which makes those two sites the natural test of whether its refusals are
+  proportionate.
 - **The merged tree was reviewed by nothing, and the unreviewed tail is 5 commits, not 2.** Panel
   round 4 saw `e5cb29f` (7 commits back); CodeRabbit's last review was `342f437` (5 back). That tail
   is `+106/-12` and is **not** all test hygiene — `6d7eb28` touches both engine files. The first
@@ -108,8 +114,8 @@ recovery paths were collapsed into one function used by both sites.
 ▶ Next: **`triage-friction-log`** — the inbox is near double budget and un-swept for
 several sessions; four of this session's entries are ready to graduate, three of them one class
 (`#150`: a check that reports success without having examined anything). Then `session-start` for
-the rest: `#164`/`#162` need an operator decision, and the five-finding
-one-of-two-symmetric-locations result wants routing — doctrine change vs. a comment on `#163`.
+the rest: the five-finding one-of-two-symmetric-locations result wants routing — doctrine change vs.
+a comment on `#163` — and `#174` wants a deliberate yes/no on the two remaining truncating writes.
 Caveat before running the sweep unattended: `notify.user_key` is blank, so `triage-friction-log`
 stops at Step 2 by design (`#128`).
 
@@ -337,58 +343,6 @@ too; the first draft of this block claimed otherwise and a lens refuted it from 
 ▶ Next: `session-start` — several threads are open (`#121` still wants the friction-log header read
 from config; `#124` and the `finalize.pr_draft` default now contradict the stated preference that
 PRs not sit as drafts) and none is obviously first.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-29 (three failed designs, and what shipped instead)
-
-**Theme —** An attempt to stop the previous sessions' review spirals. It failed three times, and
-the failures are the result worth keeping.
-
-- **`#153` merged (`b46f794`).** `fallback-review-panel.md` gains one section of *authoring*
-  guidance — keep the record short, put detail in the PR, shorten a record that has needed
-  repairing twice, and treat adopter-executed prose, commit messages and any record standing in
-  for a control as first class. It loosens no control and says so explicitly. It also gave
-  `workflows/pr-watch.md` the panel's missing precondition — that criterion applies only when the
-  review bot is unavailable — and separated the poll/fix loop bound from per-change review rounds.
-- **Three designs died first**, each killed by a panel on a real hole: a class defined by file
-  type inside a section organised by function; the same class with functional tests, which the
-  handoff passed while being the file the next session is told to act on; and a class-independent
-  stop signal that beat the first class and whose trigger the author sets by choosing how verbose
-  the fix round is.
-- **Global git identity corrected** — `user.email` was `topi.jarvinen@gmail..com` (double dot) and
-  `user.name` lacked its umlaut. Five commits from 2026-07-05/15 carry it; nothing from these
-  sessions does, because GitHub's squash attribution used the account identity. Not rewritten.
-
-**Learned**
-
-- **Any rule whose trigger the author sets is a control the author can opt out of.** All three
-  designs were versions of that, and the third one self-immunised: the commit proposing it
-  rewrote the section, which by its own test made every later finding "prose the last fix wrote".
-- **The premise was wrong.** "The record rounds did not earn their keep" does not survive: they
-  caught a falsely closed issue, a false claim published to two tracker surfaces, and a falsified
-  operator-approval record. The waste came from records being *elaborate*, not from being
-  reviewed — and deleting prose (141 → 93 lines) is the only intervention that provably worked.
-
-**Open, and owned by nothing yet**
-
-- **The inbox is 179/150** and a sweep is due — the **fourth** consecutive session ending over
-  budget (196, 203, 179, 179 since `06490a1`, against a budget of 150 throughout).
-- **`#120` now carries this session's findings** — it proposes the cheaper terminal check these
-  three designs were attempts at, so the reasons they broke are recorded there rather than only
-  in this block.
-- `#149`, `#150`, `#145`, `#146`, `#138`, `#139`, `#140`, `#141`, `#142`, `#143` and the rest per
-  `session-start`.
-
-▶ Next: `triage-friction-log` — the inbox has been over budget for four sessions. **Caveat before
-running it unattended:** `notify.user_key` is blank, so the workflow stops at Step 2 by design; the
-in-session-operator path is open regression `#128`, and `#124` records that its default draft PR
-goes to a reviewer that will never read it.
-
-No friction entries were added this session on purpose, and only one of the two lessons is in
-doctrine: the record-length one is in `fallback-review-panel.md`, while *"any rule whose trigger
-the author sets is a control the author can opt out of"* is recorded on `#120` — the tracker, not
-the inbox, because it is the constraint any future attempt at that ticket must satisfy.
 
 ______________________________________________________________________
 

@@ -4,6 +4,56 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-07-29 (three failed designs, and what shipped instead)
+
+**Theme —** An attempt to stop the previous sessions' review spirals. It failed three times, and
+the failures are the result worth keeping.
+
+- **`#153` merged (`b46f794`).** `fallback-review-panel.md` gains one section of *authoring*
+  guidance — keep the record short, put detail in the PR, shorten a record that has needed
+  repairing twice, and treat adopter-executed prose, commit messages and any record standing in
+  for a control as first class. It loosens no control and says so explicitly. It also gave
+  `workflows/pr-watch.md` the panel's missing precondition — that criterion applies only when the
+  review bot is unavailable — and separated the poll/fix loop bound from per-change review rounds.
+- **Three designs died first**, each killed by a panel on a real hole: a class defined by file
+  type inside a section organised by function; the same class with functional tests, which the
+  handoff passed while being the file the next session is told to act on; and a class-independent
+  stop signal that beat the first class and whose trigger the author sets by choosing how verbose
+  the fix round is.
+- **Global git identity corrected** — `user.email` was `topi.jarvinen@gmail..com` (double dot) and
+  `user.name` lacked its umlaut. Five commits from 2026-07-05/15 carry it; nothing from these
+  sessions does, because GitHub's squash attribution used the account identity. Not rewritten.
+
+**Learned**
+
+- **Any rule whose trigger the author sets is a control the author can opt out of.** All three
+  designs were versions of that, and the third one self-immunised: the commit proposing it
+  rewrote the section, which by its own test made every later finding "prose the last fix wrote".
+- **The premise was wrong.** "The record rounds did not earn their keep" does not survive: they
+  caught a falsely closed issue, a false claim published to two tracker surfaces, and a falsified
+  operator-approval record. The waste came from records being *elaborate*, not from being
+  reviewed — and deleting prose (141 → 93 lines) is the only intervention that provably worked.
+
+**Open, and owned by nothing yet**
+
+- **The inbox is 179/150** and a sweep is due — the **fourth** consecutive session ending over
+  budget (196, 203, 179, 179 since `06490a1`, against a budget of 150 throughout).
+- **`#120` now carries this session's findings** — it proposes the cheaper terminal check these
+  three designs were attempts at, so the reasons they broke are recorded there rather than only
+  in this block.
+- `#149`, `#150`, `#145`, `#146`, `#138`, `#139`, `#140`, `#141`, `#142`, `#143` and the rest per
+  `session-start`.
+
+▶ Next: `triage-friction-log` — the inbox has been over budget for four sessions. **Caveat before
+running it unattended:** `notify.user_key` is blank, so the workflow stops at Step 2 by design; the
+in-session-operator path is open regression `#128`, and `#124` records that its default draft PR
+goes to a reviewer that will never read it.
+
+No friction entries were added this session on purpose, and only one of the two lessons is in
+doctrine: the record-length one is in `fallback-review-panel.md`, while *"any rule whose trigger
+the author sets is a control the author can opt out of"* is recorded on `#120` — the tracker, not
+the inbox, because it is the constraint any future attempt at that ticket must satisfy.
+
 ### 2026-07-29 (the fifth sweep, and a claim that was wrong in both directions)
 
 **Theme —** One merge, four panel rounds, seven isolated lenses (two rounds on `#151`, two on the
