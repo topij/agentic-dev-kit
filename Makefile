@@ -30,7 +30,7 @@
 # was caught, because `test_kit_repo_self_check_is_clean` rehashes every
 # kit-owned file and so fails for ANY mutation to one, behavioural coverage or
 # not. A run that leaves it in reports a kill for every mutation to a KIT_OWNED
-# file — the 26 paths in kit-manifest.json, NOT the whole repo: a mutation to
+# file — the 27 paths in kit-manifest.json, NOT the whole repo: a mutation to
 # scripts/tests/, scripts/check_memory_budget.py or init.sh never trips it.
 # One lens once REPORTED 17/17 killed, which was 7 survivors with it excluded.
 # Attested, not measured: the 17 mutants are enumerated nowhere, and

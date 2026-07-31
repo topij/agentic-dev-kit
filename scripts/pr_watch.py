@@ -2185,10 +2185,11 @@ def load_state(pr: int) -> dict:
     timestamp, see :func:`read_pending_since`), ``pending_seen`` — the ``all_seen_keys``
     of the most recently *reported* plain poll, present only between a poll and
     the ``--mark-seen`` that consumes it (see :func:`mark_seen`) — and
-    ``review_receipt``, the current-head independent-review evidence written by
-    :func:`record_review` and read by :func:`build_report`. (:func:`persist_poll`
-    only carries an existing receipt forward, and its own docstring omits the key
-    while calling itself the persistence contract — worth fixing there too.)
+    ``review_receipt`` — independent-review evidence **stamped with the head it
+    was taken at**, written by :func:`record_review` and carried forward by
+    :func:`persist_poll`. Its presence is not evidence for the current head:
+    :func:`build_report` decides that at read time by comparing
+    ``receipt["head"]`` against the polled head, and a push invalidates it.
     """
     path = _seen_path(pr)
     if not path.is_file():
@@ -2201,32 +2202,19 @@ def load_state(pr: int) -> dict:
 
 
 def save_state(pr: int, state: dict) -> None:
-    # Deliberately a truncating write, not `lib/atomic_write.py` — decided on
-    # #174, so this is not rediscovered as an oversight.
+    # Deliberately a truncating write, not `lib/atomic_write.py`. The decision and
+    # its reasoning live on #174 — deliberately there and not restated here,
+    # because five review rounds found a defect in every version of the argument
+    # that was kept at this site.
     #
-    # Losing this file is NOT safe. Two earlier drafts of this comment claimed it
-    # was; the review panel on #189 refuted the second by executing it.
-    # `load_state` returns {} for an empty or partial file, dropping
-    # `head`/`max_total` and disabling the false-settle guard — `settling` True
-    # -> False, `converged` False -> True. The receipt is dropped too, so
-    # `mergeable` blocks; but only until the next `--record-review`, which merges
-    # a receipt back into the emptied file and leaves the guard off. Measured on
-    # one PR with 3 of 12 checks registered: `mergeable` is false with the state
-    # file, still false without it, and TRUE once a receipt is re-recorded over
-    # the emptied one. That is #190. It belongs to the merge gate rather than to
-    # this call — `state/` is gitignored and disposable, so an empty state file
-    # has routes no choice of write can close. `seen` goes too, so every earlier
-    # acknowledgement resurfaces.
-    #
-    # What decides this call is narrower, and it is not the size of the loss:
-    # publishing by rename would add refusals `write_text` does not have —
-    # hardlinked, non-regular, un-carryable ownership, and a non-writable parent
-    # directory. (Not read-only — `write_text` already fails on that.) Nothing
-    # enforces any of those properties between runs, in either direction: the
-    # `mkdir` below tolerates a pre-existing STATE_DIR whose mode it never
-    # checks, and `_seen_path(pr)` outlives the run that created it. A poll that
-    # refuses to record at all is the worse failure, and #190 is where the loss
-    # itself is being addressed.
+    # The one thing worth not re-deriving: losing this file is NOT safe, and two
+    # earlier drafts of this comment claimed it was. `load_state` returns {} for a
+    # missing, empty or corrupt file, which drops `head`/`max_total` and disables
+    # the false-settle guard; a receipt recorded after that makes `mergeable` true
+    # with CI still registering, and `seen` is gone so every acknowledgement
+    # resurfaces. That is #190 — a merge-gate defect, which this call can neither
+    # cause alone nor prevent: `load_state() == {}` is reached by a fresh clone or
+    # a cleared cache with no failed write anywhere.
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     _seen_path(pr).write_text(
         json.dumps(state, indent=1, sort_keys=True), encoding="utf-8"

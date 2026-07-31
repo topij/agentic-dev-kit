@@ -201,16 +201,16 @@ recovery paths were collapsed into one function used by both sites.
 
 - **`#164` and `#162` are CLOSED**, both with the reasoning posted on them rather than a bare state
   change — `#162`'s records that the decision is *normalising* and exactly what would justify
-  reopening it. **`#174` was the successor and is settled on `#189`**: the writes in
+  reopening it. **`#174` is settled by `#189`** (open at the time of writing): the writes in
   `kit_doctor.main`'s `--generate-manifest` branch and in `pr_watch.save_state` stay truncating, now
-  documented at each site. (Cited by function, not by line — `#189` moved both, which is how the
-  stale `:637`/`:2201` here were found.) The reasoning that survived review is **not** the one this
-  bullet used to carry: the refusals it named are partly wrong (`write_text` already fails on a
-  read-only target, and the enumeration omitted the non-writable-parent case, which is the only real
-  capability loss), and the safety argument for `save_state` was refuted by execution — losing that
-  file disables the false-settle guard, and the next `--record-review` re-arms `mergeable` over it.
-  That fail-open is **`#190`**, filed from `#189`'s panel; it belongs to the merge gate, and no
-  choice of write closes it.
+  documented at each site. Cited by function, not by line — `#189` moved both, which is how the
+  stale `:637`/`:2201` this bullet used to carry were found. This bullet's own reason
+  (*"both write machine-regenerated artifacts, so the refuse-on-read-only/hardlink semantics add
+  failure modes with no benefit"*) was partly wrong: `write_text` already fails on a read-only
+  target, so that was never an added refusal. **`#190`** is the larger result — a merge-gate
+  fail-open where a receipt recorded against a lost state file makes `mergeable` true with CI still
+  registering. It came out of `#189`'s panel, no choice of write can close it, and it is worth more
+  than the PR that surfaced it.
 - **The merged tree was reviewed by nothing, and the unreviewed tail is 5 commits, not 2.** Panel
   round 4 saw `e5cb29f` (7 commits back); CodeRabbit's last review was `342f437` (5 back). That tail
   is `+106/-12` and is **not** all test hygiene — `6d7eb28` touches both engine files. The first
