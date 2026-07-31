@@ -14,11 +14,71 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-07-31 — the seventh friction-log sweep merged (`#185`). Reading the tracker
-before drafting was the only step that caught anything, and what it caught was two entries asking
-for work that had already landed.
+Last updated: 2026-07-31 — `#176` merged: prose findings are now disposed of by whether anything
+executes the text, and a record-prose fix round takes one lens, not the panel. The PR itself could
+never use its own exits — every one of its deltas was doctrine.
 
-## Latest session — 2026-07-31 (the seventh sweep, and the only step that caught anything)
+## Latest session — 2026-07-31 (the loop got its exits, reviewed under the rules it replaces)
+
+**Theme —** `#176` merged (`65c9ee4`): a prose finding is disposed of by whether anything
+**executes** the text; a record-prose imprecision below HIGH is **logged** — reply on the PR plus
+a tracker artifact, no commit — instead of fixed; fix rounds batch into one push; re-runs aim at
+the delta since the last receipt's `--head`; a record-prose-only delta takes **one lens**
+(`fallback:delta`) instead of the panel. The review rounds that forged the guards are enumerated
+on `#176` — one disposition comment per round, totals in the squash message — and **the PR could
+never take its own exits**: every delta was executed prose, so every round was a full panel. That
+measures what the exits are for — record-prose PRs like this handoff update, not doctrine PRs.
+
+- **`#176` merged.** `fallback-review-panel.md` (discriminator, logged disposition, delta pass,
+  batching, cockpit-built lens worktrees), `wrap-up.md` (the record-prose authoring checklist this
+  block is written under), `pr-watch.md` and config comments (the three receipt literals). This
+  line is a pointer, not a copy.
+- **The final clause merged reviewed by no lens** — disclosed on the PR, on the operator's call:
+  `#27`'s gap chosen rather than missed, the same choice the block below records for `e5bd82b`,
+  twice in one day.
+- **Cockpit-built lens trees inverted `#75`'s failure mode.** Every lens attestation on `#176`
+  reports the named sha found in the provided tree; the recovery burden `#75` records never
+  fired. Counter-occurrence comment posted on `#75`.
+- **Filed:** `#177` (session records restate doctrine that later changes supersede — also the
+  logged disposition's first artifact) and `#184` (the terminal rounds' below-HIGH remainder,
+  including the message-only-delta gate note from the review bot's second pass).
+
+**Learned**
+
+- **The logged disposition's first live use also bent it, and the next round caught the bend.** A
+  stale restatement in this file's 2026-07-29 block — lens-marked LOW imprecision, record prose —
+  got a reply and `#177` and no commit of its own; but the artifact was first promised to this
+  inbox, a committed file, exactly what the rule forbids, and the round after made the tracker
+  artifact mandatory at disposition time. An honesty model working is indistinguishable from the
+  author happening to be honest; the record of the bend is what makes the difference checkable.
+- **Two of my own checks had the examined-nothing shape, inside the PR that documents that
+  shape.** The keyword scan read the diff but not the commit message committed beside it — two
+  banned adjacencies reached the pushed branch (rewrite declined at the permission gate;
+  disclosed; squash written fresh and scanned). And two comment-then-ack batches piped the poll
+  to `/dev/null` before `--mark-seen`, acknowledging a real bot finding unread — caught only
+  because a later poll's coverage line named a review at a sha no panel round had claimed. Both
+  in the inbox.
+- **A permission denial is a design input, not an obstacle.** Declined force-push and reset left
+  the branch label stranded on a superseded commit; committing detached and pushing
+  `HEAD:<branch>` kept every later fix fast-forward, and the label was deleted after merge.
+
+**Open, and owned by nothing yet**
+
+- **The delta pass has never run.** This wrap-up's PR is its first natural candidate: a
+  record-prose-only fix round here takes one configured lens and the `fallback:delta` receipt,
+  per the doctrine now on `main`.
+- `#177` and `#184` are occurrence collectors, open by design. The first PR to touch the panel
+  doc's stopping section should sweep `#184`'s item on the two surviving absolutes.
+- Inbox length: `check_doc_budget.py` prints the live figure; three entries added below the
+  fresh graduation marker.
+
+▶ Next: **`session-start`** — the block below's starter stands, minus what this session folded
+in: `#176` and `#177` are now in this file, so the sharpest remaining are `#179`/`#180`'s
+beside-or-inside-`#150` call and `#174`'s yes/no on the two truncating writes.
+
+______________________________________________________________________
+
+## Earlier session — 2026-07-31 (the seventh sweep, and the only step that caught anything)
 
 **Theme —** `#185` merged (`e8b145f`), graduating the inbox. The result worth keeping is not the
 sweep's accounting — that lives in the graduation marker — but **which step earned its keep**:
@@ -264,95 +324,6 @@ complete spec and three recorded failures), `#164` remains unfixed and the wrap-
 that code every session, and the cs-toolkit Phase 2 blockers (`#41`/`#37`/`#134`) are untouched.
 `triage-friction-log` is the alternative, and the inbox is further over budget than when the
 previous session chose it.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-30 (one flag, six rounds, and a bug older than the PR)
-
-**Theme —** `#74` shipped. The durable results are two: the review found a **pre-existing
-data-loss bug in the tool that owns this file**, and it measured where six rounds of its own
-effort actually went.
-
-- **`#160` merged (`85cdeb0`).** `archive_plan_sessions.py --target-lines N` sweeps oldest-first
-  until the handoff is at or under a *line* budget, so the remedy `check_doc_budget` names can
-  actually discharge it — `--keep` counts blocks and was a no-op at its default. `budget_line_count`
-  makes both tools measure a line the same way; `check_doc_budget` substitutes `{budget}` so the
-  number lives in one place. **28 new test functions / 31 cases** (`--collect-only`: 56 → 87).
-  Verified in production at this wrap-up: 419 → 355 lines.
-- **`#164` filed — the find of the session, and it is NOT fixed.** `Path.write_text` truncates
-  before writing, so a failed write destroys the document and the handler still prints *"no changes
-  applied"*. Measured on a real full filesystem: a **26,807-byte handoff went to 0 bytes** while the
-  tool reported nothing had happened. Latent in the archive engine all along.
-- **`atomic_write` was attempted for it and REVERTED** — four HIGH regressions, found independently
-  by both lenses: `os.replace` replaces a symlinked doc rather than writing through it, file
-  mode/ownership reset every sweep, a fixed temp name lets concurrent runs publish each other's
-  bytes, and a pre-existing temp symlink becomes an arbitrary-file clobber. All silent, all at
-  exit 0.
-- **The mitigation that shipped instead was itself defective three times, which is the session's own
-  thesis biting the session.** `02c70ac` — `--help` still promised a rollback the first write never
-  gets, a sentence true only while `atomic_write` existed and left standing through the revert.
-  `15c8651` — the check named `<handoff>`, but under ENOSPC the *history* fails and the handoff
-  rolls back clean, so the instruction **green-lit the damage it was written to catch** (measured:
-  an archive committed at 12 of 39 sessions). `37aebd9` — the recovery said
-  `git checkout -- <handoff>`, which discards this session's own block.
-- **Also filed:** `#161` (LOW imprecisions; **two mutants still survive** — the megaline trim and
-  `--target-lines < 1`), `#162` (the sweep is not byte-preserving), `#163` (where the review cycles
-  went).
-
-**Learned**
-
-- **A fix stops at the first site**, and it is not a prose problem. The sharpest was
-  `(OSError, UnicodeDecodeError)` applied to one of two exception classes *on the same line*,
-  leaving exit 1 producible against a contract admitting only 0/2/3 — with the correct fix already
-  sitting in `check_memory_budget.py:192-197` under a comment giving the reason. `#163` enumerates
-  five occurrences; the PR's 13 commits carry more, **twice inside a fix for this very pattern**.
-  Counts on `#163` predate rounds 5–6 and were not refreshed — treat the issue as the record and
-  this line as a pointer.
-- **A fix round that adds a new mechanism is where the next HIGH comes from.** Three times across
-  seven review passes: round 2's `.format()` template → round 3's crash; round 5's `atomic_write` →
-  round 6's four HIGHs → reverted; round 6's mitigation paragraph → the confirmation pass. The
-  doctrine already says a new mechanism gets filed however squarely a finding prompted it; this is
-  the measured version of why.
-- **A hypothesis was stated as falsifiable and refuted within one round.** Apparent lens
-  specialisation (adversarial finds mechanism, correctness finds prose) was coincidence — round 5's
-  correctness lens led with a mechanism defect. On `#163` rather than dropped, because doctrine
-  built on it would have rested on nothing.
-- **Execution found the bugs that mattered; reading found more of them.** The filled ramdisk,
-  `RLIMIT_FSIZE` and a planted symlink produced `#164` and the `atomic_write` HIGHs — nothing else
-  would have. But the one-of-two-sites class, which is most of the session's fixes, was found by
-  reading. The fuzz harnesses lived in session scratch and are gone: those runs are attestations,
-  not reproducible evidence.
-
-**Open, and owned by nothing yet**
-
-- **This handoff block was itself panel-reviewed, and both lenses found it flattering.** It
-  originally described the fallback mitigation in one sentence while three commits fixed defects in
-  it, carried a stale test count, and asserted `#163` figures that contradicted `#163`. Corrected
-  here. **The merged tree of `#160` was never seen by a lens** — the final panel reviewed `84dc129`,
-  three doc/test commits followed, and the PR's review record says so explicitly (`#27`).
-- **`#42` reproduced at merge time** on `#160`: posting the review record un-converged it
-  (`review_evidence.valid: true`, blockers empty, `mergeable: false`) and needed `--mark-seen`.
-  Occurrence data on the issue, not the inbox.
-- **`#73` gained a new instance from this session's sweep** — the moved block says *"see the latest
-  session's open list"* about `#132`, which resolves to nothing inside the history file. Not
-  repaired here; recorded so the count is honest.
-- The inbox is **168/150** and unchanged: today's friction went to the tracker (`#161`–`#164`),
-  the routing Principle #2 prescribes. The guard-chaining rule (`check && act`) is the one entry
-  that lives only there.
-
-▶ Next: **`#163` Sink 1 + `#75`** — every lens run this session (18 of 18) sat on the base commit
-with an empty `origin/main...HEAD` diff and re-derived a workaround. But the cheap fix is not the
-`git archive` recipe: worktrees share the object store, so `git diff origin/main...<sha>` and
-`git show <sha>:<path>` work directly, and the archive recipe was *refused by the sandbox* for one
-lens. So: teach the launch prompt to diff against the **named sha** rather than `HEAD` (`#163`
-Sink 1), and invert contract item 7 as `#75` actually asks. Then `#124`.
-
-**Then the cs-toolkit thread, and note the vocabulary:** Phase 2's blockers remain
-`#41`/`#37`/`#134` as the live blocks below state — all three still open, nothing discharged them.
-What this session added is the argument that `#47` is their common cause, and that a prerequisite
-slice (`#112`, `#33`, `#133`, `#135`, `#107` — the mutation/drift gate) should land first so the
-verification everything after it relies on is trustworthy. That slice is a proposal, not an
-established gate; `#164` also remains unfixed and the wrap-up sweep touches that code every session.
 
 ______________________________________________________________________
 

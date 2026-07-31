@@ -147,3 +147,36 @@ The swept entries are verbatim in the archive under `Graduated 2026-07-31`.
   `/home/user/agentic-dev-kit` — once with this sweep's two doc edits and once with them stashed —
   and getting the identical three failures and `589 passed` both times; `id -u` reports `0`. Noted
   during the 2026-07-31 sweep and deliberately left below the marker, so the next pass proposes it.
+
+## 2026-07-31 (post-merge, review-loop doctrine)
+
+- **A comment-then-ack chain piped the poll to `/dev/null`, and a bot finding was acknowledged
+  unread.** Twice in one session: `pr_watch.py <PR> --json > /dev/null` chained into `--mark-seen`
+  after posting a round comment. The second time, the discarded poll carried the review bot's pass
+  over an intermediate head with one actionable finding; the ack buried it. Caught before merge
+  only because a later read poll's `coverage` line named a review at a sha no panel round had
+  claimed, prompting a by-hand fetch of the review. `pr-watch.md` step 6 already commands "always
+  poll-and-read first" — the violation was convenience chaining, so the documented rule did not
+  hold where it mattered. **M** — proposed fix: `--mark-seen` should print an excerpt of every key
+  it promotes, making the ack surface itself a read; until then, never redirect a poll whose
+  pending set a mark-seen will promote. Routes to
+  [#180](https://github.com/topij/agentic-dev-kit/issues/180) as a sharpening, not to `#150`,
+  which the latest sweep deliberately kept narrow: the ack *was* chained to the poll, and
+  chaining gates on exit status — a check whose signal lives in its output, not its exit code,
+  is unguarded by chaining unless the output reaches a reader.
+- **The keyword-adjacency scan covered the diff and not the commit message committed beside it.**
+  Two banned constructions (described, not quoted, per this file's own precedent) reached the
+  pushed branch inside a fix-round message; the amend was prepared and scanned clean, the
+  force-push was declined at the operator's permission gate, so the branch message stands,
+  disclosed on the PR, and the squash message was authored fresh and scanned. **M** — the ground
+  rule says any surface; the scan's surface list was one short, which is
+  [#179](https://github.com/topij/agentic-dev-kit/issues/179)'s shape: a gate examining the wrong
+  set. Proposed fix, adopted mid-session and held after: write the message to a file, scan the
+  file, `git commit -F` it — and treat the surface list as diff, commit message, PR body, and
+  squash subject plus body. Occurrence data for
+  [#71](https://github.com/topij/agentic-dev-kit/issues/71).
+- **`gh pr merge --delete-branch` from a detached HEAD merges server-side, then exits nonzero.**
+  The failure ("could not determine current branch") is the local branch-switch step, after the
+  merge already succeeded; a caller reading exit ≠ 0 as merge-failed reports a false failure or
+  retries. The retry printing "already merged" is what disambiguated it here. **L** — proposed
+  fix: when detached, merge without `--delete-branch` and delete branches separately.
