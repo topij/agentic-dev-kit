@@ -133,6 +133,48 @@ from them would have surfaced it.
 
 The swept entries are verbatim in the archive under `Graduated 2026-07-31`.
 
+## 2026-08-01
+
+- **One `unavailable_markers` list serves two surfaces, so a check-surface phrase matches comment
+  bodies.** A PR comment of mine *describing* CodeRabbit's rate-limiting produced an `unavailable`
+  entry with `bot: None` attributed to `@topij`. **The engine is not confused** — `summarize_review_bots`'
+  docstring states this case exactly (`bot` is `None` when a marker matches but the author matches no
+  configured bot, "reported (the operator should see it) and attributed to nobody, so it can never
+  suppress anything"), and an earlier draft of this entry called that a defect and proposed deleting
+  the property the docstring names as its rationale. **L, not M**, and the real observation is
+  narrower: the phrase that fired is `"review rate limited"`, which `config/dev-model.yaml` annotates
+  as *the status-check wording* of the comment-surface marker. It matched a comment body only because
+  both surfaces read one list. Proposed: let a marker declare which surface it belongs to, so a
+  check-phrase cannot match a comment. Filed as a new proposal — **not** occurrence data for
+  [#23](https://github.com/topij/agentic-dev-kit/issues/23), which is closed and is the mirror-image
+  defect (a check-surface outage that was *not* being read).
+- **The closing-keyword scan ran as a separate command before the publish, so a printed violation
+  did not stop it.** The comment posted with a banned construction in it; nothing was closed
+  (GitHub auto-closes from PR bodies and commits, not issue comments), and the re-post gated on the
+  scan's exit status then began refusing publishes that carried the same shape. **M** — this is
+  [#180](https://github.com/topij/agentic-dev-kit/issues/180) occurring in the session after it was
+  filed, by the agent that filed it, so the entry is occurrence data rather than a new proposal. The
+  fix that worked: `scan && publish` as one chained command, never two sequenced ones. Also
+  occurrence data for [#71](https://github.com/topij/agentic-dev-kit/issues/71), whose guard would
+  have caught it at authoring time.
+- **`git add -A` in a fix round committed a `.DS_Store`, and no gate would have caught it.** Not in
+  `.gitignore`, not on the protected branch, invisible to CI and to the drift gate. Found only
+  because resolving the review panel's revision meant diffing against a freshly fetched base and
+  reading the diffstat. **L** — fixed in-session by adding the entry to `.gitignore`, so the
+  specific recurrence is closed; the general shape is that a fix round's `git add -A` stages
+  whatever the working tree happens to hold, and the panel's revision-resolution step was the only
+  thing that looked.
+- **A one-lens receipt at the merging head is honest but the loop has no cheaper way to earn a
+  two-lens one.** The full panel's last head was two fix rounds behind the merge, and each fix round
+  invalidates the receipt, so converging fully would have meant a panel per round indefinitely. The
+  merge disclosed the gap and recorded `fallback:delta` rather than stamping `fallback:panel`.
+  **M** — the doctrine's stopping criterion is blast radius rather than round count, but nothing in
+  `pr-watch` or the panel doc tells an agent how to *record* a stop taken on blast-radius grounds;
+  the receipt vocabulary only describes what ran, not why stopping was proportionate. Proposed:
+  a receipt field, or a documented disclosure shape, for "stopped on blast radius" — currently it
+  lives only in a PR comment an autonomous merge path never reads
+  ([#32](https://github.com/topij/agentic-dev-kit/issues/32)'s territory).
+
 ## 2026-07-31 (post-sweep)
 
 - **`make test` fails three tests as root, and the failure reads as a regression rather than as an
