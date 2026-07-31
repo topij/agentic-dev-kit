@@ -2182,9 +2182,14 @@ def load_state(pr: int) -> dict:
     Keys: ``seen`` (acked comment keys), ``head`` / ``max_total`` (false-settle
     guard, see :func:`build_report`), ``bot_pending_since`` (the head-scoped
     fallback grace clock for a review bot whose check carries no usable
-    timestamp, see :func:`read_pending_since`), and ``pending_seen`` — the ``all_seen_keys``
+    timestamp, see :func:`read_pending_since`), ``pending_seen`` — the ``all_seen_keys``
     of the most recently *reported* plain poll, present only between a poll and
-    the ``--mark-seen`` that consumes it (see :func:`mark_seen`).
+    the ``--mark-seen`` that consumes it (see :func:`mark_seen`) — and
+    ``review_receipt``, the current-head independent-review evidence written by
+    ``--record-review`` and consumed by the merge gate (see :func:`persist_poll`).
+    That last one was missing from this list until #189, while `save_state`'s
+    own comment reasoned about it; a key the docstring omits reads as a key the
+    file does not carry.
     """
     path = _seen_path(pr)
     if not path.is_file():
@@ -2198,29 +2203,28 @@ def load_state(pr: int) -> dict:
 
 def save_state(pr: int, state: dict) -> None:
     # Deliberately a truncating write, not `lib/atomic_write.py` — decided on
-    # #174, which exists so this is not rediscovered as an oversight.
+    # #174, so this is not rediscovered as an oversight.
     #
-    # Losing this file is NOT free, and the first draft of that decision said it
-    # was. `write_text` truncates before its first byte, and `load_state` returns
-    # {} for an empty or partial file, which takes `head`/`max_total` with it and
-    # so disables the false-settle guard: measured through `main`, `settling`
-    # goes True -> False and `converged` False -> True.
+    # Losing this file is NOT safe. Two earlier drafts of this comment claimed it
+    # was; the review panel on #189 refuted the second by executing it.
+    # `load_state` returns {} for an empty or partial file, dropping
+    # `head`/`max_total` and disabling the false-settle guard — `settling` True
+    # -> False, `converged` False -> True. The receipt is dropped too, so
+    # `mergeable` blocks; but only until the next `--record-review`, which merges
+    # a receipt back into the emptied file and leaves the guard off. Measured on
+    # one PR with 3 of 12 checks registered: `mergeable` false with the state
+    # file, TRUE without it. That is #190, and it belongs to the merge gate
+    # rather than to this call — `state/` is gitignored and disposable, so an
+    # empty state file has routes no choice of write can close.
     #
-    # It is safe anyway, for a reason worth stating rather than re-deriving: the
-    # review receipt lives in this same file and is lost with it, so `mergeable`
-    # gains the missing-review-evidence blocker in the same breath — and
-    # `dev_session.sh` gates a merge on `mergeable`, never on `converged` (its
-    # own comment says so). Every key here fails toward demanding a fresh review.
-    #
-    # Publishing by rename would in exchange add refusals (read-only, hardlinked,
-    # non-regular, un-carryable ownership). An earlier draft of this comment said
-    # not one of them could fire, on the grounds that the tool creates this file
-    # itself. That is an assumed invariant, not an enforced one: the `mkdir` below
-    # creates the DIRECTORY, while `_seen_path(pr)` persists across runs, so a
-    # state file that has since been hardlinked or made read-only would make a
-    # poll REFUSE to record state. That trade points the same way as the rest of
-    # this comment — a refusal here is a new failure mode on a cache whose loss
-    # already fails closed.
+    # What decides this call is narrower. The loss costs a re-poll, and
+    # publishing by rename would add refusals `write_text` does not have:
+    # hardlinked, non-regular, un-carryable ownership, and a non-writable parent
+    # directory. (Not read-only — `write_text` already fails on that.) Nothing
+    # enforces any of those properties between runs, in either direction: the
+    # `mkdir` below tolerates a pre-existing STATE_DIR whose mode it never
+    # checks, and `_seen_path(pr)` outlives the run that created it. So the trade
+    # is a cheap re-poll against a poll that cannot record state at all.
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     _seen_path(pr).write_text(
         json.dumps(state, indent=1, sort_keys=True), encoding="utf-8"

@@ -201,13 +201,16 @@ recovery paths were collapsed into one function used by both sites.
 
 - **`#164` and `#162` are CLOSED**, both with the reasoning posted on them rather than a bare state
   change — `#162`'s records that the decision is *normalising* and exactly what would justify
-  reopening it. **`#174` is the successor**: `kit_doctor.py:637` and `pr_watch.py:2201` still
-  truncate on write. `#164`'s scope note asked they be considered together; they were, and **neither
-  was converted** (both write machine-regenerated artifacts, so the refuse-on-read-only/hardlink
-  semantics add failure modes with no benefit). `#174` carries that reasoning *and the objection to
-  it* — the decision lived in a PR body, so no review lens ever examined it, and `atomic_write` has
-  one consumer, which makes those two sites the natural test of whether its refusals are
-  proportionate.
+  reopening it. **`#174` was the successor and is settled on `#189`**: the writes in
+  `kit_doctor.main`'s `--generate-manifest` branch and in `pr_watch.save_state` stay truncating, now
+  documented at each site. (Cited by function, not by line — `#189` moved both, which is how the
+  stale `:637`/`:2201` here were found.) The reasoning that survived review is **not** the one this
+  bullet used to carry: the refusals it named are partly wrong (`write_text` already fails on a
+  read-only target, and the enumeration omitted the non-writable-parent case, which is the only real
+  capability loss), and the safety argument for `save_state` was refuted by execution — losing that
+  file disables the false-settle guard, and the next `--record-review` re-arms `mergeable` over it.
+  That fail-open is **`#190`**, filed from `#189`'s panel; it belongs to the merge gate, and no
+  choice of write closes it.
 - **The merged tree was reviewed by nothing, and the unreviewed tail is 5 commits, not 2.** Panel
   round 4 saw `e5cb29f` (7 commits back); CodeRabbit's last review was `342f437` (5 back). That tail
   is `+106/-12` and is **not** all test hygiene — `6d7eb28` touches both engine files. The first

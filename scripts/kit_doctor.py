@@ -635,27 +635,29 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         manifest = generate_manifest(root, version)
         # Deliberately a truncating write, not `lib/atomic_write.py` — decided on
-        # #174, which exists so this is not rediscovered as an oversight.
+        # #174, so this is not rediscovered as an oversight.
+        #
         # `write_text` truncates before its first byte, the hazard #164 was filed
-        # for. What made #164 destructive was that the failure was SILENT: it was
-        # caught and reported as "no changes applied". None of that holds here.
-        # This call is unwrapped — `main` catches config errors and the manifest
-        # *read* below, not this — so a failure tracebacks, and the "wrote ..."
-        # line prints only after it returns.
+        # for. #164 was not SILENT — it printed `no changes applied` at exit 2 —
+        # it was FALSE. So the test for a site like this one is whether a failure
+        # can claim no damage, not whether it is loud; #164 was loud. Here the
+        # write is unwrapped (`main` catches config errors and the manifest
+        # *read*, not this) and the "wrote ..." line prints only after it
+        # returns, so no such claim is reachable. A SIGKILL mid-write still
+        # truncates with no message at all: a real gap, costing a re-run of a
+        # release-time command rather than a document.
         #
-        # At the DEFAULT path the loss is cheap too: `kit-manifest.json` is
-        # tracked, so a corrupt one is dirty in `git status` and `git checkout`
-        # restores it. That does NOT generalise, and an earlier draft of this
-        # comment claimed it unqualified — `--manifest` (`:595`) takes any path,
-        # and a target outside the repo has no such recovery. What carries the
-        # decision is that the failure is LOUD either way; the tracked-file
-        # recovery is a bonus only the default enjoys.
+        # Recovery is cheap at the DEFAULT path only: `kit-manifest.json` is
+        # tracked. `--manifest` (`:595`) takes any path, and one outside the repo
+        # has none.
         #
-        # Publishing by rename would in exchange add refusals (read-only,
-        # hardlinked, non-regular, un-carryable ownership). None is reachable
-        # for the default manifest in a writable checkout — and for an arbitrary
-        # `--manifest` target they are new ways to fail a release-time command
-        # that today simply writes.
+        # Converting would add refusals `write_text` does not have: hardlinked,
+        # non-regular, un-carryable ownership, and a non-writable parent
+        # directory — that last the one real capability loss, since `write_text`
+        # succeeds there. A read-only target is NOT among them; `write_text`
+        # already fails on one. None is reachable for the default manifest in a
+        # writable checkout, though nothing enforces `nlink == 1` on a tracked
+        # file either.
         manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         holes = [p for p, e in manifest["files"].items() if e["sha256"] is None]
         print(f"wrote {manifest_path} ({len(manifest['files'])} files, kit_version={version})")
