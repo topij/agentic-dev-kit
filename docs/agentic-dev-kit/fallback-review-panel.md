@@ -349,8 +349,12 @@ Classify the **claim, not the file** — the handoff carries both kinds in
 adjacent sentences: its `▶ Next:` line is executed by the next session; the
 round count beside it is record. The buried class-by-file-type design below
 died on exactly that boundary. Whether anything reads a string is a fact about
-the repo, checkable by grep — not a bound the author sets, which is the
-property all three buried designs lacked. The author still *applies* the
+the repo and its consumers, not a bound the author sets — which is the property
+all three buried designs lacked. Establish it fail-closed: a repository search
+finds consumers, but a missing match does not prove there are none (a runtime
+workflow, a hosting integration, a generated artifact, an operator acting on
+what they read) — **when in doubt, the text is executed prose**, the same
+default the two classes above already use. The author still *applies* the
 discriminator, so each logged disposition is stated in the PR, where a reviewer
 can dispute the classification. Lens prompts are untouched by all of this; the
 next paragraph stands.
@@ -380,9 +384,9 @@ addresses only what the review found") — a new mechanism gets filed, however
 squarely a finding prompted it.
 
 **Batch the fix round into one commit, and aim the re-run at the delta.** Each
-push invalidates the current-head receipt, and with a throttled bot each new
-head costs a full panel — a fix round landed as four commits buys four times
-the review its content needs. Land the round's accepted fixes together, then
+push invalidates the current-head receipt, so each new head costs another
+required review — a fix round landed as four commits buys four times the
+review its content needs. Land the round's accepted fixes together, then
 hand the next round `git diff <last-reviewed-sha>...<head>` as its highest-risk
 surface with the full diff still in scope. Telling a lens what a prior round
 verified is the anchoring item 2 forbids; naming which lines are new since the
@@ -393,10 +397,11 @@ trialed on `#160` from round 4).
 that touched executable code or executed prose gets the full re-run, unchanged.
 A fix round whose delta is record prose only — deletions, trims — has nothing
 in it that can act, and the proportionate re-check is **one lens over that
-delta**: isolated, fresh-context, recorded honestly as a single-lens receipt
-(`--lenses` naming the one that ran, never
-`review.fallback_panel.receipt_source`), with the delta's classification stated
-in the PR where a reviewer can dispute it. A logged disposition that produced
+delta**: isolated, fresh-context, recorded honestly as a single-lens receipt —
+source `fallback:<runtime>` as in Degraded mode, never
+`review.fallback_panel.receipt_source`, with `--lenses` naming the one that ran
+and `--head` the polled sha — with the delta's classification stated in the PR
+where a reviewer can dispute it. A logged disposition that produced
 no commit needs less still: there is no new head, so there is nothing to
 re-review. This is the second sanctioned single-lens pass, beside Degraded
 mode — conditioned on what the delta contains, which is diff-inspectable, not
