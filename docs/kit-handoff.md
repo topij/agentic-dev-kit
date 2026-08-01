@@ -14,12 +14,13 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-01 — two cs-toolkit Phase 2 blockers cleared (`#134` cause 1, `#37`/`#146`).
+Last updated: 2026-08-01 — two cs-toolkit Phase 2 blocker fixes merged (`#134` cause 1,
+`#37`/`#146`); neither issue is fully settled — cause 2 and the `#146` pairing are still open.
 What outlives them is a measurement about review, not about either fix: the panel found nothing in
 either shipped change and everything in the guards and claims around them, and a guard that could
 not converge was reverted rather than patched again.
 
-## Latest session — 2026-08-01 (two blockers merged, and a guard withdrawn on the evidence)
+## Latest session — 2026-08-01 (two blocker fixes merged, and a guard withdrawn on the evidence)
 
 **Theme —** `#134` cause 1 and `#37`/`#146` merged (`8edb4b6`, `82ef651`). Neither shipped change
 drew a single review finding. Every finding across both PRs was in a **guard or a claim** built
