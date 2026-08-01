@@ -78,7 +78,13 @@ def test_repo_root_is_found_at_any_engine_depth(tmp_path: Path, engines: str) ->
     assert find_repo_root(engine_dir(module)) == tmp_path
 
 
-def test_the_precondition_helper_detects_an_ancestor_marker(tmp_path: Path) -> None:
+# Both positions the guard walks, so no term of `(start, *start.parents)` is
+# left to a later "tidy-up". Parametrized rather than added case-by-case
+# because rounds 4 and 5 each pinned ONE of these two and shipped the other
+# unpinned — an unlisted position is what the pattern keeps exploiting, and a
+# two-element walk has exactly two.
+@pytest.mark.parametrize("marker_at_start", [True, False], ids=["at-start", "at-ancestor"])
+def test_the_precondition_helper_detects_a_marker(tmp_path: Path, marker_at_start: bool) -> None:
     """The guard is pinned too, because the guard was the fourth unpinned thing.
 
     `_require_no_ancestor_marker` fires only in an environment the suite does
@@ -89,13 +95,19 @@ def test_the_precondition_helper_detects_an_ancestor_marker(tmp_path: Path) -> N
     and silence here is indistinguishable from the environment simply being
     fine, which is the whole failure it was written to end.
 
-    Found by the adversarial panel lens, making the same catch for the fourth
-    consecutive round: the remediation reproduced the defect it remediated.
+    The name says "ancestor" and the walk is inclusive of `start`, which is
+    correct rather than sloppy: `find_repo_root` would return `start` itself
+    from a marker there, so a guard that skipped it would wave through the one
+    case where the fallback under test is least reachable.
+
+    Found by the adversarial panel lens on four consecutive rounds — each time
+    the remediation reproduced the defect it remediated. The `at-start`
+    parameter is round 5's catch; `at-ancestor` was round 4's.
     """
     root = tmp_path / "checkout"
     engines = root / "scripts"
     engines.mkdir(parents=True)
-    (root / ".git").mkdir()
+    ((engines if marker_at_start else root) / ".git").mkdir()
 
     with pytest.raises(AssertionError, match="outside any git checkout"):
         _require_no_ancestor_marker(engines)
