@@ -230,7 +230,7 @@ def test_kit_repo_self_check_is_clean():
     Marked `driftcheck` because this test compares BYTES, not behaviour: any
     edit to a kit-owned file fails it, including a deliberate mutation. Left in
     a mutation run it reports a kill for every mutation to a KIT_OWNED file — the
-    27 paths in kit-manifest.json, not the whole repo — while nothing behavioural
+    30 paths in kit-manifest.json, not the whole repo — while nothing behavioural
     caught anything (#33 — one lens once reported 17/17 killed, and 7 had
     survived when it was excluded; attested by that lens, not measured here).
     Regenerating the manifest instead makes it
@@ -638,16 +638,38 @@ def _kit_owned_paths() -> set[str]:
     return {rel for rel, _role in kit_doctor.KIT_OWNED}
 
 
-_MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+# Every syntax that can carry a link out of a doc, because a scanner that knows
+# only one of them under-reports silently. An earlier version matched inline
+# links alone; a panel lens injected a dangling reference-style link, a dangling
+# `<a href>`, and an inline link whose TEXT contained brackets, and all three
+# passed. None of those forms is in the docs today — the defect was the
+# docstring claiming general coverage the implementation did not have.
+#
+# The inline pattern anchors on `](` rather than `[text](`, so bracketed link
+# text no longer defeats it.
+_LINK_PATTERNS = (
+    re.compile(r"\]\(([^)]+)\)"),  # inline, incl. bracketed link text
+    re.compile(r"(?m)^ {0,3}\[[^\]]+\]:[ \t]*(\S+)"),  # reference definition
+    re.compile(r"""href=["']([^"']+)["']"""),  # inline HTML
+)
+
+# Directories the kit SHIPS. A link from one tracked doc into any of these is
+# the #146 pairing, not just a link within `docs/agentic-dev-kit/` — templates
+# are `/upgrade`-refreshed too, and a lens reproduced the identical defect
+# through one. Anything outside these (README.md, docs/parallel-howto.md) is
+# repo-local, never installed, and must NOT be required to be tracked.
+_KIT_SHIPPED_TREES = ("docs/agentic-dev-kit/", "docs/templates/", "scripts/")
 
 
 def _relative_links(text: str):
-    """Relative markdown link targets, anchors and query fragments stripped."""
-    for target in _MD_LINK.findall(text):
-        target = target.split("#", 1)[0].split("?", 1)[0].strip()
-        if not target or "://" in target or target.startswith(("mailto:", "/")):
-            continue
-        yield target
+    """Relative link targets in any supported syntax, fragments stripped."""
+    for pattern in _LINK_PATTERNS:
+        for target in pattern.findall(text):
+            target = target.split("#", 1)[0].split("?", 1)[0].strip()
+            target = target.strip("<>").strip()
+            if not target or "://" in target or target.startswith(("mailto:", "/")):
+                continue
+            yield target
 
 
 def test_every_link_out_of_a_kit_owned_doc_resolves(kit_repo_root):
@@ -695,9 +717,12 @@ def test_a_kit_owned_doc_never_links_to_an_untracked_kit_doc(kit_repo_root):
     asymmetry that produced three dangling links on a real upgrade while the
     doctor reported a clean install.
 
-    Scoped to `docs/agentic-dev-kit/`: a link out to an adopter-owned or
-    repo-local file (`docs/parallel-howto.md`, `README.md`) is not something
-    `/upgrade` ships, so requiring those to be tracked would be wrong.
+    Scoped to the trees the kit SHIPS (`_KIT_SHIPPED_TREES`), not to
+    `docs/agentic-dev-kit/` alone. An earlier version checked only the latter,
+    and a panel lens reproduced the identical defect through `docs/templates/`
+    — also `/upgrade`-refreshed — while this test passed. A link out to a
+    repo-local file (`README.md`, `docs/parallel-howto.md`) is never installed,
+    so requiring those to be tracked would be wrong.
     """
     owned = _kit_owned_paths()
     untracked = []
@@ -711,7 +736,7 @@ def test_a_kit_owned_doc_never_links_to_an_untracked_kit_doc(kit_repo_root):
                 target_rel = resolved.relative_to(kit_repo_root).as_posix()
             except ValueError:
                 continue  # escapes the repo; the resolving test owns that case
-            if target_rel.startswith("docs/agentic-dev-kit/") and target_rel not in owned:
+            if target_rel.startswith(_KIT_SHIPPED_TREES) and target_rel not in owned:
                 untracked.append(f"{rel} -> {target_rel}")
     assert not untracked, (
         "kit-owned docs link to UNTRACKED kit docs — an upgrade would install "
