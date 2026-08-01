@@ -91,12 +91,35 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/lib/state_paths/resolver.py", "engine"),
     ("scripts/lib/state_paths/paths.py", "engine"),
     ("scripts/lib/state_paths/repo_root.py", "engine"),
+    # Shipped, imports kitconfig, and was untracked until #37 — so an upgrade
+    # refreshed every engine around it and left this one at whatever version
+    # the adopter first installed, while reporting `0 differ, 0 unknown`.
+    ("scripts/check_memory_budget.py", "engine"),
     ("scripts/hooks/pre-push", "hook"),
+    # Same omission as check_memory_budget.py, and the more consequential half:
+    # this hook reads `review.fallback_panel.lens_compute` to render the
+    # panel reminder, so an adopter whose copy predates that key gets a
+    # reminder naming compute the kit no longer prescribes — silently, because
+    # an untracked file cannot differ.
+    ("scripts/hooks/pr_followup_hook.py", "hook"),
     # shared workflow definitions
     ("docs/agentic-dev-kit/workflows/session-start.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/wrap-up.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/pr-watch.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/parallel.md", "workflow"),
+    # Tracked for exactly the reason fallback-review-panel.md is (see below):
+    # parallel.md is manifest-owned and /upgrade-refreshed, and links here
+    # THREE times — once to say the lane-contract preamble now lives in this
+    # file. Untracked, an upgrade installed those links and not their target,
+    # and reported a clean bill of health. That is #146, and it is the concrete
+    # occurrence behind #37: the untracked file was the target of a link from a
+    # tracked one, so refreshing the tracked file is what created the dangling
+    # reference. Tracking this file closes that instance and NOTHING MORE: no
+    # test detects the same pairing for the next doc, so a new link from a
+    # tracked file to an untracked one reproduces #146 exactly. A guard for it
+    # was built here and reverted — see #216 for why and for the design. Do not
+    # read this entry as the class being handled.
+    ("docs/agentic-dev-kit/workflows/parallel-headless.md", "workflow"),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
     # /upgrade — links to it from rules 2 and 3. An untracked target means an
