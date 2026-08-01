@@ -198,9 +198,13 @@ def test_a_lens_outside_the_configured_roster_is_refused(repo):
 
 
 def test_a_head_that_is_not_a_commit_is_refused(repo):
+    """Asserting only `returncode == 2` pinned nothing: with `_require_commit`'s body
+    replaced by a passthrough, the refusal still arrived — from the branch-tip check,
+    for an unrelated reason. The message is what discriminates."""
     base, _ = _revs(repo)
     out = _run(repo, "--lens", "adversarial", "--head", "deadbeefdeadbeef", "--base", base)
     assert out.returncode == 2
+    assert "is not a commit in this repo" in out.stderr
 
 
 # --- the script's one claim about itself ----------------------------------------
@@ -500,3 +504,76 @@ def test_an_empty_base_override_is_refused_not_silently_remote_resolved(repo):
     out = _run(repo, "--lens", "adversarial", "--head", head, "--base", "", "--branch", "b")
     assert out.returncode == 2
     assert "empty" in out.stderr
+
+
+# --- round 3: the class, not three more instances -------------------------------
+
+
+@pytest.mark.parametrize(
+    "flag", ["--branch", "--base", "--base-branch", "--scratch", "--carry-forward", "--verify-command"]
+)
+def test_every_optional_override_refuses_an_empty_value(repo, flag):
+    """Three rounds each found this in a DIFFERENT flag, because each was fixed as
+    an instance. `--base-branch ""` silently fell back to the config default while
+    the prompt still said the base was resolved from the remote.
+    """
+    base, head = _revs(repo)
+    args = ["--lens", "adversarial", "--head", head, "--base", base, "--branch", "b"]
+    # Replace the flag under test with an empty value (appending is fine for the
+    # ones not already present).
+    if flag in args:
+        args[args.index(flag) + 1] = ""
+    else:
+        args += [flag, ""]
+    out = _run(repo, *args)
+    assert out.returncode == 2, f"{flag} with an empty value was accepted: {out.stdout[:200]}"
+    assert flag in out.stderr
+
+
+def test_a_local_path_remote_is_not_rendered_as_an_org_repo_slug():
+    """`file:///Users/topi/Coding/kit.git` split to `Users/topi/Coding/kit`, which
+    reads exactly like a real org/repo. This kit's own tests set a local origin."""
+    pp = _load()
+    for url in (
+        "file:///Users/topi/Coding/agentic-dev-kit.git",
+        "/Users/topi/Coding/local-clone.git",
+        "./relative-clone",
+    ):
+        assert pp._repo_slug(url) == url, f"{url} rendered as a plausible org/repo"
+    assert pp._repo_slug("https://github.com/o/r.git") == "o/r"
+
+
+def test_an_overridden_branch_is_marked_as_asserted_not_verified(repo):
+    """Every neighbouring fact in the prompt is git-verified. An overridden branch
+    is not, and rendering it unqualified gave an assertion a measurement's weight.
+    `--base`'s override already carried such a caveat; `--branch`'s did not."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "asserted/x")
+    assert out.returncode == 0, out.stderr
+    assert "not verified against this checkout" in out.stdout
+
+    ambient = _run(repo, "--lens", "adversarial", "--head", head, "--base", base)
+    assert ambient.returncode == 0, ambient.stderr
+    assert "not verified against this checkout" not in ambient.stdout
+
+
+def test_an_abbreviated_head_is_normalised_to_the_full_sha(repo):
+    """`_require_commit`'s real job is normalisation, not just refusal.
+
+    Unpinned, a future edit could render a moving branch name where the prompt
+    promises a pinned sha — which **Right revision** calls reason enough on its own.
+    """
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head[:8], "--base", base, "--branch", "b")
+    assert out.returncode == 0, out.stderr
+    assert f"`{head}`" in out.stdout, "abbreviated head was not expanded to the full sha"
+    assert f"`{head[:8]}`" not in out.stdout
+
+
+def test_a_branch_name_passed_as_head_is_normalised_to_a_sha(repo):
+    """A branch moves; a sha does not. The prompt must never carry the name."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", "main", "--base", base, "--branch", "b")
+    assert out.returncode == 0, out.stderr
+    assert f"`{head}`" in out.stdout
+    assert "**Head sha under review:** `main`" not in out.stdout

@@ -172,18 +172,16 @@ def resolve_branch(root: Path, override: str | None, head: str) -> str:
     else is a guess, so it asks for ``--branch`` instead of guessing.
     """
     if override is not None:
-        if not override.strip():
-            raise PromptError("--branch was passed but empty; name the branch or omit the flag")
         # The escape hatch must not admit the value it exists to refuse. git forbids a
         # branch literally named HEAD, so nothing valid is rejected here — and without
         # this, `--branch HEAD` reproduces the exact lie the ambient path refuses.
-        if override.strip() == "HEAD":
+        if override == "HEAD":
             raise PromptError(
                 "--branch HEAD names a placeholder, not a branch, and reproduces exactly "
                 "the render this function refuses on the ambient path. git does not allow "
                 "a branch by that name; pass the real one."
             )
-        return override.strip()
+        return override
     name = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
     if name == "HEAD":
         raise PromptError(
@@ -204,6 +202,26 @@ def resolve_branch(root: Path, override: str | None, head: str) -> str:
     return name
 
 
+def _override(flag: str, value: str | None) -> str | None:
+    """Validate one optional string override: passed-but-empty is an error.
+
+    Every optional flag here goes through this, and that is the point. Three
+    successive review rounds each found the same defect in a *different* flag,
+    because each was fixed as an instance: ``if x:`` treats an empty string — which
+    a shell interpolating an unset variable produces routinely — as "not passed",
+    so the caller's intent is discarded silently. Fixing them one at a time is how
+    the fourth one survives.
+    """
+    if value is None:
+        return None
+    if not value.strip():
+        raise PromptError(
+            f"{flag} was passed but empty. An empty override is not the same as an "
+            "omitted one, and silently falling back would discard what you asked for."
+        )
+    return value.strip()
+
+
 def _repo_slug(remote_url: str) -> str:
     """`git@host:a/b.git` and `https://host/a/b/c.git` -> `a/b`, `a/b/c`.
 
@@ -212,6 +230,14 @@ def _repo_slug(remote_url: str) -> str:
     wrong-but-plausible repo for them.
     """
     url = remote_url.strip().removesuffix(".git")
+    # A local remote has no org/repo to render. Splitting a filesystem path yields
+    # something that reads exactly like `org/repo` but is a mangled path — the
+    # wrong-but-plausible shape this function exists to avoid. This kit's own tests
+    # set a local-path origin, so it is not a hypothetical input.
+    if url.startswith(("file://", "/", "./", "../")) or (
+        "://" not in url and ":" not in url and "/" in url
+    ):
+        return remote_url
     if "://" in url:
         url = url.split("://", 1)[1]
         path = url.split("/", 1)[1] if "/" in url else url
@@ -249,6 +275,7 @@ def render(
     carry_forward: str | None,
     verify_command: str | None,
     base_from_remote: bool,
+    branch_from_checkout: bool = True,
 ) -> str:
     compute_line = ""
     if compute:
@@ -271,6 +298,14 @@ def render(
     # The base label must match the path actually taken. Saying "resolved from the
     # remote" over an author-supplied base would assert the one property this script
     # exists to guarantee, on the one path where it does not hold.
+    # An overridden branch is asserted by the caller, not observed. Every neighbouring
+    # fact in this prompt is git-verified, so saying nothing would render an assertion
+    # with the same confidence as a measurement.
+    branch_provenance = (
+        ""
+        if branch_from_checkout
+        else " — **supplied via --branch, not verified against this checkout**"
+    )
     base_provenance = (
         "resolved from the remote at assembly time, not supplied by the author"
         if base_from_remote
@@ -297,7 +332,7 @@ def render(
 ## What you are reviewing
 
 - **Repo:** {repo_slug}
-- **Branch:** {branch}
+- **Branch:** {branch}{branch_provenance}
 {pr_line}- **Head sha under review:** `{head}`
 - **Base:** `{base}` — {base_provenance}
 {tree}
@@ -336,6 +371,14 @@ def build(args: argparse.Namespace) -> str:
     # a helper reading `git log` found one commit, and the engine correctly refused
     # the resulting empty diff.
     root = (args.root or REPO_ROOT).resolve()
+    # One validator, every optional override. See _override for why this is not
+    # done per-flag.
+    o_branch = _override("--branch", args.branch)
+    o_base = _override("--base", args.base)
+    o_base_branch = _override("--base-branch", args.base_branch)
+    o_scratch = _override("--scratch", args.scratch)
+    o_carry = _override("--carry-forward", args.carry_forward)
+    o_verify = _override("--verify-command", args.verify_command)
     config = load_config(root / "config" / "dev-model.yaml")
 
     lenses = get(config, "review.fallback_panel.lenses", [])
@@ -348,15 +391,11 @@ def build(args: argparse.Namespace) -> str:
         )
 
     head = _require_commit(root, args.head)
-    branch = resolve_branch(root, args.branch, head)
-    base_branch = args.base_branch or get(config, "vcs.protected_branch", "main")
-    # These two must agree, or the provenance label describes the wrong path. An
-    # earlier version tested `is None` here and `or` below, so `--base ""` resolved
-    # from the remote while the prompt said the author supplied it.
-    if args.base is not None and not args.base.strip():
-        raise PromptError("--base was passed but empty; name a base or omit the flag")
-    base_from_remote = args.base is None
-    base = args.base if args.base is not None else resolve_base(root, base_branch)
+    branch = resolve_branch(root, o_branch, head)
+    base_branch = o_base_branch or get(config, "vcs.protected_branch", "main")
+    # These two must agree, or the provenance label describes the wrong path.
+    base_from_remote = o_base is None
+    base = o_base if o_base is not None else resolve_base(root, base_branch)
     base = _require_commit(root, base)
 
     diffstat = _git(root, "diff", "--shortstat", f"{base}...{head}")
@@ -382,11 +421,12 @@ def build(args: argparse.Namespace) -> str:
         repo_slug=slug,
         branch=branch,
         compute=get(config, f"review.fallback_panel.lens_compute.{args.runtime}", {}) or {},
-        scratch=args.scratch,
+        scratch=o_scratch,
         pr=args.pr,
-        carry_forward=args.carry_forward,
-        verify_command=args.verify_command,
+        carry_forward=o_carry,
+        verify_command=o_verify,
         base_from_remote=base_from_remote,
+        branch_from_checkout=o_branch is None,
     )
 
 
