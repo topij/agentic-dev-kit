@@ -78,6 +78,43 @@ def test_repo_root_is_found_at_any_engine_depth(tmp_path: Path, engines: str) ->
     assert find_repo_root(engine_dir(module)) == tmp_path
 
 
+def test_the_precondition_helper_detects_an_ancestor_marker(tmp_path: Path) -> None:
+    """The guard is pinned too, because the guard was the fourth unpinned thing.
+
+    `_require_no_ancestor_marker` fires only in an environment the suite does
+    not run in, so nothing exercised its detection: pointing it at a marker name
+    that cannot exist, or emptying its body outright, both left the suite green
+    at `624 passed, 1 deselected`. A legibility guard with no regression
+    protection reverts to silence on the first tidy-up of its comprehension —
+    and silence here is indistinguishable from the environment simply being
+    fine, which is the whole failure it was written to end.
+
+    Found by the adversarial panel lens, making the same catch for the fourth
+    consecutive round: the remediation reproduced the defect it remediated.
+    """
+    root = tmp_path / "checkout"
+    engines = root / "scripts"
+    engines.mkdir(parents=True)
+    (root / ".git").mkdir()
+
+    with pytest.raises(AssertionError, match="outside any git checkout"):
+        _require_no_ancestor_marker(engines)
+
+
+def test_the_precondition_helper_is_silent_when_no_marker_is_above(tmp_path: Path) -> None:
+    """The positive control, without which the test above passes vacuously.
+
+    A guard that raised unconditionally would satisfy the detection test and be
+    just as broken. This also carries the module's own environmental
+    assumption, deliberately: if `tmp_path` is inside a checkout, THIS is the
+    test that says so first.
+    """
+    engines = tmp_path / "bare" / "scripts"
+    engines.mkdir(parents=True)
+
+    _require_no_ancestor_marker(engines)  # must not raise
+
+
 def test_a_marker_at_the_engine_dir_itself_is_found(tmp_path: Path) -> None:
     """`start` is among the candidates at all — MEMBERSHIP, not its position.
 
