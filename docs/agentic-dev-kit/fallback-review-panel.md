@@ -38,6 +38,32 @@ They are the two the doctrine names, and they are chosen to overlap as little
 as possible. Add or replace lenses for your own risk profile (a data-migration
 lens, a performance lens): two disjoint lenses is the floor, not the ceiling.
 
+## What compute a lens gets
+
+`review.fallback_panel.lens_compute.<runtime>` sets it, with two independent and
+individually optional keys: `model` and `effort`. Set either, both, or neither —
+a runtime exposing only one control carries only that key, and omitting a runtime
+entirely means its lenses inherit the cockpit session's own compute. That
+inheritance is the behaviour that predates the key, so an adopter who never sets
+it sees no change.
+
+`scripts/hooks/pr_followup_hook.py` renders it into the reminder it fires on every
+`gh pr create` / `ready`, which is what makes the setting reach the agent that
+actually spawns the lenses.
+
+**A lens does not need the judgment tier.** Measured on this repo, 2026-08-01,
+over two real Sonnet panels — a docs PR (~196k output tokens) and a code PR
+(~167k). Both produced findings the cockpit had missed: a stale verified-output
+claim presented as literal command output, and a root-container run the cockpit
+had declared impossible. Lens work is bounded and adversarial rather than
+open-ended, so `effort` carries more of the weight than model tier does.
+
+Two cautions before you copy the numbers. Cost tracked **claim density**, not code
+complexity — the *docs* PR was the expensive one, because verifying prose meant
+re-reading five issues, two comments and a chat thread. And a panel that finds
+nothing has not necessarily been cheap or thorough; read what it *executed*, which
+is why the contract below demands attestation rather than a verdict.
+
 ## The contract every lens gets
 
 These are why the panel works. Drop any of them and it degrades toward the

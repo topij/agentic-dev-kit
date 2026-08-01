@@ -140,6 +140,30 @@ review:
   # receipt_source to either.
   fallback_panel:
     receipt_source: "fallback:panel"   # never the same as a single-lens receipt
+    # Compute for each panel lens, keyed by runtime — the same per-runtime shape
+    # `models.runtime_mappings` uses, because the panel runs under whichever
+    # runtime the cockpit is.
+    #
+    # `model` selects the model, `effort` the reasoning level. BOTH ARE OPTIONAL
+    # and independent: set either, both, or neither. A runtime exposing only one
+    # control carries only that key; omitting a runtime entirely means its lenses
+    # inherit the cockpit session's own compute, which is the pre-existing
+    # behaviour and stays the default for anyone who does not set this.
+    #
+    # Why sonnet rather than the `expensive` tier: measured 2026-08-01 over two
+    # real panels on this repo — a docs PR (~196k output tokens) and a code PR
+    # (~167k). Both produced findings the cockpit had missed, including a stale
+    # verified-output claim and a root-container run the cockpit had declared
+    # impossible. Lens work is bounded and adversarial rather than open-ended, so
+    # it does not need the judgment tier; `effort: high` is what carries it.
+    # Re-measure before assuming this holds for your repo — cost tracked CLAIM
+    # DENSITY, not code complexity, and the docs PR was the expensive one.
+    lens_compute:
+      claude:
+        model: sonnet
+        effort: high
+      codex:
+        effort: high
     lenses:
       - name: adversarial
         focus: "assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards"
@@ -225,6 +249,21 @@ models:
     cheap: mechanical
     default: standard
     expensive: judgment
+  # A tier's value may be EITHER a scalar or a `{model, effort}` map.
+  #
+  # The scalar form is the original and stays valid — it means "the one compute
+  # control this runtime exposes", which is why the two runtimes below currently
+  # read as different things: `claude` names models, `codex` names effort levels.
+  # That ambiguity is the reason the map form exists. Prefer it when a runtime
+  # exposes both controls and you want to pin them independently:
+  #
+  #   claude:
+  #     expensive: { model: opus, effort: high }
+  #     cheap:     { effort: low }          # model inherited
+  #
+  # Either key may be omitted; an omitted key inherits the session's own value.
+  # Kept as scalars here because that is what this repo actually uses — see
+  # `review.fallback_panel.lens_compute` for the map form in live use.
   runtime_mappings:
     claude:
       cheap: haiku

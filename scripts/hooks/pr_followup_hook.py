@@ -45,9 +45,38 @@ _DEFAULT_ENGINES_DIR = "scripts"
 _DEFAULT_PANEL_RECEIPT_SOURCE = "fallback:panel"
 
 
-def _load_review_config() -> tuple[list[str], str, str, list[str], str]:
+def _lens_compute_phrase(config, kitconfig) -> str:
+    """Render ``review.fallback_panel.lens_compute.claude`` as an instruction clause.
+
+    Returns ``""`` when unset or unusable, which means "lenses inherit the
+    cockpit's own compute" — the behaviour before this key existed, and the
+    default for any adopter who never sets it.
+
+    ``model`` and ``effort`` are independent and each optional, so a runtime that
+    exposes only one control sets only that key. Keyed by runtime for the same
+    reason ``review.fallback_commands.claude`` is: this hook only ever runs under
+    Claude Code, and a value written for another runtime must not leak into this
+    one's instruction.
+    """
+    compute = kitconfig.get(config, "review.fallback_panel.lens_compute.claude", None)
+    if not isinstance(compute, dict):
+        return ""
+    parts = []
+    for key in ("model", "effort"):
+        value = compute.get(key)
+        # Reject non-strings and blanks rather than rendering `model: None` into
+        # an instruction the agent would then dutifully try to honour.
+        if isinstance(value, str) and value.strip():
+            parts.append(f"{key} {value.strip()}")
+    if not parts:
+        return ""
+    return f" Run each lens at {' and '.join(parts)}, per review.fallback_panel.lens_compute."
+
+
+def _load_review_config() -> tuple[list[str], str, str, list[str], str, str]:
     """Read ``(review.bots, review.fallback_commands.claude, paths.engines,
-    review.fallback_panel lens names, review.fallback_panel.receipt_source)``.
+    review.fallback_panel lens names, review.fallback_panel.receipt_source,
+    rendered review.fallback_panel.lens_compute.claude clause)``.
 
     Best-effort: any failure (missing config, kitconfig unimportable, malformed
     values) falls back to generic defaults rather than raising — this hook must
@@ -86,7 +115,14 @@ def _load_review_config() -> tuple[list[str], str, str, list[str], str]:
         )
         if not isinstance(panel_source, str) or not panel_source.strip():
             panel_source = _DEFAULT_PANEL_RECEIPT_SOURCE
-        return bots, fallback, engines, lenses, panel_source.strip()
+        return (
+            bots,
+            fallback,
+            engines,
+            lenses,
+            panel_source.strip(),
+            _lens_compute_phrase(config, kitconfig),
+        )
     except Exception:
         return (
             [],
@@ -99,6 +135,9 @@ def _load_review_config() -> tuple[list[str], str, str, list[str], str]:
             # load — and nothing downstream would catch that (issue #32).
             [],
             _DEFAULT_PANEL_RECEIPT_SOURCE,
+            # Same reasoning: name no compute we could not read. Empty means
+            # "inherit this session's", which is always a safe instruction.
+            "",
         )
 
 
@@ -116,6 +155,7 @@ def _fallback_instruction(
     lenses: list[str],
     panel_source: str = _DEFAULT_PANEL_RECEIPT_SOURCE,
     engines_dir: str = _DEFAULT_ENGINES_DIR,
+    lens_compute: str = "",
 ) -> str:
     """What to run when a bot is unavailable.
 
@@ -139,6 +179,10 @@ def _fallback_instruction(
             f"`uv run {engines_dir}/pr_watch.py <PR#> "
             f'--record-review "{panel_source}" --lenses <names> --head <polled-sha>`. '
             "Never treat the outage as a review waiver."
+            # Appended only for the PANEL branch: the degraded one-lens fallback
+            # runs in the cockpit's own context, so there is no separate lens to
+            # give a model or an effort level to.
+            + lens_compute
         )
     return (
         f"If a review bot is unavailable, run the configured fallback "
@@ -147,7 +191,14 @@ def _fallback_instruction(
 
 
 def build_reminder() -> str:
-    bots, fallback_command, engines_dir, lenses, panel_source = _load_review_config()
+    (
+        bots,
+        fallback_command,
+        engines_dir,
+        lenses,
+        panel_source,
+        lens_compute,
+    ) = _load_review_config()
     bot_desc = _bot_description(bots)
     return (
         "A pull request was just opened or marked ready for review. Per the kit's "
@@ -159,7 +210,9 @@ def build_reminder() -> str:
         "replied-to with a reason. Fix real findings, reply-with-reason to nitpicks "
         "you disagree with, `--mark-seen` each handled round, and keep polling (CI "
         "can take 20-30 min). "
-        + _fallback_instruction(fallback_command, lenses, panel_source, engines_dir)
+        + _fallback_instruction(
+            fallback_command, lenses, panel_source, engines_dir, lens_compute
+        )
         + " Only stop early if you hit something that genuinely needs an "
         "operator decision."
     )

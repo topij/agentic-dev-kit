@@ -491,6 +491,17 @@ migrate_kit_schema() {
   # docs/agentic-dev-kit/fallback-review-panel.md.
   fallback_panel:
     receipt_source: "fallback:panel"
+    # Compute for each panel lens, keyed by runtime. `model` and `effort` are
+    # independent and BOTH OPTIONAL — set either, both, or neither; a runtime
+    # exposing one control carries one key. Omit a runtime and its lenses inherit
+    # the cockpit session'"'"'s compute, which is the behaviour before this key
+    # existed. Read by scripts/hooks/pr_followup_hook.py.
+    lens_compute:
+      claude:
+        model: sonnet
+        effort: high
+      codex:
+        effort: high
     lenses:
       - name: adversarial
         focus: "assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards"
