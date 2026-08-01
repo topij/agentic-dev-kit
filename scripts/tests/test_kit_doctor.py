@@ -744,10 +744,16 @@ def _uncoded(text: str) -> str:
         # which is the one failure this whole helper exists to avoid. Masked
         # rather than removed, so positions and the even/odd parity below both
         # stay honest, then restored.
-        probe = line.replace("\\`", "\x00")
+        # Mask escaped BACKSLASHES first, then escaped backticks. Order is the
+        # whole correctness argument: a backtick is escaped only when preceded
+        # by an ODD run of backslashes, so `\\\\` + backtick is an escaped
+        # backslash followed by a REAL delimiter. Masking backticks directly
+        # swallowed that delimiter and hid a link CommonMark renders — a
+        # regression a lens caught in the commit that added the escaping.
+        probe = line.replace("\\\\", "\x01").replace("\\`", "\x00")
         if probe.count("`") % 2 == 0:
             probe = _INLINE_CODE.sub("", probe)
-        out[i] = probe.replace("\x00", "\\`")
+        out[i] = probe.replace("\x00", "\\`").replace("\x01", "\\\\")
     return "\n".join(out)
 
 # Directories the kit SHIPS. A link from one tracked doc into any of these is
@@ -1015,6 +1021,14 @@ def test_is_kit_shipped_truth_table(rel: str, shipped: bool) -> None:
         ("fence unclosed at EOF blanks nothing", "```\n[x](t.md)\n", True),
         # Escaped backticks are literal text; the link between them is real.
         ("escaped backticks are not delimiters", "\\` [x](t.md) \\`\n", True),
+        # An ESCAPED BACKSLASH leaves the following backtick a real delimiter,
+        # so the span closes there and the link after it is live.
+        ("escaped backslash leaves a real delimiter", "`a\\\\` [x](t.md) `\n", True),
+        # The eighth property: `(?!\^)` separates a footnote definition from a
+        # link-reference definition. Claimed in a comment since the guard was
+        # added and pinned by nothing — the parity test is one-directional, so
+        # it cannot catch an OVER-report like this one.
+        ("a footnote definition is not a link", "Text.[^1]\n\n[^1]: prose, not a link\n", False),
     ],
 )
 def test_uncoded_decides_what_the_scanner_can_see(case: str, src: str, link_survives: bool) -> None:
