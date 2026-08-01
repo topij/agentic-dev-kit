@@ -19,9 +19,11 @@ import sys
 from pathlib import Path
 
 import pytest
+from _repo_layout import engine_dir, find_repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
+ENGINE_DIR = engine_dir(Path(__file__))
+REPO_ROOT = find_repo_root(ENGINE_DIR)
+sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 import kitconfig  # noqa: E402
 
@@ -406,7 +408,7 @@ def test_check_doc_budget_handles_a_config_without_doc_budgets(tmp_path):
     cfg = tmp_path / "dev-model.yaml"
     cfg.write_text("kit:\n  version: 2\npaths:\n  handoff: docs/handoff.md\n", encoding="utf-8")
     result = subprocess.run(  # noqa: S603
-        [sys.executable, str(REPO_ROOT / "scripts" / "check_doc_budget.py"), "--config", str(cfg)],
+        [sys.executable, str(ENGINE_DIR / "check_doc_budget.py"), "--config", str(cfg)],
         capture_output=True,
         text=True,
         check=False,
@@ -588,12 +590,19 @@ def test_archive_plan_sessions_reports_a_missing_config_instead_of_crashing(tmp_
     # list with #164 — omit it and the copied tree tracebacks on the import
     # rather than reaching the handler under test, which is a false pass waiting
     # to become a false failure.
+    #
+    # SOURCE is engine-relative, DESTINATION is not, and the asymmetry is the
+    # point (#134): the synthetic tree is built at `scripts/` on purpose — it
+    # stands in for an adopter on the kit's default layout — while the bytes are
+    # read from wherever THIS repo keeps its engines. Reading the source at
+    # `REPO_ROOT / "scripts" / …` conflated the two and broke under
+    # `paths.engines: scripts/devkit`.
     for rel in (
-        "scripts/archive_plan_sessions.py",
-        "scripts/lib/kitconfig.py",
-        "scripts/lib/atomic_write.py",
+        "archive_plan_sessions.py",
+        "lib/kitconfig.py",
+        "lib/atomic_write.py",
     ):
-        (tmp_path / rel).write_bytes((REPO_ROOT / rel).read_bytes())
+        (tmp_path / "scripts" / rel).write_bytes((ENGINE_DIR / rel).read_bytes())
 
     result = subprocess.run(  # noqa: S603
         [sys.executable, str(tmp_path / "scripts" / "archive_plan_sessions.py"), "--dry-run"],
