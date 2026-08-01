@@ -2281,6 +2281,7 @@ def test_a_non_utf8_doc_is_a_documented_exit_2_not_a_traceback(
     assert "could not read" in capsys.readouterr().err
 
 
+@_needs_permission_enforcement
 def test_an_unreadable_doc_is_a_documented_exit_2_not_a_traceback(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -3585,7 +3586,16 @@ def test_the_sweep_normalises_line_endings_deliberately(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("damaged", ["plan", "history"])
-@pytest.mark.parametrize("how", ["unreadable", "non_utf8"])
+@pytest.mark.parametrize(
+    "how",
+    [
+        # Only the chmod-000 axis is uid-sensitive; `non_utf8` damages the bytes
+        # and must keep running as root. Marking the whole function would skip
+        # both and silently halve this test's coverage in a root container.
+        pytest.param("unreadable", marks=_needs_permission_enforcement),
+        "non_utf8",
+    ],
+)
 def test_a_read_failure_names_the_document_that_failed(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], damaged: str, how: str
 ) -> None:
