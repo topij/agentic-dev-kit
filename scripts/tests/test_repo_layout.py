@@ -42,11 +42,36 @@ def _tree(root: Path, engines: str, *, git: bool = True) -> Path:
 # a free-form string, so depth is not one of two values. `parents[2]` is right
 # for exactly the first; `start.parent` from the engine dir for exactly the
 # first as well, which is why the kit's own suite could not tell them apart.
+# Depth ZERO — the marker at the engine dir itself — is not reachable by
+# parametrizing this, so it has its own test below.
 @pytest.mark.parametrize("engines", ["scripts", "scripts/devkit", "tools/vendor/devkit"])
 def test_repo_root_is_found_at_any_engine_depth(tmp_path: Path, engines: str) -> None:
     module = _tree(tmp_path, engines)
 
     assert find_repo_root(engine_dir(module)) == tmp_path
+
+
+def test_a_marker_at_the_engine_dir_itself_is_found(tmp_path: Path) -> None:
+    """The walk-up examines `start` BEFORE any parent, and that is load-bearing.
+
+    `for candidate in (start, *start.parents)` mirrors `kitconfig.repo_root`'s
+    identical construction. Dropping the `start` term — `for candidate in
+    start.parents` — left the whole suite green (`622 passed, 1 deselected`)
+    until this test existed: every other case here puts the marker at least one
+    level above the engine dir, so none of them can tell the two loops apart.
+
+    Found by the adversarial panel lens, whose point was that
+    `test_repo_root_is_found_at_any_engine_depth` claims more generality in its
+    name than its parameters reach. Reaching depth zero needs a differently
+    shaped tree, not another parameter — `engines` there is a path segment, and
+    there is no segment meaning "no directory at all".
+    """
+    engines = tmp_path / "repo"
+    tests = engines / "tests"
+    tests.mkdir(parents=True)
+    (engines / ".git").mkdir()
+
+    assert find_repo_root(engine_dir(tests / "test_something.py")) == engines
 
 
 def test_engine_dir_is_the_directory_holding_the_tests_directory(tmp_path: Path) -> None:
