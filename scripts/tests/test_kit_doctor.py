@@ -17,6 +17,7 @@ diagnosable at all:
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -584,3 +585,120 @@ def test_generate_manifest_refuses_an_unreadable_version(tmp_path, capsys):
 
 def test_remap_tolerates_a_trailing_slash():
     assert kit_doctor._remap("scripts/pr_watch.py", "scripts/devkit/") == "scripts/devkit/pr_watch.py"
+
+
+# --------------------------------------------------------------------------- #
+# What the tracking list must not omit (#37, #146)
+# --------------------------------------------------------------------------- #
+#
+# `KIT_OWNED` is hand-maintained, and it has drifted from the shipped tree twice
+# — most consequentially when `parallel.md` (tracked, and refreshed by
+# `/upgrade`) linked three times to `parallel-headless.md` (untracked). The
+# adopter got the links and not their target, and `kit_doctor` reported
+# `0 differ, 0 unknown`, because a file it does not track cannot be missing.
+#
+# Adding the missing entries does not stop the list drifting again. These do.
+# They are deliberately narrower than #47, which asks for membership to be
+# DERIVED from the shipped tree rather than declared: these pin the two
+# properties whose violation has actually cost something, and leave the
+# structural change to that issue.
+
+
+@pytest.fixture
+def kit_repo_root() -> Path:
+    """The kit's own checkout, or a skip.
+
+    These two assertions are about the SHIPPED tree, so they are meaningful
+    only where that tree is present. An adopter vendors the engines and a
+    subset of the docs, so running them there would report the adopter's
+    deliberate omissions as kit defects — #134's cause 2, which is exactly the
+    mistake of failing a test that does not apply rather than skipping it.
+    """
+    if not (REPO_ROOT / "docs" / "agentic-dev-kit").is_dir():
+        pytest.skip("not the kit's own repo — the shipped doc tree is absent")
+    return REPO_ROOT
+
+
+def _kit_owned_paths() -> set[str]:
+    return {rel for rel, _role in kit_doctor.KIT_OWNED}
+
+
+_MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+
+
+def _relative_links(text: str):
+    """Relative markdown link targets, anchors and query fragments stripped."""
+    for target in _MD_LINK.findall(text):
+        target = target.split("#", 1)[0].split("?", 1)[0].strip()
+        if not target or "://" in target or target.startswith(("mailto:", "/")):
+            continue
+        yield target
+
+
+def test_every_link_out_of_a_kit_owned_doc_resolves(kit_repo_root):
+    """A tracked doc must not ship a link to a file that does not exist.
+
+    This is the failure #37 records, in its general form: refreshing a tracked
+    doc installs its links, so a broken one reaches every adopter at once.
+    """
+    broken = []
+    examined = 0
+    for rel in sorted(_kit_owned_paths()):
+        if not rel.endswith(".md"):
+            continue
+        doc = kit_repo_root / rel
+        for target in _relative_links(doc.read_text(encoding="utf-8")):
+            examined += 1
+            if not (doc.parent / target).resolve().exists():
+                broken.append(f"{rel} -> {target}")
+    # Positive control: a link regex that stops matching would pass over
+    # nothing and read exactly like a clean result.
+    #
+    # NOT a minimum count. The tracked docs currently hold 11 relative links
+    # between them, so any floor tight enough to be meaningful is one doc edit
+    # away from a spurious failure, and a floor loose enough to be stable stops
+    # meaning anything — the brittleness #135 names. This anchors on the one
+    # link the guard below exists for instead: parallel.md -> parallel-headless.md,
+    # the pairing that produced #146. If the scan cannot see that, it is not
+    # working, and the assertion says which link it lost.
+    assert examined, "link scan found no links at all — it is not reaching the docs"
+    parallel = kit_repo_root / "docs/agentic-dev-kit/workflows/parallel.md"
+    seen = set(_relative_links(parallel.read_text(encoding="utf-8")))
+    assert "parallel-headless.md" in seen, (
+        "the scan no longer sees parallel.md's link to parallel-headless.md — "
+        f"the link syntax or the doc changed and this guard is now blind; saw {sorted(seen)}"
+    )
+    assert not broken, "kit-owned docs link to files that do not exist: " + "; ".join(broken)
+
+
+def test_a_kit_owned_doc_never_links_to_an_untracked_kit_doc(kit_repo_root):
+    """The #146 pairing: tracked doc, untracked target, both under the kit's
+    own doc tree.
+
+    Resolving (the test above) is not enough — the target existing HERE says
+    nothing about it reaching an adopter. Only tracking does, and that is the
+    asymmetry that produced three dangling links on a real upgrade while the
+    doctor reported a clean install.
+
+    Scoped to `docs/agentic-dev-kit/`: a link out to an adopter-owned or
+    repo-local file (`docs/parallel-howto.md`, `README.md`) is not something
+    `/upgrade` ships, so requiring those to be tracked would be wrong.
+    """
+    owned = _kit_owned_paths()
+    untracked = []
+    for rel in sorted(owned):
+        if not rel.endswith(".md"):
+            continue
+        doc = kit_repo_root / rel
+        for target in _relative_links(doc.read_text(encoding="utf-8")):
+            resolved = (doc.parent / target).resolve()
+            try:
+                target_rel = resolved.relative_to(kit_repo_root).as_posix()
+            except ValueError:
+                continue  # escapes the repo; the resolving test owns that case
+            if target_rel.startswith("docs/agentic-dev-kit/") and target_rel not in owned:
+                untracked.append(f"{rel} -> {target_rel}")
+    assert not untracked, (
+        "kit-owned docs link to UNTRACKED kit docs — an upgrade would install "
+        "the link and not its target (#37/#146): " + "; ".join(untracked)
+    )

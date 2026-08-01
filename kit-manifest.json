@@ -26,6 +26,10 @@
       "role": "doctrine",
       "sha256": "6dc6815ffb7fd89f00409dbd9ae620522214d0b97117ea8a0d09bf0d2344b365"
     },
+    "docs/agentic-dev-kit/workflows/parallel-headless.md": {
+      "role": "workflow",
+      "sha256": "4c4aa6fa0564fd4d4433dc9c6f05f3a23742706ba00fee285fa44673c72cee08"
+    },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
       "sha256": "d944a198e1ef32fe958d454b6e66fe35c125cf84af7fe4b71911f2806d02b3b1"
@@ -70,9 +74,17 @@
       "role": "engine",
       "sha256": "013c1fa1e20763c9d99c8c2153b07723b1cda9a7b8c2dd9c2e78a6ed6a9d007c"
     },
+    "scripts/check_memory_budget.py": {
+      "role": "engine",
+      "sha256": "5c385491289433b810b87167459015a3d23617accb5c317c0b539b879c1e1162"
+    },
     "scripts/dev_session.sh": {
       "role": "engine",
       "sha256": "7324a1df01ba8aaf9a39a23ee1e00fb488f9a80ceaeac008cf2d40f33f426231"
+    },
+    "scripts/hooks/pr_followup_hook.py": {
+      "role": "hook",
+      "sha256": "16c9d696662d0ae32a7e740c56af17c666b9364e137147dca8260f0f1956e688"
     },
     "scripts/hooks/pre-push": {
       "role": "hook",
@@ -80,7 +92,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "b5ca68893bdfacd9ea6d4c54e553be16e1c7f024653796daa4103c1b028903e5"
+      "sha256": "1d3f2a4cba44025e23f4270bb6905c32ebd0c635853c1ec23cdc797165f30672"
     },
     "scripts/lib/atomic_write.py": {
       "role": "engine",
