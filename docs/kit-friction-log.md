@@ -60,3 +60,40 @@ establish: on the PR. Swept entries are verbatim in the archive under `Graduated
   cannot fully account for rather than defaulting it away. Filed as
   [#198](https://github.com/topij/agentic-dev-kit/issues/198) alongside the bullet above — one
   issue, two separately testable acceptance criteria.
+
+## 2026-08-01 (post-merge, mutation and receipt hygiene)
+
+- **Mutation-testing a file that carries uncommitted work makes `git checkout --` destructive.**
+  I mutated `scripts/hooks/pr_followup_hook.py` while it held three uncommitted review fixes, then
+  reverted the mutant with `git checkout -- <file>` — which discarded the fixes too. Caught only
+  because the tests written minutes earlier went red; had the mutation targeted code those tests
+  did not cover, the fixes would have vanished silently and the PR would have merged without them.
+  **M** — `fallback-review-panel.md` contract item 7 already says to mutate in an isolated copy of
+  the repo, but it frames that as protecting *other lenses* from your writes. This is the same
+  hazard pointed inward: the cockpit's own tree. Proposed: extend item 7 to say mutate only
+  committed code, or copy the file aside and restore from the copy rather than from git — `git
+  checkout --` cannot distinguish your mutant from your work.
+- **A review receipt can name a lens that has not run, and the cockpit is as able to do it as
+  anyone.** I recorded `--record-review "fallback:delta" --lenses correctness` before spawning the
+  correctness lens, then ran the lens to make the claim true. The engine accepts `--lenses` as a
+  typed string and verifies nothing. **M** — occurrence data for
+  [#32](https://github.com/topij/agentic-dev-kit/issues/32), whose whole subject is that the lens
+  roster is self-reported; what this occurrence adds is that the failure is easy to commit
+  *accidentally*, mid-way through doing the right thing, rather than as a shortcut. No new proposal
+  — the lens-written entries `#32` already asks for would settle it — but the sequencing hazard is
+  worth naming: record after the lens returns, never before.
+- **`.agents/skills/**` is not manifest-tracked, so a Codex adapter can drift from the config it
+  documents.** Adding a `lens_compute.codex` sentence to `.agents/skills/pr-watch/SKILL.md` and
+  regenerating the manifest produced no diff at all. The review bot independently flagged the same
+  gap. **L** — these adapters are the Codex runtime's only consumer of several config keys, so a
+  silent drift there makes a key inert on that runtime with nothing reporting it. Proposed: extend
+  `KIT_OWNED` to the adapter files, or state at `#47` why they are deliberately excluded.
+- **A config key can express a control the runtime cannot actually apply.**
+  `review.fallback_panel.lens_compute` carries `effort`, but Claude Code's delegation tool has no
+  per-agent effort parameter, so on that runtime it reaches a lens only as prompt text. This one is
+  documented at every surface — but only because a dogfooding run surfaced it after the key had
+  already been designed, written, tested and opened as a PR. **M** — nothing prevents the next such
+  key, and the failure is quiet: config that reads as a control and behaves as a suggestion.
+  Proposed: when a config key selects compute or capability, state per runtime whether it is
+  mechanical or advisory, and consider a `kit_doctor` check that a declared runtime key has a named
+  consumer.
