@@ -929,3 +929,70 @@ def test_the_link_scanner_agrees_with_commonmark_on_what_is_a_link():
         "the scanner sees no link where CommonMark renders one — a real dangling "
         "link in this shape would pass both guards silently: " + "; ".join(hidden)
     )
+
+
+# --------------------------------------------------------------------------- #
+# The scanner's own helpers, pinned directly
+# --------------------------------------------------------------------------- #
+#
+# A review lens systematically reverted six properties `_uncoded` and
+# `_is_kit_shipped` claim, and five survived the whole suite: the two end-to-end
+# guards only exercise whatever the real doc tree happens to contain, and it
+# contains none of these shapes. The 12-case matrix in the commit log was
+# one-time manual reproduction, not standing coverage — which is a fair
+# description of every verification in this file's history until now.
+#
+# The CommonMark parity test above cannot close this on its own, and that is by
+# design rather than oversight: it asserts in ONE direction (a link the renderer
+# shows must not be hidden), so every property whose failure merely EXPOSES more
+# text is invisible to it. Those need asserting directly, which is what these do.
+
+
+@pytest.mark.parametrize(
+    ("rel", "shipped"),
+    [
+        ("scripts/pr_watch.py", True),
+        ("docs/agentic-dev-kit/workflows/parallel.md", True),
+        ("docs/templates/handoff.md.tmpl", True),
+        # Not shipped: the test trees under `scripts/` (#132).
+        ("scripts/tests/test_kit_doctor.py", False),
+        ("scripts/lib/state_paths/tests/test_resolver.py", False),
+        # …but `tests/` under a DOCS tree is shipped, and excluding it reopened
+        # #146 where this guard is meant to watch. A lens built exactly this.
+        ("docs/agentic-dev-kit/tests/note.md", True),
+        # Near-misses that must not be swept up by a sloppy segment match.
+        ("scripts/latests/x.py", True),
+        ("scripts/tests2/x.py", True),
+        # Repo-local, never installed, must never be required to be tracked.
+        ("README.md", False),
+        ("docs/parallel-howto.md", False),
+    ],
+)
+def test_is_kit_shipped_truth_table(rel: str, shipped: bool) -> None:
+    assert _is_kit_shipped(rel) is shipped
+
+
+@pytest.mark.parametrize(
+    ("case", "src", "link_survives"),
+    [
+        ("plain prose", "See [x](t.md).\n", True),
+        ("closed fence is code", "```\n[x](t.md)\n```\n", False),
+        # Pins indented-fence recognition: this repo's docs indent fences inside
+        # list items, and an unrecognised fence exposes its contents.
+        ("indented fence is code", "  ```\n  [x](t.md)\n  ```\n", False),
+        ("tilde fence is code", "~~~\n[x](t.md)\n~~~\n", False),
+        # Pins the delimiter-CHARACTER match: `~~~` must not close a ``` fence,
+        # so the link stays inside the block.
+        ("mismatched delimiter does not close", "```\n~~~\n[x](t.md)\n```\n", False),
+        # Pins the delimiter-LENGTH match, verified against CommonMark: the
+        # shorter run is literal content, so the link is real and must survive.
+        ("shorter run does not close", "````\n```\n````\n[x](t.md)\n````\n```\n", True),
+        # Pins the even-count guard: three backticks cannot be paired
+        # unambiguously, so the line is left alone rather than half-stripped.
+        ("odd backticks leave the line alone", "` [x](t.md) ` and ` more\n", True),
+        ("even backticks strip the span", "`a [x](t.md) b`\n", False),
+        ("fence unclosed at EOF blanks nothing", "```\n[x](t.md)\n", True),
+    ],
+)
+def test_uncoded_decides_what_the_scanner_can_see(case: str, src: str, link_survives: bool) -> None:
+    assert (list(_relative_links(src)) == ["t.md"]) is link_survives, case
