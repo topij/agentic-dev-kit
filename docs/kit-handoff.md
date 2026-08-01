@@ -50,8 +50,9 @@ claims shared one shape — a measurement or a correction, true when written, st
   instead of reading the diff. Nothing would have caught it: `init.sh` is not in
   `kit-manifest.json`.
 - **A test can name a property and pin nothing; the mutant is how you find out.** "This key is
-  load-bearing" rested on an append no test covered — deleting it left the suite green. Two further
-  tests here exist only because a lens deleted the thing they were meant to protect.
+  load-bearing" rested on an append no test covered — deleting it left the suite green. The test
+  that now fails on that deletion exists only because a lens performed it. Per-finding dispositions
+  are on `#200`.
 - **A receipt can name a lens that never ran.** `--lenses` is a typed string the engine does not
   verify (`#32`), and the cockpit can type it prematurely as easily as anyone. Inbox has it.
 - **Reverting a mutant with `git checkout --` discards uncommitted work in the same file.** The
