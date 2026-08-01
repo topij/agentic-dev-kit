@@ -147,9 +147,10 @@ author re-reading their own diff. **Cite them by name, never by number.**
 7. **No writes in the tree you were given.** Mutate in an isolated copy of the
    repo under review, never the shared tree. Mutation testing needs temporary
    writes, and lenses run concurrently — one lens's mutations can appear to
-   another as an external process corrupting the repo. Give each lens a scratch
-   copy or its own git worktree, and require it to leave the shared tree
-   byte-identical.
+   another as an external process corrupting the repo, and the companion has the
+   occasion this was discovered on, where one lens nearly destroyed live work.
+   Give each lens a scratch copy or its own git worktree, and require it to leave
+   the shared tree byte-identical.
 
    A runtime may hand a lens the live checkout, or a worktree holding somebody's
    in-progress work — on this repo `dev_session.sh` builds lanes with
@@ -177,7 +178,10 @@ author re-reading their own diff. **Cite them by name, never by number.**
 10. **Right revision.** Assume the worktree points at the wrong ref. A lens that
     does not check would review an empty diff and report all-clear — the worst
     failure available to a review mechanism, and reason enough on its own.
-    (`#75` and `#163` hold the occurrence data; read it there.)
+    (`#75` and `#163` hold the occurrence data; read it there rather than
+    restating a figure here. **Those tallies are approximate** — counted by hand,
+    counting different populations, and two of them do not reconcile. The
+    companion has that account.)
 
     So the launch prompt names the **repo, the branch and the head sha**, and
     never claims isolation has been arranged unless that was confirmed — one
@@ -270,7 +274,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    — and name that path in the launch prompt (remove the worktrees when the
    round ends). The cockpit is the only party that knows the target;
    runtime-provided isolation routinely lands at the wrong ref (`#75` holds
-   the occurrence data). A cockpit-built tree turns that per-lens recovery burden
+   the occurrence data; read it there rather than a figure here, and note its
+   own tallies say they are **approximate**). A cockpit-built tree turns that
+   per-lens recovery burden
    into a confirmation. Nothing in **No writes in the tree you were given** or
    **Report what you reviewed, first** relaxes: the tree is still not one the lens
    created (its mutation copies stay its own), and it still reports the HEAD it
