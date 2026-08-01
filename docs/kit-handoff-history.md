@@ -4,6 +4,110 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-07-30 (one bug, seven review rounds, and the same defect five times)
+
+**Theme —** `#172` merged (`b82eba9`), repairing `#164` and settling `#162`. The bug was one *call*
+— `Path.write_text` truncating before it writes — at three sites in the engine.
+What the session actually measured is where the *fix* kept going wrong: **a fix, or its
+written rationale, applied to one of two symmetric locations — five findings, three of them inside
+the fix for that very pattern.** (Three are literally one-of-two *call sites*; the fourth is a test
+covering one site only, the fifth a `BaseException` argument written in one method's docstring and
+not carried to the method one call away. The wider class is the honest one.) Severity ranking missed
+every instance, and what ended it was structural rather than another guard: the two hand-written
+recovery paths were collapsed into one function used by both sites.
+
+- **`#164` repaired.** `Path.write_text` truncates before writing, so a failed write destroyed the
+  living handoff while the tool printed *"no changes applied"*. Measured with `RLIMIT_FSIZE`
+  against the **real 28,518-byte handoff**: before, 28,518 → 1,024 bytes at exit 2 under that
+  message; after, both documents byte-identical and the message true. New `scripts/lib/atomic_write.py`
+  stages to a random sibling temp (`mkstemp`, `O_EXCL`), fsyncs, publishes with `os.replace` —
+  and stages **both documents plus the rollback** before publishing either, which is what dissolves
+  the objection that reverted the first attempt on `#160`: the rollback's cost is paid up front,
+  while failing is still free. **Not total:** of five failure scenarios a lens measured as silent
+  data loss, two now recover and three do not — those three force a publish *and* its rollback to
+  fail together, so nothing is left to recover from. All five now print a message naming both
+  documents, which is the part that was missing.
+- **`#162` settled the other way, deliberately.** The `\x1c` half was genuine content loss and is
+  repaired (a bare `str.strip()` eats `\v \f \x1c \x1d \x1e \x1f \x85 \xa0`). Line endings
+  **normalise**, and a test pins it — including what that test *cannot* see on POSIX. The docstring
+  still opens with "only ever moves content" and now **qualifies** it with the normalisation as a
+  named exception; it was not replaced, and this line said "instead of" until a lens read the file.
+- **Seven review rounds**: CodeRabbit ×3 (rate-limited on every head in between), fallback panel ×4.
+  Tests 564 → 599, both counts reproduced by `make test`. The mutant total (25 across three batches,
+  all reported killed by named behaviour tests) is **attested, not reproducible**: only round 1's ten
+  are enumerated on the PR, the driver scripts lived in session scratch, and `Makefile` already warns
+  that an unenumerated kill count is exactly the figure that does not survive scrutiny.
+
+**Learned**
+
+- **Ctrl-C was more destructive than SIGKILL.** At the same instant: SIGKILL runs no handler, so the
+  staged rollback survived on disk and the data was recoverable; Ctrl-C ran the `finally`, which
+  unlinked the copy staged for exactly that moment. On a tool whose caller is interactive. Nothing
+  about severity or code review suggests looking there — only executing it did.
+- **A proxy documented as "the fact".** The staged temp's absence is *evidence* the rename happened;
+  anything else that removes it reads identically. Hedging the wording made the message honest
+  without making the outcome better. What worked was **reading the destination back** and comparing
+  it to what the run intended to write — a real check replacing an inference.
+- **Three separate episodes of my own checks reporting success without examining anything.** A
+  persisted `cd` into a scratch clone made `ruff`/`make test`/manifest all pass against the wrong
+  tree (three checks, one episode); the same drift put a `sed` rename in the clone, leaving a test
+  whose docstring claimed a rename that never happened; and a verification probe reported five clean
+  passes because it compared an unresolved path against a `realpath`-resolved one. Only the `sed` one
+  is literally `#150`'s subject (a scripted text replacement that matches nothing); the other two
+  share its **root cause** — a check whose target was never reached — which is the widening the
+  friction entries propose. All three were caught by reading output, not by an exit code.
+- **A kill you cannot attribute is not evidence.** Four mutants needed a second attempt: one test
+  raised from an f-string argument (evaluated before the function was entered), one guard was
+  invisible to content assertions, one hazard had been fixed twice so the symptoms were gone either
+  way, and one kill aborted the pytest session instead of naming a test.
+
+**Open, and owned by nothing yet**
+
+- **`#164` and `#162` are CLOSED**, both with the reasoning posted on them rather than a bare state
+  change — `#162`'s records that the decision is *normalising* and exactly what would justify
+  reopening it. **`#174` is settled by `#189`** (open at the time of writing): the writes in
+  `kit_doctor.main`'s `--generate-manifest` branch and in `pr_watch.save_state` stay truncating, now
+  documented at each site. Cited by function, not by line — `#189` moved both, which is how the
+  stale `:637`/`:2201` this bullet used to carry were found. This bullet's own reason
+  (*"both write machine-regenerated artifacts, so the refuse-on-read-only/hardlink semantics add
+  failure modes with no benefit"*) was partly wrong: `write_text` already fails on a read-only
+  target, so that was never an added refusal. **`#190`** is the larger result — a merge-gate
+  fail-open where a receipt recorded against a lost state file makes `mergeable` true with CI still
+  registering. It came out of `#189`'s panel, no choice of write can close it, and it is worth more
+  than the PR that surfaced it.
+- **The merged tree was reviewed by nothing, and the unreviewed tail is 5 commits, not 2.** Panel
+  round 4 saw `e5cb29f` (7 commits back); CodeRabbit's last review was `342f437` (5 back). That tail
+  is `+106/-12` and is **not** all test hygiene — `6d7eb28` touches both engine files. The first
+  draft of this bullet said "last two commits", which was the PR receipt's error reproduced into the
+  durable record. `#27`'s gap, live again.
+- **`#75` again: 8 of 8 lens runs were placed at the base rather than the head.** All eight detected
+  it and diffed the named sha, so the contract works — but a 100% harness failure rate is an open
+  defect, not a rigor statistic, and belongs here rather than in the round-count bullet where the
+  first draft put it. The 8/8 figure is **self-reported by the lenses** and unverifiable from outside
+  (`#32`), like every `--lenses` claim on every receipt this repo records.
+- **The wider one-of-two-symmetric-locations pattern belongs in doctrine, not just this block.**
+  `#163` records occurrences; what this session adds is that it recurred *inside its own fix* and
+  that the remedy is **structural** — remove the second site — where guards and severity ranking both
+  failed. Caveat against the thesis: the de-duplication commit itself left a duplicated comment
+  block, caught by the review bot, which is the same trap this repo's history already records.
+- **`#127` and `#138` are still the pair that would make a sweep's claims mechanically checkable**,
+  carried forward from the block this session archived. Both OPEN. Recorded here because the sweep
+  that moved that block **dropped them** from the live handoff, which the file's own closing line
+  promises does not happen — and `#127` is the ticket about a sweep being indistinguishable from a
+  deletion. Found by a review lens, not by the sweep.
+- The inbox was **283/150 at this wrap-up** — the largest in the recorded series
+  (168 → 179 → 233 → 283). Stated as a measurement with its moment, not a running figure: the
+  previous block dropped the number precisely because a hand-written one went stale three times,
+  each time inside the commit correcting its predecessor. `check_doc_budget.py` prints the live one.
+
+▶ Next: **`triage-friction-log`** — the inbox is near double budget and un-swept for
+several sessions; four of this session's entries are ready to graduate, three of them one class
+(`#150`: a check that reports success without having examined anything). Then `session-start` for
+the rest: the five-finding one-of-two-symmetric-locations result wants routing — doctrine change vs.
+a comment on `#163` — and `#174` wants a deliberate yes/no on the two remaining truncating writes.
+Caveat before running the sweep unattended: `notify.user_key` is blank, so `triage-friction-log`
+stops at Step 2 by design (`#128`).
+
 ### 2026-07-30 (two merges, eight rounds, and where every defect lived)
 
 **Theme —** Both PRs landed after eight panel rounds: **18 lens runs launched, 16 completed**, two
