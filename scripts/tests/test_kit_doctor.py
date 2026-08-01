@@ -778,7 +778,11 @@ def _is_kit_shipped(rel: str) -> bool:
     # three trees, so an untracked `docs/agentic-dev-kit/tests/…` target was
     # silently waved through — #146 reopened in the one place this guard exists
     # to watch. Dormant when found (no such path exists), and a lens built one.
-    return not (rel.startswith(_NEVER_SHIPPED_UNDER) and _NEVER_SHIPPED_SEGMENT in f"/{rel}")
+    # Trailing slash on BOTH sides so the directory itself matches, not only its
+    # descendants: `/scripts/tests` contains no `/tests/`, so the bare directory
+    # read as shipped while every file under it read as not. Raised by the
+    # review bot and unactioned for two rounds before a lens re-found it.
+    return not (rel.startswith(_NEVER_SHIPPED_UNDER) and _NEVER_SHIPPED_SEGMENT in f"/{rel}/")
 
 
 def _relative_links(text: str):
@@ -970,6 +974,10 @@ def test_the_link_scanner_agrees_with_commonmark_on_what_is_a_link():
         # Not shipped: the test trees under `scripts/` (#132).
         ("scripts/tests/test_kit_doctor.py", False),
         ("scripts/lib/state_paths/tests/test_resolver.py", False),
+        # The directory itself, not just its contents — the bare form matched
+        # nothing until the segment check gained a trailing slash.
+        ("scripts/tests", False),
+        ("scripts/lib/state_paths/tests", False),
         # …but `tests/` under a DOCS tree is shipped, and excluding it reopened
         # #146 where this guard is meant to watch. A lens built exactly this.
         ("docs/agentic-dev-kit/tests/note.md", True),
