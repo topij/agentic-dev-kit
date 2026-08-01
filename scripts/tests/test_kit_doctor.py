@@ -709,21 +709,27 @@ def _uncoded(text: str) -> str:
     """
     lines = text.split("\n")
     out = list(lines)
-    fence_char: str | None = None
+    fence: tuple[str, int] | None = None  # (delimiter char, opener length)
     block: list[int] = []
 
     for i, line in enumerate(lines):
         match = _FENCE_LINE.match(line)
-        if fence_char is None:
+        if fence is None:
             if match:
-                fence_char = match.group(1)[0]
+                run = match.group(1)
+                fence = (run[0], len(run))
                 block = [i]
             continue
         block.append(i)
-        if match and match.group(1)[0] == fence_char:
+        # CommonMark: a closer must use the same character AND be at least as
+        # long as its opener. Comparing only the character let a SHORTER run
+        # inside the block close it early, after which the next run reopened —
+        # so a real link between them was blanked while a renderer showed it as
+        # a link. Verified against markdown-it-py before and after.
+        if match and match.group(1)[0] == fence[0] and len(match.group(1)) >= fence[1]:
             for j in block:
                 out[j] = ""
-            fence_char, block = None, []
+            fence, block = None, []
 
     # An unclosed fence leaves `block` unapplied on purpose: the document is
     # malformed, and guessing where the author meant it to end is how the
@@ -856,4 +862,70 @@ def test_a_kit_owned_doc_never_links_to_an_untracked_kit_doc(kit_repo_root):
     assert not untracked, (
         "kit-owned docs link to UNTRACKED kit docs — an upgrade would install "
         "the link and not its target (#37/#146): " + "; ".join(untracked)
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Parity with a real CommonMark renderer
+# --------------------------------------------------------------------------- #
+
+
+# Cases where "is this a link?" is a judgement call, plus every construct a
+# review round has actually disputed. Built as a corpus rather than assertions
+# so the ORACLE is a spec implementation and not my reading of the spec: three
+# separate rounds argued about what these mean, and two lens findings were
+# refuted only by rendering them.
+_MARKDOWN_CASES = (
+    "See [x](target.md).\n",
+    "See [a [nested] label](target.md).\n",
+    "Run `see [a note](target.md) here` first.\n",
+    "Don`t use foo`, but see [x](target.md).\n",  # stray backticks, real link
+    "```\nSee [x](target.md)\n```\n",
+    "```bash\nunclosed, so [x](target.md) is code\n",
+    "````\n```\n````\n[x](target.md)\n````\n```\n",  # shorter inner run
+    "~~~~\n~~~\n~~~~\n[x](target.md)\n~~~~\n~~~\n",
+    "  ```\n  indented fence, [x](target.md) is code\n  ```\n",
+    "Text.[^1]\n\n[^1]: a footnote, not a link\n",
+    "See [x][r].\n\n[r]: target.md\n",
+    'See <a href="target.md">x</a>.\n',
+    "- item\n\n  ```\n  [x](target.md)\n  ```\n",
+)
+
+
+def test_the_link_scanner_agrees_with_commonmark_on_what_is_a_link():
+    """The scanner must not disagree with a renderer about what a link IS.
+
+    Every markdown rule here is hand-rolled, and three review rounds were spent
+    arguing over cases this settles by execution instead. Two lens findings —
+    both HIGH, both confident — claimed real links were being hidden; rendering
+    showed they were code. A third was real and this test would have caught it:
+    a fence closer shorter than its opener falsely closed the block, so a link a
+    renderer displays was blanked.
+
+    **Only one direction is asserted.** If the renderer produces no `<a href>`,
+    the scanner must find no link there — hiding a real link is the silent
+    failure that defeats the guard. The converse is deliberately NOT asserted:
+    the scanner also reads reference definitions and raw `href=` attributes,
+    which a renderer may resolve differently, and over-reporting is the safe
+    direction this file chooses everywhere else.
+
+    Skipped when the renderer is absent, matching `test_kitconfig.py`'s PyYAML
+    parity check. **CI installs only pytest and pyyaml, so this SKIPS there** —
+    it is a local guard, and making it a gate means adding the dependency to
+    `.github/workflows/test.yml` deliberately rather than by accident.
+    """
+    markdown_it = pytest.importorskip(
+        "markdown_it", reason="markdown-it-py absent — CommonMark parity skipped"
+    )
+    md = markdown_it.MarkdownIt("commonmark")
+
+    hidden = []
+    for src in _MARKDOWN_CASES:
+        renders_link = "<a href" in md.render(src)
+        scanner_found = list(_relative_links(src))
+        if renders_link and not scanner_found:
+            hidden.append(repr(src))
+    assert not hidden, (
+        "the scanner sees no link where CommonMark renders one — a real dangling "
+        "link in this shape would pass both guards silently: " + "; ".join(hidden)
     )
