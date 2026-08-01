@@ -18,9 +18,13 @@
       "role": "doctrine",
       "sha256": "c6c74e8cc3f80fe7ce6d88b34845e627a3800bc6c8cca10f57692fece4d16eab"
     },
+    "docs/agentic-dev-kit/fallback-review-panel-evidence.md": {
+      "role": "doctrine",
+      "sha256": "22a464d9fea3df1f868645d5d9a575752917a715dadd9a19152f75632aae2619"
+    },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "c2c602e3846d1095234c9411845b0ec3da76a7ec925900b96bd2778c74181424"
+      "sha256": "b02153c791b6602e27979a2d8ab14cb455b5602347a54771fcf44f49615d1ea3"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -92,7 +96,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "bd1dec58daaee7e930b82e97a13d4ec10ffb2912083285b190167b80d511e139"
+      "sha256": "0f5a903fcca75688711adf81576a4d7edbf8235891a7c1a87111867e446bae4a"
     },
     "scripts/lib/atomic_write.py": {
       "role": "engine",

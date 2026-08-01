@@ -1,6 +1,7 @@
 """What pins the mutation-testing exclusion — and, deliberately, what does not.
 
-`docs/agentic-dev-kit/fallback-review-panel.md` contract item 5 tells a reviewer
+`docs/agentic-dev-kit/fallback-review-panel.md`'s **Mutation-test new branches**
+contract item tells a reviewer
 to trust `-m 'not driftcheck'` when deciding whether a mutant died. The tests
 here pin that the exclusion selects the right test, removes exactly it, that the
 test it removes is really running, and that the documented command still passes

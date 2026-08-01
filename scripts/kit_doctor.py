@@ -126,6 +126,16 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # upgrading adopter gets doctrine pointing at a file they do not have, and
     # kit_doctor cannot report it missing because it is not tracked.
     ("docs/agentic-dev-kit/fallback-review-panel.md", "doctrine"),
+    # The companion split out of the file above (#213). Tracked for the SAME
+    # reason and by the same hand-checked route: fallback-review-panel.md is
+    # manifest-owned and /upgrade-refreshed, and links here once. Untracked,
+    # an upgrade would refresh that link and not its target — #146 exactly,
+    # reproduced by the very change that split the file. NOTHING IN THE SUITE
+    # ENFORCES THIS PAIRING: the link guard was built and reverted (#216), so
+    # this entry and the kit-manifest.json entry beside it are a manual
+    # checklist item. If you add another kit doc linked from a tracked one,
+    # you must do this by hand too.
+    ("docs/agentic-dev-kit/fallback-review-panel-evidence.md", "doctrine"),
     # Tracked so an adopter who installs the kit gets it, and so kit_doctor can
     # say when they did not. NOT for the same reason as the line above, despite
     # an earlier version of this comment claiming so: fallback-review-panel.md
