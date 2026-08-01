@@ -105,11 +105,22 @@ def contract(doctrine_path: Path) -> tuple[str, list[str]]:
     following = _NEXT_H2.search(text, body_start)
     section = text[body_start : following.start() if following else len(text)].strip("\n")
 
-    names = [m.group(2) for m in _ITEM.finditer(section)]
+    matches = list(_ITEM.finditer(section))
+    names = [m.group(2) for m in matches]
     if not names:
         raise PromptError(
             f"{doctrine_path}: parsed 0 contract items from {CONTRACT_HEADING!r}. The "
             "list format changed; refusing to emit a prompt carrying no contract."
+        )
+    # The rendered "carries N items" line is only assurance if N describes a sound
+    # list. A renumbering slip leaves the count intact while the doctrine reads
+    # wrong, so the ordinals are checked rather than merely counted.
+    ordinals = [int(m.group(1)) for m in matches]
+    if ordinals != list(range(1, len(ordinals) + 1)):
+        raise PromptError(
+            f"{doctrine_path}: contract items are numbered {ordinals}, not 1..{len(ordinals)}. "
+            "A renumbering slip leaves the item count unchanged, so the count alone would "
+            "have reported false assurance. Refusing to emit."
         )
     return section, names
 
@@ -124,6 +135,47 @@ def resolve_base(root: Path, branch: str, remote: str = "origin") -> str:
             "base is still an ancestor)."
         )
     return out.split()[0]
+
+
+def resolve_branch(root: Path, override: str | None) -> str:
+    """Name the branch under review, or refuse.
+
+    `git rev-parse --abbrev-ref HEAD` returns the literal string ``HEAD`` on a
+    detached checkout — which is the state of every worktree built at a pinned sha
+    for review, and of a default CI PR checkout. Rendering that produces
+    ``**Branch:** HEAD``, a plausible-looking lie, at exit 0. The contract requires
+    the prompt name the repo, the branch and the head sha; a placeholder is not a
+    branch, so this refuses and asks for one.
+    """
+    if override:
+        return override
+    name = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
+    if name == "HEAD":
+        raise PromptError(
+            "this checkout is detached, so the branch under review cannot be observed "
+            "— `git rev-parse --abbrev-ref HEAD` returns the literal 'HEAD'. Pass "
+            "--branch explicitly. Emitting 'Branch: HEAD' would name a placeholder as "
+            "if it were the branch."
+        )
+    return name
+
+
+def _repo_slug(remote_url: str) -> str:
+    """`git@host:a/b.git` and `https://host/a/b/c.git` -> `a/b`, `a/b/c`.
+
+    Keeping every path segment matters for forges with nested namespaces (GitLab
+    subgroups, Bitbucket projects): taking only the last two silently renders a
+    wrong-but-plausible repo for them.
+    """
+    url = remote_url.strip().removesuffix(".git")
+    if "://" in url:
+        url = url.split("://", 1)[1]
+        path = url.split("/", 1)[1] if "/" in url else url
+    elif ":" in url:  # scp-like: git@host:path
+        path = url.split(":", 1)[1]
+    else:
+        path = url
+    return path.strip("/") or remote_url
 
 
 def _require_commit(root: Path, rev: str) -> str:
@@ -248,7 +300,7 @@ def build(args: argparse.Namespace) -> str:
             "lenses be drawn from the configured roster, not minted for the occasion."
         )
 
-    branch = args.branch or _git(root, "rev-parse", "--abbrev-ref", "HEAD")
+    branch = resolve_branch(root, args.branch)
     base_branch = args.base_branch or get(config, "vcs.protected_branch", "main")
     base_from_remote = args.base is None
     base = args.base or resolve_base(root, base_branch)
@@ -265,8 +317,7 @@ def build(args: argparse.Namespace) -> str:
 
     section, names = contract(root / DOCTRINE)
 
-    remote_url = _git(root, "config", "--get", "remote.origin.url")
-    slug = re.sub(r"^.*[:/]([^/]+/[^/]+?)(?:\.git)?$", r"\1", remote_url) or remote_url
+    slug = _repo_slug(_git(root, "config", "--get", "remote.origin.url"))
 
     return render(
         lens=args.lens,

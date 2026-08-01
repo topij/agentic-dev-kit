@@ -315,3 +315,91 @@ def test_a_level_three_subheading_does_not_truncate_the_contract(tmp_path):
     )
     _, names = pp.contract(doctored)
     assert names == ["First", "Second"]
+
+
+# --- findings from the adversarial lens on PR #219 -------------------------------
+
+
+def test_a_detached_checkout_is_refused_rather_than_named_HEAD(repo):
+    """`rev-parse --abbrev-ref HEAD` returns the literal 'HEAD' when detached.
+
+    That is the state of every worktree built at a pinned sha for review, and of a
+    default CI PR checkout. Rendering it produced `**Branch:** HEAD` at exit 0 — a
+    plausible-looking lie in the field the contract requires. Found by mutation:
+    hardwiring the branch to a constant passed the entire suite.
+    """
+    base, head = _revs(repo)
+    _git(repo, "checkout", "-q", "--detach", head)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base)
+    assert out.returncode == 2
+    assert "detached" in out.stderr
+    assert "**Branch:** HEAD" not in out.stdout
+
+
+def test_an_explicit_branch_is_accepted_on_a_detached_checkout(repo):
+    """The refusal must be escapable the documented way, or it just blocks review."""
+    base, head = _revs(repo)
+    _git(repo, "checkout", "-q", "--detach", head)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "topic/x")
+    assert out.returncode == 0, out.stderr
+    assert "- **Branch:** topic/x" in out.stdout
+
+
+def test_the_branch_under_review_is_actually_rendered(repo):
+    """No test asserted on the Branch line at all; hardwiring it killed nothing."""
+    base, head = _revs(repo)
+    _git(repo, "checkout", "-q", "-b", "feat/observed")
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base)
+    assert out.returncode == 0, out.stderr
+    assert "- **Branch:** feat/observed" in out.stdout
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://github.com/topij/agentic-dev-kit.git", "topij/agentic-dev-kit"),
+        ("git@github.com:topij/agentic-dev-kit.git", "topij/agentic-dev-kit"),
+        ("https://gitlab.com/group/subgroup/proj.git", "group/subgroup/proj"),
+        ("git@gitlab.com:group/subgroup/proj.git", "group/subgroup/proj"),
+        ("https://host/a/b/c/d", "a/b/c/d"),
+    ],
+)
+def test_nested_remote_paths_are_not_truncated(url, expected):
+    """Taking only the last two segments renders a wrong-but-plausible repo for
+    forges with nested namespaces — GitLab subgroups, Bitbucket projects."""
+    pp = _load()
+    assert pp._repo_slug(url) == expected
+
+
+def test_the_no_worktree_write_safety_instruction_is_present(repo):
+    """Unpinned, this inverted cleanly under mutation while 641 tests passed.
+
+    Item 7/#136 is the reason it matters: one lens nearly destroyed live work.
+    """
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
+    assert "do not write into any tree you were handed" in out.stdout
+    assert "No worktree was provided" in out.stdout
+
+
+def test_a_provided_worktree_is_named_and_the_no_worktree_warning_is_dropped(repo):
+    base, head = _revs(repo)
+    out = _run(
+        repo, "--lens", "adversarial", "--head", head, "--base", base,
+        "--branch", "b", "--scratch", "/abs/scratch/lens-x",
+    )
+    assert "/abs/scratch/lens-x" in out.stdout
+    assert "No worktree was provided" not in out.stdout
+
+
+def test_a_renumbering_slip_is_refused_even_though_the_count_is_unchanged(tmp_path):
+    """`len(names)` alone reported "13 items" over a doctrine numbered 1..12,13->12."""
+    pp = _load()
+    doctored = tmp_path / "doctrine.md"
+    doctored.write_text(
+        "## The contract every lens gets\n\n"
+        "1. **First.** body\n"
+        "3. **Third, skipping two.** body\n"
+    )
+    with pytest.raises(pp.PromptError, match="not 1..2"):
+        pp.contract(doctored)
