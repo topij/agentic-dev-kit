@@ -26,13 +26,20 @@ private copy raises there instead; raising at import time is what turns a
 missing ``.git`` into a *collection* error, which is the failure mode being
 removed here, so it is not the form to copy.
 
+**The fallback does not repair #134, it preserves it**, and that is worth saying
+outright rather than leaving to be inferred: with no marker anywhere, a nested
+engines directory still resolves one level short — the original defect, on the
+one path where nothing can tell the layouts apart. That limit is ``#60``'s, not
+this module's, and it is *pinned* rather than merely described, by
+``test_repo_layout.py::test_the_fallback_is_wrong_in_a_nested_layout_and_that_is_known``
+— which fails if ``#60``'s resolution lands without updating here.
+
 **Three modules still carry their own copy** — ``test_portability.py``,
 ``test_mutation_gate.py`` and ``test_pr_followup_hook.py``. They already derive
 the engine directory from their own location, so they are not affected by
-#134 and were left alone rather than swept into its fix; consolidating them (and
-deciding whether the raising fallback should survive anywhere) is tracked
-separately. Do not read their divergence as a second opinion about what is
-correct.
+#134 and were left alone rather than swept into its fix; consolidating them, and
+deciding whether the raising fallback should survive anywhere, is ``#203``. Do
+not read their divergence as a second opinion about what is correct.
 """
 
 from __future__ import annotations
