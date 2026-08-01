@@ -273,3 +273,45 @@ def test_the_verification_command_is_never_guessed(repo):
         repo, "--lens", "adversarial", "--head", head, "--base", base, "--verify-command", "make test"
     )
     assert "`make test` is this repo's verification command" in named.stdout
+
+
+def test_a_level_three_heading_is_not_mistaken_for_the_contract(tmp_path):
+    """`### The contract...` contains `## The contract...` as a substring.
+
+    A plain `str.find` matches it at offset 1 and would emit a subsection as the
+    contract. Found by CodeRabbit on the PR that added this engine.
+    """
+    pp = _load()
+    doctored = tmp_path / "doctrine.md"
+    doctored.write_text(
+        "# Doc\n\n### The contract every lens gets\n\n1. **Decoy.** not the real one\n"
+    )
+    with pytest.raises(pp.PromptError, match="no '## The contract"):
+        pp.contract(doctored)
+
+
+def test_the_phrase_quoted_in_prose_is_not_mistaken_for_the_heading(tmp_path):
+    pp = _load()
+    doctored = tmp_path / "doctrine.md"
+    doctored.write_text(
+        "# Doc\n\nSee the ## The contract every lens gets section below.\n\n"
+        "1. **Decoy.** not the real one\n"
+    )
+    with pytest.raises(pp.PromptError, match="no '## The contract"):
+        pp.contract(doctored)
+
+
+def test_a_level_three_subheading_does_not_truncate_the_contract(tmp_path):
+    """Bounding on `\\n## ` must not stop at a `###` sub-heading inside the section."""
+    pp = _load()
+    doctored = tmp_path / "doctrine.md"
+    doctored.write_text(
+        "## The contract every lens gets\n\n"
+        "1. **First.** body\n\n"
+        "### A subsection inside the contract\n\n"
+        "2. **Second.** body\n\n"
+        "## Running it\n\n"
+        "3. **Not a contract item.** body\n"
+    )
+    _, names = pp.contract(doctored)
+    assert names == ["First", "Second"]

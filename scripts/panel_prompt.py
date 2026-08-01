@@ -61,6 +61,14 @@ CONTRACT_HEADING = "## The contract every lens gets"
 # item count honest.
 _ITEM = re.compile(r"^(\d+)\.\s+\*\*(.+?)\.?\*\*", re.MULTILINE)
 
+# The heading must be a real level-two heading on its own line. A plain substring
+# search also matches `### The contract every lens gets` (at offset 1) and any prose
+# quoting the phrase mid-line — so it would happily slice a "contract" out of a
+# subsection or a sentence and emit it as the contract.
+_HEADING = re.compile(rf"^{re.escape(CONTRACT_HEADING)}\s*$", re.MULTILINE)
+# Any level-two heading, to bound the section without matching `###` sub-headings.
+_NEXT_H2 = re.compile(r"^## ", re.MULTILINE)
+
 
 class PromptError(Exception):
     """A condition that would make the emitted prompt misleading."""
@@ -87,15 +95,15 @@ def contract(doctrine_path: Path) -> tuple[str, list[str]]:
     the doctrine — the count is the thing #214 says is currently invisible.
     """
     text = doctrine_path.read_text()
-    start = text.find(CONTRACT_HEADING)
-    if start == -1:
+    opening = _HEADING.search(text)
+    if opening is None:
         raise PromptError(
             f"{doctrine_path}: no {CONTRACT_HEADING!r} heading — the doctrine moved or "
             "was renamed, and this script must not guess at a substitute"
         )
-    body_start = start + len(CONTRACT_HEADING)
-    nxt = text.find("\n## ", body_start)
-    section = text[body_start : nxt if nxt != -1 else len(text)].strip("\n")
+    body_start = opening.end()
+    following = _NEXT_H2.search(text, body_start)
+    section = text[body_start : following.start() if following else len(text)].strip("\n")
 
     names = [m.group(2) for m in _ITEM.finditer(section)]
     if not names:
