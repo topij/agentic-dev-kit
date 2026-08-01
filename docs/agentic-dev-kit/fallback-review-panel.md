@@ -47,9 +47,19 @@ entirely means its lenses inherit the cockpit session's own compute. That
 inheritance is the behaviour that predates the key, so an adopter who never sets
 it sees no change.
 
-`scripts/hooks/pr_followup_hook.py` renders it into the reminder it fires when a
-PR is opened or readied, which is what makes the setting reach the agent that
-actually spawns the lenses.
+**Each runtime reaches its own key by its own path**, and the key is inert until
+that path exists — so if you add a runtime here, give it one.
+
+- **Claude Code** — `scripts/hooks/pr_followup_hook.py` reads
+  `lens_compute.claude` and renders it into the reminder it fires when a PR is
+  opened or readied. It reads *only* that key: a value written for another
+  runtime must never leak into this one's instruction.
+- **Codex** — `.agents/skills/pr-watch/SKILL.md` step 5 names
+  `lens_compute.codex`, the same way it names `review.fallback_commands`. No
+  Python or shell reads either; the adapter is the consumer.
+
+Do not go looking in the hook for why a non-Claude key had no effect — by design
+it will never mention one.
 
 **The two keys do not reach equally far, and the difference is per-runtime.** On
 Claude Code today the delegation tool takes a `model` parameter but no per-agent
