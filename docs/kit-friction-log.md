@@ -97,15 +97,29 @@ establish: on the PR. Swept entries are verbatim in the archive under `Graduated
   Proposed: when a config key selects compute or capability, state per runtime whether it is
   mechanical or advisory, and consider a `kit_doctor` check that a declared runtime key has a named
   consumer.
-- **`gh pr view <branch>` can resolve to a *merged* PR when a branch name repeats, so a failed
-  create reads as success.** The wrap-up branch pattern `chore/update-handoff-{date}` repeats
-  whenever two wrap-ups land on one date, and this session's did. `gh pr create` failed silently
-  (it printed no URL); the very next command — `gh pr view <branch> --json number,isDraft` — printed
-  `PR #191 isDraft=false`, a PR **merged the previous session** from a branch of the same name. The
-  intended check ("did the PR open, and is it ready rather than draft?") answered confidently about
-  a different, already-merged PR. Caught only by listing open PRs and finding none. **M** — this is
-  [#179](https://github.com/topij/agentic-dev-kit/issues/179)'s shape with a concrete new mechanism,
-  and it weakens [#170](https://github.com/topij/agentic-dev-kit/issues/170) directly: verifying the
-  draft bit landed is only sound if the verification is bound to the PR just created. Proposed:
-  verify by the PR **number** `gh pr create` prints, never by branch name; and consider a wrap-up
-  branch pattern that cannot repeat within a day.
+- **A guard that refuses looks exactly like a command that failed, and the recovery instinct is to
+  re-run without the guard.** `gh pr create` was chained to the closing-keyword scan. The scan
+  **refused** — correctly: the PR body quoted a banned construction in the course of describing it.
+  All the chain emitted was an absence, no URL, so I read it as a transient failure and re-ran
+  `gh pr create` **without the chain**, publishing the body the guard had just declined. **H** —
+  this is [#180](https://github.com/topij/agentic-dev-kit/issues/180) inverted and is the more
+  dangerous half: `#180` is about a guard that is not chained, this is about a guard that *is*
+  chained, fires correctly, and gets bypassed by the operator's next keystroke. Nothing was altered
+  (`#195`'s timeline shows no event from the PR) which is luck, not mechanism. Proposed: a refusing
+  guard must say so loudly enough that its silence is never mistaken for the tool's — print
+  `REFUSED: <reason>` on the failure path — and a chain must never be re-run without its guard
+  merely because the first attempt produced no output. Also occurrence data for
+  [#71](https://github.com/topij/agentic-dev-kit/issues/71): the guard being ad-hoc rather than a
+  shipped hook is what made dropping it a single edit.
+- **`gh pr view <branch>` can resolve to a *merged* PR when a branch name repeats.** Compounding the
+  above, and the reason I mis-diagnosed it: the wrap-up branch pattern
+  `chore/update-handoff-{date}` repeats whenever two wrap-ups land on one date, and this session's
+  did. `gh pr view <branch> --json number,isDraft` printed `PR #191 isDraft=false` — a PR **merged
+  the previous session** from a branch of the same name — so the check answered confidently about a
+  different, already-merged PR and sent me looking for a transient `gh` failure instead of at my own
+  refused guard. Caught only by listing open PRs and finding none. **M** —
+  [#179](https://github.com/topij/agentic-dev-kit/issues/179)'s shape with a concrete mechanism, and
+  it weakens [#170](https://github.com/topij/agentic-dev-kit/issues/170) directly: verifying the
+  draft bit landed is only sound when bound to the PR just created. Proposed: verify by the PR
+  **number** `gh pr create` prints, never by branch name; and consider a wrap-up branch pattern that
+  cannot repeat within a day.
