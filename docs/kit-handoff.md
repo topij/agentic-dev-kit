@@ -30,7 +30,7 @@ as `#216`, because four consecutive rounds each found a regression introduced by
 - **`#134` cause 1 — the issue's own numbers were stale, and the real failure was worse.** Its
   `19 failed, 368 passed` is reachable only with `--continue-on-collection-errors`, which nothing in
   the kit passes: the plain invocation **aborts collection and runs nothing**. Further corrections to
-  the issue's own text are on the issue, under "corrections".
+  the issue's own text are in its comments.
   **Cause 2 stays open** with a measurement attached — and no count is repeated here, because it is a
   function of both the vendored subset and the head.
 - **`#37`/`#146` — three shipped files were untracked, so an upgrade refreshed a doc's links and not
@@ -71,9 +71,10 @@ as `#216`, because four consecutive rounds each found a regression introduced by
 ▶ Next: **`#213`** — read `fallback-review-panel.md` end to end and produce the split inventory
 (every section classified executes / explains, contract items enumerated) **before editing**. Decide
 and state the review-cost call for that PR up front, since it is doctrine and therefore first-class
-prose reviewed under the rule it reforms. **Read `#213`'s correction comment first:** its body claims
-the `#37`/`#146` hazard is guarded by tests that were reverted, so the split must add the new
-companion to `KIT_OWNED` and the manifest by hand — nothing fails if it does not.
+prose reviewed under the rule it reforms. **Read `#213`'s correction comment first.** That
+issue's original body says the `#37`/`#146` hazard is guarded by link tests added in `#207`; those
+tests were reverted before `#207` merged, which the correction comment records. So the split must add
+the new companion to `KIT_OWNED` and the manifest by hand — nothing fails if it does not.
 
 ______________________________________________________________________
 
