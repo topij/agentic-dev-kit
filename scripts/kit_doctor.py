@@ -114,8 +114,11 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # and reported a clean bill of health. That is #146, and it is the concrete
     # occurrence behind #37: the untracked file was the target of a link from a
     # tracked one, so refreshing the tracked file is what created the dangling
-    # reference. `test_kit_doctor.py` now fails if this pairing regresses for
-    # any kit-owned doc, not just this one.
+    # reference. Tracking this file closes that instance and NOTHING MORE: no
+    # test detects the same pairing for the next doc, so a new link from a
+    # tracked file to an untracked one reproduces #146 exactly. A guard for it
+    # was built here and reverted — see #216 for why and for the design. Do not
+    # read this entry as the class being handled.
     ("docs/agentic-dev-kit/workflows/parallel-headless.md", "workflow"),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
