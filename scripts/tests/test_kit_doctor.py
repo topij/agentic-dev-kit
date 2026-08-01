@@ -647,11 +647,35 @@ def _kit_owned_paths() -> set[str]:
 #
 # The inline pattern anchors on `](` rather than `[text](`, so bracketed link
 # text no longer defeats it.
+#
+# Widening a matcher trades under-reporting for FALSE POSITIVES, and the next
+# round found all three it introduced. Each guard below is one of them:
+#
+#   `(?!\^)`   a footnote definition `[^1]: prose` is syntactically identical
+#              to a link-reference definition. Without this the first word of
+#              the footnote text is read as a target, both tests fail, and the
+#              message names a path nobody wrote.
+#   _uncoded   an `<a href>` or `](…)` quoted INSIDE backticks is documentation
+#              OF link syntax, not a link. The docs here explain markup for a
+#              living, so this is the likeliest false positive of the three.
 _LINK_PATTERNS = (
     re.compile(r"\]\(([^)]+)\)"),  # inline, incl. bracketed link text
-    re.compile(r"(?m)^ {0,3}\[[^\]]+\]:[ \t]*(\S+)"),  # reference definition
+    re.compile(r"(?m)^ {0,3}\[(?!\^)[^\]]+\]:[ \t]*(\S+)"),  # reference definition
     re.compile(r"""href=["']([^"']+)["']"""),  # inline HTML
 )
+
+_FENCED = re.compile(r"(?ms)^```.*?^```")
+_INLINE_CODE = re.compile(r"`[^`\n]*`")
+
+
+def _uncoded(text: str) -> str:
+    """`text` with fenced blocks and inline code spans blanked out.
+
+    Blanked rather than deleted so nothing on either side of a removed span can
+    be spliced into a construct that was never written.
+    """
+    text = _FENCED.sub(lambda m: "\n" * m.group().count("\n"), text)
+    return _INLINE_CODE.sub("", text)
 
 # Directories the kit SHIPS. A link from one tracked doc into any of these is
 # the #146 pairing, not just a link within `docs/agentic-dev-kit/` — templates
@@ -660,9 +684,23 @@ _LINK_PATTERNS = (
 # repo-local, never installed, and must NOT be required to be tracked.
 _KIT_SHIPPED_TREES = ("docs/agentic-dev-kit/", "docs/templates/", "scripts/")
 
+# …minus the test trees, which live UNDER `scripts/` and are deliberately not
+# kit-owned (#132: nothing under `scripts/tests/` reaches an adopter via
+# `/upgrade` at all). A bare `scripts/` prefix demanded that a doc linking to
+# `scripts/tests/test_kit_doctor.py` have that file tracked — contradicting
+# this repo's own Makefile note that a mutation to `scripts/tests/` never trips
+# the drift check. `scripts/lib/state_paths/tests/` is the same case one level
+# down, which is why this matches a path SEGMENT rather than a prefix.
+_NEVER_SHIPPED_SEGMENT = "/tests/"
+
+
+def _is_kit_shipped(rel: str) -> bool:
+    return rel.startswith(_KIT_SHIPPED_TREES) and _NEVER_SHIPPED_SEGMENT not in f"/{rel}"
+
 
 def _relative_links(text: str):
     """Relative link targets in any supported syntax, fragments stripped."""
+    text = _uncoded(text)
     for pattern in _LINK_PATTERNS:
         for target in pattern.findall(text):
             target = target.split("#", 1)[0].split("?", 1)[0].strip()
@@ -673,10 +711,20 @@ def _relative_links(text: str):
 
 
 def test_every_link_out_of_a_kit_owned_doc_resolves(kit_repo_root):
-    """A tracked doc must not ship a link to a file that does not exist.
+    """A tracked `.md` doc must not ship a link to a file that does not exist.
 
     This is the failure #37 records, in its general form: refreshing a tracked
     doc installs its links, so a broken one reaches every adopter at once.
+
+    **`.md.tmpl` sources are NOT scanned, and that is a real gap, not a
+    definition.** Five templates are tracked and `/upgrade`-refreshed, and a
+    dangling link injected into one passes both guards — verified. They are
+    excluded because their links cannot be resolved from where the file SITS:
+    most are unrendered `{{TOKENS}}` standing for adopter-configured paths, and
+    `AGENTS.md.tmpl`'s are repo-root-relative because it renders at the root,
+    not in `docs/templates/`. Scanning them needs a render-location model,
+    which is a design decision rather than a wider regex — #208. Narrowing this
+    docstring rather than leaving it claiming coverage it does not have.
     """
     broken = []
     examined = 0
@@ -736,7 +784,7 @@ def test_a_kit_owned_doc_never_links_to_an_untracked_kit_doc(kit_repo_root):
                 target_rel = resolved.relative_to(kit_repo_root).as_posix()
             except ValueError:
                 continue  # escapes the repo; the resolving test owns that case
-            if target_rel.startswith(_KIT_SHIPPED_TREES) and target_rel not in owned:
+            if _is_kit_shipped(target_rel) and target_rel not in owned:
                 untracked.append(f"{rel} -> {target_rel}")
     assert not untracked, (
         "kit-owned docs link to UNTRACKED kit docs — an upgrade would install "
