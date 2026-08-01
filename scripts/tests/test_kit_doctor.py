@@ -664,18 +664,75 @@ _LINK_PATTERNS = (
     re.compile(r"""href=["']([^"']+)["']"""),  # inline HTML
 )
 
-_FENCED = re.compile(r"(?ms)^```.*?^```")
+_FENCE_LINE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
 _INLINE_CODE = re.compile(r"`[^`\n]*`")
 
 
 def _uncoded(text: str) -> str:
-    """`text` with fenced blocks and inline code spans blanked out.
+    """`text` with WELL-FORMED fenced blocks and inline code spans removed.
 
-    Blanked rather than deleted so nothing on either side of a removed span can
-    be spliced into a construct that was never written.
+    **When this cannot tell code from prose it leaves the text alone**, and that
+    asymmetry is the whole design. Blanking too little yields a false positive:
+    a test fails naming a link that was only ever an example, which is loud and
+    fixed in a minute. Blanking too much yields a false NEGATIVE: a real dangling
+    link is never scanned, the suite stays green, and the guard silently stops
+    guarding. The first is an annoyance; the second is the defect this file
+    exists to prevent.
+
+    **What this rewrite actually fixed, and what it deliberately did not.** A
+    panel lens reported three HIGH regressions here. One was real:
+    ``_is_kit_shipped`` excluded ``/tests/`` under every shipped tree (see
+    there). The other two were text it said hid real links — a link between two
+    backticks, and a link after an unclosed fence — and both were **refuted by
+    measurement**: rendered through CommonMark (``markdown-it-py``), neither
+    produces an ``<a href>``. They are code by the spec, so skipping them is
+    correct and scanning them would be the defect. Recorded because a confident,
+    well-evidenced lens finding can still be wrong about what a file means, and
+    the way to settle that is to run the thing rather than weigh the reports.
+
+    The regex form was replaced anyway, because it was genuinely weaker than
+    line tracking in ways the lens's cases pointed at without naming:
+
+    - ``^```…`` recognised no INDENTED fence, and this repo's own docs indent
+      them inside list items (``pr-watch.md`` has several). An unrecognised
+      fence leaves example links exposed — a false positive.
+    - It ignored ``~~~`` fences entirely, and did not require a closer to use
+      the same character as its opener.
+    - Inline spans were stripped regardless of whether the backticks paired.
+      Now a line is stripped only when its backtick count is EVEN; an odd count
+      means at least one is literal, so nothing is removed.
+
+    A fence left open at EOF removes nothing, since there is no closer to
+    delimit it. A fence closed by a LATER delimiter blanks everything between,
+    which is what CommonMark does too — the document is malformed, and both this
+    and a renderer read it the same way.
     """
-    text = _FENCED.sub(lambda m: "\n" * m.group().count("\n"), text)
-    return _INLINE_CODE.sub("", text)
+    lines = text.split("\n")
+    out = list(lines)
+    fence_char: str | None = None
+    block: list[int] = []
+
+    for i, line in enumerate(lines):
+        match = _FENCE_LINE.match(line)
+        if fence_char is None:
+            if match:
+                fence_char = match.group(1)[0]
+                block = [i]
+            continue
+        block.append(i)
+        if match and match.group(1)[0] == fence_char:
+            for j in block:
+                out[j] = ""
+            fence_char, block = None, []
+
+    # An unclosed fence leaves `block` unapplied on purpose: the document is
+    # malformed, and guessing where the author meant it to end is how the
+    # previous version hid a real link.
+
+    for i, line in enumerate(out):
+        if line and line.count("`") % 2 == 0:
+            out[i] = _INLINE_CODE.sub("", line)
+    return "\n".join(out)
 
 # Directories the kit SHIPS. A link from one tracked doc into any of these is
 # the #146 pairing, not just a link within `docs/agentic-dev-kit/` — templates
@@ -692,10 +749,20 @@ _KIT_SHIPPED_TREES = ("docs/agentic-dev-kit/", "docs/templates/", "scripts/")
 # the drift check. `scripts/lib/state_paths/tests/` is the same case one level
 # down, which is why this matches a path SEGMENT rather than a prefix.
 _NEVER_SHIPPED_SEGMENT = "/tests/"
+_NEVER_SHIPPED_UNDER = "scripts/"
 
 
 def _is_kit_shipped(rel: str) -> bool:
-    return rel.startswith(_KIT_SHIPPED_TREES) and _NEVER_SHIPPED_SEGMENT not in f"/{rel}"
+    if not rel.startswith(_KIT_SHIPPED_TREES):
+        return False
+    # The exclusion is scoped to `scripts/` because that is the only tree its
+    # argument covers. #132 says nothing under `scripts/tests/` reaches an
+    # adopter; it says nothing about a `tests/` directory under `docs/`, which
+    # WOULD be /upgrade-refreshed. An earlier version applied the segment to all
+    # three trees, so an untracked `docs/agentic-dev-kit/tests/…` target was
+    # silently waved through — #146 reopened in the one place this guard exists
+    # to watch. Dormant when found (no such path exists), and a lens built one.
+    return not (rel.startswith(_NEVER_SHIPPED_UNDER) and _NEVER_SHIPPED_SEGMENT in f"/{rel}")
 
 
 def _relative_links(text: str):
