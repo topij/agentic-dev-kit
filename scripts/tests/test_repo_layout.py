@@ -78,13 +78,20 @@ def test_repo_root_is_found_at_any_engine_depth(tmp_path: Path, engines: str) ->
     assert find_repo_root(engine_dir(module)) == tmp_path
 
 
-# Both positions the guard walks, so no term of `(start, *start.parents)` is
-# left to a later "tidy-up". Parametrized rather than added case-by-case
-# because rounds 4 and 5 each pinned ONE of these two and shipped the other
-# unpinned — an unlisted position is what the pattern keeps exploiting, and a
-# two-element walk has exactly two.
-@pytest.mark.parametrize("marker_at_start", [True, False], ids=["at-start", "at-ancestor"])
-def test_the_precondition_helper_detects_a_marker(tmp_path: Path, marker_at_start: bool) -> None:
+# Marker depth above `start`, and marker kind. The depths are not decorative:
+# each pins that the walk is not truncated at the depth below it, and the
+# `file` case pins the same `.exists()`-not-`.is_dir()` choice
+# `test_a_git_file_counts_as_a_marker` pins for `find_repo_root`.
+_GUARD_CASES = (
+    pytest.param(0, "dir", id="at-start"),
+    pytest.param(1, "dir", id="one-above"),
+    pytest.param(3, "dir", id="three-above"),
+    pytest.param(1, "file", id="worktree-gitfile"),
+)
+
+
+@pytest.mark.parametrize(("depth", "kind"), _GUARD_CASES)
+def test_the_precondition_helper_detects_a_marker(tmp_path: Path, depth: int, kind: str) -> None:
     """The guard is pinned too, because the guard was the fourth unpinned thing.
 
     `_require_no_ancestor_marker` fires only in an environment the suite does
@@ -95,22 +102,41 @@ def test_the_precondition_helper_detects_a_marker(tmp_path: Path, marker_at_star
     and silence here is indistinguishable from the environment simply being
     fine, which is the whole failure it was written to end.
 
-    The name says "ancestor" and the walk is inclusive of `start`, which is
-    correct rather than sloppy: `find_repo_root` would return `start` itself
-    from a marker there, so a guard that skipped it would wave through the one
-    case where the fallback under test is least reachable.
+    The walk is inclusive of `start` despite the name saying "ancestor", and
+    that is correct rather than sloppy: `find_repo_root` would return `start`
+    itself from a marker there, so a guard skipping it would wave through the
+    one case where the fallback under test is least reachable.
 
-    Found by the adversarial panel lens on four consecutive rounds — each time
-    the remediation reproduced the defect it remediated. The `at-start`
-    parameter is round 5's catch; `at-ancestor` was round 4's.
+    **What these cases do NOT establish, stated because the previous version of
+    this comment claimed the opposite.** It said a "two-element walk has exactly
+    two" positions and both were covered. That was wrong twice over: the walk is
+    `(start, *start.parents)`, which is unbounded — it climbs to the filesystem
+    root — and "two" described the two-level tree the test happened to build,
+    not the walk. A lens then truncated the walk to `(start, start.parent)` and
+    the whole suite stayed green.
+
+    No finite set of examples pins an unbounded walk. What these pin is that it
+    is not truncated at depth 0, 1 or 2, and that a `.git` FILE counts — the
+    linked-worktree shape, which every previous case here missed because they
+    all built directories. A truncation at depth 3 or beyond would still
+    survive, and saying so is the point: the honest claim is "not truncated at
+    the depths tested", not "complete".
+
+    Depth matters for the real failure too. `--basetemp` names a directory whose
+    per-test subdirectory then holds this fixture's own tree, so a repository
+    marker is several levels above `start`, not one.
     """
-    root = tmp_path / "checkout"
-    engines = root / "scripts"
-    engines.mkdir(parents=True)
-    ((engines if marker_at_start else root) / ".git").mkdir()
+    chain = tmp_path.joinpath(*(f"level{i}" for i in range(depth)))
+    start = chain / "engines"
+    start.mkdir(parents=True)
+    marker = (start if depth == 0 else start.parents[depth - 1]) / ".git"
+    if kind == "dir":
+        marker.mkdir()
+    else:
+        marker.write_text("gitdir: /elsewhere/.git/worktrees/x\n", encoding="utf-8")
 
     with pytest.raises(AssertionError, match="outside any git checkout"):
-        _require_no_ancestor_marker(engines)
+        _require_no_ancestor_marker(start)
 
 
 def test_the_precondition_helper_is_silent_when_no_marker_is_above(tmp_path: Path) -> None:
