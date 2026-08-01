@@ -96,6 +96,10 @@ def repo(tmp_path: Path) -> Path:
     return root
 
 
+def _run_ok(root: Path, *args: str) -> bool:
+    return subprocess.run(["git", *args], cwd=root, capture_output=True, check=False).returncode == 0
+
+
 def _revs(root: Path) -> tuple[str, str]:
     return _git(root, "rev-parse", "HEAD~1"), _git(root, "rev-parse", "HEAD")
 
@@ -577,3 +581,67 @@ def test_a_branch_name_passed_as_head_is_normalised_to_a_sha(repo):
     assert out.returncode == 0, out.stderr
     assert f"`{head}`" in out.stdout
     assert "**Head sha under review:** `main`" not in out.stdout
+
+
+# --- round 4: guards that refused a legitimate invocation ------------------------
+
+
+def test_a_shallow_clone_gets_an_actionable_error_not_a_staleness_one(repo, tmp_path):
+    """`ls-remote` transfers no objects, so a `--depth 1` clone has the feature
+    branch's history but not the base's. Validating the base locally then failed on
+    a base that is provably CURRENT, with a message reading like staleness and
+    naming no remedy — the engine refusing an entirely legitimate invocation.
+    """
+    pp = _load()
+    upstream = tmp_path / "up"
+    _git(repo, "clone", "-q", "--bare", str(repo), str(upstream))
+    _git(repo, "checkout", "-q", "-b", "feature")
+    (repo / "f.txt").write_text("f\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "feature work")
+    _git(repo, "remote", "set-url", "origin", str(upstream))
+    _git(repo, "push", "-q", "origin", "feature")
+
+    shallow = tmp_path / "shallow"
+    # `file://` is required: git treats a plain local path as a hardlink clone and
+    # silently ignores --depth, so the fixture would not be shallow at all.
+    _git(repo, "clone", "-q", "--depth", "1", "--branch", "feature",
+         f"file://{upstream}", str(shallow))
+    base = _git(repo, "rev-parse", "main")
+    assert not _run_ok(shallow, "cat-file", "-e", base), "fixture did not produce a shallow clone"
+
+    with pytest.raises(pp.PromptError) as exc:
+        pp._require_base_object(shallow, base, "main", True)
+    msg = str(exc.value)
+    assert "not in this clone" in msg
+    assert "git fetch origin main" in msg, "the error must name the remedy"
+    assert "the sha is\ncurrent" in msg or "current" in msg
+
+
+def test_a_base_object_that_is_present_still_resolves(repo):
+    pp = _load()
+    base, head = _revs(repo)
+    assert pp._require_base_object(repo, base, "main", True) == base
+
+
+def test_an_empty_runtime_is_refused_like_every_other_override(repo):
+    """`--runtime` was left out of the sweep while `_override`'s docstring claimed
+    'every optional flag'."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+               "--runtime", "")
+    assert out.returncode == 2
+    assert "--runtime" in out.stderr
+
+
+def test_a_runtime_with_no_configured_compute_says_so_rather_than_omitting_it(repo):
+    """An unconfigured runtime legitimately means 'inherit', but a TYPO looked
+    identical — both silently dropped the line."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+               "--runtime", "clade")
+    assert out.returncode == 0, out.stderr
+    assert "No compute configured for runtime 'clade'" in out.stdout
+
+    configured = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
+    assert "Run at:" in configured.stdout

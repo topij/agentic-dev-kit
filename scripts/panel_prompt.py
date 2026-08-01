@@ -251,6 +251,39 @@ def _repo_slug(remote_url: str) -> str:
     return slug if "/" in slug else remote_url
 
 
+def _require_base_object(root: Path, base: str, base_branch: str, from_remote: bool) -> str:
+    """Validate the base locally, distinguishing "not fetched" from "not a commit".
+
+    ``resolve_base`` reads the sha from the remote with ``ls-remote``, which transfers
+    no objects. A shallow or single-branch clone — ``git clone --depth 1``, and what
+    ``actions/checkout`` does by default — then has the feature branch's history but
+    not the base's, so validating it locally fails on a base that is *provably
+    current*. The refusal was right to happen and its message was wrong: it read as
+    staleness or corruption and named no remedy, so the engine rejected an entirely
+    legitimate invocation with no way out.
+    """
+    try:
+        return _git(root, "rev-parse", "--verify", f"{base}^{{commit}}")
+    except PromptError:
+        pass
+    if _run_ok(root, "cat-file", "-e", base):
+        raise PromptError(f"{base} exists but is not a commit")
+    where = f"resolved from the remote as the tip of {base_branch!r}" if from_remote else "supplied via --base"
+    raise PromptError(
+        f"the base {base} was {where}, but its object is not in this clone. That is a "
+        "shallow or single-branch checkout, not a stale or wrong base — the sha is "
+        f"current. Fetch it and retry:\n    git fetch origin {base_branch}\n"
+        "(or `git fetch --unshallow`). Refusing rather than diffing against a base "
+        "this repo cannot read."
+    )
+
+
+def _run_ok(root: Path, *args: str) -> bool:
+    return subprocess.run(
+        ["git", *args], cwd=root, capture_output=True, text=True, check=False
+    ).returncode == 0
+
+
 def _require_commit(root: Path, rev: str) -> str:
     try:
         return _git(root, "rev-parse", "--verify", f"{rev}^{{commit}}")
@@ -270,18 +303,23 @@ def render(
     repo_slug: str,
     branch: str,
     compute: dict,
-    scratch: str | None,
+    runtime: str = "claude",
+    scratch: str | None = None,
     pr: int | None,
     carry_forward: str | None,
     verify_command: str | None,
     base_from_remote: bool,
     branch_from_checkout: bool = True,
 ) -> str:
-    compute_line = ""
-    if compute:
-        parts = [f"{k} {v}" for k, v in sorted(compute.items()) if v]
-        if parts:
-            compute_line = f"\nRun at: {', '.join(parts)}.\n"
+    # An unconfigured runtime legitimately means "inherit the cockpit's compute"
+    # (the doctrine says so), but a TYPO looks identical. Saying which runtime was
+    # asked for makes the two distinguishable at the point a reader can act on it.
+    parts = [f"{k} {v}" for k, v in sorted(compute.items()) if v] if compute else []
+    compute_line = (
+        f"\nRun at: {', '.join(parts)}.\n"
+        if parts
+        else f"\nNo compute configured for runtime {runtime!r}; inherit the cockpit's.\n"
+    )
 
     tree = (
         f"- **A detached worktree at that sha has been built for you at:**\n  `{scratch}`\n"
@@ -379,6 +417,7 @@ def build(args: argparse.Namespace) -> str:
     o_scratch = _override("--scratch", args.scratch)
     o_carry = _override("--carry-forward", args.carry_forward)
     o_verify = _override("--verify-command", args.verify_command)
+    o_runtime = _override("--runtime", args.runtime) or "claude"
     config = load_config(root / "config" / "dev-model.yaml")
 
     lenses = get(config, "review.fallback_panel.lenses", [])
@@ -396,7 +435,7 @@ def build(args: argparse.Namespace) -> str:
     # These two must agree, or the provenance label describes the wrong path.
     base_from_remote = o_base is None
     base = o_base if o_base is not None else resolve_base(root, base_branch)
-    base = _require_commit(root, base)
+    base = _require_base_object(root, base, base_branch, base_from_remote)
 
     diffstat = _git(root, "diff", "--shortstat", f"{base}...{head}")
     if not diffstat:
@@ -420,7 +459,8 @@ def build(args: argparse.Namespace) -> str:
         item_names=names,
         repo_slug=slug,
         branch=branch,
-        compute=get(config, f"review.fallback_panel.lens_compute.{args.runtime}", {}) or {},
+        compute=get(config, f"review.fallback_panel.lens_compute.{o_runtime}", {}) or {},
+        runtime=o_runtime,
         scratch=o_scratch,
         pr=args.pr,
         carry_forward=o_carry,
