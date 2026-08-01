@@ -111,7 +111,8 @@ author re-reading their own diff. **Cite them by name, never by number.**
    **Beware false kills.** If your repo has a checksum/drift test over the files
    you are mutating (this kit has one: `kit_doctor`'s self-check), *every*
    mutation fails it regardless of behaviour, and a whole run can report 100%
-   killed while nothing behavioural caught anything.
+   killed while nothing behavioural caught anything — the companion has the
+   measured case.
 
    **So exclude your repo's drift test before believing a kill** — by node id, by
    marker, by whatever your suite supports. In *this kit's own* repo that test
@@ -330,7 +331,8 @@ author re-reading their own diff. **Cite them by name, never by number.**
 "until a full pass finds nothing new". Take that literally *and* know its limit:
 measured across one session, **every round found something**, and several of
 those findings were defects introduced by the *previous round's fix*. **The
-termination condition may never arrive.**
+termination condition may never arrive.** The companion has both measurements —
+the round counts, and a second one on a diff with no shipped behaviour at all.
 
 So the stopping criterion is **blast radius, not round count**:
 
@@ -416,7 +418,8 @@ an anchoring accepted deliberately, like the delta boundary itself.
 **Do not push the gate into the lens prompts.** Severity has to come from a reviewer
 who does not know what you consider low-stakes. A docs-only change drew **two HIGH
 findings**, both real and both acted on; a lens told to calibrate down for "it's only
-docs" would have downgraded precisely those two. It is also the anchoring **No
+docs" would have downgraded precisely those two — the companion names which change.
+It is also the anchoring **No
 framing** forbids. Report at full severity; gate at the point of action.
 
 Say which one you applied **in the PR**, where a human reads it — the receipt
