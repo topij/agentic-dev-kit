@@ -11,214 +11,52 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
-## 2026-07-31 — Backlog migrated to GitHub Issues (#178–#183)
+## 2026-08-01 — Backlog migrated to GitHub Issues (#192–#196)
 
-Swept by the `triage-friction-log` workflow in LLM-only mode (the engine tracked in
-[#6](https://github.com/topij/agentic-dev-kit/issues/6) is still not vendored).
-**Fourteen entries in, fourteen accounted for:** six new issues
-([#178](https://github.com/topij/agentic-dev-kit/issues/178)–[#183](https://github.com/topij/agentic-dev-kit/issues/183)),
-four occurrence comments (`#163`, `#54`, `#140`, `#75`), and two entries that needed no ticket
-because the work they asked for had already landed — ten writes, each re-read from the tracker
-after landing per `#138`.
+Eighth sweep, LLM-only mode ([#6](https://github.com/topij/agentic-dev-kit/issues/6) still not
+vendored). **Eight entries in, eight accounted for:** five new issues
+([#192](https://github.com/topij/agentic-dev-kit/issues/192)–[#196](https://github.com/topij/agentic-dev-kit/issues/196)),
+two occurrence comments (`#180`, `#71`), and one proposal the operator declined. All seven writes
+were re-read from the tracker after landing per `#138` — and the issues were compared **by body**,
+not by title, which closes the asymmetry the previous marker disclosed about itself.
 
-The mapping is not one-per-entry in either direction, so neither count is a per-entry tally: two
-entries of the 2026-07-30 post-merge-second section share `#179`; the `#163` comment carries two
-entries, and the `#54` comment carries two, one of which is also the whole of the `#140` comment.
+**Approval.** The operator replied `5 skip, approve others` in the Slack DM thread (channel
+`D083840DP7B`, parent ts `1785559251.831209`). Item 5 — a fix round's `git add -A` staging a
+`.DS_Store` — was declined as not worth its friction. Its source entry is nonetheless swept to the
+archive with the rest, so that friction now has **no tracker representation**; this sentence is the
+only pointer to it.
 
-**Reading the tracker before drafting changed the routing twice, and both changes were
-subtractions.** The doc-budget entry proposed occurrence data for `#74` — but `#74` is no longer
-open (completed 2026-07-30), `scripts/archive_plan_sessions.py` now implements
-`--target-lines`, and `docs/agentic-dev-kit/workflows/wrap-up.md`'s *"Keep the handoff docs lean"*
-step prescribes it by name. (Cited by heading because position failed twice: `:58` was true when
-written and `#176` invalidated it hours later, then the repair said "step 8" when it is step 7.)
-Both
-halves of that entry had landed, including the half the entry itself said was still missing. The
-`finalize.pr_draft` entry had already recorded its own resolution inline on 2026-07-30. A sweep
-that drafted from the entries alone would have filed two tickets for work that was already done,
-and the entries are the only surface that would have said otherwise.
+**Frozen inbox:** 16,795 bytes, `sha256 d793a1bb…`, reproducing from
+`git show 84931f1:docs/kit-friction-log.md | tail -n +14 | shasum -a 256` — run in this session,
+digest matched.
 
-Two proposals were filed as **new issues rather than as occurrence comments on `#150`**. That
-issue's stated subject is a scripted text replacement that matches nothing; a check that ran in
-the wrong directory (`#179`) and a guard that reported failure correctly and was then ignored
-(`#180`) are neither. Stretching `#150` to cover them would have widened its acceptance criterion
-past what it can test — three entries pointed at it, and only the `sed` half of one is literally
-in scope. `#150` stays open and unchanged; both new issues link to it, so the backlinks are on it
-either way.
+Reading the tracker before drafting again changed two proposals, and both times the entry was the
+less accurate source. Routing table, verification commands, and what this sweep does **not**
+establish: on the PR. Swept entries are verbatim in the archive under `Graduated 2026-08-01`.
 
-### Approval record — in-session operator, no DM
+## 2026-08-01 (post-sweep)
 
-`config/dev-model.yaml → notify.user_key` is empty and no `config/dev-model.local.yaml` exists, so
-there is no DM surface to stop on; the operator was present in session and substituted for it.
-**The documented stop is still unconditional** — `.claude/commands/triage-friction-log.md` states
-it at lines 113 and 465 — so this run is in the same position as the run
-[#128](https://github.com/topij/agentic-dev-kit/issues/128) was filed against, which the archive
-records as having *violated* the stop rather than substituted for it. What `#128` asks for is an
-interactive-operator exception that does not exist yet; what it calls the load-bearing half is
-that any substitute leave a **committed** approval record, since `state/` and `reports/` are
-gitignored (`.gitignore:9` and `:25`). This block is that record. It does not make the run
-compliant with a rule the skill has not yet gained.
-
-Approval was bulk and unconditional — *"lgtm"* — so every proposal carries the same decision and
-the explicit-opt-in default for unmentioned proposals was never exercised. This is the **seventh**
-sweep overall; the archive holds the six earlier markers.
-
-**Frozen-inbox snapshot:** `state/triage/frozen-inbox_2026-07-31.txt` (gitignored),
-`sha256 33ad2f7260690df2104e199bfa6f824b38d64df741eb93ee0be027ed31079d3f` over **23,145 bytes**.
-Taken before any write, and over a *committed* blob — the inbox at `abbd62f` is that text, so
-`git show abbd62f:docs/kit-friction-log.md | tail -n +14 | sha256sum` reproduces the digest in any
-session that has **`git` and a SHA-256 utility**, with no reliance on the gitignored file
-surviving. An earlier draft of this block said *"from `git` alone, in any session"*. The reviewer
-on this PR refuted it by running the command: its environment had none of `sha256sum`, `shasum`,
-`openssl`, `busybox` or `cksum`, so it could confirm the blob and its 23,145 bytes but not the
-digest. That is an untested mechanism claim of exactly the shape
-[#140](https://github.com/topij/agentic-dev-kit/issues/140) governs, written from intent about an
-environment other than the one it ran in.
-
-| # | proposal (abridged) | from entry | decision | outcome |
-| - | ------------------- | ---------- | -------- | ------- |
-| 1 | Hook fires on command *text*, not on a PR actually opening | 5 | approve | [#178](https://github.com/topij/agentic-dev-kit/issues/178) |
-| 2 | A check that never reached its subject reports clean | 1 + 2 | approve | [#179](https://github.com/topij/agentic-dev-kit/issues/179) |
-| 3 | A guard must be *chained* to the action it guards | 14 | approve | [#180](https://github.com/topij/agentic-dev-kit/issues/180) |
-| 4 | `--subject` suppresses the automatic `(#N)` append | 6 | approve | [#181](https://github.com/topij/agentic-dev-kit/issues/181) |
-| 5 | A stalled lens is indistinguishable from one that found nothing | 7 | approve | [#182](https://github.com/topij/agentic-dev-kit/issues/182) |
-| 6 | A mutation kill that aborts the session names no test | 4 | approve | [#183](https://github.com/topij/agentic-dev-kit/issues/183) |
-| 7 | The one-of-two-sites remedy is structural, not another guard | 3 + 12 | approve | comment on #163 |
-| 8 | A count of your own effort is a verification claim like any other | 8 + 9 | approve | comment on #54 |
-| 9 | An ordinal into someone else's list is a mechanism claim | 9 | approve | comment on #140 |
-| 10 | Occurrence; recovery needed the object reachable locally | 13 | approve | comment on #75 |
-| — | Doc-budget remedy is a no-op at the default `--keep` | 10 | approve | no ticket — already landed |
-| — | `finalize.pr_draft` contradicts the operator's preference | 11 | approve | no ticket — already landed |
-
-### What was verified
-
-The commands and their output are on the PR. Read them there. In summary: the snapshot digest
-reproduces from `abbd62f`; all six issues exist with the titles and labels this record claims,
-re-read from the tracker after filing; each of the four comments was re-read **by body** on the
-issue claimed for it, not merely by the URL the create call returned; `#74` is no longer open and
-the `--target-lines` mode it asked for is present in `archive_plan_sessions.py`.
-
-The sweep itself ran under five assertions that abort before any write — snapshot equality, fence
-parity, no alteration inside a fenced block, an un-demote round-trip, and per-line survival. The
-previous marker recorded the fence count as measured rather than gated, and this run promoted it
-to a gate.
-
-**That promotion established nothing, and the run reported so itself.** The script printed
-`0 fences preserved`: this inbox contains no fenced blocks at all, so the fence-parity assertion
-and the fenced-line comparison both passed over an empty set. They are gates that never reached
-their subject — which is [#179](https://github.com/topij/agentic-dev-kit/issues/179), filed
-earlier in this same sweep, occurring inside the sweep that filed it. The only reason it is
-recorded rather than claimed as coverage is that the script prints the count it asserted on; had
-it printed `ok` the vacuous pass would have read as a real one, and that is `#179`'s
-negative-control ask in one line.
-
-So the gates that actually bore weight here are snapshot equality, the un-demote round-trip, and
-per-line survival — and the round-trip is self-inverting, so it would pass on a corrupted
-demotion. Per-line survival is the one doing real work. The fence gates stay in the script
-because the archive *does* contain fenced blocks and a future inbox will too; they are simply
-unproven today.
-
-**What these checks do not reach.** Two are carried over unchanged: nothing verifies that the
-approval happened as described — which matters most precisely because the DM that normally carries
-that evidence did not exist — and no automated gate covers any of this
-([#127](https://github.com/topij/agentic-dev-kit/issues/127)). One is new and is a direct
-consequence of how the issues were checked: the six were confirmed by **title and label**, not by
-body, so a mangled body would have passed. The comments were checked more strictly than the issues
-were, which is the asymmetry a reader should assume until it is closed.
-
-Above all, nothing here verifies that any filed issue or posted comment is **true**. What this
-sweep can say is narrower and worth saying plainly: reading the tracker first is the only step
-that caught anything, and what it caught was two entries asking for work that already existed. The
-entries were confidently wrong about the state of the repository, and no amount of care in drafting
-from them would have surfaced it.
-
-The swept entries are verbatim in the archive under `Graduated 2026-07-31`.
-
-## 2026-08-01
-
-- **One `unavailable_markers` list serves two surfaces, so a check-surface phrase matches comment
-  bodies.** A PR comment of mine *describing* CodeRabbit's rate-limiting produced an `unavailable`
-  entry with `bot: None` attributed to `@topij`. **The engine is not confused** — `summarize_review_bots`'
-  docstring states this case exactly (`bot` is `None` when a marker matches but the author matches no
-  configured bot, "reported (the operator should see it) and attributed to nobody, so it can never
-  suppress anything"), and an earlier draft of this entry called that a defect and proposed deleting
-  the property the docstring names as its rationale. **L, not M**, and the real observation is
-  narrower: the phrase that fired is `"review rate limited"`, which `config/dev-model.yaml` annotates
-  as *the status-check wording* of the comment-surface marker. It matched a comment body only because
-  both surfaces read one list. Proposed: let a marker declare which surface it belongs to, so a
-  check-phrase cannot match a comment. Filed as a new proposal — **not** occurrence data for
-  [#23](https://github.com/topij/agentic-dev-kit/issues/23), which is closed and is the mirror-image
-  defect (a check-surface outage that was *not* being read).
-- **The closing-keyword scan ran as a separate command before the publish, so a printed violation
-  did not stop it.** The comment posted with a banned construction in it; nothing was closed
-  (GitHub auto-closes from PR bodies and commits, not issue comments), and the re-post gated on the
-  scan's exit status then began refusing publishes that carried the same shape. **M** — this is
-  [#180](https://github.com/topij/agentic-dev-kit/issues/180) occurring in the session after it was
-  filed, by the agent that filed it, so the entry is occurrence data rather than a new proposal. The
-  fix that worked: `scan && publish` as one chained command, never two sequenced ones. Also
-  occurrence data for [#71](https://github.com/topij/agentic-dev-kit/issues/71), whose guard would
-  have caught it at authoring time.
-- **`git add -A` in a fix round committed a `.DS_Store`, and no gate would have caught it.** Not in
-  `.gitignore`, not on the protected branch, invisible to CI and to the drift gate. Found only
-  because resolving the review panel's revision meant diffing against a freshly fetched base and
-  reading the diffstat. **L** — fixed in-session by adding the entry to `.gitignore`, so the
-  specific recurrence is closed; the general shape is that a fix round's `git add -A` stages
-  whatever the working tree happens to hold, and the panel's revision-resolution step was the only
-  thing that looked.
-- **A one-lens receipt at the merging head is honest but the loop has no cheaper way to earn a
-  two-lens one.** The full panel's last head was two fix rounds behind the merge, and each fix round
-  invalidates the receipt, so converging fully would have meant a panel per round indefinitely. The
-  merge disclosed the gap and recorded `fallback:delta` rather than stamping `fallback:panel`.
-  **M** — the doctrine's stopping criterion is blast radius rather than round count, but nothing in
-  `pr-watch` or the panel doc tells an agent how to *record* a stop taken on blast-radius grounds;
-  the receipt vocabulary only describes what ran, not why stopping was proportionate. Proposed:
-  a receipt field, or a documented disclosure shape, for "stopped on blast radius" — currently it
-  lives only in a PR comment an autonomous merge path never reads
-  ([#32](https://github.com/topij/agentic-dev-kit/issues/32)'s territory).
-
-## 2026-07-31 (post-sweep)
-
-- **`make test` fails three tests as root, and the failure reads as a regression rather than as an
-  environment fact.** `test_an_unreadable_doc_is_a_documented_exit_2_not_a_traceback` and both
-  `test_a_read_failure_names_the_document_that_failed` cases make a doc unreadable with `chmod 000`
-  and assert exit 2. Under `uid 0` that permission is a no-op — root reads the file anyway — so the
-  tool succeeds and the assertion sees `assert 0 == 2`. **M** — the hazard is the *reading*, not the
-  failure: `make test` is the verification command this repo's `CLAUDE.md` names, and an agent that
-  runs it in a root container sees three red tests with no signal that they are environmental. The
-  honest options are to skip them under `os.geteuid() == 0` with a stated reason, or to make the
-  file unreadable by a means root cannot bypass. Established by running `make test` twice from
-  `/home/user/agentic-dev-kit` — once with this sweep's two doc edits and once with them stashed —
-  and getting the identical three failures and `589 passed` both times; `id -u` reports `0`. Noted
-  during the 2026-07-31 sweep and deliberately left below the marker, so the next pass proposes it.
-
-## 2026-07-31 (post-merge, review-loop doctrine)
-
-- **A comment-then-ack chain piped the poll to `/dev/null`, and a bot finding was acknowledged
-  unread.** Twice in one session: `pr_watch.py <PR> --json > /dev/null` chained into `--mark-seen`
-  after posting a round comment. The second time, the discarded poll carried the review bot's pass
-  over an intermediate head with one actionable finding; the ack buried it. Caught before merge
-  only because a later read poll's `coverage` line named a review at a sha no panel round had
-  claimed, prompting a by-hand fetch of the review. `pr-watch.md` step 6 already commands "always
-  poll-and-read first" — the violation was convenience chaining, so the documented rule did not
-  hold where it mattered. **M** — proposed fix: `--mark-seen` should print an excerpt of every key
-  it promotes, making the ack surface itself a read; until then, never redirect a poll whose
-  pending set a mark-seen will promote. Routes to
-  [#180](https://github.com/topij/agentic-dev-kit/issues/180) as a sharpening, not to `#150`,
-  which the latest sweep deliberately kept narrow: the ack *was* chained to the poll, and
-  chaining gates on exit status — a check whose signal lives in its output, not its exit code,
-  is unguarded by chaining unless the output reaches a reader.
-- **The keyword-adjacency scan covered the diff and not the commit message committed beside it.**
-  Two banned constructions (described, not quoted, per this file's own precedent) reached the
-  pushed branch inside a fix-round message; the amend was prepared and scanned clean, the
-  force-push was declined at the operator's permission gate, so the branch message stands,
-  disclosed on the PR, and the squash message was authored fresh and scanned. **M** — the ground
-  rule says any surface; the scan's surface list was one short, which is
-  [#179](https://github.com/topij/agentic-dev-kit/issues/179)'s shape: a gate examining the wrong
-  set. Proposed fix, adopted mid-session and held after: write the message to a file, scan the
-  file, `git commit -F` it — and treat the surface list as diff, commit message, PR body, and
-  squash subject plus body. Occurrence data for
-  [#71](https://github.com/topij/agentic-dev-kit/issues/71).
-- **`gh pr merge --delete-branch` from a detached HEAD merges server-side, then exits nonzero.**
-  The failure ("could not determine current branch") is the local branch-switch step, after the
-  merge already succeeded; a caller reading exit ≠ 0 as merge-failed reports a false failure or
-  retries. The retry printing "already merged" is what disambiguated it here. **L** — proposed
-  fix: when detached, merge without `--delete-branch` and delete branches separately.
+- **The notify identity and the operator identity are the same account, so the approval detector
+  cannot tell the batch apart from its own approval.** This sweep's DM went through the Slack MCP
+  under the operator's own token into their self-DM, so the proposal message, the reminder, and the
+  operator's `5 skip, approve others` reply all carry author `U082VD4SR2N`. Session B's documented
+  rule — *"if the only replies are from the bot itself … exit 0 with state intact"* — is
+  unevaluable under that configuration, and matching against `approver_user_ids` admits the
+  pipeline's own messages as operator replies. A human reads the thread correctly; the automated
+  detector the skill specifies cannot. **M** — proposed: a marker the pipeline stamps on its own
+  messages, or a bot identity in config distinct from `notify.user_key`. Reply-ts ordering against
+  `posted_at` is **not** sufficient alone and was rejected on review: it establishes only that a
+  message arrived later, and the pipeline's own reminder is itself later than `posted_at`, so
+  ordering re-admits exactly what it is meant to exclude. Filed as
+  [#198](https://github.com/topij/agentic-dev-kit/issues/198). The reply itself was correct and
+  in-thread; this is not a defect in it.
+- **The approval grammar has no "approve the rest" form, and the safe default makes the natural
+  phrasing file nothing.** `5 skip, approve others` is unambiguous to a reader but matches no
+  documented rule: bulk approve is `lgtm` / `approve all`, per-item approve is `<numbers> approve`,
+  and anything unmentioned defaults to skip. A literal parser would have skipped item 5, found no
+  approve verb bound to the rest, and filed **zero** tickets while reporting success. **M** — the
+  failure is silent and in the safe direction, which is exactly why it would survive unnoticed.
+  Proposed: add an explicit `others`/`rest approve` form, or have the parser refuse a reply it
+  cannot fully account for rather than defaulting it away. Filed as
+  [#198](https://github.com/topij/agentic-dev-kit/issues/198) alongside the bullet above — one
+  issue, two separately testable acceptance criteria.
