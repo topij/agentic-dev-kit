@@ -14,9 +14,26 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+import yaml
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 HOOK_PATH = ENGINE_DIR / "hooks" / "pr_followup_hook.py"
+
+
+def _find_repo_root(start: Path) -> Path:
+    """Walk up for the `.git` marker rather than counting `parents[N]`.
+
+    Depth arithmetic breaks in the `scripts/devkit/` layout `/adopt` defaults to
+    (#134); the marker walk is the same approach `kitconfig.repo_root` takes and
+    the sibling suite already uses.
+    """
+    for candidate in (start, *start.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    raise RuntimeError(f"no repository root above {start}")
+
+
+REPO_ROOT = _find_repo_root(ENGINE_DIR)
 
 
 def _load_hook() -> ModuleType:
@@ -126,12 +143,19 @@ def test_reminder_names_configured_bots_not_a_hardcoded_bot(monkeypatch):
         hook,
         "_load_review_config",
         # Shape matches `_load_review_config`'s declared contract
-        # (tuple[list[str], str, str, list[str], str]) rather than being merely
-        # duck-compatible: `panel_source` in particular is guarded twice and
+        # (tuple[list[str], str, str, list[str], str, str]) rather than being
+        # merely duck-compatible: `panel_source` in particular is guarded twice and
         # defaulted on the except path, so `None` is not a value the real
         # function can return, and a mock that returns one could mask a
         # type-shape bug instead of exposing it.
-        lambda: (["zzz-sentinel-bot"], "/code-review", "scripts", [], "fallback:test-panel"),
+        lambda: (
+            ["zzz-sentinel-bot"],
+            "/code-review",
+            "scripts",
+            [],
+            "fallback:test-panel",
+            "",
+        ),
     )
 
     reminder = hook.build_reminder()
@@ -161,6 +185,7 @@ def test_reminder_names_configured_bots_on_the_panel_branch_too(monkeypatch):
             "scripts",
             ["zzz-lens-one", "zzz-lens-two"],
             "fallback:test-panel",
+            "",
         ),
     )
 
@@ -198,6 +223,7 @@ def test_reminder_points_at_the_panel_not_the_degraded_one_lens_mode(monkeypatch
             "scripts",
             ["zzz-lens-one", "zzz-lens-two"],
             "fallback:test-panel",
+            "",
         ),
     )
 
@@ -295,7 +321,7 @@ def test_blank_lens_names_are_discarded_and_never_advertised(monkeypatch):
         },
     )
 
-    _bots, _fb, _eng, lenses, _src = hook._load_review_config()
+    _bots, _fb, _eng, lenses, _src, _compute = hook._load_review_config()
 
     assert lenses == ["adversarial"]
     # "never advertised" was the half the name promised and the body skipped:
@@ -330,7 +356,7 @@ def test_load_review_config_degrades_gracefully_when_config_unreadable(monkeypat
         raise FileNotFoundError("no config here")
 
     monkeypatch.setattr(kitconfig, "load_config", _boom)
-    bots, fallback, engines, lenses, panel_source = hook._load_review_config()
+    bots, fallback, engines, lenses, panel_source, lens_compute = hook._load_review_config()
     assert bots == []
     assert fallback == "/code-review"
     assert engines == "scripts"
@@ -364,3 +390,193 @@ def test_an_unreadable_config_never_advertises_a_panel(monkeypatch):
     assert "PANEL" not in reminder
     assert "/code-review" in reminder  # the compatible single-command wording
     assert "review waiver" in reminder
+
+
+def test_lens_compute_renders_both_controls_from_config(monkeypatch):
+    """`model` and `effort` are independent knobs and both must reach the agent.
+
+    The hook is the most-read statement of the fallback policy in the kit, so a
+    lens-compute setting that never renders is a setting that silently does
+    nothing — the `#145` failure mode (a config key read by no code) reintroduced
+    one level down.
+    """
+    hook = _load_hook()
+
+    class _Cfg:
+        @staticmethod
+        def get(config, path, default=None):
+            if path == "review.fallback_panel.lens_compute.claude":
+                return {"model": "zzz-model", "effort": "zzz-effort"}
+            return default
+
+    phrase = hook._lens_compute_phrase({}, _Cfg)
+
+    assert "zzz-model" in phrase
+    assert "zzz-effort" in phrase
+    assert "review.fallback_panel.lens_compute" in phrase, (
+        "name the key, or an operator cannot find what produced the instruction"
+    )
+
+
+def test_lens_compute_renders_a_lone_control(monkeypatch):
+    """A runtime exposing only one control sets only that key.
+
+    `codex` in the shipped config carries `effort` and no `model`, so a renderer
+    that required both would emit nothing for it while the config plainly asks
+    for something.
+    """
+    hook = _load_hook()
+
+    class _Cfg:
+        @staticmethod
+        def get(config, path, default=None):
+            if path == "review.fallback_panel.lens_compute.claude":
+                return {"effort": "zzz-effort"}
+            return default
+
+    phrase = hook._lens_compute_phrase({}, _Cfg)
+
+    assert "zzz-effort" in phrase
+    assert "model" not in phrase, "must not invent a model the config did not name"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        {},
+        "sonnet",                      # scalar where a map belongs
+        {"model": None},               # present-but-null
+        {"model": "   "},              # blank after strip
+        {"nonsense": "x"},             # unknown keys only
+        # kitconfig's YAML subset has no block scalars, so `model: |` reaches us
+        # as the literal "|" instead of raising. Non-blank, so a strip()-only
+        # guard rendered `model |` into the instruction. Found by an adversarial
+        # review that drove the real hook end-to-end against a mutated config.
+        {"model": "|"},
+        {"model": ">", "effort": "-"},
+    ],
+)
+def test_lens_compute_is_silent_rather_than_wrong(value):
+    """Unset or unusable must render NOTHING, never a malformed directive.
+
+    Empty means "inherit the cockpit's compute" — the behaviour before this key
+    existed and the default for any adopter who never sets it. Rendering
+    `model: None` into the reminder would have the agent try to honour a model
+    that does not exist, which is worse than saying nothing at all.
+    """
+    hook = _load_hook()
+
+    class _Cfg:
+        @staticmethod
+        def get(config, path, default=None):
+            if path == "review.fallback_panel.lens_compute.claude":
+                return value
+            return default
+
+    assert hook._lens_compute_phrase({}, _Cfg) == ""
+
+
+def test_lens_compute_never_reaches_the_degraded_one_lens_branch(monkeypatch):
+    """The degraded fallback runs in the cockpit's OWN context.
+
+    There is no separate lens process to give a model or effort level to, so
+    appending the directive there would tell the operator to set compute for
+    something that is not a delegated reviewer at all.
+    """
+    hook = _load_hook()
+    monkeypatch.setattr(
+        hook,
+        "_load_review_config",
+        lambda: (
+            ["zzz-sentinel-bot"],
+            "/code-review",
+            "scripts",
+            [],  # fewer than two lenses -> degraded branch
+            "fallback:test-panel",
+            " Run each lens at model zzz-model, per review.fallback_panel.lens_compute.",
+        ),
+    )
+
+    reminder = hook.build_reminder()
+
+    assert "PANEL" not in reminder, "guard: this must be the degraded branch"
+    assert "zzz-model" not in reminder
+
+
+def test_shipped_config_pins_the_lens_compute_the_panel_measurement_chose():
+    """A silent revert of this key is a silent cost/quality change.
+
+    Nothing else in the suite would notice `lens_compute` disappearing from the
+    shipped config, and the hook fails soft by design — so the panel would
+    quietly go back to inheriting the cockpit's compute with no signal.
+    """
+    shipped = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
+    compute = shipped["review"]["fallback_panel"]["lens_compute"]
+
+    assert compute["claude"]["model"] == "sonnet"
+    assert compute["claude"]["effort"] == "high"
+    # codex exposes effort only; asserting no `model` keeps the "a runtime may
+    # carry one control" case represented in the shipped file, which is what the
+    # lone-control renderer test above is written against.
+    assert "model" not in compute["codex"]
+
+
+def test_lens_compute_actually_reaches_the_panel_instruction(monkeypatch):
+    """The positive path the whole key exists for.
+
+    Its sibling below pins that the clause must NOT reach the degraded branch,
+    and the renderer tests pin that the clause is built correctly — but until
+    this test existed, deleting the `+ lens_compute` append from
+    `_fallback_instruction` entirely left the whole suite green. The claim "this
+    key is load-bearing" rested on wiring that no mutant could kill. Found by an
+    adversarial review that deleted exactly that line.
+    """
+    hook = _load_hook()
+    monkeypatch.setattr(
+        hook,
+        "_load_review_config",
+        lambda: (
+            ["zzz-sentinel-bot"],
+            "/code-review",
+            "scripts",
+            ["zzz-lens-one", "zzz-lens-two"],  # two lenses -> PANEL branch
+            "fallback:test-panel",
+            " Run each lens at model zzz-model and effort zzz-effort.",
+        ),
+    )
+
+    reminder = hook.build_reminder()
+
+    assert "PANEL" in reminder, "guard: this must be the panel branch"
+    assert "zzz-model" in reminder
+    assert "zzz-effort" in reminder
+
+
+def test_a_fault_confined_to_lens_compute_does_not_drop_the_panel(monkeypatch):
+    """A failure reading the least important field must not empty `lenses`.
+
+    All six fields once shared one `try`, so a raise from the lens_compute read
+    returned the whole default tuple — including `lenses == []`, which routes
+    `_fallback_instruction` to the DEGRADED single-lens wording. The panel would
+    stop being advertised for a reason having nothing to do with the panel.
+    Not reachable through any config shape found by fuzzing, which is exactly
+    why it needs a test rather than a comment.
+    """
+    hook = _load_hook()
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("lens_compute read exploded")
+
+    monkeypatch.setattr(hook, "_lens_compute_phrase", _boom)
+
+    bots, _fb, _eng, lenses, panel_source, lens_compute = hook._load_review_config()
+
+    assert lens_compute == "", "the failed field itself degrades to silence"
+    assert lenses, "a lens_compute fault must NOT empty the lens roster"
+    assert panel_source == "fallback:panel"
+    assert "PANEL" in hook._fallback_instruction(
+        "/code-review", lenses, panel_source, "scripts", lens_compute
+    )

@@ -38,6 +38,57 @@ They are the two the doctrine names, and they are chosen to overlap as little
 as possible. Add or replace lenses for your own risk profile (a data-migration
 lens, a performance lens): two disjoint lenses is the floor, not the ceiling.
 
+## What compute a lens gets
+
+`review.fallback_panel.lens_compute.<runtime>` sets it, with two independent and
+individually optional keys: `model` and `effort`. Set either, both, or neither —
+a runtime exposing only one control carries only that key, and omitting a runtime
+entirely means its lenses inherit the cockpit session's own compute. That
+inheritance is the behaviour that predates the key, so an adopter who never sets
+it sees no change.
+
+**Each runtime reaches its own key by its own path**, and the key is inert until
+that path exists — so if you add a runtime here, give it one.
+
+- **Claude Code** — `scripts/hooks/pr_followup_hook.py` reads
+  `lens_compute.claude` and renders it into the reminder it fires when a PR is
+  opened or readied. It reads *only* that key: a value written for another
+  runtime must never leak into this one's instruction.
+- **Codex** — `.agents/skills/pr-watch/SKILL.md` step 5 names
+  `lens_compute.codex`, the same way it names `review.fallback_commands`. No
+  Python or shell reads either; the adapter is the consumer.
+
+Do not go looking in the hook for why a non-Claude key had no effect — by design
+it will never mention one.
+
+**The two keys do not reach equally far, and the difference is per-runtime.** On
+Claude Code today the delegation tool takes a `model` parameter but no per-agent
+effort parameter — so `model` is a real control, and `effort` arrives as an
+instruction in the lens's prompt, which the lens may or may not act on. Under a
+runtime that exposes effort per delegated task it maps directly. Set it either
+way; it is honest intent, and it becomes mechanical when the runtime catches up.
+Do not record a receipt that implies an effort level was enforced.
+
+**Upgrading an existing install does not add this key.** `init.sh` writes the
+whole `fallback_panel` block only when the block is absent, so a repo that
+configured a panel before `lens_compute` existed keeps its current block and
+silently keeps inheriting the cockpit's compute. That is the safe direction — no
+migration rewrites a config you tuned — but it means you add `lens_compute` by
+hand. Fresh installs get it.
+
+**A lens does not need the judgment tier.** Measured on this repo, 2026-08-01,
+over two real Sonnet panels — a docs PR (~196k output tokens) and a code PR
+(~167k). Both produced findings the cockpit had missed: a stale verified-output
+claim presented as literal command output, and a root-container run the cockpit
+had declared impossible. Lens work is bounded and adversarial rather than
+open-ended, so `effort` carries more of the weight than model tier does.
+
+Two cautions before you copy the numbers. Cost tracked **claim density**, not code
+complexity — the *docs* PR was the expensive one, because verifying prose meant
+re-reading five issues, two comments and a chat thread. And a panel that finds
+nothing has not necessarily been cheap or thorough; read what it *executed*, which
+is why the contract below demands attestation rather than a verdict.
+
 ## The contract every lens gets
 
 These are why the panel works. Drop any of them and it degrades toward the
