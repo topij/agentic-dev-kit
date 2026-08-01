@@ -21,10 +21,12 @@ import sys
 from pathlib import Path
 
 import pytest
+from _repo_layout import engine_dir, find_repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
+ENGINE_DIR = engine_dir(Path(__file__))
+REPO_ROOT = find_repo_root(ENGINE_DIR)
+sys.path.insert(0, str(ENGINE_DIR))
+sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 import kit_doctor  # noqa: E402
 

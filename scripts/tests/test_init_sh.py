@@ -33,9 +33,11 @@ from pathlib import Path
 
 import pytest
 import yaml
+from _repo_layout import engine_dir, find_repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
+ENGINE_DIR = engine_dir(Path(__file__))
+REPO_ROOT = find_repo_root(ENGINE_DIR)
+sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 SHIPPED_CONFIG = (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
 
@@ -114,9 +116,16 @@ def _fixture(
         for tmpl in (REPO_ROOT / "docs" / "templates").glob("*.tmpl"):
             shutil.copy2(tmpl, repo / "docs" / "templates" / tmpl.name)
     if hooks:
-        target = repo / "scripts" / "hooks" / "pre-push"
+        # Place the hook where the config THIS fixture just wrote says the
+        # engines are, not at a literal `scripts/` (#134). `install_hooks()`
+        # resolves the same key, so a hardcoded destination builds a fake repo
+        # that contradicts its own config: under a `scripts/devkit` config the
+        # hook was written to `scripts/` and init.sh correctly found nothing,
+        # failing three tests for a reason that had nothing to do with hooks.
+        engines = (yaml.safe_load(config).get("paths") or {}).get("engines") or "scripts"
+        target = repo / engines / "hooks" / "pre-push"
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(REPO_ROOT / "scripts" / "hooks" / "pre-push", target)
+        shutil.copy2(ENGINE_DIR / "hooks" / "pre-push", target)
     if git:
         subprocess.run(
             ["git", "init", "-q"], cwd=repo, check=True, env=_env(tmp_path), capture_output=True
@@ -623,7 +632,15 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
     configured_name = yaml.safe_load(SHIPPED_CONFIG)["project"]["name"]
     assert configured_name, "shipped config has no project.name to render"
     assert configured_name in seeded["docs/kit-handoff.md"]  # {{PROJECT_NAME}}
-    assert "scripts/check_doc_budget.py" in seeded["docs/kit-handoff.md"]  # {{ENGINE_DIR}}
+    # Read the engines dir from the config under test for the same reason
+    # `configured_name` above is read rather than written literally (#134): a
+    # bare "scripts/" pins this to one layout, and it failed under the
+    # `scripts/devkit` layout `/adopt` defaults to — where the token renders
+    # correctly and the assertion was simply wrong about what correct is.
+    configured_engines = yaml.safe_load(SHIPPED_CONFIG)["paths"]["engines"]
+    assert (
+        f"{configured_engines}/check_doc_budget.py" in seeded["docs/kit-handoff.md"]
+    )  # {{ENGINE_DIR}}
     assert "kit-handoff-history.md" in seeded["docs/kit-handoff.md"]  # {{HANDOFF_HISTORY}}
     assert "kit-handoff.md" in seeded["docs/kit-handoff-history.md"]  # {{HANDOFF}}
     assert "kit-friction-log-archive.md" in seeded["docs/kit-friction-log.md"]  # {{FRICTION_ARCHIVE}}
@@ -807,7 +824,12 @@ def test_installs_pre_push_shim_into_git_hooks(tmp_path: Path) -> None:
     assert os.access(shim, os.X_OK)
     body = shim.read_text(encoding="utf-8")
     assert "devkit-hook-shim" in body
-    assert "scripts/hooks/pre-push" in body
+    # The shim must point at the hook under the CONFIGURED engines dir, not at
+    # a literal `scripts/` (#134). Under `paths.engines: scripts/devkit` the
+    # generated shim correctly reads `scripts/devkit/hooks/pre-push`, and the
+    # literal form of this assertion failed on a shim that was right.
+    configured_engines = yaml.safe_load(SHIPPED_CONFIG)["paths"]["engines"]
+    assert f"{configured_engines}/hooks/pre-push" in body
 
 
 def test_hook_shim_honors_repo_local_hookspath(tmp_path: Path) -> None:
