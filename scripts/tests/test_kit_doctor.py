@@ -736,8 +736,18 @@ def _uncoded(text: str) -> str:
     # previous version hid a real link.
 
     for i, line in enumerate(out):
-        if line and line.count("`") % 2 == 0:
-            out[i] = _INLINE_CODE.sub("", line)
+        if not line:
+            continue
+        # A BACKSLASH-ESCAPED backtick is literal text, not a delimiter —
+        # CommonMark renders `` \` [x](t.md) \` `` with a real link in it. Counting
+        # raw backticks read that as a well-formed span and deleted the link,
+        # which is the one failure this whole helper exists to avoid. Masked
+        # rather than removed, so positions and the even/odd parity below both
+        # stay honest, then restored.
+        probe = line.replace("\\`", "\x00")
+        if probe.count("`") % 2 == 0:
+            probe = _INLINE_CODE.sub("", probe)
+        out[i] = probe.replace("\x00", "\\`")
     return "\n".join(out)
 
 # Directories the kit SHIPS. A link from one tracked doc into any of these is
@@ -889,6 +899,9 @@ _MARKDOWN_CASES = (
     "See [x][r].\n\n[r]: target.md\n",
     'See <a href="target.md">x</a>.\n',
     "- item\n\n  ```\n  [x](target.md)\n  ```\n",
+    # A backslash-escaped backtick is literal, not a delimiter. Counting raw
+    # backticks read this as a code span and deleted a link the renderer shows.
+    "\\` [x](target.md) \\`\n",
 )
 
 
@@ -992,7 +1005,14 @@ def test_is_kit_shipped_truth_table(rel: str, shipped: bool) -> None:
         ("odd backticks leave the line alone", "` [x](t.md) ` and ` more\n", True),
         ("even backticks strip the span", "`a [x](t.md) b`\n", False),
         ("fence unclosed at EOF blanks nothing", "```\n[x](t.md)\n", True),
+        # Escaped backticks are literal text; the link between them is real.
+        ("escaped backticks are not delimiters", "\\` [x](t.md) \\`\n", True),
     ],
 )
 def test_uncoded_decides_what_the_scanner_can_see(case: str, src: str, link_survives: bool) -> None:
-    assert (list(_relative_links(src)) == ["t.md"]) is link_survives, case
+    # Asserted against the exact expected list in BOTH branches. An earlier
+    # version wrote `(… == ["t.md"]) is link_survives`, so the False branch was
+    # also satisfied by finding something OTHER than the link — a spurious extra
+    # match would have passed. Flagged LOW by a review lens; no live case
+    # exploited it, and a weaker assertion is not worth keeping for that reason.
+    assert list(_relative_links(src)) == (["t.md"] if link_survives else []), case
