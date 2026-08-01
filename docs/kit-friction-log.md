@@ -97,3 +97,15 @@ establish: on the PR. Swept entries are verbatim in the archive under `Graduated
   Proposed: when a config key selects compute or capability, state per runtime whether it is
   mechanical or advisory, and consider a `kit_doctor` check that a declared runtime key has a named
   consumer.
+- **`gh pr view <branch>` can resolve to a *merged* PR when a branch name repeats, so a failed
+  create reads as success.** The wrap-up branch pattern `chore/update-handoff-{date}` repeats
+  whenever two wrap-ups land on one date, and this session's did. `gh pr create` failed silently
+  (it printed no URL); the very next command — `gh pr view <branch> --json number,isDraft` — printed
+  `PR #191 isDraft=false`, a PR **merged the previous session** from a branch of the same name. The
+  intended check ("did the PR open, and is it ready rather than draft?") answered confidently about
+  a different, already-merged PR. Caught only by listing open PRs and finding none. **M** — this is
+  [#179](https://github.com/topij/agentic-dev-kit/issues/179)'s shape with a concrete new mechanism,
+  and it weakens [#170](https://github.com/topij/agentic-dev-kit/issues/170) directly: verifying the
+  draft bit landed is only sound if the verification is bound to the PR just created. Proposed:
+  verify by the PR **number** `gh pr create` prints, never by branch name; and consider a wrap-up
+  branch pattern that cannot repeat within a day.
