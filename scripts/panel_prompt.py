@@ -268,13 +268,24 @@ def _require_base_object(root: Path, base: str, base_branch: str, from_remote: b
         pass
     if _run_ok(root, "cat-file", "-e", base):
         raise PromptError(f"{base} exists but is not a commit")
-    where = f"resolved from the remote as the tip of {base_branch!r}" if from_remote else "supplied via --base"
+    if from_remote:
+        # Earned: the sha was read off the remote's ref tip moments ago.
+        raise PromptError(
+            f"the base {base} was resolved from the remote as the tip of {base_branch!r}, "
+            "but its object is not in this clone. That is a shallow or single-branch "
+            "checkout, not a stale or wrong base — the sha is current. Fetch it and "
+            f"retry:\n    git fetch origin {base_branch}\n(or `git fetch --unshallow`). "
+            "Refusing rather than diffing against a base this repo cannot read."
+        )
+    # NOT earned: nothing verified an author-supplied base, so asserting it is current
+    # would tell someone who fat-fingered --base to run a fetch that cannot help. The
+    # render already says an author-supplied base is unverified; the refusal must agree.
     raise PromptError(
-        f"the base {base} was {where}, but its object is not in this clone. That is a "
-        "shallow or single-branch checkout, not a stale or wrong base — the sha is "
-        f"current. Fetch it and retry:\n    git fetch origin {base_branch}\n"
-        "(or `git fetch --unshallow`). Refusing rather than diffing against a base "
-        "this repo cannot read."
+        f"the base {base} was supplied via --base, and no object by that name is in "
+        "this repo. It may be a typo, or it may be a real commit this clone has not "
+        f"fetched — nothing here has verified which. If you meant the tip of "
+        f"{base_branch!r}, omit --base and it will be resolved from the remote; if you "
+        f"meant this sha, fetch it first."
     )
 
 
@@ -408,7 +419,8 @@ def build(args: argparse.Namespace) -> str:
     # `--root` for the same reason. CI checks out shallow, which is what surfaced it:
     # a helper reading `git log` found one commit, and the engine correctly refused
     # the resulting empty diff.
-    root = (args.root or REPO_ROOT).resolve()
+    o_root = _override("--root", args.root)
+    root = (Path(o_root) if o_root else REPO_ROOT).resolve()
     # One validator, every optional override. See _override for why this is not
     # done per-flag.
     o_branch = _override("--branch", args.branch)
@@ -418,6 +430,10 @@ def build(args: argparse.Namespace) -> str:
     o_carry = _override("--carry-forward", args.carry_forward)
     o_verify = _override("--verify-command", args.verify_command)
     o_runtime = _override("--runtime", args.runtime) or "claude"
+    # --head and --lens are required=True, so argparse guarantees presence but not
+    # content; an empty value otherwise reaches git as a blank revision.
+    _override("--head", args.head)
+    _override("--lens", args.lens)
     config = load_config(root / "config" / "dev-model.yaml")
 
     lenses = get(config, "review.fallback_panel.lenses", [])
@@ -474,7 +490,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Assemble a fallback-review-panel launch prompt from the doctrine."
     )
-    parser.add_argument("--root", type=Path, default=None, help="repo under review (default: this one)")
+    # NOT `type=Path`: argparse would coerce "" to PosixPath(".") — truthy — so the
+    # `or REPO_ROOT` fallback silently never fires and the review retargets at cwd.
+    # The string is validated first, then converted.
+    parser.add_argument("--root", default=None, help="repo under review (default: this one)")
     parser.add_argument("--lens", required=True, help="lens name; must be in the configured roster")
     parser.add_argument("--head", required=True, help="head sha under review")
     parser.add_argument("--base", default=None, help="override the remote-resolved base (discouraged)")

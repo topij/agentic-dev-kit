@@ -645,3 +645,66 @@ def test_a_runtime_with_no_configured_compute_says_so_rather_than_omitting_it(re
 
     configured = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
     assert "Run at:" in configured.stdout
+
+
+# --- round 5: the flag outside the sweep, and an unearned certainty --------------
+
+
+def test_an_empty_root_is_refused_and_does_not_silently_retarget_the_cwd(repo, tmp_path):
+    """`--root` was the one optional flag outside the `_override` sweep, and
+    argparse's `type=Path` hid it: `Path("")` is `PosixPath(".")`, which is TRUTHY,
+    so `args.root or REPO_ROOT` never fell through. `--root ""` silently reviewed
+    whatever repo the process happened to be standing in.
+    """
+    base, head = _revs(repo)
+    out = subprocess.run(
+        [sys.executable, str(ENGINE), "--root", "", "--lens", "adversarial",
+         "--head", head, "--base", base, "--branch", "b"],
+        cwd=repo, capture_output=True, text=True, check=False,
+    )
+    assert out.returncode == 2, out.stdout[:300]
+    assert "--root" in out.stderr
+
+
+def test_an_omitted_root_still_defaults_to_the_engines_own_repo(repo):
+    """The fallback the empty-string bug disabled must still work."""
+    out = subprocess.run(
+        [sys.executable, str(ENGINE), "--lens", "adversarial", "--head", "HEAD", "--branch", "b"],
+        cwd=repo, capture_output=True, text=True, check=False,
+    )
+    # Resolves against the ENGINE's repo, not `repo` — so it must not see repo's shas.
+    assert "o/r" not in out.stdout
+
+
+@pytest.mark.parametrize("flag", ["--head", "--lens"])
+def test_required_flags_reject_an_empty_value(repo, flag):
+    """argparse guarantees presence, not content; an empty --head reached git as a
+    blank revision and produced a message with a hole in it."""
+    base, head = _revs(repo)
+    args = ["--lens", "adversarial", "--head", head, "--base", base, "--branch", "b"]
+    args[args.index(flag) + 1] = ""
+    out = _run(repo, *args)
+    assert out.returncode == 2
+    assert flag in out.stderr
+
+
+def test_an_author_supplied_base_is_not_told_the_sha_is_current(repo):
+    """Round 4's message asserted "the sha is current" on BOTH paths. On the
+    --base path nothing verified that, so a fat-fingered sha was confidently told
+    to run a fetch that cannot help. The render already calls an author-supplied
+    base unverified; the refusal must agree with it.
+    """
+    _, head = _revs(repo)
+    bogus = "deadbeef" * 5
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", bogus, "--branch", "b")
+    assert out.returncode == 2
+    assert "the sha is current" not in out.stderr
+    assert "nothing here has verified which" in out.stderr
+
+
+def test_a_remote_resolved_base_still_says_the_sha_is_current(repo, tmp_path):
+    """The earned half of that distinction must survive."""
+    pp = _load()
+    with pytest.raises(pp.PromptError) as exc:
+        pp._require_base_object(repo, "deadbeef" * 5, "main", True)
+    assert "the sha is current" in str(exc.value)
