@@ -30,7 +30,7 @@
 # was caught, because `test_kit_repo_self_check_is_clean` rehashes every
 # kit-owned file and so fails for ANY mutation to one, behavioural coverage or
 # not. A run that leaves it in reports a kill for every mutation to a KIT_OWNED
-# file — the 30 paths in kit-manifest.json, NOT the whole repo: a mutation to
+# file — the paths in kit-manifest.json, NOT the whole repo: a mutation to
 # scripts/tests/ or init.sh never trips it. `scripts/check_memory_budget.py`
 # was in that never-trips list until #37 tracked it, and is not any more —
 # which is the hazard in miniature: this comment tells a contributor which

@@ -996,8 +996,9 @@ add_ignore_line() {
 }
 add_ignore_line "state/"
 add_ignore_line ".devkit_state_root"
-# A runtime that isolates review lenses by worktree may place one here. Contract
-# item 7 of fallback-review-panel.md forbids a lens from writing inside a tree it
+# A runtime that isolates review lenses by worktree may place one here. The
+# "No writes in the tree you were given" contract item of fallback-review-panel.md
+# forbids a lens from writing inside a tree it
 # did not create, so this is not lens scratch — it is somebody else's tree, and
 # either way it must never be committed back into the repo.
 add_ignore_line ".claude/worktrees/"
