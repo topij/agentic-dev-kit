@@ -150,6 +150,15 @@ review:
     # inherit the cockpit session's own compute, which is the pre-existing
     # behaviour and stays the default for anyone who does not set this.
     #
+    # HOW FAR EACH KEY ACTUALLY REACHES depends on the runtime, and on Claude
+    # Code today they differ. Its delegation tool takes a `model` parameter, so
+    # `model` is a real control. It takes NO per-agent effort parameter, so
+    # `effort` reaches the lens only as an instruction in its prompt — the lens
+    # is told to work at that level and may or may not. Under a runtime that
+    # does expose effort per delegated task, it maps directly. Set `effort`
+    # anyway: it is honest intent either way, and it becomes mechanical the
+    # moment the runtime supports it. Just do not read it as a guarantee.
+    #
     # Why sonnet rather than the `expensive` tier: measured 2026-08-01 over two
     # real panels on this repo — a docs PR (~196k output tokens) and a code PR
     # (~167k). Both produced findings the cockpit had missed, including a stale

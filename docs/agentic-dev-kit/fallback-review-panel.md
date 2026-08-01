@@ -47,9 +47,17 @@ entirely means its lenses inherit the cockpit session's own compute. That
 inheritance is the behaviour that predates the key, so an adopter who never sets
 it sees no change.
 
-`scripts/hooks/pr_followup_hook.py` renders it into the reminder it fires on every
-`gh pr create` / `ready`, which is what makes the setting reach the agent that
+`scripts/hooks/pr_followup_hook.py` renders it into the reminder it fires when a
+PR is opened or readied, which is what makes the setting reach the agent that
 actually spawns the lenses.
+
+**The two keys do not reach equally far, and the difference is per-runtime.** On
+Claude Code today the delegation tool takes a `model` parameter but no per-agent
+effort parameter — so `model` is a real control, and `effort` arrives as an
+instruction in the lens's prompt, which the lens may or may not act on. Under a
+runtime that exposes effort per delegated task it maps directly. Set it either
+way; it is honest intent, and it becomes mechanical when the runtime catches up.
+Do not record a receipt that implies an effort level was enforced.
 
 **A lens does not need the judgment tier.** Measured on this repo, 2026-08-01,
 over two real Sonnet panels — a docs PR (~196k output tokens) and a code PR
