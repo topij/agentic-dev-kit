@@ -43,10 +43,13 @@ establish: on the PR. Swept entries are verbatim in the archive under `Graduated
   rule — *"if the only replies are from the bot itself … exit 0 with state intact"* — is
   unevaluable under that configuration, and matching against `approver_user_ids` admits the
   pipeline's own messages as operator replies. A human reads the thread correctly; the automated
-  detector the skill specifies cannot. **M** — proposed: key the detector on something other than
-  author identity (reply ts ordering against `posted_at`, or a marker the pipeline stamps on its
-  own messages), or let config carry a bot identity distinct from `notify.user_key`. The reply
-  itself was correct and in-thread; this is not a defect in it.
+  detector the skill specifies cannot. **M** — proposed: a marker the pipeline stamps on its own
+  messages, or a bot identity in config distinct from `notify.user_key`. Reply-ts ordering against
+  `posted_at` is **not** sufficient alone and was rejected on review: it establishes only that a
+  message arrived later, and the pipeline's own reminder is itself later than `posted_at`, so
+  ordering re-admits exactly what it is meant to exclude. Filed as
+  [#198](https://github.com/topij/agentic-dev-kit/issues/198). The reply itself was correct and
+  in-thread; this is not a defect in it.
 - **The approval grammar has no "approve the rest" form, and the safe default makes the natural
   phrasing file nothing.** `5 skip, approve others` is unambiguous to a reader but matches no
   documented rule: bulk approve is `lgtm` / `approve all`, per-item approve is `<numbers> approve`,
@@ -54,4 +57,6 @@ establish: on the PR. Swept entries are verbatim in the archive under `Graduated
   approve verb bound to the rest, and filed **zero** tickets while reporting success. **M** — the
   failure is silent and in the safe direction, which is exactly why it would survive unnoticed.
   Proposed: add an explicit `others`/`rest approve` form, or have the parser refuse a reply it
-  cannot fully account for rather than defaulting it away.
+  cannot fully account for rather than defaulting it away. Filed as
+  [#198](https://github.com/topij/agentic-dev-kit/issues/198) alongside the bullet above — one
+  issue, two separately testable acceptance criteria.
