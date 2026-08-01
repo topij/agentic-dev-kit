@@ -34,6 +34,34 @@ Reading the tracker before drafting again changed two proposals, and both times 
 less accurate source. Routing table, verification commands, and what this sweep does **not**
 establish: on the PR. Swept entries are verbatim in the archive under `Graduated 2026-08-01`.
 
+## 2026-08-01 (post-merge, review-loop mechanics)
+
+- **A `cd` inside a mutation harness persisted across calls, so my edits landed in a scratch copy
+  rather than the repo — more than once.** A commit went into a throwaway tree, caught only because
+  that scratch had no `origin`, which is luck rather than a check. Separately, a test block was
+  appended to a scratch copy while I read the resulting all-mutants-survive sweep as "my tests are
+  ineffective" rather than "my tests are absent". **No count here on purpose:** a draft said "three
+  separate times" and enumerated two, and a review lens caught it — a bare count outrunning its own
+  evidence, in the entry describing that failure class. **M** — the recovery that worked was asserting
+  `pwd` before any write and having the harness assert the SOURCE file contains the tests before
+  mutating, plus an explicit `cwd=` on the subprocess rather than an inherited one. Occurrence data
+  for [#205](https://github.com/topij/agentic-dev-kit/issues/205); what this adds is that the slip is
+  in the *shell state*, not the command, so re-reading the command never reveals it.
+- **The review bot and the fallback panel are separate queues, and only one of them was being
+  drained.** A CodeRabbit finding — that a path predicate should exclude the tests directory itself,
+  not only its descendants — sat unactioned for two rounds. Not disputed, not filed, not fixed; it
+  fell through while I worked the panel's findings, and an independent lens re-found it later. **M** —
+  `pr_watch.py --mark-seen` acknowledges a comment whether or not it was acted on, so an acknowledged
+  bot finding and an actioned one are indistinguishable afterwards. Proposed: have the ack record a
+  disposition per finding, or at minimum have `pr-watch` surface bot findings that were seen but
+  never referenced in any subsequent commit or reply.
+- **A revert left a comment claiming coverage the revert had deleted.** The comment lived in a file
+  the revert did not touch, so sweeping the reverted file for leftovers found nothing. **M** — worse
+  than a missing comment, because it tells the next contributor the bug class is guarded and
+  discourages rebuilding the guard. Found by a lens that verified the claim by *appending to the doc
+  and running the suite* rather than reading. Proposed: when reverting, grep for references to the
+  removed thing across the whole tree, not just the files the revert restores.
+
 ## 2026-08-01 (post-sweep)
 
 - **The notify identity and the operator identity are the same account, so the approval detector
