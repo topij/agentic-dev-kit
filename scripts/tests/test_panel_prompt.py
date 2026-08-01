@@ -708,3 +708,15 @@ def test_a_remote_resolved_base_still_says_the_sha_is_current(repo, tmp_path):
     with pytest.raises(pp.PromptError) as exc:
         pp._require_base_object(repo, "deadbeef" * 5, "main", True)
     assert "the sha is current" in str(exc.value)
+
+
+def test_an_object_that_exists_but_is_not_a_commit_is_named_as_such(repo):
+    """The third branch of `_require_base_object`, advertised by its own docstring
+    and by round 4's commit message, had zero coverage: deleting it entirely failed
+    no test, and a tree sha would then have been reported as "not fetched" with a
+    fetch command that could not help.
+    """
+    pp = _load()
+    tree = _git(repo, "rev-parse", "HEAD^{tree}")
+    with pytest.raises(pp.PromptError, match="exists but is not a commit"):
+        pp._require_base_object(repo, tree, "main", True)
