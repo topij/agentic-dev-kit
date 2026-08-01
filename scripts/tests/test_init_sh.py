@@ -888,3 +888,60 @@ def test_non_interactive_run_is_unaffected_without_an_origin_remote(tmp_path: Pa
     _run_init(repo)  # check=True — a non-zero exit fails here
 
     assert yaml.safe_load(_config(repo))["tracker"]["project_name"] == "topij/agentic-dev-kit"
+
+
+def _lens_compute_block(text: str, *, unescape: bool = False) -> tuple[str, str]:
+    """Return ``(comment, values)`` for the `lens_compute` block in `text`."""
+    if unescape:
+        text = text.replace("'\"'\"'", "'")
+    start_values = text.index("    lens_compute:")
+    start_comment = text.index("    # Compute for each panel lens")
+    end_values = text.index("lenses:", start_values)
+    return text[start_comment:start_values], text[start_values:end_values].strip()
+
+
+def test_init_sh_ships_the_same_lens_compute_values_as_the_reference_config():
+    """A fresh install must not diverge from the shipped config's actual settings.
+
+    `init.sh` is NOT tracked in `kit-manifest.json`, so no drift check compares
+    it against anything — the two can separate silently, and a new adopter would
+    then get different panel compute than this repo runs.
+    """
+    init_comment, init_values = _lens_compute_block(
+        (REPO_ROOT / "init.sh").read_text(encoding="utf-8"), unescape=True
+    )
+    cfg_comment, cfg_values = _lens_compute_block(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
+
+    assert init_values == cfg_values
+
+    # The comments are deliberately NOT compared for equality: the reference
+    # config carries the measurement rationale for the shipped values, which a
+    # migration script has no reason to repeat. Asserting equality here would
+    # be a check that fails for a reason nobody wants enforced.
+    assert init_comment != "" and cfg_comment != ""
+
+
+def test_both_lens_compute_comments_state_that_effort_is_not_enforced():
+    """The honesty caveat must reach BOTH install paths, not just the reference.
+
+    Regression pin for a real miss: the commit that retracted the "effort is a
+    real control" overclaim fixed `config/dev-model.yaml` and the doctrine doc
+    and left `init.sh` carrying the retracted wording — so every NEW adopter
+    would have installed the version its author had already judged wrong. Caught
+    by a review lens that ran `init.sh` over a fixture and read the output.
+
+    This is #149's rule ("when a claim is corrected, enumerate every surface it
+    was published to") applied to the one surface a manifest cannot watch.
+    """
+    caveat = "NO per-agent effort parameter"
+    init_comment, _ = _lens_compute_block(
+        (REPO_ROOT / "init.sh").read_text(encoding="utf-8"), unescape=True
+    )
+    cfg_comment, _ = _lens_compute_block(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
+
+    assert caveat in init_comment, "init.sh must not promise an effort guarantee"
+    assert caveat in cfg_comment, "the reference config must not either"

@@ -66,8 +66,18 @@ def _lens_compute_phrase(config, kitconfig) -> str:
         value = compute.get(key)
         # Reject non-strings and blanks rather than rendering `model: None` into
         # an instruction the agent would then dutifully try to honour.
-        if isinstance(value, str) and value.strip():
-            parts.append(f"{key} {value.strip()}")
+        if not isinstance(value, str):
+            continue
+        cleaned = value.strip()
+        # Non-blank is NOT enough. kitconfig's YAML subset does not implement
+        # block scalars, so `model: |` arrives as the literal string "|" rather
+        # than raising — a non-blank string that would render `model |` into the
+        # instruction. Requiring one alphanumeric character rejects that and any
+        # other pure-punctuation token, while accepting every real model or
+        # effort name (`sonnet`, `high`, `claude-opus-5`, `gpt-5`).
+        if not cleaned or not any(ch.isalnum() for ch in cleaned):
+            continue
+        parts.append(f"{key} {cleaned}")
     if not parts:
         return ""
     return f" Run each lens at {' and '.join(parts)}, per review.fallback_panel.lens_compute."
@@ -115,13 +125,23 @@ def _load_review_config() -> tuple[list[str], str, str, list[str], str, str]:
         )
         if not isinstance(panel_source, str) or not panel_source.strip():
             panel_source = _DEFAULT_PANEL_RECEIPT_SOURCE
+        try:
+            lens_compute = _lens_compute_phrase(config, kitconfig)
+        except Exception:
+            # Scoped deliberately. This is the least consequential of the six
+            # fields, and sharing the outer `except` let a fault confined to it
+            # collapse the whole tuple to defaults — which empties `lenses` and
+            # so drops PANEL advertising entirely, for a reason that has nothing
+            # to do with whether a panel is configured. Losing the compute clause
+            # is the proportionate failure; losing the panel is not.
+            lens_compute = ""
         return (
             bots,
             fallback,
             engines,
             lenses,
             panel_source.strip(),
-            _lens_compute_phrase(config, kitconfig),
+            lens_compute,
         )
     except Exception:
         return (
@@ -162,9 +182,14 @@ def _fallback_instruction(
     Names the PANEL when one is configured, because a single command in this
     session's own context is the author reviewing their own diff — which
     `safety-critical-changes.md` rule 2 says is not a green light. This hook
-    fires on every `gh pr create`/`ready`, so it is the most-read statement of
-    the fallback policy in the kit; pointing it at the degraded mode taught the
-    wrong habit every time.
+    fires whenever a PR is opened or readied, so it is the most-read statement
+    of the fallback policy in the kit; pointing it at the degraded mode taught
+    the wrong habit every time.
+
+    ``lens_compute`` is the pre-rendered clause from
+    :func:`_lens_compute_phrase` (``""`` when unset). It is appended to the
+    PANEL branch only: the degraded mode runs in this session's own context, so
+    there is no delegated lens to give a model or an effort level to.
     """
     # Two DISTINCT lenses is the panel's floor (see fallback-review-panel.md).
     # A one-lens `fallback_panel` is not a panel, so advertising one would tell

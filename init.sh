@@ -496,6 +496,13 @@ migrate_kit_schema() {
     # exposing one control carries one key. Omit a runtime and its lenses inherit
     # the cockpit session'"'"'s compute, which is the behaviour before this key
     # existed. Read by scripts/hooks/pr_followup_hook.py.
+    #
+    # HOW FAR EACH KEY REACHES depends on the runtime, and on Claude Code today
+    # they differ. Its delegation tool takes a `model` parameter, so `model` is a
+    # real control. It takes NO per-agent effort parameter, so `effort` reaches
+    # the lens only as an instruction in its prompt — honest intent, not a
+    # guarantee, and mechanical the moment a runtime exposes it. See
+    # docs/agentic-dev-kit/fallback-review-panel.md.
     lens_compute:
       claude:
         model: sonnet

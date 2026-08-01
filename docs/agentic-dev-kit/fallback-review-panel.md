@@ -59,6 +59,13 @@ runtime that exposes effort per delegated task it maps directly. Set it either
 way; it is honest intent, and it becomes mechanical when the runtime catches up.
 Do not record a receipt that implies an effort level was enforced.
 
+**Upgrading an existing install does not add this key.** `init.sh` writes the
+whole `fallback_panel` block only when the block is absent, so a repo that
+configured a panel before `lens_compute` existed keeps its current block and
+silently keeps inheriting the cockpit's compute. That is the safe direction — no
+migration rewrites a config you tuned — but it means you add `lens_compute` by
+hand. Fresh installs get it.
+
 **A lens does not need the judgment tier.** Measured on this repo, 2026-08-01,
 over two real Sonnet panels — a docs PR (~196k output tokens) and a code PR
 (~167k). Both produced findings the cockpit had missed: a stale verified-output
