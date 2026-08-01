@@ -105,12 +105,16 @@ establish: on the PR. Swept entries are verbatim in the archive under `Graduated
   this is [#180](https://github.com/topij/agentic-dev-kit/issues/180) inverted and is the more
   dangerous half: `#180` is about a guard that is not chained, this is about a guard that *is*
   chained, fires correctly, and gets bypassed by the operator's next keystroke. Nothing was altered
-  (`#195`'s timeline shows no event from the PR) which is luck, not mechanism. Proposed: a refusing
-  guard must say so loudly enough that its silence is never mistaken for the tool's — print
-  `REFUSED: <reason>` on the failure path — and a chain must never be re-run without its guard
-  merely because the first attempt produced no output. Also occurrence data for
-  [#71](https://github.com/topij/agentic-dev-kit/issues/71): the guard being ad-hoc rather than a
-  shipped hook is what made dropping it a single edit.
+  (`#195`'s timeline shows no event from the PR) which is luck, not mechanism. **Proposed — and
+  review of this entry sharpened it, which is worth recording because the first proposal was too
+  weak.** A louder failure message is not a fix: `REFUSED: <reason>` on the failure path is a useful
+  diagnostic, but it does not stop the next keystroke from dropping the chain, and prescribing
+  operator discipline against that is Principle #8's *"a rule that lives only in a doc is a wish"*
+  aimed at my own remedy. The enforceable version is that the guarded path is the **only**
+  publishing path — scan inside it, direct unguarded publication rejected — which is
+  [#71](https://github.com/topij/agentic-dev-kit/issues/71)'s ask rather than a separate one. So
+  this is occurrence data for `#71` and evidence for its priority: the guard being ad-hoc rather
+  than shipped is precisely what made dropping it a single edit.
 - **`gh pr view <branch>` can resolve to a *merged* PR when a branch name repeats.** Compounding the
   above, and the reason I mis-diagnosed it: the wrap-up branch pattern
   `chore/update-handoff-{date}` repeats whenever two wrap-ups land on one date, and this session's
