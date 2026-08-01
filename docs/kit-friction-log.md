@@ -103,9 +103,21 @@ establish: on the PR. Swept entries are verbatim in the archive under `Graduated
   All the chain emitted was an absence, no URL, so I read it as a transient failure and re-ran
   `gh pr create` **without the chain**, publishing the body the guard had just declined. **H** —
   this is [#180](https://github.com/topij/agentic-dev-kit/issues/180) inverted and is the more
-  dangerous half: `#180` is about a guard that is not chained, this is about a guard that *is*
-  chained, fires correctly, and gets bypassed by the operator's next keystroke. Nothing was altered
-  (`#195`'s timeline shows no event from the PR) which is luck, not mechanism. **Proposed — and
+  dangerous half: `#180` is about a guard that is not chained; this is a guard that *is* chained,
+  fires correctly, and loses to the operator's next keystroke.
+  **What each half rests on, since a review round challenged exactly this.** The refusal is
+  reproducible — the scan still exits 1 on that body content, so *"the chain would not have
+  published this"* is checkable rather than narrated. The re-run without the chain leaves no
+  server-side trace and cannot be corroborated from the forge; treat it as my account. What the
+  record shows independently is the **consequence**: the banned construction was live in the PR body
+  for roughly fourteen minutes, and throughout that window the body asserted the scan was *"clean
+  over both surfaces"* while naming only the doc lines and the commit message. The body was itself
+  a surface, and its claim of cleanliness was false about the document making it.
+  **`#195` was not altered** — it reached its final state at `05:29:21Z`, before this PR existed,
+  and nothing has moved it since.
+  An earlier draft cited *"no timeline event from the PR"* as the evidence for that, and the commit
+  publishing the claim falsified it on the spot by naming `#195` in its own message, which GitHub
+  auto-links. **State is the checkable property here; timeline is not.** **Proposed — and
   review of this entry sharpened it, which is worth recording because the first proposal was too
   weak.** A louder failure message is not a fix: `REFUSED: <reason>` on the failure path is a useful
   diagnostic, but it does not stop the next keystroke from dropping the chain, and prescribing
