@@ -101,14 +101,14 @@ the round-by-round split.
 
 ### Why severity alone is the wrong discriminator
 
-The paragraph in the executing file that states this had its own first review
-round prove it: **no HIGH, and four of its MEDs said the paragraph loosened a
-control it claimed to tighten.**
+The executing file's "**Severity alone is the wrong discriminator**" paragraph had
+its own first review round prove it: **no HIGH, and four of its MEDs said the
+paragraph loosened a control it claimed to tighten.**
 
 ### Why the gate must not go into the lens prompts
 
-The change that added rule 3's fix-round paragraph was docs-only and drew **two
-HIGH findings**, both real and both acted on. A lens told to calibrate down for
+The change that added `safety-critical-changes.md` rule 3's fix-round paragraph
+was docs-only and drew **two HIGH findings**, both real and both acted on. A lens told to calibrate down for
 "it's only docs" would have downgraded precisely those two.
 
 ### Why fix rounds must be smaller, not fewer
@@ -117,7 +117,10 @@ A separate session, whose rounds were classified by whether each change had been
 *asked for*, found the damage concentrated in one place: across five rounds on one
 feature, **three mechanisms were added that no reviewer asked for, and every one
 became a HIGH finding in a later round** — two of them built in direct response to
-a real MED, which is the trap. The fixes actually asked for held.
+a real MED, which is the trap. The fixes actually asked for held. (That last
+clause is `safety-critical-changes.md` rule 3's own wording, quoted from the
+sibling doctrine file rather than from a tracker issue — a review lens went
+looking for it on the tracker and could not source it.)
 
 ### The cost measurement that does not exist
 

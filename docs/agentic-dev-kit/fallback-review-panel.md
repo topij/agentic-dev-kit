@@ -11,9 +11,11 @@ found holed, live in
 Nothing there executes; it exists so a rule is not re-litigated and a buried
 design is not re-proposed. You do not need it to run a panel.
 
-**Contract items are named, not numbered.** Every reference in this kit is by
-name, so items can be inserted or reordered without invalidating anything
-(`#167`). The numbers below are for reading order only — do not cite them.
+**Contract items are named, not numbered.** Cite them by name; the numbers below
+are for reading order only and may change (`#167`). Every citation on the kit's
+*shipped* surfaces was swept to names when this file was split. This repo's own
+narrative logs still carry older numeric citations — records, not instructions —
+and some of them no longer resolve to the item they name.
 
 ## Why a panel and not a command
 
@@ -348,8 +350,8 @@ class, it is the first one.
   HIGH is acted on in every class; for record prose the act is deletion or
   shortening. Reply-with-reason stays what step 5 makes it, an answer to a
   nitpick, not a disposal route for something a lens called real.
-- **Second class** — act on HIGH, and at any severity on a finding
-  **Severity and regression** marks a *regression*. An imprecision below HIGH — a
+- **Second class** — act on HIGH, and at any severity on a finding the
+  **Severity and regression** item marks a *regression*. An imprecision below HIGH — a
   miscount, a stale cross-reference — may
   instead be **filed**: replied to on the PR with the reason, as step 5 requires,
   *and* recorded where your project tracks deferred work, so it is a disposition
@@ -427,7 +429,8 @@ A further lever acts on what a round *contains* rather than on which of its find
 you act on, and it **replaces none of the above** — step 6's re-run stays
 not-optional. Measured on a separate session, the damage was concentrated in one
 place: **mechanisms added that no reviewer asked for became HIGH findings in a later
-round**, while the fixes actually asked for held. So make each round *smaller*, not
+round**, while the fixes actually asked for held — the companion has the counts and
+the trap inside them. So make each round *smaller*, not
 fewer: `safety-critical-changes.md` rule 3 ("a fix round addresses only what the
 review found") — a new mechanism gets filed, however squarely a finding prompted it.
 
