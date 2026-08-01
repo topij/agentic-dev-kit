@@ -126,29 +126,64 @@ def contract(doctrine_path: Path) -> tuple[str, list[str]]:
 
 
 def resolve_base(root: Path, branch: str, remote: str = "origin") -> str:
-    """Resolve the base from the REMOTE. Never an input, so it cannot be stale."""
+    """Resolve the base from the REMOTE. Never an input, so it cannot be stale.
+
+    ``git ls-remote`` takes a *pattern*, not a name. A ``base_branch`` carrying glob
+    metacharacters — reachable from a mistyped ``--base-branch`` or a
+    ``vcs.protected_branch`` written prose-style as ``release/*`` — matches several
+    refs, and taking the first silently picks a base nobody chose. Requiring exactly
+    one match is what keeps "resolved from the remote" worth saying.
+    """
     out = _git(root, "ls-remote", remote, f"refs/heads/{branch}")
-    if not out:
+    lines = [ln for ln in out.splitlines() if ln.strip()]
+    if not lines:
         raise PromptError(
             f"{remote} has no refs/heads/{branch} — cannot establish base currency "
             "against the remote, and an ancestry check does not substitute (a stale "
             "base is still an ancestor)."
         )
-    return out.split()[0]
+    if len(lines) > 1:
+        matched = ", ".join(sorted(ln.split()[-1] for ln in lines))
+        raise PromptError(
+            f"{branch!r} matched {len(lines)} refs on {remote} ({matched}). "
+            "`git ls-remote` takes a pattern, so a base branch containing a glob "
+            "resolves ambiguously and the first match would be chosen silently. "
+            "Name one branch."
+        )
+    return lines[0].split()[0]
 
 
-def resolve_branch(root: Path, override: str | None) -> str:
-    """Name the branch under review, or refuse.
+def resolve_branch(root: Path, override: str | None, head: str) -> str:
+    """Name the branch under review, or refuse. Never guess it from the checkout.
 
-    `git rev-parse --abbrev-ref HEAD` returns the literal string ``HEAD`` on a
-    detached checkout — which is the state of every worktree built at a pinned sha
-    for review, and of a default CI PR checkout. Rendering that produces
-    ``**Branch:** HEAD``, a plausible-looking lie, at exit 0. The contract requires
-    the prompt name the repo, the branch and the head sha; a placeholder is not a
-    branch, so this refuses and asks for one.
+    Two ways the checkout lies about this, and refusing only the first is not
+    enough — an earlier version of this function did exactly that:
+
+    - **Detached**: ``rev-parse --abbrev-ref HEAD`` returns the literal ``HEAD``,
+      and rendering it produces ``**Branch:** HEAD`` at exit 0.
+    - **On some other branch**: this repo's own ``dev_session.sh`` builds lanes with
+      ``git worktree add -b``, so a review tree can sit on a throwaway lane branch.
+      That renders a real-looking branch name that is not the branch under review —
+      strictly worse than ``HEAD``, which at least reads as a placeholder. The
+      doctrine's own **No writes in the tree you were given** names this pattern.
+
+    The checkable property is the same in both cases: an auto-detected branch is
+    only the branch under review if **its tip is the head being reviewed**. Anything
+    else is a guess, so it asks for ``--branch`` instead of guessing.
     """
-    if override:
-        return override
+    if override is not None:
+        if not override.strip():
+            raise PromptError("--branch was passed but empty; name the branch or omit the flag")
+        # The escape hatch must not admit the value it exists to refuse. git forbids a
+        # branch literally named HEAD, so nothing valid is rejected here — and without
+        # this, `--branch HEAD` reproduces the exact lie the ambient path refuses.
+        if override.strip() == "HEAD":
+            raise PromptError(
+                "--branch HEAD names a placeholder, not a branch, and reproduces exactly "
+                "the render this function refuses on the ambient path. git does not allow "
+                "a branch by that name; pass the real one."
+            )
+        return override.strip()
     name = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
     if name == "HEAD":
         raise PromptError(
@@ -156,6 +191,15 @@ def resolve_branch(root: Path, override: str | None) -> str:
             "— `git rev-parse --abbrev-ref HEAD` returns the literal 'HEAD'. Pass "
             "--branch explicitly. Emitting 'Branch: HEAD' would name a placeholder as "
             "if it were the branch."
+        )
+    tip = _git(root, "rev-parse", "--verify", f"{name}^{{commit}}")
+    if tip != head:
+        raise PromptError(
+            f"this checkout is on branch {name!r}, whose tip is {tip[:12]}, but the head "
+            f"under review is {head[:12]}. That branch is not the one under review — a "
+            "worktree built with `git worktree add -b` sits on its own lane branch, and "
+            "rendering it would name a real-looking branch that is the wrong one. Pass "
+            "--branch explicitly."
         )
     return name
 
@@ -175,7 +219,10 @@ def _repo_slug(remote_url: str) -> str:
         path = url.split(":", 1)[1]
     else:
         path = url
-    return path.strip("/") or remote_url
+    slug = path.strip("/")
+    # A URL with no path at all leaves the host in `path`; rendering that as the
+    # repo is wrong-but-plausible, so fall back to the raw URL, which reads as odd.
+    return slug if "/" in slug else remote_url
 
 
 def _require_commit(root: Path, rev: str) -> str:
@@ -211,14 +258,14 @@ def render(
 
     tree = (
         f"- **A detached worktree at that sha has been built for you at:**\n  `{scratch}`\n"
-        if scratch
+        if scratch is not None
         else "- **No worktree was provided.** Obtain the revision into a copy you made; "
         "do not write into any tree you were handed.\n"
     )
-    pr_line = f"- **PR:** #{pr}\n" if pr else ""
+    pr_line = "" if pr is None else f"- **PR:** #{pr}\n"
     carry = (
         f"\n## What prior rounds have and have not covered\n\n{carry_forward.strip()}\n"
-        if carry_forward
+        if carry_forward is not None and carry_forward.strip()
         else ""
     )
     # The base label must match the path actually taken. Saying "resolved from the
@@ -237,7 +284,7 @@ def render(
     verify = (
         f"\n`{verify_command}` is this repo's verification command. A different probe "
         "failing is not\nevidence that tests cannot run here.\n"
-        if verify_command
+        if verify_command is not None and verify_command.strip()
         else ""
     )
 
@@ -300,11 +347,16 @@ def build(args: argparse.Namespace) -> str:
             "lenses be drawn from the configured roster, not minted for the occasion."
         )
 
-    branch = resolve_branch(root, args.branch)
-    base_branch = args.base_branch or get(config, "vcs.protected_branch", "main")
-    base_from_remote = args.base is None
-    base = args.base or resolve_base(root, base_branch)
     head = _require_commit(root, args.head)
+    branch = resolve_branch(root, args.branch, head)
+    base_branch = args.base_branch or get(config, "vcs.protected_branch", "main")
+    # These two must agree, or the provenance label describes the wrong path. An
+    # earlier version tested `is None` here and `or` below, so `--base ""` resolved
+    # from the remote while the prompt said the author supplied it.
+    if args.base is not None and not args.base.strip():
+        raise PromptError("--base was passed but empty; name a base or omit the flag")
+    base_from_remote = args.base is None
+    base = args.base if args.base is not None else resolve_base(root, base_branch)
     base = _require_commit(root, base)
 
     diffstat = _git(root, "diff", "--shortstat", f"{base}...{head}")

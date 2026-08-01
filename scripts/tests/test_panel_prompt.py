@@ -393,7 +393,7 @@ def test_a_provided_worktree_is_named_and_the_no_worktree_warning_is_dropped(rep
 
 
 def test_a_renumbering_slip_is_refused_even_though_the_count_is_unchanged(tmp_path):
-    """`len(names)` alone reported "13 items" over a doctrine numbered 1..12,13->12."""
+    """A renumbering slip changes no count: `len(names)` is the same either way."""
     pp = _load()
     doctored = tmp_path / "doctrine.md"
     doctored.write_text(
@@ -403,3 +403,100 @@ def test_a_renumbering_slip_is_refused_even_though_the_count_is_unchanged(tmp_pa
     )
     with pytest.raises(pp.PromptError, match="not 1..2"):
         pp.contract(doctored)
+
+
+# --- round 2 findings: the branch fix did not close its class -------------------
+
+
+def test_a_worktree_on_its_own_lane_branch_is_refused(repo, tmp_path):
+    """`dev_session.sh` builds lanes with `git worktree add -b`, so a review tree
+    can sit on a real branch that is NOT the branch under review.
+
+    The first fix refused only the literal 'HEAD'. This case renders a real-looking
+    branch name instead — strictly worse, because 'HEAD' at least reads as a
+    placeholder. The checkable property is that an auto-detected branch is the
+    branch under review only if its tip IS the head under review.
+    """
+    base, head = _revs(repo)
+    lane = tmp_path / "lane"
+    _git(repo, "worktree", "add", "-b", "lane/throwaway", str(lane), base)
+    out = _run(lane, "--lens", "adversarial", "--head", head, "--base", base)
+    assert out.returncode == 2, out.stdout
+    assert "is not the one under review" in out.stderr
+    assert "lane/throwaway" not in out.stdout
+
+
+def test_a_branch_whose_tip_is_the_head_is_accepted(repo):
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base)
+    assert out.returncode == 0, out.stderr
+    assert "- **Branch:** main" in out.stdout
+
+
+def test_an_empty_branch_override_is_refused_not_silently_ignored(repo):
+    """`if override:` let `--branch ''` fall through to auto-detection."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "")
+    assert out.returncode == 2
+    assert "empty" in out.stderr
+
+
+# --- round 2 findings: resolve_base had zero coverage ---------------------------
+
+
+def test_a_base_branch_matching_several_refs_is_refused(repo, tmp_path):
+    """`git ls-remote` takes a PATTERN. A glob matched several refs and the first
+    was chosen silently — defeating the one property the docstring names as this
+    script's reason for existing.
+    """
+    pp = _load()
+    upstream = tmp_path / "upstream"
+    _git(repo, "clone", "-q", "--bare", str(repo), str(upstream))
+    _git(repo, "branch", "main-extra")
+    _git(repo, "remote", "set-url", "origin", str(upstream))
+    _git(repo, "push", "-q", "origin", "main-extra")
+
+    with pytest.raises(pp.PromptError, match="matched 2 refs"):
+        pp.resolve_base(repo, "main*")
+
+
+def test_a_base_branch_matching_exactly_one_ref_resolves(repo, tmp_path):
+    pp = _load()
+    upstream = tmp_path / "upstream2"
+    _git(repo, "clone", "-q", "--bare", str(repo), str(upstream))
+    _git(repo, "remote", "set-url", "origin", str(upstream))
+    assert pp.resolve_base(repo, "main") == _git(repo, "rev-parse", "HEAD")
+
+
+def test_a_base_branch_matching_no_ref_is_refused(repo, tmp_path):
+    pp = _load()
+    upstream = tmp_path / "upstream3"
+    _git(repo, "clone", "-q", "--bare", str(repo), str(upstream))
+    _git(repo, "remote", "set-url", "origin", str(upstream))
+    with pytest.raises(pp.PromptError, match="has no refs/heads/"):
+        pp.resolve_base(repo, "no-such-branch")
+
+
+def test_a_remote_url_with_no_repo_path_does_not_render_the_host_as_the_repo():
+    pp = _load()
+    assert pp._repo_slug("https://github.com") == "https://github.com"
+    assert pp._repo_slug("https://github.com/o/r") == "o/r"
+
+
+def test_the_branch_escape_hatch_refuses_the_value_it_exists_to_refuse(repo):
+    """`--branch HEAD` passed straight through and rendered the identical lie the
+    ambient path refuses. git forbids a branch named HEAD, so nothing valid is lost.
+    """
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "HEAD")
+    assert out.returncode == 2
+    assert "**Branch:** HEAD" not in out.stdout
+
+
+def test_an_empty_base_override_is_refused_not_silently_remote_resolved(repo):
+    """`base_from_remote` used `is None` while the value used `or`, so `--base ""`
+    resolved from the remote while the prompt said the author supplied it."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", "", "--branch", "b")
+    assert out.returncode == 2
+    assert "empty" in out.stderr
