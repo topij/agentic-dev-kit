@@ -36,11 +36,13 @@ establish: on the PR. Swept entries are verbatim in the archive under `Graduated
 
 ## 2026-08-01 (post-merge, review-loop mechanics)
 
-- **A `cd` inside a mutation harness persisted across calls, and my edits landed in a scratch copy
-  three separate times.** Once a commit went into a throwaway tree (caught only because the push had
-  no remote — the scratch had no `origin`, which was luck, not a check). Once a test block was
+- **A `cd` inside a mutation harness persisted across calls, so my edits landed in a scratch copy
+  rather than the repo — more than once.** A commit went into a throwaway tree, caught only because
+  that scratch had no `origin`, which is luck rather than a check. Separately, a test block was
   appended to a scratch copy while I read the resulting all-mutants-survive sweep as "my tests are
-  ineffective" rather than "my tests are absent". **M** — the recovery that worked was asserting
+  ineffective" rather than "my tests are absent". **No count here on purpose:** a draft said "three
+  separate times" and enumerated two, and a review lens caught it — a bare count outrunning its own
+  evidence, in the entry describing that failure class. **M** — the recovery that worked was asserting
   `pwd` before any write and having the harness assert the SOURCE file contains the tests before
   mutating, plus an explicit `cwd=` on the subprocess rather than an inherited one. Occurrence data
   for [#205](https://github.com/topij/agentic-dev-kit/issues/205); what this adds is that the slip is
