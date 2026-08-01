@@ -66,10 +66,10 @@ class PromptError(Exception):
     """A condition that would make the emitted prompt misleading."""
 
 
-def _git(*args: str, cwd: Path | None = None) -> str:
+def _git(root: Path, *args: str) -> str:
     proc = subprocess.run(
         ["git", *args],
-        cwd=cwd or REPO_ROOT,
+        cwd=root,
         capture_output=True,
         text=True,
         check=False,
@@ -106,9 +106,9 @@ def contract(doctrine_path: Path) -> tuple[str, list[str]]:
     return section, names
 
 
-def resolve_base(branch: str, remote: str = "origin") -> str:
+def resolve_base(root: Path, branch: str, remote: str = "origin") -> str:
     """Resolve the base from the REMOTE. Never an input, so it cannot be stale."""
-    out = _git("ls-remote", remote, f"refs/heads/{branch}")
+    out = _git(root, "ls-remote", remote, f"refs/heads/{branch}")
     if not out:
         raise PromptError(
             f"{remote} has no refs/heads/{branch} — cannot establish base currency "
@@ -118,9 +118,9 @@ def resolve_base(branch: str, remote: str = "origin") -> str:
     return out.split()[0]
 
 
-def _require_commit(rev: str) -> str:
+def _require_commit(root: Path, rev: str) -> str:
     try:
-        return _git("rev-parse", "--verify", f"{rev}^{{commit}}")
+        return _git(root, "rev-parse", "--verify", f"{rev}^{{commit}}")
     except PromptError as exc:
         raise PromptError(f"{rev} is not a commit in this repo: {exc}") from exc
 
@@ -222,7 +222,14 @@ readable as a result rather than as an unexecuted pass.
 
 
 def build(args: argparse.Namespace) -> str:
-    config = load_config()
+    # The repo under review is a parameter, not a module constant, so the engine can
+    # be pointed at a checkout other than its own — and so its own tests can build a
+    # fixture repo rather than depending on this one's history. `kit_doctor.py` takes
+    # `--root` for the same reason. CI checks out shallow, which is what surfaced it:
+    # a helper reading `git log` found one commit, and the engine correctly refused
+    # the resulting empty diff.
+    root = (args.root or REPO_ROOT).resolve()
+    config = load_config(root / "config" / "dev-model.yaml")
 
     lenses = get(config, "review.fallback_panel.lenses", [])
     roster = {entry["name"]: entry.get("focus", "") for entry in lenses if "name" in entry}
@@ -233,14 +240,14 @@ def build(args: argparse.Namespace) -> str:
             "lenses be drawn from the configured roster, not minted for the occasion."
         )
 
-    branch = args.branch or _git("rev-parse", "--abbrev-ref", "HEAD")
+    branch = args.branch or _git(root, "rev-parse", "--abbrev-ref", "HEAD")
     base_branch = args.base_branch or get(config, "vcs.protected_branch", "main")
     base_from_remote = args.base is None
-    base = args.base or resolve_base(base_branch)
-    head = _require_commit(args.head)
-    base = _require_commit(base)
+    base = args.base or resolve_base(root, base_branch)
+    head = _require_commit(root, args.head)
+    base = _require_commit(root, base)
 
-    diffstat = _git("diff", "--shortstat", f"{base}...{head}")
+    diffstat = _git(root, "diff", "--shortstat", f"{base}...{head}")
     if not diffstat:
         raise PromptError(
             f"diff {base}...{head} is empty. A lens handed an empty diff reports a clean "
@@ -248,9 +255,9 @@ def build(args: argparse.Namespace) -> str:
             "to a review mechanism. Refusing to emit."
         )
 
-    section, names = contract(REPO_ROOT / DOCTRINE)
+    section, names = contract(root / DOCTRINE)
 
-    remote_url = _git("config", "--get", "remote.origin.url")
+    remote_url = _git(root, "config", "--get", "remote.origin.url")
     slug = re.sub(r"^.*[:/]([^/]+/[^/]+?)(?:\.git)?$", r"\1", remote_url) or remote_url
 
     return render(
@@ -276,6 +283,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Assemble a fallback-review-panel launch prompt from the doctrine."
     )
+    parser.add_argument("--root", type=Path, default=None, help="repo under review (default: this one)")
     parser.add_argument("--lens", required=True, help="lens name; must be in the configured roster")
     parser.add_argument("--head", required=True, help="head sha under review")
     parser.add_argument("--base", default=None, help="override the remote-resolved base (discouraged)")

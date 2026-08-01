@@ -132,7 +132,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "6687871acdaf543647f48fc8ee1b6731427dba9d8469e38792d10df9575786eb"
+      "sha256": "6ed2b143c80b47a5a30c6f0e2f9980988af88db23bbb98db285abb4aa6073288"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
