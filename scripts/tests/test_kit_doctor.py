@@ -606,16 +606,31 @@ def test_remap_tolerates_a_trailing_slash():
 
 @pytest.fixture
 def kit_repo_root() -> Path:
-    """The kit's own checkout, or a skip.
+    """A tree holding the COMPLETE set of kit-owned docs, or a skip.
 
-    These two assertions are about the SHIPPED tree, so they are meaningful
-    only where that tree is present. An adopter vendors the engines and a
-    subset of the docs, so running them there would report the adopter's
-    deliberate omissions as kit defects — #134's cause 2, which is exactly the
-    mistake of failing a test that does not apply rather than skipping it.
+    These assertions are about the shipped tree, so they are meaningful only
+    where all of it is present. An adopter vendors a subset — `/adopt` Step 3
+    installs `workflows/`, `safety-critical-changes.md` and
+    `adopting-into-a-linted-repo.md` and not the rest — so running them there
+    reports deliberate omissions as kit defects. That is #134's cause 2, and
+    the first version of this fixture committed it: it tested only that
+    `docs/agentic-dev-kit/` EXISTS, which a partial vendor satisfies. Measured
+    on such a tree, both tests died with `FileNotFoundError` rather than
+    skipping — a crash, not even a legible failure. Found by the review bot.
+
+    So the gate is the precondition the tests actually have, stated directly
+    rather than approximated by a directory probe: every kit-owned markdown
+    file is readable. Nothing is lost by skipping when one is missing — a
+    tracked file absent from the tree is exactly what `kit_doctor` reports as
+    `missing`, so that case already has an owner, and it is not this one.
     """
-    if not (REPO_ROOT / "docs" / "agentic-dev-kit").is_dir():
-        pytest.skip("not the kit's own repo — the shipped doc tree is absent")
+    absent = [
+        rel
+        for rel, _role in kit_doctor.KIT_OWNED
+        if rel.endswith(".md") and not (REPO_ROOT / rel).is_file()
+    ]
+    if absent:
+        pytest.skip(f"not a complete kit tree — {len(absent)} kit-owned doc(s) absent, e.g. {absent[0]}")
     return REPO_ROOT
 
 
