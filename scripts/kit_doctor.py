@@ -39,8 +39,9 @@ verifies it still holds. Per kit-owned file it reports one of:
     deliberate omission and to ask before installing it — so the documented path
     invited someone to decline `lib/kitconfig.py`, which every Python engine
     imports (issue #41). Which files these are is DERIVED at
-    ``--generate-manifest`` time from the dependency graph — Python imports and
-    shell ``source`` — not restated by hand.
+    ``--generate-manifest`` time from the PYTHON import graph, not restated by
+    hand. Shell ``source`` is deliberately NOT scanned — see
+    `derive_dependencies` for the gap that leaves and why it is left open.
 ``unknown-version``
     The manifest has no entry for this file, so drift can't be judged.
 
@@ -78,7 +79,6 @@ import argparse
 import ast
 import hashlib
 import json
-import posixpath
 import re
 import sys
 from dataclasses import dataclass, field
@@ -252,6 +252,7 @@ _ENGINE_NAMES: tuple[str, ...] = _derive_engine_names(KIT_OWNED)
 # `python3 - <<'PY'` heredoc.
 _TEXT_IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_][A-Za-z0-9_.]*)", re.MULTILINE)
 
+
 # Bash `source` / `.` of another kit file. A shell engine's dependency is a PATH,
 # not a module name, so it needs its own scanner — and without one the graph
 # fails open on exactly the pair #41 is about: `dev_session.sh` and
@@ -262,83 +263,6 @@ _TEXT_IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_][A-Za-z0-9_.]*)",
 # than the text it replaced — "declining one is safe" — which is a worse false
 # assurance than the "decide, don't assume" it superseded. Found by the
 # adversarial lens on PR #225.
-# The operand: a double-quoted string, a single-quoted string, or a bare word.
-# The double-quoted alternative admits `$( … )` chunks explicitly, because
-# `"$(dirname "$0")/lib/x.sh"` — the commonest form of this idiom — nests a
-# quote INSIDE the quoted operand, and a plain `"[^"]*"` truncates it to
-# `"$(dirname "`.
-#
-# The BARE alternative stops at a shell separator rather than at whitespace:
-# `{ source lib/dep.sh; }` and `source lib/dep.sh; cat <<EOF` otherwise yield
-# `lib/dep.sh;` with the semicolon attached, which `_NOT_A_LITERAL_PATH` does
-# not reject (`;` is not in its class) and which therefore reaches `record()`
-# as a path that can never match. Found by probing this function's own new
-# separator handling, not by a lens.
-_OPERAND = r"""(?:"((?:\$\([^)]*\)|[^"])*)"|'([^']*)'|([^\s;&|<>]+))"""
-
-# `source` must be the FIRST token on its line. This is a deliberate,
-# re-affirmed bound, not an oversight — and the history is worth keeping because
-# the obvious improvement was tried and withdrawn:
-#
-# Round 2 widened it to match after a separator or block keyword, so that
-# `[ -f "$LIB" ] && source "$LIB"` would be seen. Round 3 showed what that cost.
-# The scan reads raw text and has no notion of "inside a string", so
-# `echo "please then source lib/dep.sh now"` — ordinary prose in an ordinary
-# echo — produced a real dependency edge. That is the harmful direction: a bogus
-# `required_by` in the manifest tells an adopter whose install is FINE that it is
-# broken and to install a file they do not need, which is `missing-required`
-# firing in reverse.
-#
-# Deciding command position correctly needs a bash tokenizer — quote state,
-# escapes, `$'…'`, line continuations, multi-line strings — and every regex
-# approximation of it found in three rounds leaked in one direction or the
-# other. Anchoring has exactly ONE failure direction, and it is the safe one: a
-# guarded `source` is missed, which degrades that file to plain `missing`, i.e.
-# the pre-#41 behaviour. Unhelpful, never misleading. Both shell engines in this
-# tree use the anchored form, so nothing real is missed today; #228 holds the
-# proper fix. The miss is pinned by a test so it stays a stated bound.
-_SOURCE_RE = re.compile(r"^[ \t]*(?:source|\.)[ \t]+" + _OPERAND)
-
-# `<<DELIM`, `<<'DELIM'`, `<<-DELIM`. Heredoc BODIES are skipped by the shell
-# scanner (and only by it): a `source` line inside a heredoc is text being
-# printed, not a dependency. `pre-push` already carries two `cat >&2 <<EOF`
-# help blocks, and one of them gaining a line explaining how a sibling engine
-# wires itself up would have baked a false edge into the manifest — telling
-# every adopter with the hook and without the session engines that their
-# install is broken. Note the Python-import scan deliberately does NOT skip
-# heredocs: `pre-push`'s kitconfig import lives inside a `python3 - <<'PY'`
-# body and genuinely executes. Adversarial lens, PR #225 round 2.
-#
-# The `<` guards are load-bearing and were missing at first: `<<<` is a
-# HERESTRING with no body, but an unguarded `<<-?` matched its second and third
-# characters and took the following word as a delimiter — so `read x <<< "$out"`
-# put the scanner into a heredoc that never closed, silently deleting every real
-# edge for the REST OF THE FILE. That is strictly worse than the false positive
-# the heredoc skip was added to fix, and the pre-round-2 code got it right by
-# having no heredoc concept at all. Adversarial lens, PR #225 round 3.
-_HEREDOC_RE = re.compile(r"(?<!<)<<(?!<)-?[ \t]*[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?")
-
-# A leading shell expansion — `$SCRIPT_DIR/`, `${VAR}/`, `$(dirname "$0")/` —
-# stripped so what remains is a path relative to the sourcing file's own
-# directory, which is what every such prefix in this tree resolves to.
-_SHELL_PREFIX_RE = re.compile(r"^(?:\$\([^)]*\)|\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*)/")
-
-# What is left must be a literal relative path. Anything still carrying a shell
-# metacharacter is computed at run time, and the honest answer there is no edge
-# rather than a guessed one.
-#
-# NOT INDEPENDENTLY PINNABLE, and recorded as such rather than left looking like
-# tested behaviour: `record()` already requires an exact match against
-# KIT_OWNED, so a candidate this filter rejects would be discarded there anyway
-# — deleting the filter changes no observable output and fails no test. It is
-# kept as the second of two checks because the operand capture is deliberately
-# permissive, and it states an intent `record()`'s membership test does not.
-# Adversarial lens, PR #225 round 2; the backtick was added to the class in the
-# same round, since a single-token `source \`depfile\`` slipped through a class
-# whose whole job is rejecting substitutions.
-_NOT_A_LITERAL_PATH = re.compile(r"""[\s$`"'*?\[\]{}()|&<>]""")
-
-
 def _imported_modules(text: str) -> set[tuple[int, str]]:
     """``(relative_level, dotted_name)`` for every import in `text`.
 
@@ -372,93 +296,6 @@ def _module_targets(module: str, package_dir: str) -> tuple[str, ...]:
     return (f"{package_dir}/{base}.py", f"{package_dir}/{base}/__init__.py")
 
 
-def _heredoc_body_lines(lines: list[str]) -> set[int]:
-    """Indices of lines inside a heredoc body — but only for bodies that CLOSE.
-
-    The two-pass shape is the point, and it is a structural bound rather than
-    another regex patch. A single-pass tracker treats a mis-detected opener as
-    the start of a body that runs to end of file, so ONE false positive deletes
-    every real dependency edge after it. Three separate constructs were found
-    tripping that in one review round — `<<<` herestrings, and `<<` inside
-    `$(( … ))` arithmetic, both of which look exactly like `<<DELIM` to a regex.
-    `dev_session.sh` already contains eight herestrings and is safe today only
-    because each happens to be followed by `"$…` rather than a bare word.
-
-    Requiring the delimiter to actually appear on a later line turns every such
-    mis-detection into a NO-OP: a bogus delimiter (`greeting`, `shift_amount`)
-    essentially never occurs as a standalone line, so the region is discarded
-    and those lines are scanned normally. The failure mode stops scaling with
-    file length, which is what made the single-pass version dangerous rather
-    than merely imprecise. Adversarial and correctness lenses, PR #225 round 3.
-    """
-    body: set[int] = set()
-    index = 0
-    while index < len(lines):
-        opening = _HEREDOC_RE.search(lines[index])
-        if not opening:
-            index += 1
-            continue
-        delimiter = opening.group(1)
-        for close in range(index + 1, len(lines)):
-            if lines[close].strip() == delimiter:
-                body.update(range(index + 1, close))
-                index = close
-                break
-        # No terminator: not a heredoc at all. Fall through WITHOUT consuming,
-        # so the very next line is examined normally.
-        index += 1
-    return body
-
-
-def _sourced_paths(text: str, rel: str) -> set[str]:
-    """Kit-layout paths this shell file `source`s, resolved against its own dir.
-
-    Only the leading shell expansion is stripped; a `source` whose path is
-    genuinely computed at run time (a loop variable, a value read from config)
-    resolves to nothing and produces no edge. Nothing in the tree does that
-    today, and no test here would catch a future engine that did — the same
-    stated limit `derive_dependencies` records for dynamic Python imports.
-
-    Heredoc bodies are skipped: a `source` line inside one is text being
-    printed, not a dependency. The line that OPENS a heredoc is ordinary code
-    and is still scanned.
-    """
-    here = PurePosixPath(rel).parent
-    found: set[str] = set()
-    lines = text.splitlines()
-    skip = _heredoc_body_lines(lines)
-    for number, line in enumerate(lines):
-        if number in skip:
-            continue
-        # No comment stripping: with `source` anchored to the first token, a
-        # commented line cannot match in the first place — `#` is not `source`.
-        # Round 2 carried a `_COMMENT_RE` because the widened anchor could reach
-        # a `source` after a `&&` INSIDE a comment; withdrawing that widening
-        # removed the only thing it defended against, and keeping a guard whose
-        # justification no longer holds is how dead code acquires authority.
-        # The commented-out-source tests still pass, now via the anchor.
-        for match in _SOURCE_RE.finditer(line):
-            quoted_double, quoted_single, bare = match.groups()
-            operand = next(g for g in (quoted_double, quoted_single, bare) if g is not None)
-            tail = _SHELL_PREFIX_RE.sub("", operand)
-            if not tail or tail.startswith("/") or _NOT_A_LITERAL_PATH.search(tail):
-                continue
-            # normpath, not a bare join: `PurePosixPath` does NOT collapse `..`,
-            # so `scripts/sub` / `../lib/dep.sh` stayed `scripts/sub/../lib/dep.sh`
-            # and could never equal the canonical KIT_OWNED path it genuinely
-            # names — a literal, unconditional dependency dropped in silence.
-            # That is #41's own failure class reached by a different route, and
-            # it is NOT the documented "computed at run time" bound: nothing
-            # here is computed. Correctness lens, PR #225 round 2.
-            target = posixpath.normpath(str(here / tail))
-            # A path that climbs out of the repo cannot name a KIT_OWNED file;
-            # recording it would put `../…` in the manifest.
-            if target.startswith(".."):
-                continue
-            found.add(target)
-    return found
-
-
 def derive_dependencies(
     root: Path, kit_owned: tuple[tuple[str, str], ...] = KIT_OWNED
 ) -> dict[str, list[str]]:
@@ -480,14 +317,27 @@ def derive_dependencies(
     `state_paths` package's internal edges (``from .resolver import …``) in the
     graph rather than only its top-level name.
 
-    **The shell engines are scanned too, and must be.** `dev_session.sh` and
-    `reconcile_sessions.sh` `source "$SCRIPT_DIR/lib/repo_root.sh"`, which is a
-    hard dependency expressed as a path rather than a module. A Python-only
-    version of this function reported such a tree exit-0 clean while
-    ``bash scripts/dev_session.sh`` died on its `source` line — #41's own bug
-    class, reproduced by the change meant to close it. `.py` files take the
-    `ast` path and only that; everything else is scanned for both Python-style
-    imports (the `pre-push` heredoc) and shell `source`.
+    **Shell `source` is NOT scanned, and this is the one real gap.**
+    `dev_session.sh` and `reconcile_sessions.sh` both
+    `source "$SCRIPT_DIR/lib/repo_root.sh"` — a hard dependency expressed as a
+    path rather than a module — so a tree missing `lib/repo_root.sh` reports it
+    as an ordinary `missing` while `bash scripts/dev_session.sh` dies on its
+    `source` line. That is a live instance of #41's own bug class and it is
+    knowingly left open; #228 carries it.
+
+    A scanner for it was built across three review rounds and withdrawn. The
+    short version: preventing FALSE edges requires recognising every real
+    heredoc opener, and preventing MISSED edges requires knowing whether a
+    `source` is in command position — both are tokenizer problems, and each
+    regex approximation leaked in one direction or the other. A false edge is
+    the harmful direction (it tells an adopter their working install is broken),
+    and shipping a mechanism that can produce them is worse than shipping the
+    Python-only graph plus a documented hole. #228 has the full account,
+    including the four constructs that defeated the last version.
+
+    Non-Python files ARE still scanned for Python-style imports: `pre-push` is
+    bash, and its `from kitconfig import …` lives inside a `python3 - <<'PY'`
+    heredoc that genuinely executes.
 
     LIMITS, because a graph that overstates its coverage is worse than a short
     one:
@@ -509,24 +359,14 @@ def derive_dependencies(
       it no longer enumerates them. `grep -rln importlib scripts/` is the
       answer, and unlike a list in a docstring it cannot go stale.
       (Correctness lens, PR #225 rounds 1 and 2.)
-    - The shell scan requires `source` to be the FIRST token on its line. A
-      guarded (`[ -f "$L" ] && source "$L"`), nested, continued, or
-      `eval`-reached `source` is not seen. Widening this was tried in round 2
-      and withdrawn in round 3: without a bash tokenizer the widened form could
-      not tell a command position from the word `then` inside a string, and
-      manufactured edges out of prose. #228 holds the proper fix.
-
-      Of these, the GUARDED and NESTED forms are pinned by a test so they stay
-      stated rather than implicit. The continuation, `eval` and shell-function
-      forms are NOT pinned by anything — said plainly because an earlier version
-      of this paragraph claimed "both directions of this bound are now pinned by
-      tests", which the correctness lens checked and found false: `grep -n
-      "continuation\\|eval" scripts/tests/test_kit_doctor.py` returns nothing.
+    - Shell `source` is not scanned at all, so `lib/repo_root.sh`'s two
+      dependents are absent from the graph. Stated above; #228 carries it.
     - Every one of these bounds errs toward NO edge. That direction is chosen,
       not incidental: a missing edge degrades a file to plain `missing`, which
       is the pre-#41 behaviour and merely unhelpful, while a false edge tells an
       adopter their working install is broken and to install something they do
-      not need. `missing-required` firing wrongly is worse than it not firing.
+      not need. `missing-required` firing wrongly is worse than it not firing,
+      and that asymmetry is what decided the shell-scan question above.
     """
     owned = {rel for rel, _ in kit_owned}
     dependents: dict[str, set[str]] = {}
@@ -551,13 +391,6 @@ def derive_dependencies(
             else:
                 package_dir = f"{KIT_ENGINE_PREFIX}/lib"
             for candidate in _module_targets(module, package_dir):
-                record(candidate, rel)
-        # Dispatched on the SUFFIX, not on whether `ast` happened to succeed: a
-        # short shell file can be accidentally valid Python, and resting a
-        # correctness property on "bash never parses" is the kind of implicit
-        # bound this report exists to avoid.
-        if not rel.endswith(".py"):
-            for candidate in _sourced_paths(text, rel):
                 record(candidate, rel)
     return {path: sorted(deps) for path, deps in sorted(dependents.items())}
 

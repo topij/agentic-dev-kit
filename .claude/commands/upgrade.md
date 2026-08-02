@@ -46,8 +46,8 @@ kit's copy against this repo: `uv run /tmp/agentic-dev-kit/scripts/kit_doctor.py
 --manifest /tmp/agentic-dev-kit/kit-manifest.json`.
 
 The report gives you, per kit-owned file: `unchanged` / `differs` / `missing` /
-`unknown-version`, plus four installation-level checks. **Read all four** — each is a
-silent failure mode:
+`missing-required` / `unknown-version`, plus four installation-level checks.
+**Read all four** — each is a silent failure mode:
 
 - **config schema version** — unversioned or behind means migrations are pending.
 - **`paths.engines` resolves to a directory that actually holds engines.** A `✗` here is
@@ -114,26 +114,34 @@ too. Confirm with `git branch --show-current` before the first copy.
 
 **Install every `missing-required` file first, before any other copy in this step.**
 Those are the kit's own libraries — `lib/kitconfig.py` above all, which every Python
-engine imports — and refreshing an engine on top of an absent one produces a broken
+engine imports — and refreshing a component on top of an absent one produces a broken
 install: `check_doc_budget.py` dies with `ModuleNotFoundError`, and `pr_watch.py` warns
 and silently falls back to built-in defaults, leaving the adopter's entire `review.*`
-config inert. `kit_doctor` derives this set from the import graph, so it is answering
-"what does *this* tree's installed engines need", not a fixed list.
+config inert. `kit_doctor` derives this set from the Python import graph, so it is
+answering "what do *this* tree's installed components need", not a fixed list.
+
+**Then re-run `kit_doctor` after installing anything.** The set is computed against the
+components present *when the report ran*: a file is `missing-required` only if something
+that depends on it is already installed. So installing a previously-`missing` engine or
+hook can introduce requirements the first report had no reason to classify. Re-run
+before you rely on the list again, and treat the report as converged only when a run
+that installed nothing still shows no `missing-required`.
 
 - **`missing-required`** → install it. This is the one absent-file case that is **not**
-  an operator decision: an engine that is already installed imports it, and the report
-  names which. Do not carry it into the `missing` conversation below.
+  an operator decision: an installed component depends on it, and the report names
+  which. Do not carry it into the `missing` conversation below.
 - **`unchanged`** → copy the new version straight in. It is provably untouched, so there
   is nothing to lose.
 - **`missing`** → decide, don't assume. A sized-down adoption omits engines deliberately
   (one surveyed repo installs 2 of 6 on purpose). Ask the operator whether each missing
   piece is wanted before installing it. If a piece stays out, note it in the PR body so
-  the next upgrade doesn't re-litigate it. Nothing installed here imports these **by
-  the graph `kit_doctor` derives** — Python imports plus shell `source` — which is what
-  separates them from the bullet above. That graph cannot see a dependency whose path
-  is computed at run time, so it is a much better prior than the old blanket "decide,
-  don't assume", not a proof; if a piece you are declining is one an engine plausibly
-  reaches for, check before dropping it.
+  the next upgrade doesn't re-litigate it. Nothing installed here depends on these **by
+  the graph `kit_doctor` derives**, which is what separates them from the bullet above.
+  That graph covers **Python imports only** — it does not read shell `source`, so
+  `lib/repo_root.sh` (which `dev_session.sh` and `reconcile_sessions.sh` both source)
+  will appear here rather than above. It is a much better prior than the old blanket
+  "decide, don't assume", not a proof: if a piece you are declining is a library a
+  shell component plausibly reaches for, check before dropping it.
 - **`differs`** → `diff` the local file against the kit's, and read the diff:
   - Only kit-authored changes (the local copy is simply older) → replace it.
   - Local edits present → for each, find where that value now lives in

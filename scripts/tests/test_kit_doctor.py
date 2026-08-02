@@ -649,351 +649,6 @@ def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
     }
 
 
-def test_the_shell_engines_source_dependency_is_in_the_graph():
-    """A shell engine's dependency is a PATH, not a module, and the first version
-    of `derive_dependencies` scanned only Python.
-
-    Consequence, reproduced by the adversarial lens on PR #225: with
-    `lib/repo_root.sh` deleted, `kit_doctor` reported the tree exit-0 clean and
-    listed the file as an ordinary sized-down omission, while
-    `bash scripts/dev_session.sh` died on its `source` line. That is #41's own
-    failure mode, reproduced by the change written to close it.
-    """
-    graph = kit_doctor.derive_dependencies(REPO_ROOT)
-    assert graph.get("scripts/lib/repo_root.sh") == [
-        "scripts/dev_session.sh",
-        "scripts/reconcile_sessions.sh",
-    ]
-
-
-@pytest.mark.parametrize(
-    "line",
-    [
-        'source "$SCRIPT_DIR/lib/dep.sh"',
-        "source ${SCRIPT_DIR}/lib/dep.sh",
-        'source "$(dirname "$0")/lib/dep.sh"',
-        ". $SCRIPT_DIR/lib/dep.sh",
-        # Trailing content after the operand: the operand stops at a shell
-        # separator rather than running to end of line, so these are found.
-        'source "$SCRIPT_DIR/lib/dep.sh" || true',
-        "source lib/dep.sh && echo ready",
-        "source lib/dep.sh; echo ready",
-        "source 'lib/dep.sh'",
-    ],
-)
-def test_the_shell_scan_strips_the_leading_expansion(tmp_path, line):
-    root = _tree(
-        tmp_path,
-        {
-            "scripts/engine.sh": f"#!/usr/bin/env bash\n{line}\n",
-            "scripts/lib/dep.sh": "x() { :; }\n",
-        },
-    )
-    owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
-    assert kit_doctor.derive_dependencies(root, owned) == {
-        "scripts/lib/dep.sh": ["scripts/engine.sh"]
-    }
-
-
-@pytest.mark.parametrize(
-    "line",
-    [
-        "# source lib/dep.sh",
-        "echo ready # source lib/dep.sh",
-        "# run cmd && source lib/dep.sh to wire it up",
-        # Ordinary prose in an ordinary echo. This is what killed round 2's
-        # widened anchor: matching `source` after a separator or block keyword
-        # cannot tell a real command position from the word `then` inside a
-        # string, so this line produced a REAL dependency edge. Regex has no
-        # notion of quote state; deciding command position needs a tokenizer.
-        # Adversarial lens, PR #225 round 3.
-        'echo "please then source lib/dep.sh now"',
-        "printf '%s' 'run: source lib/dep.sh'",
-    ],
-)
-def test_prose_mentioning_source_is_not_an_edge(tmp_path, line):
-    """A false edge is worse than a missing one, and this is the direction that
-    withdrew the round-2 widening.
-
-    A bogus `required_by` entry baked into the manifest tells every adopter who
-    has the importing file and not the target that their install is BROKEN and
-    to install something they do not need — `missing-required` firing in
-    reverse, which is the failure the `missing` split exists to prevent.
-
-    These pass via the line-start anchor, not via any comment-stripping step:
-    round 2 carried one, and withdrawing the widening removed the only thing it
-    defended against.
-    """
-    root = _tree(
-        tmp_path,
-        {"scripts/engine.sh": f"#!/usr/bin/env bash\n{line}\n", "scripts/lib/dep.sh": "\n"},
-    )
-    owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
-    assert kit_doctor.derive_dependencies(root, owned) == {}
-
-
-@pytest.mark.parametrize(
-    "line",
-    [
-        '[ -f "$SCRIPT_DIR/lib/dep.sh" ] && source "$SCRIPT_DIR/lib/dep.sh"',
-        'if true; then source "$SCRIPT_DIR/lib/dep.sh"; fi',
-        "{ source lib/dep.sh; }",
-        "while read -r x; do source lib/dep.sh; done",
-    ],
-)
-def test_a_guarded_source_is_a_KNOWN_MISS_not_an_accident(tmp_path, line):
-    """Asserted so the bound stays STATED. `source` must be the first token on
-    its line; a guarded or nested one is not seen.
-
-    Round 2 widened the anchor to catch exactly these and round 3 withdrew it —
-    the widened form could not tell a command position from the word `then`
-    inside a string, and manufactured edges from prose. The trade is deliberate:
-    anchoring fails in ONE direction, and a missed edge degrades the file to
-    plain `missing`, which is the pre-#41 behaviour — unhelpful, never
-    misleading. Neither shell engine in this tree uses a guarded form, so
-    nothing real is missed today. #228 holds the proper fix.
-
-    If a future change makes any of these produce an edge, this test fails —
-    which is correct: that change must arrive with a real command-position
-    parser and this test rewritten, not as an incidental loosening.
-    """
-    root = _tree(
-        tmp_path,
-        {"scripts/engine.sh": f"#!/usr/bin/env bash\n{line}\n", "scripts/lib/dep.sh": "\n"},
-    )
-    owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
-    assert kit_doctor.derive_dependencies(root, owned) == {}
-
-
-@pytest.mark.parametrize(
-    "herestring",
-    [
-        'read -r x <<< "$out"',
-        "printf '%s' greeting <<< greeting",
-        "mapfile -t arr <<<$out",
-        # `<<` inside arithmetic looks identical to `<<DELIM` to a regex. The
-        # `<<<` guard does not cover it, and it blinded the rest of the file the
-        # same way. Correctness lens, PR #225 round 3.
-        "result=$(( flags << shift_amount ))",
-        "(( total = total << 1 ))",
-    ],
-)
-def test_a_herestring_does_not_swallow_the_rest_of_the_file(tmp_path, herestring):
-    """`<<<` is a herestring with no body. An unguarded `<<-?` matched its second
-    and third characters, took the following word as a delimiter, and put the
-    scanner into a heredoc that never closed — silently deleting every real edge
-    for the REST OF THE FILE.
-
-    Strictly worse than the false positive the heredoc skip was added to fix,
-    and the code before that skip existed got this right by having no heredoc
-    concept at all. `read x <<< "$var"` is everyday bash, not exotic.
-    Adversarial lens, PR #225 round 3.
-    """
-    root = _tree(
-        tmp_path,
-        {
-            "scripts/engine.sh": f"#!/usr/bin/env bash\n{herestring}\nsource lib/dep.sh\n",
-            "scripts/lib/dep.sh": "\n",
-        },
-    )
-    owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
-    assert kit_doctor.derive_dependencies(root, owned) == {
-        "scripts/lib/dep.sh": ["scripts/engine.sh"]
-    }
-
-
-def test_a_herestring_whose_word_recurs_as_a_line_still_does_not_swallow(tmp_path):
-    """What keeps the `<<<` lookbehind load-bearing rather than redundant.
-
-    The two-pass "a heredoc region only counts if it CLOSES" rule neutralises
-    most `<<<` misparses on its own, because a bogus delimiter rarely appears as
-    a standalone line. `done` is the exception and it is not exotic — it closes
-    every `for`/`while` loop in shell. Without the lookbehind, `<<< done`
-    captures `done`, the loop's own `done` closes the phantom body, and every
-    line between them is silently dropped.
-
-    Mutation-checked: removing the lookbehind leaves the rest of the suite green
-    and fails only this test, which is what makes the guard pinned rather than
-    decorative.
-    """
-    root = _tree(
-        tmp_path,
-        {
-            "scripts/engine.sh": (
-                "#!/usr/bin/env bash\n"
-                "while read -r x; do\n"
-                "  read -r flag <<< done\n"
-                "source lib/dep.sh\n"
-                "done\n"
-            ),
-            "scripts/lib/dep.sh": "\n",
-        },
-    )
-    owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
-    assert kit_doctor.derive_dependencies(root, owned) == {
-        "scripts/lib/dep.sh": ["scripts/engine.sh"]
-    }
-
-
-def test_a_tab_indented_heredoc_terminator_closes_the_body(tmp_path):
-    """`<<-` strips leading tabs from the body AND from its terminator, so the
-    closing line is indented. Unpinned until round 3 flagged it; a terminator
-    that never matches is the same never-closing-heredoc failure as `<<<`."""
-    root = _tree(
-        tmp_path,
-        {
-            "scripts/engine.sh": (
-                "#!/usr/bin/env bash\ncat <<-EOF\n\tsource lib/other.sh\n\tEOF\nsource lib/dep.sh\n"
-            ),
-            "scripts/lib/dep.sh": "\n",
-            "scripts/lib/other.sh": "\n",
-        },
-    )
-    owned = (
-        ("scripts/engine.sh", "engine"),
-        ("scripts/lib/dep.sh", "engine"),
-        ("scripts/lib/other.sh", "engine"),
-    )
-    assert kit_doctor.derive_dependencies(root, owned) == {
-        "scripts/lib/dep.sh": ["scripts/engine.sh"]
-    }
-
-
-def test_a_source_inside_a_heredoc_body_is_not_an_edge(tmp_path):
-    """A `source` line inside a heredoc is text being PRINTED, not a dependency.
-
-    `pre-push` already carries two `cat >&2 <<EOF` help blocks; one of them
-    gaining a line that explains how a sibling engine wires itself up would have
-    baked a false edge into the manifest. And the strongest regression test in
-    this file would not have caught it —
-    `test_shipped_manifest_required_by_matches_a_fresh_derivation` compares the
-    manifest against a fresh derivation, so a bad edit that gets
-    `--generate-manifest`'d is confirmed as correct by construction. Adversarial
-    lens, PR #225 round 2.
-
-    The Python-import scan deliberately does NOT skip heredocs: `pre-push`'s
-    kitconfig import lives in a `python3 - <<'PY'` body and genuinely runs. The
-    asymmetry is the point, so both halves are asserted here.
-    """
-    root = _tree(
-        tmp_path,
-        {
-            "scripts/engine.sh": (
-                "#!/usr/bin/env bash\n"
-                "cat >&2 <<'EOF'\n"
-                "To wire this up by hand:\n"
-                '    source "$SCRIPT_DIR/lib/dep.sh"\n'
-                "EOF\n"
-                "python3 - <<'PY'\n"
-                "from kitconfig import get\n"
-                "PY\n"
-            ),
-            "scripts/lib/dep.sh": "\n",
-            "scripts/lib/kitconfig.py": "def get(): ...\n",
-        },
-    )
-    owned = (
-        ("scripts/engine.sh", "engine"),
-        ("scripts/lib/dep.sh", "engine"),
-        ("scripts/lib/kitconfig.py", "engine"),
-    )
-    assert kit_doctor.derive_dependencies(root, owned) == {
-        "scripts/lib/kitconfig.py": ["scripts/engine.sh"]
-    }
-
-
-def test_code_on_a_heredoc_opening_line_is_still_scanned(tmp_path):
-    """The line that OPENS a heredoc is ordinary code and can carry its own
-    `source`; only the body is skipped. Detecting the opener before scanning
-    the line, and applying it after, is what makes that true — the obvious
-    ordering drops a real edge."""
-    root = _tree(
-        tmp_path,
-        {
-            "scripts/engine.sh": (
-                "#!/usr/bin/env bash\nsource lib/dep.sh; cat <<EOF\nsource lib/other.sh\nEOF\n"
-            ),
-            "scripts/lib/dep.sh": "\n",
-            "scripts/lib/other.sh": "\n",
-        },
-    )
-    owned = (
-        ("scripts/engine.sh", "engine"),
-        ("scripts/lib/dep.sh", "engine"),
-        ("scripts/lib/other.sh", "engine"),
-    )
-    assert kit_doctor.derive_dependencies(root, owned) == {
-        "scripts/lib/dep.sh": ["scripts/engine.sh"]
-    }
-
-
-def test_a_dotdot_relative_source_resolves_rather_than_vanishing(tmp_path):
-    """`PurePosixPath` does not collapse `..`, so a plain `source "../lib/dep.sh"`
-    built the target `scripts/sub/../lib/dep.sh`, which can never equal the
-    canonical KIT_OWNED path it genuinely names — the edge disappeared.
-
-    Nothing about that path is computed, so it was not covered by the documented
-    "computed at run time" bound: it was #41's own failure class, a real hard
-    dependency silently downgraded to a sized-down omission, reached by a
-    different route. Correctness lens, PR #225 round 2.
-    """
-    root = _tree(
-        tmp_path,
-        {
-            "scripts/sub/engine.sh": '#!/usr/bin/env bash\nsource "../lib/dep.sh"\n',
-            "scripts/lib/dep.sh": "\n",
-        },
-    )
-    owned = (("scripts/sub/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
-    assert kit_doctor.derive_dependencies(root, owned) == {
-        "scripts/lib/dep.sh": ["scripts/sub/engine.sh"]
-    }
-
-
-def test_a_source_climbing_out_of_the_repo_produces_no_edge():
-    """Asserted at `_sourced_paths`, NOT through `derive_dependencies`.
-
-    Routed through the public function this pinned nothing: `record()`'s
-    KIT_OWNED membership check discards an escaped path regardless, so deleting
-    the `..` guard left the whole suite green while `_sourced_paths` really did
-    return `{'../outside/dep.sh'}` — a path that would land in the manifest.
-    Same unpinnable-by-construction trap `_NOT_A_LITERAL_PATH` documents, and
-    the first version of this test walked into it. Correctness lens, PR #225
-    round 3.
-    """
-    text = '#!/usr/bin/env bash\nsource "../../outside/dep.sh"\n'
-    assert kit_doctor._sourced_paths(text, "scripts/engine.sh") == set()
-
-
-def test_a_source_path_computed_at_runtime_produces_no_edge(tmp_path):
-    """The stated limit, pinned so it stays stated rather than drifting into an
-    unnoticed false edge: a bare variable resolves to nothing, not to a guess."""
-    root = _tree(
-        tmp_path,
-        {
-            "scripts/engine.sh": '#!/usr/bin/env bash\nsource "$COMPUTED"\n',
-            "scripts/lib/dep.sh": "\n",
-        },
-    )
-    owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
-    assert kit_doctor.derive_dependencies(root, owned) == {}
-
-
-def test_a_python_file_is_not_scanned_for_shell_source(tmp_path):
-    """Dispatch is on the `.py` suffix, not on whether `ast` happened to succeed.
-    A Python engine mentioning `source lib/dep.sh` in a docstring or a subprocess
-    string must not manufacture an edge."""
-    root = _tree(
-        tmp_path,
-        {
-            "scripts/engine.py": '"""Run:\n\n    source lib/dep.sh\n"""\n',
-            "scripts/lib/dep.sh": "\n",
-        },
-    )
-    owned = (("scripts/engine.py", "engine"), ("scripts/lib/dep.sh", "engine"))
-    assert kit_doctor.derive_dependencies(root, owned) == {}
-
-
 def test_importing_a_package_by_name_resolves_to_its_init(tmp_path):
     """The `<pkg>/__init__.py` candidate in `_module_targets`. Nothing in the kit
     imports a KIT_OWNED package by bare name today, so deleting that candidate
@@ -1010,6 +665,40 @@ def test_importing_a_package_by_name_resolves_to_its_init(tmp_path):
     owned = (("scripts/engine.py", "engine"), ("scripts/lib/pkg/__init__.py", "engine"))
     assert kit_doctor.derive_dependencies(root, owned) == {
         "scripts/lib/pkg/__init__.py": ["scripts/engine.py"]
+    }
+
+
+def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
+    """`dev_session.sh` and `reconcile_sessions.sh` both
+    `source "$SCRIPT_DIR/lib/repo_root.sh"`, and that edge is deliberately NOT
+    in the graph. Asserted so the gap stays stated.
+
+    A scanner for it was built and withdrawn across three review rounds. Both
+    directions failed: preventing FALSE edges needs every real heredoc opener
+    recognised (`cmd <<A <<B`, `<<123`, `<<'MULTI WORD'` all defeated the last
+    version, letting a printed heredoc body become a dependency), and
+    preventing MISSED edges needs to know whether a `source` is in command
+    position (`echo "run this; source lib/dep.sh"` became a real edge). Both are
+    tokenizer problems. A false edge tells an adopter their working install is
+    broken, so shipping the Python-only graph with this hole documented beats
+    shipping a mechanism that can manufacture one. #228 carries it.
+
+    If a future change adds shell scanning, this test fails — which is correct:
+    it must arrive with a real parser and this test rewritten, not as an
+    incidental loosening.
+    """
+    graph = kit_doctor.derive_dependencies(REPO_ROOT)
+    assert "scripts/lib/repo_root.sh" not in graph
+    # The whole graph, so a false edge from ANY future non-Python source — a
+    # heredoc body, a doc code fence — fails here in the kit's own repo, which
+    # is where such a file would be authored. This is the guard that replaced
+    # the withdrawn scanner, and it costs five lines instead of thirty-five.
+    assert set(graph) == {
+        "scripts/lib/atomic_write.py",
+        "scripts/lib/kitconfig.py",
+        "scripts/lib/state_paths/paths.py",
+        "scripts/lib/state_paths/repo_root.py",
+        "scripts/lib/state_paths/resolver.py",
     }
 
 
@@ -1185,6 +874,10 @@ def test_a_healthy_report_does_not_grow_the_parenthetical(tmp_path, capsys):
     # Everything but check_doc_budget.py is absent here, so the count is large —
     # the property under test is that none of it is called REQUIRED, because
     # nothing that imports it is installed either.
-    assert line == "  files: 1 unchanged, 0 differ, 31 missing, 0 unknown"
+    # Derived, not literal: a new KIT_OWNED entry would otherwise fail this test
+    # for a reason unrelated to the property under test, which is only that the
+    # parenthetical is absent. (CodeRabbit, PR #225.)
+    absent = len(kit_doctor.KIT_OWNED) - 1
+    assert line == f"  files: 1 unchanged, 0 differ, {absent} missing, 0 unknown"
     assert "required by an installed engine" not in out
     assert "this install is broken" not in out
