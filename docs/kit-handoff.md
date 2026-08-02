@@ -15,11 +15,11 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
 Last updated: 2026-08-02 — **Phase 2's named blockers are done.** `#41`, `#134` and `#226` are
-closed by `ee3371d` and `3e34fe5`. The durable result is not either feature: three times this
-session a mechanism kept drawing HIGH findings round after round, and each time **withdrawing it
-ended the loop that patching was extending**. `#231` is the doctrine change that follows.
+closed by `ee3371d` and `3e34fe5`. The durable result is not either feature: this
+session, where a mechanism kept drawing HIGH findings round after round, **withdrawing it ended
+the loop that patching was extending**. `#231` is the doctrine change that follows.
 
-## Latest session — 2026-08-02 (Phase 2's blockers closed, and withdrawal beating repair three times)
+## Latest session — 2026-08-02 (Phase 2's blockers closed, and withdrawal beating repair)
 
 **Theme —** Two PRs merged and one closed unmerged. In all three, the expensive part was a
 mechanism *added in response to a review finding* — the doctrine already says to file those rather
@@ -45,10 +45,10 @@ than build them, and not following that is what the rounds were spent on.
   finding prompted it" is already in `fallback-review-panel.md`, and each expensive PR this session
   broke it. What it lacks is what to do once the mechanism is already in the diff and drawing
   HIGHs, where the default — patch again — is what turns two rounds into five. `#231`.
-- **Withdrawal is the cheapest round available.** A shell-`source` scanner (`#228`), a
-  no-`.git` root guess (`#233`), and the `#230` rule itself were each removed rather than repaired,
-  and the round that removed them was the one that came back clean. Removal deletes surface instead
-  of adding more for the next round to find.
+- **Withdrawal is the cheapest round available.** A shell-`source` scanner (`#228`) and a
+  no-`.git` root guess (`#233`) were each removed rather than repaired after successive rounds found
+  a fresh HIGH in the previous round's fix, and the round that removed them came back clean. Removal
+  deletes surface instead of adding more for the next round to find.
 - **A pre-declared threshold must be calibrated, and is binding either way.** `#230`'s fired on one
   HIGH at round 1, before any fix existed — stricter than the rule it was protecting, and it cost
   that PR. Honouring it anyway is the only thing that makes the mechanism worth having.
@@ -72,12 +72,17 @@ than build them, and not following that is what the rounds were spent on.
 - **Carried forward:** `#213`, `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`,
   `#124`, `#169`, `#170`, `#33`/`#112`, `#181`, `#93`.
 
-▶ Next: **`#231`** — the withdraw-don't-patch recovery rule, redesigned. Three instances now back
-it, and `#230` records exactly why the first attempt failed review, so this starts from evidence
-rather than a blank page. It is also the gate on the cs-toolkit vendoring: Phase 2's blockers are
+▶ Next: **`#231`** — the withdraw-don't-patch recovery rule, redesigned. `#228` and `#233` are the
+withdrawals it generalises, and `#230` records why the first attempt at the rule itself failed
+review, so this starts from evidence rather than a blank page. It is also the gate on the cs-toolkit vendoring: Phase 2's blockers are
 closed, but both PRs that closed them cost the round counts `#209` predicted would make a cost
 lever load-bearing first — and on this session's evidence the lever is this rule, not `#209`'s
 pass-size question or `#120`'s terminal check. Read `#231` and `#230` together before proposing.
+
+▶ Next: **`#220`** — sub-HIGH fixes, each already reproduced and specified on the issue, none
+larger than a few lines. Good standalone work that needs no design decision. If you would rather
+take a design question, `#209` now has three measurements behind it and an argument that its own
+recommended direction is aimed at the wrong variable — read it before proposing anything.
 
 ______________________________________________________________________
 
