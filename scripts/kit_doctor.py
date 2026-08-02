@@ -27,8 +27,21 @@ verifies it still holds. Per kit-owned file it reports one of:
     schema version, and either way the required action is the same: diff before
     replacing, never clobber.
 ``missing``
-    Not installed. Either a deliberately sized-down adoption or an incomplete
-    one; the report can't tell, so it says so rather than guessing.
+    Not installed, and nothing installed here needs it. Either a deliberately
+    sized-down adoption or an incomplete one; the report can't tell, so it says
+    so rather than guessing.
+``missing-required``
+    Not installed, but an engine that IS installed needs it — so this install
+    is broken, not sized down. The distinction exists because the old report had
+    only ``missing``, which files a hard dependency under "sized-down adoption,
+    or incomplete" alongside `docs/templates/*.tmpl`, which genuinely are
+    optional. `/upgrade` then tells the operator that a missing piece may be a
+    deliberate omission and to ask before installing it — so the documented path
+    invited someone to decline `lib/kitconfig.py`, which every Python engine
+    imports (issue #41). Which files these are is DERIVED at
+    ``--generate-manifest`` time from the PYTHON import graph, not restated by
+    hand. Shell ``source`` is deliberately NOT scanned — see
+    `derive_dependencies` for the gap that leaves and why it is left open.
 ``unknown-version``
     The manifest has no entry for this file, so drift can't be judged.
 
@@ -50,7 +63,10 @@ Usage:
 
 Exit codes:
     0 — every kit-owned file is `unchanged` (or intentionally absent)
-    1 — at least one file `differs` or is `unknown-version`
+    1 — at least one file `differs`, is `unknown-version`, or is
+        `missing-required`. The last one is not drift, but it is a broken
+        install, and the exit code an adopter gates CI on should not be green
+        for a tree whose engines cannot load their own library.
     2 — usage error (no config, no manifest, unreadable input) — including a
         `kit.version` that is present but not a number. That is deliberately
         NOT a warning-and-exit-0: CI gates on this exit code, and a config the
@@ -60,11 +76,13 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
+import re
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
@@ -191,6 +209,7 @@ ADOPTER_OWNED: tuple[str, ...] = (
 # adopter's configured engines directory.
 KIT_ENGINE_PREFIX = "scripts"
 
+
 def _derive_engine_names(kit_owned: tuple[tuple[str, str], ...]) -> tuple[str, ...]:
     """Engine paths as they sit UNDER `paths.engines`, derived from KIT_OWNED.
 
@@ -224,6 +243,156 @@ def _derive_engine_names(kit_owned: tuple[tuple[str, str], ...]) -> tuple[str, .
 
 
 _ENGINE_NAMES: tuple[str, ...] = _derive_engine_names(KIT_OWNED)
+
+# Import statements in a file Python cannot parse. Applied ONLY to `engine` and
+# `hook` roles, never to docs or templates: markdown cannot import anything, and
+# a doctrine file quoting `from kitconfig import get` inside a code fence would
+# otherwise manufacture a dependency edge out of prose. Its user is
+# `scripts/hooks/pre-push`, a bash file whose kitconfig import lives inside a
+# `python3 - <<'PY'` heredoc.
+_TEXT_IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_][A-Za-z0-9_.]*)", re.MULTILINE)
+
+
+# Bash `source` / `.` of another kit file. A shell engine's dependency is a PATH,
+# not a module name, so it needs its own scanner — and without one the graph
+# fails open on exactly the pair #41 is about: `dev_session.sh` and
+# `reconcile_sessions.sh` both `source "$SCRIPT_DIR/lib/repo_root.sh"`, so a tree
+# missing `lib/repo_root.sh` reported `0 missing`-that-matters and exit 0 while
+# `bash scripts/dev_session.sh` died on line 63. The Python-only version of this
+# function shipped that hole and the /upgrade wording built on it went further
+# than the text it replaced — "declining one is safe" — which is a worse false
+# assurance than the "decide, don't assume" it superseded. Found by the
+# adversarial lens on PR #225.
+def _imported_modules(text: str) -> set[tuple[int, str]]:
+    """``(relative_level, dotted_name)`` for every import in `text`.
+
+    `ast` first, and the choice matters rather than being stylistic: two library
+    modules here open with a usage example in the module docstring — the literal
+    line ``from devmodel_config import get, load_config, resolve_path`` sits in
+    `devmodel_config.py`'s own docstring. A text scan reads that as an import
+    and marks the module required by itself; `ast` sees a string constant. The
+    regex is the fallback for files Python cannot parse at all.
+    """
+    modules: set[tuple[int, str]] = set()
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return {(0, m.group(1)) for m in _TEXT_IMPORT_RE.finditer(text)}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update((0, alias.name) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                modules.add((node.level, node.module))
+            elif node.level:
+                # `from . import resolver` — the imported NAME is the module.
+                modules.update((node.level, alias.name) for alias in node.names)
+    return modules
+
+
+def _module_targets(module: str, package_dir: str) -> tuple[str, ...]:
+    """Kit-layout paths a dotted module name could resolve to under `package_dir`."""
+    base = "/".join(module.split("."))
+    return (f"{package_dir}/{base}.py", f"{package_dir}/{base}/__init__.py")
+
+
+def derive_dependencies(
+    root: Path, kit_owned: tuple[tuple[str, str], ...] = KIT_OWNED
+) -> dict[str, list[str]]:
+    """Map each kit-owned file to the kit-owned files that import it.
+
+    This is the ``required`` axis #41 asks for, DERIVED rather than declared —
+    for the same reason `_derive_engine_names` is derived (#59, #67): a
+    hand-maintained list of hard dependencies goes stale exactly when a new
+    engine starts importing something, which is the moment it needed to be
+    right. A boolean would also be less true than this mapping. "Required" is
+    not a property of a file, it is a property of a PAIR: `lib/kitconfig.py`
+    matters to a repo that installed an engine and does not matter to one that
+    installed none, and both are supported adoptions.
+
+    Resolution mirrors what the engines actually do at run time: every Python
+    one does ``sys.path.insert(0, <engine-dir>/"lib")`` before importing, so an
+    absolute import resolves against ``scripts/lib``. Relative imports resolve
+    against the importing file's own package, which is what keeps the
+    `state_paths` package's internal edges (``from .resolver import …``) in the
+    graph rather than only its top-level name.
+
+    **Shell `source` is NOT scanned, and this is the one real gap.**
+    `dev_session.sh` and `reconcile_sessions.sh` both
+    `source "$SCRIPT_DIR/lib/repo_root.sh"` — a hard dependency expressed as a
+    path rather than a module — so a tree missing `lib/repo_root.sh` reports it
+    as an ordinary `missing` while `bash scripts/dev_session.sh` dies on its
+    `source` line. That is a live instance of #41's own bug class and it is
+    knowingly left open; #228 carries it.
+
+    A scanner for it was built across three review rounds and withdrawn. The
+    short version: preventing FALSE edges requires recognising every real
+    heredoc opener, and preventing MISSED edges requires knowing whether a
+    `source` is in command position — both are tokenizer problems, and each
+    regex approximation leaked in one direction or the other. A false edge is
+    the harmful direction (it tells an adopter their working install is broken),
+    and shipping a mechanism that can produce them is worse than shipping the
+    Python-only graph plus a documented hole. #228 has the full account,
+    including the four constructs that defeated the last version.
+
+    Non-Python files ARE still scanned for Python-style imports: `pre-push` is
+    bash, and its `from kitconfig import …` lives inside a `python3 - <<'PY'`
+    heredoc that genuinely executes.
+
+    LIMITS, because a graph that overstates its coverage is worse than a short
+    one:
+
+    - Only `engine` and `hook` roles are scanned; see `_TEXT_IMPORT_RE`.
+    - Only imports resolving to a KIT_OWNED path are recorded. Third-party and
+      stdlib imports are not this function's business, and an engine importing
+      an UNTRACKED kit file produces no edge at all — that is #37's class, not
+      one this can see.
+    - A dynamic import (``importlib``, an ``__import__`` call) is invisible, as
+      is a `source` whose path is computed at run time. No file THIS FUNCTION
+      SCANS does either today; the qualifier is load-bearing, because several
+      TEST modules do use `importlib.util`, and they are neither `engine` nor
+      `hook` so they are out of scope. A future ENGINE that did either would get
+      a silently thin graph, and no test here would catch it.
+
+      This sentence has now been wrong twice — first claiming "nothing in the
+      tree does this", then naming three test modules when there are four — so
+      it no longer enumerates them. `grep -rln importlib scripts/` is the
+      answer, and unlike a list in a docstring it cannot go stale.
+      (Correctness lens, PR #225 rounds 1 and 2.)
+    - Shell `source` is not scanned at all, so `lib/repo_root.sh`'s two
+      dependents are absent from the graph. Stated above; #228 carries it.
+    - Every one of these bounds errs toward NO edge. That direction is chosen,
+      not incidental: a missing edge degrades a file to plain `missing`, which
+      is the pre-#41 behaviour and merely unhelpful, while a false edge tells an
+      adopter their working install is broken and to install something they do
+      not need. `missing-required` firing wrongly is worse than it not firing,
+      and that asymmetry is what decided the shell-scan question above.
+    """
+    owned = {rel for rel, _ in kit_owned}
+    dependents: dict[str, set[str]] = {}
+
+    def record(target: str, importer: str) -> None:
+        if target in owned and target != importer:
+            dependents.setdefault(target, set()).add(importer)
+
+    for rel, role in kit_owned:
+        if role not in ("engine", "hook"):
+            continue
+        source = root / rel
+        if not source.is_file():
+            continue
+        text = source.read_text(encoding="utf-8", errors="replace")
+        for level, module in _imported_modules(text):
+            if level:
+                package = PurePosixPath(rel).parent
+                for _ in range(level - 1):
+                    package = package.parent
+                package_dir = str(package)
+            else:
+                package_dir = f"{KIT_ENGINE_PREFIX}/lib"
+            for candidate in _module_targets(module, package_dir):
+                record(candidate, rel)
+    return {path: sorted(deps) for path, deps in sorted(dependents.items())}
 
 
 @dataclass
@@ -265,6 +434,16 @@ class Report:
     @property
     def missing(self) -> list[FileStatus]:
         return [f for f in self.files if f.state == "missing"]
+
+    @property
+    def broken(self) -> list[FileStatus]:
+        """Files an installed engine needs and that are not installed.
+
+        Deliberately NOT folded into `drifted`: a file that is absent has not
+        drifted from anything, and this report's whole position is that it does
+        not claim more than it knows. They meet only at the exit code.
+        """
+        return [f for f in self.files if f.state == "missing-required"]
 
 
 def sha256_of(path: Path) -> str:
@@ -399,7 +578,18 @@ def generate_manifest(root: Path, kit_version: int) -> dict:
     absent here is recorded as ``None`` rather than skipped, so a packaging
     mistake shows up as an explicit hole instead of silently narrowing what
     later gets checked.
+
+    ``required_by`` is written only where the derived dependent set is non-empty
+    — most kit files are needed by nothing, and an entry per file would be
+    twenty-six empty lists to read past in every manifest diff (32 KIT_OWNED
+    entries, 6 with a dependent; the earlier figure of "thirty" was a guess and
+    the correctness lens on PR #225 computed the real one). A reader must
+    therefore treat an ABSENT key as "no known dependents", which is also what
+    an older manifest (written before this field existed) yields: it reports
+    every missing file as an ordinary `missing`, exactly as it did before.
+    Degrading to the previous behaviour is the intended failure mode.
     """
+    dependents = derive_dependencies(root)
     files: dict[str, dict] = {}
     for rel, role in KIT_OWNED:
         target = root / rel
@@ -407,6 +597,8 @@ def generate_manifest(root: Path, kit_version: int) -> dict:
             "sha256": sha256_of(target) if target.is_file() else None,
             "role": role,
         }
+        if dependents.get(rel):
+            files[rel]["required_by"] = dependents[rel]
     return {
         "kit_version": kit_version,
         "files": files,
@@ -418,6 +610,11 @@ def inspect(root: Path, manifest: dict, config: dict) -> Report:
     engines_dir = str(get(config, "paths.engines", KIT_ENGINE_PREFIX))
     manifest_files = manifest.get("files") or {}
 
+    # Presence of EVERY kit-owned file, resolved before the status loop: whether
+    # a missing file is a broken install or a sized-down one is a question about
+    # its dependents, and those can sit anywhere in KIT_OWNED order.
+    present = {rel: (root / _remap(rel, engines_dir)).is_file() for rel, _ in KIT_OWNED}
+
     statuses: list[FileStatus] = []
     for rel, role in KIT_OWNED:
         local_rel = _remap(rel, engines_dir)
@@ -425,12 +622,21 @@ def inspect(root: Path, manifest: dict, config: dict) -> Report:
         entry = manifest_files.get(rel) or {}
         expected = entry.get("sha256")
         if not target.is_file():
-            statuses.append(FileStatus(local_rel, role, "missing"))
+            # Filtered to INSTALLED dependents. A repo that installed no engine
+            # is a supported sized-down adoption and must not be told its
+            # missing library breaks it — the same distinction `_ENGINE_NAMES`
+            # exists to keep the engines probe from getting wrong (#59).
+            needed_by = [dep for dep in (entry.get("required_by") or []) if present.get(dep)]
+            if needed_by:
+                names = ", ".join(PurePosixPath(dep).name for dep in needed_by)
+                statuses.append(
+                    FileStatus(local_rel, role, "missing-required", f"needed by {names}")
+                )
+            else:
+                statuses.append(FileStatus(local_rel, role, "missing"))
             continue
         if expected is None:
-            statuses.append(
-                FileStatus(local_rel, role, "unknown-version", "no manifest entry")
-            )
+            statuses.append(FileStatus(local_rel, role, "unknown-version", "no manifest entry"))
             continue
         actual = sha256_of(target)
         if actual == expected:
@@ -552,11 +758,20 @@ def render(report: Report) -> str:
     for f in report.files:
         by_state.setdefault(f.state, []).append(f)
 
+    # `missing` counts BOTH absent states, so the total does not change meaning
+    # for anyone reading this line as "how much of the kit is not here"; the
+    # parenthetical is what says how much of that absence is breakage. Rendered
+    # only when non-zero, so a healthy install's summary line is unchanged.
+    n_required_missing = len(by_state.get("missing-required", []))
+    n_absent = len(by_state.get("missing", [])) + n_required_missing
+    absent_note = (
+        f" ({n_required_missing} required by an installed engine)" if n_required_missing else ""
+    )
     lines.append("")
     lines.append(
         f"  files: {len(by_state.get('unchanged', []))} unchanged, "
         f"{len(by_state.get('differs', []))} differ, "
-        f"{len(by_state.get('missing', []))} missing, "
+        f"{n_absent} missing{absent_note}, "
         f"{len(by_state.get('unknown-version', []))} unknown"
     )
     # Narrow "differs" using the schema version rather than asserting a cause.
@@ -598,6 +813,14 @@ def render(report: Report) -> str:
             "diff before replacing"
         )
     for state, label in (
+        # First, and phrased to leave no room for the "deliberate omission"
+        # reading: this is the one absent-file case where the answer is not
+        # "decide, don't assume" but "install it".
+        (
+            "missing-required",
+            "✗ NOT INSTALLED, and needed by an engine that is — this install is "
+            "broken, not sized down. Install these before refreshing any engine",
+        ),
         ("differs", differs_label),
         ("unknown-version", "no manifest entry — drift cannot be judged"),
         ("missing", "not installed (sized-down adoption, or incomplete)"),
@@ -687,11 +910,15 @@ def main(argv: list[str] | None = None) -> int:
         # a manifest git TRACKS. Tracked is the property that makes that work, not
         # location: `--manifest` and `--root` can both aim at an untracked path,
         # inside the repo or outside it.
-        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         holes = [p for p, e in manifest["files"].items() if e["sha256"] is None]
         print(f"wrote {manifest_path} ({len(manifest['files'])} files, kit_version={version})")
         if holes:
-            print(f"warning: {len(holes)} listed file(s) absent from this checkout:", file=sys.stderr)
+            print(
+                f"warning: {len(holes)} listed file(s) absent from this checkout:", file=sys.stderr
+            )
             for h in holes:
                 print(f"  · {h}", file=sys.stderr)
         return 0
@@ -742,7 +969,7 @@ def main(argv: list[str] | None = None) -> int:
         # the adopter sees the ⚠ line, then a non-zero status so CI cannot go
         # green on a config this very run called UNREADABLE.
         return 2
-    return 1 if report.drifted else 0
+    return 1 if report.drifted or report.broken else 0
 
 
 if __name__ == "__main__":

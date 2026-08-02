@@ -58,7 +58,9 @@ def _manifest(entries: dict[str, str | None], version: int = 2) -> dict:
 
 def test_remap_follows_configured_engines_dir():
     assert kit_doctor._remap("scripts/pr_watch.py", "scripts") == "scripts/pr_watch.py"
-    assert kit_doctor._remap("scripts/pr_watch.py", "scripts/devkit") == "scripts/devkit/pr_watch.py"
+    assert (
+        kit_doctor._remap("scripts/pr_watch.py", "scripts/devkit") == "scripts/devkit/pr_watch.py"
+    )
     assert (
         kit_doctor._remap("scripts/lib/state_paths/resolver.py", "tools/devkit")
         == "tools/devkit/lib/state_paths/resolver.py"
@@ -441,7 +443,9 @@ def test_a_manifest_without_a_usable_version_is_not_a_silent_checkmark(
     report = kit_doctor.inspect(root, manifest, config)
     assert report.kit_version_manifest is None
     rendered = kit_doctor.render(report)
-    assert f"manifest kit_version is {shown} — cannot tell whether this config is behind" in rendered
+    assert (
+        f"manifest kit_version is {shown} — cannot tell whether this config is behind" in rendered
+    )
     assert "cannot narrow this" in rendered
     assert "LOCAL EDITS" not in rendered
     assert "OLDER version" not in rendered
@@ -583,4 +587,297 @@ def test_generate_manifest_refuses_an_unreadable_version(tmp_path, capsys):
 
 
 def test_remap_tolerates_a_trailing_slash():
-    assert kit_doctor._remap("scripts/pr_watch.py", "scripts/devkit/") == "scripts/devkit/pr_watch.py"
+    assert (
+        kit_doctor._remap("scripts/pr_watch.py", "scripts/devkit/") == "scripts/devkit/pr_watch.py"
+    )
+
+
+# --- the required-by axis (#41) -------------------------------------------
+#
+# The bug these pin: `missing` filed a hard dependency under "sized-down
+# adoption, or incomplete", and /upgrade tells the operator that such a piece
+# may be a deliberate omission and to ask before installing it. So the
+# documented path invited someone to decline `lib/kitconfig.py`, which every
+# Python engine imports.
+
+
+def _tree(tmp_path: Path, files: dict[str, str]) -> Path:
+    for rel, text in files.items():
+        _write(tmp_path / rel, text)
+    return tmp_path
+
+
+def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
+    """Measured against the kit's own tree, not a fixture.
+
+    What this pins that a fixture cannot: `scripts/hooks/pre-push` is BASH, and
+    its kitconfig import lives inside a `python3 - <<'PY'` heredoc, so an
+    ast-only scan drops it; and the equality assertion below fails on any NEW
+    importer the derivation misses, which is the staleness the whole axis exists
+    to prevent.
+
+    **What it does NOT pin, corrected from an earlier version of this docstring
+    that claimed otherwise.** The `devmodel_config.py` assertion looks like it
+    proves `ast` beats a text scan on a docstring usage example — that module's
+    docstring opens with the literal line `from devmodel_config import get,
+    load_config, resolve_path`. It does not: that example names the module's own
+    file, so `derive_dependencies`'s `candidate != rel` self-loop guard drops it
+    whether ast or the regex produced the match. Forcing the regex branch leaves
+    this test GREEN. The ast-vs-prose property is real and IS pinned — by
+    `test_a_docstring_usage_example_is_not_an_import`, whose fixture names a
+    DIFFERENT module and so is not rescued by the self-loop guard. The assertion
+    is kept here as a cheap regression check on the graph's shape, not as
+    evidence of the mechanism. Found by the correctness lens on PR #225.
+    """
+    graph = kit_doctor.derive_dependencies(REPO_ROOT)
+    importers = set(graph.get("scripts/lib/kitconfig.py", []))
+    assert "scripts/hooks/pre-push" in importers, "the bash heredoc import was dropped"
+    assert "scripts/pr_watch.py" in importers, "a function-level import was dropped"
+    assert "scripts/lib/devmodel_config.py" not in graph, "a docstring example became an edge"
+    # Every engine that imports it, by the kit's own grep. Equality, not a
+    # subset: a NEW importer that this misses is exactly the staleness the
+    # derivation exists to prevent.
+    assert importers == {
+        "scripts/archive_plan_sessions.py",
+        "scripts/check_doc_budget.py",
+        "scripts/check_memory_budget.py",
+        "scripts/hooks/pr_followup_hook.py",
+        "scripts/hooks/pre-push",
+        "scripts/kit_doctor.py",
+        "scripts/panel_prompt.py",
+        "scripts/pr_watch.py",
+    }
+
+
+def test_importing_a_package_by_name_resolves_to_its_init(tmp_path):
+    """The `<pkg>/__init__.py` candidate in `_module_targets`. Nothing in the kit
+    imports a KIT_OWNED package by bare name today, so deleting that candidate
+    left the whole suite green — flagged by the adversarial lens on PR #225 as
+    an untested resolution rule, and pinned here rather than left to a future
+    engine to discover."""
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/engine.py": "import pkg\n",
+            "scripts/lib/pkg/__init__.py": "value = 1\n",
+        },
+    )
+    owned = (("scripts/engine.py", "engine"), ("scripts/lib/pkg/__init__.py", "engine"))
+    assert kit_doctor.derive_dependencies(root, owned) == {
+        "scripts/lib/pkg/__init__.py": ["scripts/engine.py"]
+    }
+
+
+def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
+    """`dev_session.sh` and `reconcile_sessions.sh` both
+    `source "$SCRIPT_DIR/lib/repo_root.sh"`, and that edge is deliberately NOT
+    in the graph. Asserted so the gap stays stated.
+
+    A scanner for it was built and withdrawn across three review rounds. Both
+    directions failed: preventing FALSE edges needs every real heredoc opener
+    recognised (`cmd <<A <<B`, `<<123`, `<<'MULTI WORD'` all defeated the last
+    version, letting a printed heredoc body become a dependency), and
+    preventing MISSED edges needs to know whether a `source` is in command
+    position (`echo "run this; source lib/dep.sh"` became a real edge). Both are
+    tokenizer problems. A false edge tells an adopter their working install is
+    broken, so shipping the Python-only graph with this hole documented beats
+    shipping a mechanism that can manufacture one. #228 carries it.
+
+    If a future change adds shell scanning, this test fails — which is correct:
+    it must arrive with a real parser and this test rewritten, not as an
+    incidental loosening.
+    """
+    graph = kit_doctor.derive_dependencies(REPO_ROOT)
+    assert "scripts/lib/repo_root.sh" not in graph
+    # The whole graph, so a false edge from ANY future non-Python source — a
+    # heredoc body, a doc code fence — fails here in the kit's own repo, which
+    # is where such a file would be authored. This is the guard that replaced
+    # the withdrawn scanner, and it costs five lines instead of thirty-five.
+    assert set(graph) == {
+        "scripts/lib/atomic_write.py",
+        "scripts/lib/kitconfig.py",
+        "scripts/lib/state_paths/paths.py",
+        "scripts/lib/state_paths/repo_root.py",
+        "scripts/lib/state_paths/resolver.py",
+    }
+
+
+def test_shipped_manifest_required_by_matches_a_fresh_derivation():
+    """A stale `required_by` is a silent downgrade: the file stops being called
+    required and the report goes back to inviting an operator to decline it.
+
+    This is the guard the KIT_OWNED comments say does not exist for the
+    tracked/untracked pairing (#216) — it is affordable here only because the
+    axis is derived rather than hand-written.
+    """
+    manifest = json.loads((REPO_ROOT / kit_doctor.MANIFEST_NAME).read_text(encoding="utf-8"))
+    shipped = {
+        rel: entry["required_by"]
+        for rel, entry in manifest["files"].items()
+        if entry.get("required_by")
+    }
+    assert shipped == kit_doctor.derive_dependencies(REPO_ROOT), (
+        "kit-manifest.json's required_by is stale: run "
+        "`uv run scripts/kit_doctor.py --generate-manifest` and commit it."
+    )
+
+
+def test_a_docstring_usage_example_is_not_an_import(tmp_path):
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/lib/thing.py": '"""Use it:\n\n    from other import go\n"""\n',
+            "scripts/lib/other.py": "def go(): ...\n",
+        },
+    )
+    owned = (("scripts/lib/thing.py", "engine"), ("scripts/lib/other.py", "engine"))
+    assert kit_doctor.derive_dependencies(root, owned) == {}
+
+
+def test_relative_imports_inside_a_package_are_edges(tmp_path):
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/lib/pkg/__init__.py": "from .inner import thing\nfrom . import sibling\n",
+            "scripts/lib/pkg/inner.py": "thing = 1\n",
+            "scripts/lib/pkg/sibling.py": "other = 2\n",
+        },
+    )
+    owned = (
+        ("scripts/lib/pkg/__init__.py", "engine"),
+        ("scripts/lib/pkg/inner.py", "engine"),
+        ("scripts/lib/pkg/sibling.py", "engine"),
+    )
+    assert kit_doctor.derive_dependencies(root, owned) == {
+        "scripts/lib/pkg/inner.py": ["scripts/lib/pkg/__init__.py"],
+        "scripts/lib/pkg/sibling.py": ["scripts/lib/pkg/__init__.py"],
+    }
+
+
+def test_doctrine_prose_quoting_an_import_is_not_scanned(tmp_path):
+    """Roles other than engine/hook are skipped, and this is why: the fallback
+    text scan cannot tell a code fence from code, and kit doctrine quotes engine
+    imports when explaining them."""
+    root = _tree(
+        tmp_path,
+        {
+            "docs/kit/explainer.md": "The engines do:\n\n```python\nfrom kitconfig import get\n```\n",
+            "scripts/lib/kitconfig.py": "def get(): ...\n",
+        },
+    )
+    owned = (("docs/kit/explainer.md", "doctrine"), ("scripts/lib/kitconfig.py", "engine"))
+    assert kit_doctor.derive_dependencies(root, owned) == {}
+
+
+def test_a_missing_library_an_installed_engine_imports_is_broken_not_sized_down(tmp_path):
+    root = _fake_repo(tmp_path)  # installs scripts/check_doc_budget.py, no lib/
+    manifest = _manifest({"scripts/check_doc_budget.py": None, "scripts/lib/kitconfig.py": None})
+    manifest["files"]["scripts/lib/kitconfig.py"]["required_by"] = ["scripts/check_doc_budget.py"]
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config)
+    states = {f.path: f.state for f in report.files}
+    assert states["scripts/lib/kitconfig.py"] == "missing-required"
+    assert [f.path for f in report.broken] == ["scripts/lib/kitconfig.py"]
+    detail = next(f.detail for f in report.files if f.path == "scripts/lib/kitconfig.py")
+    assert detail == "needed by check_doc_budget.py"
+
+
+def test_a_missing_library_nothing_installed_imports_stays_an_ordinary_omission(tmp_path):
+    """The pair, not the file, is what makes a dependency required. A repo that
+    installed no engine is a supported sized-down adoption and must not be told
+    its absent library breaks it."""
+    root = _fake_repo(tmp_path)
+    (root / "scripts" / "check_doc_budget.py").unlink()
+    manifest = _manifest({"scripts/check_doc_budget.py": None, "scripts/lib/kitconfig.py": None})
+    manifest["files"]["scripts/lib/kitconfig.py"]["required_by"] = ["scripts/check_doc_budget.py"]
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config)
+    states = {f.path: f.state for f in report.files}
+    assert states["scripts/lib/kitconfig.py"] == "missing"
+    assert report.broken == []
+
+
+def test_the_dependent_is_looked_up_through_the_engines_remap(tmp_path):
+    """`required_by` records kit-layout paths; whether the dependent is INSTALLED
+    is a question about the adopter's layout. Without the remap, a repo that
+    vendored engines under `scripts/devkit/` looks like it installed nothing and
+    a genuinely broken install reports as sized-down."""
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    manifest = _manifest({"scripts/check_doc_budget.py": None, "scripts/lib/kitconfig.py": None})
+    manifest["files"]["scripts/lib/kitconfig.py"]["required_by"] = ["scripts/check_doc_budget.py"]
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config)
+    states = {f.path: f.state for f in report.files}
+    assert states["scripts/devkit/lib/kitconfig.py"] == "missing-required"
+
+
+def test_a_manifest_without_the_field_degrades_to_the_old_report(tmp_path):
+    """An adopter comparing against a kit release older than this field gets the
+    previous behaviour, not a crash and not a false all-clear."""
+    root = _fake_repo(tmp_path)
+    manifest = _manifest({"scripts/check_doc_budget.py": None, "scripts/lib/kitconfig.py": None})
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config)
+    states = {f.path: f.state for f in report.files}
+    assert states["scripts/lib/kitconfig.py"] == "missing"
+    assert report.broken == []
+
+
+def test_a_broken_install_is_not_a_green_exit(tmp_path, capsys):
+    """The dependent is given its REAL hash, so it lands `unchanged` and
+    `report.drifted` is empty — otherwise the exit code proves nothing.
+
+    The first version of this test used `_manifest`'s default `None` hash. That
+    makes the *present* dependent `unknown-version`, which is already counted in
+    `drifted`, so `assert code == 1` passed for a reason unrelated to the
+    mechanism under test: deleting `report.broken` from the exit expression
+    entirely left all 72 tests green. Found by the adversarial lens on PR #225 —
+    the doctrine's "named by a test and pinned by nothing" case, in a test
+    written to pin exactly that.
+    """
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    manifest = _manifest(
+        {
+            "scripts/check_doc_budget.py": kit_doctor.sha256_of(target),
+            "scripts/lib/kitconfig.py": None,
+        }
+    )
+    manifest["files"]["scripts/lib/kitconfig.py"]["required_by"] = ["scripts/check_doc_budget.py"]
+    manifest_path = root / "kit-manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    # Positive control on the fixture itself: if a future edit reintroduces an
+    # unrelated drifted entry, this fails rather than silently restoring the
+    # confound the assertion below is meant to be free of.
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config)
+    assert report.drifted == [], f"fixture is confounded: {[f.path for f in report.drifted]}"
+    assert [f.path for f in report.broken] == ["scripts/lib/kitconfig.py"]
+
+    code = kit_doctor.main(["--root", str(root), "--manifest", str(manifest_path)])
+    out = capsys.readouterr().out
+    assert code == 1, "a tree whose engines cannot import their own library exited green"
+    assert "this install is broken, not sized down" in out
+    assert "1 required by an installed engine" in out
+
+
+def test_a_healthy_report_does_not_grow_the_parenthetical(tmp_path, capsys):
+    """The count line's new clause is conditional; a report with no breakage
+    must read exactly as it did."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    manifest = _manifest({"scripts/check_doc_budget.py": kit_doctor.sha256_of(target)})
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    print(kit_doctor.render(kit_doctor.inspect(root, manifest, config)))
+    out = capsys.readouterr().out
+    line = next(ln for ln in out.splitlines() if ln.startswith("  files:"))
+    # Everything but check_doc_budget.py is absent here, so the count is large —
+    # the property under test is that none of it is called REQUIRED, because
+    # nothing that imports it is installed either.
+    # Derived, not literal: a new KIT_OWNED entry would otherwise fail this test
+    # for a reason unrelated to the property under test, which is only that the
+    # parenthetical is absent. (CodeRabbit, PR #225.)
+    absent = len(kit_doctor.KIT_OWNED) - 1
+    assert line == f"  files: 1 unchanged, 0 differ, {absent} missing, 0 unknown"
+    assert "required by an installed engine" not in out
+    assert "this install is broken" not in out
