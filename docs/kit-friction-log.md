@@ -11,6 +11,26 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-02 (wrap-up mechanics)
+
+- **A commit message written in a shell heredoc silently lost a figure to variable expansion.**
+  An unquoted heredoc expanded `$598` — meant as a line count — to the empty string, and the
+  message shipped reading "against  at the base". Caught by grepping the message back, not by
+  writing it. **M** — the wrap-up and review workflows both prescribe generating figures by shell
+  substitution at the head, which is right, and this is that instruction's failure mode: the same
+  `$` that interpolates a wanted value silently eats an unwanted one. Proposed fix: when a message
+  body contains a literal `$` that is not a substitution, quote the heredoc delimiter (`<<'EOF'`)
+  and compute figures into the text beforehand — and read the message back with `git log -1` as
+  its own step, the way the publish gate is already a separate step.
+
+- **The cockpit's own PR comment un-converges the merge gate, so `--mark-seen` is needed twice.**
+  Posting a round-result comment immediately before merging flips `converged` back to false —
+  the comment is unacknowledged input like any other — so `mergeable` goes false until a second
+  `--mark-seen`. Not wrong, and arguably correct (the gate cannot know who wrote it), but the
+  loop reads as a spurious block at exactly the moment the operator expects to merge. **L** —
+  proposed fix: no code change; note in `pr-watch` that a comment posted after the last
+  `--mark-seen` requires another ack, so the second call is expected rather than a symptom.
+
 ## 2026-08-01 — Backlog migrated to GitHub Issues (#192–#196)
 
 Eighth sweep, LLM-only mode ([#6](https://github.com/topij/agentic-dev-kit/issues/6) still not
