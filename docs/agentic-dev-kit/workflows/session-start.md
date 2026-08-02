@@ -155,36 +155,24 @@ something already classified 🟡 is later raised to 🔴, it gets the check the
   point of sweeping into them. So a problem diagnosed three months ago is
   invisible to every other step here, and its symptom is not.
 
-  Search them **per candidate**, by job / ticket / subject name.
+  Search them **per candidate**, by job / ticket / subject name, using **your
+  runtime's own file-search facility** — the subject passed as a *parameter*, the
+  two archives as the scope.
 
-  **Do not build a shell command out of the subject.** It is candidate-derived
-  text — a ticket title, a PR title, a job name — so on any repo whose tracker
-  takes issues from outside it is attacker-influenceable. **No quoting rule makes
-  arbitrary text safe to interpolate into a command line**, and single-quoting
-  specifically does not: one `'` in the subject closes the quote, and what follows
-  runs as a command. This is not only a hostile-input concern — an ordinary
-  apostrophe does it by accident, so a real title from this repo's own history
-  (`the kit's two remaining truncating writes`) already breaks the recipe.
+  **Skip a candidate whose subject is empty or whitespace-only** rather than
+  searching for it. An empty pattern matches every line of both archives, which is
+  worse than finding nothing: it is a false-positive flood over exactly the files
+  this step refuses to read whole.
 
-  **Preferred: use your runtime's own file-search facility**, passing the subject
-  as a **parameter** and the two archives as the search scope. A parameter is
-  never parsed as shell syntax, which closes the class rather than narrowing it.
-
-  If a shell is the only route you have, keep the subject out of the command line
-  by writing it through a **quoted** heredoc and matching from the file:
-
-  ```bash
-  cat > "${TMPDIR:-/tmp}/devkit-subject" <<'DEVKIT_SUBJECT_END'
-  <job-or-subject>
-  DEVKIT_SUBJECT_END
-  grep -Fnf "${TMPDIR:-/tmp}/devkit-subject" "<handoff-history>" "<friction-log-archive>"
-  ```
-
-  A quoted delimiter suppresses every expansion, so the subject reaches the file
-  verbatim; `-F` then matches it literally, so a title carrying regex
-  metacharacters cannot silently match the wrong entries. The residual is narrow
-  and worth naming rather than hiding: a subject containing a line equal to the
-  delimiter would end the heredoc early. Pick one no title would contain.
+  **This workflow deliberately ships no shell recipe for that search.** The
+  subject is candidate-derived text — a ticket title, a PR title, a job name — so
+  on any repo whose tracker takes issues from outside it is attacker-influenceable,
+  and a parameter is the only form never parsed as syntax. Three shell recipes were
+  written for this line and each was broken by a different input, the last two by
+  the fix for the one before; the full account is on
+  [`#241`](https://github.com/topij/agentic-dev-kit/issues/241). If a shell is the
+  only route you have, read that issue first and treat building the command as its
+  own problem rather than assuming a quoting rule settles it.
 
   A hit **locates** a record; it does not by itself establish one. Read the entry
   the hit sits in before acting on it — these are Markdown blocks, so the
