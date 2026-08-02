@@ -673,18 +673,12 @@ def test_the_shell_engines_source_dependency_is_in_the_graph():
         "source ${SCRIPT_DIR}/lib/dep.sh",
         'source "$(dirname "$0")/lib/dep.sh"',
         ". $SCRIPT_DIR/lib/dep.sh",
-        # Everything below was a SILENT MISS in the first version of this
-        # scanner, which anchored `source` to the start of its physical line.
-        # A guarded source is the more defensive idiom — arguably better bash
-        # than the bare form both current shell engines use — so the scanner
-        # was blindest to the engines most careful about the very dependency
-        # it exists to find. Adversarial lens, PR #225 round 2.
-        '[ -f "$SCRIPT_DIR/lib/dep.sh" ] && source "$SCRIPT_DIR/lib/dep.sh"',
-        'if true; then source "$SCRIPT_DIR/lib/dep.sh"; fi',
+        # Trailing content after the operand: the operand stops at a shell
+        # separator rather than running to end of line, so these are found.
         'source "$SCRIPT_DIR/lib/dep.sh" || true',
         "source lib/dep.sh && echo ready",
-        "{ source lib/dep.sh; }",
         "source lib/dep.sh; echo ready",
+        "source 'lib/dep.sh'",
     ],
 )
 def test_the_shell_scan_strips_the_leading_expansion(tmp_path, line):
@@ -706,28 +700,163 @@ def test_the_shell_scan_strips_the_leading_expansion(tmp_path, line):
     [
         "# source lib/dep.sh",
         "echo ready # source lib/dep.sh",
-        # The one that matters: dropping the line-start anchor to catch guarded
-        # `source` also lets a `&&` inside a COMMENT reach the scanner. Nothing
-        # pinned that, so the mutation removing the anchor passed the whole
-        # suite while turning commented-out prose into a dependency edge.
         "# run cmd && source lib/dep.sh to wire it up",
+        # Ordinary prose in an ordinary echo. This is what killed round 2's
+        # widened anchor: matching `source` after a separator or block keyword
+        # cannot tell a real command position from the word `then` inside a
+        # string, so this line produced a REAL dependency edge. Regex has no
+        # notion of quote state; deciding command position needs a tokenizer.
+        # Adversarial lens, PR #225 round 3.
+        'echo "please then source lib/dep.sh now"',
+        "printf '%s' 'run: source lib/dep.sh'",
     ],
 )
-def test_a_commented_out_source_is_not_an_edge(tmp_path, line):
-    """A false edge is worse than a missing one, and this is the direction the
-    round-2 widening could have broken.
+def test_prose_mentioning_source_is_not_an_edge(tmp_path, line):
+    """A false edge is worse than a missing one, and this is the direction that
+    withdrew the round-2 widening.
 
     A bogus `required_by` entry baked into the manifest tells every adopter who
     has the importing file and not the target that their install is BROKEN and
-    to install something they do not need — the `missing-required` state firing
-    in reverse, which is the failure `missing` vs `missing-required` exists to
-    prevent."""
+    to install something they do not need — `missing-required` firing in
+    reverse, which is the failure the `missing` split exists to prevent.
+
+    These pass via the line-start anchor, not via any comment-stripping step:
+    round 2 carried one, and withdrawing the widening removed the only thing it
+    defended against.
+    """
     root = _tree(
         tmp_path,
         {"scripts/engine.sh": f"#!/usr/bin/env bash\n{line}\n", "scripts/lib/dep.sh": "\n"},
     )
     owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
     assert kit_doctor.derive_dependencies(root, owned) == {}
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        '[ -f "$SCRIPT_DIR/lib/dep.sh" ] && source "$SCRIPT_DIR/lib/dep.sh"',
+        'if true; then source "$SCRIPT_DIR/lib/dep.sh"; fi',
+        "{ source lib/dep.sh; }",
+        "while read -r x; do source lib/dep.sh; done",
+    ],
+)
+def test_a_guarded_source_is_a_KNOWN_MISS_not_an_accident(tmp_path, line):
+    """Asserted so the bound stays STATED. `source` must be the first token on
+    its line; a guarded or nested one is not seen.
+
+    Round 2 widened the anchor to catch exactly these and round 3 withdrew it —
+    the widened form could not tell a command position from the word `then`
+    inside a string, and manufactured edges from prose. The trade is deliberate:
+    anchoring fails in ONE direction, and a missed edge degrades the file to
+    plain `missing`, which is the pre-#41 behaviour — unhelpful, never
+    misleading. Neither shell engine in this tree uses a guarded form, so
+    nothing real is missed today. #228 holds the proper fix.
+
+    If a future change makes any of these produce an edge, this test fails —
+    which is correct: that change must arrive with a real command-position
+    parser and this test rewritten, not as an incidental loosening.
+    """
+    root = _tree(
+        tmp_path,
+        {"scripts/engine.sh": f"#!/usr/bin/env bash\n{line}\n", "scripts/lib/dep.sh": "\n"},
+    )
+    owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
+    assert kit_doctor.derive_dependencies(root, owned) == {}
+
+
+@pytest.mark.parametrize(
+    "herestring",
+    [
+        'read -r x <<< "$out"',
+        "printf '%s' greeting <<< greeting",
+        "mapfile -t arr <<<$out",
+        # `<<` inside arithmetic looks identical to `<<DELIM` to a regex. The
+        # `<<<` guard does not cover it, and it blinded the rest of the file the
+        # same way. Correctness lens, PR #225 round 3.
+        "result=$(( flags << shift_amount ))",
+        "(( total = total << 1 ))",
+    ],
+)
+def test_a_herestring_does_not_swallow_the_rest_of_the_file(tmp_path, herestring):
+    """`<<<` is a herestring with no body. An unguarded `<<-?` matched its second
+    and third characters, took the following word as a delimiter, and put the
+    scanner into a heredoc that never closed — silently deleting every real edge
+    for the REST OF THE FILE.
+
+    Strictly worse than the false positive the heredoc skip was added to fix,
+    and the code before that skip existed got this right by having no heredoc
+    concept at all. `read x <<< "$var"` is everyday bash, not exotic.
+    Adversarial lens, PR #225 round 3.
+    """
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/engine.sh": f"#!/usr/bin/env bash\n{herestring}\nsource lib/dep.sh\n",
+            "scripts/lib/dep.sh": "\n",
+        },
+    )
+    owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
+    assert kit_doctor.derive_dependencies(root, owned) == {
+        "scripts/lib/dep.sh": ["scripts/engine.sh"]
+    }
+
+
+def test_a_herestring_whose_word_recurs_as_a_line_still_does_not_swallow(tmp_path):
+    """What keeps the `<<<` lookbehind load-bearing rather than redundant.
+
+    The two-pass "a heredoc region only counts if it CLOSES" rule neutralises
+    most `<<<` misparses on its own, because a bogus delimiter rarely appears as
+    a standalone line. `done` is the exception and it is not exotic — it closes
+    every `for`/`while` loop in shell. Without the lookbehind, `<<< done`
+    captures `done`, the loop's own `done` closes the phantom body, and every
+    line between them is silently dropped.
+
+    Mutation-checked: removing the lookbehind leaves the rest of the suite green
+    and fails only this test, which is what makes the guard pinned rather than
+    decorative.
+    """
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/engine.sh": (
+                "#!/usr/bin/env bash\n"
+                "while read -r x; do\n"
+                "  read -r flag <<< done\n"
+                "source lib/dep.sh\n"
+                "done\n"
+            ),
+            "scripts/lib/dep.sh": "\n",
+        },
+    )
+    owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
+    assert kit_doctor.derive_dependencies(root, owned) == {
+        "scripts/lib/dep.sh": ["scripts/engine.sh"]
+    }
+
+
+def test_a_tab_indented_heredoc_terminator_closes_the_body(tmp_path):
+    """`<<-` strips leading tabs from the body AND from its terminator, so the
+    closing line is indented. Unpinned until round 3 flagged it; a terminator
+    that never matches is the same never-closing-heredoc failure as `<<<`."""
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/engine.sh": (
+                "#!/usr/bin/env bash\ncat <<-EOF\n\tsource lib/other.sh\n\tEOF\nsource lib/dep.sh\n"
+            ),
+            "scripts/lib/dep.sh": "\n",
+            "scripts/lib/other.sh": "\n",
+        },
+    )
+    owned = (
+        ("scripts/engine.sh", "engine"),
+        ("scripts/lib/dep.sh", "engine"),
+        ("scripts/lib/other.sh", "engine"),
+    )
+    assert kit_doctor.derive_dependencies(root, owned) == {
+        "scripts/lib/dep.sh": ["scripts/engine.sh"]
+    }
 
 
 def test_a_source_inside_a_heredoc_body_is_not_an_edge(tmp_path):
@@ -821,15 +950,19 @@ def test_a_dotdot_relative_source_resolves_rather_than_vanishing(tmp_path):
     }
 
 
-def test_a_source_climbing_out_of_the_repo_produces_no_edge(tmp_path):
-    """Normalising `..` must not let a target escape the tree — a recorded
-    `../…` would land in the manifest as a path no adopter layout produces."""
-    root = _tree(
-        tmp_path,
-        {"scripts/engine.sh": '#!/usr/bin/env bash\nsource "../../outside/dep.sh"\n'},
-    )
-    owned = (("scripts/engine.sh", "engine"),)
-    assert kit_doctor.derive_dependencies(root, owned) == {}
+def test_a_source_climbing_out_of_the_repo_produces_no_edge():
+    """Asserted at `_sourced_paths`, NOT through `derive_dependencies`.
+
+    Routed through the public function this pinned nothing: `record()`'s
+    KIT_OWNED membership check discards an escaped path regardless, so deleting
+    the `..` guard left the whole suite green while `_sourced_paths` really did
+    return `{'../outside/dep.sh'}` — a path that would land in the manifest.
+    Same unpinnable-by-construction trap `_NOT_A_LITERAL_PATH` documents, and
+    the first version of this test walked into it. Correctness lens, PR #225
+    round 3.
+    """
+    text = '#!/usr/bin/env bash\nsource "../../outside/dep.sh"\n'
+    assert kit_doctor._sourced_paths(text, "scripts/engine.sh") == set()
 
 
 def test_a_source_path_computed_at_runtime_produces_no_edge(tmp_path):
