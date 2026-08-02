@@ -36,7 +36,40 @@ from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 REPO_ROOT = find_repo_root(Path(__file__).resolve())
 ENGINE = engine_dir(Path(__file__).resolve()) / "panel_prompt.py"
 DOCTRINE = Path("docs") / "agentic-dev-kit" / "fallback-review-panel.md"
-DOCTRINE_TEXT = (REPO_ROOT / DOCTRINE).read_text()
+
+# The whole module is conditioned on the shipped doctrine, not just the tests
+# that read it: `panel_prompt.py` QUOTES its contract out of this file at run
+# time and exits 2 rather than guessing when it cannot, so an engine installed
+# without the doctrine is non-functional by design and there is nothing here
+# worth asserting about it. That an adopter can reach that state at all is
+# #226's second half — `/adopt` Step 3 installs three files from
+# `docs/agentic-dev-kit/` and this is not one of them — and it stays open there.
+#
+# A string LITERAL, not `str(DOCTRINE)`, so `test_kit_repo_only.py` can find it
+# by scanning the source; the test below pins the two spellings together.
+pytestmark = pytest.mark.kit_repo_only("docs/agentic-dev-kit/fallback-review-panel.md")
+
+
+def test_the_marker_path_matches_the_doctrine_path():
+    """Without this, a doctrine rename would leave the marker naming a file that
+    no longer exists, and skip this whole module everywhere — silently."""
+    assert str(DOCTRINE) == "docs/agentic-dev-kit/fallback-review-panel.md"
+
+
+def doctrine_text() -> str:
+    """The shipped doctrine, read at CALL time rather than import time.
+
+    This was a module-level `read_text()`, which raised during **collection** in
+    any tree without the doctrine — so pytest aborted and ran **zero** tests,
+    rather than failing the handful that need the file. `/adopt` Step 3 does not
+    name `fallback-review-panel.md` among the docs it installs, so that was not
+    the extreme floor: it was a by-the-book adoption (#226).
+
+    A function and not a fixture, deliberately: one caller wants it inside a
+    test body and one inside another fixture, and a fixture would thread a
+    parameter through call sites that need nothing else.
+    """
+    return (REPO_ROOT / DOCTRINE).read_text(encoding="utf-8")
 
 
 def _load():
@@ -67,7 +100,7 @@ def repo(tmp_path: Path) -> Path:
     (root / "docs" / "agentic-dev-kit").mkdir(parents=True)
 
     # The real doctrine, so the contract these tests assert on is the shipped one.
-    (root / DOCTRINE).write_text(DOCTRINE_TEXT)
+    (root / DOCTRINE).write_text(doctrine_text())
     (root / "config" / "dev-model.yaml").write_text(
         "vcs:\n  protected_branch: main\n"
         "review:\n"
@@ -139,7 +172,7 @@ def test_the_contract_is_read_from_the_doctrine_not_embedded_in_the_script(tmp_p
     """
     pp = _load()
     doctored = tmp_path / "doctrine.md"
-    text = DOCTRINE_TEXT.replace(
+    text = doctrine_text().replace(
         "1. **Fresh context.**", "1. **Wholly invented item.**", 1
     )
     doctored.write_text(text)

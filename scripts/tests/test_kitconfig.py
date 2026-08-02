@@ -296,6 +296,7 @@ def test_load_config_reports_a_missing_file_clearly():
         "AGENTS.md.tmpl",
     ],
 )
+@pytest.mark.kit_repo_only("docs/templates")
 def test_narrative_templates_ship(name):
     """init.sh renders these; a missing one silently degrades adoption to an
     unrendered skeleton, which is the bug the templates were added to fix."""

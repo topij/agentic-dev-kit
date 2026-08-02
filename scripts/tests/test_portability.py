@@ -1090,6 +1090,7 @@ def test_keep_alone_is_unchanged_by_the_target_lines_addition(
     assert updated_history.index("### Second") < updated_history.index("### First")
 
 
+@pytest.mark.kit_repo_only("init.sh")
 def test_init_migrates_the_previous_runtime_schema(tmp_path: Path) -> None:
     repo = tmp_path / "project"
     (repo / "config").mkdir(parents=True)
@@ -1273,6 +1274,7 @@ def _run_init(tmp_path: Path, name: str, config_text: str):
 
 
 @pytest.mark.parametrize("shape", sorted(_MIGRATION_SHAPES))
+@pytest.mark.kit_repo_only("init.sh")
 def test_migration_never_corrupts_or_silently_drops_adopter_config(
     tmp_path: Path, shape: str
 ) -> None:
@@ -1318,6 +1320,7 @@ def test_migration_never_corrupts_or_silently_drops_adopter_config(
 
 
 @pytest.mark.parametrize("shape", sorted(_MIGRATION_SHAPES))
+@pytest.mark.kit_repo_only("init.sh")
 def test_migration_is_idempotent(tmp_path: Path, shape: str) -> None:
     """Re-running `./init.sh` is the documented upgrade path, so a second run
     must be a no-op — not a second copy of every key it added."""
@@ -1331,6 +1334,7 @@ def test_migration_is_idempotent(tmp_path: Path, shape: str) -> None:
     assert path.read_text(encoding="utf-8") == once
 
 
+@pytest.mark.kit_repo_only("init.sh")
 def test_migration_adds_every_review_key_exactly_once(tmp_path: Path) -> None:
     """Per-key guards, not one guard over a block of five.
 
@@ -1402,6 +1406,7 @@ def test_migration_adds_every_review_key_exactly_once(tmp_path: Path) -> None:
         ),
     ],
 )
+@pytest.mark.kit_repo_only("init.sh")
 def test_the_instruction_matches_the_list_style(
     tmp_path: Path, style: str, config: str, wanted: str, unwanted: str
 ) -> None:
@@ -1438,6 +1443,7 @@ def test_the_instruction_matches_the_list_style(
         ("absent", "review:\n  bots: [bugbot]\n"),
     ],
 )
+@pytest.mark.kit_repo_only("init.sh")
 def test_the_instruction_stays_quiet_when_there_is_nothing_to_add(
     tmp_path: Path, case: str, config: str
 ) -> None:
@@ -1446,6 +1452,7 @@ def test_the_instruction_stays_quiet_when_there_is_nothing_to_add(
     assert "ACTION NEEDED" not in proc.stderr
 
 
+@pytest.mark.kit_repo_only("init.sh")
 def test_a_marker_named_only_in_a_comment_does_not_count(tmp_path: Path) -> None:
     """The kit's own shipped config carries a trailing comment on that very
     line, so a raw-line grep is satisfied by a config whose LIST lacks it."""

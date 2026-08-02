@@ -607,6 +607,7 @@ def _tree(tmp_path: Path, files: dict[str, str]) -> Path:
     return tmp_path
 
 
+@pytest.mark.kit_repo_only("scripts/kit_doctor.py")
 def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
     """Measured against the kit's own tree, not a fixture.
 
@@ -668,6 +669,7 @@ def test_importing_a_package_by_name_resolves_to_its_init(tmp_path):
     }
 
 
+@pytest.mark.kit_repo_only("scripts/kit_doctor.py")
 def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
     """`dev_session.sh` and `reconcile_sessions.sh` both
     `source "$SCRIPT_DIR/lib/repo_root.sh"`, and that edge is deliberately NOT
@@ -702,6 +704,7 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
     }
 
 
+@pytest.mark.kit_repo_only("scripts/kit_doctor.py")
 def test_shipped_manifest_required_by_matches_a_fresh_derivation():
     """A stale `required_by` is a silent downgrade: the file stops being called
     required and the report goes back to inviting an operator to decline it.

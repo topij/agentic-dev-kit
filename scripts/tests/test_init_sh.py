@@ -35,6 +35,13 @@ import pytest
 import yaml
 from _repo_layout import engine_dir, find_repo_root
 
+# Every test here asserts on `init.sh`'s behaviour, and an adopter who
+# vendored engines and config has no `init.sh` to assert about. Repairing
+# the paths would only turn FileNotFoundError into a differently-worded
+# failure — #134 cause 2 says the honest handling is a skip, not a fix.
+pytestmark = pytest.mark.kit_repo_only("init.sh")
+
+
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
