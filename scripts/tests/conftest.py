@@ -36,28 +36,32 @@ from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 
-# The roots a path may be looked up under. Normally one: the resolved root.
+# Whether a `.git` marker was actually found. With none, `find_repo_root` falls
+# back to `start.parent`, which is right for a flat layout and short by one or
+# more levels for a nested one — and nothing here can tell those apart, because
+# the only signal that would is exactly what is missing.
 #
-# With no `.git` anywhere, `find_repo_root` falls back to `start.parent`, which
-# is right when the engines sit directly under the root and one level short in
-# the `scripts/devkit/` layout `/adopt` defaults to (#60, pinned in
-# `test_repo_layout.py`) — and nothing here can tell those apart. So when the
-# root is a guess, BOTH candidates count, and a path found under either is
-# treated as present.
+# THREE ATTEMPTS TO BE CLEVER ABOUT THIS WERE WITHDRAWN, one per review round,
+# and the next one should not be made here:
 #
-# The direction is chosen. A missing skip leaves the pre-existing loud
-# `FileNotFoundError` from the test body, which is merely unhelpful; a wrongly
-# fired skip claims `not vendored in this tree` about a file that is right
-# there, which is a confident false statement to an adopter.
+#   round 1 — disable skipping entirely when no `.git` was found. Broke the FLAT
+#             sized-down tarball case, which had been skipping correctly: an
+#             accurate skip became a raw FileNotFoundError, #134's own harm class.
+#   round 2 — search both `REPO_ROOT` and its parent. Still wrong at nesting
+#             depth > 1 (`tools/internal/devkit/`), where it emitted a confident
+#             `not vendored` about a file present at the true root; and in the
+#             flat case the second candidate sits OUTSIDE the tree, so a
+#             same-named file above it suppressed a skip that should have fired.
+#   round 3 — this. No guess at all.
 #
-# Round 1 addressed the same finding by disabling the skip outright whenever no
-# `.git` was found. That was withdrawn in round 2: the fallback root is CORRECT
-# for the flat layout, so disabling the skip broke a case that worked — a
-# tarball export of a genuinely sized-down tree went from an accurate skip to a
-# failure, which is #134's own harm class. Adversarial lens, PR #232 rounds 1
-# and 2. #233 holds the underlying root ambiguity.
+# The root is unknowable without `.git`, so the skip no longer pretends
+# otherwise: it searches the one resolved root and SAYS the root was a guess.
+# That is not a false claim — it states exactly what was checked — and it keeps
+# the clean run a sized-down adopter is owed. #233 holds the resolution.
 _ROOT_FOUND = any((c / ".git").exists() for c in (ENGINE_DIR, *ENGINE_DIR.parents))
-SEARCH_ROOTS = (REPO_ROOT,) if _ROOT_FOUND else (REPO_ROOT, REPO_ROOT.parent)
+_UNRESOLVED = (
+    "" if _ROOT_FOUND else f" (repo root unresolved — no .git above {ENGINE_DIR}; see #233)"
+)
 
 
 def require_kit_paths(*paths: str) -> None:
@@ -76,11 +80,9 @@ def require_kit_paths(*paths: str) -> None:
 def _skip_if_missing(paths, prefix: str) -> None:
     if not paths:
         return
-    missing = [
-        rel for rel in paths if not any((root / rel).exists() for root in SEARCH_ROOTS)
-    ]
+    missing = [rel for rel in paths if not (REPO_ROOT / rel).exists()]
     if missing:
-        pytest.skip(f"{prefix}: not vendored in this tree: {', '.join(missing)}")
+        pytest.skip(f"{prefix}: not vendored in this tree: {', '.join(missing)}{_UNRESOLVED}")
 
 
 def pytest_configure(config) -> None:

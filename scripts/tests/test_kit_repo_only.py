@@ -139,32 +139,15 @@ def test_a_directory_counts_as_present(tmp_path):
     assert "1 passed" in out.stdout, out.stdout
 
 
-def test_a_path_at_the_parent_of_a_guessed_root_counts_as_present(tmp_path):
-    """With no `.git` anywhere, the resolved root is a guess — right for a flat
-    layout, one level short for the nested one `/adopt` defaults to (#233). Both
-    candidates are searched, so a present file is never called `not vendored`.
+def test_an_unresolved_root_says_so_rather_than_claiming_certainty(tmp_path):
+    """With no `.git` the root is a guess, and the skip must not pretend
+    otherwise. Three rounds of guessing at it were withdrawn (see `conftest.py`);
+    what ships states what was searched and points at #233.
 
-    Round 1 handled this by disabling the skip whenever `.git` was absent, which
-    broke the flat sized-down case (see the test below). Adversarial lens,
-    PR #232 rounds 1 and 2.
+    The reason text is the whole behaviour here — a skip that reads identically
+    to a resolved-root one is the confident false claim the withdrawals were
+    about.
     """
-    root = tmp_path / "adopter"
-    vendored = root / "scripts" / "devkit" / "tests"
-    vendored.mkdir(parents=True)
-    for name in ("conftest.py", "_repo_layout.py"):
-        shutil.copy(TESTS_DIR / name, vendored / name)
-    (vendored / "test_probe.py").write_text(PROBE.format(paths='"init.sh"'), encoding="utf-8")
-    # No `.git`, and `init.sh` at the TRUE root — one above the guessed one.
-    (root / "init.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
-    out = _run(root)
-    assert "1 passed" in out.stdout, out.stdout
-
-
-def test_a_flat_tree_with_no_git_still_skips_a_genuinely_absent_path(tmp_path):
-    """The other direction, and the one round 1 broke: a flat layout's guessed
-    root is CORRECT, so a genuinely missing file must still skip rather than
-    fail. Disabling the skip on `.git` absence turned an accurate skip into a
-    failure for a tarball export of a sized-down tree — #134's own harm class."""
     root = tmp_path / "adopter"
     vendored = root / "scripts" / "tests"
     vendored.mkdir(parents=True)
@@ -176,6 +159,18 @@ def test_a_flat_tree_with_no_git_still_skips_a_genuinely_absent_path(tmp_path):
         cwd=root, capture_output=True, text=True,
     )
     assert "1 skipped" in out.stdout, out.stdout
+    reason = next(ln for ln in out.stdout.splitlines() if "not vendored" in ln)
+    assert "repo root unresolved" in reason, reason
+    assert "#233" in reason, reason
+
+
+def test_a_resolved_root_does_not_carry_the_unresolved_note(tmp_path):
+    """The other side: with `.git` present the root is known, so the caveat must
+    be absent — a caveat on every skip would be noise that stops being read."""
+    root = _tree(tmp_path, PROBE.format(paths='"init.sh"'))
+    out = _run(root)
+    reason = next(ln for ln in out.stdout.splitlines() if "not vendored" in ln)
+    assert "repo root unresolved" not in reason, reason
 
 
 def test_the_completeness_guard_rejects_a_tree_missing_an_untracked_kit_file(tmp_path):
@@ -196,7 +191,20 @@ def test_the_completeness_guard_rejects_a_tree_missing_an_untracked_kit_file(tmp
 
 
 @pytest.mark.parametrize(
-    "body", ["[1, 2, 3]", '"a string"', "null", "{garbage not json", '{"files": []}']
+    "body",
+    [
+        "[1, 2, 3]",
+        '"a string"',
+        "null",
+        "{garbage not json",
+        '{"files": []}',
+        # Truthy but not a dict — the only shape that reaches, and therefore
+        # pins, the `isinstance(files, dict)` guard. Without it `for rel in
+        # files` iterates the LIST's elements as manifest keys, and real path
+        # strings there would yield a confident wrong verdict rather than a
+        # rejection. Adversarial lens, PR #232 round 3.
+        '{"files": ["init.sh", "Makefile"]}',
+    ],
 )
 def test_a_manifest_of_any_shape_degrades_rather_than_aborting(tmp_path, body):
     """This predicate feeds a `skipif`, so it runs at MODULE scope — anything it
@@ -255,7 +263,15 @@ def _is_complete_kit_tree(root: Path = None) -> bool:
         return False
     try:
         parsed = json.loads(manifest.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (ValueError, OSError):
+        # ValueError, not JSONDecodeError: invalid UTF-8 bytes raise
+        # UnicodeDecodeError, which is a ValueError and was NOT caught — so a
+        # manifest with one stray byte aborted collection at module scope, since
+        # this feeds a `skipif`. #226's failure class inside the fix for #226,
+        # and the round-2 claim that every malformed form was pinned was false:
+        # `write_text` on a `str` can only ever emit valid UTF-8, so the
+        # parametrized cases structurally could not reach it. Adversarial lens,
+        # PR #232 round 3.
         return False
     # `[1, 2, 3]` is valid JSON. Calling `.get` on it raised `AttributeError`
     # here — at MODULE scope, since this feeds a `skipif` — so collection

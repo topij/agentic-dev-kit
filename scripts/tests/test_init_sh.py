@@ -46,7 +46,18 @@ ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
-SHIPPED_CONFIG = (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+def shipped_config() -> str:
+    """The kit's own `config/dev-model.yaml`, read at CALL time.
+
+    This was a module-scope `read_text()`. Wherever `REPO_ROOT` resolves wrong —
+    a nested engines directory in a tree with no `.git`, which #233 records as
+    not resolvable — it raised during COLLECTION, so pytest aborted the whole
+    session and ran zero tests, taking unrelated modules down with it. That is
+    #226's failure class in a second module, and the reason the `kit_repo_only`
+    marker cannot help: the exception fires at import, long before any marker is
+    consulted. Correctness lens, PR #232 round 3.
+    """
+    return (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
 
 # A v1-schema config with no `paths.engines`, so a run must call
 # detect_engines_dir() to stamp it — the same shape test_portability.py migrates.
@@ -270,7 +281,7 @@ def _shipped_with_name(name_value: str) -> str:
     pattern = re.compile(r"^  name: .*$", re.M)
     # No `count=` cap: capping at 1 would make the assertion below unable to fire
     # on a duplicate, which is exactly what it claims to guard (panel, correctness).
-    replaced, count = pattern.subn(lambda _m: f"  name: {name_value}", SHIPPED_CONFIG)
+    replaced, count = pattern.subn(lambda _m: f"  name: {name_value}", shipped_config())
     assert count == 1, (
         f"expected exactly one `  name:` line under project: in the shipped config, found {count}"
     )
@@ -283,7 +294,7 @@ def _shipped_with_tracker_url(url_value: str) -> str:
     pattern = re.compile(r"^  url: .*$", re.M)
     # No `count=` cap: capping at 1 would make the assertion below unable to fire
     # on a duplicate, which is exactly what it claims to guard (panel, correctness).
-    replaced, count = pattern.subn(lambda _m: f"  url: {url_value}", SHIPPED_CONFIG)
+    replaced, count = pattern.subn(lambda _m: f"  url: {url_value}", shipped_config())
     assert count == 1, (
         f"expected exactly one `  url:` line under tracker: in the shipped config, found {count}"
     )
@@ -295,11 +306,11 @@ def test_rerun_on_shipped_config_preserves_every_value_and_is_stable(tmp_path: P
     and a further re-run must be byte-identical (the documented upgrade path).
     The bots byte-assertion pins the quoted-item list serialization — value
     equality alone let a revert to unquoted items survive (panel, #87)."""
-    repo = _fixture(tmp_path, config=SHIPPED_CONFIG)
+    repo = _fixture(tmp_path, config=shipped_config())
 
     _run_init(repo)
     once = _config(repo)
-    assert yaml.safe_load(once) == yaml.safe_load(SHIPPED_CONFIG)
+    assert yaml.safe_load(once) == yaml.safe_load(shipped_config())
     assert 'bots: ["coderabbit"]' in once
 
     _run_init(repo)
@@ -463,7 +474,7 @@ def test_rerun_normalizes_single_quoted_bots_item(tmp_path: Path) -> None:
     """A hand-written `bots: ['coderabbit']` is valid YAML naming the reviewer
     `coderabbit` — the double-quote-only strip re-serialized it as the literal
     name `'coderabbit'`, which pr_watch silently fails to match (panel, #87)."""
-    config = SHIPPED_CONFIG.replace("  bots: [coderabbit]", "  bots: ['coderabbit']")
+    config = shipped_config().replace("  bots: [coderabbit]", "  bots: ['coderabbit']")
     assert "  bots: ['coderabbit']" in config
     repo = _fixture(tmp_path, config=config)
 
@@ -491,7 +502,7 @@ def test_rerun_drops_yaml_significant_chars_from_bots_items(tmp_path: Path) -> N
     """A quote or backslash inside a bots item would corrupt the whole flow
     list when re-wrapped; such characters cannot appear in a real bot handle
     and are dropped so the config stays loadable (CodeRabbit on #87)."""
-    config = SHIPPED_CONFIG.replace('  bots: [coderabbit]', '  bots: ["a\\"b"]')
+    config = shipped_config().replace('  bots: [coderabbit]', '  bots: ["a\\"b"]')
     assert '  bots: ["a\\"b"]' in config
     repo = _fixture(tmp_path, config=config)
 
@@ -611,7 +622,7 @@ def test_set_field_writes_backslashes_literally(tmp_path: Path) -> None:
 
 @pytest.mark.kit_repo_only("docs/templates")
 def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
-    repo = _fixture(tmp_path, config=SHIPPED_CONFIG, templates=True)
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
 
     _run_init(repo)
 
@@ -637,7 +648,7 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
     # under test — not to a literal. Asserting `my-project` coupled this to the
     # config being unstamped, so it failed the moment this repo (or any adopter)
     # set its own project name, which is not what this test is about.
-    configured_name = yaml.safe_load(SHIPPED_CONFIG)["project"]["name"]
+    configured_name = yaml.safe_load(shipped_config())["project"]["name"]
     assert configured_name, "shipped config has no project.name to render"
     assert configured_name in seeded["docs/kit-handoff.md"]  # {{PROJECT_NAME}}
     # Read the engines dir from the config under test for the same reason
@@ -645,7 +656,7 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
     # bare "scripts/" pins this to one layout, and it failed under the
     # `scripts/devkit` layout `/adopt` defaults to — where the token renders
     # correctly and the assertion was simply wrong about what correct is.
-    configured_engines = yaml.safe_load(SHIPPED_CONFIG)["paths"]["engines"]
+    configured_engines = yaml.safe_load(shipped_config())["paths"]["engines"]
     assert (
         f"{configured_engines}/check_doc_budget.py" in seeded["docs/kit-handoff.md"]
     )  # {{ENGINE_DIR}}
@@ -657,7 +668,7 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
     # branch the config under test selects. The blank branch keeps its own test
     # below, so stamping a real URL here cannot silently delete that coverage —
     # which is exactly what happened when this assertion was a bare literal.
-    configured_url = yaml.safe_load(SHIPPED_CONFIG)["tracker"]["url"]
+    configured_url = yaml.safe_load(shipped_config())["tracker"]["url"]
     assert (configured_url or "tracker.url") in seeded["docs/kit-friction-log.md"]
     # AGENTS.md renders at the repo ROOT, so its handoff link is the repo-relative
     # configured path, not the sibling-relative form the narrative docs use.
@@ -697,7 +708,7 @@ def test_render_preserves_backslashes_in_values(tmp_path: Path) -> None:
 
 @pytest.mark.kit_repo_only("docs/templates")
 def test_seeding_respects_in_use_docs_and_reclaims_marked_ones(tmp_path: Path) -> None:
-    repo = _fixture(tmp_path, config=SHIPPED_CONFIG, templates=True)
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
     (repo / "docs").mkdir(parents=True, exist_ok=True)
     in_use = repo / "docs" / "kit-handoff.md"
     in_use.write_text("# mine — hands off\n", encoding="utf-8")
@@ -725,7 +736,7 @@ def test_agents_md_renders_the_configured_protected_branch(tmp_path: Path) -> No
     would pass with the substitution deleted: the template contains no literal
     `main`, so that assertion would have failed. The test is right; the reason
     given for it was not.)"""
-    config = SHIPPED_CONFIG.replace("protected_branch: main", "protected_branch: trunk-9f2a")
+    config = shipped_config().replace("protected_branch: main", "protected_branch: trunk-9f2a")
     repo = _fixture(tmp_path, config=config, templates=True)
 
     _run_init(repo)
@@ -748,7 +759,7 @@ def test_seeding_leaves_a_doc_that_merely_quotes_the_marker_untouched(
     green while init.sh overwrote a doc whose line 2 quotes the marker. The
     read-only reporter got this case first; the file-destroying one had it open
     two rounds longer (panel round 5)."""
-    repo = _fixture(tmp_path, config=SHIPPED_CONFIG, templates=True)
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
     mine = repo / "AGENTS.md"
     lines = ["# AGENTS.md — hand written", "", "still hand written", ""]
     lines[marker_line - 1] = "The kit marks skeletons `devkit-template: unrendered` on line 1."
@@ -784,7 +795,7 @@ def test_kit_ships_no_root_agents_md(tmp_path: Path) -> None:
 
 
 def test_gitignore_entries_added_exactly_once_across_reruns(tmp_path: Path) -> None:
-    repo = _fixture(tmp_path, config=SHIPPED_CONFIG)
+    repo = _fixture(tmp_path, config=shipped_config())
 
     _run_init(repo)
     _run_init(repo)
@@ -811,12 +822,12 @@ def test_gitignore_gains_mcp_json_only_for_literal_credentials(tmp_path: Path) -
     ignored, a ${ENV} reference leaves it tracked. The sniff itself misses the
     kit's own documented hyphenated shape (CF-Access-Client-Id) — #86 tracks
     that; this green pins the guard that exists, not sufficiency."""
-    literal = _fixture(tmp_path / "literal", config=SHIPPED_CONFIG)
+    literal = _fixture(tmp_path / "literal", config=shipped_config())
     (literal / ".mcp.json").write_text('{"CF_TOKEN": "abc123"}', encoding="utf-8")
     _run_init(literal)
     assert ".mcp.json" in (literal / ".gitignore").read_text(encoding="utf-8").splitlines()
 
-    envref = _fixture(tmp_path / "envref", config=SHIPPED_CONFIG)
+    envref = _fixture(tmp_path / "envref", config=shipped_config())
     (envref / ".mcp.json").write_text('{"CF_TOKEN": "${CF_TOKEN}"}', encoding="utf-8")
     _run_init(envref)
     assert ".mcp.json" not in (envref / ".gitignore").read_text(encoding="utf-8").splitlines()
@@ -828,7 +839,7 @@ def test_gitignore_gains_mcp_json_only_for_literal_credentials(tmp_path: Path) -
 
 
 def test_installs_pre_push_shim_into_git_hooks(tmp_path: Path) -> None:
-    repo = _fixture(tmp_path, config=SHIPPED_CONFIG, git=True, hooks=True)
+    repo = _fixture(tmp_path, config=shipped_config(), git=True, hooks=True)
 
     _run_init(repo)
 
@@ -841,12 +852,12 @@ def test_installs_pre_push_shim_into_git_hooks(tmp_path: Path) -> None:
     # a literal `scripts/` (#134). Under `paths.engines: scripts/devkit` the
     # generated shim correctly reads `scripts/devkit/hooks/pre-push`, and the
     # literal form of this assertion failed on a shim that was right.
-    configured_engines = yaml.safe_load(SHIPPED_CONFIG)["paths"]["engines"]
+    configured_engines = yaml.safe_load(shipped_config())["paths"]["engines"]
     assert f"{configured_engines}/hooks/pre-push" in body
 
 
 def test_hook_shim_honors_repo_local_hookspath(tmp_path: Path) -> None:
-    repo = _fixture(tmp_path, config=SHIPPED_CONFIG, git=True, hooks=True)
+    repo = _fixture(tmp_path, config=shipped_config(), git=True, hooks=True)
     subprocess.run(
         ["git", "config", "core.hooksPath", ".githooks"],
         cwd=repo,
@@ -862,7 +873,7 @@ def test_hook_shim_honors_repo_local_hookspath(tmp_path: Path) -> None:
 
 
 def test_existing_non_shim_hook_left_untouched(tmp_path: Path) -> None:
-    repo = _fixture(tmp_path, config=SHIPPED_CONFIG, git=True, hooks=True)
+    repo = _fixture(tmp_path, config=shipped_config(), git=True, hooks=True)
     hookdir = repo / ".git" / "hooks"
     hookdir.mkdir(parents=True, exist_ok=True)
     own = "#!/bin/sh\n# the adopter's own hook\n"
@@ -881,7 +892,7 @@ def test_gitignore_append_preserves_a_file_with_no_trailing_newline(tmp_path: Pa
 
     The fix shipped without a test and its mutant survived the whole suite
     (panel, adversarial lens) — this is that test."""
-    repo = _fixture(tmp_path, config=SHIPPED_CONFIG)
+    repo = _fixture(tmp_path, config=shipped_config())
     (repo / ".gitignore").write_text("node_modules/\n.env", encoding="utf-8")
 
     _run_init(repo)
@@ -899,7 +910,7 @@ def test_non_interactive_run_refuses_to_inherit_a_foreign_tracker(tmp_path: Path
 
     Fires only when an origin remote exists and disagrees, so the kit's own repo
     and every fixture here (no remote) are unaffected."""
-    repo = _fixture(tmp_path, config=SHIPPED_CONFIG, git=True)
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
     subprocess.run(
         ["git", "remote", "add", "origin", "https://github.com/acme/widgets.git"],
         cwd=repo, check=True, capture_output=True, env=_env(tmp_path),
@@ -918,7 +929,7 @@ def test_non_interactive_run_is_unaffected_without_an_origin_remote(tmp_path: Pa
     """The guard must not fire for the kit's own repo or a fresh copy-in — both
     reach init.sh before any remote exists. Pins the guard's narrowness, which is
     what keeps it from wedging the documented install path."""
-    repo = _fixture(tmp_path, config=SHIPPED_CONFIG, git=True)
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
 
     _run_init(repo)  # check=True — a non-zero exit fails here
 
