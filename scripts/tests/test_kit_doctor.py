@@ -610,15 +610,24 @@ def _tree(tmp_path: Path, files: dict[str, str]) -> Path:
 def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
     """Measured against the kit's own tree, not a fixture.
 
-    Two properties a fixture cannot pin, both of which a plausible
-    implementation gets wrong:
+    What this pins that a fixture cannot: `scripts/hooks/pre-push` is BASH, and
+    its kitconfig import lives inside a `python3 - <<'PY'` heredoc, so an
+    ast-only scan drops it; and the equality assertion below fails on any NEW
+    importer the derivation misses, which is the staleness the whole axis exists
+    to prevent.
 
-    - `scripts/hooks/pre-push` is BASH, and its kitconfig import lives inside a
-      `python3 - <<'PY'` heredoc. An ast-only scan drops it.
-    - `scripts/lib/devmodel_config.py` must NOT appear as its own dependent.
-      Its module docstring opens with the literal line
-      `from devmodel_config import get, load_config, resolve_path` as a usage
-      example, so a text scan reads prose as an import.
+    **What it does NOT pin, corrected from an earlier version of this docstring
+    that claimed otherwise.** The `devmodel_config.py` assertion looks like it
+    proves `ast` beats a text scan on a docstring usage example — that module's
+    docstring opens with the literal line `from devmodel_config import get,
+    load_config, resolve_path`. It does not: that example names the module's own
+    file, so `derive_dependencies`'s `candidate != rel` self-loop guard drops it
+    whether ast or the regex produced the match. Forcing the regex branch leaves
+    this test GREEN. The ast-vs-prose property is real and IS pinned — by
+    `test_a_docstring_usage_example_is_not_an_import`, whose fixture names a
+    DIFFERENT module and so is not rescued by the self-loop guard. The assertion
+    is kept here as a cheap regression check on the graph's shape, not as
+    evidence of the mechanism. Found by the correctness lens on PR #225.
     """
     graph = kit_doctor.derive_dependencies(REPO_ROOT)
     importers = set(graph.get("scripts/lib/kitconfig.py", []))
@@ -637,6 +646,94 @@ def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
         "scripts/kit_doctor.py",
         "scripts/panel_prompt.py",
         "scripts/pr_watch.py",
+    }
+
+
+def test_the_shell_engines_source_dependency_is_in_the_graph():
+    """A shell engine's dependency is a PATH, not a module, and the first version
+    of `derive_dependencies` scanned only Python.
+
+    Consequence, reproduced by the adversarial lens on PR #225: with
+    `lib/repo_root.sh` deleted, `kit_doctor` reported the tree exit-0 clean and
+    listed the file as an ordinary sized-down omission, while
+    `bash scripts/dev_session.sh` died on its `source` line. That is #41's own
+    failure mode, reproduced by the change written to close it.
+    """
+    graph = kit_doctor.derive_dependencies(REPO_ROOT)
+    assert graph.get("scripts/lib/repo_root.sh") == [
+        "scripts/dev_session.sh",
+        "scripts/reconcile_sessions.sh",
+    ]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'source "$SCRIPT_DIR/lib/dep.sh"',
+        "source ${SCRIPT_DIR}/lib/dep.sh",
+        'source "$(dirname "$0")/lib/dep.sh"',
+        ". $SCRIPT_DIR/lib/dep.sh",
+    ],
+)
+def test_the_shell_scan_strips_the_leading_expansion(tmp_path, line):
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/engine.sh": f"#!/usr/bin/env bash\n{line}\n",
+            "scripts/lib/dep.sh": "x() { :; }\n",
+        },
+    )
+    owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
+    assert kit_doctor.derive_dependencies(root, owned) == {
+        "scripts/lib/dep.sh": ["scripts/engine.sh"]
+    }
+
+
+def test_a_source_path_computed_at_runtime_produces_no_edge(tmp_path):
+    """The stated limit, pinned so it stays stated rather than drifting into an
+    unnoticed false edge: a bare variable resolves to nothing, not to a guess."""
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/engine.sh": '#!/usr/bin/env bash\nsource "$COMPUTED"\n',
+            "scripts/lib/dep.sh": "\n",
+        },
+    )
+    owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
+    assert kit_doctor.derive_dependencies(root, owned) == {}
+
+
+def test_a_python_file_is_not_scanned_for_shell_source(tmp_path):
+    """Dispatch is on the `.py` suffix, not on whether `ast` happened to succeed.
+    A Python engine mentioning `source lib/dep.sh` in a docstring or a subprocess
+    string must not manufacture an edge."""
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/engine.py": '"""Run:\n\n    source lib/dep.sh\n"""\n',
+            "scripts/lib/dep.sh": "\n",
+        },
+    )
+    owned = (("scripts/engine.py", "engine"), ("scripts/lib/dep.sh", "engine"))
+    assert kit_doctor.derive_dependencies(root, owned) == {}
+
+
+def test_importing_a_package_by_name_resolves_to_its_init(tmp_path):
+    """The `<pkg>/__init__.py` candidate in `_module_targets`. Nothing in the kit
+    imports a KIT_OWNED package by bare name today, so deleting that candidate
+    left the whole suite green — flagged by the adversarial lens on PR #225 as
+    an untested resolution rule, and pinned here rather than left to a future
+    engine to discover."""
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/engine.py": "import pkg\n",
+            "scripts/lib/pkg/__init__.py": "value = 1\n",
+        },
+    )
+    owned = (("scripts/engine.py", "engine"), ("scripts/lib/pkg/__init__.py", "engine"))
+    assert kit_doctor.derive_dependencies(root, owned) == {
+        "scripts/lib/pkg/__init__.py": ["scripts/engine.py"]
     }
 
 
@@ -717,7 +814,7 @@ def test_a_missing_library_an_installed_engine_imports_is_broken_not_sized_down(
     assert states["scripts/lib/kitconfig.py"] == "missing-required"
     assert [f.path for f in report.broken] == ["scripts/lib/kitconfig.py"]
     detail = next(f.detail for f in report.files if f.path == "scripts/lib/kitconfig.py")
-    assert detail == "imported by check_doc_budget.py"
+    assert detail == "needed by check_doc_budget.py"
 
 
 def test_a_missing_library_nothing_installed_imports_stays_an_ordinary_omission(tmp_path):
@@ -762,11 +859,36 @@ def test_a_manifest_without_the_field_degrades_to_the_old_report(tmp_path):
 
 
 def test_a_broken_install_is_not_a_green_exit(tmp_path, capsys):
+    """The dependent is given its REAL hash, so it lands `unchanged` and
+    `report.drifted` is empty — otherwise the exit code proves nothing.
+
+    The first version of this test used `_manifest`'s default `None` hash. That
+    makes the *present* dependent `unknown-version`, which is already counted in
+    `drifted`, so `assert code == 1` passed for a reason unrelated to the
+    mechanism under test: deleting `report.broken` from the exit expression
+    entirely left all 72 tests green. Found by the adversarial lens on PR #225 —
+    the doctrine's "named by a test and pinned by nothing" case, in a test
+    written to pin exactly that.
+    """
     root = _fake_repo(tmp_path)
-    manifest = _manifest({"scripts/check_doc_budget.py": None, "scripts/lib/kitconfig.py": None})
+    target = root / "scripts" / "check_doc_budget.py"
+    manifest = _manifest(
+        {
+            "scripts/check_doc_budget.py": kit_doctor.sha256_of(target),
+            "scripts/lib/kitconfig.py": None,
+        }
+    )
     manifest["files"]["scripts/lib/kitconfig.py"]["required_by"] = ["scripts/check_doc_budget.py"]
     manifest_path = root / "kit-manifest.json"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    # Positive control on the fixture itself: if a future edit reintroduces an
+    # unrelated drifted entry, this fails rather than silently restoring the
+    # confound the assertion below is meant to be free of.
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config)
+    assert report.drifted == [], f"fixture is confounded: {[f.path for f in report.drifted]}"
+    assert [f.path for f in report.broken] == ["scripts/lib/kitconfig.py"]
+
     code = kit_doctor.main(["--root", str(root), "--manifest", str(manifest_path)])
     out = capsys.readouterr().out
     assert code == 1, "a tree whose engines cannot import their own library exited green"

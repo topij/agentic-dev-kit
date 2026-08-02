@@ -128,8 +128,12 @@ config inert. `kit_doctor` derives this set from the import graph, so it is answ
 - **`missing`** → decide, don't assume. A sized-down adoption omits engines deliberately
   (one surveyed repo installs 2 of 6 on purpose). Ask the operator whether each missing
   piece is wanted before installing it. If a piece stays out, note it in the PR body so
-  the next upgrade doesn't re-litigate it. Nothing installed here imports these — that
-  is what separates them from the bullet above, and it is why declining one is safe.
+  the next upgrade doesn't re-litigate it. Nothing installed here imports these **by
+  the graph `kit_doctor` derives** — Python imports plus shell `source` — which is what
+  separates them from the bullet above. That graph cannot see a dependency whose path
+  is computed at run time, so it is a much better prior than the old blanket "decide,
+  don't assume", not a proof; if a piece you are declining is one an engine plausibly
+  reaches for, check before dropping it.
 - **`differs`** → `diff` the local file against the kit's, and read the diff:
   - Only kit-authored changes (the local copy is simply older) → replace it.
   - Local edits present → for each, find where that value now lives in
