@@ -609,6 +609,7 @@ def test_set_field_writes_backslashes_literally(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.kit_repo_only("docs/templates")
 def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
     repo = _fixture(tmp_path, config=SHIPPED_CONFIG, templates=True)
 
@@ -663,6 +664,7 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
     assert "docs/kit-handoff.md" in seeded["AGENTS.md"]  # {{HANDOFF_PATH}}
 
 
+@pytest.mark.kit_repo_only("docs/templates")
 def test_blank_tracker_url_renders_the_set_it_instruction(tmp_path: Path) -> None:
     """The {{TRACKER_URL}} fallback branch, pinned independently of what the
     shipped config holds.
@@ -680,6 +682,7 @@ def test_blank_tracker_url_renders_the_set_it_instruction(tmp_path: Path) -> Non
     assert "{{" not in friction
 
 
+@pytest.mark.kit_repo_only("docs/templates")
 def test_render_preserves_backslashes_in_values(tmp_path: Path) -> None:
     """_render passes values to awk via ENVIRON: with `-v`, a backslash-n in a
     project name became a real newline in every seeded doc — this was the one
@@ -692,6 +695,7 @@ def test_render_preserves_backslashes_in_values(tmp_path: Path) -> None:
     assert r"Acme\nCo" in handoff
 
 
+@pytest.mark.kit_repo_only("docs/templates")
 def test_seeding_respects_in_use_docs_and_reclaims_marked_ones(tmp_path: Path) -> None:
     repo = _fixture(tmp_path, config=SHIPPED_CONFIG, templates=True)
     (repo / "docs").mkdir(parents=True, exist_ok=True)
@@ -710,6 +714,7 @@ def test_seeding_respects_in_use_docs_and_reclaims_marked_ones(tmp_path: Path) -
     assert "{{" not in reseeded
 
 
+@pytest.mark.kit_repo_only("docs/templates")
 def test_agents_md_renders_the_configured_protected_branch(tmp_path: Path) -> None:
     """{{PROTECTED_BRANCH}} pinned against a DISTINCTIVE value, because the token
     has a FALLBACK: `render_protected_branch` defaults to "main" when the config
@@ -728,6 +733,7 @@ def test_agents_md_renders_the_configured_protected_branch(tmp_path: Path) -> No
     assert "trunk-9f2a" in (repo / "AGENTS.md").read_text(encoding="utf-8")
 
 
+@pytest.mark.kit_repo_only("docs/templates")
 @pytest.mark.parametrize("marker_line", [2, 3])
 def test_seeding_leaves_a_doc_that_merely_quotes_the_marker_untouched(
     tmp_path: Path, marker_line: int

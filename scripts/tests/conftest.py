@@ -33,10 +33,42 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 
-# Resolved once, the same way every test module resolves it — walk up for `.git`
-# from the engines directory, itself derived from this file's own location
-# rather than counted in `parents[N]` (#134 cause 1).
-REPO_ROOT = find_repo_root(engine_dir(Path(__file__)))
+ENGINE_DIR = engine_dir(Path(__file__))
+REPO_ROOT = find_repo_root(ENGINE_DIR)
+
+# Whether a `.git` marker was actually FOUND, as opposed to `find_repo_root`
+# falling back to `start.parent`. The fallback is right only when the engines
+# sit directly under the root, and is one level short in the `scripts/devkit/`
+# layout `/adopt` defaults to (#60, pinned in `test_repo_layout.py`).
+#
+# It matters here and nowhere else in the suite: a wrong root used to surface as
+# a loud `FileNotFoundError` from a test body, and the skip below would convert
+# that into `not vendored in this tree` — a confident, wrong claim about a file
+# that is present. So when the marker is absent the skip does not run at all,
+# and the pre-existing loud failure is preserved. Adversarial and correctness
+# lenses, PR #232 round 1.
+ROOT_IS_RESOLVED = any((c / ".git").exists() for c in (ENGINE_DIR, *ENGINE_DIR.parents))
+
+
+def require_kit_paths(*paths: str) -> None:
+    """Skip the current test unless every path is present, from inside a fixture.
+
+    The fixture-time counterpart of the `kit_repo_only` marker, and the same
+    predicate. It exists because a dependency introduced by a FIXTURE cannot be
+    declared on the tests that use it without repeating a marker on every one of
+    them — and a marker repeated 38 times goes stale the first time someone adds
+    a 39th test. Expressed at the fixture, a new user of that fixture inherits
+    it. `test_kit_repo_only.py` scans for both spellings.
+    """
+    _skip_if_missing(paths, "a fixture this test uses needs")
+
+
+def _skip_if_missing(paths, prefix: str) -> None:
+    if not paths or not ROOT_IS_RESOLVED:
+        return
+    missing = [rel for rel in paths if not (REPO_ROOT / rel).exists()]
+    if missing:
+        pytest.skip(f"{prefix}: not vendored in this tree: {', '.join(missing)}")
 
 
 def pytest_configure(config) -> None:
@@ -82,18 +114,23 @@ def pytest_runtest_setup(item) -> None:
     kit's checkout from a full-vendor adoption anyway. A full vendor that keeps
     `scripts/` runs these tests, correctly, because it genuinely has the files.
 
-    **The limit this leaves, stated because it is real.** In the kit's own repo
-    every path is present, so nothing skips and coverage is unchanged — but if a
-    kit file were deleted here, its tests would go quiet rather than red.
-    `test_kit_repo_only.py` catches a marker naming a path that never existed;
-    it cannot catch a deletion, because the marker would then be telling the
-    truth. `kit-manifest.json` covers every KIT_OWNED path; `init.sh` and the
-    root `Makefile` are tracked by neither, so for those two the trade is a loud
-    failure for a counted skip.
+    **The limit this leaves, corrected from a claim that was wrong.** An earlier
+    version of this docstring said a deleted kit file would "go quiet rather
+    than red". It does not: `test_kit_repo_only.py`'s positive control asserts
+    every marked path exists in a complete kit tree, and it fires on a deletion
+    exactly as readily as on a typo — measured by deleting each marked path in
+    turn. Deleting `scripts/kit_doctor.py` is louder still, since
+    `test_kit_doctor.py` imports it at module scope and collection aborts.
+
+    What the control genuinely cannot do is tell a deletion from a typo, and it
+    is scoped to trees that hold every file `kit-manifest.json` lists — so a
+    marker naming `init.sh`, which the manifest does not track, is the one path
+    whose typo could go unnoticed in a tree that is otherwise incomplete.
     """
-    marker = item.get_closest_marker("kit_repo_only")
-    if marker is None:
-        return
-    missing = [rel for rel in marker.args if not (REPO_ROOT / rel).exists()]
-    if missing:
-        pytest.skip(f"not vendored in this tree: {', '.join(missing)}")
+    # `iter_markers`, not `get_closest_marker`: a function-level marker must ADD
+    # to a module-level one rather than replace it. `test_portability.py`'s
+    # init.sh tests that also need `docs/templates` are exactly that case, and
+    # with `get_closest_marker` the function marker silently dropped the
+    # module's `init.sh` requirement. Correctness lens, PR #232 round 1.
+    paths = sorted({rel for m in item.iter_markers("kit_repo_only") for rel in m.args})
+    _skip_if_missing(paths, "needs")

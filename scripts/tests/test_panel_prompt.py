@@ -29,6 +29,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import require_kit_paths
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
@@ -37,22 +38,26 @@ REPO_ROOT = find_repo_root(Path(__file__).resolve())
 ENGINE = engine_dir(Path(__file__).resolve()) / "panel_prompt.py"
 DOCTRINE = Path("docs") / "agentic-dev-kit" / "fallback-review-panel.md"
 
-# The whole module is conditioned on the shipped doctrine, not just the tests
-# that read it: `panel_prompt.py` QUOTES its contract out of this file at run
-# time and exits 2 rather than guessing when it cannot, so an engine installed
-# without the doctrine is non-functional by design and there is nothing here
-# worth asserting about it. That an adopter can reach that state at all is
-# #226's second half — `/adopt` Step 3 installs three files from
-# `docs/agentic-dev-kit/` and this is not one of them — and it stays open there.
+# NOT a module-level marker. An earlier version marked the whole module on the
+# doctrine, reasoning that `panel_prompt.py` is non-functional without it. That
+# over-reached: 15 test cases here never read the shipped file — they parse
+# synthetic doctrines they write themselves, or exercise `_repo_slug()`, a pure
+# string function with three prior lens-found bugs. Marking the module skipped
+# all of them in exactly the tree #226 says `/adopt` produces, losing coverage
+# of shipped parsing logic that such a tree still has. Both lenses, PR #232
+# round 1.
 #
-# A string LITERAL, not `str(DOCTRINE)`, so `test_kit_repo_only.py` can find it
-# by scanning the source; the test below pins the two spellings together.
-pytestmark = pytest.mark.kit_repo_only("docs/agentic-dev-kit/fallback-review-panel.md")
+# The dependency is instead declared where it actually arises — in
+# `doctrine_text()`, which the `repo` fixture and one test call — so a new test
+# inherits it by using the fixture rather than by remembering a decorator.
 
 
-def test_the_marker_path_matches_the_doctrine_path():
-    """Without this, a doctrine rename would leave the marker naming a file that
-    no longer exists, and skip this whole module everywhere — silently."""
+def test_the_declared_path_matches_the_doctrine_path():
+    """`doctrine_text()` names the path as a string LITERAL so
+    `test_kit_repo_only.py` can find it by scanning the source; `DOCTRINE` is a
+    `Path` built separately. Two spellings of one path drift, so this pins them
+    — without it a doctrine rename would leave the requirement naming a file
+    that no longer exists, and skip every test using it, silently."""
     assert str(DOCTRINE) == "docs/agentic-dev-kit/fallback-review-panel.md"
 
 
@@ -69,6 +74,7 @@ def doctrine_text() -> str:
     test body and one inside another fixture, and a fixture would thread a
     parameter through call sites that need nothing else.
     """
+    require_kit_paths("docs/agentic-dev-kit/fallback-review-panel.md")
     return (REPO_ROOT / DOCTRINE).read_text(encoding="utf-8")
 
 

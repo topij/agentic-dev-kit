@@ -15,6 +15,7 @@ when a path is absent" is the whole behaviour.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -22,10 +23,11 @@ import sys
 from pathlib import Path
 
 import pytest
-from _repo_layout import engine_dir
+from _repo_layout import engine_dir, find_repo_root
 
 TESTS_DIR = Path(__file__).resolve().parent
 ENGINE_DIR = engine_dir(Path(__file__))
+REPO_ROOT = find_repo_root(ENGINE_DIR)
 
 
 def _tree(tmp_path: Path, body: str) -> Path:
@@ -135,10 +137,30 @@ def _marked_paths() -> set[str]:
     below needed to know about it.
     """
     found: set[str] = set()
+    pattern = re.compile(r"(?:kit_repo_only|require_kit_paths)\(([^)]*)\)")
     for module in sorted(TESTS_DIR.glob("test_*.py")):
-        for call in re.finditer(r"kit_repo_only\(([^)]*)\)", module.read_text(encoding="utf-8")):
+        for call in pattern.finditer(module.read_text(encoding="utf-8")):
             found.update(re.findall(r'"([^"]+)"', call.group(1)))
     return found
+
+
+def _is_complete_kit_tree() -> bool:
+    """Whether this tree holds every file `kit-manifest.json` says the kit ships.
+
+    The scope guard the check below needs, and DERIVED rather than a judgement
+    about "is this the kit's own repo" — which would be a bound the author sets.
+    True in the kit's checkout and in a full vendor that kept `scripts/`; false
+    in any sized-down tree, where a marked path being absent is the mechanism
+    working rather than a defect.
+    """
+    manifest = REPO_ROOT / "kit-manifest.json"
+    if not manifest.is_file():
+        return False
+    try:
+        files = json.loads(manifest.read_text(encoding="utf-8")).get("files", {})
+    except (json.JSONDecodeError, OSError):
+        return False
+    return bool(files) and all((REPO_ROOT / rel).exists() for rel in files)
 
 
 def test_the_marker_scan_finds_something():
@@ -150,21 +172,29 @@ def test_the_marker_scan_finds_something():
     assert len(found) >= 4, found
 
 
+@pytest.mark.skipif(
+    not _is_complete_kit_tree(),
+    reason="not a complete kit tree — a marked path being absent here is the "
+    "mechanism working, not a defect",
+)
 @pytest.mark.parametrize("path", sorted(_marked_paths()))
-def test_every_path_this_repo_marks_actually_exists_here(path):
-    """The kit's own repo must have every path its markers name, or those tests
-    go quiet rather than red.
+def test_every_path_a_marker_names_exists_in_a_complete_kit_tree(path):
+    """A positive control on the marker SET, not on the mechanism.
 
-    This is a positive control on the marker set, not on the mechanism: it fails
-    if someone marks a test with a path that never existed (a typo, a renamed
-    file), which would skip that test in EVERY tree including this one — the
-    failure mode the mechanism makes possible and nothing else would catch.
+    It fails if a marker names a path that is not there — a typo, a renamed
+    file — which would otherwise skip that test in every tree, silently.
 
-    It does not, and cannot, catch a kit file being deleted: the marker would
-    then correctly report it absent, and this test would fail for the same
-    reason the deletion caused. That is the stated limit in `conftest.py`.
+    **The scope guard is the point, and its absence was a HIGH finding.** With
+    no guard this ran in every vendored tree and failed wherever a marked path
+    was legitimately absent — which is the normal, designed state of a
+    sized-down adoption. It turned the `/adopt` tree this PR exists to make
+    clean into 4 failures. Adversarial lens, PR #232 round 1.
+
+    It catches a DELETION too, loudly, contradicting an earlier version of this
+    docstring that claimed it could not: the assertion does not know why a path
+    is missing and fires either way. What it cannot do is tell the two apart.
     """
-    assert (ENGINE_DIR.parent / path).exists(), (
-        f"a kit_repo_only marker names {path!r}, which does not exist in the "
-        "kit's own repo — every test carrying it will skip everywhere"
+    assert (REPO_ROOT / path).exists(), (
+        f"a kit_repo_only marker names {path!r}, which is absent from a tree "
+        "that is otherwise a complete kit — every test carrying it will skip"
     )
