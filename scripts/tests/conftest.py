@@ -36,18 +36,28 @@ from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 
-# Whether a `.git` marker was actually FOUND, as opposed to `find_repo_root`
-# falling back to `start.parent`. The fallback is right only when the engines
-# sit directly under the root, and is one level short in the `scripts/devkit/`
-# layout `/adopt` defaults to (#60, pinned in `test_repo_layout.py`).
+# The roots a path may be looked up under. Normally one: the resolved root.
 #
-# It matters here and nowhere else in the suite: a wrong root used to surface as
-# a loud `FileNotFoundError` from a test body, and the skip below would convert
-# that into `not vendored in this tree` — a confident, wrong claim about a file
-# that is present. So when the marker is absent the skip does not run at all,
-# and the pre-existing loud failure is preserved. Adversarial and correctness
-# lenses, PR #232 round 1.
-ROOT_IS_RESOLVED = any((c / ".git").exists() for c in (ENGINE_DIR, *ENGINE_DIR.parents))
+# With no `.git` anywhere, `find_repo_root` falls back to `start.parent`, which
+# is right when the engines sit directly under the root and one level short in
+# the `scripts/devkit/` layout `/adopt` defaults to (#60, pinned in
+# `test_repo_layout.py`) — and nothing here can tell those apart. So when the
+# root is a guess, BOTH candidates count, and a path found under either is
+# treated as present.
+#
+# The direction is chosen. A missing skip leaves the pre-existing loud
+# `FileNotFoundError` from the test body, which is merely unhelpful; a wrongly
+# fired skip claims `not vendored in this tree` about a file that is right
+# there, which is a confident false statement to an adopter.
+#
+# Round 1 addressed the same finding by disabling the skip outright whenever no
+# `.git` was found. That was withdrawn in round 2: the fallback root is CORRECT
+# for the flat layout, so disabling the skip broke a case that worked — a
+# tarball export of a genuinely sized-down tree went from an accurate skip to a
+# failure, which is #134's own harm class. Adversarial lens, PR #232 rounds 1
+# and 2. #233 holds the underlying root ambiguity.
+_ROOT_FOUND = any((c / ".git").exists() for c in (ENGINE_DIR, *ENGINE_DIR.parents))
+SEARCH_ROOTS = (REPO_ROOT,) if _ROOT_FOUND else (REPO_ROOT, REPO_ROOT.parent)
 
 
 def require_kit_paths(*paths: str) -> None:
@@ -64,9 +74,11 @@ def require_kit_paths(*paths: str) -> None:
 
 
 def _skip_if_missing(paths, prefix: str) -> None:
-    if not paths or not ROOT_IS_RESOLVED:
+    if not paths:
         return
-    missing = [rel for rel in paths if not (REPO_ROOT / rel).exists()]
+    missing = [
+        rel for rel in paths if not any((root / rel).exists() for root in SEARCH_ROOTS)
+    ]
     if missing:
         pytest.skip(f"{prefix}: not vendored in this tree: {', '.join(missing)}")
 
@@ -128,8 +140,9 @@ def pytest_runtest_setup(item) -> None:
     whose typo could go unnoticed in a tree that is otherwise incomplete.
     """
     # `iter_markers`, not `get_closest_marker`: a function-level marker must ADD
-    # to a module-level one rather than replace it. `test_portability.py`'s
-    # init.sh tests that also need `docs/templates` are exactly that case, and
+    # to a module-level one rather than replace it. `test_init_sh.py`'s six
+    # seeding tests, which need `docs/templates` on top of the module's
+    # `init.sh`, are exactly that case, and
     # with `get_closest_marker` the function marker silently dropped the
     # module's `init.sh` requirement. Correctness lens, PR #232 round 1.
     paths = sorted({rel for m in item.iter_markers("kit_repo_only") for rel in m.args})

@@ -103,6 +103,33 @@ def test_one_absent_path_among_several_is_enough_to_skip(tmp_path):
     assert "init.sh" not in reason, reason
 
 
+def test_a_function_marker_adds_to_a_module_marker_rather_than_replacing_it(tmp_path):
+    """`get_closest_marker` returns only the nearest, so a function-level marker
+    silently dropped the module's requirement — `test_init_sh.py`'s six seeding
+    tests need `docs/templates` on top of the module's `init.sh`, and with the
+    closest-marker form they ran in a tree with no `init.sh`.
+
+    Fixed in round 1 by unioning `iter_markers`, and pinned here in round 2:
+    reverting to `get_closest_marker` left the whole suite green, because the
+    only real instance has both paths present in the kit's own repo either way.
+    Adversarial lens, PR #232 round 2.
+    """
+    body = (
+        "import pytest\n\n"
+        'pytestmark = pytest.mark.kit_repo_only("init.sh")\n\n\n'
+        '@pytest.mark.kit_repo_only("docs/templates")\n'
+        "def test_probe():\n    assert True\n"
+    )
+    root = _tree(tmp_path, body)
+    # The FUNCTION's path is present and the MODULE's is not: under
+    # `get_closest_marker` this runs, under the union it skips.
+    (root / "docs" / "templates").mkdir(parents=True)
+    out = _run(root)
+    assert "1 skipped" in out.stdout, out.stdout
+    reason = next(ln for ln in out.stdout.splitlines() if "not vendored" in ln)
+    assert "init.sh" in reason, reason
+
+
 def test_a_directory_counts_as_present(tmp_path):
     """`docs/templates` is named as a directory by `test_kitconfig.py`, so the
     check has to be `exists()` rather than `is_file()`."""
@@ -110,6 +137,75 @@ def test_a_directory_counts_as_present(tmp_path):
     (root / "docs" / "templates").mkdir(parents=True)
     out = _run(root)
     assert "1 passed" in out.stdout, out.stdout
+
+
+def test_a_path_at_the_parent_of_a_guessed_root_counts_as_present(tmp_path):
+    """With no `.git` anywhere, the resolved root is a guess — right for a flat
+    layout, one level short for the nested one `/adopt` defaults to (#233). Both
+    candidates are searched, so a present file is never called `not vendored`.
+
+    Round 1 handled this by disabling the skip whenever `.git` was absent, which
+    broke the flat sized-down case (see the test below). Adversarial lens,
+    PR #232 rounds 1 and 2.
+    """
+    root = tmp_path / "adopter"
+    vendored = root / "scripts" / "devkit" / "tests"
+    vendored.mkdir(parents=True)
+    for name in ("conftest.py", "_repo_layout.py"):
+        shutil.copy(TESTS_DIR / name, vendored / name)
+    (vendored / "test_probe.py").write_text(PROBE.format(paths='"init.sh"'), encoding="utf-8")
+    # No `.git`, and `init.sh` at the TRUE root — one above the guessed one.
+    (root / "init.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    out = _run(root)
+    assert "1 passed" in out.stdout, out.stdout
+
+
+def test_a_flat_tree_with_no_git_still_skips_a_genuinely_absent_path(tmp_path):
+    """The other direction, and the one round 1 broke: a flat layout's guessed
+    root is CORRECT, so a genuinely missing file must still skip rather than
+    fail. Disabling the skip on `.git` absence turned an accurate skip into a
+    failure for a tarball export of a sized-down tree — #134's own harm class."""
+    root = tmp_path / "adopter"
+    vendored = root / "scripts" / "tests"
+    vendored.mkdir(parents=True)
+    for name in ("conftest.py", "_repo_layout.py"):
+        shutil.copy(TESTS_DIR / name, vendored / name)
+    (vendored / "test_probe.py").write_text(PROBE.format(paths='"init.sh"'), encoding="utf-8")
+    out = subprocess.run(
+        [sys.executable, "-m", "pytest", "scripts/tests", "-q", "--no-header", "-rs"],
+        cwd=root, capture_output=True, text=True,
+    )
+    assert "1 skipped" in out.stdout, out.stdout
+
+
+def test_the_completeness_guard_rejects_a_tree_missing_an_untracked_kit_file(tmp_path):
+    """`kit-manifest.json` tracks neither `init.sh` nor the root `Makefile`, so
+    manifest-completeness alone said True for a tree missing one — and the
+    positive control then ran and FAILED over a legitimately absent file, which
+    is round 1's HIGH narrowed rather than closed. Adversarial lens, round 2."""
+    root = tmp_path / "kitish"
+    (root / "scripts").mkdir(parents=True)
+    (root / "scripts" / "engine.py").write_text("x = 1\n", encoding="utf-8")
+    (root / "kit-manifest.json").write_text(
+        json.dumps({"files": {"scripts/engine.py": {"sha256": "0" * 64}}}), encoding="utf-8"
+    )
+    (root / "Makefile").write_text("test:\n", encoding="utf-8")
+    assert _is_complete_kit_tree(root) is False, "manifest-complete but no init.sh"
+    (root / "init.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    assert _is_complete_kit_tree(root) is True
+
+
+@pytest.mark.parametrize(
+    "body", ["[1, 2, 3]", '"a string"', "null", "{garbage not json", '{"files": []}']
+)
+def test_a_manifest_of_any_shape_degrades_rather_than_aborting(tmp_path, body):
+    """This predicate feeds a `skipif`, so it runs at MODULE scope — anything it
+    raises aborts collection and runs zero tests, which is exactly #226. Every
+    malformed shape must return False, never raise."""
+    root = tmp_path / "tree"
+    root.mkdir()
+    (root / "kit-manifest.json").write_text(body, encoding="utf-8")
+    assert _is_complete_kit_tree(root) is False
 
 
 def test_an_unmarked_test_is_untouched(tmp_path):
@@ -144,7 +240,7 @@ def _marked_paths() -> set[str]:
     return found
 
 
-def _is_complete_kit_tree() -> bool:
+def _is_complete_kit_tree(root: Path = None) -> bool:
     """Whether this tree holds every file `kit-manifest.json` says the kit ships.
 
     The scope guard the check below needs, and DERIVED rather than a judgement
@@ -153,14 +249,30 @@ def _is_complete_kit_tree() -> bool:
     in any sized-down tree, where a marked path being absent is the mechanism
     working rather than a defect.
     """
-    manifest = REPO_ROOT / "kit-manifest.json"
+    root = REPO_ROOT if root is None else root
+    manifest = root / "kit-manifest.json"
     if not manifest.is_file():
         return False
     try:
-        files = json.loads(manifest.read_text(encoding="utf-8")).get("files", {})
+        parsed = json.loads(manifest.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return False
-    return bool(files) and all((REPO_ROOT / rel).exists() for rel in files)
+    # `[1, 2, 3]` is valid JSON. Calling `.get` on it raised `AttributeError`
+    # here — at MODULE scope, since this feeds a `skipif` — so collection
+    # aborted and the whole session ran zero tests. That is #226's failure class
+    # reproduced inside the fix for it. Correctness lens, PR #232 round 2.
+    if not isinstance(parsed, dict):
+        return False
+    files = parsed.get("files")
+    if not isinstance(files, dict):
+        return False
+    if not files or not all((root / rel).exists() for rel in files):
+        return False
+    # The manifest tracks neither of these, so a manifest-complete tree could
+    # still be missing one — and then the control below would run and FAIL over
+    # a legitimately absent file, which is the round-1 defect narrowed rather
+    # than closed. Adversarial lens, PR #232 round 2.
+    return all((root / rel).exists() for rel in ("init.sh", "Makefile"))
 
 
 def test_the_marker_scan_finds_something():
