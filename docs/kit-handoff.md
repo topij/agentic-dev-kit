@@ -40,8 +40,9 @@ than build them, and not following that is what the rounds were spent on.
   `#231` with every finding and the design questions they exposed.
 - **`/upgrade` dry-run against a throwaway copy of cs-toolkit**, kit at `3e34fe5`. It **succeeds** —
   `kit_doctor` reports 32 unchanged, 0 differ, 0 missing, hook installed — and that is the finding:
-  all six of cs-toolkit's Claude adapters are forks that reference no shared workflow, Step 4 says
-  to keep them, and no `.claude/` path is in `KIT_OWNED` so nothing can report it. Step 5's own
+  cs-toolkit's six Claude adapters all diverge from the kit's, the four measured reference no shared
+  workflow doc, Step 4 says to keep them, and no `.claude/` path is in `KIT_OWNED` so nothing can
+  report it. Step 5's own
   verification then runs zero tests, because test files never reach an adopter. `#236`. Live
   occurrences also recorded on `#51` (an older kit reported as "likely LOCAL EDITS") and `#93` (the
   slug mismatch installs the kit's skill *beside* the fork rather than replacing it).
@@ -143,6 +144,11 @@ prompt aimed lenses at, not how large the pass was.
   `#213`, `#167`, `#209`, `#216`, `#220`, `#190`, `#187`, `#124`, `#169`, `#170`, `#33`/`#112`,
   `#181`, `#93`.
 - Budgets: `check_doc_budget.py` prints the live figures.
+
+▶ Next: **`#220`** — sub-HIGH fixes, each already reproduced and specified on the issue, none
+larger than a few lines. Good standalone work that needs no design decision. If you would rather
+take a design question, `#209` now has three measurements behind it and an argument that its own
+recommended direction is aimed at the wrong variable — read it before proposing anything.
 
 ______________________________________________________________________
 
