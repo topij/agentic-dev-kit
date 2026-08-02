@@ -1,7 +1,8 @@
 # Session start
 
 Start-of-session briefing — the bookend to `wrap-up`. Reads the living handoff, the
-friction-log inbox, your tracker, and live repo/CI state, then proposes **what to do
+friction-log inbox, your tracker, and live repo/CI state; checks anything urgent
+against the narrative archives before promoting it; then proposes **what to do
 next**: candidates grouped by **urgency** and tagged `[size · model · mode]`, ending
 with one recommendation.
 
@@ -9,7 +10,9 @@ with one recommendation.
 
 Read `config/dev-model.yaml` first. In this workflow:
 
-- `<handoff>` and `<friction-log>` mean `paths.handoff` and `paths.friction_log`.
+- `<handoff>` and `<friction-log>` mean `paths.handoff` and `paths.friction_log`;
+  `<handoff-history>` and `<friction-log-archive>` mean `paths.handoff_history` and
+  `paths.friction_log_archive`.
 - `<engine-dir>` means `paths.engines`.
 - `cheap`, `default`, and `expensive` are the neutral keys under `models.tiers`.
   Apply the current runtime's `models.runtime_mappings` value only when the runtime
@@ -28,15 +31,16 @@ Read `config/dev-model.yaml` first. In this workflow:
 | Working tree     | `git status --short` + `git branch --show-current` — unfinished business from last session                                              |
 | CI/cron health   | your cron/CI runner's status command (adapt to your infra — e.g. a wrapper script that logs recent job outcomes)                         |
 | Config drift     | your host config-apply step, if you have one (e.g. a `verify --json`-style check comparing committed config against applied host state) — drop this bullet entirely if it doesn't generalize to your setup |
+| Narrative archives | `<handoff-history>` + `<friction-log-archive>` — deliberately **not** part of the gather and never read whole; grepped per-candidate in *Remediation check*, and only for a candidate you are about to promote to 🔴 |
 
 ### 0 · Gather (run in parallel)
 
 Fire these together — they're independent:
 
 - `git status --short` and `git branch --show-current`
-- `gh pr list --state open --json number,title,isDraft,reviewDecision,statusCheckRollup,author --limit 20` (`author` distinguishes a **cron/automation-opened** PR from one a person opened; those are guarded out of `pr-watch` by your cron runner's job-name signal, so their bot findings get no automated follow-through and the next cockpit must adopt them — see Step 2)
+- `gh pr list --state open --json number,title,isDraft,reviewDecision,statusCheckRollup,author --limit 20` (`author` distinguishes a **cron/automation-opened** PR from one a person opened; those are guarded out of `pr-watch` by your cron runner's job-name signal, so their bot findings get no automated follow-through and the next cockpit must adopt them — see *Render the briefing*)
 - your cron/CI health command (adapt to your infra)
-- your config-drift check, if you have one (parse its output for a 🔴-worthy line in Step 2)
+- your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>` (focus: the **"Latest session"** block and its `Next:` / `Follow-ups:` lines, plus the top-of-file "Last updated" trail for the active sprint)
 - Read `<friction-log>` (the inbox — entries above the most-recent `## … — Backlog migrated to <tracker>` marker; everything below it is already ticketed)
 - **Tracker** (optional — if the script/key fails, note the gap and continue): a field-limited list-issues call against `tracker.project_name` (id/identifier/title/url/state/priority/updated — avoid pulling full descriptions, which is what makes a naive "dump everything" call routinely overflow a tool's token limit). Discard issues whose state type is `completed`/`canceled`, and print a compact table sorted urgent(1) → low(4) with no-priority(0) last. A missing/invalid config or missing tracker credential should exit non-zero with a clear message — treat any non-zero exit as the optional-tracker gap (note it and continue) — never act on a partial payload.
@@ -59,7 +63,7 @@ pointer**.
   handoff's explicit current `Next:` **iff** it's the active sprint's blocking step;
   any entry your config-drift check flags — a merged config change that's inert on
   the host until applied is an **operator host-action** reminder, not a delegatable
-  build candidate — render it without model/mode tags (see Step 2).
+  build candidate — render it without model/mode tags (see *Render the briefing*).
 - 🟡 **Soon** — this week's clear next steps. Active-sprint follow-ups, time-bound
   items ("validate Wednesday's run"), medium-severity friction-log entries,
   started/high-priority tracker tickets.
@@ -91,7 +95,7 @@ purely mechanical work:
 
 **Execution mode** `inline / delegate` — *where* the work runs once you greenlight it;
 the token lever (a plan, not an action — nothing launches until the operator picks one
-in Step 3):
+in *Recommend one, then wait*):
 
 - **`delegate`** — use the current runtime's isolated-task mechanism for
   **self-contained, clearly specified work**, while the cockpit retains orchestration
@@ -125,7 +129,84 @@ interactive/exploratory ⇒ inline on expensive`. When in doubt, default `inline
   merge-class table) and report the split to the operator before launch — e.g. "2 will
   self-merge, 3 held for you."
 
-### 2 · Render the briefing
+### 2 · Remediation check
+
+Before promoting any candidate to 🔴, rule out that it is a **solved problem
+misread as new**. Every source in the gather shows you *live* state — a symptom is
+visible there while the remediation that already addressed it is not, because the
+remediation is in a file the gather deliberately does not read, or behind a
+tracker state that is wrong.
+
+This is neither of the *Classify each candidate* rules. **Dedup** is one item
+appearing in several
+live sources; **don't invent work** is an item traceable to no source at all. Both
+are about provenance across the sources you just read. This is about an item whose
+*resolution* is in none of them.
+
+Run it only against candidates you are about to promote to 🔴 — it is a filter on
+that promotion, not a pass over the whole list. That is a deliberate cost bound:
+the archives are large, so checking every 🟡 and 🟢 would put an archive search
+behind every candidate. It follows the promotion rather than the bucket, so if
+something already classified 🟡 is later raised to 🔴, it gets the check then.
+
+- **Archived diagnosis.** `<handoff-history>` and `<friction-log-archive>` hold
+  everything the archival sweeps moved out of the two live narrative files. The
+  gather reads neither, by design — they grow without bound, which is the whole
+  point of sweeping into them. So a problem diagnosed three months ago is
+  invisible to every other step here, and its symptom is not.
+
+  Search them **per candidate**, by job / ticket / subject name, using **your
+  runtime's own file-search facility** — the subject passed as a *parameter*, the
+  two archives as the scope.
+
+  **Skip a candidate whose subject is empty or whitespace-only** rather than
+  searching for it. An empty pattern matches every line of both archives, which is
+  worse than finding nothing: it is a false-positive flood over exactly the files
+  this step refuses to read whole.
+
+  **This workflow deliberately ships no shell recipe for that search.** The
+  subject is candidate-derived text — a ticket title, a PR title, a job name — so
+  on any repo whose tracker takes issues from outside it is attacker-influenceable,
+  and a parameter is the only form never parsed as syntax. Three shell recipes were
+  written for this line and each was broken by a different input, the last two by
+  the fix for the one before; the full account is on
+  [`#241`](https://github.com/topij/agentic-dev-kit/issues/241). If a shell is the
+  only route you have, read that issue first and treat building the command as its
+  own problem rather than assuming a quoting rule settles it.
+
+  A hit **locates** a record; it does not by itself establish one. Read the entry
+  the hit sits in before acting on it — these are Markdown blocks, so the
+  diagnosis and any residual follow-up routinely sit on lines the grep did not
+  return, and a generic subject can match an unrelated older incident. Confirm the
+  entry is about *this* occurrence, then: attach it as
+  `previously diagnosed: <one line> [<file>:<line>]` and **drop the candidate** —
+  unless the entry names a residual follow-up still outstanding, in which case that
+  follow-up is the candidate and the symptom is not. Never render a diagnosed
+  symptom as a fresh 🔴.
+
+  **Scoped grep only — never read either file whole.** They are the accumulated
+  output of every sweep the repo has run; on a mature repo they reach thousands of
+  lines, and reading them is how a briefing that is supposed to be cheap stops
+  being one.
+
+- **A tracker item that reads resolved but is not.** When a symptom clearly
+  implicates one ticket, check that ticket **live** rather than inferring from its
+  absence in the gather's open-only list. A forge's automation can move an item to
+  a done state on a keyword in a PR title, a commit message, or a squash
+  message — whether or not the code behind it shipped, and whether or not anyone
+  meant it. That is the same mechanism the closing-keyword discipline guards
+  against on the write side; this is its read side. An item the tracker shows as
+  done that is not actually resolved is a real candidate, and the open-only list
+  is precisely where it will not appear.
+
+  **The live lookup is not for the state — the state is the thing you are
+  distrusting.** Fetch the item by id and read what it points *at*: the commit, PR,
+  or check that is supposed to have resolved it, and whether its acceptance
+  criteria are met in current code. A done state with nothing behind it leaves the
+  candidate standing. Keep it actionable until something other than the state says
+  otherwise.
+
+### 3 · Render the briefing
 
 ```text
 🧭 Session Start — <Day YYYY-MM-DD>
@@ -156,7 +237,7 @@ What to do next
   concern — mention it only under 🟢 Whenever if present, never conflated with the 🔴
   line above.
 
-### 3 · Recommend one, then wait
+### 4 · Recommend one, then wait
 
 End with a single pick and a one-line why, then **stop** — let the operator choose. Do
 not auto-start the work.
