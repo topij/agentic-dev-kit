@@ -122,6 +122,47 @@ clause is `safety-critical-changes.md` rule 3's own wording, quoted from the
 sibling doctrine file rather than from a tracker issue — a review lens went
 looking for it on the tracker and could not source it.)
 
+### The session that measured withdrawal
+
+PR `#225` (`#41`, the required/optional manifest axis). Five rounds:
+
+| Round | What it reviewed | HIGH |
+|---|---|---|
+| 1 | the change | 2 |
+| 2 | the round-1 fix | 2 |
+| 3 | the round-2 fix | 2 |
+| 4 | the round-3 fix | 1 |
+| 5 | the withdrawal | 0 |
+
+Only round 1 reviewed the change. Its second HIGH was a real fail-open — the
+derived graph missed `lib/repo_root.sh`, which two shell engines `source`, so
+`kit_doctor` called a broken tree clean at exit 0 — and the fix was a bash
+`source` scanner: a new mechanism, prompted by a finding, which the filing rule
+says to file rather than build. It was built.
+
+Every HIGH in rounds 2–4 was inside that scanner, and each was a defect in the
+previous round's fix for it:
+
+- **round 2** — the scan missed guarded `source` (`[ -f "$L" ] && source "$L"`),
+  and its exit-code test was confounded by its own fixture, so deleting the
+  mechanism under test left the suite green
+- **round 3** — the widened anchor matched `source` inside a quoted string, so
+  `echo "run this; source lib/dep.sh"` became a real edge; and the heredoc
+  tracker read `<<<` and arithmetic `<<` as openers, blinding whole files
+- **round 4** — the heredoc tracker recognised fewer opener forms than bash
+  accepts (`cmd <<A <<B`, `<<123`, `<<'MULTI WORD'`), so a real heredoc body was
+  scanned as code and manufactured an edge
+
+Both failure directions are tokenizer problems — command position, and heredoc
+boundaries — and no regex approximates either safely. The threshold was declared
+before round 4's findings ("a HIGH means the scanner comes out"), a HIGH arrived,
+and round 5 reviewed a delta of 90 insertions against 560 deletions and found
+none. The scanner is `#228`, filed with the four constructs that defeated it and
+an executable acceptance bar.
+
+The counterfactual is the whole point: filed at round 1, as the rule already
+required, that PR is two rounds rather than five.
+
 ### The cost measurement that does not exist
 
 `#163` Sink 2 asked for a cost measurement before "aim the re-run at the delta"

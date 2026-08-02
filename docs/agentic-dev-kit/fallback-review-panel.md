@@ -443,6 +443,22 @@ the trap inside them. So make each round *smaller*, not
 fewer: `safety-critical-changes.md` rule 3 ("a fix round addresses only what the
 review found") — a new mechanism gets filed, however squarely a finding prompted it.
 
+**When that rule was not followed, withdraw rather than patch.** The filing rule
+is prevention; this is its recovery, and it exists because the prevention was
+measured failing. A mechanism a round-1 finding prompted was built rather than
+filed, and every later round then found a HIGH *inside that mechanism* while the
+rest of the change drew nothing — rounds 2–5 reviewed the fixes, not the work.
+The signal is not a round count but **a fix that itself draws a HIGH, twice, in
+the same mechanism**: patching further is evidence-free, each patch a fresh guess
+at a problem the last guess misread. Take the mechanism out, file it with what
+defeated it, and let the round that removes it be the last — removal is the
+cheapest round there is, deleting surface rather than adding more for the next
+round to find.
+
+**Declare the withdrawal threshold before seeing a round's findings**, beside the
+stopping criterion. Named in advance it is a decision; reached afterwards it is
+indistinguishable from fatigue, and no reviewer can tell which it was.
+
 **Batch the fix round into one commit and one push, and aim the re-run at the
 delta.** Each push invalidates the current-head receipt, so each new head
 costs another required review — a fix round landed as four pushes buys four
