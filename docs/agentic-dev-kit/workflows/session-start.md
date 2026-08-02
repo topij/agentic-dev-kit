@@ -167,7 +167,22 @@ something already classified 🟡 is later raised to 🔴, it gets the check the
 
   Search them **per candidate**, by job / ticket / subject name, using **your
   runtime's own file-search facility** — the subject passed as a *parameter*, the
-  two archives as the scope.
+  two archives as the scope. A parameter is never parsed as shell syntax, which is
+  what makes this the preferred route.
+
+  **If your runtime exposes no such tool, the deciding question is where the
+  subject came from**, not whether you are using a shell:
+
+  - **From your own repository or config** — a cron job name, a branch, a file
+    path, a scope. Operator-controlled, and an ordinary shell search is fine.
+  - **From your tracker or forge** — an issue title, a PR title. On any project
+    that accepts issues from outside, that is attacker-influenceable text, and
+    building a shell command around it is a problem three separate attempts here
+    failed to solve; see
+    [`#241`](https://github.com/topij/agentic-dev-kit/issues/241) before trying a
+    fourth. Prefer matching such a candidate by its **id** (`CUS-1107`, `#143`),
+    which is the part you control the shape of, and search the title only through
+    a parameter-passing tool.
 
   **Skip a candidate whose subject is empty or whitespace-only** rather than
   searching for it. An empty pattern matches every line of both archives, which is
