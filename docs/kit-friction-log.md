@@ -11,6 +11,32 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-02 (wrap-up mechanics)
+
+- **A commit message written in a shell heredoc silently lost a figure to variable expansion.**
+  An unquoted heredoc expanded `$598` — meant as a line count — to the empty string, leaving the
+  message reading "against  at the base". Committed locally as `2c6c364`, caught by reading the
+  message back, and amended to `914831c` before any push, so it never shipped. `2c6c364` survives
+  in the reflog and under `git fsck --unreachable --no-reflogs` — **not** under a bare
+  `git fsck --unreachable`, since reflog entries are reachability roots by default. The broken
+  figure is in the commit *body*, not its subject: two review lenses inspected the same object and
+  reached opposite conclusions because one stopped at the subject line. **M** — the wrap-up and review workflows both prescribe generating figures by shell
+  substitution at the head, which is right, and this is that instruction's failure mode: the same
+  `$` that interpolates a wanted value silently eats an unwanted one. Proposed fix: when a message
+  body contains a literal `$` that is not a substitution, quote the heredoc delimiter (`<<'EOF'`)
+  and compute figures into the text beforehand — and read the message back with `git log -1` as
+  its own step, the way the publish gate is already a separate step.
+
+- **The cockpit's own PR comment un-converges the merge gate, so `--mark-seen` is needed twice.**
+  Posting a round-result comment immediately before merging flips `converged` back to false —
+  the comment is unacknowledged input like any other — so `mergeable` goes false until a second
+  `--mark-seen`. Not wrong, and arguably correct (the gate cannot know who wrote it), but the
+  loop reads as a spurious block at exactly the moment the operator expects to merge. **L** —
+  the remedy is **poll, then `--mark-seen`**, not a second bare `--mark-seen`: the engine's own
+  docstring records that calling it twice with no intervening poll is an idempotent no-op, because
+  a comment absent from the last reported poll cannot be acked. Proposed fix: no code change; note
+  that sequence in `pr-watch` so the extra cycle reads as expected rather than as a symptom.
+
 ## 2026-08-01 — Backlog migrated to GitHub Issues (#192–#196)
 
 Eighth sweep, LLM-only mode ([#6](https://github.com/topij/agentic-dev-kit/issues/6) still not
