@@ -35,7 +35,21 @@ Read `config/dev-model.yaml` first. In this workflow:
 
 ### 0 · Gather (run in parallel)
 
-Fire these together — they're independent:
+Fire these together — they're independent.
+
+**A source that fails is reported as unavailable, never as its empty value.** A
+non-zero exit, a missing binary, or an absent credential returns nothing — and
+nothing is indistinguishable from a genuine zero: no open PRs, no failing jobs, no
+drift. Rendering the empty value turns a command that never ran into an all-clear,
+which is worse than a visible gap because nothing on the briefing says to look
+again.
+
+This governs every source whose failure can pass for a benign zero. The PR list,
+your cron/CI health command and your config-drift check each have a slot in
+*Render the briefing* for saying so; the tracker bullet carries the rule inline
+instead, and reports its gap in the briefing text rather than in a fixed field.
+The two narrative-file reads are not in this set: a failed read there does not look
+like good news, it looks like a missing handoff.
 
 - `git status --short` and `git branch --show-current`
 - `gh pr list --state open --json number,title,isDraft,reviewDecision,statusCheckRollup,author --limit 100`
@@ -49,6 +63,11 @@ Fire these together — they're independent:
   person opened; those are guarded out of `pr-watch` by your cron runner's job-name
   signal, so their bot findings get no automated follow-through and the next
   cockpit must adopt them — see *Render the briefing*.)
+
+  Note the two failure shapes are different and only one is covered above: a
+  **failed** `gh pr list` returns nothing and is caught by the unavailable rule; a
+  **truncated** one returns valid JSON with fewer rows than exist, which no exit
+  code reveals and only the full-page check catches.
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>` (focus: the **"Latest session"** block and its `Next:` / `Follow-ups:` lines, plus the top-of-file "Last updated" trail for the active sprint)
@@ -222,7 +241,7 @@ something already classified 🟡 is later raised to 🔴, it gets the check the
 🧭 Session Start — <Day YYYY-MM-DD>
 
 Where things stand
-  • <branch> (<clean | N uncommitted/untracked>) · <N> open PRs · CI/cron: <all green | N failed/skipped>
+  • <branch> (<clean | N uncommitted/untracked>) · <N open PRs | PRs unavailable: reason> · CI/cron: <all green | N failed/skipped | unavailable: reason>
   • Active sprint: <one line, from handoff top trail>
   • Last session: <one-line theme from the latest handoff block>
 
@@ -242,7 +261,10 @@ What to do next
   this week; see 🟢 Whenever for backlog.`
 - Order items within a bucket by leverage (blocking > high-value > cheap-win).
 - The config-drift line only appears when your drift check reports something
-  outstanding; name the affected items. A less-urgent "orphan" class of drift (config
+  outstanding; name the affected items. **If the check could not run, say so where
+  that line would go** — "config drift: unavailable (`<reason>`)". Silence here
+  otherwise means "nothing outstanding", and a check that never ran would claim it.
+  A less-urgent "orphan" class of drift (config
   present with nothing applying it, or vice versa) is a separate, lower-urgency
   concern — mention it only under 🟢 Whenever if present, never conflated with the 🔴
   line above.
