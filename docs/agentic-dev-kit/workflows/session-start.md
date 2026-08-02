@@ -35,7 +35,15 @@ Read `config/dev-model.yaml` first. In this workflow:
 
 ### 0 · Gather (run in parallel)
 
-Fire these together — they're independent:
+Fire these together — they're independent.
+
+**A source that fails is reported as unavailable, never as its empty value.** A
+non-zero exit, a missing binary, or an absent credential returns nothing — and
+nothing is indistinguishable from a genuine zero: no open PRs, no failing jobs, no
+drift. Rendering the empty value turns a command that never ran into an all-clear,
+which is worse than a visible gap because nothing on the briefing says to look
+again. This applies to every source below; the tracker bullet states it for itself
+only because it was written first, not because it is the only one it covers.
 
 - `git status --short` and `git branch --show-current`
 - `gh pr list --state open --json number,title,isDraft,reviewDecision,statusCheckRollup,author --limit 100`
@@ -50,12 +58,10 @@ Fire these together — they're independent:
   signal, so their bot findings get no automated follow-through and the next
   cockpit must adopt them — see *Render the briefing*.)
 
-  **If the command fails, report the PR source as unavailable — never as empty.**
-  A non-zero exit, a partial response, or an absent `gh` returns nothing, and
-  nothing is indistinguishable from a repo that genuinely has no open PRs. The
-  first renders an all-clear 🔴 bucket off a command that never ran. This is the
-  same rule the tracker source below already states for itself; the two sources
-  differ only in that one said so.
+  Note the two failure shapes are different and only one is covered above: a
+  **failed** `gh pr list` returns nothing and is caught by the unavailable rule; a
+  **truncated** one returns valid JSON with fewer rows than exist, which no exit
+  code reveals and only the full-page check catches.
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>` (focus: the **"Latest session"** block and its `Next:` / `Follow-ups:` lines, plus the top-of-file "Last updated" trail for the active sprint)
@@ -229,7 +235,7 @@ something already classified 🟡 is later raised to 🔴, it gets the check the
 🧭 Session Start — <Day YYYY-MM-DD>
 
 Where things stand
-  • <branch> (<clean | N uncommitted/untracked>) · <N> open PRs | PRs: unavailable (<reason>) · CI/cron: <all green | N failed/skipped>
+  • <branch> (<clean | N uncommitted/untracked>) · <N open PRs | PRs unavailable: reason> · CI/cron: <all green | N failed/skipped | unavailable: reason>
   • Active sprint: <one line, from handoff top trail>
   • Last session: <one-line theme from the latest handoff block>
 
