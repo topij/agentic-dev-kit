@@ -144,7 +144,10 @@ are about provenance across the sources you just read. This is about an item who
 *resolution* is in none of them.
 
 Run it only against candidates you are about to promote to 🔴 — it is a filter on
-that promotion, not a pass over the whole list.
+that promotion, not a pass over the whole list. That is a deliberate cost bound:
+the archives are large, so checking every 🟡 and 🟢 would put an archive search
+behind every candidate. It follows the promotion rather than the bucket, so if
+something already classified 🟡 is later raised to 🔴, it gets the check then.
 
 - **Archived diagnosis.** `<handoff-history>` and `<friction-log-archive>` hold
   everything the archival sweeps moved out of the two live narrative files. The
@@ -152,21 +155,36 @@ that promotion, not a pass over the whole list.
   point of sweeping into them. So a problem diagnosed three months ago is
   invisible to every other step here, and its symptom is not.
 
-  Grep them **per candidate**, by job / ticket / subject name. The search term is
-  candidate-derived text — a ticket title, a PR title, a job name — so bind it to a
-  variable and search for it as a fixed string rather than interpolating it into
-  the command:
+  Search them **per candidate**, by job / ticket / subject name.
+
+  **Do not build a shell command out of the subject.** It is candidate-derived
+  text — a ticket title, a PR title, a job name — so on any repo whose tracker
+  takes issues from outside it is attacker-influenceable. **No quoting rule makes
+  arbitrary text safe to interpolate into a command line**, and single-quoting
+  specifically does not: one `'` in the subject closes the quote, and what follows
+  runs as a command. This is not only a hostile-input concern — an ordinary
+  apostrophe does it by accident, so a real title from this repo's own history
+  (`the kit's two remaining truncating writes`) already breaks the recipe.
+
+  **Preferred: use your runtime's own file-search facility**, passing the subject
+  as a **parameter** and the two archives as the search scope. A parameter is
+  never parsed as shell syntax, which closes the class rather than narrowing it.
+
+  If a shell is the only route you have, keep the subject out of the command line
+  by writing it through a **quoted** heredoc and matching from the file:
 
   ```bash
-  subject='<job-or-subject>'          # single-quoted: never inline it below
-  grep -Fn -- "$subject" "<handoff-history>" "<friction-log-archive>"
+  cat > "${TMPDIR:-/tmp}/devkit-subject" <<'DEVKIT_SUBJECT_END'
+  <job-or-subject>
+  DEVKIT_SUBJECT_END
+  grep -Fnf "${TMPDIR:-/tmp}/devkit-subject" "<handoff-history>" "<friction-log-archive>"
   ```
 
-  **Why, and it is not style.** On any repo whose tracker accepts issues from
-  outside, a title is attacker-influenceable text, and an interpolated `$(…)` or a
-  backtick in one executes when you run the line. `-F` also stops a title
-  containing regex metacharacters from silently matching the wrong entries, and
-  `--` stops one beginning with `-` from being read as an option.
+  A quoted delimiter suppresses every expansion, so the subject reaches the file
+  verbatim; `-F` then matches it literally, so a title carrying regex
+  metacharacters cannot silently match the wrong entries. The residual is narrow
+  and worth naming rather than hiding: a subject containing a line equal to the
+  delimiter would end the heredoc early. Pick one no title would contain.
 
   A hit **locates** a record; it does not by itself establish one. Read the entry
   the hit sits in before acting on it — these are Markdown blocks, so the
