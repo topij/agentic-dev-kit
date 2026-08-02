@@ -112,12 +112,24 @@ Work through `kit_doctor`'s file list. You are already on the branch from Step 2
 `init.sh` refreshed itself and migrated the config there, so those changes are captured
 too. Confirm with `git branch --show-current` before the first copy.
 
+**Install every `missing-required` file first, before any other copy in this step.**
+Those are the kit's own libraries — `lib/kitconfig.py` above all, which every Python
+engine imports — and refreshing an engine on top of an absent one produces a broken
+install: `check_doc_budget.py` dies with `ModuleNotFoundError`, and `pr_watch.py` warns
+and silently falls back to built-in defaults, leaving the adopter's entire `review.*`
+config inert. `kit_doctor` derives this set from the import graph, so it is answering
+"what does *this* tree's installed engines need", not a fixed list.
+
+- **`missing-required`** → install it. This is the one absent-file case that is **not**
+  an operator decision: an engine that is already installed imports it, and the report
+  names which. Do not carry it into the `missing` conversation below.
 - **`unchanged`** → copy the new version straight in. It is provably untouched, so there
   is nothing to lose.
 - **`missing`** → decide, don't assume. A sized-down adoption omits engines deliberately
   (one surveyed repo installs 2 of 6 on purpose). Ask the operator whether each missing
   piece is wanted before installing it. If a piece stays out, note it in the PR body so
-  the next upgrade doesn't re-litigate it.
+  the next upgrade doesn't re-litigate it. Nothing installed here imports these — that
+  is what separates them from the bullet above, and it is why declining one is safe.
 - **`differs`** → `diff` the local file against the kit's, and read the diff:
   - Only kit-authored changes (the local copy is simply older) → replace it.
   - Local edits present → for each, find where that value now lives in
