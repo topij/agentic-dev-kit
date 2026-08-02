@@ -152,16 +152,30 @@ that promotion, not a pass over the whole list.
   point of sweeping into them. So a problem diagnosed three months ago is
   invisible to every other step here, and its symptom is not.
 
-  Grep them **per candidate**, by job / ticket / subject name:
+  Grep them **per candidate**, by job / ticket / subject name. The search term is
+  candidate-derived text — a ticket title, a PR title, a job name — so bind it to a
+  variable and search for it as a fixed string rather than interpolating it into
+  the command:
 
   ```bash
-  grep -n "<job-or-subject>" <handoff-history> <friction-log-archive>
+  subject='<job-or-subject>'          # single-quoted: never inline it below
+  grep -Fn -- "$subject" "<handoff-history>" "<friction-log-archive>"
   ```
 
-  A hit means it is already diagnosed. Attach it as
+  **Why, and it is not style.** On any repo whose tracker accepts issues from
+  outside, a title is attacker-influenceable text, and an interpolated `$(…)` or a
+  backtick in one executes when you run the line. `-F` also stops a title
+  containing regex metacharacters from silently matching the wrong entries, and
+  `--` stops one beginning with `-` from being read as an option.
+
+  A hit **locates** a record; it does not by itself establish one. Read the entry
+  the hit sits in before acting on it — these are Markdown blocks, so the
+  diagnosis and any residual follow-up routinely sit on lines the grep did not
+  return, and a generic subject can match an unrelated older incident. Confirm the
+  entry is about *this* occurrence, then: attach it as
   `previously diagnosed: <one line> [<file>:<line>]` and **drop the candidate** —
-  unless the hit itself names a residual follow-up still outstanding, in which case
-  that follow-up is the candidate and the symptom is not. Never render a diagnosed
+  unless the entry names a residual follow-up still outstanding, in which case that
+  follow-up is the candidate and the symptom is not. Never render a diagnosed
   symptom as a fresh 🔴.
 
   **Scoped grep only — never read either file whole.** They are the accumulated
@@ -177,7 +191,14 @@ that promotion, not a pass over the whole list.
   meant it. That is the same mechanism the closing-keyword discipline guards
   against on the write side; this is its read side. An item the tracker shows as
   done that is not actually resolved is a real candidate, and the open-only list
-  is exactly where it will not appear.
+  is precisely where it will not appear.
+
+  **The live lookup is not for the state — the state is the thing you are
+  distrusting.** Fetch the item by id and read what it points *at*: the commit, PR,
+  or check that is supposed to have resolved it, and whether its acceptance
+  criteria are met in current code. A done state with nothing behind it leaves the
+  candidate standing. Keep it actionable until something other than the state says
+  otherwise.
 
 ### 3 · Render the briefing
 
