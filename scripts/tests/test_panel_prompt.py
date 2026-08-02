@@ -29,6 +29,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import require_kit_paths
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
@@ -36,7 +37,45 @@ from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 REPO_ROOT = find_repo_root(Path(__file__).resolve())
 ENGINE = engine_dir(Path(__file__).resolve()) / "panel_prompt.py"
 DOCTRINE = Path("docs") / "agentic-dev-kit" / "fallback-review-panel.md"
-DOCTRINE_TEXT = (REPO_ROOT / DOCTRINE).read_text()
+
+# NOT a module-level marker. An earlier version marked the whole module on the
+# doctrine, reasoning that `panel_prompt.py` is non-functional without it. That
+# over-reached: 15 test cases here never read the shipped file — they parse
+# synthetic doctrines they write themselves, or exercise `_repo_slug()`, a pure
+# string function with three prior lens-found bugs. Marking the module skipped
+# all of them in exactly the tree #226 says `/adopt` produces, losing coverage
+# of shipped parsing logic that such a tree still has. Both lenses, PR #232
+# round 1.
+#
+# The dependency is instead declared where it actually arises — in
+# `doctrine_text()`, which the `repo` fixture and one test call — so a new test
+# inherits it by using the fixture rather than by remembering a decorator.
+
+
+def test_the_declared_path_matches_the_doctrine_path():
+    """`doctrine_text()` names the path as a string LITERAL so
+    `test_kit_repo_only.py` can find it by scanning the source; `DOCTRINE` is a
+    `Path` built separately. Two spellings of one path drift, so this pins them
+    — without it a doctrine rename would leave the requirement naming a file
+    that no longer exists, and skip every test using it, silently."""
+    assert str(DOCTRINE) == "docs/agentic-dev-kit/fallback-review-panel.md"
+
+
+def doctrine_text() -> str:
+    """The shipped doctrine, read at CALL time rather than import time.
+
+    This was a module-level `read_text()`, which raised during **collection** in
+    any tree without the doctrine — so pytest aborted and ran **zero** tests,
+    rather than failing the handful that need the file. `/adopt` Step 3 does not
+    name `fallback-review-panel.md` among the docs it installs, so that was not
+    the extreme floor: it was a by-the-book adoption (#226).
+
+    A function and not a fixture, deliberately: one caller wants it inside a
+    test body and one inside another fixture, and a fixture would thread a
+    parameter through call sites that need nothing else.
+    """
+    require_kit_paths("docs/agentic-dev-kit/fallback-review-panel.md")
+    return (REPO_ROOT / DOCTRINE).read_text(encoding="utf-8")
 
 
 def _load():
@@ -67,7 +106,7 @@ def repo(tmp_path: Path) -> Path:
     (root / "docs" / "agentic-dev-kit").mkdir(parents=True)
 
     # The real doctrine, so the contract these tests assert on is the shipped one.
-    (root / DOCTRINE).write_text(DOCTRINE_TEXT)
+    (root / DOCTRINE).write_text(doctrine_text())
     (root / "config" / "dev-model.yaml").write_text(
         "vcs:\n  protected_branch: main\n"
         "review:\n"
@@ -139,7 +178,7 @@ def test_the_contract_is_read_from_the_doctrine_not_embedded_in_the_script(tmp_p
     """
     pp = _load()
     doctored = tmp_path / "doctrine.md"
-    text = DOCTRINE_TEXT.replace(
+    text = doctrine_text().replace(
         "1. **Fresh context.**", "1. **Wholly invented item.**", 1
     )
     doctored.write_text(text)
