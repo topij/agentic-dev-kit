@@ -78,6 +78,7 @@ import argparse
 import ast
 import hashlib
 import json
+import posixpath
 import re
 import sys
 from dataclasses import dataclass, field
@@ -261,11 +262,47 @@ _TEXT_IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_][A-Za-z0-9_.]*)",
 # than the text it replaced — "declining one is safe" — which is a worse false
 # assurance than the "decide, don't assume" it superseded. Found by the
 # adversarial lens on PR #225.
-# The operand is captured to end-of-argument rather than with a quote-excluding
-# character class, because `$(dirname "$0")/lib/x.sh` — the commonest form of
-# this idiom — contains both a quote and a space INSIDE the expansion, and a
-# class-based match truncates it to `$(dirname`.
-_SOURCE_RE = re.compile(r"""^[ \t]*(?:source|\.)[ \t]+(\S[^;#\n]*)""", re.MULTILINE)
+# The operand: a double-quoted string, a single-quoted string, or a bare word.
+# The double-quoted alternative admits `$( … )` chunks explicitly, because
+# `"$(dirname "$0")/lib/x.sh"` — the commonest form of this idiom — nests a
+# quote INSIDE the quoted operand, and a plain `"[^"]*"` truncates it to
+# `"$(dirname "`.
+#
+# The BARE alternative stops at a shell separator rather than at whitespace:
+# `{ source lib/dep.sh; }` and `source lib/dep.sh; cat <<EOF` otherwise yield
+# `lib/dep.sh;` with the semicolon attached, which `_NOT_A_LITERAL_PATH` does
+# not reject (`;` is not in its class) and which therefore reaches `record()`
+# as a path that can never match. Found by probing this function's own new
+# separator handling, not by a lens.
+_OPERAND = r"""(?:"((?:\$\([^)]*\)|[^"])*)"|'([^']*)'|([^\s;&|<>]+))"""
+
+# What may precede `source` on its line: nothing, or a command separator, or a
+# block keyword. The first version of this anchored at line start only, which
+# silently dropped `[ -f "$LIB" ] && source "$LIB"` — a defensively-written and
+# arguably *better* engine than the bare form the two current shell engines use
+# — and dropped `source x && echo` too, because the operand ran to end of line
+# and then failed the literal-path filter. Both reproduced; found by the
+# adversarial lens, PR #225 round 2.
+_SOURCE_RE = re.compile(r"(?:^|[;&|{]|\bthen\b|\bdo\b)[ \t]*(?:source|\.)[ \t]+" + _OPERAND)
+
+# A `#` at line start or after whitespace begins a comment. Approximate — a `#`
+# inside a quoted string preceded by a space is treated as one — and the
+# approximation is deliberately in the false-NEGATIVE direction: it can only
+# suppress an edge, never invent one. Dropping the line-start anchor above
+# without this would make a commented-out `# source lib/dep.sh` produce a real
+# dependency edge.
+_COMMENT_RE = re.compile(r"(?:^|[ \t])#")
+
+# `<<DELIM`, `<<'DELIM'`, `<<-DELIM`. Heredoc BODIES are skipped by the shell
+# scanner (and only by it): a `source` line inside a heredoc is text being
+# printed, not a dependency. `pre-push` already carries two `cat >&2 <<EOF`
+# help blocks, and one of them gaining a line explaining how a sibling engine
+# wires itself up would have baked a false edge into the manifest — telling
+# every adopter with the hook and without the session engines that their
+# install is broken. Note the Python-import scan deliberately does NOT skip
+# heredocs: `pre-push`'s kitconfig import lives inside a `python3 - <<'PY'`
+# body and genuinely executes. Adversarial lens, PR #225 round 2.
+_HEREDOC_RE = re.compile(r"<<-?[ \t]*[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?")
 
 # A leading shell expansion — `$SCRIPT_DIR/`, `${VAR}/`, `$(dirname "$0")/` —
 # stripped so what remains is a path relative to the sourcing file's own
@@ -275,7 +312,17 @@ _SHELL_PREFIX_RE = re.compile(r"^(?:\$\([^)]*\)|\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-
 # What is left must be a literal relative path. Anything still carrying a shell
 # metacharacter is computed at run time, and the honest answer there is no edge
 # rather than a guessed one.
-_NOT_A_LITERAL_PATH = re.compile(r"""[\s$"'*?\[\]{}()|&<>]""")
+#
+# NOT INDEPENDENTLY PINNABLE, and recorded as such rather than left looking like
+# tested behaviour: `record()` already requires an exact match against
+# KIT_OWNED, so a candidate this filter rejects would be discarded there anyway
+# — deleting the filter changes no observable output and fails no test. It is
+# kept as the second of two checks because the operand capture is deliberately
+# permissive, and it states an intent `record()`'s membership test does not.
+# Adversarial lens, PR #225 round 2; the backtick was added to the class in the
+# same round, since a single-token `source \`depfile\`` slipped through a class
+# whose whole job is rejecting substitutions.
+_NOT_A_LITERAL_PATH = re.compile(r"""[\s$`"'*?\[\]{}()|&<>]""")
 
 
 def _imported_modules(text: str) -> set[tuple[int, str]]:
@@ -322,14 +369,38 @@ def _sourced_paths(text: str, rel: str) -> set[str]:
     """
     here = PurePosixPath(rel).parent
     found: set[str] = set()
-    for match in _SOURCE_RE.finditer(text):
-        operand = match.group(1).strip()
-        if len(operand) > 1 and operand[0] in "\"'" and operand[-1] == operand[0]:
-            operand = operand[1:-1]
-        tail = _SHELL_PREFIX_RE.sub("", operand)
-        if not tail or tail.startswith("/") or _NOT_A_LITERAL_PATH.search(tail):
+    delimiter: str | None = None
+    for line in text.splitlines():
+        if delimiter is not None:
+            if line.strip() == delimiter:
+                delimiter = None
             continue
-        found.add(str(PurePosixPath(here / tail)))
+        # Detected before the scan but applied after it: the line that OPENS a
+        # heredoc is itself ordinary code and can carry its own `source`.
+        opening = _HEREDOC_RE.search(line)
+        comment = _COMMENT_RE.search(line)
+        code = line[: comment.start()] if comment else line
+        for match in _SOURCE_RE.finditer(code):
+            quoted_double, quoted_single, bare = match.groups()
+            operand = next(g for g in (quoted_double, quoted_single, bare) if g is not None)
+            tail = _SHELL_PREFIX_RE.sub("", operand)
+            if not tail or tail.startswith("/") or _NOT_A_LITERAL_PATH.search(tail):
+                continue
+            # normpath, not a bare join: `PurePosixPath` does NOT collapse `..`,
+            # so `scripts/sub` / `../lib/dep.sh` stayed `scripts/sub/../lib/dep.sh`
+            # and could never equal the canonical KIT_OWNED path it genuinely
+            # names — a literal, unconditional dependency dropped in silence.
+            # That is #41's own failure class reached by a different route, and
+            # it is NOT the documented "computed at run time" bound: nothing
+            # here is computed. Correctness lens, PR #225 round 2.
+            target = posixpath.normpath(str(here / tail))
+            # A path that climbs out of the repo cannot name a KIT_OWNED file;
+            # recording it would put `../…` in the manifest.
+            if target.startswith(".."):
+                continue
+            found.add(target)
+        if opening:
+            delimiter = opening.group(1)
     return found
 
 
@@ -373,14 +444,27 @@ def derive_dependencies(
       one this can see.
     - A dynamic import (``importlib``, an ``__import__`` call) is invisible, as
       is a `source` whose path is computed at run time. No file THIS FUNCTION
-      SCANS does either today — the qualifier is load-bearing and an earlier
-      version of this sentence dropped it, claiming "nothing in the tree",
-      which is false: `importlib.util` is used in `test_portability.py`,
-      `test_check_memory_budget.py` and `test_pr_followup_hook.py`. Those are
-      test files, neither `engine` nor `hook`, so they are out of scope here —
-      but the sentence read as a claim about the whole tree. A future ENGINE
-      that did either would get a silently thin graph, and no test here would
-      catch it. (Correctness lens, PR #225.)
+      SCANS does either today; the qualifier is load-bearing, because several
+      TEST modules do use `importlib.util`, and they are neither `engine` nor
+      `hook` so they are out of scope. A future ENGINE that did either would get
+      a silently thin graph, and no test here would catch it.
+
+      This sentence has now been wrong twice — first claiming "nothing in the
+      tree does this", then naming three test modules when there are four — so
+      it no longer enumerates them. `grep -rln importlib scripts/` is the
+      answer, and unlike a list in a docstring it cannot go stale.
+      (Correctness lens, PR #225 rounds 1 and 2.)
+    - The shell scan reads one physical line at a time. `source` is found after
+      a separator or a block keyword, and inside a `{ … }` group, but a
+      continuation (`source \\` + newline + path) or a `source` reached only
+      through a shell function or `eval` is not. Both directions of this bound
+      were reported as undocumented in round 2 and are now pinned by tests
+      rather than left implicit.
+    - Every one of these bounds errs toward NO edge. That direction is chosen,
+      not incidental: a missing edge degrades a file to plain `missing`, which
+      is the pre-#41 behaviour and merely unhelpful, while a false edge tells an
+      adopter their working install is broken and to install something they do
+      not need. `missing-required` firing wrongly is worse than it not firing.
     """
     owned = {rel for rel, _ in kit_owned}
     dependents: dict[str, set[str]] = {}
@@ -602,7 +686,9 @@ def generate_manifest(root: Path, kit_version: int) -> dict:
 
     ``required_by`` is written only where the derived dependent set is non-empty
     — most kit files are needed by nothing, and an entry per file would be
-    thirty empty lists to read past in every manifest diff. A reader must
+    twenty-six empty lists to read past in every manifest diff (32 KIT_OWNED
+    entries, 6 with a dependent; the earlier figure of "thirty" was a guess and
+    the correctness lens on PR #225 computed the real one). A reader must
     therefore treat an ABSENT key as "no known dependents", which is also what
     an older manifest (written before this field existed) yields: it reports
     every missing file as an ordinary `missing`, exactly as it did before.

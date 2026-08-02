@@ -673,6 +673,18 @@ def test_the_shell_engines_source_dependency_is_in_the_graph():
         "source ${SCRIPT_DIR}/lib/dep.sh",
         'source "$(dirname "$0")/lib/dep.sh"',
         ". $SCRIPT_DIR/lib/dep.sh",
+        # Everything below was a SILENT MISS in the first version of this
+        # scanner, which anchored `source` to the start of its physical line.
+        # A guarded source is the more defensive idiom — arguably better bash
+        # than the bare form both current shell engines use — so the scanner
+        # was blindest to the engines most careful about the very dependency
+        # it exists to find. Adversarial lens, PR #225 round 2.
+        '[ -f "$SCRIPT_DIR/lib/dep.sh" ] && source "$SCRIPT_DIR/lib/dep.sh"',
+        'if true; then source "$SCRIPT_DIR/lib/dep.sh"; fi',
+        'source "$SCRIPT_DIR/lib/dep.sh" || true',
+        "source lib/dep.sh && echo ready",
+        "{ source lib/dep.sh; }",
+        "source lib/dep.sh; echo ready",
     ],
 )
 def test_the_shell_scan_strips_the_leading_expansion(tmp_path, line):
@@ -687,6 +699,137 @@ def test_the_shell_scan_strips_the_leading_expansion(tmp_path, line):
     assert kit_doctor.derive_dependencies(root, owned) == {
         "scripts/lib/dep.sh": ["scripts/engine.sh"]
     }
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "# source lib/dep.sh",
+        "echo ready # source lib/dep.sh",
+        # The one that matters: dropping the line-start anchor to catch guarded
+        # `source` also lets a `&&` inside a COMMENT reach the scanner. Nothing
+        # pinned that, so the mutation removing the anchor passed the whole
+        # suite while turning commented-out prose into a dependency edge.
+        "# run cmd && source lib/dep.sh to wire it up",
+    ],
+)
+def test_a_commented_out_source_is_not_an_edge(tmp_path, line):
+    """A false edge is worse than a missing one, and this is the direction the
+    round-2 widening could have broken.
+
+    A bogus `required_by` entry baked into the manifest tells every adopter who
+    has the importing file and not the target that their install is BROKEN and
+    to install something they do not need — the `missing-required` state firing
+    in reverse, which is the failure `missing` vs `missing-required` exists to
+    prevent."""
+    root = _tree(
+        tmp_path,
+        {"scripts/engine.sh": f"#!/usr/bin/env bash\n{line}\n", "scripts/lib/dep.sh": "\n"},
+    )
+    owned = (("scripts/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
+    assert kit_doctor.derive_dependencies(root, owned) == {}
+
+
+def test_a_source_inside_a_heredoc_body_is_not_an_edge(tmp_path):
+    """A `source` line inside a heredoc is text being PRINTED, not a dependency.
+
+    `pre-push` already carries two `cat >&2 <<EOF` help blocks; one of them
+    gaining a line that explains how a sibling engine wires itself up would have
+    baked a false edge into the manifest. And the strongest regression test in
+    this file would not have caught it —
+    `test_shipped_manifest_required_by_matches_a_fresh_derivation` compares the
+    manifest against a fresh derivation, so a bad edit that gets
+    `--generate-manifest`'d is confirmed as correct by construction. Adversarial
+    lens, PR #225 round 2.
+
+    The Python-import scan deliberately does NOT skip heredocs: `pre-push`'s
+    kitconfig import lives in a `python3 - <<'PY'` body and genuinely runs. The
+    asymmetry is the point, so both halves are asserted here.
+    """
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/engine.sh": (
+                "#!/usr/bin/env bash\n"
+                "cat >&2 <<'EOF'\n"
+                "To wire this up by hand:\n"
+                '    source "$SCRIPT_DIR/lib/dep.sh"\n'
+                "EOF\n"
+                "python3 - <<'PY'\n"
+                "from kitconfig import get\n"
+                "PY\n"
+            ),
+            "scripts/lib/dep.sh": "\n",
+            "scripts/lib/kitconfig.py": "def get(): ...\n",
+        },
+    )
+    owned = (
+        ("scripts/engine.sh", "engine"),
+        ("scripts/lib/dep.sh", "engine"),
+        ("scripts/lib/kitconfig.py", "engine"),
+    )
+    assert kit_doctor.derive_dependencies(root, owned) == {
+        "scripts/lib/kitconfig.py": ["scripts/engine.sh"]
+    }
+
+
+def test_code_on_a_heredoc_opening_line_is_still_scanned(tmp_path):
+    """The line that OPENS a heredoc is ordinary code and can carry its own
+    `source`; only the body is skipped. Detecting the opener before scanning
+    the line, and applying it after, is what makes that true — the obvious
+    ordering drops a real edge."""
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/engine.sh": (
+                "#!/usr/bin/env bash\nsource lib/dep.sh; cat <<EOF\nsource lib/other.sh\nEOF\n"
+            ),
+            "scripts/lib/dep.sh": "\n",
+            "scripts/lib/other.sh": "\n",
+        },
+    )
+    owned = (
+        ("scripts/engine.sh", "engine"),
+        ("scripts/lib/dep.sh", "engine"),
+        ("scripts/lib/other.sh", "engine"),
+    )
+    assert kit_doctor.derive_dependencies(root, owned) == {
+        "scripts/lib/dep.sh": ["scripts/engine.sh"]
+    }
+
+
+def test_a_dotdot_relative_source_resolves_rather_than_vanishing(tmp_path):
+    """`PurePosixPath` does not collapse `..`, so a plain `source "../lib/dep.sh"`
+    built the target `scripts/sub/../lib/dep.sh`, which can never equal the
+    canonical KIT_OWNED path it genuinely names — the edge disappeared.
+
+    Nothing about that path is computed, so it was not covered by the documented
+    "computed at run time" bound: it was #41's own failure class, a real hard
+    dependency silently downgraded to a sized-down omission, reached by a
+    different route. Correctness lens, PR #225 round 2.
+    """
+    root = _tree(
+        tmp_path,
+        {
+            "scripts/sub/engine.sh": '#!/usr/bin/env bash\nsource "../lib/dep.sh"\n',
+            "scripts/lib/dep.sh": "\n",
+        },
+    )
+    owned = (("scripts/sub/engine.sh", "engine"), ("scripts/lib/dep.sh", "engine"))
+    assert kit_doctor.derive_dependencies(root, owned) == {
+        "scripts/lib/dep.sh": ["scripts/sub/engine.sh"]
+    }
+
+
+def test_a_source_climbing_out_of_the_repo_produces_no_edge(tmp_path):
+    """Normalising `..` must not let a target escape the tree — a recorded
+    `../…` would land in the manifest as a path no adopter layout produces."""
+    root = _tree(
+        tmp_path,
+        {"scripts/engine.sh": '#!/usr/bin/env bash\nsource "../../outside/dep.sh"\n'},
+    )
+    owned = (("scripts/engine.sh", "engine"),)
+    assert kit_doctor.derive_dependencies(root, owned) == {}
 
 
 def test_a_source_path_computed_at_runtime_produces_no_edge(tmp_path):
