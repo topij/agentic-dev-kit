@@ -38,6 +38,13 @@ than build them, and not following that is what the rounds were spent on.
 - **`#230` closed unmerged.** A recovery rule for the panel's filing rule, dropped under its own
   pre-declared threshold when round 1 returned HIGHs from both lenses and the bot. Refiled as
   `#231` with every finding and the design questions they exposed.
+- **`/upgrade` dry-run against a throwaway copy of cs-toolkit**, kit at `3e34fe5`. It **succeeds** —
+  `kit_doctor` reports 32 unchanged, 0 differ, 0 missing, hook installed — and that is the finding:
+  all six of cs-toolkit's Claude adapters are forks that reference no shared workflow, Step 4 says
+  to keep them, and no `.claude/` path is in `KIT_OWNED` so nothing can report it. Step 5's own
+  verification then runs zero tests, because test files never reach an adopter. `#236`. Live
+  occurrences also recorded on `#51` (an older kit reported as "likely LOCAL EDITS") and `#93` (the
+  slug mismatch installs the kit's skill *beside* the fork rather than replacing it).
 
 **Learned**
 
@@ -72,17 +79,13 @@ than build them, and not following that is what the rounds were spent on.
 - **Carried forward:** `#213`, `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`,
   `#124`, `#169`, `#170`, `#33`/`#112`, `#181`, `#93`.
 
-▶ Next: **`#231`** — the withdraw-don't-patch recovery rule, redesigned. `#228` and `#233` are the
-withdrawals it generalises, and `#230` records why the first attempt at the rule itself failed
-review, so this starts from evidence rather than a blank page. It is also the gate on the cs-toolkit vendoring: Phase 2's blockers are
-closed, but both PRs that closed them cost the round counts `#209` predicted would make a cost
-lever load-bearing first — and on this session's evidence the lever is this rule, not `#209`'s
-pass-size question or `#120`'s terminal check. Read `#231` and `#230` together before proposing.
-
-▶ Next: **`#220`** — sub-HIGH fixes, each already reproduced and specified on the issue, none
-larger than a few lines. Good standalone work that needs no design decision. If you would rather
-take a design question, `#209` now has three measurements behind it and an argument that its own
-recommended direction is aimed at the wrong variable — read it before proposing anything.
+▶ Next: **`#236`** — decide the adapter policy before running the cs-toolkit upgrade for real. The
+file-copy half is proven: the dry run installed all 32 files cleanly. What is unresolved is that the
+upgrade leaves the executed surface — the six forked `.claude/commands/` adapters — untouched while
+reporting success, so a green upgrade changes nothing about how sessions behave. `#93` is one
+instance of the same thing on the Codex side. Neither is a kit bug to fix first; both are decisions
+that shape the upgrade plan. `#231` (the withdraw-don't-patch rule) is real but gates `#6`'s
+vendoring, not this upgrade — a file copy has no mechanism to invent.
 
 ______________________________________________________________________
 
