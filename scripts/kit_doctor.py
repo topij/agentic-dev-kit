@@ -83,6 +83,14 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/dev_session.sh", "engine"),
     ("scripts/reconcile_sessions.sh", "engine"),
     ("scripts/kit_doctor.py", "engine"),
+    # Assembles panel launch prompts by QUOTING the contract out of
+    # docs/agentic-dev-kit/fallback-review-panel.md at run time (#214). That
+    # coupling is why it is tracked beside the doctrine rather than left
+    # adopter-local: an /upgrade that refreshed the doctrine and not this engine
+    # would leave the parser pointed at a heading that moved, and the engine
+    # exits 2 rather than guessing — a hard failure at panel time, which is the
+    # worst moment for one.
+    ("scripts/panel_prompt.py", "engine"),
     ("scripts/lib/kitconfig.py", "engine"),
     ("scripts/lib/atomic_write.py", "engine"),
     ("scripts/lib/devmodel_config.py", "engine"),
