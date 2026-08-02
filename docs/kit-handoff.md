@@ -60,8 +60,9 @@ prompt aimed lenses at, not how large the pass was.
 - **A correction can carry its own error.** Counts in commit messages and PR bodies went stale
   repeatedly, including inside paragraphs written to correct exactly that. What ended it was
   generating figures by shell substitution at the head rather than typing them.
-- **CodeRabbit was rate-limited across most of both PRs**, so the panel was the substitute rather
-  than a supplement. The receipts say so.
+- **CodeRabbit was rate-limited across most of `#213`'s PR**, so the panel was the substitute
+  rather than a supplement there; the receipt says so. On `#214`'s PR it reported, and four of that
+  PR's final-round findings are its — recorded on `#220`.
 
 **Open, and owned by nothing yet**
 
