@@ -49,6 +49,13 @@ Fire these together — they're independent:
   person opened; those are guarded out of `pr-watch` by your cron runner's job-name
   signal, so their bot findings get no automated follow-through and the next
   cockpit must adopt them — see *Render the briefing*.)
+
+  **If the command fails, report the PR source as unavailable — never as empty.**
+  A non-zero exit, a partial response, or an absent `gh` returns nothing, and
+  nothing is indistinguishable from a repo that genuinely has no open PRs. The
+  first renders an all-clear 🔴 bucket off a command that never ran. This is the
+  same rule the tracker source below already states for itself; the two sources
+  differ only in that one said so.
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>` (focus: the **"Latest session"** block and its `Next:` / `Follow-ups:` lines, plus the top-of-file "Last updated" trail for the active sprint)
@@ -222,7 +229,7 @@ something already classified 🟡 is later raised to 🔴, it gets the check the
 🧭 Session Start — <Day YYYY-MM-DD>
 
 Where things stand
-  • <branch> (<clean | N uncommitted/untracked>) · <N> open PRs · CI/cron: <all green | N failed/skipped>
+  • <branch> (<clean | N uncommitted/untracked>) · <N> open PRs | PRs: unavailable (<reason>) · CI/cron: <all green | N failed/skipped>
   • Active sprint: <one line, from handoff top trail>
   • Last session: <one-line theme from the latest handoff block>
 
