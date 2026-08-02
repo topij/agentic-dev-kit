@@ -42,8 +42,14 @@ non-zero exit, a missing binary, or an absent credential returns nothing — and
 nothing is indistinguishable from a genuine zero: no open PRs, no failing jobs, no
 drift. Rendering the empty value turns a command that never ran into an all-clear,
 which is worse than a visible gap because nothing on the briefing says to look
-again. This applies to every source below; the tracker bullet states it for itself
-only because it was written first, not because it is the only one it covers.
+again.
+
+This governs every source whose failure can pass for a benign zero. The PR list,
+your cron/CI health command and your config-drift check each have a slot in
+*Render the briefing* for saying so; the tracker bullet carries the rule inline
+instead, and reports its gap in the briefing text rather than in a fixed field.
+The two narrative-file reads are not in this set: a failed read there does not look
+like good news, it looks like a missing handoff.
 
 - `git status --short` and `git branch --show-current`
 - `gh pr list --state open --json number,title,isDraft,reviewDecision,statusCheckRollup,author --limit 100`
@@ -255,7 +261,10 @@ What to do next
   this week; see 🟢 Whenever for backlog.`
 - Order items within a bucket by leverage (blocking > high-value > cheap-win).
 - The config-drift line only appears when your drift check reports something
-  outstanding; name the affected items. A less-urgent "orphan" class of drift (config
+  outstanding; name the affected items. **If the check could not run, say so where
+  that line would go** — "config drift: unavailable (`<reason>`)". Silence here
+  otherwise means "nothing outstanding", and a check that never ran would claim it.
+  A less-urgent "orphan" class of drift (config
   present with nothing applying it, or vice versa) is a separate, lower-urgency
   concern — mention it only under 🟢 Whenever if present, never conflated with the 🔴
   line above.
