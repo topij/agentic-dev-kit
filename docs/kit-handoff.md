@@ -14,13 +14,74 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-02 — the review-process sprint shipped both halves: the panel doctrine
-split into what executes and what explains (`30feeec`), and an engine that assembles launch
-prompts from it (`dc33e55`). `#214` closed; `#213` stays open because the split met its ask and
-not its goal. What outlives both is a measurement about where review yield actually comes from —
-`#209` carries it.
+Last updated: 2026-08-02 — **Phase 2's named blockers are done.** `#41`, `#134` and `#226` are
+closed by `ee3371d` and `3e34fe5`. The durable result is not either feature: three times this
+session a mechanism kept drawing HIGH findings round after round, and each time **withdrawing it
+ended the loop that patching was extending**. `#231` is the doctrine change that follows.
 
-## Latest session — 2026-08-02 (the doctrine split, the assembler that reads it, and where review yield actually comes from)
+## Latest session — 2026-08-02 (Phase 2's blockers closed, and withdrawal beating repair three times)
+
+**Theme —** Two PRs merged and one closed unmerged. In all three, the expensive part was a
+mechanism *added in response to a review finding* — the doctrine already says to file those rather
+than build them, and not following that is what the rounds were spent on.
+
+- **`#41` — the required/optional manifest axis** (`ee3371d`). `kit-manifest.json` gains
+  `required_by`, derived from the Python import graph rather than declared, so `/upgrade` stops
+  filing a hard dependency under "sized-down adoption, or incomplete". It is a **mapping, not a
+  boolean**: "required" is a property of a pair, so `lib/kitconfig.py` breaks a repo that installed
+  an engine and is a legitimate omission for one that installed none.
+- **`#134` cause 2 and `#226`** (`3e34fe5`). A `kit_repo_only` marker in the conftest that travels
+  with the tests, skipping on the paths a test actually needs. Before it, a by-the-book `/adopt`
+  tree ran **zero** tests — `test_panel_prompt.py` read the doctrine at module scope and collection
+  aborted. The per-tree figures and their vendored subsets are in that PR's commits; a count
+  without its tree identifies nothing.
+- **`#230` closed unmerged.** A recovery rule for the panel's filing rule, dropped under its own
+  pre-declared threshold when round 1 returned HIGHs from both lenses and the bot. Refiled as
+  `#231` with every finding and the design questions they exposed.
+
+**Learned**
+
+- **The doctrine has prevention but no recovery.** "A new mechanism gets filed, however squarely a
+  finding prompted it" is already in `fallback-review-panel.md`, and each expensive PR this session
+  broke it. What it lacks is what to do once the mechanism is already in the diff and drawing
+  HIGHs, where the default — patch again — is what turns two rounds into five. `#231`.
+- **Withdrawal is the cheapest round available.** A shell-`source` scanner (`#228`), a
+  no-`.git` root guess (`#233`), and the `#230` rule itself were each removed rather than repaired,
+  and the round that removed them was the one that came back clean. Removal deletes surface instead
+  of adding more for the next round to find.
+- **A pre-declared threshold must be calibrated, and is binding either way.** `#230`'s fired on one
+  HIGH at round 1, before any fix existed — stricter than the rule it was protecting, and it cost
+  that PR. Honouring it anyway is the only thing that makes the mechanism worth having.
+- **Claiming a test pins a guard is not the same as it pinning one.** This recurred across both
+  merged PRs, each time verified false by deleting the guard and watching the suite stay green.
+  `#229` and `#234` carry the instances; the check is to delete the thing, and it was skipped
+  exactly where confidence was highest.
+- **A measurement can be blind to its own subject.** The vendored trees are built from
+  `git ls-files`, so a run taken before the new test file was tracked omitted the file under test
+  and reported a clean result that was not. Build the tree from committed state.
+
+**Open, and owned by nothing yet**
+
+- **`docs/kit-friction-log.md` is over budget** — `uv run scripts/check_doc_budget.py` prints the
+  live figure. `triage-friction-log` is the sweep; it needs tracker writes and operator approval.
+  Note `#143`. Nothing was added to the inbox this session: `#71` took the closing-keyword scan
+  occurrence, and the rest went straight to the tracker.
+- **Filed this session:** `#227`, `#228`, `#229`, `#231`, `#233`, `#234`, plus an occurrence on
+  `#71`. `#233` is worth reading before touching test-tree resolution — it records three withdrawn
+  attempts at the same problem.
+- **Carried forward:** `#213`, `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`,
+  `#124`, `#169`, `#170`, `#33`/`#112`, `#181`, `#93`.
+
+▶ Next: **`#231`** — the withdraw-don't-patch recovery rule, redesigned. Three instances now back
+it, and `#230` records exactly why the first attempt failed review, so this starts from evidence
+rather than a blank page. It is also the gate on the cs-toolkit vendoring: Phase 2's blockers are
+closed, but both PRs that closed them cost the round counts `#209` predicted would make a cost
+lever load-bearing first — and on this session's evidence the lever is this rule, not `#209`'s
+pass-size question or `#120`'s terminal check. Read `#231` and `#230` together before proposing.
+
+______________________________________________________________________
+
+## Earlier session — 2026-08-02 (the doctrine split, the assembler that reads it, and where review yield actually comes from)
 
 **Theme —** `#213` and `#214` merged. Neither result is the durable one. Across both PRs the
 review rounds found almost nothing in the shipped change and almost everything in the *previous
@@ -74,11 +135,6 @@ prompt aimed lenses at, not how large the pass was.
   `#213`, `#167`, `#209`, `#216`, `#220`, `#190`, `#187`, `#124`, `#169`, `#170`, `#33`/`#112`,
   `#181`, `#93`.
 - Budgets: `check_doc_budget.py` prints the live figures.
-
-▶ Next: **`#220`** — sub-HIGH fixes, each already reproduced and specified on the issue, none
-larger than a few lines. Good standalone work that needs no design decision. If you would rather
-take a design question, `#209` now has three measurements behind it and an argument that its own
-recommended direction is aimed at the wrong variable — read it before proposing anything.
 
 ______________________________________________________________________
 
@@ -317,68 +373,6 @@ measures what the exits are for — record-prose PRs like this handoff update, n
 ▶ Next: **`session-start`** — the block below's starter stands, minus what this session folded
 in: `#176` and `#177` are now in this file, so the sharpest remaining are `#179`/`#180`'s
 beside-or-inside-`#150` call and `#174`'s yes/no on the two truncating writes.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-31 (the seventh sweep, and the only step that caught anything)
-
-**Theme —** `#185` merged (`e8b145f`), graduating the inbox. The result worth keeping is not the
-sweep's accounting — that lives in the graduation marker — but **which step earned its keep**:
-reading the live tracker *before* drafting was the only one that found anything, and what it found
-was two entries asking for work already done. Both would have become tickets if drafted from the
-entry text, which was the only surface claiming otherwise.
-
-- **`#185` merged (`e8b145f`).** Seventh `triage-friction-log` sweep, LLM-only (`#6` unvendored).
-  Filed `#178`–`#183`; occurrence comments on `#163`, `#54`, `#140`, `#75`. The per-entry routing
-  table, the approval record, and the verification statement are in the marker in
-  `docs/kit-friction-log.md`; this line is a pointer, not a copy.
-- **Two entries needed no ticket, established against the repo rather than against the entry.**
-  `#74` is no longer open, `archive_plan_sessions.py` implements `--target-lines`, and
-  `wrap-up.md`'s *"Keep the handoff docs lean"* step prescribes it by name; the `finalize.pr_draft`
-  entry had recorded its own resolution inline. **Cited by name, not by position** — the merged
-  marker says `wrap-up.md:58`, which `#176` invalidated by inserting above it hours later, and the
-  first repair of that said "step 8" when it is step 7. A position into a living document expires;
-  a heading does not.
-- **`#179` and `#180` were filed beside `#150`, not folded into it.** That issue's subject is a
-  scripted text replacement that matches nothing; a check run in the wrong directory and a guard
-  that reported failure and was then ignored are neither. `#150` is unchanged — a judgement call
-  worth revisiting while the three are fresh.
-
-**Learned**
-
-- **A gate promoted in this sweep passed over an empty set.** Fence-parity went from measured to
-  asserted, then printed `0 fences preserved` — this inbox has no fenced blocks, so the assertion
-  and its companion never reached a subject. `#179`, occurring inside the sweep that filed it. It
-  is visible only because the script prints the count it asserts on; had it printed `ok`, the
-  vacuous pass would have read as a real one. That is `#179`'s negative-control ask in one line.
-- **The review's one finding was record prose, refuted by execution.** The marker claimed the
-  frozen-inbox digest reproduces *"from `git` alone"*; the command also needs a SHA-256 utility,
-  and the reviewer established that by running it where none existed. Corrected in `e5bd82b`. The
-  same wording still stands in **two archived markers** — correcting those would falsify the
-  un-demote round-trip the sweep verifies — so three consecutive sweeps *made* the claim and two
-  still carry it. `#140`'s shape, and now its occurrence data.
-- **`make test` is red under `uid 0` and green in CI.** Three tests `chmod 000` a doc and assert
-  exit 2, which root bypasses. Established by running `make test` from the repository root twice,
-  once with the session's edits stashed, and getting identical results both times. In the inbox
-  below the marker, deliberately un-swept.
-
-**Open, and owned by nothing yet**
-
-- **A parallel session ran alongside this one and wraps up after it.** `#176` (`65c9ee4`) is its
-  work; its own block will carry it. That block lands on top of this one in this file.
-- **The merge receipt covers `7d95da8`, not head.** `e5bd82b` — the correction the reviewer itself
-  asked for — merged unreviewed, on the operator's explicit call after the bot rate-limited a
-  third time. `#27`'s gap, live again, and this time chosen rather than missed.
-- **The reviewer was rate-limited on two of three attempts**, holding the merge about an hour.
-  Re-triggering after the stated window produced a real review — `#118`'s proposed behaviour,
-  performed by hand. Occurrence data is on that issue.
-- Inbox length: `check_doc_budget.py` prints the live figure. No number here.
-
-▶ Next: **`session-start`** — six fresh tickets and no single obvious thread. The sharpest
-candidates: `#179`/`#180` want the beside-vs-inside-`#150` call confirmed while the reasoning is
-fresh; `#176` and `#177` want folding into the handoff; `#174` still wants a deliberate yes/no on
-the two remaining truncating writes. `#178` is the most self-contained fix (gate the hook on the
-tool result, with a predicate per command).
 
 ______________________________________________________________________
 

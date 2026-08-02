@@ -4,6 +4,66 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-07-31 (the seventh sweep, and the only step that caught anything)
+
+**Theme —** `#185` merged (`e8b145f`), graduating the inbox. The result worth keeping is not the
+sweep's accounting — that lives in the graduation marker — but **which step earned its keep**:
+reading the live tracker *before* drafting was the only one that found anything, and what it found
+was two entries asking for work already done. Both would have become tickets if drafted from the
+entry text, which was the only surface claiming otherwise.
+
+- **`#185` merged (`e8b145f`).** Seventh `triage-friction-log` sweep, LLM-only (`#6` unvendored).
+  Filed `#178`–`#183`; occurrence comments on `#163`, `#54`, `#140`, `#75`. The per-entry routing
+  table, the approval record, and the verification statement are in the marker in
+  `docs/kit-friction-log.md`; this line is a pointer, not a copy.
+- **Two entries needed no ticket, established against the repo rather than against the entry.**
+  `#74` is no longer open, `archive_plan_sessions.py` implements `--target-lines`, and
+  `wrap-up.md`'s *"Keep the handoff docs lean"* step prescribes it by name; the `finalize.pr_draft`
+  entry had recorded its own resolution inline. **Cited by name, not by position** — the merged
+  marker says `wrap-up.md:58`, which `#176` invalidated by inserting above it hours later, and the
+  first repair of that said "step 8" when it is step 7. A position into a living document expires;
+  a heading does not.
+- **`#179` and `#180` were filed beside `#150`, not folded into it.** That issue's subject is a
+  scripted text replacement that matches nothing; a check run in the wrong directory and a guard
+  that reported failure and was then ignored are neither. `#150` is unchanged — a judgement call
+  worth revisiting while the three are fresh.
+
+**Learned**
+
+- **A gate promoted in this sweep passed over an empty set.** Fence-parity went from measured to
+  asserted, then printed `0 fences preserved` — this inbox has no fenced blocks, so the assertion
+  and its companion never reached a subject. `#179`, occurring inside the sweep that filed it. It
+  is visible only because the script prints the count it asserts on; had it printed `ok`, the
+  vacuous pass would have read as a real one. That is `#179`'s negative-control ask in one line.
+- **The review's one finding was record prose, refuted by execution.** The marker claimed the
+  frozen-inbox digest reproduces *"from `git` alone"*; the command also needs a SHA-256 utility,
+  and the reviewer established that by running it where none existed. Corrected in `e5bd82b`. The
+  same wording still stands in **two archived markers** — correcting those would falsify the
+  un-demote round-trip the sweep verifies — so three consecutive sweeps *made* the claim and two
+  still carry it. `#140`'s shape, and now its occurrence data.
+- **`make test` is red under `uid 0` and green in CI.** Three tests `chmod 000` a doc and assert
+  exit 2, which root bypasses. Established by running `make test` from the repository root twice,
+  once with the session's edits stashed, and getting identical results both times. In the inbox
+  below the marker, deliberately un-swept.
+
+**Open, and owned by nothing yet**
+
+- **A parallel session ran alongside this one and wraps up after it.** `#176` (`65c9ee4`) is its
+  work; its own block will carry it. That block lands on top of this one in this file.
+- **The merge receipt covers `7d95da8`, not head.** `e5bd82b` — the correction the reviewer itself
+  asked for — merged unreviewed, on the operator's explicit call after the bot rate-limited a
+  third time. `#27`'s gap, live again, and this time chosen rather than missed.
+- **The reviewer was rate-limited on two of three attempts**, holding the merge about an hour.
+  Re-triggering after the stated window produced a real review — `#118`'s proposed behaviour,
+  performed by hand. Occurrence data is on that issue.
+- Inbox length: `check_doc_budget.py` prints the live figure. No number here.
+
+▶ Next: **`session-start`** — six fresh tickets and no single obvious thread. The sharpest
+candidates: `#179`/`#180` want the beside-vs-inside-`#150` call confirmed while the reasoning is
+fresh; `#176` and `#177` want folding into the handoff; `#174` still wants a deliberate yes/no on
+the two remaining truncating writes. `#178` is the most self-contained fix (gate the hook on the
+tool result, with a predicate per command).
+
 ### 2026-07-30 (one bug, seven review rounds, and the same defect five times)
 
 **Theme —** `#172` merged (`b82eba9`), repairing `#164` and settling `#162`. The bug was one *call*
