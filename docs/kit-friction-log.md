@@ -14,9 +14,11 @@
 ## 2026-08-02 (wrap-up mechanics)
 
 - **A commit message written in a shell heredoc silently lost a figure to variable expansion.**
-  An unquoted heredoc expanded `$598` — meant as a line count — to the empty string, and the
-  message shipped reading "against  at the base". Caught by grepping the message back, not by
-  writing it. **M** — the wrap-up and review workflows both prescribe generating figures by shell
+  An unquoted heredoc expanded `$598` — meant as a line count — to the empty string, leaving the
+  message reading "against  at the base". Committed locally as `2c6c364`, caught by reading the
+  message back, and amended to `914831c` before any push, so it never shipped. `2c6c364` is
+  unreachable now; `git fsck --unreachable` and the reflog both still carry it, which is how a
+  review lens verified this entry rather than taking it on trust. **M** — the wrap-up and review workflows both prescribe generating figures by shell
   substitution at the head, which is right, and this is that instruction's failure mode: the same
   `$` that interpolates a wanted value silently eats an unwanted one. Proposed fix: when a message
   body contains a literal `$` that is not a substitution, quote the heredoc delimiter (`<<'EOF'`)
