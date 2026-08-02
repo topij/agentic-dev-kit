@@ -27,7 +27,7 @@ Read `config/dev-model.yaml` first. In this workflow:
 | Living handoff   | `<handoff>` — latest session block + every "Next:" / "Follow-ups:" trail                                                              |
 | Friction inbox   | `<friction-log>` — entries since the last "Backlog migrated" marker                                                                  |
 | Tracker backlog  | your tracker's list-issues command/script — project `tracker.project_name` (open only — drop `completed`/`canceled`)                     |
-| Open PRs         | `gh pr list` — anything draft / CI-red / awaiting-review (the PR-follow-through rule)                                                    |
+| Open PRs         | `gh pr list` — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Pass an explicit `--limit`; see the gather for why a full page must be treated as truncated |
 | Working tree     | `git status --short` + `git branch --show-current` — unfinished business from last session                                              |
 | CI/cron health   | your cron/CI runner's status command (adapt to your infra — e.g. a wrapper script that logs recent job outcomes)                         |
 | Config drift     | your host config-apply step, if you have one (e.g. a `verify --json`-style check comparing committed config against applied host state) — drop this bullet entirely if it doesn't generalize to your setup |
@@ -38,7 +38,17 @@ Read `config/dev-model.yaml` first. In this workflow:
 Fire these together — they're independent:
 
 - `git status --short` and `git branch --show-current`
-- `gh pr list --state open --json number,title,isDraft,reviewDecision,statusCheckRollup,author --limit 20` (`author` distinguishes a **cron/automation-opened** PR from one a person opened; those are guarded out of `pr-watch` by your cron runner's job-name signal, so their bot findings get no automated follow-through and the next cockpit must adopt them — see *Render the briefing*)
+- `gh pr list --state open --json number,title,isDraft,reviewDecision,statusCheckRollup,author --limit 100`
+  — **the explicit limit matters, and so does treating a full page as suspect.**
+  `gh pr list` silently defaults to 30 (`--limit int … (default 30)`, verified on
+  gh 2.96.0), and it reports nothing when it truncates. If exactly `--limit` rows
+  come back, assume there are more and re-run higher. This list is the whole
+  input to the 🔴 bucket's PR items, so a PR that falls off the end is not
+  under-reported — it is invisible, while the ones above it render as if they were
+  all of them. (`author` distinguishes a **cron/automation-opened** PR from one a
+  person opened; those are guarded out of `pr-watch` by your cron runner's job-name
+  signal, so their bot findings get no automated follow-through and the next
+  cockpit must adopt them — see *Render the briefing*.)
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>` (focus: the **"Latest session"** block and its `Next:` / `Follow-ups:` lines, plus the top-of-file "Last updated" trail for the active sprint)
