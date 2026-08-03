@@ -90,19 +90,25 @@ like good news, it looks like a missing handoff.
     `gh issue list --state open --limit 500 --json … | wc -c`: with `body` ~386 KB;
     the field list above ~49 KB; that same list rendered through a compact
     one-line-per-issue `--template` ~18 KB. Field selection is what makes a
-    **complete** list affordable, which is why it comes first.
+    **complete** list affordable, which is why it comes first — but it bounds the
+    bytes *per row*, not the total, so a backlog large enough to overflow even the
+    compact form needs **paging**: fetch successive pages and concatenate them all.
+    Still never by lowering the row count, which trades this loud failure for the
+    silent one below.
   - **Silent truncation** — the same failure as the PR list above, and the worse of
     the two, because the response is well-formed and the exit code is zero. Pass an
     explicit limit above your real backlog (`gh issue list` defaults to **30**, and
     `gh pr list` to 30 — both verified on gh 2.96.0), and if exactly `--limit` rows
-    come back, assume there are more and re-run higher.
+    come back, assume there are more and re-run higher. Where the backend caps the
+    limit below your backlog, re-running higher is not available and paging is the
+    only route: keep fetching until a short page ends the data.
 
   Reaching for the wrong one is not hypothetical: `--limit 25` was adopted **in this
   repo** as the remedy for the overflow above and carried in the handoff as "the form
-  that works here", while the backlog stood at 89 open issues. If your backend exposes
-  no field selection at all (the GitHub-Issues MCP tool does not), page it and
-  concatenate every page — shrinking the request to fit the tool is the mistake this
-  bullet exists to stop.
+  that works here", while the backlog stood at 89 open issues. Where field selection is
+  unavailable entirely (the GitHub-Issues MCP tool exposes none), paging is the only
+  route left rather than one option among several. Shrinking the request to fit the
+  tool is the mistake this bullet exists to stop, whichever limit you shrink.
 
 ### 1 · Classify each candidate
 
