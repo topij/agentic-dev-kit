@@ -1615,9 +1615,14 @@ def test_main_does_not_claim_self_comparison_against_a_separate_manifest(tmp_pat
     assert "STALE **and** LOCALLY EDITED" in out
 
 
-def test_main_sees_through_a_symlinked_baseline_path(tmp_path, capsys):
+def test_main_sees_through_a_symlinked_manifest_path(tmp_path, capsys):
     """`resolve()` follows symlinks, so the same file reached by two names is
-    still one document. Pins the resolution, not just the equality."""
+    still one document. Pins the resolution, not just the equality.
+
+    The symlink is on `--manifest`; `--baseline` is left to default. The
+    comparison is symmetric, so this exercises the same resolution either way —
+    but the name said `baseline` and the body passed `--manifest`, which is the
+    name-promises-more shape this file exists to catch (panel round 6)."""
     root, rel = _recorded_adopter(tmp_path)
     _write(root / rel, "edited")
     link = tmp_path / "alias.json"
