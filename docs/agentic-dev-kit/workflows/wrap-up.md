@@ -167,19 +167,32 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    - Read the complete final diff — `git diff HEAD`, same reason — for churn,
      duplicated blocks, secrets or personal data quoted from a real artifact, and
      edits unrelated to the wrap-up.
-   - **Then read every untracked file, and stage by name.** No diff of any kind
-     shows the *contents* of an untracked file, so everything above can pass while
-     a new file goes unreviewed into the commit:
+   - **Then account for every untracked file, and stage by name.** No diff of any
+     kind shows the *contents* of an untracked file, so everything above can pass
+     while a new file goes unreviewed into the commit:
 
      ```sh
      git ls-files --others --exclude-standard
      ```
 
-     Anything listed is either part of this wrap-up — in which case read it and
-     stage it deliberately — or it is somebody's work-in-progress that a wildcard
-     add would sweep in. **So never stage with `git add -A` or `git add .` here.**
-     Name the paths. This workflow knows exactly which files it touched; a
-     wildcard is how it acquires ones it did not.
+     **Classify each path before opening it — do not read the list unconditionally.**
+     A wrap-up runs in repos that hold contact exports, generated reports, raw CRM
+     or customer data, and `.env`-shaped files, and `--exclude-standard` only omits
+     what `.gitignore` already covers, so restricted data reaches this list exactly
+     when someone forgot to ignore it. Reading such a file to decide whether to
+     stage it pulls it into the agent's context, a transcript, and possibly a tool
+     call — an exposure that staging discipline does not undo. **For anything whose
+     path indicates protected content, do not open it:** treat it as not-for-this-
+     commit, leave it unstaged, and say you skipped it and why. Ask the operator if
+     it genuinely needs to be in the wrap-up.
+
+     Everything else is either part of this wrap-up — read it and stage it
+     deliberately — or somebody's work-in-progress that a wildcard add would sweep
+     in. **So never stage with `git add -A` or `git add .` here.** Name the paths.
+     This workflow knows exactly which files it touched; a wildcard is how it
+     acquires ones it did not. Note the asymmetry: *listing* the paths is always
+     safe and is what the staging discipline needs, while *reading* is the step
+     that carries the risk — which is why the two are separated here.
 
      Seeing the file is not enough on its own. On this rule's first live use the
      untracked file *was* listed, was read as "pre-existing, not mine", and was
