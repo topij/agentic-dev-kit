@@ -15,17 +15,17 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
 Last updated: 2026-08-03 — **The review lever that hid a bug.** `#51`'s local half shipped,
-and then an adopter's reviewer found a defect in it that every later round on the PR had read
-without seeing — most of them under an instruction of mine saying that area was covered, but
-not the one that was aimed straight at it. Aim moves finding-yield, which is why `#209` now
-recommends it; a wrong coverage claim moves it the other way, and neither explains all of it.
+and then an adopter's reviewer found a defect in it that the PR's own later rounds did not
+catch — later ones under an instruction of mine saying that area was covered, but not the one
+aimed straight at it. Aim moves finding-yield, which is why `#209` now recommends it; a wrong
+coverage claim moves it the other way, and neither explains all of it.
 
-## Latest session — 2026-08-03 (the aim lever, and the bug every later round read without seeing)
+## Latest session — 2026-08-03 (the aim lever, and the bug the later rounds did not catch)
 
 **Theme —** `#51`'s local half shipped, and the durable result is not the feature. What cost
-more to learn than the code did is about *review*: an adopter upgrade found a defect that every
-later round on the PR had read without seeing — and the cheapest explanation fails, because one
-of those rounds was pointed directly at the guards it lived in.
+more to learn than the code did is about *review*: an adopter upgrade found a defect that the
+PR's later review rounds did not catch — and the cheapest explanation fails, because the round
+pointed directly at the guards it lived in missed it too.
 
 - **`#278` — `kit_commit` in the manifest, and `differs` split three ways** (`a042c82`).
   `STALE` / `LOCALLY EDITED` / `STALE and EDITED`, stated as fact rather than inferred from
@@ -45,9 +45,10 @@ of those rounds was pointed directly at the guards it lived in.
   files beside it. Shipping the field alone would have relocated the false accusation rather
   than removing it.
 - **Carry-forward can subtract attention — but it is not the whole story here.** No total is
-  given, because this one has been miscounted twice and the enumeration is what holds. From
-  the archived launch briefs: the bug entered in the fix commit for round 4; **round 4's own
-  brief aimed at those guards** ("whether each actually guards what it claims") and missed it;
+  given, because every total I gave this was wrong and the enumeration is what holds. From the
+  archived launch briefs: the bug entered in the fix for **round 3** (`accf8fa`), which round 4
+  then reviewed; **round 4's brief aimed at those guards** ("whether each actually guards what
+  it claims") and missed it;
   **rounds 5 and 6 named "the three isinstance degrade sites" as already covered**; **round 7
   reviewed a prose-only delta under a blanket "everything else is already covered"**. So a
   wrong coverage claim removed most of the chances and something else removed the one that was
