@@ -125,11 +125,29 @@ deliberately:
    --merge-class <self|operator>` per chosen ticket (see below) and relay each copy-paste line **with a kickoff prompt**
    the operator pastes as the session's first message:
 
+   **Ground each lane brief in the ticket body, not in a summary of it.** Before drafting
+   a lane's kickoff, read the ticket itself from your tracker. A brief written from
+   `<handoff>` or a plan summary is not acceptable while the ticket is reachable: a
+   summary is written to preserve what a ticket is *about*, so anything enumerated in the
+   body — an acceptance list, a second deliverable — is exactly what it is free to drop,
+   and the brief that results reads complete. The occurrence behind this rule is one
+   lane, reported by an adopter of this kit rather than seen in this repo, whose two
+   named deliverables lived only in the ticket body and were retrofitted mid-review.
+   Treat the mechanism as the general claim and that as its single, second-hand
+   instance — there is no record of it here to check it against.
+
+   If the tracker read fails (missing key, backend down), the hazard is the **silent
+   fallback**, not the failure — so do not quietly write the brief from the summary
+   anyway. Say so *in the brief* and mark it summary-sourced, which is what makes the gap
+   actionable by whoever reads it. Then reconcile it against the ticket as soon as the
+   tracker is reachable; if your forge and tracker post a linkback on the lane's PR, that
+   comment is an earlier and cheaper place to catch the difference.
+
    > Obtain the lane contract with `<engine-dir>/dev_session.sh print-contract` and
    > follow it for this session — don't infer it from this kickoff, which is
    > task-specific, not the contract itself. Read tracker ticket `<ID>` (+ any recipe
    > in `<handoff>`). Pre-flight its premise against the live code before coding.
-   > Branch `dev/<scope>` is ready. **Suggested effort: `<tier>`**
+   > Branch `<branch>` is ready. **Suggested effort: `<tier>`**
    > (`<one-line risk reason>`) — set your session's model (and reasoning effort, if
    > your client exposes that control) accordingly before starting. Heads-up: a
    > parallel session owns `<other-area>` — if you need to touch `<shared-file>`,
@@ -236,8 +254,12 @@ merged or consciously parked — run the joint wrap-up **from this cockpit sessi
    <engine-dir>/reconcile_sessions.sh <scope-1> <scope-2> <scope-3>
    ```
 
-   For each `dev/<scope>` it resolves a **merged** PR (`gh pr list --head dev/<scope>
-   --state merged`) or marks it **parked** with the reason (`EMPTY — 0 commits, never
+   For each `<prefix>/<scope>` — `vcs.dev_branch_prefix`, which the reconciler reads
+   itself and `--prefix` overrides — it lists that branch's PRs (`gh pr list --head
+   <prefix>/<scope> --state all`) and classifies the newest one itself, rather than
+   asking the forge only for merged ones: a stale merged PR would otherwise mask the
+   in-flight PR that is the lane's actual state. It resolves
+   **merged**, or marks it **parked** with the reason (`EMPTY — 0 commits, never
    started`, `PR closed unmerged`, `N commit(s), no PR opened`) or **open** (still in
    flight), then prints the `launched N, merged M, parked K` tally — exit 3 if any
    scope is open or parked, 0 only when all merged. **Do not write the wrap-up block
@@ -297,6 +319,14 @@ to run it in a new terminal; don't try to start the session yourself. Options:
 branches get their own namespace to avoid colliding with hand-named feature branches),
 `--branch <full>` to override the whole name. Omitting `--merge-class` fails safe to
 `operator`.
+
+**Git hooks need no per-lane setup.** `git worktree` shares one hooks directory across
+the primary checkout and every lane — `git rev-parse --git-common-dir` from inside a lane
+resolves back to the primary checkout's `.git` — so `init.sh` only needs to run **once**,
+in the primary checkout, and every lane created afterwards already has the hooks. There
+is nothing to install per-lane. This matters here because the kit ships `pre-push` and
+`dev_session.sh` builds every lane as a worktree, so a lane is covered by the primary
+checkout's install or by nothing.
 
 ### Unattended / headless launch
 

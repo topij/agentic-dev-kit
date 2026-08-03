@@ -36,7 +36,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "d41d738184729de72bc97f7c88b59a2e394322f5c075cdccfd47ad75dd43fbc3"
+      "sha256": "c94bc2e08c3a285b2aec58598fd351a538d855f441025612c53eebd920df4993"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
