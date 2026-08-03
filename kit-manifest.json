@@ -96,7 +96,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "c05ff1858df7c227e904f9f1b9850e4bd44d4070b630f0623c6f1e31b7bdbf52"
+      "sha256": "8545d3b3bb0dbf464582b7bb93fea02805a45265abe0215db7ff053520e96b90"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [

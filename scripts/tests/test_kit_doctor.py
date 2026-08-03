@@ -1275,15 +1275,12 @@ def test_a_sha256_object_format_head_is_accepted(monkeypatch, tmp_path):
     """`git rev-parse HEAD` prints 64 hex in a repo created with
     `--object-format=sha256`. Matching only 40 refused a valid checkout and
     reported it as "not a git checkout" (CodeRabbit, PR #278)."""
-    import subprocess as sp
-
     class Done:
         returncode = 0
         stdout = "b" * 64 + "\n"
 
     monkeypatch.setattr(kit_doctor.subprocess, "run", lambda *a, **k: Done())
     assert kit_doctor._git_head(tmp_path) == "b" * 64
-    _ = sp  # imported to make the monkeypatched target explicit
 
 
 def test_a_non_string_kit_commit_does_not_abort_the_report(tmp_path, capsys):
@@ -1314,7 +1311,9 @@ def test_an_unwritable_baseline_path_exits_two_rather_than_tracebacking(tmp_path
     assert "cannot write baseline" in capsys.readouterr().err
 
 
-def test_an_unreadable_source_manifest_refuses_rather_than_recording_everything(tmp_path, capsys):
+def test_an_unreadable_source_manifest_refuses_rather_than_recording_everything(
+    tmp_path, capsys, monkeypatch
+):
     """Falling back to the permissive mode here would silently re-open the
     retained-file hole: the check that keeps an adopter's own file out of the
     baseline is exactly the one that needs this manifest."""
@@ -1323,12 +1322,8 @@ def test_an_unreadable_source_manifest_refuses_rather_than_recording_everything(
     kit.mkdir()
     (kit / ".git").mkdir()
     _write(kit / "kit-manifest.json", "{ not json")
-    monkey = kit_doctor._git_head
-    kit_doctor._git_head = lambda p: "c" * 40
-    try:
-        code = kit_doctor.main(["--record-install", "--root", str(root), "--from-kit", str(kit)])
-    finally:
-        kit_doctor._git_head = monkey
+    monkeypatch.setattr(kit_doctor, "_git_head", lambda p: "c" * 40)
+    code = kit_doctor.main(["--record-install", "--root", str(root), "--from-kit", str(kit)])
     assert code == 2
     assert "cannot read" in capsys.readouterr().err
     assert not (root / "kit-manifest.json").exists()
@@ -1399,7 +1394,7 @@ def test_a_baseline_entry_that_is_not_a_dict_degrades(tmp_path):
     assert next(f for f in report.files if f.path == rel).state == "differs"
 
 
-def test_a_partial_record_exits_nonzero_and_names_what_it_left_out(tmp_path, capsys):
+def test_a_partial_record_exits_nonzero_and_names_what_it_left_out(tmp_path, capsys, monkeypatch):
     """The stderr warning had zero coverage through `main`, and the mode exited
     0 regardless — so an agent-driven /adopt or /upgrade reading only the status
     code would treat a partial record as complete (panel, adversarial lens)."""
@@ -1411,12 +1406,8 @@ def test_a_partial_record_exits_nonzero_and_names_what_it_left_out(tmp_path, cap
         kit / "kit-manifest.json",
         json.dumps({"files": {"scripts/check_doc_budget.py": {"sha256": _sha("the kit's")}}}),
     )
-    real_head = kit_doctor._git_head
-    kit_doctor._git_head = lambda p: "d" * 40
-    try:
-        code = kit_doctor.main(["--record-install", "--root", str(root), "--from-kit", str(kit)])
-    finally:
-        kit_doctor._git_head = real_head
+    monkeypatch.setattr(kit_doctor, "_git_head", lambda p: "d" * 40)
+    code = kit_doctor.main(["--record-install", "--root", str(root), "--from-kit", str(kit)])
     err = capsys.readouterr().err
     assert code == 1, "a partial record must not report success"
     # Named by its LOCAL path, which is what the operator has to go look at —
@@ -1456,3 +1447,28 @@ def test_the_kit_bug_nudge_stays_silent_when_the_file_is_only_stale(tmp_path, ca
     assert next(f for f in stale.files if f.path == rel).state == "stale"
     print(kit_doctor.render(stale))
     assert "Engines are kit-owned" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("body", ['["a", "list"]', '"a string"', "null", '{"files": ["oops"]}'])
+def test_a_structurally_malformed_source_manifest_degrades_rather_than_tracebacking(
+    tmp_path, capsys, monkeypatch, body
+):
+    """Syntactically valid JSON of the wrong SHAPE at `--from-kit`. The read was
+    guarded for JSONDecodeError/OSError but not for "parsed fine, isn't a dict",
+    so `.get` raised AttributeError and escaped — the one malformed-input path
+    in this file that tracebacked instead of degrading, in code this PR adds
+    (CodeRabbit, PR #278).
+
+    The safe degrade is an empty source: it matches nothing, so every present
+    file lands in `unverified` and none is blessed as kit-installed."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "installed")
+    kit = tmp_path / "kit"
+    (kit / ".git").mkdir(parents=True)
+    _write(kit / "kit-manifest.json", body)
+    monkeypatch.setattr(kit_doctor, "_git_head", lambda p: "e" * 40)
+    code = kit_doctor.main(["--record-install", "--root", str(root), "--from-kit", str(kit)])
+    assert code == 1, "nothing could be verified, so the record is partial"
+    assert "scripts/check_doc_budget.py" in capsys.readouterr().err
+    recorded = json.loads((root / "kit-manifest.json").read_text())
+    assert recorded["files"] == {}, "nothing may be recorded as installed from an unusable source"

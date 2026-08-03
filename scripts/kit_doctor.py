@@ -798,9 +798,15 @@ def record_install_manifest(
         if not target.is_file():
             continue
         digest = sha256_of(target)
-        if source_files is not None and (source_files.get(rel) or {}).get("sha256") != digest:
-            unverified.append(_remap(rel, engines_dir))
-            continue
+        if source_files is not None:
+            # Same non-dict hazard as the caller's, one level down: a `files`
+            # value that is a non-empty list survives `or {}` and raises on
+            # `.get`. Anything that is not a matching dict entry means "this did
+            # not come from that kit", which is the conservative answer.
+            entry = source_files.get(rel) if isinstance(source_files, dict) else None
+            if not isinstance(entry, dict) or entry.get("sha256") != digest:
+                unverified.append(_remap(rel, engines_dir))
+                continue
         files[rel] = {"sha256": digest, "role": role}
     return {
         "kit_version": kit_version,
@@ -1318,9 +1324,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.from_kit:
             source_manifest = args.from_kit / MANIFEST_NAME
             try:
-                source_files = (json.loads(source_manifest.read_text(encoding="utf-8"))).get(
-                    "files"
-                ) or {}
+                parsed_source = json.loads(source_manifest.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError) as exc:
                 # Refuse rather than fall back to recording everything: without
                 # this manifest the retained-file check below cannot run, and
@@ -1328,6 +1332,14 @@ def main(argv: list[str] | None = None) -> int:
                 # adopter file gets blessed as kit-installed.
                 print(f"error: cannot read {source_manifest}: {exc}", file=sys.stderr)
                 return 2
+            # `isinstance`, not `.get(...) or {}`. Syntactically valid JSON whose
+            # top level is a list or a string has no `.get`, and AttributeError
+            # is not in the `except` above — so the tool tracebacked where every
+            # other malformed-input path in this file degrades. An empty dict
+            # here is the SAFE degrade: it matches nothing, so every present
+            # file lands in `unverified` and none is blessed as kit-installed
+            # (CodeRabbit, PR #278).
+            source_files = parsed_source.get("files") if isinstance(parsed_source, dict) else {}
         baseline, unverified = record_install_manifest(
             root, config, version, kit_commit, source_files
         )
