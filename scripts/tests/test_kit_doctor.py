@@ -1574,3 +1574,88 @@ def test_an_upstream_comparison_still_claims_the_kit_is_unchanged(tmp_path, caps
     out = capsys.readouterr().out
     assert "the kit's version is unchanged" in out
     assert "compared against ITSELF" not in out
+
+
+def _recorded_adopter(tmp_path: Path) -> tuple[Path, str]:
+    """An adopter with a real recorded baseline on disk, via the CLI."""
+    root = _fake_repo(tmp_path)
+    rel = "scripts/check_doc_budget.py"
+    _write(root / rel, "installed")
+    assert kit_doctor.main(["--record-install", "--root", str(root)]) == 0
+    return root, rel
+
+
+def test_main_derives_self_comparison_from_the_resolved_paths(tmp_path, capsys):
+    """`main`'s `baseline_path.resolve() == manifest_path.resolve()` was the real
+    signal and nothing exercised it: every test hand-passed the boolean to
+    `inspect`, so hardcoding the line to False left the suite green — found
+    independently by BOTH lenses (panel round 5).
+
+    Drives the bare CLI, which is the invocation the module docstring lists
+    first."""
+    root, rel = _recorded_adopter(tmp_path)
+    _write(root / rel, "edited after recording")
+    assert kit_doctor.main(["--root", str(root)]) == 1
+    out = capsys.readouterr().out
+    assert "compared against ITSELF" in out
+    assert "changed here since it was recorded" in out
+    assert "the kit's version is unchanged" not in out
+
+
+def test_main_does_not_claim_self_comparison_against_a_separate_manifest(tmp_path, capsys):
+    """The discriminating half, also through the CLI: a real upstream manifest
+    at a different path must NOT be reported as a self-comparison."""
+    root, rel = _recorded_adopter(tmp_path)
+    _write(root / rel, "edited after recording")
+    upstream = tmp_path / "kit" / "kit-manifest.json"
+    _write(upstream, json.dumps(_manifest({rel: _sha("what the kit ships")})))
+    assert kit_doctor.main(["--root", str(root), "--manifest", str(upstream)]) == 1
+    out = capsys.readouterr().out
+    assert "compared against ITSELF" not in out
+    assert "STALE **and** LOCALLY EDITED" in out
+
+
+def test_main_sees_through_a_symlinked_baseline_path(tmp_path, capsys):
+    """`resolve()` follows symlinks, so the same file reached by two names is
+    still one document. Pins the resolution, not just the equality."""
+    root, rel = _recorded_adopter(tmp_path)
+    _write(root / rel, "edited")
+    link = tmp_path / "alias.json"
+    link.symlink_to(root / "kit-manifest.json")
+    assert kit_doctor.main(["--root", str(root), "--manifest", str(link)]) == 1
+    assert "compared against ITSELF" in capsys.readouterr().out
+
+
+def test_self_comparison_is_dropped_when_the_two_documents_actually_differ(tmp_path):
+    """`inspect` verifies the caller's assertion instead of believing it. Called
+    with `baseline_is_comparison=True` but genuinely different documents, the
+    report used to say "no upstream was consulted" in the summary and "changed
+    upstream" one line below (panel, adversarial lens)."""
+    root = _fake_repo(tmp_path)
+    rel = "scripts/check_doc_budget.py"
+    _write(root / rel, "on disk")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(
+        root,
+        _manifest({rel: _sha("upstream")}),
+        config,
+        _baseline({rel: _sha("recorded")}, kit_commit="f" * 40),
+        baseline_is_comparison=True,
+    )
+    assert not report.baseline_is_comparison, "the claim contradicted the documents"
+    assert next(f for f in report.files if f.path == rel).state == "stale-and-edited"
+
+
+def test_an_untrusted_self_comparison_is_not_reported_as_one(tmp_path):
+    """The `and trusted` half, which was also unpinned: a bare run in a repo
+    whose only manifest is a release manifest consulted no baseline for a cause,
+    so "compared against itself" describes nothing that happened. Only visible
+    in --json, where the two fields would otherwise contradict each other."""
+    root = _fake_repo(tmp_path)
+    rel = "scripts/check_doc_budget.py"
+    _write(root / rel, "on disk")
+    release = _manifest({rel: _sha("on disk")})  # no kit_commit
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, release, config, release, baseline_is_comparison=True)
+    assert not report.baseline_trusted
+    assert not report.baseline_is_comparison, "a field pair that must never contradict"

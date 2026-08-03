@@ -641,7 +641,7 @@ def generate_manifest(root: Path, kit_version: int) -> dict:
     ``required_by`` is written only where the derived dependent set is non-empty
     — most kit files are needed by nothing, and an entry per file would be
     twenty-six empty lists to read past in every manifest diff (32 KIT_OWNED
-    entries, 6 with a dependent; the earlier figure of "thirty" was a guess and
+    entries, 5 with a dependent; the earlier figure of "thirty" was a guess and
     the correctness lens on PR #225 computed the real one). A reader must
     therefore treat an ABSENT key as "no known dependents", which is also what
     an older manifest (written before this field existed) yields: it reports
@@ -1001,10 +1001,32 @@ def inspect(
         hooks_installed=hooks_installed,
         narrative_rendered=narrative,
         baseline_trusted=trusted,
-        # Passed in rather than inferred from `baseline is manifest`: `main`
-        # knows it from the resolved PATHS, and identity would also be true for
-        # two separately-read files that happen to be equal dicts.
-        baseline_is_comparison=baseline_is_comparison and trusted,
+        # Passed in rather than inferred from paths: `main` knows it from the
+        # resolved PATHS, which this function does not see.
+        #
+        # But it is VERIFIED here rather than believed, because a caller that
+        # gets it wrong produces a self-contradicting report: the summary says
+        # "no upstream was consulted" while a file below it says "changed
+        # upstream". A caller asserting self-comparison is asserting the two
+        # documents are the same one, so that is exactly what is checked —
+        # cheap, and it makes the invariant hold by construction instead of by
+        # assumption (panel, adversarial lens).
+        #
+        # `and trusted` because an UNtrusted baseline was never consulted for a
+        # cause at all, so "compared against itself" describes nothing that
+        # happened.
+        #
+        # KNOWN GAP, deliberately documented rather than closed: `main` derives
+        # its half with `Path.resolve()`, which follows symlinks but cannot see
+        # HARD links — two hard links to one inode resolve to two different
+        # paths, so that case reports as an ordinary independent baseline. The
+        # content is identical either way, so no file is ever misattributed;
+        # only the caveat goes missing. No `/adopt` or `/upgrade` step
+        # constructs hard-linked manifests. Detecting it needs `st_ino`/`st_dev`
+        # comparison, which is a new mechanism for a LOW with no reachable
+        # consequence — the doctrine's answer to that is to document the
+        # limitation, not to trade it for more machinery.
+        baseline_is_comparison=(baseline_is_comparison and trusted and baseline == manifest),
         # Normalized to str-or-None. Trust keys on the KEY's presence, so any
         # JSON type survives it — and `render` slices this value, which would
         # raise TypeError on a number or a list and abort the whole report over

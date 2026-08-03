@@ -248,7 +248,7 @@ upgrade the previous cycle's baseline is still on disk, so a skipped Step 4 prin
 perfectly well-formed line naming the commit you upgraded from *last* time:
 
 ```sh
-git -C /tmp/agentic-dev-kit rev-parse HEAD   # must match the sha on the baseline: line
+git -C /tmp/agentic-dev-kit rev-parse HEAD   # the baseline: line shows its first 12 chars
 ```
 
 `none recorded` means Step 4's `--record-install` never ran. A line reading `compared

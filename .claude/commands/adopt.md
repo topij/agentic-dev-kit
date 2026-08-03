@@ -141,7 +141,7 @@ before re-running, and never silence it by dropping the flag.
   earlier attempt prints a real-looking line naming the wrong commit:
 
   ```sh
-  git -C <kit checkout> rev-parse HEAD    # must match the sha on the baseline: line
+  git -C <kit checkout> rev-parse HEAD    # the baseline: line shows its first 12 chars
   ```
 
   `baseline: none recorded` means Step 3's `--record-install` did not run at all.
