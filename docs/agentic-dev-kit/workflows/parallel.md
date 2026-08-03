@@ -252,8 +252,9 @@ merged or consciously parked — run the joint wrap-up **from this cockpit sessi
    <engine-dir>/reconcile_sessions.sh <scope-1> <scope-2> <scope-3>
    ```
 
-   For each `dev/<scope>` it resolves a **merged** PR (`gh pr list --head dev/<scope>
-   --state merged`) or marks it **parked** with the reason (`EMPTY — 0 commits, never
+   For each `<prefix>/<scope>` — `vcs.dev_branch_prefix`, which the reconciler reads
+   itself and `--prefix` overrides — it resolves a **merged** PR (`gh pr list --head
+   <prefix>/<scope> --state merged`) or marks it **parked** with the reason (`EMPTY — 0 commits, never
    started`, `PR closed unmerged`, `N commit(s), no PR opened`) or **open** (still in
    flight), then prints the `launched N, merged M, parked K` tally — exit 3 if any
    scope is open or parked, 0 only when all merged. **Do not write the wrap-up block
