@@ -166,8 +166,26 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
      one. The whole point of this step is to see what the commit will contain.
    - Read the complete final diff — `git diff HEAD`, same reason — for churn,
      duplicated blocks, secrets or personal data quoted from a real artifact, and
-     edits unrelated to the wrap-up. Add `git status --short`: a file that is
-     untracked appears in no diff at all, and `git add` later sweeps it in.
+     edits unrelated to the wrap-up.
+   - **Then read every untracked file, and stage by name.** No diff of any kind
+     shows the *contents* of an untracked file, so everything above can pass while
+     a new file goes unreviewed into the commit:
+
+     ```sh
+     git ls-files --others --exclude-standard
+     ```
+
+     Anything listed is either part of this wrap-up — in which case read it and
+     stage it deliberately — or it is somebody's work-in-progress that a wildcard
+     add would sweep in. **So never stage with `git add -A` or `git add .` here.**
+     Name the paths. This workflow knows exactly which files it touched; a
+     wildcard is how it acquires ones it did not.
+
+     Seeing the file is not enough on its own. On this rule's first live use the
+     untracked file *was* listed, was read as "pre-existing, not mine", and was
+     then swept in by a wildcard add anyway — 228 lines of someone's design note
+     into a commit about something else, carried through review and merge. The
+     check that works is mechanical: list them, then stage by name.
 
    **Never infer completion from a branch name, a commit message, a process exit
    code, or a ticket reference alone.** Each of those reports that something was
