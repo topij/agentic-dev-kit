@@ -131,8 +131,10 @@ deliberately:
    summary is written to preserve what a ticket is *about*, so anything enumerated in the
    body — an acceptance list, a second deliverable — is exactly what it is free to drop,
    and the brief that results reads complete. The occurrence behind this rule is one
-   lane whose two named deliverables lived only in the ticket body and were retrofitted
-   mid-review; treat the mechanism as the general claim and that as its single instance.
+   lane, reported by an adopter of this kit rather than seen in this repo, whose two
+   named deliverables lived only in the ticket body and were retrofitted mid-review.
+   Treat the mechanism as the general claim and that as its single, second-hand
+   instance — there is no record of it here to check it against.
 
    If the tracker read fails (missing key, backend down), the hazard is the **silent
    fallback**, not the failure — so do not quietly write the brief from the summary
@@ -145,7 +147,7 @@ deliberately:
    > follow it for this session — don't infer it from this kickoff, which is
    > task-specific, not the contract itself. Read tracker ticket `<ID>` (+ any recipe
    > in `<handoff>`). Pre-flight its premise against the live code before coding.
-   > The branch printed by `new` is ready. **Suggested effort: `<tier>`**
+   > Branch `<branch>` is ready. **Suggested effort: `<tier>`**
    > (`<one-line risk reason>`) — set your session's model (and reasoning effort, if
    > your client exposes that control) accordingly before starting. Heads-up: a
    > parallel session owns `<other-area>` — if you need to touch `<shared-file>`,
@@ -253,8 +255,11 @@ merged or consciously parked — run the joint wrap-up **from this cockpit sessi
    ```
 
    For each `<prefix>/<scope>` — `vcs.dev_branch_prefix`, which the reconciler reads
-   itself and `--prefix` overrides — it resolves a **merged** PR (`gh pr list --head
-   <prefix>/<scope> --state merged`) or marks it **parked** with the reason (`EMPTY — 0 commits, never
+   itself and `--prefix` overrides — it lists that branch's PRs (`gh pr list --head
+   <prefix>/<scope> --state all`) and classifies the newest one itself, rather than
+   asking the forge only for merged ones: a stale merged PR would otherwise mask the
+   in-flight PR that is the lane's actual state. It resolves
+   **merged**, or marks it **parked** with the reason (`EMPTY — 0 commits, never
    started`, `PR closed unmerged`, `N commit(s), no PR opened`) or **open** (still in
    flight), then prints the `launched N, merged M, parked K` tally — exit 3 if any
    scope is open or parked, 0 only when all merged. **Do not write the wrap-up block
