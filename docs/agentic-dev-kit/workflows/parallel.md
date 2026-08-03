@@ -130,11 +130,10 @@ deliberately:
    `<handoff>` or a plan summary is not acceptable while the ticket is reachable: a
    summary is written to preserve what a ticket is *about*, so anything enumerated in the
    body — an acceptance list, a second deliverable — is exactly what it is free to drop,
-   and the brief that results reads complete. The occurrence behind this rule is one
-   lane, reported by an adopter of this kit rather than seen in this repo, whose two
-   named deliverables lived only in the ticket body and were retrofitted mid-review.
-   Treat the mechanism as the general claim and that as its single, second-hand
-   instance — there is no record of it here to check it against.
+   and the brief that results reads complete. The evidence behind this rule is a
+   single reported lane whose two named deliverables lived only in the ticket body
+   and were retrofitted mid-review — one occurrence, not a survey. Treat the
+   mechanism as the general claim and that as its single instance.
 
    If the tracker read fails (missing key, backend down), the hazard is the **silent
    fallback**, not the failure — so do not quietly write the brief from the summary

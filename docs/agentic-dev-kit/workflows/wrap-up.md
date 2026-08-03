@@ -146,6 +146,33 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    tracker writes + operator approval). This is what stops the handoff docs
    from ballooning between archive sweeps.
 
+1. **Validate the record before staging anything.** This is its own step, and its
+   result is read before the commit exists — not chained onto it. An `&&` chain
+   ending in a push buries the verification's output above two later successes,
+   which is exactly where nobody looks ([`#119`](https://github.com/topij/agentic-dev-kit/issues/119)).
+
+   - Read the changed handoff blocks **in full**, not just your diff of them.
+   - Verify every figure a claim rests on — dates, PR and ticket states, job
+     states, counts — against the live source rather than against what the
+     handoff said before you edited it. This is the read-side companion to
+     "the handoff carries what cannot be recomputed": once a figure is no longer
+     restated, the only place to get it right is the source.
+   - Check the handoff, any active plan, and any status doc do not contradict
+     each other.
+   - `git diff HEAD --check`, and your pre-commit hooks against the changed files
+     if you have them. **`HEAD`, not a bare `git diff`** — a bare one reads the
+     worktree against the index, so anything already staged is invisible to it,
+     and a wrap-up that stages as it goes is the normal case rather than the edge
+     one. The whole point of this step is to see what the commit will contain.
+   - Read the complete final diff — `git diff HEAD`, same reason — for churn,
+     duplicated blocks, secrets or personal data quoted from a real artifact, and
+     edits unrelated to the wrap-up. Add `git status --short`: a file that is
+     untracked appears in no diff at all, and `git add` later sweeps it in.
+
+   **Never infer completion from a branch name, a commit message, a process exit
+   code, or a ticket reference alone.** Each of those reports that something was
+   *attempted*, and a wrap-up's job is to record what is *true*.
+
 1. **Commit + PR the handoff update — never commit to your protected branch
    directly.** Commit as `chore: update handoff — [one-line summary of session work]`
    (stage `<friction-log>` too if you added an inbox entry this session, and
@@ -156,6 +183,16 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    way, once there's nothing left to push, **mark the PR ready** so it gets reviewed,
    and run the watch-and-fix loop (`pr-watch`) to merge — per your project's
    branching convention.
+
+   **Keep tracker identifiers out of the title and body unless this PR is really
+   about that ticket.** Trackers parse titles and bodies; they do not parse diffs.
+   So naming a ticket to give background *attaches* the PR to it, and a review bot
+   that reads linked issues will then grade the PR against that ticket's acceptance
+   criteria — producing findings about work the PR never set out to do. A wrap-up
+   PR is the worst case, because it touches a record that mentions everything the
+   session went near. Put the detail in the diff, which nothing parses. This is
+   separate from the closing-keyword discipline: that one is about changing a
+   ticket's state, this one is about attaching to it at all.
 
 ## Rules
 
