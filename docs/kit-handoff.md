@@ -58,7 +58,7 @@ pointed directly at the guards it lived in missed it too.
   **The briefs those figures come from are session scratch, not committed**, so a later reader
   cannot re-derive this from the repo. `#280`'s merged body and commit message state it
   differently again; treat this bullet as the account of record and that one as superseded.
-- **Both panel rounds on `#278` returned disjoint lens sets**; the first convergence came at
+- **Rounds 2 and 4 on `#278` returned disjoint lens sets**; the first convergence came at
   round 5. Direct evidence on the question `#209` turns on — recorded on `#278` itself, not on
   `#209`, which a review lens checked and found bare.
 - **The configured bot reviewed a minority of heads while its check went green on all of
