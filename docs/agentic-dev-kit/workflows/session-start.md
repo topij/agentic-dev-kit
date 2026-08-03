@@ -119,6 +119,25 @@ like good news, it looks like a missing handoff.
     **page** — both clients above expose it (`nextPageToken`, `cursor`) — and keep
     fetching until a short page ends the data.
 
+    **If the response states whether more remain, that answer beats every count
+    above.** Row-count arithmetic is the fallback for a backend that tells you
+    nothing, and its two weaknesses are not equally costly. The **second** ceiling is
+    the dangerous one: against a cap you have not documented there is nothing to
+    compare with, so a silent cap reads as a complete list. The first ceiling — the
+    limit *you* passed — always works, and its only weakness is a false alarm on a
+    final page that happens to be exactly full, which the "assume there are more"
+    rule above already absorbs at the cost of one empty fetch. An explicit
+    `has_next_page`-style field, or a non-empty next-page token, is the backend
+    answering the question directly and removes the guesswork from both.
+
+    Both tracker MCP clients named above provide one, so read it and page while it is
+    true rather than until a page looks short: Linear's `list_issues` returns
+    `hasNextPage` beside its `cursor`; Jira's `searchJiraIssuesUsingJql` returns
+    `pageInfo.hasNextPage` beside an `endCursor`. Both verified by calling them,
+    2026-08-03 — and Linear at `limit: 250`, its own maximum, answered
+    `hasNextPage: true`, which is the ceiling-equals-count case above reported
+    outright instead of inferred.
+
   Reaching for the wrong one is not hypothetical: `--limit 25` was adopted **in this
   repo** as the remedy for the overflow above and carried in the handoff as "the form
   that works here", while the backlog stood at 89 open issues. Where field selection is
