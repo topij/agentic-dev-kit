@@ -159,11 +159,15 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
      restated, the only place to get it right is the source.
    - Check the handoff, any active plan, and any status doc do not contradict
      each other.
-   - `git diff --check`, and your pre-commit hooks against the changed files if
-     you have them.
-   - Read the complete final diff for churn, duplicated blocks, secrets or
-     personal data quoted from a real artifact, and edits unrelated to the
-     wrap-up.
+   - `git diff HEAD --check`, and your pre-commit hooks against the changed files
+     if you have them. **`HEAD`, not a bare `git diff`** — a bare one reads the
+     worktree against the index, so anything already staged is invisible to it,
+     and a wrap-up that stages as it goes is the normal case rather than the edge
+     one. The whole point of this step is to see what the commit will contain.
+   - Read the complete final diff — `git diff HEAD`, same reason — for churn,
+     duplicated blocks, secrets or personal data quoted from a real artifact, and
+     edits unrelated to the wrap-up. Add `git status --short`: a file that is
+     untracked appears in no diff at all, and `git add` later sweeps it in.
 
    **Never infer completion from a branch name, a commit message, a process exit
    code, or a ticket reference alone.** Each of those reports that something was
