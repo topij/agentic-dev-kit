@@ -15,17 +15,17 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
 Last updated: 2026-08-03 — **The review lever that hid a bug.** `#51`'s local half shipped,
-and then an adopter's reviewer found a defect in it that three later review rounds had read
-without seeing — one aimed straight at the guards it lived in, two told by an instruction of
-mine that they were already covered. Aim moves finding-yield, which is why `#209` now
-recommends it; a wrong coverage claim moves it the other way.
+and then an adopter's reviewer found a defect in it that every later round on the PR had read
+without seeing — most of them under an instruction of mine saying that area was covered, but
+not the one that was aimed straight at it. Aim moves finding-yield, which is why `#209` now
+recommends it; a wrong coverage claim moves it the other way, and neither explains all of it.
 
-## Latest session — 2026-08-03 (the aim lever, and the bug three rounds read without seeing)
+## Latest session — 2026-08-03 (the aim lever, and the bug every later round read without seeing)
 
 **Theme —** `#51`'s local half shipped, and the durable result is not the feature. What cost
-more to learn than the code did is about *review*: an adopter upgrade found a defect that
-three later rounds had read without seeing — and the two cheapest explanations both fail,
-because one of those rounds was pointed directly at the guards it lived in.
+more to learn than the code did is about *review*: an adopter upgrade found a defect that every
+later round on the PR had read without seeing — and the cheapest explanation fails, because one
+of those rounds was pointed directly at the guards it lived in.
 
 - **`#278` — `kit_commit` in the manifest, and `differs` split three ways** (`a042c82`).
   `STALE` / `LOCALLY EDITED` / `STALE and EDITED`, stated as fact rather than inferred from
@@ -44,15 +44,22 @@ because one of those rounds was pointed directly at the guards it lived in.
   against was never written by any install path, so it had drifted nineteen days from the
   files beside it. Shipping the field alone would have relocated the false accusation rather
   than removing it.
-- **Carry-forward can subtract attention — but it is not the whole story here.** Rounds 5 and
-  6 of `#278` carried an instruction of mine saying the isinstance degrade sites were already
-  mutation-pinned; true of the tests, false of the code, pinned for one case only. Round 4,
-  though, was aimed *at* those same guards — "whether each actually guards what it claims" —
-  and missed it too. So a wrong coverage claim removed two chances and something else removed
-  the first. Recorded on `#211`, which the `#209` decision below recommends: a carry-forward
+- **Carry-forward can subtract attention — but it is not the whole story here.** No total is
+  given, because this one has been miscounted twice and the enumeration is what holds. From
+  the archived launch briefs: the bug entered in the fix commit for round 4; **round 4's own
+  brief aimed at those guards** ("whether each actually guards what it claims") and missed it;
+  **rounds 5 and 6 named "the three isinstance degrade sites" as already covered**; **round 7
+  reviewed a prose-only delta under a blanket "everything else is already covered"**. So a
+  wrong coverage claim removed most of the chances and something else removed the one that was
+  aimed. Recorded on `#211`, which the `#209` decision below recommends: a carry-forward
   asserting coverage should have to name the test or mutation that establishes it.
+
+  **The briefs those figures come from are session scratch, not committed**, so a later reader
+  cannot re-derive this from the repo. `#280`'s merged body and commit message state it
+  differently again; treat this bullet as the account of record and that one as superseded.
 - **Both panel rounds on `#278` returned disjoint lens sets**; the first convergence came at
-  round 5. Direct evidence on the question `#209` turns on, recorded there.
+  round 5. Direct evidence on the question `#209` turns on — recorded on `#278` itself, not on
+  `#209`, which a review lens checked and found bare.
 - **The configured bot reviewed a minority of heads while its check went green on all of
   them.** Its check surface carries no signal about whether a review happened — occurrence and
   the per-head table on `#45`.
