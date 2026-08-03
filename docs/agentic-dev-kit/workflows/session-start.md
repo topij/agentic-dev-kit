@@ -26,7 +26,7 @@ Read `config/dev-model.yaml` first. In this workflow:
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Living handoff   | `<handoff>` — latest session block + every "Next:" / "Follow-ups:" trail                                                              |
 | Friction inbox   | `<friction-log>` — entries since the last "Backlog migrated" marker                                                                  |
-| Tracker backlog  | your tracker's list-issues command/script — project `tracker.project_name` (open only — drop `completed`/`canceled`)                     |
+| Tracker backlog  | your tracker's list-issues command/script — project `tracker.project_name` (open only — drop `completed`/`canceled`). Pass an explicit row limit *and* select fields; see the gather for why these are two separate limits and why a full page must be treated as truncated |
 | Open PRs         | `gh pr list` — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Pass an explicit `--limit`; see the gather for why a full page must be treated as truncated |
 | Working tree     | `git status --short` + `git branch --show-current` — unfinished business from last session                                              |
 | CI/cron health   | your cron/CI runner's status command (adapt to your infra — e.g. a wrapper script that logs recent job outcomes)                         |
@@ -72,7 +72,37 @@ like good news, it looks like a missing handoff.
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>` (focus: the **"Latest session"** block and its `Next:` / `Follow-ups:` lines, plus the top-of-file "Last updated" trail for the active sprint)
 - Read `<friction-log>` (the inbox — entries above the most-recent `## … — Backlog migrated to <tracker>` marker; everything below it is already ticketed)
-- **Tracker** (optional — if the script/key fails, note the gap and continue): a field-limited list-issues call against `tracker.project_name` (id/identifier/title/url/state/priority/updated — avoid pulling full descriptions, which is what makes a naive "dump everything" call routinely overflow a tool's token limit). Discard issues whose state type is `completed`/`canceled`, and print a compact table sorted urgent(1) → low(4) with no-priority(0) last. A missing/invalid config or missing tracker credential should exit non-zero with a clear message — treat any non-zero exit as the optional-tracker gap (note it and continue) — never act on a partial payload.
+- **Tracker** (optional — if the script/key fails, note the gap and continue): a
+  field-limited list-issues call against `tracker.project_name`
+  (id/identifier/title/url/state/priority/updated). Discard issues whose state type is
+  `completed`/`canceled`, and print a compact table sorted urgent(1) → low(4) with
+  no-priority(0) last. A missing/invalid config or missing tracker credential should
+  exit non-zero with a clear message — treat any non-zero exit as the optional-tracker
+  gap (note it and continue) — never act on a partial payload.
+
+  **The call has two independent limits, and using one against the other's failure
+  silently loses issues.** Field selection bounds the *bytes per row*; the row limit
+  bounds *how many rows*. Neither substitutes for the other:
+
+  - **Payload overflow** — pulling full descriptions is what makes a naive "dump
+    everything" call overflow a tool's token limit. The fix is to drop the body, never
+    to ask for fewer issues. Measured on this repo 2026-08-03 at 136 open issues, via
+    `gh issue list --state open --limit 500 --json … | wc -c`: with `body` ~386 KB;
+    the field list above ~49 KB; that same list rendered through a compact
+    one-line-per-issue `--template` ~18 KB. Field selection is what makes a
+    **complete** list affordable, which is why it comes first.
+  - **Silent truncation** — the same failure as the PR list above, and the worse of
+    the two, because the response is well-formed and the exit code is zero. Pass an
+    explicit limit above your real backlog (`gh issue list` defaults to **30**, and
+    `gh pr list` to 30 — both verified on gh 2.96.0), and if exactly `--limit` rows
+    come back, assume there are more and re-run higher.
+
+  Reaching for the wrong one is not hypothetical: `--limit 25` was adopted **in this
+  repo** as the remedy for the overflow above and carried in the handoff as "the form
+  that works here", while the backlog stood at 89 open issues. If your backend exposes
+  no field selection at all (the GitHub-Issues MCP tool does not), page it and
+  concatenate every page — shrinking the request to fit the tool is the mistake this
+  bullet exists to stop.
 
 ### 1 · Classify each candidate
 
