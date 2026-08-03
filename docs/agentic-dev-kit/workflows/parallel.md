@@ -145,7 +145,7 @@ deliberately:
    > follow it for this session — don't infer it from this kickoff, which is
    > task-specific, not the contract itself. Read tracker ticket `<ID>` (+ any recipe
    > in `<handoff>`). Pre-flight its premise against the live code before coding.
-   > Branch `dev/<scope>` is ready. **Suggested effort: `<tier>`**
+   > The branch printed by `new` is ready. **Suggested effort: `<tier>`**
    > (`<one-line risk reason>`) — set your session's model (and reasoning effort, if
    > your client exposes that control) accordingly before starting. Heads-up: a
    > parallel session owns `<other-area>` — if you need to touch `<shared-file>`,
