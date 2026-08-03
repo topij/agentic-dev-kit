@@ -14,13 +14,103 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-03 — **The first forked adapter is a pointer, and it earned its keep
-immediately.** cs-toolkit's `/session-start` now reads the kit's shared workflow
-(`in-parallel-oy/cs-toolkit@b33f2e90`), and its reviewer found a defect in *the kit's* text
-that was fixed once, upstream, and returned byte-identical. That loop is what the shared
-workflow exists for and could not happen while the adapter was a fork.
+Last updated: 2026-08-03 — **The fix was right in round one; everything that failed review was
+the evidence written around it.** A silent tracker truncation the operator hit in cs-toolkit is
+closed in both places it lived in the kit — and the durable result is what the review rounds
+found instead: not drifted restatements, but mechanisms asserted without being tested, stated
+beside verified claims at the same confidence.
 
-## Latest session — 2026-08-03 (the conversion proved itself, and the record kept outrunning the work)
+## Latest session — 2026-08-03 (the tracker gather, and a failure mode `#248` had not named)
+
+**Theme —** The shipped rule never changed after round one. Across **every** review round on
+`#260` and `#263`, each finding was in a claim written *about* the fix — and four of six were
+not restatements of anything, which is the shape `#248` currently does not describe. Both loops
+ended by **deleting** the claim that kept breaking rather than repairing it again.
+
+- **`#260` — `session-start`'s tracker gather gets a row limit** (`601a225`). Its PR bullet was
+  hardened in `e49ddf3`; the tracker bullet three lines below carried nothing, because
+  "field-limited" governs *which fields*, never *how many rows*. Field selection and the row
+  limit are separate controls, and the returned count is now suspect against **two** ceilings —
+  yours and the backend's.
+- **`#262` — the same gather in `parallel plan`** (`fd9506f`), by pointer rather than copy. A
+  truncation there does not shorten a briefing, it narrows the input to a set of isolated lanes,
+  and nothing downstream recovers the tickets past the cut.
+- **`#263` — prefer the backend's own has-more signal** (`56b42bf`). Row-count arithmetic is the
+  fallback, not the method. Evidence the previous PR could not have had: Linear at its schema
+  maximum answered `hasNextPage: true` — `#260`'s ceiling-equals-count case, reported outright
+  instead of inferred.
+- **`#258` — the handoff stops restating derived state** (`7546bdd`). The rule **replaced**
+  `wrap-up.md`'s "The invariant, not the figure" rather than joining it: that bullet is what
+  permitted the defect, since the stale line followed it exactly. This block is the rule's first
+  use.
+- **Filed:** `#264` (Jira's `nextPageToken` is an input, `endCursor` the output; the doc presents
+  them as symmetric with Linear's `cursor`), `#261` (filed and closed here), and **`CUS-1119`**
+  on cs-toolkit's own tracker. Occurrences on `#42`, `#44` (twice — the second retracts a fix the
+  first proposed), `#143`, `#179`, `#248` (twice).
+
+**Learned**
+
+- **The rule was never the defect.** Every finding was in the surrounding evidence — an untested
+  mechanism, a measurement that broke its own stated method, a citation to the wrong issue. What
+  ended both loops was removal: the byte-comparison row that drew defects in two consecutive
+  rounds was cut rather than repaired a third time.
+- **`#248` may be named too narrowly.** Its framing is a restated fact drifting from its owner.
+  The dominant failure here was an **inference presented as an observation** — "ask for 500 and
+  you get 100" when both cited clients reject; "one field set across all three" when the template
+  rendered four of six. A restatement has a source to diff against; an untested assertion has
+  none, which is why nothing catches it. Both instances were found by a lens that **called the
+  tool** rather than read its schema. Enumerated on `#248`.
+- **The operator asking "is that actually true?" was the cheapest intervention available**, and
+  it fired on two claims inherited from this repo's own archive — including "no MCP server is
+  configured in this checkout", which was false and was the premise of a whole paragraph.
+- **A rate-limited bot's stub carries the same commit-range marker as a real review.** On one PR
+  that marker sat beside a genuine clean review; on the next, beside "we couldn't start this
+  review". Zero review objects in both. The discriminator is the actionable-comments marker —
+  which `review.noise_markers` deliberately discards. `#44`.
+
+**Decided this session (operator)**
+
+- **Both `wrap-up` runtimes harmonize in one pass.** Nothing relies on cs-toolkit's Codex
+  `session-wrap-up` skill, so `#93`'s *compatibility* half is retired and the slug becomes a plain
+  rename. Its *content-recovery* half stands: those forked lines may hold knowledge the shared doc
+  lacks, so map before deleting.
+- **The "Filed this session" list stays.** An event is not a tally — the enumeration is
+  recoverable only by a dated tracker query; a count beside it is what recounts keep finding
+  wrong. Written into `wrap-up.md`'s rule.
+
+**cs-toolkit pre-flight — this changes the next step**
+
+Established by comparing `kit-manifest.json` against the live checkout, not assumed:
+
+- **`parallel.md` is not installed there**, so the standing "convert the `/parallel` adapter"
+  had no target to point at. Most of the manifest is likewise absent, including
+  `fallback-review-panel.md` and `safety-critical-changes.md` — sessions there have no panel
+  doctrine when a bot goes down.
+- **Its `session-start.md` is content-identical to kit `6bf4443` but byte-different** — a
+  markdown formatter reflowed tables and re-wrapped paragraphs. `kit_doctor` compares bytes, so
+  a formatter in an adopter makes kit-owned docs read as drifted permanently. Bears on `#51`.
+- **`CUS-1119`** — its `list_dev_backlog.py` caps at 40, does not page, and applies the cap
+  *before* filtering, against a Linear project whose size is on that ticket. The kit fix does not
+  reach it.
+
+**Open, and owned by nothing yet**
+
+- **Carried forward:** `#243` (still the precondition for the `triage-friction-log` /
+  `post-merge-systemize` conversions, not for `/parallel`), `#256`, `#248`, `#264`, `#236`,
+  `#231`, `#213`, `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`, `#124`, `#169`,
+  `#93`, `#143`.
+
+▶ Next: **cs-toolkit — install the shared workflows first, then convert `/parallel` and
+`/wrap-up` together.** Install at current `main`, not at whatever the repo last saw. Then
+`/parallel` (a ~200-line fork with its shared doc now present) and `/wrap-up` on **both**
+runtimes in one pass — `.claude/commands/wrap-up.md` and `.agents/skills/session-wrap-up/`,
+renaming that slug to `wrap-up`. Use the method `in-parallel-oy/cs-toolkit#1826` proved: map
+every section before deleting any, and contribute anything generic upstream first. Every
+conversion so far has found a kit bug the fork was hiding.
+
+______________________________________________________________________
+
+## Earlier session — 2026-08-03 (the conversion proved itself, and the record kept outrunning the work)
 
 **Theme —** Three kit PRs merged, one closed unmerged, one adopter converted. The durable
 result is not any of them: it is that **a claim written about work already done was wrong in
@@ -289,52 +379,6 @@ prose reviewed under the rule it reforms. **Read `#213`'s correction comment fir
 issue's original body says the `#37`/`#146` hazard is guarded by link tests added in `#207`; those
 tests were reverted before `#207` merged, which the correction comment records. So the split must add
 the new companion to `KIT_OWNED` and the manifest by hand — nothing fails if it does not.
-
-______________________________________________________________________
-
-## Earlier session — 2026-08-01 (the eighth sweep, configurable lens compute, and a panel that kept finding my own overclaims)
-
-**Theme —** Three merges: the eighth friction sweep (`#197`), the root-permission test change
-(`#199`, which settled `#195`), and configurable panel lens compute (`#200`). The durable result is
-none of those.
-It is that **every review pass this session found a false claim in work already verified**, and the
-claims shared one shape — a measurement or a correction, true when written, stale when published.
-
-- **`#198` filed — the Slack approval loop cannot be mechanically parsed.** Under a self-DM the
-  operator and the pipeline share one identity, so Session B's "replies from the bot itself" rule is
-  unevaluable; and the grammar has no "approve the rest" form, so the natural phrasing files nothing
-  while reporting success. Both halves, with separate acceptance criteria, are on `#198`.
-- **Sonnet lens compute is config now, not a per-run decision.**
-  `review.fallback_panel.lens_compute.<runtime>`, independent optional `model` / `effort`, consumed
-  on the Claude path by `pr_followup_hook.py` and on the Codex path by
-  `.agents/skills/pr-watch/SKILL.md`. **`effort` is advisory on Claude Code** — its delegation tool
-  has no per-agent effort parameter — and that caveat sits at all three surfaces because review
-  caught it missing from one. Existing installs do not gain the key on upgrade; the doctrine doc
-  says so.
-- **Reading the tracker before drafting changed two proposals again, both by subtraction** — third
-  sweep running. `#195` collapsed from a design question to two missing decorators once the marker
-  it asked for turned out to already exist, applied to four tests in the same file. Routing table
-  is on `#197`.
-
-**Learned**
-
-- **A correction must reach every surface at once, and I proved `#149` on myself.** Retracting an
-  `effort` overclaim in the reference config and the doctrine doc left `init.sh` — the one adopters
-  install from — carrying the retracted wording. Found by a lens that ran `init.sh` over a fixture
-  instead of reading the diff. Nothing would have caught it: `init.sh` is not in
-  `kit-manifest.json`.
-- **A test can name a property and pin nothing; the mutant is how you find out.** "This key is
-  load-bearing" rested on an append no test covered — deleting it left the suite green. The test
-  that now fails on that deletion exists only because a lens performed it. Per-finding dispositions
-  are on `#200`.
-- **A receipt can name a lens that never ran.** `--lenses` is a typed string the engine does not
-  verify (`#32`), and the cockpit can type it prematurely as easily as anyone. Inbox has it.
-- **Reverting a mutant with `git checkout --` discards uncommitted work in the same file.** The
-  panel doctrine already says mutate in an isolated copy; this is that hazard one level in, inside
-  the cockpit's own tree.
-
-▶ Next: `#193` — make `--mark-seen` print an excerpt of every key it promotes. Small, self-contained,
-and it demonstrated itself on every ack this session (each printed a bare count).
 
 ______________________________________________________________________
 
