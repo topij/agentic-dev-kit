@@ -119,6 +119,19 @@ like good news, it looks like a missing handoff.
     **page** — both clients above expose it (`nextPageToken`, `cursor`) — and keep
     fetching until a short page ends the data.
 
+    **If the response states whether more remain, that answer beats every count
+    above.** Row-count arithmetic is the fallback for a backend that tells you
+    nothing, and it is a heuristic that fails in both directions: it cannot fire at
+    all against a cap you do not know, and it raises a false alarm on a final page
+    that happens to be exactly full. A `has_next_page`-style field or a non-empty
+    next-page token is the backend answering the question directly, so neither
+    failure applies.
+    Linear's `list_issues` returns `hasNextPage` alongside its `cursor`; read it, and
+    keep paging while it is true rather than until a page looks short. Verified
+    2026-08-03 against a real project: at `limit: 250`, Linear's own maximum, the
+    response came back `hasNextPage: true` — the ceiling-equals-count case above,
+    reported outright by the backend instead of inferred.
+
   Reaching for the wrong one is not hypothetical: `--limit 25` was adopted **in this
   repo** as the remedy for the overflow above and carried in the handoff as "the form
   that works here", while the backlog stood at 89 open issues. Where field selection is
