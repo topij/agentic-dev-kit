@@ -4,6 +4,50 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-08-01 (the eighth sweep, configurable lens compute, and a panel that kept finding my own overclaims)
+
+**Theme —** Three merges: the eighth friction sweep (`#197`), the root-permission test change
+(`#199`, which settled `#195`), and configurable panel lens compute (`#200`). The durable result is
+none of those.
+It is that **every review pass this session found a false claim in work already verified**, and the
+claims shared one shape — a measurement or a correction, true when written, stale when published.
+
+- **`#198` filed — the Slack approval loop cannot be mechanically parsed.** Under a self-DM the
+  operator and the pipeline share one identity, so Session B's "replies from the bot itself" rule is
+  unevaluable; and the grammar has no "approve the rest" form, so the natural phrasing files nothing
+  while reporting success. Both halves, with separate acceptance criteria, are on `#198`.
+- **Sonnet lens compute is config now, not a per-run decision.**
+  `review.fallback_panel.lens_compute.<runtime>`, independent optional `model` / `effort`, consumed
+  on the Claude path by `pr_followup_hook.py` and on the Codex path by
+  `.agents/skills/pr-watch/SKILL.md`. **`effort` is advisory on Claude Code** — its delegation tool
+  has no per-agent effort parameter — and that caveat sits at all three surfaces because review
+  caught it missing from one. Existing installs do not gain the key on upgrade; the doctrine doc
+  says so.
+- **Reading the tracker before drafting changed two proposals again, both by subtraction** — third
+  sweep running. `#195` collapsed from a design question to two missing decorators once the marker
+  it asked for turned out to already exist, applied to four tests in the same file. Routing table
+  is on `#197`.
+
+**Learned**
+
+- **A correction must reach every surface at once, and I proved `#149` on myself.** Retracting an
+  `effort` overclaim in the reference config and the doctrine doc left `init.sh` — the one adopters
+  install from — carrying the retracted wording. Found by a lens that ran `init.sh` over a fixture
+  instead of reading the diff. Nothing would have caught it: `init.sh` is not in
+  `kit-manifest.json`.
+- **A test can name a property and pin nothing; the mutant is how you find out.** "This key is
+  load-bearing" rested on an append no test covered — deleting it left the suite green. The test
+  that now fails on that deletion exists only because a lens performed it. Per-finding dispositions
+  are on `#200`.
+- **A receipt can name a lens that never ran.** `--lenses` is a typed string the engine does not
+  verify (`#32`), and the cockpit can type it prematurely as easily as anyone. Inbox has it.
+- **Reverting a mutant with `git checkout --` discards uncommitted work in the same file.** The
+  panel doctrine already says mutate in an isolated copy; this is that hazard one level in, inside
+  the cockpit's own tree.
+
+▶ Next: `#193` — make `--mark-seen` print an excerpt of every key it promotes. Small, self-contained,
+and it demonstrated itself on every ack this session (each printed a bare count).
+
 ### 2026-08-01 (a documentation PR, and the defect it found in the merge gate)
 
 **Theme —** `#189` merged (`13afb19`) and settled `#174`: `kit_doctor.main`'s `--generate-manifest`
