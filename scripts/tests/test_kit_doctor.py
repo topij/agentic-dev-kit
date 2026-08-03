@@ -1683,11 +1683,17 @@ def test_from_kit_never_falls_back_to_recording_everything(tmp_path, capsys, mon
     check reads the source manifest's `files`; downstream, `None` is the
     sentinel for "no --from-kit given", which turns verification off.
 
-    **Exactly two of the seven bodies below reproduced that.** Evaluating the
-    pre-fix line over all seven: `{"kit_version": 2}` and `"files": null` yield
-    None and were the bug; a non-dict `files` yields the list or string itself,
-    and a non-dict TOP level never calls `.get` at all — those five were already
-    safe, degraded by `record_install_manifest`'s own dict check.
+    **Exactly two of the seven bodies below reproduced that**, and the other
+    five were already safe by TWO DIFFERENT routes — worth separating, because
+    an earlier version of this docstring credited one route for all five:
+
+    - `{"kit_version": 2}` and `"files": null` yield None. These were the bug.
+    - `"files": ["a"]` / `"files": "nope"` pass that list or string straight
+      through, and `record_install_manifest`'s own `isinstance(source_files,
+      dict)` refuses it.
+    - A non-dict TOP level never calls `.get` at all: the pre-fix line's own
+      `else {}` had already produced a real empty dict, so the check above
+      trivially passes and safety comes from the per-key lookup finding nothing.
 
     They are parametrized together anyway, as a boundary: the fix normalizes all
     seven to `{}`, and the five that were already safe are what keeps a future
