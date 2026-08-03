@@ -93,7 +93,8 @@ with an enumeration a grep can check. `#248`.
 - **Carried forward:** `#236` (now narrowed to engines/doctrine plus Step 5), `#231`, `#213`,
   `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#93`.
 
-▶ Next: **convert cs-toolkit's `/parallel` adapter** with the method `#1826` proved — map every
+▶ Next: **convert cs-toolkit's `/parallel` adapter** with the method
+`in-parallel-oy/cs-toolkit#1826` proved — map every
 section before deleting any, contribute anything generic upstream first, then run it. It is a
 200-line fork with a shared workflow already in the kit and no Codex counterpart, so it is the
 same single-runtime shape as the one just done. Each conversion so far has found a kit bug the
@@ -155,10 +156,9 @@ than build them, and not following that is what the rounds were spent on.
 
 **Open, and owned by nothing yet**
 
-- **`docs/kit-friction-log.md` is over budget** — `uv run scripts/check_doc_budget.py` prints the
-  live figure. `triage-friction-log` is the sweep; it needs tracker writes and operator approval.
-  Note `#143`. Nothing was added to the inbox this session: `#71` took the closing-keyword scan
-  occurrence, and the rest went straight to the tracker.
+- Nothing was added to the inbox this session: `#71` took the closing-keyword scan occurrence, and
+  the rest went straight to the tracker. Sweeping it needs `triage-friction-log`, which needs
+  tracker writes and operator approval. Note `#143`.
 - **Filed this session:** `#227`, `#228`, `#229`, `#231`, `#233`, `#234`, plus an occurrence on
   `#71`. `#233` is worth reading before touching test-tree resolution — it records three withdrawn
   attempts at the same problem.
@@ -221,14 +221,12 @@ prompt aimed lenses at, not how large the pass was.
 
 **Open, and owned by nothing yet**
 
-- **`docs/kit-friction-log.md` is over budget** — `uv run scripts/check_doc_budget.py` prints the
-  live figure. The `triage-friction-log` workflow is the sweep; it needs tracker writes and
+- Sweeping the inbox needs the `triage-friction-log` workflow, which needs tracker writes and
   operator approval, so it is not done inline. Note `#143`: the tracker is past the size where
   `session-start`'s tracker step overflows.
 - **Carried forward, all still open:** `#41` and `#134` cause 2 (the remaining Phase 2 blockers),
   `#213`, `#167`, `#209`, `#216`, `#220`, `#190`, `#187`, `#124`, `#169`, `#170`, `#33`/`#112`,
   `#181`, `#93`.
-- Budgets: `check_doc_budget.py` prints the live figures.
 
 ▶ Next: **`#220`** — sub-HIGH fixes, each already reproduced and specified on the issue, none
 larger than a few lines. Good standalone work that needs no design decision. If you would rather
@@ -283,7 +281,6 @@ as `#216`, because four consecutive rounds each found a regression introduced by
   restructure; `#205` is the standalone if there is room.
 - **Carried forward, all still open:** `#41` and `#134` cause 2 (the remaining Phase 2 blockers),
   `#190`, `#187`, `#124`, `#167`, `#169`, `#170`, `#33`/`#112`, `#181`, `#93`.
-- Budgets: `check_doc_budget.py` prints the live figures.
 
 ▶ Next: **`#213`** — read `fallback-review-panel.md` end to end and produce the split inventory
 (every section classified executes / explains, contract items enumerated) **before editing**. Decide

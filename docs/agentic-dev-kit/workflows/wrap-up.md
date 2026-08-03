@@ -30,10 +30,25 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    **Author record prose defensively** — review findings concentrate in
    narration of work already done, so write claims a later round cannot refute:
 
-   - **The invariant, not the figure.** No hand-written counts of your own work
-     (rounds run, tests added, lens runs): recounts have found them wrong,
-     and restated figures go stale. If a number matters, name the
-     command that prints the live one, or link the artifact that carries it.
+   - **If a command prints it, do not write it here.** The handoff carries what
+     cannot be recomputed — decisions, intent, why something was abandoned, what
+     a check does *not* establish, the `▶ Next:`. Everything a command owns —
+     line counts, budget status, open-issue tallies, and counts of your own work
+     (rounds run, tests added, lens runs) — is a second, hand-maintained copy
+     that can only go stale; recounts have repeatedly found those wrong.
+
+     **Naming the command instead of the number is not enough.** That is the
+     halfway fix, and it is the half that failed: *"over budget —
+     `check_doc_budget.py` prints the live figure"* drops the volatile figure and
+     keeps the volatile **judgement**, which was false within hours
+     ([#258](https://github.com/topij/agentic-dev-kit/issues/258)). Drop the
+     claim, not just the digits — `session-start` gathers these sources
+     first-hand before it could ever act on your summary of them.
+
+     **An event is not a tally.** "Filed this session: `#227`, `#228`" records
+     what happened and is worth keeping; "three issues filed" is a count, and a
+     count beside a list is the thing recounts keep finding wrong. Write the
+     enumeration, never a number next to it.
    - **A verification claim names its command and the directory it ran in.**
      "Verified" with neither is the claim a later review round exists to find.
    - **A "why this is safe" sentence cites a test that would fail if it were
