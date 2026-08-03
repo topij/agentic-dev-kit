@@ -1342,13 +1342,36 @@ def test_record_install_refuses_to_overwrite_a_release_manifest(tmp_path, capsys
     (panel, adversarial lens)."""
     root = _fake_repo(tmp_path)
     release = kit_doctor.generate_manifest(REPO_ROOT, 2)
-    assert any(e.get("required_by") for e in release["files"].values()), "fixture precondition"
     _write(root / "kit-manifest.json", json.dumps(release))
     before = (root / "kit-manifest.json").read_text()
     code = kit_doctor.main(["--record-install", "--root", str(root)])
     assert code == 2
-    assert "RELEASE manifest" in capsys.readouterr().err
+    assert "not written by --record-install" in capsys.readouterr().err
     assert (root / "kit-manifest.json").read_text() == before, "refused, and wrote nothing"
+
+
+def test_the_refusal_does_not_depend_on_required_by_existing(tmp_path, capsys):
+    """The guard's first version needed a `required_by` edge to recognise a
+    release manifest — but that is an emergent fact about today's import graph
+    (5 of 32 files have a dependent), not something `generate_manifest`
+    guarantees. Stripping those keys — which a kit losing its last shared
+    library would do on its own — made the guard silently stop firing and
+    reproduced the original destructive overwrite at exit 0 (panel, adversarial
+    lens).
+
+    A guard resting on an incidental property of the current codebase is not a
+    guard, so the signal is now the one thing that is exact: `--record-install`
+    always writes `kit_commit`, `generate_manifest` never does."""
+    root = _fake_repo(tmp_path)
+    release = kit_doctor.generate_manifest(REPO_ROOT, 2)
+    for entry in release["files"].values():
+        entry.pop("required_by", None)
+    assert not any(e.get("required_by") for e in release["files"].values())
+    _write(root / "kit-manifest.json", json.dumps(release))
+    before = (root / "kit-manifest.json").read_text()
+    assert kit_doctor.main(["--record-install", "--root", str(root)]) == 2
+    assert "not written by --record-install" in capsys.readouterr().err
+    assert (root / "kit-manifest.json").read_text() == before
 
 
 def test_a_real_baseline_is_still_overwritable(tmp_path):
@@ -1472,3 +1495,82 @@ def test_a_structurally_malformed_source_manifest_degrades_rather_than_traceback
     assert "scripts/check_doc_budget.py" in capsys.readouterr().err
     recorded = json.loads((root / "kit-manifest.json").read_text())
     assert recorded["files"] == {}, "nothing may be recorded as installed from an unusable source"
+
+
+@pytest.mark.parametrize(
+    "trusted,commit,differ,expect",
+    [
+        (True, "a" * 40, True, "installed from kit aaaaaaaaaaaa"),
+        (True, "a" * 40, False, "installed from kit aaaaaaaaaaaa"),
+        (True, None, True, "recorded, install provenance unknown"),
+        (True, None, False, "recorded, install provenance unknown"),
+        (False, None, True, "none recorded"),
+        (False, None, False, "none recorded"),
+    ],
+)
+def test_the_baseline_line_is_emitted_in_every_combination(
+    tmp_path, capsys, trusted, commit, differ, expect
+):
+    """Both skill docs tell the operator to read this line to confirm
+    `--record-install` ran, phrased as a two-way check. Two combinations printed
+    NOTHING — untrusted with zero mismatches, and trusted-without-provenance
+    with zero mismatches — so the documented check had a silent third outcome,
+    in exactly the case someone runs it (a clean install). And no test asserted
+    on the line at all: deleting the whole render block left the suite green
+    (panel, correctness lens)."""
+    root = _fake_repo(tmp_path)
+    rel = "scripts/check_doc_budget.py"
+    _write(root / rel, "on disk")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    ships = _sha("kit") if differ else _sha("on disk")
+    baseline = (
+        _baseline({rel: _sha("on disk")}, kit_commit=commit)
+        if trusted
+        else _manifest({rel: _sha("on disk")})
+    )
+    print(kit_doctor.render(kit_doctor.inspect(root, _manifest({rel: ships}), config, baseline)))
+    out = capsys.readouterr().out
+    line = [ln for ln in out.splitlines() if ln.startswith("  baseline:")]
+    assert line, "the documented signal must never be silently absent"
+    assert expect in line[0]
+
+
+def test_a_self_comparison_run_does_not_claim_the_kit_is_unchanged(tmp_path, capsys):
+    """The bare invocation resolves baseline and comparison to the same file, so
+    `recorded == expected` holds by construction and every mismatch is
+    `locally-edited` — which is CORRECT, since the baseline is what you
+    installed. What is not correct is the label's second clause, "and the kit's
+    version is unchanged": this run has no upstream in it at all and knows
+    nothing about the kit's copy (panel, adversarial lens)."""
+    root = _fake_repo(tmp_path)
+    rel = "scripts/check_doc_budget.py"
+    _write(root / rel, "edited after recording")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    same = _baseline({rel: _sha("as recorded")}, kit_commit="b" * 40)
+    report = kit_doctor.inspect(root, same, config, same, baseline_is_comparison=True)
+    assert next(f for f in report.files if f.path == rel).state == "locally-edited"
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+    assert "changed here since it was recorded" in out
+    assert "the kit's version is unchanged" not in out, "no upstream was consulted"
+    assert "compared against ITSELF" in out
+
+
+def test_an_upstream_comparison_still_claims_the_kit_is_unchanged(tmp_path, capsys):
+    """The discriminating half: when a real upstream manifest IS supplied, the
+    stronger claim is earned and must still be made."""
+    root = _fake_repo(tmp_path)
+    rel = "scripts/check_doc_budget.py"
+    _write(root / rel, "edited")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(
+        root,
+        _manifest({rel: _sha("kit")}),
+        config,
+        _baseline({rel: _sha("kit")}, kit_commit="c" * 40),
+    )
+    assert next(f for f in report.files if f.path == rel).state == "locally-edited"
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+    assert "the kit's version is unchanged" in out
+    assert "compared against ITSELF" not in out

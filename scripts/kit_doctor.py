@@ -74,7 +74,8 @@ Read-only when REPORTING. Two flags write, and each writes exactly one file:
 ``--generate-manifest`` produces the kit's release manifest and is for the kit's
 own checkout; ``--record-install`` produces an adopter's install baseline and is
 for an adopter. They are not interchangeable, and the second refuses to
-overwrite a release manifest — see ``record_install_manifest``.
+overwrite anything it did not write itself — see ``_was_written_by_record_install``
+for the signal and ``main``'s ``--record-install`` branch for the refusal.
 
 Usage:
     uv run scripts/kit_doctor.py                    # human report
@@ -465,6 +466,15 @@ class Report:
     # supported value — a retro-recorded baseline does not know its provenance —
     # and is why this must never be used as the trust signal.
     baseline_kit_commit: str | None = None
+    # True when the baseline and the comparison manifest are the same source —
+    # the bare `kit_doctor.py` invocation, where both default to
+    # `<root>/kit-manifest.json`. Then "differs from the kit" and "differs from
+    # what I installed" are the SAME comparison, so staleness is not merely
+    # unobserved, it is unobservABLE: `stale` and `stale-and-edited` cannot
+    # occur. Every mismatch is a local edit, which is correct — but the label's
+    # claim about the kit's own copy is not, and `render` drops it (panel,
+    # adversarial lens).
+    baseline_is_comparison: bool = False
     files: list[FileStatus] = field(default_factory=list)
 
     @property
@@ -676,31 +686,30 @@ def generate_manifest(root: Path, kit_version: int) -> dict:
     }
 
 
-def _is_release_manifest(candidate: object) -> bool:
-    """Whether this JSON looks like the kit's RELEASE manifest rather than an
-    install baseline — the file `--generate-manifest` writes, not the one
-    `--record-install` does.
+def _was_written_by_record_install(candidate: object) -> bool:
+    """Whether this JSON is a file `--record-install` wrote.
 
-    Two signals together, because neither alone is decisive: no ``kit_commit``
-    (which only `--record-install` writes), and at least one ``required_by``
-    entry (which only `generate_manifest` derives). A freshly created baseline
-    has the first and never the second.
+    ONE signal, and it is exact: `record_install_manifest` always emits the
+    ``kit_commit`` key (its value may be null; the key is not optional), and
+    `generate_manifest` never does. So the key's presence is a complete answer
+    to "did this mode write this file", not a heuristic.
 
-    This exists because `--record-install --root <the kit's own checkout>` is a
-    natural invocation that silently destroyed the committed release manifest:
-    it dropped every ``required_by`` edge — the whole basis of the
-    ``missing-required`` axis — and added the ``kit_commit`` key whose ABSENCE
-    from a release manifest is what stops a copied one from being trusted as a
-    baseline. So the mode defeated that invariant from the opposite side, with
-    a success message, and only the test suite caught it (panel, adversarial
-    lens). Nothing about the flags said which of the two writers you wanted.
+    An earlier version required a SECOND signal — at least one ``required_by``
+    entry — to classify a release manifest. That was the same mistake this whole
+    engine exists to stop: ``required_by`` is not a property `generate_manifest`
+    guarantees, it is an emergent fact about the current Python import graph
+    (today 5 of 32 kit-owned files have a dependent). A kit whose graph loses
+    its last shared-library edge produces a release manifest with no
+    ``required_by``, the guard silently stops recognising it, and
+    `--record-install --root <the kit's own checkout>` destroys it again — exit
+    0, success message, reproduced by the panel by stripping those keys from
+    the real manifest. A guard resting on an incidental property of today's
+    codebase is not a guard.
+
+    This is deliberately the SAME signal `_baseline_trusted` reads. One concept
+    — "a baseline is a file this mode wrote" — so the two cannot drift apart.
     """
-    if not isinstance(candidate, dict) or "kit_commit" in candidate:
-        return False
-    files = candidate.get("files")
-    if not isinstance(files, dict):
-        return False
-    return any(isinstance(e, dict) and e.get("required_by") for e in files.values())
+    return isinstance(candidate, dict) and "kit_commit" in candidate
 
 
 def _git_head(checkout: Path) -> str | None:
@@ -864,7 +873,14 @@ def _drift_state(actual: str, expected: str, recorded: str | None) -> tuple[str,
     )
 
 
-def inspect(root: Path, manifest: dict, config: dict, baseline: dict | None = None) -> Report:
+def inspect(
+    root: Path,
+    manifest: dict,
+    config: dict,
+    baseline: dict | None = None,
+    *,
+    baseline_is_comparison: bool = False,
+) -> Report:
     engines_dir = str(get(config, "paths.engines", KIT_ENGINE_PREFIX))
     manifest_files = manifest.get("files") or {}
     trusted = _baseline_trusted(baseline)
@@ -985,6 +1001,10 @@ def inspect(root: Path, manifest: dict, config: dict, baseline: dict | None = No
         hooks_installed=hooks_installed,
         narrative_rendered=narrative,
         baseline_trusted=trusted,
+        # Passed in rather than inferred from `baseline is manifest`: `main`
+        # knows it from the resolved PATHS, and identity would also be true for
+        # two separately-read files that happen to be equal dicts.
+        baseline_is_comparison=baseline_is_comparison and trusted,
         # Normalized to str-or-None. Trust keys on the KEY's presence, so any
         # JSON type survives it — and `render` slices this value, which would
         # raise TypeError on a number or a list and abort the whole report over
@@ -1080,22 +1100,33 @@ def render(report: Report) -> str:
         f"{n_absent} missing{absent_note}, "
         f"{len(by_state.get('unknown-version', []))} unknown"
     )
+    # ALWAYS emitted, in every combination. Both skill docs tell the operator to
+    # read this line to confirm `--record-install` actually ran — and two
+    # combinations used to print nothing at all (untrusted with zero mismatches;
+    # trusted-without-provenance with zero mismatches), so the documented check
+    # had a silent third outcome its two-way phrasing did not admit. A clean
+    # install is exactly when someone wants to confirm the record landed
+    # (panel, correctness lens).
     if report.baseline_trusted:
         origin = (
             f"installed from kit {report.baseline_kit_commit[:12]}"
             if report.baseline_kit_commit
-            else "install provenance not recorded"
+            else "recorded, install provenance unknown"
         )
-        # The "split by cause" clause is earned only when there is something to
-        # split. Without this the kit's own clean self-check advertised a
-        # breakdown of an empty set, pointing "below" at nothing.
-        if n_differ:
+        if report.baseline_is_comparison:
+            # No upstream in this run: the baseline IS the comparison, so a
+            # mismatch means "edited since I recorded it" and nothing at all is
+            # known about what the kit now ships.
+            lines.append(
+                f"  baseline: {origin} — compared against ITSELF, so staleness is not "
+                "evaluated."
+                "\n            Pass --manifest <kit checkout>/kit-manifest.json to see it."
+            )
+        elif n_differ:
             lines.append(f"  baseline: {origin} — mismatches below are split by cause")
-        elif report.baseline_kit_commit:
+        else:
             lines.append(f"  baseline: {origin}")
-    elif n_differ:
-        # Only when it changes what the report could have said. A clean install
-        # gains nothing from being told a baseline is missing.
+    else:
         lines.append(
             "  baseline: none recorded — cannot tell stale from locally edited."
             "\n            Run `kit_doctor.py --record-install --from-kit <kit checkout>`"
@@ -1173,8 +1204,17 @@ def render(report: Report) -> str:
         ),
         (
             "locally-edited",
-            "LOCALLY EDITED — changed here since install, and the kit's version is "
-            "unchanged. Move each edit into config/dev-model.yaml, then take the kit's copy",
+            (
+                # The second clause is a claim about the KIT's copy, and a
+                # self-comparison run has no information about it — there is no
+                # upstream in the comparison at all. Asserting it there is the
+                # overstatement class this repo files under #54.
+                "LOCALLY EDITED — changed here since it was recorded. Move each edit into "
+                "config/dev-model.yaml, then take the kit's copy"
+                if report.baseline_is_comparison
+                else "LOCALLY EDITED — changed here since install, and the kit's version is "
+                "unchanged. Move each edit into config/dev-model.yaml, then take the kit's copy"
+            ),
         ),
         (
             "stale-and-edited",
@@ -1286,11 +1326,11 @@ def main(argv: list[str] | None = None) -> int:
                 # tell, and overwriting a corrupt baseline is the point of
                 # re-recording. Fall through.
                 existing = None
-            if _is_release_manifest(existing):
+            if existing is not None and not _was_written_by_record_install(existing):
                 print(
-                    f"error: {baseline_path} looks like the kit's RELEASE manifest "
-                    "(no kit_commit, and it carries required_by edges), not an install "
-                    "baseline — refusing to overwrite it.",
+                    f"error: {baseline_path} was not written by --record-install "
+                    "(it carries no kit_commit key), so it is not an install baseline — "
+                    "refusing to overwrite it.",
                     file=sys.stderr,
                 )
                 print(
@@ -1448,7 +1488,8 @@ def main(argv: list[str] | None = None) -> int:
     # part of it that merely could not be refined. It IS reported, so the
     # degrade is visible rather than silent.
     baseline: dict | None = None
-    if baseline_path.resolve() == manifest_path.resolve():
+    baseline_is_comparison = baseline_path.resolve() == manifest_path.resolve()
+    if baseline_is_comparison:
         # Same file, already read. Re-reading would be a second chance to
         # disagree with itself if it changed underneath us mid-run.
         baseline = manifest
@@ -1460,7 +1501,9 @@ def main(argv: list[str] | None = None) -> int:
     if not isinstance(baseline, dict):
         baseline = None
 
-    report = inspect(root, manifest, config, baseline)
+    report = inspect(
+        root, manifest, config, baseline, baseline_is_comparison=baseline_is_comparison
+    )
 
     if args.json:
         print(
@@ -1482,6 +1525,7 @@ def main(argv: list[str] | None = None) -> int:
                     # whether or not a baseline was consulted, and a null commit
                     # is a legitimate recorded value rather than an absent one.
                     "baseline_trusted": report.baseline_trusted,
+                    "baseline_is_comparison": report.baseline_is_comparison,
                     "baseline_kit_commit": report.baseline_kit_commit,
                     "files": [
                         {"path": f.path, "role": f.role, "state": f.state, "detail": f.detail}

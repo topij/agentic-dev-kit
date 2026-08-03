@@ -133,9 +133,18 @@ before re-running, and never silence it by dropping the flag.
   independent reference, and it is also the only one carrying `required_by`, which is
   what makes the `missing-required` axis work at all.
 
-  Expect zero mismatches, `missing` containing only the pieces Step 2 deliberately left
-  out, and a `baseline:` line naming the kit commit. A `baseline: none recorded` line
-  means Step 3's `--record-install` did not run.
+  Expect zero mismatches and `missing` containing only the pieces Step 2 deliberately
+  left out.
+
+  **Then check the `baseline:` line by comparing the sha it prints**, not merely that it
+  is present. It reports what the baseline *claims*, so a leftover baseline from an
+  earlier attempt prints a real-looking line naming the wrong commit:
+
+  ```sh
+  git -C <kit checkout> rev-parse HEAD    # must match the sha on the baseline: line
+  ```
+
+  `baseline: none recorded` means Step 3's `--record-install` did not run at all.
 - Confirm the repo's CI/lint scope **skips** the kit files (or add a kit-dir exclude if lint is repo-wide).
 
 ## Step 5 — Record the friction (the flywheel's first turn)

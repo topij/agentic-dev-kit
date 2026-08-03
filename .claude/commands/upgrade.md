@@ -242,8 +242,18 @@ The one expected exception is a local patch you chose to keep in Step 3: it repo
 `LOCALLY EDITED`, which is the baseline working as intended. Name it in the PR body so
 the next upgrade does not re-litigate it.
 
-It should also now print a `baseline:` line naming the kit commit you installed from. If
-it still says `none recorded`, Step 4's `--record-install` did not run.
+It should also now print a `baseline:` line naming the kit commit you installed from —
+and **the sha it names has to be checked, not just the line's presence.** On a repeat
+upgrade the previous cycle's baseline is still on disk, so a skipped Step 4 prints a
+perfectly well-formed line naming the commit you upgraded from *last* time:
+
+```sh
+git -C /tmp/agentic-dev-kit rev-parse HEAD   # must match the sha on the baseline: line
+```
+
+`none recorded` means Step 4's `--record-install` never ran. A line reading `compared
+against ITSELF` means you invoked `kit_doctor` bare — that run has no upstream in it and
+cannot report staleness at all; re-run it with `--manifest` as shown above.
 
 > **Known gotcha:** the `state_paths` tests fail when run from inside a worktree carrying
 > a `.devkit_state_root` marker — the fixture neutralizes the environment but not marker
