@@ -127,13 +127,19 @@ deliberately:
 
    **Ground each lane brief in the ticket body, not in a summary of it.** Before drafting
    a lane's kickoff, read the ticket itself from your tracker. A brief written from
-   `<handoff>` or a plan summary is not acceptable while the ticket is reachable, and the
-   failure is silent in a specific way: a summary records what the ticket was *about*,
-   and what it drops is the enumerated deliverables. Those surface later — typically from
-   the tracker's own PR linkback — and get retrofitted mid-review, which is the expensive
-   moment to discover them. If the tracker read fails (missing key, backend down), do not
-   quietly fall back to the summary: say so **in the brief**, mark it summary-sourced, and
-   reconcile it against the linkback once that appears.
+   `<handoff>` or a plan summary is not acceptable while the ticket is reachable: a
+   summary is written to preserve what a ticket is *about*, so anything enumerated in the
+   body — an acceptance list, a second deliverable — is exactly what it is free to drop,
+   and the brief that results reads complete. The occurrence behind this rule is one
+   lane whose two named deliverables lived only in the ticket body and were retrofitted
+   mid-review; treat the mechanism as the general claim and that as its single instance.
+
+   If the tracker read fails (missing key, backend down), the hazard is the **silent
+   fallback**, not the failure — so do not quietly write the brief from the summary
+   anyway. Say so *in the brief* and mark it summary-sourced, which is what makes the gap
+   actionable by whoever reads it. Then reconcile it against the ticket as soon as the
+   tracker is reachable; if your forge and tracker post a linkback on the lane's PR, that
+   comment is an earlier and cheaper place to catch the difference.
 
    > Obtain the lane contract with `<engine-dir>/dev_session.sh print-contract` and
    > follow it for this session — don't infer it from this kickoff, which is
