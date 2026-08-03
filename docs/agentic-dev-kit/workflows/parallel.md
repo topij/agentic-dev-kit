@@ -125,6 +125,16 @@ deliberately:
    --merge-class <self|operator>` per chosen ticket (see below) and relay each copy-paste line **with a kickoff prompt**
    the operator pastes as the session's first message:
 
+   **Ground each lane brief in the ticket body, not in a summary of it.** Before drafting
+   a lane's kickoff, read the ticket itself from your tracker. A brief written from
+   `<handoff>` or a plan summary is not acceptable while the ticket is reachable, and the
+   failure is silent in a specific way: a summary records what the ticket was *about*,
+   and what it drops is the enumerated deliverables. Those surface later — typically from
+   the tracker's own PR linkback — and get retrofitted mid-review, which is the expensive
+   moment to discover them. If the tracker read fails (missing key, backend down), do not
+   quietly fall back to the summary: say so **in the brief**, mark it summary-sourced, and
+   reconcile it against the linkback once that appears.
+
    > Obtain the lane contract with `<engine-dir>/dev_session.sh print-contract` and
    > follow it for this session — don't infer it from this kickoff, which is
    > task-specific, not the contract itself. Read tracker ticket `<ID>` (+ any recipe
@@ -297,6 +307,17 @@ to run it in a new terminal; don't try to start the session yourself. Options:
 branches get their own namespace to avoid colliding with hand-named feature branches),
 `--branch <full>` to override the whole name. Omitting `--merge-class` fails safe to
 `operator`.
+
+**Git hooks need no per-lane setup, and trying to add it fails.** `git worktree` shares
+one hooks directory across the primary checkout and every lane — `git rev-parse
+--git-common-dir` from inside a lane resolves back to the primary checkout's `.git` — so
+whatever installs your hooks (`init.sh`, a `make` target) only ever runs **once**, in the
+primary checkout. A freshly created lane inherits them; there is nothing to install
+there. Do **not** run the hook-install step from inside a lane: a linked worktree's
+`.git` is a *file* holding a `gitdir:` pointer, not a directory, so the usual
+`mkdir -p .git/hooks` + symlink form fails against it. This matters here because the kit
+ships `pre-push` and lanes are worktrees, so the guard an adopter most wants on a lane is
+exactly the one the failed install would have skipped.
 
 ### Unattended / headless launch
 
