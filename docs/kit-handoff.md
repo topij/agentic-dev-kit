@@ -43,6 +43,9 @@ with an enumeration a grep can check. `#248`.
   was mapped before anything was deleted; the one with no home was contributed upstream as
   `#238` first. The conversion was **run**, not only mapped — the mapping and the run are on
   that PR.
+- **Ninth friction-log sweep** (`#257`, `e2e8719`). Fifteen entries routed: seven new issues
+  (`#250`–`#256`), five occurrence comments, two already tagged `#198`. CodeRabbit was
+  rate-limited, so the merge stands on a `fallback:panel` receipt rather than a bot review.
 
 **Learned**
 
@@ -62,14 +65,30 @@ with an enumeration a grep can check. `#248`.
 - **Half the kit is not thin** — four workflows exist only as Claude adapters with their
   doctrine inline and no Codex equivalent, so Codex can run half the kit by omission. This is
   what makes `#236`'s adapter half intractable and is now its precondition. `#243`.
+- **The record outran the work again, in the session that named it.** Two more position claims
+  were wrong — "four" sections where three was right, and a marker called first that is third —
+  both inside sentences citing `#224` *for the position problem*. The second survived because
+  the author repaired the visibly-broken clause and left the one needing a `grep`. Occurrence
+  data on `#248`, and evidence for its "stop restating the structure" direction over the other
+  two.
+
+**Decided this session (operator)**
+
+- **Branch patterns must uniquify within a day** — a second same-day run is the expected case,
+  not the edge one. All three patterns are `{date}`-only; `state/triage/frozen-inbox_2026-07-29-b.json`
+  is a hand-applied workaround from when triage hit it. Reproduced live today:
+  `gh pr view chore/update-handoff-2026-08-03` answers `#249 MERGED`, this morning's wrap-up.
+  Broadened onto `#256`; this session's own branch carries the `{date}-{time}` shape.
+- **The handoff stops restating derived state.** `session-start` already gathers the friction
+  log and grades its entries, so a budget line here is a second copy that can only go stale —
+  it did, on `#257`'s merge, and it was the only misleading line in this block. Rule: the
+  handoff carries what cannot be recomputed; if a command prints it, it belongs to the command.
+  `#258`.
 
 **Open, and owned by nothing yet**
 
-- **`docs/kit-friction-log.md` is over budget** — `uv run scripts/check_doc_budget.py` prints
-  the live figure. `triage-friction-log` is the sweep; it needs tracker writes and operator
-  approval. Note `#143`.
-- **Filed this session:** `#243`, `#245`, `#246`, `#248`, plus `#240` and `#241` (the three
-  withdrawn search recipes and the constraints any fourth must meet).
+- **Filed this session:** `#243`, `#245`, `#246`, `#248`, `#250`–`#256`, `#258`, plus `#240`
+  and `#241` (the three withdrawn search recipes and the constraints any fourth must meet).
 - **Carried forward:** `#236` (now narrowed to engines/doctrine plus Step 5), `#231`, `#213`,
   `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#93`.
 
