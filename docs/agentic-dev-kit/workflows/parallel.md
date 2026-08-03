@@ -81,6 +81,18 @@ deliberately:
    in `<handoff>`. If a `<focus>` argument was given (a
    theme, an area, or an explicit ticket list), scope to it.
 
+   **That call needs a row limit and field selection**, on the terms
+   [`session-start`'s tracker gather](session-start.md) sets out — they are separate
+   controls, and the row count is suspect against both your requested limit and the
+   backend's own maximum. Do not restate the rules here; follow them there. What is
+   specific to *this* gather is the consequence: a truncated briefing under-reports
+   and a human reads a short list, but a truncated batch plan silently narrows the
+   **input to a set of isolated lanes** — the tickets past the cut are not merely
+   unmentioned, they are not worked, and the batch reports success over the subset it
+   happened to see. Nothing downstream recovers them: clustering, the stale-premise
+   pre-flight and the disjointness test all reason over the candidates they were
+   handed, so a short list looks exactly like a small backlog.
+
 1. **Cluster by file footprint.** Group candidates by the files/dirs each one
    touches — read the ticket and grep the code when unsure; don't infer the footprint
    from the title. Present the clusters as a table. Within a cluster, pick **at most
