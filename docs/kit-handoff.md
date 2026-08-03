@@ -37,6 +37,8 @@ a repo with a fresh reviewer is the cheapest oracle found so far for finding the
   `#1831`** (`2ee66143`) converting it, 200 lines to 64.
 - **kit `#272` — the validation step** (`c7eb7ea`), and **cs-toolkit `#1832`** converting
   `/wrap-up` on both runtimes, 197 lines to 62, renaming the Codex slug.
+- **kit `#276` and cs-toolkit `#1833`** — the validation step demonstrated its own gap in the
+  commit that introduced it, and the repair. See below.
 - **Filed:** `#269`, `#270`, `#271`, `#273`, `#274` (the defect class above), plus an occurrence
   and a correction on `#61` and the fourth measurement on `#209`.
 
@@ -56,6 +58,13 @@ a repo with a fresh reviewer is the cheapest oracle found so far for finding the
   validation step had no upstream equivalent — seven distinctive phrases, zero hits.
 - **The panel found a false claim by executing it**, in a paragraph written while citing `#248`
   for that exact failure. Verifying the cheap sub-claims is not verifying the claim.
+- **Seeing an untracked file is not a control; staging by name is.** The validation step added
+  in `#272` was defeated on its first live use, in the same commit: `git add -A` swept 228 lines
+  of an adopter's uncommitted design note into a wrap-up PR, through review and merge. The
+  pre-commit check **did** list the file. It was read for intent — "pre-existing, not mine" —
+  rather than as a staging hazard, which is why "surface untracked files" would not have helped
+  and is the fix that was **not** shipped. `#276` bans wildcard adds in the workflow instead;
+  cs-toolkit `#1833` reverted the sweep, content verified byte-identical three ways.
 - **The panel's own contract has a write channel it forbids.** Two live incidents: a scratch
   clone whose `origin` pointed at the handed tree took a pushed ref, and a lens deleted this
   repo's installed `pre-push` after inferring from an untracked path that it had created it.
@@ -82,8 +91,12 @@ a repo with a fresh reviewer is the cheapest oracle found so far for finding the
 
 **Open, and owned by nothing yet**
 
-- **cs-toolkit's own `docs/handoff.md` was not updated for this session's work there.** Three
-  PRs landed in that repo and its living plan does not know. Its next session should start there.
+- **cs-toolkit's own wrap-up is in flight**, run through the newly converted `/wrap-up` so the
+  conversion gets an end-to-end exercise rather than only a review. Two things it cannot do:
+  its friction inbox is over budget with four un-graduated dated sections, and graduating them
+  needs tracker writes plus operator approval (`triage-friction-log`, a separate pass); and its
+  `chore/update-plan-<date>` convention already collided with an earlier PR the same day, which
+  is `#256` reproduced a third time.
 - **Carried forward:** `#243` (still the precondition for the `triage-friction-log` and
   `post-merge-systemize` conversions — those two are what remain of the adapter work), `#209`,
   `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`,
