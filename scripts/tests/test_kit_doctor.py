@@ -1683,14 +1683,19 @@ def test_from_kit_never_falls_back_to_recording_everything(tmp_path, capsys, mon
     check reads the source manifest's `files`; downstream, `None` is the
     sentinel for "no --from-kit given", which turns verification off.
 
-    So any shape that yields None from `.get("files")` silently converted the
-    strict mode into the permissive one — recording a file the adopter had all
-    along as kit-installed, exit 0, no warning, which a later run reports STALE
-    with "replace them, nothing local is lost". Found on a live adopter upgrade
-    (cs-toolkit#1835) after four review rounds had passed over the line.
+    **Exactly two of the seven bodies below reproduced that.** Evaluating the
+    pre-fix line over all seven: `{"kit_version": 2}` and `"files": null` yield
+    None and were the bug; a non-dict `files` yields the list or string itself,
+    and a non-dict TOP level never calls `.get` at all — those five were already
+    safe, degraded by `record_install_manifest`'s own dict check.
 
-    Parametrized across every shape that reaches the sentinel, because the bug
-    was introduced by a fix that handled one of them and not the rest."""
+    They are parametrized together anyway, as a boundary: the fix normalizes all
+    seven to `{}`, and the five that were already safe are what keeps a future
+    edit from re-splitting them. But the coverage claim is "two reproduce, five
+    bound them", not "every shape reaches the sentinel" — an earlier version of
+    this docstring said the latter, which is the same overstated-coverage class
+    that let the bug survive four rounds in the first place (panel, both lenses
+    converged on it)."""
     root = _fake_repo(tmp_path)
     _write(root / "scripts" / "check_doc_budget.py", "the adopter's own file, never installed")
     kit = tmp_path / "kit"

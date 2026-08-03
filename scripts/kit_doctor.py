@@ -1396,10 +1396,13 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             # TWO checks, and the second is what makes the first safe.
             #
-            # Outer: syntactically valid JSON whose top level is a list or a
-            # string has no `.get`, and AttributeError is not in the `except`
-            # above — so the tool tracebacked where every other malformed-input
-            # path in this file degrades (CodeRabbit, PR #278).
+            # Outer: syntactically valid JSON whose top level is anything
+            # other than an object — a list, string, number, bool or null — has
+            # no `.get`, and AttributeError is not in the `except` above, so the
+            # tool tracebacked where every other malformed-input path in this
+            # file degrades (CodeRabbit, PR #278). Stated as "not a dict" rather
+            # than by example: `isinstance` treats every non-dict alike, so an
+            # enumeration here can only go stale or read as exhaustive.
             #
             # Inner: `.get("files")` returns None for a dict with no `files`
             # key, or an explicit `"files": null` — and downstream, **None is
