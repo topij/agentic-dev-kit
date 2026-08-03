@@ -176,6 +176,14 @@ that installed nothing still shows no `missing-required`.
   - **Local edits that are genuinely ahead of the kit** — a fix made here first — are the
     one case to route *upstream* instead: open a PR against the kit rather than
     overwriting your better version.
+
+  **If you keep a local patch, do not leave it in place through Step 4.** Step 4 records
+  the baseline from the files as they sit, so a patch still applied here is recorded as
+  *what the kit installed* — and every later upgrade then reports that file `STALE`,
+  whose instruction is "replace it, nothing local is lost". The flag saying someone chose
+  that patch is destroyed by the step meant to protect it. Set the patch aside now (take
+  the kit's copy, keep the diff), let Step 4 record, then re-apply it. It will read
+  `LOCALLY EDITED` from then on, which is the whole point.
 - **`unknown-version`** → the manifest has no entry, so drift is unjudgeable. Treat as
   `differs` and diff by hand.
 

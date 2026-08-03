@@ -42,8 +42,25 @@ verifies it still holds. Per kit-owned file it reports one of:
     ``--generate-manifest`` time from the PYTHON import graph, not restated by
     hand. Shell ``source`` is deliberately NOT scanned — see
     `derive_dependencies` for the gap that leaves and why it is left open.
+``stale``
+    Byte-identical to what THIS repo installed (per its baseline — see
+    ``--record-install``), and different from what the kit ships. Nothing was
+    edited here; replace it. Only reachable with a trusted baseline.
+``locally-edited``
+    Changed here since install, while the kit's copy did not move. Reconcile
+    the edit into ``config/dev-model.yaml``, then take the kit's copy. Only
+    reachable with a trusted baseline.
+``stale-and-edited``
+    Changed on both sides. The only state that can lose work, so it is named
+    separately rather than folded into either single-sided one. Only reachable
+    with a trusted baseline.
 ``unknown-version``
     The manifest has no entry for this file, so drift can't be judged.
+
+The three states above are refinements of ``differs``, not lesser categories:
+they all count as drift, and all of them exit 1. Without a trusted baseline —
+one carrying ``kit_commit``, which only ``--record-install`` writes — every
+mismatch stays ``differs`` and no cause is claimed.
 
 Adopter-owned paths (the config, the narrative docs) are **never** compared —
 they are supposed to differ, and reporting them as drift would bury the signal.
@@ -53,20 +70,33 @@ layout (``scripts/…``), and comparison maps that prefix onto whatever the
 adopter configured, so a repo that vendored engines under ``scripts/devkit/``
 compares correctly without a rewritten manifest.
 
-Read-only. Never writes to the repo it inspects (``--generate-manifest`` writes
-only the manifest, and only when run in the kit's own checkout).
+Read-only when REPORTING. Two flags write, and each writes exactly one file:
+``--generate-manifest`` produces the kit's release manifest and is for the kit's
+own checkout; ``--record-install`` produces an adopter's install baseline and is
+for an adopter. They are not interchangeable, and the second refuses to
+overwrite a release manifest — see ``record_install_manifest``.
 
 Usage:
     uv run scripts/kit_doctor.py                    # human report
     uv run scripts/kit_doctor.py --json             # machine-readable
     uv run scripts/kit_doctor.py --generate-manifest  # (kit repo) refresh the manifest
+    uv run scripts/kit_doctor.py --record-install --from-kit <kit checkout>
+                                                    # (adopter) record the install baseline
+    uv run scripts/kit_doctor.py --manifest <kit checkout>/kit-manifest.json
+                                                    # compare against upstream, splitting
+                                                    # drift by cause
 
 Exit codes:
     0 — every kit-owned file is `unchanged` (or intentionally absent)
-    1 — at least one file `differs`, is `unknown-version`, or is
-        `missing-required`. The last one is not drift, but it is a broken
+    1 — at least one file `differs`, is `stale`, `locally-edited`,
+        `stale-and-edited`, `unknown-version`, or `missing-required`. The last
+        one is not drift, but it is a broken
         install, and the exit code an adopter gates CI on should not be green
         for a tree whose engines cannot load their own library.
+        Under ``--record-install`` this same code means the baseline was
+        written but some present kit-owned path was EXCLUDED from it — see that
+        mode's stderr list. Exiting 0 there would let a caller that reads only
+        the status code treat a partial record as a complete one.
     2 — usage error (no config, no manifest, unreadable input) — including a
         `kit.version` that is present but not a number. That is deliberately
         NOT a warning-and-exit-0: CI gates on this exit code, and a config the
@@ -646,6 +676,33 @@ def generate_manifest(root: Path, kit_version: int) -> dict:
     }
 
 
+def _is_release_manifest(candidate: object) -> bool:
+    """Whether this JSON looks like the kit's RELEASE manifest rather than an
+    install baseline — the file `--generate-manifest` writes, not the one
+    `--record-install` does.
+
+    Two signals together, because neither alone is decisive: no ``kit_commit``
+    (which only `--record-install` writes), and at least one ``required_by``
+    entry (which only `generate_manifest` derives). A freshly created baseline
+    has the first and never the second.
+
+    This exists because `--record-install --root <the kit's own checkout>` is a
+    natural invocation that silently destroyed the committed release manifest:
+    it dropped every ``required_by`` edge — the whole basis of the
+    ``missing-required`` axis — and added the ``kit_commit`` key whose ABSENCE
+    from a release manifest is what stops a copied one from being trusted as a
+    baseline. So the mode defeated that invariant from the opposite side, with
+    a success message, and only the test suite caught it (panel, adversarial
+    lens). Nothing about the flags said which of the two writers you wanted.
+    """
+    if not isinstance(candidate, dict) or "kit_commit" in candidate:
+        return False
+    files = candidate.get("files")
+    if not isinstance(files, dict):
+        return False
+    return any(isinstance(e, dict) and e.get("required_by") for e in files.values())
+
+
 def _git_head(checkout: Path) -> str | None:
     """Resolve a checkout's HEAD commit, or None if that is not answerable.
 
@@ -805,7 +862,15 @@ def inspect(root: Path, manifest: dict, config: dict, baseline: dict | None = No
     engines_dir = str(get(config, "paths.engines", KIT_ENGINE_PREFIX))
     manifest_files = manifest.get("files") or {}
     trusted = _baseline_trusted(baseline)
-    baseline_files = ((baseline or {}).get("files") or {}) if trusted else {}
+    # `isinstance`, not `or {}`: a non-empty list or string is truthy, so `or`
+    # passes it straight through to `.get` below and raises AttributeError,
+    # aborting the whole read-only diagnostic. That is the same
+    # degrade-don't-abort violation the `kit_commit` normalization exists to
+    # prevent, reached through the same trust gate — and the minimal hand-edit
+    # that turns trust ON (`"kit_commit": null`) is what makes this path
+    # reachable at all (panel, adversarial lens).
+    raw_baseline_files = (baseline or {}).get("files") if trusted else None
+    baseline_files = raw_baseline_files if isinstance(raw_baseline_files, dict) else {}
 
     # Presence of EVERY kit-owned file, resolved before the status loop: whether
     # a missing file is a broken install or a sized-down one is a question about
@@ -844,8 +909,14 @@ def inspect(root: Path, manifest: dict, config: dict, baseline: dict | None = No
             # the correct instruction even though the baseline is out of date.
             statuses.append(FileStatus(local_rel, role, "unchanged"))
         elif trusted:
+            # Same reason as `baseline_files` above: a per-file entry that is
+            # not a dict must degrade to "no baseline entry for this file"
+            # (which `_drift_state` handles) rather than crash the report.
+            recorded_entry = baseline_files.get(rel)
             state, detail = _drift_state(
-                actual, expected, (baseline_files.get(rel) or {}).get("sha256")
+                actual,
+                expected,
+                recorded_entry.get("sha256") if isinstance(recorded_entry, dict) else None,
             )
             statuses.append(FileStatus(local_rel, role, state, detail))
         else:
@@ -1197,6 +1268,32 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.record_install:
+        # Before anything else: refuse to overwrite a RELEASE manifest. Checked
+        # first because the damage is the write itself, and every later step
+        # here (version parse, HEAD resolution, hashing) is wasted if we are
+        # about to refuse anyway.
+        if baseline_path.is_file():
+            try:
+                existing = json.loads(baseline_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                # Unreadable is not a release manifest as far as this check can
+                # tell, and overwriting a corrupt baseline is the point of
+                # re-recording. Fall through.
+                existing = None
+            if _is_release_manifest(existing):
+                print(
+                    f"error: {baseline_path} looks like the kit's RELEASE manifest "
+                    "(no kit_commit, and it carries required_by edges), not an install "
+                    "baseline — refusing to overwrite it.",
+                    file=sys.stderr,
+                )
+                print(
+                    "hint: in the kit's own checkout you want --generate-manifest. In an "
+                    "adopter that copied the kit's manifest in, delete it first: a copied "
+                    "release manifest is not a baseline and is already ignored as one.",
+                    file=sys.stderr,
+                )
+                return 2
         raw_version = get(config, "kit.version", None)
         version = 2 if raw_version is None else _as_version(raw_version)
         if version is None:
@@ -1267,7 +1364,13 @@ def main(argv: list[str] | None = None) -> int:
                 "commit); only the 'how far behind upstream' question needs it.",
                 file=sys.stderr,
             )
-        return 0
+        # Non-zero when the record is PARTIAL. The baseline was written, so this
+        # is not a failure to write — it is "I did not record everything you
+        # have", and a caller that reads only the status code would otherwise
+        # treat a partial record as a complete one and move on. `/adopt` and
+        # `/upgrade` are agent-driven, which is exactly that caller (panel,
+        # adversarial lens).
+        return 1 if unverified else 0
 
     if args.generate_manifest:
         # An absent (or explicitly null) kit.version takes the documented

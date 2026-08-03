@@ -9,9 +9,14 @@ diagnosable at all:
 - the `engines_dir_ok` probe, which is what catches a configured engines
   directory containing no engine — the silent breakage where every workflow's
   `<engine-dir>/…` reference resolves to nothing.
-- `differs` never asserting a *cause*. A hash mismatch cannot tell an older kit
-  version from a hand-edit, and claiming "locally modified" sends someone
-  hunting for edits they never made.
+- `differs` never asserting a *cause* **without a trusted baseline**. A hash
+  mismatch alone cannot tell an older kit version from a hand-edit, and claiming
+  "locally modified" sends someone hunting for edits they never made. With a
+  baseline recording what this repo actually installed (`--record-install`,
+  #51), the cause stops being an inference: the mismatch splits into `stale` /
+  `locally-edited` / `stale-and-edited`, each a fact. The no-cause rule still
+  governs every report without one, which is every repo adopted before that
+  field existed.
 """
 
 from __future__ import annotations
@@ -1100,21 +1105,45 @@ def test_every_split_state_still_counts_as_drift(state):
 def test_the_count_line_totals_every_mismatch_state(tmp_path, capsys):
     """`N differ` must keep meaning "how many kit files are not what the kit
     ships" once the causes are split out, or a fully-split report reads as
-    `0 differ` with its files listed underneath."""
+    `0 differ` with its files listed underneath.
+
+    **All four mismatch states are present at once, on purpose.** An earlier
+    version built ONE file in ONE state and asserted `1 differ` — which cannot
+    detect a bug in the summation it is named for: dropping `stale-and-edited`
+    from `render`'s total left the whole suite green (panel, correctness lens,
+    mutation-confirmed). A total is only pinned by a case where the states it
+    sums are distinguishable from each other."""
     root = _fake_repo(tmp_path)
-    _write(root / "scripts" / "check_doc_budget.py", "mine")
-    rel = "scripts/check_doc_budget.py"
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    # Four kit-owned engines, one per mismatch state. Real KIT_OWNED paths so
+    # the remap and manifest lookup behave as in a live report.
+    cases = {
+        "scripts/check_doc_budget.py": ("here", _sha("kit"), _sha("here")),  # stale
+        "scripts/pr_watch.py": ("here", _sha("kit"), _sha("kit")),  # locally-edited
+        "scripts/dev_session.sh": ("here", _sha("kit"), _sha("third")),  # stale-and-edited
+        "scripts/panel_prompt.py": ("here", _sha("kit"), None),  # differs (not in baseline)
+    }
+    for rel, (content, _, _) in cases.items():
+        _write(root / rel, content)
     report = kit_doctor.inspect(
         root,
-        _manifest({rel: _sha("v1")}),
+        _manifest({rel: ships for rel, (_, ships, _) in cases.items()}),
         config,
-        _baseline({rel: _sha("v1")}),
+        _baseline({rel: rec for rel, (_, _, rec) in cases.items() if rec is not None}),
     )
+    states = {f.path: f.state for f in report.files}
+    assert states["scripts/check_doc_budget.py"] == "stale"
+    assert states["scripts/pr_watch.py"] == "locally-edited"
+    assert states["scripts/dev_session.sh"] == "stale-and-edited"
+    assert states["scripts/panel_prompt.py"] == "differs"
     print(kit_doctor.render(report))
     out = capsys.readouterr().out
-    assert next(ln for ln in out.splitlines() if ln.startswith("  files:")).count("1 differ") == 1
-    assert "LOCALLY EDITED" in out
+    # The property: the total equals the number of mismatches, across all four
+    # states. Dropping any one from `render`'s sum makes this 3.
+    assert next(ln for ln in out.splitlines() if ln.startswith("  files:")).count("4 differ") == 1
+    assert len(report.drifted) == 4
+    for label in ("STALE", "LOCALLY EDITED", "STALE **and** LOCALLY EDITED"):
+        assert label in out
 
 
 def test_record_install_hashes_the_installed_files_not_the_kit(tmp_path):
@@ -1303,3 +1332,127 @@ def test_an_unreadable_source_manifest_refuses_rather_than_recording_everything(
     assert code == 2
     assert "cannot read" in capsys.readouterr().err
     assert not (root / "kit-manifest.json").exists()
+
+
+# --- what the fallback review panel found on PR #278 -----------------------
+
+
+def test_record_install_refuses_to_overwrite_a_release_manifest(tmp_path, capsys):
+    """`--record-install --root <the kit's own checkout>` is a natural
+    invocation, and it silently destroyed the committed release manifest: every
+    `required_by` edge gone (the basis of the `missing-required` axis), plus a
+    `kit_commit` key whose ABSENCE from a release manifest is what stops a
+    copied one being trusted as a baseline. The mode defeated that invariant
+    from the opposite side, printed a success line, and only the suite caught it
+    (panel, adversarial lens)."""
+    root = _fake_repo(tmp_path)
+    release = kit_doctor.generate_manifest(REPO_ROOT, 2)
+    assert any(e.get("required_by") for e in release["files"].values()), "fixture precondition"
+    _write(root / "kit-manifest.json", json.dumps(release))
+    before = (root / "kit-manifest.json").read_text()
+    code = kit_doctor.main(["--record-install", "--root", str(root)])
+    assert code == 2
+    assert "RELEASE manifest" in capsys.readouterr().err
+    assert (root / "kit-manifest.json").read_text() == before, "refused, and wrote nothing"
+
+
+def test_a_real_baseline_is_still_overwritable(tmp_path):
+    """The other direction: re-recording over a previous baseline is the
+    supported path and must not be caught by the guard above."""
+    root = _fake_repo(tmp_path)
+    _write(root / "kit-manifest.json", json.dumps(_baseline({"scripts/pr_watch.py": _sha("x")})))
+    assert kit_doctor.main(["--record-install", "--root", str(root)]) == 0
+    assert json.loads((root / "kit-manifest.json").read_text())["kit_commit"] is None
+
+
+@pytest.mark.parametrize("bad_files", [["oops"], "oops", 7])
+def test_a_baseline_whose_files_is_not_a_dict_degrades(tmp_path, bad_files, capsys):
+    """Trust keys on `kit_commit`'s presence, so the minimal hand-edit that
+    turns the split ON is also what made this path reachable — and it raised
+    AttributeError, aborting the whole read-only diagnostic. Same
+    degrade-don't-abort rule the `kit_commit` normalization already obeyed,
+    reached through the same gate (panel, adversarial lens)."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "installed")
+    rel = "scripts/check_doc_budget.py"
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(
+        root, _manifest({rel: _sha("kit")}), config, {"kit_commit": None, "files": bad_files}
+    )
+    assert next(f for f in report.files if f.path == rel).state == "differs"
+    print(kit_doctor.render(report))  # must not raise
+    assert "differ" in capsys.readouterr().out
+
+
+def test_a_baseline_entry_that_is_not_a_dict_degrades(tmp_path):
+    """Same hazard one level down: `files` is a dict but an entry is not."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "installed")
+    rel = "scripts/check_doc_budget.py"
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(
+        root,
+        _manifest({rel: _sha("kit")}),
+        config,
+        {"kit_commit": None, "files": {rel: "not-a-dict"}},
+    )
+    assert next(f for f in report.files if f.path == rel).state == "differs"
+
+
+def test_a_partial_record_exits_nonzero_and_names_what_it_left_out(tmp_path, capsys):
+    """The stderr warning had zero coverage through `main`, and the mode exited
+    0 regardless — so an agent-driven /adopt or /upgrade reading only the status
+    code would treat a partial record as complete (panel, adversarial lens)."""
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    _write(root / "scripts" / "devkit" / "check_doc_budget.py", "the adopter's own file")
+    kit = tmp_path / "kit"
+    (kit / ".git").mkdir(parents=True)
+    _write(
+        kit / "kit-manifest.json",
+        json.dumps({"files": {"scripts/check_doc_budget.py": {"sha256": _sha("the kit's")}}}),
+    )
+    real_head = kit_doctor._git_head
+    kit_doctor._git_head = lambda p: "d" * 40
+    try:
+        code = kit_doctor.main(["--record-install", "--root", str(root), "--from-kit", str(kit)])
+    finally:
+        kit_doctor._git_head = real_head
+    err = capsys.readouterr().err
+    assert code == 1, "a partial record must not report success"
+    # Named by its LOCAL path, which is what the operator has to go look at —
+    # the kit-layout key would send them to a directory that does not exist here.
+    assert "scripts/devkit/check_doc_budget.py" in err
+    assert "scripts/check_doc_budget.py\n" not in err
+
+
+def test_the_kit_bug_nudge_fires_on_a_trusted_local_edit(tmp_path, capsys):
+    """`show_nudge`'s trusted branch was unpinned: hardcoding it False left the
+    suite green (panel, adversarial lens). The nudge is the only place the
+    report tells an adopter that editing an engine is a kit bug worth
+    reporting."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "edited here")
+    rel = "scripts/check_doc_budget.py"
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    edited = kit_doctor.inspect(
+        root, _manifest({rel: _sha("kit")}), config, _baseline({rel: _sha("kit")})
+    )
+    assert next(f for f in edited.files if f.path == rel).state == "locally-edited"
+    print(kit_doctor.render(edited))
+    assert "Engines are kit-owned" in capsys.readouterr().out
+
+
+def test_the_kit_bug_nudge_stays_silent_when_the_file_is_only_stale(tmp_path, capsys):
+    """The discriminating half. A stale file is not an edit, so telling its
+    owner they may have found a kit bug is noise — and a nudge that fired on
+    everything would satisfy the test above without pinning anything."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "installed")
+    rel = "scripts/check_doc_budget.py"
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    stale = kit_doctor.inspect(
+        root, _manifest({rel: _sha("kit")}), config, _baseline({rel: _sha("installed")})
+    )
+    assert next(f for f in stale.files if f.path == rel).state == "stale"
+    print(kit_doctor.render(stale))
+    assert "Engines are kit-owned" not in capsys.readouterr().out
