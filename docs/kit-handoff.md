@@ -23,9 +23,10 @@ beside verified claims at the same confidence.
 ## Latest session — 2026-08-03 (the tracker gather, and a failure mode `#248` had not named)
 
 **Theme —** The shipped rule never changed after round one. Across **every** review round on
-`#260` and `#263`, each finding was in a claim written *about* the fix — and four of six were
-not restatements of anything, which is the shape `#248` currently does not describe. Both loops
-ended by **deleting** the claim that kept breaking rather than repairing it again.
+`#260` and `#263`, each finding was in a claim written *about* the fix — and the dominant shape
+was not a drifted restatement but an inference presented as an observation, which `#248` does
+not currently describe. Both loops ended by **deleting** the claim that kept breaking rather
+than repairing it again.
 
 - **`#260` — `session-start`'s tracker gather gets a row limit** (`601a225`). Its PR bullet was
   hardened in `e49ddf3`; the tracker bullet three lines below carried nothing, because
@@ -45,15 +46,15 @@ ended by **deleting** the claim that kept breaking rather than repairing it agai
   use.
 - **Filed:** `#264` (Jira's `nextPageToken` is an input, `endCursor` the output; the doc presents
   them as symmetric with Linear's `cursor`), `#261` (filed and closed here), and **`CUS-1119`**
-  on cs-toolkit's own tracker. Occurrences on `#42`, `#44` (twice — the second retracts a fix the
-  first proposed), `#143`, `#179`, `#248` (twice).
+  on cs-toolkit's own tracker. Occurrences on `#42`, `#44` (where a later comment retracts a fix
+  an earlier one proposed), `#143`, `#179`, `#248`.
 
 **Learned**
 
 - **The rule was never the defect.** Every finding was in the surrounding evidence — an untested
   mechanism, a measurement that broke its own stated method, a citation to the wrong issue. What
-  ended both loops was removal: the byte-comparison row that drew defects in two consecutive
-  rounds was cut rather than repaired a third time.
+  ended both loops was removal: the byte-comparison row that drew defects in consecutive rounds
+  was cut rather than repaired again.
 - **`#248` may be named too narrowly.** Its framing is a restated fact drifting from its owner.
   The dominant failure here was an **inference presented as an observation** — "ask for 500 and
   you get 100" when both cited clients reject; "one field set across all three" when the template
@@ -61,7 +62,7 @@ ended by **deleting** the claim that kept breaking rather than repairing it agai
   none, which is why nothing catches it. Both instances were found by a lens that **called the
   tool** rather than read its schema. Enumerated on `#248`.
 - **The operator asking "is that actually true?" was the cheapest intervention available**, and
-  it fired on two claims inherited from this repo's own archive — including "no MCP server is
+  it fired on claims inherited from this repo's own archive — including "no MCP server is
   configured in this checkout", which was false and was the premise of a whole paragraph.
 - **A rate-limited bot's stub carries the same commit-range marker as a real review.** On one PR
   that marker sat beside a genuine clean review; on the next, beside "we couldn't start this
