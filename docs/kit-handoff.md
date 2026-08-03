@@ -43,9 +43,10 @@ with an enumeration a grep can check. `#248`.
   was mapped before anything was deleted; the one with no home was contributed upstream as
   `#238` first. The conversion was **run**, not only mapped — the mapping and the run are on
   that PR.
-- **Ninth friction-log sweep** (`#257`, `e2e8719`). Fifteen entries routed: seven new issues
-  (`#250`–`#256`), five occurrence comments, two already tagged `#198`. CodeRabbit was
-  rate-limited, so the merge stands on a `fallback:panel` receipt rather than a bot review.
+- **Ninth friction-log sweep** (`#257`, `e2e8719`). Fifteen entries routed: seven into new
+  issues (`#250`–`#256`), six into five occurrence comments (two entries shared one comment on
+  `#205`), two already tagged `#198`. Twelve writes, fifteen entries — not the same number.
+  CodeRabbit was rate-limited, so the merge stands on a `fallback:panel` receipt.
 
 **Learned**
 
