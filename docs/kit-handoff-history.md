@@ -4,6 +4,74 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-08-02 (Phase 2's blockers closed, and withdrawal beating repair)
+
+**Theme —** Two PRs merged and one closed unmerged. In all three, the expensive part was a
+mechanism *added in response to a review finding* — the doctrine already says to file those rather
+than build them, and not following that is what the rounds were spent on.
+
+- **`#41` — the required/optional manifest axis** (`ee3371d`). `kit-manifest.json` gains
+  `required_by`, derived from the Python import graph rather than declared, so `/upgrade` stops
+  filing a hard dependency under "sized-down adoption, or incomplete". It is a **mapping, not a
+  boolean**: "required" is a property of a pair, so `lib/kitconfig.py` breaks a repo that installed
+  an engine and is a legitimate omission for one that installed none.
+- **`#134` cause 2 and `#226`** (`3e34fe5`). A `kit_repo_only` marker in the conftest that travels
+  with the tests, skipping on the paths a test actually needs. Before it, a by-the-book `/adopt`
+  tree ran **zero** tests — `test_panel_prompt.py` read the doctrine at module scope and collection
+  aborted. The per-tree figures and their vendored subsets are in that PR's commits; a count
+  without its tree identifies nothing.
+- **`#230` closed unmerged.** A recovery rule for the panel's filing rule, dropped under its own
+  pre-declared threshold when round 1 returned HIGHs from both lenses and the bot. Refiled as
+  `#231` with every finding and the design questions they exposed.
+- **`/upgrade` dry-run against a throwaway copy of cs-toolkit**, kit at `3e34fe5`. It **succeeds** —
+  `kit_doctor` reports 32 unchanged, 0 differ, 0 missing, hook installed — and that is the finding:
+  cs-toolkit's six Claude adapters all diverge from the kit's, the four measured reference no shared
+  workflow doc, Step 4 says to keep them, and no `.claude/` path is in `KIT_OWNED` so nothing can
+  report it. Step 5's own
+  verification then runs zero tests, because test files never reach an adopter. `#236`. Live
+  occurrences also recorded on `#51` (an older kit reported as "likely LOCAL EDITS") and `#93` (the
+  slug mismatch installs the kit's skill *beside* the fork rather than replacing it).
+
+**Learned**
+
+- **The doctrine has prevention but no recovery.** "A new mechanism gets filed, however squarely a
+  finding prompted it" is already in `fallback-review-panel.md`, and each expensive PR this session
+  broke it. What it lacks is what to do once the mechanism is already in the diff and drawing
+  HIGHs, where the default — patch again — is what turns two rounds into five. `#231`.
+- **Withdrawal is the cheapest round available.** A shell-`source` scanner (`#228`) and a
+  no-`.git` root guess (`#233`) were each removed rather than repaired after successive rounds found
+  a fresh HIGH in the previous round's fix, and the round that removed them came back clean. Removal
+  deletes surface instead of adding more for the next round to find.
+- **A pre-declared threshold must be calibrated, and is binding either way.** `#230`'s fired on one
+  HIGH at round 1, before any fix existed — stricter than the rule it was protecting, and it cost
+  that PR. Honouring it anyway is the only thing that makes the mechanism worth having.
+- **Claiming a test pins a guard is not the same as it pinning one.** This recurred across both
+  merged PRs, each time verified false by deleting the guard and watching the suite stay green.
+  `#229` and `#234` carry the instances; the check is to delete the thing, and it was skipped
+  exactly where confidence was highest.
+- **A measurement can be blind to its own subject.** The vendored trees are built from
+  `git ls-files`, so a run taken before the new test file was tracked omitted the file under test
+  and reported a clean result that was not. Build the tree from committed state.
+
+**Open, and owned by nothing yet**
+
+- Nothing was added to the inbox this session: `#71` took the closing-keyword scan occurrence, and
+  the rest went straight to the tracker. Sweeping it needs `triage-friction-log`, which needs
+  tracker writes and operator approval. Note `#143`.
+- **Filed this session:** `#227`, `#228`, `#229`, `#231`, `#233`, `#234`, plus an occurrence on
+  `#71`. `#233` is worth reading before touching test-tree resolution — it records three withdrawn
+  attempts at the same problem.
+- **Carried forward:** `#213`, `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`,
+  `#124`, `#169`, `#170`, `#33`/`#112`, `#181`, `#93`.
+
+▶ Next: **`#236`** — decide the adapter policy before running the cs-toolkit upgrade for real. The
+file-copy half is proven: the dry run installed all 32 files cleanly. What is unresolved is that the
+upgrade leaves the executed surface — the six forked `.claude/commands/` adapters — untouched while
+reporting success, so a green upgrade changes nothing about how sessions behave. `#93` is one
+instance of the same thing on the Codex side. Neither is a kit bug to fix first; both are decisions
+that shape the upgrade plan. `#231` (the withdraw-don't-patch rule) is real but gates `#6`'s
+vendoring, not this upgrade — a file copy has no mechanism to invent.
+
 ### 2026-08-02 (the doctrine split, the assembler that reads it, and where review yield actually comes from)
 
 **Theme —** `#213` and `#214` merged. Neither result is the durable one. Across both PRs the

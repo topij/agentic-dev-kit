@@ -14,13 +14,85 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-03 — **Prose that is correct where it is written and false where it is
-read.** Three adapters converted across two repos. Five separate defects this session were the
-same shape, and it is not `#248`'s: not a restatement drifting from its owner, but a sentence
-true in the repo that authored it and false in the repo that installs it. Docs that ship into
-other repositories have a failure mode single-repo prose does not.
+Last updated: 2026-08-03 — **The review lever that hid a bug.** `#51`'s local half shipped,
+and then an adopter's reviewer found a defect in it that three later review rounds had read
+without seeing — one aimed straight at the guards it lived in, two told by an instruction of
+mine that they were already covered. Aim moves finding-yield, which is why `#209` now
+recommends it; a wrong coverage claim moves it the other way.
 
-## Latest session — 2026-08-03 (three conversions, and a defect class that only exists in shipped docs)
+## Latest session — 2026-08-03 (the aim lever, and the bug three rounds read without seeing)
+
+**Theme —** `#51`'s local half shipped, and the durable result is not the feature. What cost
+more to learn than the code did is about *review*: an adopter upgrade found a defect that
+three later rounds had read without seeing — and the two cheapest explanations both fail,
+because one of those rounds was pointed directly at the guards it lived in.
+
+- **`#278` — `kit_commit` in the manifest, and `differs` split three ways** (`a042c82`).
+  `STALE` / `LOCALLY EDITED` / `STALE and EDITED`, stated as fact rather than inferred from
+  `kit.version`, which tracks the config schema and so never moved when kit files did.
+- **`#280` — the fix that reopened the hole** (`d3faafb`). `#278`'s round-3 change replaced
+  `.get("files") or {}` with an isinstance check and dropped the `None` handling; `None` is
+  the sentinel for "no `--from-kit`", so verification silently switched off. Found by
+  cs-toolkit's reviewer one commit after `#278` merged.
+- **cs-toolkit upgraded** to the fixed kit, which was the first real use of `--record-install`
+  and is where `#283` was found.
+
+**Learned**
+
+- **The design premise was wrong, and only measuring the adopter showed it.** `#51`'s comment
+  said the local column "is already computed today". It is computed; the baseline it computes
+  against was never written by any install path, so it had drifted nineteen days from the
+  files beside it. Shipping the field alone would have relocated the false accusation rather
+  than removing it.
+- **Carry-forward can subtract attention — but it is not the whole story here.** Rounds 5 and
+  6 of `#278` carried an instruction of mine saying the isinstance degrade sites were already
+  mutation-pinned; true of the tests, false of the code, pinned for one case only. Round 4,
+  though, was aimed *at* those same guards — "whether each actually guards what it claims" —
+  and missed it too. So a wrong coverage claim removed two chances and something else removed
+  the first. Recorded on `#211`, which the `#209` decision below recommends: a carry-forward
+  asserting coverage should have to name the test or mutation that establishes it.
+- **Both panel rounds on `#278` returned disjoint lens sets**; the first convergence came at
+  round 5. Direct evidence on the question `#209` turns on, recorded there.
+- **The configured bot reviewed a minority of heads while its check went green on all of
+  them.** Its check surface carries no signal about whether a review happened — occurrence and
+  the per-head table on `#45`.
+- **A guard resting on an incidental property is not a guard.** `#278`'s first
+  release-manifest check needed a `required_by` edge to fire, which is an accident of the
+  current import graph. A lens called it fragile; cs-toolkit's real manifest then turned out
+  to have none, so the original guard would have missed the live case.
+
+**Decided this session (operator)**
+
+- **`#209` — no proportionality valve.** None of directions 1–4 adopted, each refuted by a
+  counter-example from a different PR; the issue body's recommendation of direction 1 is
+  struck so a reader of the body cannot act on it. Next moves are `#211` then `#120`, both
+  aimed at the finding *population* rather than the pass size.
+- **Kit findings surfaced in an adopter route upstream, not into the adopter's PR.** A local
+  edit to a kit-owned file reports `LOCALLY EDITED` on every later upgrade, which is the
+  signal the baseline exists to give.
+
+**Filed this session:** `#279`, `#281`, `#282`, `#283`; occurrences on `#45`, `#211`, `#270`.
+
+**Open, and owned by nothing yet**
+
+- **`#243` is still the precondition** for the `triage-friction-log` and
+  `post-merge-systemize` conversions — the two that remain of the adapter work.
+- **cs-toolkit's friction inbox is over budget with un-graduated dated sections.** Needs
+  tracker writes plus operator approval, so it is `triage-friction-log`'s job and not a
+  wrap-up's.
+- **Carried forward:** `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#120`, `#216`, `#220`,
+  `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`#283`** — one paragraph in `/upgrade` Step 4 saying a copied release manifest must
+be removed before `--record-install`, and that the mode exits 1 on a partial record. It is the
+smallest of the four filed today, it is on the path every pre-`#51` adopter takes on their
+next upgrade, and the fix is prose in a file that is already `/upgrade`-refreshed. `#281` is
+the next-largest and is a real guard defect, but it needs a test over the near-miss keys
+rather than a wording change.
+
+______________________________________________________________________
+
+## Earlier session — 2026-08-03 (three conversions, and a defect class that only exists in shipped docs)
 
 **Theme —** `/session-start` was already converted; this session did the rest. `/parallel` and
 `/wrap-up` now point at shared workflows, `/wrap-up` on **both** runtimes. The durable result is
@@ -287,76 +359,6 @@ fork was hiding; that is the reason to keep going rather than to batch them. `wr
 one to leave for later — it carries `#93`'s Codex slug mismatch, and
 `triage-friction-log`/`post-merge-systemize` cannot be converted at all until `#243` gives them
 shared workflows.
-
-______________________________________________________________________
-
-## Earlier session — 2026-08-02 (Phase 2's blockers closed, and withdrawal beating repair)
-
-**Theme —** Two PRs merged and one closed unmerged. In all three, the expensive part was a
-mechanism *added in response to a review finding* — the doctrine already says to file those rather
-than build them, and not following that is what the rounds were spent on.
-
-- **`#41` — the required/optional manifest axis** (`ee3371d`). `kit-manifest.json` gains
-  `required_by`, derived from the Python import graph rather than declared, so `/upgrade` stops
-  filing a hard dependency under "sized-down adoption, or incomplete". It is a **mapping, not a
-  boolean**: "required" is a property of a pair, so `lib/kitconfig.py` breaks a repo that installed
-  an engine and is a legitimate omission for one that installed none.
-- **`#134` cause 2 and `#226`** (`3e34fe5`). A `kit_repo_only` marker in the conftest that travels
-  with the tests, skipping on the paths a test actually needs. Before it, a by-the-book `/adopt`
-  tree ran **zero** tests — `test_panel_prompt.py` read the doctrine at module scope and collection
-  aborted. The per-tree figures and their vendored subsets are in that PR's commits; a count
-  without its tree identifies nothing.
-- **`#230` closed unmerged.** A recovery rule for the panel's filing rule, dropped under its own
-  pre-declared threshold when round 1 returned HIGHs from both lenses and the bot. Refiled as
-  `#231` with every finding and the design questions they exposed.
-- **`/upgrade` dry-run against a throwaway copy of cs-toolkit**, kit at `3e34fe5`. It **succeeds** —
-  `kit_doctor` reports 32 unchanged, 0 differ, 0 missing, hook installed — and that is the finding:
-  cs-toolkit's six Claude adapters all diverge from the kit's, the four measured reference no shared
-  workflow doc, Step 4 says to keep them, and no `.claude/` path is in `KIT_OWNED` so nothing can
-  report it. Step 5's own
-  verification then runs zero tests, because test files never reach an adopter. `#236`. Live
-  occurrences also recorded on `#51` (an older kit reported as "likely LOCAL EDITS") and `#93` (the
-  slug mismatch installs the kit's skill *beside* the fork rather than replacing it).
-
-**Learned**
-
-- **The doctrine has prevention but no recovery.** "A new mechanism gets filed, however squarely a
-  finding prompted it" is already in `fallback-review-panel.md`, and each expensive PR this session
-  broke it. What it lacks is what to do once the mechanism is already in the diff and drawing
-  HIGHs, where the default — patch again — is what turns two rounds into five. `#231`.
-- **Withdrawal is the cheapest round available.** A shell-`source` scanner (`#228`) and a
-  no-`.git` root guess (`#233`) were each removed rather than repaired after successive rounds found
-  a fresh HIGH in the previous round's fix, and the round that removed them came back clean. Removal
-  deletes surface instead of adding more for the next round to find.
-- **A pre-declared threshold must be calibrated, and is binding either way.** `#230`'s fired on one
-  HIGH at round 1, before any fix existed — stricter than the rule it was protecting, and it cost
-  that PR. Honouring it anyway is the only thing that makes the mechanism worth having.
-- **Claiming a test pins a guard is not the same as it pinning one.** This recurred across both
-  merged PRs, each time verified false by deleting the guard and watching the suite stay green.
-  `#229` and `#234` carry the instances; the check is to delete the thing, and it was skipped
-  exactly where confidence was highest.
-- **A measurement can be blind to its own subject.** The vendored trees are built from
-  `git ls-files`, so a run taken before the new test file was tracked omitted the file under test
-  and reported a clean result that was not. Build the tree from committed state.
-
-**Open, and owned by nothing yet**
-
-- Nothing was added to the inbox this session: `#71` took the closing-keyword scan occurrence, and
-  the rest went straight to the tracker. Sweeping it needs `triage-friction-log`, which needs
-  tracker writes and operator approval. Note `#143`.
-- **Filed this session:** `#227`, `#228`, `#229`, `#231`, `#233`, `#234`, plus an occurrence on
-  `#71`. `#233` is worth reading before touching test-tree resolution — it records three withdrawn
-  attempts at the same problem.
-- **Carried forward:** `#213`, `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`,
-  `#124`, `#169`, `#170`, `#33`/`#112`, `#181`, `#93`.
-
-▶ Next: **`#236`** — decide the adapter policy before running the cs-toolkit upgrade for real. The
-file-copy half is proven: the dry run installed all 32 files cleanly. What is unresolved is that the
-upgrade leaves the executed surface — the six forked `.claude/commands/` adapters — untouched while
-reporting success, so a green upgrade changes nothing about how sessions behave. `#93` is one
-instance of the same thing on the Codex side. Neither is a kit bug to fix first; both are decisions
-that shape the upgrade plan. `#231` (the withdraw-don't-patch rule) is real but gates `#6`'s
-vendoring, not this upgrade — a file copy has no mechanism to invent.
 
 ______________________________________________________________________
 
