@@ -4,6 +4,136 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-08-01 (a documentation PR, and the defect it found in the merge gate)
+
+**Theme —** `#189` merged (`13afb19`) and settled `#174`: `kit_doctor.main`'s `--generate-manifest`
+branch and `pr_watch.save_state` keep `Path.write_text`, each with a short comment pointing at the
+issue. **No behavioural delta at either site** — the scope independently corroborated by lens
+token-stream and AST comparison, and deliberately narrower than the wider claim an earlier draft
+made, which a lens disputed and I upheld against myself: the regenerated `kit-manifest.json` is
+consumed by a build-failing drift gate. Every review round found a defect in some version of the
+argument kept at the call sites, and some rounds' findings were regressions introduced by the round
+before. Per-round dispositions are on `#189`; this block points at them rather than recounting them.
+
+- **`#190` filed, and it is the durable result.** A receipt recorded against a lost false-settle
+  baseline makes `mergeable` true while checks are still registering. Pre-existing on `main` and
+  **not closed by converting the write**, which is why `#174` settled as *leave both* despite the
+  discovery. The mechanism, the measurement and the suggested direction are on `#190`.
+- **The decision's stated basis changed completely; the decision did not.** `#174`'s own reasoning
+  was wrong in three places, and the superseding comment there carries what survived. The site
+  comments point at it rather than restating it — which is only honest because that comment was
+  written; an earlier draft pointed at a thread still carrying refuted claims.
+- **Merged with an explicit squash body**, because the repo squashes with `COMMIT_MESSAGES` and the
+  default would have published the withdrawn safety claim onto `main` as this change's recorded
+  rationale. Found by a lens reading commit messages as a reviewed surface — it appears in no diff.
+
+**Learned**
+
+- **Delegation is only honest if the target is current.** Shortening the site comments to "the
+  argument lives on `#174`" left the deciding reason existing nowhere, because that issue still
+  carried claims the review had already refuted. A pointer inherits the accuracy of what it points
+  at.
+- **Deleting beats correcting — but not blindly.** Cutting the comments in half repaired most of one
+  round's findings and simultaneously threw away a *correct* repair, putting the `#164` criterion
+  wrong again. Deletion is a scalpel, and the load-bearing sentence is the one most easily cut with
+  the verbose ones.
+- **A guard sequenced before an action is not chained to it, and I proved `#180` on myself.** The
+  closing-keyword scan printed a violation and the comment posted anyway, because the scan ran
+  before the `gh` call rather than gating it. Rewired to gate on exit status it began refusing
+  publishes, including on this block. Nothing was closed. **No such scanner exists in `scripts/`** —
+  `#71` is the ask to build one, and each of these was an ad-hoc command. Occurrence data for `#180`
+  and `#71` is in the inbox, un-graduated, not on those issues.
+- **Two of my own checks reported success without examining their subject.** A CI-wait loop printed
+  its exit condition and then crashed in its reporting line; a scripted comment edit matched its
+  patterns and produced mangled text in both files. Both caught by reading output rather than an
+  exit code — `#179`'s shape, in the session that merged a PR about unverified claims.
+
+**Open, and owned by nothing yet**
+
+- **`#190` is unowned and is the sharpest thing on the board**, and the `▶ Next` below sends the
+  next session at it. Its ask is on the issue.
+- **`#189` merged with a single-lens receipt (`fallback:delta`, correctness) and a one-commit
+  unreviewed tail**, both disclosed on the PR before merge. The tail is `#27`'s gap; the one-lens
+  receipt is `#76`'s. Chosen rather than missed, and the engine's own warnings are in the record
+  command's output.
+- **`#187` is now live rather than theoretical**: `check_doc_budget.py` warns that the friction log
+  is over budget. Both the graduation marker and the inbox contribute, and `#187`'s own measurement
+  is that a sweep lands the file back just under budget — so the warning clears, narrowly, and
+  returns. Read `#187` before assuming either half is sufficient on its own.
+- **Carried forward from the block this session swept to history, because all are still open and
+  the sweep would otherwise drop them:** `#124` (documented default flipped, prose only — nothing an
+  adopter runs changed while `#6`'s engine is unvendored), `#167`, `#169`, `#170` from the draft-bit
+  and contract-numbering thread, `#33`/`#112`, which still want confirming against `#131` before
+  either is deliberately marked done, `#181` (a merge that lands without its `(#N)` suffix —
+  recurring, and not repairable in place), and the cs-toolkit Phase 2 blockers `#41`/`#37`/`#134`,
+  still untouched. **A first pass at this bullet folded only the issue-numbered items and dropped
+  these**, which is the same invariant failing twice in one PR.
+- Inbox length: `check_doc_budget.py` prints the live figure.
+
+▶ Next: **`session-start`** — `#190` is the one clear thread and the rest is diffuse. **Page the
+tracker rather than dumping it:** `#143` records `session-start` overflowing its tool limit above 68
+open issues and is still open; `gh issue list --state open --limit 25 --json number,title,labels,state`
+is the form that works here. That issue's own remedy names a GitHub-MCP parameter, and no MCP server
+is configured in this checkout, so the `gh` form is the executable one.
+
+### 2026-07-31 (the loop got its exits, reviewed under the rules it replaces)
+
+**Theme —** `#176` merged (`65c9ee4`): a prose finding is disposed of by whether anything
+**executes** the text; a record-prose imprecision below HIGH is **logged** — reply on the PR plus
+a tracker artifact, no commit — instead of fixed; fix rounds batch into one push; re-runs aim at
+the delta since the last receipt's `--head`; a record-prose-only delta takes **one lens**
+(`fallback:delta`) instead of the panel. The review rounds that forged the guards are enumerated
+on `#176` — one disposition comment per round, totals in the squash message — and **the PR could
+never take its own exits**: every delta was executed prose, so every round was a full panel. That
+measures what the exits are for — record-prose PRs like this handoff update, not doctrine PRs.
+
+- **`#176` merged.** `fallback-review-panel.md` (discriminator, logged disposition, delta pass,
+  batching, cockpit-built lens worktrees), `wrap-up.md` (the record-prose authoring checklist this
+  block is written under), `pr-watch.md` and config comments (the three receipt literals). This
+  line is a pointer, not a copy.
+- **The final clause merged reviewed by no lens** — disclosed on the PR, on the operator's call:
+  `#27`'s gap chosen rather than missed, the same choice the block below records for `e5bd82b`,
+  twice in one day.
+- **Cockpit-built lens trees inverted `#75`'s failure mode.** Every lens attestation on `#176`
+  reports the named sha found in the provided tree; the recovery burden `#75` records never
+  fired. Counter-occurrence comment posted on `#75`.
+- **Filed:** `#177` (session records restate doctrine that later changes supersede — also the
+  logged disposition's first artifact) and `#184` (the terminal rounds' below-HIGH remainder,
+  including the message-only-delta gate note from the review bot's second pass).
+
+**Learned**
+
+- **The logged disposition's first live use also bent it, and the next round caught the bend.** A
+  stale restatement in this file's 2026-07-29 block — lens-marked LOW imprecision, record prose —
+  got a reply and `#177` and no commit of its own; but the artifact was first promised to this
+  inbox, a committed file, exactly what the rule forbids, and the round after made the tracker
+  artifact mandatory at disposition time. An honesty model working is indistinguishable from the
+  author happening to be honest; the record of the bend is what makes the difference checkable.
+- **Two of my own checks had the examined-nothing shape, inside the PR that documents that
+  shape.** The keyword scan read the diff but not the commit message committed beside it — two
+  banned adjacencies reached the pushed branch (rewrite declined at the permission gate;
+  disclosed; squash written fresh and scanned). And two comment-then-ack batches piped the poll
+  to `/dev/null` before `--mark-seen`, acknowledging a real bot finding unread — caught only
+  because a later poll's coverage line named a review at a sha no panel round had claimed. Both
+  in the inbox.
+- **A permission denial is a design input, not an obstacle.** Declined force-push and reset left
+  the branch label stranded on a superseded commit; committing detached and pushing
+  `HEAD:<branch>` kept every later fix fast-forward, and the label was deleted after merge.
+
+**Open, and owned by nothing yet**
+
+- **The delta pass has never run.** This wrap-up's PR is its first natural candidate: a
+  record-prose-only fix round here takes one configured lens and the `fallback:delta` receipt,
+  per the doctrine now on `main`.
+- `#177` and `#184` are occurrence collectors, open by design. The first PR to touch the panel
+  doc's stopping section should sweep `#184`'s item on the two surviving absolutes.
+- Inbox length: `check_doc_budget.py` prints the live figure; three entries added below the
+  fresh graduation marker.
+
+▶ Next: **`session-start`** — the block below's starter stands, minus what this session folded
+in: `#176` and `#177` are now in this file, so the sharpest remaining are `#179`/`#180`'s
+beside-or-inside-`#150` call and `#174`'s yes/no on the two truncating writes.
+
 ### 2026-07-31 (the seventh sweep, and the only step that caught anything)
 
 **Theme —** `#185` merged (`e8b145f`), graduating the inbox. The result worth keeping is not the

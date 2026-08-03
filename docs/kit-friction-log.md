@@ -11,6 +11,36 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-03 (multi-repo sessions, and reviewing across a repo boundary)
+
+- **A forge write landed on the wrong repository because `gh` resolves the repo from the
+  working directory.** Two repos open in one session, both with an open PR numbered 244 —
+  `gh pr comment 244` ran with the cwd on the adopter and commented on its unrelated, already
+  merged PR. Deleted and reposted with `--repo` pinned. **H** — filed as
+  [#246](https://github.com/topij/agentic-dev-kit/issues/246), and the reason it belongs here
+  too is the detection story rather than the mistake: `gh pr comment` returned a URL and exit
+  0, and only the *next, different* command failed — with a message about the wrong PR's state,
+  which reads as a fact about your intended target. A session that only commented would never
+  have learned. `/adopt` and `/upgrade` exist to operate on another repo from a session that
+  also has the kit open, so two remotes is the normal case for this kit, not an edge one.
+- **A repo-specific CI gate caught what two review passes did not, and only because a
+  "trivial" nitpick had already fired.** cs-toolkit lints fenced `bash` blocks in
+  `.claude/commands/**` and rejects compound operators, because `claude -p --output-format
+  json` cron mode blocks them outright — so the guard line I added would not have run
+  unattended. **M** — the chain is the entry: the linter only scans blocks whose fence is
+  *labelled*, the fork's fence was unlabelled, and CodeRabbit's MD040 nitpick is what labelled
+  it and pulled the block into scope. A violation had been latent there for as long as the
+  fence was bare. Worth remembering before dismissing a formatting nitpick as cosmetic: it
+  changed what a gate could see.
+- **Two "verified in both directions" checks did not discriminate, and both would have been
+  reported as passes.** One compared a leading-dash grep argument where neither branch matched
+  the fixture, so both returned `rc=1`; another computed an "executed" flag from an expression
+  that was true on the *safe* outcome. **M** — both were caught by asking what the other branch
+  returns rather than by re-reading the harness, which is the check worth naming: a
+  verification that cannot fail is indistinguishable from one that passed. Occurrence data for
+  [#205](https://github.com/topij/agentic-dev-kit/issues/205); what this adds is that both
+  slips were in harnesses written *specifically* to prevent the class they were checking.
+
 ## 2026-08-02 (wrap-up mechanics)
 
 - **A commit message written in a shell heredoc silently lost a figure to variable expansion.**
