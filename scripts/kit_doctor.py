@@ -1394,14 +1394,30 @@ def main(argv: list[str] | None = None) -> int:
                 # adopter file gets blessed as kit-installed.
                 print(f"error: cannot read {source_manifest}: {exc}", file=sys.stderr)
                 return 2
-            # `isinstance`, not `.get(...) or {}`. Syntactically valid JSON whose
-            # top level is a list or a string has no `.get`, and AttributeError
-            # is not in the `except` above — so the tool tracebacked where every
-            # other malformed-input path in this file degrades. An empty dict
-            # here is the SAFE degrade: it matches nothing, so every present
-            # file lands in `unverified` and none is blessed as kit-installed
-            # (CodeRabbit, PR #278).
-            source_files = parsed_source.get("files") if isinstance(parsed_source, dict) else {}
+            # TWO checks, and the second is what makes the first safe.
+            #
+            # Outer: syntactically valid JSON whose top level is a list or a
+            # string has no `.get`, and AttributeError is not in the `except`
+            # above — so the tool tracebacked where every other malformed-input
+            # path in this file degrades (CodeRabbit, PR #278).
+            #
+            # Inner: `.get("files")` returns None for a dict with no `files`
+            # key, or an explicit `"files": null` — and downstream, **None is
+            # the sentinel for "no --from-kit was given"**, which turns
+            # verification OFF entirely. The first version of this degrade
+            # dropped the `or {}` it replaced and so reopened exactly the hole
+            # the flag exists to close: `--from-kit` at a manifest with no
+            # `files` key recorded every present kit-owned path as installed
+            # from that kit, including a file the adopter had all along, at exit
+            # 0 with no warning — which a later run then reports STALE, whose
+            # instruction is "replace them, nothing local is lost". Found on a
+            # live adopter upgrade, PR in-parallel-oy/cs-toolkit#1835.
+            #
+            # So once `--from-kit` is given this must be a dict, always. An
+            # empty one is the safe value: it matches nothing, so every present
+            # file lands in `unverified` and none is blessed.
+            raw_source_files = parsed_source.get("files") if isinstance(parsed_source, dict) else None
+            source_files = raw_source_files if isinstance(raw_source_files, dict) else {}
         baseline, unverified = record_install_manifest(
             root, config, version, kit_commit, source_files
         )

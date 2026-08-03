@@ -1664,3 +1664,41 @@ def test_an_untrusted_self_comparison_is_not_reported_as_one(tmp_path):
     report = kit_doctor.inspect(root, release, config, release, baseline_is_comparison=True)
     assert not report.baseline_trusted
     assert not report.baseline_is_comparison, "a field pair that must never contradict"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        '{"kit_version": 2}',  # dict, no files key
+        '{"kit_version": 2, "files": null}',  # explicit null
+        '{"kit_version": 2, "files": ["a"]}',  # present but not a dict
+        '{"kit_version": 2, "files": "nope"}',
+        '["a", "list"]',  # top level not a dict at all
+        '"a string"',
+        "null",
+    ],
+)
+def test_from_kit_never_falls_back_to_recording_everything(tmp_path, capsys, monkeypatch, body):
+    """`--from-kit` means "these came from that kit" and must be CHECKED. The
+    check reads the source manifest's `files`; downstream, `None` is the
+    sentinel for "no --from-kit given", which turns verification off.
+
+    So any shape that yields None from `.get("files")` silently converted the
+    strict mode into the permissive one — recording a file the adopter had all
+    along as kit-installed, exit 0, no warning, which a later run reports STALE
+    with "replace them, nothing local is lost". Found on a live adopter upgrade
+    (cs-toolkit#1835) after four review rounds had passed over the line.
+
+    Parametrized across every shape that reaches the sentinel, because the bug
+    was introduced by a fix that handled one of them and not the rest."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "the adopter's own file, never installed")
+    kit = tmp_path / "kit"
+    (kit / ".git").mkdir(parents=True)
+    _write(kit / "kit-manifest.json", body)
+    monkeypatch.setattr(kit_doctor, "_git_head", lambda p: "a" * 40)
+    code = kit_doctor.main(["--record-install", "--root", str(root), "--from-kit", str(kit)])
+    recorded = json.loads((root / "kit-manifest.json").read_text())
+    assert recorded["files"] == {}, "an unusable source must bless nothing"
+    assert code == 1, "and the partial record must not report success"
+    assert "scripts/check_doc_budget.py" in capsys.readouterr().err
