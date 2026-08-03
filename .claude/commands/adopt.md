@@ -100,6 +100,15 @@ guess was wrong for the commonest case and told adopters to hunt for edits they 
 made (kit `#51`). Run it **after** the copies, so it records what landed; a sized-down
 adoption is recorded as exactly the subset it installed.
 
+**Pass `--from-kit`, and read what it prints.** With it, only files matching that
+checkout are recorded — which is what keeps the "copy only if the target doesn't already
+exist" rule above from backfiring. A file this adoption *retained* rather than copied
+(an adopter's own file already sitting at a kit-owned path) is not the kit's, and
+recording it would make the next `/upgrade` report it `STALE` — wording that says
+"replace them, nothing local is lost" about a file that is entirely theirs. Any such
+path is named on stderr and left out of the baseline; reconcile each with the operator
+before re-running, and never silence it by dropping the flag.
+
 ## Step 4 — Verify
 
 - Portability tests: run the kit's suites explicitly. `/adopt` does not install the kit's
@@ -112,9 +121,21 @@ adoption is recorded as exactly the subset it installed.
 
   (Adjust the prefix when engines live directly under `scripts/`.)
 - `check_doc_budget`: run it — it should read the configured plan via `config/dev-model.yaml`.
-- `kit_doctor`: run it. It should report zero mismatches, `missing` containing only the
-  pieces Step 2 deliberately left out, and a `baseline:` line naming the kit commit. A
-  `baseline: none recorded` line means Step 3's `--record-install` did not run.
+- `kit_doctor`: run it **against the kit checkout's manifest**, not bare:
+
+  ```sh
+  uv run <engines-dir>/kit_doctor.py --manifest <kit checkout>/kit-manifest.json
+  ```
+
+  Bare, it compares this repo against the baseline Step 3 just wrote from these same
+  files, so every recorded file matches *by construction* and the check establishes
+  nothing — it would pass over a file that was copied wrong. The kit's manifest is an
+  independent reference, and it is also the only one carrying `required_by`, which is
+  what makes the `missing-required` axis work at all.
+
+  Expect zero mismatches, `missing` containing only the pieces Step 2 deliberately left
+  out, and a `baseline:` line naming the kit commit. A `baseline: none recorded` line
+  means Step 3's `--record-install` did not run.
 - Confirm the repo's CI/lint scope **skips** the kit files (or add a kit-dir exclude if lint is repo-wide).
 
 ## Step 5 — Record the friction (the flywheel's first turn)

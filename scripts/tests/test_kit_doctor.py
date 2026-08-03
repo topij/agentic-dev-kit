@@ -923,7 +923,8 @@ def _baseline(entries: dict[str, str], kit_commit: str | None = None) -> dict:
 
 def _split_case(tmp_path, *, installed: str, ships: str, recorded: str | None):
     """Drive one row of the table: what the file says, what the kit ships, what
-    the baseline recorded. Returns the single FileStatus for that file."""
+    the baseline recorded. Returns `(that file's FileStatus, the whole Report)` —
+    the report so a caller can also assert on `baseline_trusted` or the counts."""
     root = _fake_repo(tmp_path)
     _write(root / "scripts" / "check_doc_budget.py", installed)
     rel = "scripts/check_doc_budget.py"
@@ -1034,12 +1035,56 @@ def test_the_trust_signal_is_the_key_not_its_value():
     assert not kit_doctor._baseline_trusted(None)
 
 
+def _states_drift_state_can_return() -> set[str]:
+    """Every state `_drift_state` actually produces, derived by driving it over
+    the truth table rather than restated as a literal.
+
+    The point is the derivation. A hardcoded list cannot fail when a fourth
+    state is added to `_drift_state` and forgotten in `drifted` — which is
+    precisely the regression the test below exists to catch, and an earlier
+    version of it claimed to catch while pinning nothing (CodeRabbit, PR #278).
+    """
+    a, b, c = "a" * 64, "b" * 64, "c" * 64
+    return {
+        kit_doctor._drift_state(actual, expected, recorded)[0]
+        # actual != expected always (a matching pair never reaches _drift_state),
+        # so this covers: untouched-but-behind, edited-with-kit-still,
+        # edited-and-kit-moved, and no-baseline-entry.
+        for actual, expected, recorded in ((a, b, a), (a, b, b), (a, b, c), (a, b, None))
+    }
+
+
+def test_no_split_state_can_escape_the_drift_tally():
+    """Derived from `_drift_state` itself: whatever causes it can name, `drifted`
+    must count. Adding a fifth row to the table without adding its state to
+    `drifted` fails here, which the parametrized list below could not do."""
+    missing = _states_drift_state_can_return() - {
+        f.state
+        for f in kit_doctor.Report(
+            kit_version_config=2,
+            kit_version_manifest=2,
+            engines_dir="scripts",
+            engines_dir_ok=True,
+            hooks_installed=True,
+            narrative_rendered={},
+            files=[
+                kit_doctor.FileStatus(s, "engine", s) for s in _states_drift_state_can_return()
+            ],
+        ).drifted
+    }
+    assert not missing, f"states _drift_state can return that `drifted` does not count: {missing}"
+
+
 @pytest.mark.parametrize("state", ["stale", "locally-edited", "stale-and-edited"])
 def test_every_split_state_still_counts_as_drift(state):
     """The split states are refinements of `differs`, not lesser categories.
     Dropping one from `drifted` would remove it from the exit code AND from the
     CI manifest gate — so naming a drift precisely would be what made it stop
-    being reported. Parametrized so adding a fourth state fails here loudly."""
+    being reported.
+
+    This list is a literal on purpose — it names the three states this PR
+    introduced, so a rename shows up as a failure here. The test above is the
+    one that catches a NEW state going uncounted; this one does not claim to."""
     report = kit_doctor.Report(
         kit_version_config=2,
         kit_version_manifest=2,
@@ -1079,7 +1124,7 @@ def test_record_install_hashes_the_installed_files_not_the_kit(tmp_path):
     root = _fake_repo(tmp_path)
     _write(root / "scripts" / "check_doc_budget.py", "what is actually here")
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
-    recorded = kit_doctor.record_install_manifest(root, config, 2, None)
+    recorded, _ = kit_doctor.record_install_manifest(root, config, 2, None)
     entry = recorded["files"]["scripts/check_doc_budget.py"]
     assert entry["sha256"] == _sha("what is actually here")
     # Only what is installed: absent files get no entry at all, so a later
@@ -1094,7 +1139,7 @@ def test_record_install_keys_by_kit_layout_under_a_vendored_engines_dir(tmp_path
     root = _fake_repo(tmp_path, engines="scripts/devkit")
     _write(root / "scripts" / "devkit" / "check_doc_budget.py", "vendored")
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
-    recorded = kit_doctor.record_install_manifest(root, config, 2, None)
+    recorded, _ = kit_doctor.record_install_manifest(root, config, 2, None)
     assert "scripts/check_doc_budget.py" in recorded["files"]
     assert "scripts/devkit/check_doc_budget.py" not in recorded["files"]
 
@@ -1148,3 +1193,113 @@ def test_an_unreadable_baseline_degrades_instead_of_aborting(tmp_path, capsys):
     assert code == 1, "drift still reported"
     assert "unreadable baseline" in captured.err
     assert "differ" in captured.out
+
+
+def test_a_retained_adopter_file_is_left_out_of_the_baseline(tmp_path):
+    """`/adopt` copies only where the target does not already exist, so a file
+    the adopter already had at a kit-owned path is RETAINED, not installed.
+    Recording it would make the next upgrade call it `STALE` — "replace them,
+    nothing local is lost" — about a file that is entirely theirs, and the
+    operator would be instructed to overwrite it (CodeRabbit, PR #278).
+
+    `--from-kit` is the assertion "these came from that kit", so it is checked
+    rather than believed."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "the adopter's own file, kept")
+    rel = "scripts/check_doc_budget.py"
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    source = {rel: {"sha256": _sha("what the kit actually ships"), "role": "engine"}}
+    recorded, unverified = kit_doctor.record_install_manifest(root, config, 2, "a" * 40, source)
+    assert rel not in recorded["files"], "a retained file must not be recorded as installed"
+    assert unverified == [rel], "and it must be named, not silently dropped"
+    # The consequence that matters: it stays unjudgeable rather than STALE.
+    report = kit_doctor.inspect(root, _manifest(dict.fromkeys([rel], _sha("kit"))), config, recorded)
+    assert next(f for f in report.files if f.path == rel).state == "differs"
+
+
+def test_a_genuinely_installed_file_is_recorded(tmp_path):
+    """The other direction — without it the check above is satisfied by a
+    `--from-kit` mode that records nothing at all."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "straight from the kit")
+    rel = "scripts/check_doc_budget.py"
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    source = {rel: {"sha256": _sha("straight from the kit"), "role": "engine"}}
+    recorded, unverified = kit_doctor.record_install_manifest(root, config, 2, "a" * 40, source)
+    assert recorded["files"][rel]["sha256"] == _sha("straight from the kit")
+    assert unverified == []
+
+
+def test_retro_recording_without_a_kit_records_everything(tmp_path):
+    """The mode the live acceptance test uses: an existing install, nothing
+    matching current HEAD by construction, operator taking the files as found."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "installed long ago")
+    recorded, unverified = kit_doctor.record_install_manifest(
+        root, kit_doctor.load_config(root / "config" / "dev-model.yaml"), 2, None
+    )
+    assert "scripts/check_doc_budget.py" in recorded["files"]
+    assert unverified == []
+
+
+def test_a_sha256_object_format_head_is_accepted(monkeypatch, tmp_path):
+    """`git rev-parse HEAD` prints 64 hex in a repo created with
+    `--object-format=sha256`. Matching only 40 refused a valid checkout and
+    reported it as "not a git checkout" (CodeRabbit, PR #278)."""
+    import subprocess as sp
+
+    class Done:
+        returncode = 0
+        stdout = "b" * 64 + "\n"
+
+    monkeypatch.setattr(kit_doctor.subprocess, "run", lambda *a, **k: Done())
+    assert kit_doctor._git_head(tmp_path) == "b" * 64
+    _ = sp  # imported to make the monkeypatched target explicit
+
+
+def test_a_non_string_kit_commit_does_not_abort_the_report(tmp_path, capsys):
+    """Trust keys on the KEY's presence, so a hand-edited baseline can carry any
+    JSON type. `render` slices this value; a number or list raised TypeError and
+    took the whole read-only diagnostic with it, contradicting the
+    degrade-don't-abort rule (CodeRabbit, PR #278)."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "installed")
+    rel = "scripts/check_doc_budget.py"
+    baseline = _baseline({rel: _sha("installed")})
+    baseline["kit_commit"] = 12345  # not a string
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, _manifest({rel: _sha("kit moved")}), config, baseline)
+    assert report.baseline_trusted, "the hashes are still good"
+    assert report.baseline_kit_commit is None, "but the value is unusable as provenance"
+    print(kit_doctor.render(report))  # must not raise
+    assert "STALE" in capsys.readouterr().out
+
+
+def test_an_unwritable_baseline_path_exits_two_rather_than_tracebacking(tmp_path, capsys):
+    """The module's convention for an operator-facing failure (CodeRabbit, PR #278)."""
+    root = _fake_repo(tmp_path)
+    code = kit_doctor.main(
+        ["--record-install", "--root", str(root), "--baseline", str(tmp_path / "nodir" / "m.json")]
+    )
+    assert code == 2
+    assert "cannot write baseline" in capsys.readouterr().err
+
+
+def test_an_unreadable_source_manifest_refuses_rather_than_recording_everything(tmp_path, capsys):
+    """Falling back to the permissive mode here would silently re-open the
+    retained-file hole: the check that keeps an adopter's own file out of the
+    baseline is exactly the one that needs this manifest."""
+    root = _fake_repo(tmp_path)
+    kit = tmp_path / "kit"
+    kit.mkdir()
+    (kit / ".git").mkdir()
+    _write(kit / "kit-manifest.json", "{ not json")
+    monkey = kit_doctor._git_head
+    kit_doctor._git_head = lambda p: "c" * 40
+    try:
+        code = kit_doctor.main(["--record-install", "--root", str(root), "--from-kit", str(kit)])
+    finally:
+        kit_doctor._git_head = monkey
+    assert code == 2
+    assert "cannot read" in capsys.readouterr().err
+    assert not (root / "kit-manifest.json").exists()

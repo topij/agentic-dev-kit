@@ -58,32 +58,28 @@ The report gives you, per kit-owned file: `unchanged` / `differs` / `missing` /
   `devkit-template: unrendered` means the adoption never completed its seeding step. A
   doc that merely quotes the marker further down is in use and is reported as such.
 
-**What `differs` splits into depends on whether this repo has a baseline.** A baseline
-is `kit-manifest.json` here recording what *this repo installed*, written by
-`--record-install` at the end of Step 4. With one, the report states a cause as fact:
+**What `differs` splits into depends on whether this repo has a *trusted* baseline.** A
+baseline is `kit-manifest.json` here recording what *this repo installed*, written by
+`--record-install` at the end of Step 4. Trusted means it carries a `kit_commit` key —
+that key is written only by `--record-install`, so its presence is what distinguishes a
+record of an install from a manifest that was merely copied in. With one, the report
+states a cause as fact:
 
 - **`STALE`** — byte-identical to what was installed here, so nothing was edited.
   Replace it; nothing local is lost.
 - **`LOCALLY EDITED`** — changed here since install, and the kit's copy never moved.
 - **`STALE and LOCALLY EDITED`** — both. The only state that can lose work.
 
-Without one — which is every repo adopted before this field existed — it falls back to
+Without a trusted one — **including an existing `kit-manifest.json` that has no
+`kit_commit`**, which is every repo adopted before this field existed — it falls back to
 `differs` and **does not claim a cause**: a hash mismatch alone cannot distinguish
 "older kit version" from "hand-edited", and the schema-version signal it used to narrow
 by tracks the *config schema*, not file contents, so it was wrong for every kit change
 that did not bump the schema (kit `#51`). Confirm with an actual diff in Step 3.
 
-If the report says `baseline: none recorded`, you can stamp one from what is installed
-right now — before changing anything, so it records the state you are upgrading *from*:
-
-```bash
-uv run <engine-dir>/kit_doctor.py --record-install --from-kit /tmp/agentic-dev-kit
-```
-
-Only do this when the current install is the one you want as the reference. It records
-the files as they sit, so anything already hand-edited is recorded *as* the baseline and
-will read as `STALE` rather than `LOCALLY EDITED` from then on. When in doubt, skip it
-here and let Step 4 write the baseline after the copies instead.
+A `baseline: none recorded` line here is expected on a first upgrade and is not an error;
+Step 4 writes the baseline. Do **not** run `--record-install` at this point — it writes a
+file, and everything before Step 2 must stay read-only.
 
 ## Step 2 — Branch, refresh the migrator, then migrate
 

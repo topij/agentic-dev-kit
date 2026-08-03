@@ -670,14 +670,23 @@ def _git_head(checkout: Path) -> str | None:
     # Verified rather than assumed: `rev-parse` prints its ARGUMENT back on a
     # path that is not a repository ("HEAD\n", exit 128), so an exit check alone
     # is not enough to know a sha came back.
-    if done.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", sha):
+    #
+    # Both widths are real HEADs: 40 hex in a SHA-1 repository, 64 in one
+    # created with `--object-format=sha256`. Matching only the former refuses a
+    # valid checkout and reports it as "not a git checkout" (CodeRabbit, PR
+    # #278).
+    if done.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", sha):
         return None
     return sha
 
 
 def record_install_manifest(
-    root: Path, config: dict, kit_version: int, kit_commit: str | None
-) -> dict:
+    root: Path,
+    config: dict,
+    kit_version: int,
+    kit_commit: str | None,
+    source_files: dict | None = None,
+) -> tuple[dict, list[str]]:
     """Record what is ACTUALLY INSTALLED in an adopter as its drift baseline.
 
     This is the step that was missing, and its absence is why the three-way
@@ -702,23 +711,46 @@ def record_install_manifest(
     from. That does not weaken the edit axis (the hashes were just taken from
     the files), only the "am I behind upstream" question, which needs the
     comparison manifest anyway.
+
+    **`source_files` is what keeps this from blessing a file the kit never
+    installed**, and the two modes are deliberately different (CodeRabbit, PR
+    #278):
+
+    - **Given** (`--from-kit`): the caller is asserting "I just installed these
+      from that kit", so a file is recorded only if it MATCHES that kit's
+      manifest. `/adopt` copies only where the target does not already exist,
+      so an adopter's own pre-existing file at a kit-owned path is retained,
+      not copied — and hashing it here would record it as kit-installed. On the
+      next upgrade it would then read `STALE`, whose wording is "replace them,
+      nothing local is lost", and the operator would be told to overwrite their
+      own file. Non-matching paths are returned as the second element and left
+      out, so they stay unjudgeable rather than confidently wrong.
+    - **Omitted**: retro-recording an existing install, where nothing matches
+      current HEAD by construction and the operator is explicitly taking the
+      files as found. Everything installed is recorded.
     """
     engines_dir = str(get(config, "paths.engines", KIT_ENGINE_PREFIX))
     files: dict[str, dict] = {}
+    unverified: list[str] = []
     for rel, role in KIT_OWNED:
         target = root / _remap(rel, engines_dir)
         # Keyed by the KIT-layout path even when the file lives somewhere else
         # locally, so this manifest and the kit's are keyed identically and
         # `inspect` can look both up with one key. The remap is applied to the
         # lookup, never to the key.
-        if target.is_file():
-            files[rel] = {"sha256": sha256_of(target), "role": role}
+        if not target.is_file():
+            continue
+        digest = sha256_of(target)
+        if source_files is not None and (source_files.get(rel) or {}).get("sha256") != digest:
+            unverified.append(_remap(rel, engines_dir))
+            continue
+        files[rel] = {"sha256": digest, "role": role}
     return {
         "kit_version": kit_version,
         "kit_commit": kit_commit,
         "files": files,
         "adopter_owned": list(ADOPTER_OWNED),
-    }
+    }, unverified
 
 
 def _baseline_trusted(baseline: dict | None) -> bool:
@@ -876,7 +908,18 @@ def inspect(root: Path, manifest: dict, config: dict, baseline: dict | None = No
         hooks_installed=hooks_installed,
         narrative_rendered=narrative,
         baseline_trusted=trusted,
-        baseline_kit_commit=(baseline or {}).get("kit_commit") if trusted else None,
+        # Normalized to str-or-None. Trust keys on the KEY's presence, so any
+        # JSON type survives it — and `render` slices this value, which would
+        # raise TypeError on a number or a list and abort the whole report over
+        # a hand-edited supplementary file. That would contradict the
+        # degrade-don't-abort rule the unreadable-baseline path states
+        # (CodeRabbit, PR #278). An unusable value keeps the baseline trusted —
+        # the hashes are still good — and only drops the provenance line.
+        baseline_kit_commit=(
+            commit
+            if trusted and isinstance(commit := (baseline or {}).get("kit_commit"), str)
+            else None
+        ),
         files=statuses,
     )
 
@@ -1174,15 +1217,49 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 2
-        baseline = record_install_manifest(root, config, version, kit_commit)
-        baseline_path.write_text(
-            json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        source_files: dict | None = None
+        if args.from_kit:
+            source_manifest = args.from_kit / MANIFEST_NAME
+            try:
+                source_files = (json.loads(source_manifest.read_text(encoding="utf-8"))).get(
+                    "files"
+                ) or {}
+            except (json.JSONDecodeError, OSError) as exc:
+                # Refuse rather than fall back to recording everything: without
+                # this manifest the retained-file check below cannot run, and
+                # silently downgrading to the permissive mode is how a retained
+                # adopter file gets blessed as kit-installed.
+                print(f"error: cannot read {source_manifest}: {exc}", file=sys.stderr)
+                return 2
+        baseline, unverified = record_install_manifest(
+            root, config, version, kit_commit, source_files
         )
+        try:
+            baseline_path.write_text(
+                json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+        except OSError as exc:
+            # Operator-facing failure, so it reports and exits 2 rather than
+            # tracebacking — the convention the config and manifest read paths
+            # above already follow (CodeRabbit, PR #278).
+            print(f"error: cannot write baseline {baseline_path}: {exc}", file=sys.stderr)
+            return 2
         origin = kit_commit[:12] if kit_commit else "unrecorded"
         print(
             f"wrote {baseline_path} ({len(baseline['files'])} installed files, "
             f"kit_version={version}, kit_commit={origin})"
         )
+        if unverified:
+            print(
+                f"note: {len(unverified)} kit-owned path(s) present here do NOT match "
+                f"{args.from_kit}, so they were left OUT of the baseline rather than "
+                "recorded as installed from it — a file this kit did not put there must "
+                "never be reported STALE and replaced. Refresh or reconcile each, then "
+                "re-run:",
+                file=sys.stderr,
+            )
+            for path in unverified:
+                print(f"  · {path}", file=sys.stderr)
         if kit_commit is None:
             print(
                 "note: no --from-kit given, so install provenance is unrecorded. Drift is "
