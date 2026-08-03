@@ -14,12 +14,77 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-02 — **Phase 2's named blockers are done.** `#41`, `#134` and `#226` are
-closed by `ee3371d` and `3e34fe5`. The durable result is not either feature: this
-session, where a mechanism kept drawing HIGH findings round after round, **withdrawing it ended
-the loop that patching was extending**. `#231` is the doctrine change that follows.
+Last updated: 2026-08-03 — **The first forked adapter is a pointer, and it earned its keep
+immediately.** cs-toolkit's `/session-start` now reads the kit's shared workflow
+(`in-parallel-oy/cs-toolkit@b33f2e90`), and its reviewer found a defect in *the kit's* text
+that was fixed once, upstream, and returned byte-identical. That loop is what the shared
+workflow exists for and could not happen while the adapter was a fork.
 
-## Latest session — 2026-08-02 (Phase 2's blockers closed, and withdrawal beating repair)
+## Latest session — 2026-08-03 (the conversion proved itself, and the record kept outrunning the work)
+
+**Theme —** Three kit PRs merged, one closed unmerged, one adopter converted. The durable
+result is not any of them: it is that **a claim written about work already done was wrong in
+every review round of one paragraph**, and the thing that finally held was replacing the claim
+with an enumeration a grep can check. `#248`.
+
+- **`#238` — `session-start` gains a Remediation check** (`b5b9547`). The kit shipped an
+  archival mechanism and a briefing where the briefing never read what the archiver swept:
+  `paths.handoff_history` and `paths.friction_log_archive` were consumed by nothing.
+- **`#237` — the PR limit and its lost caveat** (`e49ddf3`). The shipped `--limit 20` was
+  *below* `gh`'s own default. Both halves came from diffing the four shared workflows against
+  the cs-toolkit adapters they were generalized out of; that survey found nothing else, and
+  its result is recorded on the PR.
+- **The fail-closed rule** (`6bf4443`). A source that fails now reports unavailable rather
+  than its empty value. Found by CodeRabbit reviewing **cs-toolkit's copy**, not this repo's.
+- **`#244` closed unmerged**, under a bound declared before its second lens reported. Its
+  provenance rule was disproven on its own example — `git check-ref-format` accepts `$()` in a
+  branch name, and `git branch --show-current` is in this workflow's own gather. `#245`.
+- **cs-toolkit `/session-start` converted** to pointer + appendix. Every section of the fork
+  was mapped before anything was deleted; the one with no home was contributed upstream as
+  `#238` first. The conversion was **run**, not only mapped — the mapping and the run are on
+  that PR.
+
+**Learned**
+
+- **The record outran the work in every round, on one paragraph.** Four consecutive scope
+  sentences each claimed more than was implemented, including one caught by its author's own
+  grep before push. That is not four typos: an enumeration restating a list from six
+  paragraphs above will drift from it. `#248` carries the rounds and three candidate
+  directions.
+- **Provenance is not a safety test.** "Who authored this string" says nothing about what
+  characters it contains, and the shell only cares about the latter. `#245`.
+- **A verification harness earned its place by being rewritten until it discriminated.** Twice
+  a check returned the same result whichever branch was live and would have been reported as a
+  pass; both were caught by asking what the *other* branch returns.
+- **`gh` resolves the repo from the working directory, and a forge write is not retractable
+  the way a file write is.** A comment landed on an unrelated merged PR in another repo that
+  happened to share the number, and the write reported success. `#246`.
+- **Half the kit is not thin** — four workflows exist only as Claude adapters with their
+  doctrine inline and no Codex equivalent, so Codex can run half the kit by omission. This is
+  what makes `#236`'s adapter half intractable and is now its precondition. `#243`.
+
+**Open, and owned by nothing yet**
+
+- **`docs/kit-friction-log.md` is over budget** — `uv run scripts/check_doc_budget.py` prints
+  the live figure. `triage-friction-log` is the sweep; it needs tracker writes and operator
+  approval. Note `#143`.
+- **Filed this session:** `#243`, `#245`, `#246`, `#248`, plus `#240` and `#241` (the three
+  withdrawn search recipes and the constraints any fourth must meet).
+- **Carried forward:** `#236` (now narrowed to engines/doctrine plus Step 5), `#231`, `#213`,
+  `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#93`.
+
+▶ Next: **convert cs-toolkit's `/parallel` adapter** with the method `#1826` proved — map every
+section before deleting any, contribute anything generic upstream first, then run it. It is a
+200-line fork with a shared workflow already in the kit and no Codex counterpart, so it is the
+same single-runtime shape as the one just done. Each conversion so far has found a kit bug the
+fork was hiding; that is the reason to keep going rather than to batch them. `wrap-up` is the
+one to leave for later — it carries `#93`'s Codex slug mismatch, and
+`triage-friction-log`/`post-merge-systemize` cannot be converted at all until `#243` gives them
+shared workflows.
+
+______________________________________________________________________
+
+## Earlier session — 2026-08-02 (Phase 2's blockers closed, and withdrawal beating repair)
 
 **Theme —** Two PRs merged and one closed unmerged. In all three, the expensive part was a
 mechanism *added in response to a review finding* — the doctrine already says to file those rather
@@ -253,140 +318,6 @@ claims shared one shape — a measurement or a correction, true when written, st
 
 ▶ Next: `#193` — make `--mark-seen` print an excerpt of every key it promotes. Small, self-contained,
 and it demonstrated itself on every ack this session (each printed a bare count).
-
-______________________________________________________________________
-
-## Earlier session — 2026-08-01 (a documentation PR, and the defect it found in the merge gate)
-
-**Theme —** `#189` merged (`13afb19`) and settled `#174`: `kit_doctor.main`'s `--generate-manifest`
-branch and `pr_watch.save_state` keep `Path.write_text`, each with a short comment pointing at the
-issue. **No behavioural delta at either site** — the scope independently corroborated by lens
-token-stream and AST comparison, and deliberately narrower than the wider claim an earlier draft
-made, which a lens disputed and I upheld against myself: the regenerated `kit-manifest.json` is
-consumed by a build-failing drift gate. Every review round found a defect in some version of the
-argument kept at the call sites, and some rounds' findings were regressions introduced by the round
-before. Per-round dispositions are on `#189`; this block points at them rather than recounting them.
-
-- **`#190` filed, and it is the durable result.** A receipt recorded against a lost false-settle
-  baseline makes `mergeable` true while checks are still registering. Pre-existing on `main` and
-  **not closed by converting the write**, which is why `#174` settled as *leave both* despite the
-  discovery. The mechanism, the measurement and the suggested direction are on `#190`.
-- **The decision's stated basis changed completely; the decision did not.** `#174`'s own reasoning
-  was wrong in three places, and the superseding comment there carries what survived. The site
-  comments point at it rather than restating it — which is only honest because that comment was
-  written; an earlier draft pointed at a thread still carrying refuted claims.
-- **Merged with an explicit squash body**, because the repo squashes with `COMMIT_MESSAGES` and the
-  default would have published the withdrawn safety claim onto `main` as this change's recorded
-  rationale. Found by a lens reading commit messages as a reviewed surface — it appears in no diff.
-
-**Learned**
-
-- **Delegation is only honest if the target is current.** Shortening the site comments to "the
-  argument lives on `#174`" left the deciding reason existing nowhere, because that issue still
-  carried claims the review had already refuted. A pointer inherits the accuracy of what it points
-  at.
-- **Deleting beats correcting — but not blindly.** Cutting the comments in half repaired most of one
-  round's findings and simultaneously threw away a *correct* repair, putting the `#164` criterion
-  wrong again. Deletion is a scalpel, and the load-bearing sentence is the one most easily cut with
-  the verbose ones.
-- **A guard sequenced before an action is not chained to it, and I proved `#180` on myself.** The
-  closing-keyword scan printed a violation and the comment posted anyway, because the scan ran
-  before the `gh` call rather than gating it. Rewired to gate on exit status it began refusing
-  publishes, including on this block. Nothing was closed. **No such scanner exists in `scripts/`** —
-  `#71` is the ask to build one, and each of these was an ad-hoc command. Occurrence data for `#180`
-  and `#71` is in the inbox, un-graduated, not on those issues.
-- **Two of my own checks reported success without examining their subject.** A CI-wait loop printed
-  its exit condition and then crashed in its reporting line; a scripted comment edit matched its
-  patterns and produced mangled text in both files. Both caught by reading output rather than an
-  exit code — `#179`'s shape, in the session that merged a PR about unverified claims.
-
-**Open, and owned by nothing yet**
-
-- **`#190` is unowned and is the sharpest thing on the board**, and the `▶ Next` below sends the
-  next session at it. Its ask is on the issue.
-- **`#189` merged with a single-lens receipt (`fallback:delta`, correctness) and a one-commit
-  unreviewed tail**, both disclosed on the PR before merge. The tail is `#27`'s gap; the one-lens
-  receipt is `#76`'s. Chosen rather than missed, and the engine's own warnings are in the record
-  command's output.
-- **`#187` is now live rather than theoretical**: `check_doc_budget.py` warns that the friction log
-  is over budget. Both the graduation marker and the inbox contribute, and `#187`'s own measurement
-  is that a sweep lands the file back just under budget — so the warning clears, narrowly, and
-  returns. Read `#187` before assuming either half is sufficient on its own.
-- **Carried forward from the block this session swept to history, because all are still open and
-  the sweep would otherwise drop them:** `#124` (documented default flipped, prose only — nothing an
-  adopter runs changed while `#6`'s engine is unvendored), `#167`, `#169`, `#170` from the draft-bit
-  and contract-numbering thread, `#33`/`#112`, which still want confirming against `#131` before
-  either is deliberately marked done, `#181` (a merge that lands without its `(#N)` suffix —
-  recurring, and not repairable in place), and the cs-toolkit Phase 2 blockers `#41`/`#37`/`#134`,
-  still untouched. **A first pass at this bullet folded only the issue-numbered items and dropped
-  these**, which is the same invariant failing twice in one PR.
-- Inbox length: `check_doc_budget.py` prints the live figure.
-
-▶ Next: **`session-start`** — `#190` is the one clear thread and the rest is diffuse. **Page the
-tracker rather than dumping it:** `#143` records `session-start` overflowing its tool limit above 68
-open issues and is still open; `gh issue list --state open --limit 25 --json number,title,labels,state`
-is the form that works here. That issue's own remedy names a GitHub-MCP parameter, and no MCP server
-is configured in this checkout, so the `gh` form is the executable one.
-
-______________________________________________________________________
-
-## Earlier session — 2026-07-31 (the loop got its exits, reviewed under the rules it replaces)
-
-**Theme —** `#176` merged (`65c9ee4`): a prose finding is disposed of by whether anything
-**executes** the text; a record-prose imprecision below HIGH is **logged** — reply on the PR plus
-a tracker artifact, no commit — instead of fixed; fix rounds batch into one push; re-runs aim at
-the delta since the last receipt's `--head`; a record-prose-only delta takes **one lens**
-(`fallback:delta`) instead of the panel. The review rounds that forged the guards are enumerated
-on `#176` — one disposition comment per round, totals in the squash message — and **the PR could
-never take its own exits**: every delta was executed prose, so every round was a full panel. That
-measures what the exits are for — record-prose PRs like this handoff update, not doctrine PRs.
-
-- **`#176` merged.** `fallback-review-panel.md` (discriminator, logged disposition, delta pass,
-  batching, cockpit-built lens worktrees), `wrap-up.md` (the record-prose authoring checklist this
-  block is written under), `pr-watch.md` and config comments (the three receipt literals). This
-  line is a pointer, not a copy.
-- **The final clause merged reviewed by no lens** — disclosed on the PR, on the operator's call:
-  `#27`'s gap chosen rather than missed, the same choice the block below records for `e5bd82b`,
-  twice in one day.
-- **Cockpit-built lens trees inverted `#75`'s failure mode.** Every lens attestation on `#176`
-  reports the named sha found in the provided tree; the recovery burden `#75` records never
-  fired. Counter-occurrence comment posted on `#75`.
-- **Filed:** `#177` (session records restate doctrine that later changes supersede — also the
-  logged disposition's first artifact) and `#184` (the terminal rounds' below-HIGH remainder,
-  including the message-only-delta gate note from the review bot's second pass).
-
-**Learned**
-
-- **The logged disposition's first live use also bent it, and the next round caught the bend.** A
-  stale restatement in this file's 2026-07-29 block — lens-marked LOW imprecision, record prose —
-  got a reply and `#177` and no commit of its own; but the artifact was first promised to this
-  inbox, a committed file, exactly what the rule forbids, and the round after made the tracker
-  artifact mandatory at disposition time. An honesty model working is indistinguishable from the
-  author happening to be honest; the record of the bend is what makes the difference checkable.
-- **Two of my own checks had the examined-nothing shape, inside the PR that documents that
-  shape.** The keyword scan read the diff but not the commit message committed beside it — two
-  banned adjacencies reached the pushed branch (rewrite declined at the permission gate;
-  disclosed; squash written fresh and scanned). And two comment-then-ack batches piped the poll
-  to `/dev/null` before `--mark-seen`, acknowledging a real bot finding unread — caught only
-  because a later poll's coverage line named a review at a sha no panel round had claimed. Both
-  in the inbox.
-- **A permission denial is a design input, not an obstacle.** Declined force-push and reset left
-  the branch label stranded on a superseded commit; committing detached and pushing
-  `HEAD:<branch>` kept every later fix fast-forward, and the label was deleted after merge.
-
-**Open, and owned by nothing yet**
-
-- **The delta pass has never run.** This wrap-up's PR is its first natural candidate: a
-  record-prose-only fix round here takes one configured lens and the `fallback:delta` receipt,
-  per the doctrine now on `main`.
-- `#177` and `#184` are occurrence collectors, open by design. The first PR to touch the panel
-  doc's stopping section should sweep `#184`'s item on the two surviving absolutes.
-- Inbox length: `check_doc_budget.py` prints the live figure; three entries added below the
-  fresh graduation marker.
-
-▶ Next: **`session-start`** — the block below's starter stands, minus what this session folded
-in: `#176` and `#177` are now in this file, so the sharpest remaining are `#179`/`#180`'s
-beside-or-inside-`#150` call and `#174`'s yes/no on the two truncating writes.
 
 ______________________________________________________________________
 
