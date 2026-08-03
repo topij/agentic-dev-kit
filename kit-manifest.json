@@ -44,7 +44,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "c89ae52397a2945a7f3a21e93666553d2e91e654c547ec6516411f1c69984608"
+      "sha256": "ca32c5eb37b35f6364ffb69a1673cd5a9fcbbacd8fa6baebc0e03a648cd5589c"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",

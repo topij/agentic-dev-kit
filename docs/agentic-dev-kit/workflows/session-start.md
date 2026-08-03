@@ -86,10 +86,12 @@ like good news, it looks like a missing handoff.
 
   - **Payload overflow** — pulling full descriptions is what makes a naive "dump
     everything" call overflow a tool's token limit. The fix is to drop the body, never
-    to ask for fewer issues. Measured on this repo 2026-08-03 at 136 open issues, via
-    `gh issue list --state open --limit 500 --json … | wc -c`: with `body` ~386 KB;
-    the field list above ~49 KB; that same list rendered through a compact
-    one-line-per-issue `--template` ~18 KB. Field selection is what makes a
+    to ask for fewer issues. Measured on this repo 2026-08-03 at 136 open issues,
+    holding **one** field set across all three so they are comparable —
+    `gh issue list --state open --limit 500 --json number,title,labels,state,updatedAt,url`
+    piped to `wc -c` — that call returns ~48 KB, rising to ~408 KB with `,body`
+    appended and falling to ~18 KB through a compact one-line-per-issue
+    `--template`. Field selection is what makes a
     **complete** list affordable, which is why it comes first — but it bounds the
     bytes *per row*, not the total, so a backlog large enough to overflow even the
     compact form needs **paging**: fetch successive pages and concatenate them all.
@@ -98,17 +100,28 @@ like good news, it looks like a missing handoff.
   - **Silent truncation** — the same failure as the PR list above, and the worse of
     the two, because the response is well-formed and the exit code is zero. Pass an
     explicit limit above your real backlog (`gh issue list` defaults to **30**, and
-    `gh pr list` to 30 — both verified on gh 2.96.0), and if exactly `--limit` rows
-    come back, assume there are more and re-run higher. Where the backend caps the
-    limit below your backlog, re-running higher is not available and paging is the
-    only route: keep fetching until a short page ends the data.
+    `gh pr list` to 30 — both verified on gh 2.96.0), then check the row count against
+    **two** ceilings rather than one: your requested limit, and the backend's own
+    maximum. Equalling either means assume there are more.
+
+    The second ceiling is the one a bare "did I get exactly `--limit` rows?" check
+    cannot see — ask a backend that caps at 100 for 500 and you get 100, which equals
+    neither your limit nor the end of the data, so the rule never fires and a
+    truncated result reads as complete. Caps are the norm, not the corner: of the two
+    tracker MCP clients reachable from this session, Jira's
+    `searchJiraIssuesUsingJql` caps `maxResults` at **100** and Linear's `list_issues`
+    caps `limit` at **250**. Above your own cap, re-running higher is not available
+    and paging is the only route — both expose one (`nextPageToken`, `cursor`) — so
+    keep fetching until a short page ends the data.
 
   Reaching for the wrong one is not hypothetical: `--limit 25` was adopted **in this
   repo** as the remedy for the overflow above and carried in the handoff as "the form
   that works here", while the backlog stood at 89 open issues. Where field selection is
-  unavailable entirely (the GitHub-Issues MCP tool exposes none), paging is the only
-  route left rather than one option among several. Shrinking the request to fit the
-  tool is the mistake this bullet exists to stop, whichever limit you shrink.
+  unavailable entirely, paging is the only route left rather than one option among
+  several — [`#143`](https://github.com/topij/agentic-dev-kit/issues/143) reports that
+  of the GitHub-Issues MCP client, and is the place to confirm it against a live
+  server. Shrinking the request to fit the tool is the mistake this bullet exists to
+  stop, whichever limit you shrink.
 
 ### 1 · Classify each candidate
 
