@@ -58,9 +58,32 @@ The report gives you, per kit-owned file: `unchanged` / `differs` / `missing` /
   `devkit-template: unrendered` means the adoption never completed its seeding step. A
   doc that merely quotes the marker further down is in use and is reported as such.
 
-`differs` deliberately does **not** claim a cause: a hash mismatch cannot distinguish
-"older kit version" from "hand-edited". The report narrows it by schema version; you
-confirm with an actual diff in Step 3.
+**What `differs` splits into depends on whether this repo has a baseline.** A baseline
+is `kit-manifest.json` here recording what *this repo installed*, written by
+`--record-install` at the end of Step 4. With one, the report states a cause as fact:
+
+- **`STALE`** — byte-identical to what was installed here, so nothing was edited.
+  Replace it; nothing local is lost.
+- **`LOCALLY EDITED`** — changed here since install, and the kit's copy never moved.
+- **`STALE and LOCALLY EDITED`** — both. The only state that can lose work.
+
+Without one — which is every repo adopted before this field existed — it falls back to
+`differs` and **does not claim a cause**: a hash mismatch alone cannot distinguish
+"older kit version" from "hand-edited", and the schema-version signal it used to narrow
+by tracks the *config schema*, not file contents, so it was wrong for every kit change
+that did not bump the schema (kit `#51`). Confirm with an actual diff in Step 3.
+
+If the report says `baseline: none recorded`, you can stamp one from what is installed
+right now — before changing anything, so it records the state you are upgrading *from*:
+
+```bash
+uv run <engine-dir>/kit_doctor.py --record-install --from-kit /tmp/agentic-dev-kit
+```
+
+Only do this when the current install is the one you want as the reference. It records
+the files as they sit, so anything already hand-edited is recorded *as* the baseline and
+will read as `STALE` rather than `LOCALLY EDITED` from then on. When in doubt, skip it
+here and let Step 4 write the baseline after the copies instead.
 
 ## Step 2 — Branch, refresh the migrator, then migrate
 
@@ -142,7 +165,13 @@ that installed nothing still shows no `missing-required`.
   will appear here rather than above. It is a much better prior than the old blanket
   "decide, don't assume", not a proof: if a piece you are declining is a library a
   shell component plausibly reaches for, check before dropping it.
-- **`differs`** → `diff` the local file against the kit's, and read the diff:
+- **`STALE`** → replace it. The baseline proves it was never touched here, so the diff
+  you would read is entirely kit-authored. This is the state that used to be reported as
+  a likely local edit and cost a hand-diff each time.
+- **`LOCALLY EDITED`** / **`STALE and LOCALLY EDITED`** → the `differs` procedure below,
+  which is now reached only when there really is a local change to reconcile.
+- **`differs`** (no baseline, or a file the baseline has no entry for) → `diff` the local
+  file against the kit's, and read the diff:
   - Only kit-authored changes (the local copy is simply older) → replace it.
   - Local edits present → for each, find where that value now lives in
     `config/dev-model.yaml` and move it there, then take the kit's engine. If there is no
@@ -168,6 +197,31 @@ entries are exactly where the risk is.
 - **`.claude/settings.json`** — if this repo has its own, **merge** the kit's hooks and
   permissions into it rather than replacing; it likely carries project-specific entries.
 
+**Then record the baseline — this step is not optional, and its omission is what made
+`differs` unjudgeable for every adopter until now:**
+
+```bash
+uv run <engine-dir>/kit_doctor.py --record-install --from-kit /tmp/agentic-dev-kit
+```
+
+This rewrites `kit-manifest.json` **here** to record what this repo now has installed,
+stamped with the kit commit it came from. Nothing else writes it: `/adopt` and `/upgrade`
+copied kit files in and left this file at whatever it was on the day it first arrived, so
+an adopter's baseline drifted further from its own tree with every upgrade. Measured on a
+real adopter (2026-08-03): its manifest recorded `wrap-up.md` at the kit's 2026-07-15
+version while the file beside it had been installed from a 2026-08-03 commit — nineteen
+days of skew, against which three untouched files read as local edits.
+
+**Order matters, and it is the reverse of what feels natural.** Run this *after the
+copies and before re-applying any local patch you decided to keep*:
+
+- A patch applied **after** recording reads as `LOCALLY EDITED` at every future upgrade —
+  which is what you want for a patch you are carrying deliberately.
+- A patch applied **before** recording is baked into the baseline and reads as `STALE`
+  forever, silently losing the flag that says someone chose it.
+
+Commit the rewritten `kit-manifest.json` with the rest of the upgrade.
+
 ## Step 5 — Verify
 
 ```bash
@@ -176,8 +230,16 @@ uv run --with pytest --with pyyaml python -m pytest <engine-dir>/lib/state_paths
 uv run <engine-dir>/check_doc_budget.py
 ```
 
-`kit_doctor` should now report zero `differs` and zero `unknown-version`, with `missing`
+`kit_doctor` should now report zero mismatches of every kind — `differs`, `STALE`,
+`LOCALLY EDITED`, `STALE and LOCALLY EDITED` — and zero `unknown-version`, with `missing`
 containing only deliberately-omitted pieces. Anything else means Step 3 left something.
+
+The one expected exception is a local patch you chose to keep in Step 3: it reports
+`LOCALLY EDITED`, which is the baseline working as intended. Name it in the PR body so
+the next upgrade does not re-litigate it.
+
+It should also now print a `baseline:` line naming the kit commit you installed from. If
+it still says `none recorded`, Step 4's `--record-install` did not run.
 
 > **Known gotcha:** the `state_paths` tests fail when run from inside a worktree carrying
 > a `.devkit_state_root` marker — the fixture neutralizes the environment but not marker

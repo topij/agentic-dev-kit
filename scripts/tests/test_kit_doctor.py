@@ -884,3 +884,267 @@ def test_a_healthy_report_does_not_grow_the_parenthetical(tmp_path, capsys):
     assert line == f"  files: 1 unchanged, 0 differ, {absent} missing, 0 unknown"
     assert "required by an installed engine" not in out
     assert "this install is broken" not in out
+
+
+# --- the install baseline and the three-way drift split (#51) ---------------
+#
+# `differs` used to guess its cause from `kit.version`, which tracks the CONFIG
+# SCHEMA and therefore does not move when kit FILES change. Every doc, engine
+# and doctrine fix between schema bumps landed in the "same schema version, so
+# these are likely LOCAL EDITS" branch — wrong for the commonest case, and
+# worst for a freshly-upgraded adopter, who is the most likely to be one commit
+# behind and the least deserving of being sent hunting for edits they never
+# made.
+#
+# The fix is a baseline, not better wording: a second manifest recording what
+# this repo actually installed. A file matching it cannot be a local edit
+# however far upstream has moved, which turns the guess into arithmetic.
+#
+# These tests pin the truth table, and — as importantly — the two ways it may
+# NOT be applied: without a trustworthy baseline (below), and to a file the
+# baseline has no entry for.
+
+
+def _sha(text: str) -> str:
+    """The sha a file with this content would hash to, without writing one."""
+    import hashlib
+
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _baseline(entries: dict[str, str], kit_commit: str | None = None) -> dict:
+    """A manifest carrying the `kit_commit` KEY, which is the trust signal."""
+    return {
+        "kit_version": 2,
+        "kit_commit": kit_commit,
+        "files": {p: {"sha256": h, "role": "engine"} for p, h in entries.items()},
+    }
+
+
+def _split_case(tmp_path, *, installed: str, ships: str, recorded: str | None):
+    """Drive one row of the table: what the file says, what the kit ships, what
+    the baseline recorded. Returns the single FileStatus for that file."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", installed)
+    rel = "scripts/check_doc_budget.py"
+    baseline = _baseline({rel: _sha(recorded)}) if recorded is not None else _baseline({})
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, _manifest({rel: _sha(ships)}), config, baseline)
+    return next(f for f in report.files if f.path == rel), report
+
+
+def test_the_kit_release_manifest_carries_no_commit_and_is_not_a_baseline(tmp_path):
+    """`--record-install` is the ONLY writer of `kit_commit`, which is what lets
+    its presence mean "a kit recorded an install here".
+
+    The hazard this closes: the `cp -r` quickstart (#18) copies the kit's
+    manifest into an adopter verbatim. If the release manifest carried the
+    field, that copy would be trusted as a record of an install it knows nothing
+    about, and every file installed at an older kit version would read as a
+    local edit — #51 reproduced by the fix for #51.
+
+    Also pins byte-determinism, which the CI manifest gate depends on: a HEAD
+    sha here would change the file on every commit."""
+    root = _fake_repo(tmp_path)
+    manifest = kit_doctor.generate_manifest(root, 2)
+    assert "kit_commit" not in manifest
+    assert not kit_doctor._baseline_trusted(manifest), "a release manifest is not a baseline"
+    assert kit_doctor.generate_manifest(root, 2) == manifest
+
+
+def test_a_copied_release_manifest_does_not_impersonate_a_baseline(tmp_path):
+    """The `cp -r` path, end to end: an adopter whose only manifest is the kit's
+    own must still get the hedge, not a confident local-edit claim about files
+    it merely installed at an older version."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "installed at an older kit")
+    rel = "scripts/check_doc_budget.py"
+    released = kit_doctor.generate_manifest(root, 2)
+    released["files"][rel] = {"sha256": _sha("what the kit ships now"), "role": "engine"}
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, released, config, released)
+    assert not report.baseline_trusted
+    assert next(f for f in report.files if f.path == rel).state == "differs"
+
+
+def test_an_untouched_file_the_kit_moved_past_is_stale_not_edited(tmp_path):
+    """The #51 headline, and the case measured live on a real adopter: installed
+    unmodified, upstream changed, previously reported as a likely LOCAL EDIT."""
+    status, _ = _split_case(tmp_path, installed="v1", ships="v2", recorded="v1")
+    assert status.state == "stale"
+    assert "installed" in status.detail and "kit ships" in status.detail
+
+
+def test_a_changed_file_the_kit_left_alone_is_locally_edited(tmp_path):
+    """The other direction. Without this the check is not discriminating — a
+    split that answered STALE for everything would pass the test above."""
+    status, _ = _split_case(tmp_path, installed="mine", ships="v1", recorded="v1")
+    assert status.state == "locally-edited"
+
+
+def test_a_file_changed_on_both_sides_says_so(tmp_path):
+    """The only state that can lose work, so it must not collapse into either
+    single-sided one."""
+    status, _ = _split_case(tmp_path, installed="mine", ships="v2", recorded="v1")
+    assert status.state == "stale-and-edited"
+
+
+def test_a_file_edited_into_agreement_with_the_kit_is_unchanged(tmp_path):
+    """Edited, but edited to exactly what the kit ships. `unchanged` is defined
+    against the COMPARISON manifest alone because the instruction — do nothing —
+    follows from that and not from the baseline, which is merely out of date."""
+    status, _ = _split_case(tmp_path, installed="v2", ships="v2", recorded="v1")
+    assert status.state == "unchanged"
+
+
+def test_a_file_absent_from_the_baseline_is_not_judged(tmp_path):
+    """Installed after the baseline was recorded. The baseline is trustworthy
+    and still has nothing to say about THIS file, so the report must fall back
+    to the undifferentiated state rather than reading a missing entry as
+    evidence of anything."""
+    status, _ = _split_case(tmp_path, installed="mine", ships="v1", recorded=None)
+    assert status.state == "differs"
+    assert "not in baseline" in status.detail
+
+
+def test_a_baseline_predating_the_field_is_distrusted(tmp_path):
+    """Every adopter installed before this change has a manifest with no
+    `kit_commit` key, and — measured on a real one — a baseline nineteen days
+    older than the files beside it. Trusting it would re-file every stale file
+    as an edit, which is #51 reproduced in a new place. The report degrades to
+    the pre-#51 wording instead."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    _write(target, "installed")
+    rel = "scripts/check_doc_budget.py"
+    old_style = _manifest({rel: _sha("upstream")})  # no kit_commit key
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, old_style, config, old_style)
+    assert not report.baseline_trusted
+    assert next(f for f in report.files if f.path == rel).state == "differs"
+
+
+def test_the_trust_signal_is_the_key_not_its_value():
+    """An install recorded retroactively knows its hashes but not its origin, so
+    `kit_commit: null` is a legitimate recorded baseline. Reading the VALUE as
+    the signal would throw that case away."""
+    assert kit_doctor._baseline_trusted({"kit_commit": None, "files": {}})
+    assert kit_doctor._baseline_trusted({"kit_commit": "a" * 40, "files": {}})
+    assert not kit_doctor._baseline_trusted({"files": {}})
+    assert not kit_doctor._baseline_trusted(None)
+
+
+@pytest.mark.parametrize("state", ["stale", "locally-edited", "stale-and-edited"])
+def test_every_split_state_still_counts_as_drift(state):
+    """The split states are refinements of `differs`, not lesser categories.
+    Dropping one from `drifted` would remove it from the exit code AND from the
+    CI manifest gate — so naming a drift precisely would be what made it stop
+    being reported. Parametrized so adding a fourth state fails here loudly."""
+    report = kit_doctor.Report(
+        kit_version_config=2,
+        kit_version_manifest=2,
+        engines_dir="scripts",
+        engines_dir_ok=True,
+        hooks_installed=True,
+        narrative_rendered={},
+        files=[kit_doctor.FileStatus("x", "engine", state)],
+    )
+    assert [f.state for f in report.drifted] == [state]
+
+
+def test_the_count_line_totals_every_mismatch_state(tmp_path, capsys):
+    """`N differ` must keep meaning "how many kit files are not what the kit
+    ships" once the causes are split out, or a fully-split report reads as
+    `0 differ` with its files listed underneath."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "mine")
+    rel = "scripts/check_doc_budget.py"
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(
+        root,
+        _manifest({rel: _sha("v1")}),
+        config,
+        _baseline({rel: _sha("v1")}),
+    )
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+    assert next(ln for ln in out.splitlines() if ln.startswith("  files:")).count("1 differ") == 1
+    assert "LOCALLY EDITED" in out
+
+
+def test_record_install_hashes_the_installed_files_not_the_kit(tmp_path):
+    """The distinction the whole fix rests on. Copying the kit's hashes would
+    assert "these came from kit HEAD" — false for any install that is merely
+    old, and it would re-file every stale file as an edit."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "what is actually here")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    recorded = kit_doctor.record_install_manifest(root, config, 2, None)
+    entry = recorded["files"]["scripts/check_doc_budget.py"]
+    assert entry["sha256"] == _sha("what is actually here")
+    # Only what is installed: absent files get no entry at all, so a later
+    # install of one is `differs`/unjudgeable rather than a false edit.
+    assert "scripts/pr_watch.py" not in recorded["files"]
+
+
+def test_record_install_keys_by_kit_layout_under_a_vendored_engines_dir(tmp_path):
+    """Both manifests must be keyed identically or `inspect` looks the baseline
+    up under a path it was never written under — which would silently make every
+    vendored-engine adopter unjudgeable, i.e. exactly the repos this is for."""
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    _write(root / "scripts" / "devkit" / "check_doc_budget.py", "vendored")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    recorded = kit_doctor.record_install_manifest(root, config, 2, None)
+    assert "scripts/check_doc_budget.py" in recorded["files"]
+    assert "scripts/devkit/check_doc_budget.py" not in recorded["files"]
+
+
+def test_record_install_refuses_a_from_kit_that_is_not_a_checkout(tmp_path, capsys):
+    """Naming a checkout is asking the provenance question explicitly. Answering
+    it with null — the value that means "nobody asked" — would be silent."""
+    root = _fake_repo(tmp_path)
+    code = kit_doctor.main(
+        ["--record-install", "--root", str(root), "--from-kit", str(tmp_path / "not-a-repo")]
+    )
+    assert code == 2
+    assert "cannot resolve HEAD" in capsys.readouterr().err
+    assert not (root / "kit-manifest.json").exists()
+
+
+def test_record_install_without_a_kit_still_splits_drift(tmp_path, capsys):
+    """Provenance is optional and the edit axis does not depend on it: the
+    hashes were taken from the files. Only "how far behind upstream" needs the
+    commit, and that is a separate question."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "installed")
+    assert kit_doctor.main(["--record-install", "--root", str(root)]) == 0
+    assert "provenance is unrecorded" in capsys.readouterr().err
+    baseline = json.loads((root / "kit-manifest.json").read_text())
+    assert baseline["kit_commit"] is None
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(
+        root,
+        _manifest({"scripts/check_doc_budget.py": _sha("upstream moved")}),
+        config,
+        baseline,
+    )
+    assert report.baseline_trusted
+    assert [f.state for f in report.drifted] == ["stale"]
+
+
+def test_an_unreadable_baseline_degrades_instead_of_aborting(tmp_path, capsys):
+    """A read-only diagnostic must not withhold the whole report because a
+    supplementary file is malformed — but the degrade has to be visible."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "installed")
+    kit_manifest = tmp_path / "kit" / "kit-manifest.json"
+    _write(
+        kit_manifest,
+        json.dumps(_baseline({"scripts/check_doc_budget.py": _sha("upstream")})),
+    )
+    _write(root / "kit-manifest.json", "{ this is not json")
+    code = kit_doctor.main(["--root", str(root), "--manifest", str(kit_manifest)])
+    captured = capsys.readouterr()
+    assert code == 1, "drift still reported"
+    assert "unreadable baseline" in captured.err
+    assert "differ" in captured.out

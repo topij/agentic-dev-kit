@@ -87,6 +87,19 @@ For each piece, **copy only if the target doesn't already exist**:
 **Never overwrite an existing file.** If something you didn't anticipate collides, stop
 and ask the operator.
 
+**Last, once every copy above is done, record the drift baseline:**
+
+```bash
+uv run <engines-dir>/kit_doctor.py --record-install --from-kit <kit checkout>
+```
+
+This writes `kit-manifest.json` here, recording which kit-owned files this adoption
+actually installed and the kit commit they came from. It is what lets a later
+`/upgrade` tell a **stale** file from a **hand-edited** one instead of guessing — the
+guess was wrong for the commonest case and told adopters to hunt for edits they never
+made (kit `#51`). Run it **after** the copies, so it records what landed; a sized-down
+adoption is recorded as exactly the subset it installed.
+
 ## Step 4 — Verify
 
 - Portability tests: run the kit's suites explicitly. `/adopt` does not install the kit's
@@ -99,6 +112,9 @@ and ask the operator.
 
   (Adjust the prefix when engines live directly under `scripts/`.)
 - `check_doc_budget`: run it — it should read the configured plan via `config/dev-model.yaml`.
+- `kit_doctor`: run it. It should report zero mismatches, `missing` containing only the
+  pieces Step 2 deliberately left out, and a `baseline:` line naming the kit commit. A
+  `baseline: none recorded` line means Step 3's `--record-install` did not run.
 - Confirm the repo's CI/lint scope **skips** the kit files (or add a kit-dir exclude if lint is repo-wide).
 
 ## Step 5 — Record the friction (the flywheel's first turn)
