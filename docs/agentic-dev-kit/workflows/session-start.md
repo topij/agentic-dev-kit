@@ -86,15 +86,15 @@ like good news, it looks like a missing handoff.
 
   - **Payload overflow** — pulling full descriptions is what makes a naive "dump
     everything" call overflow a tool's token limit. The fix is to drop the body, never
-    to ask for fewer issues. Measured on this repo 2026-08-03 at 136 open issues,
-    holding **one** field set across all three so they are comparable —
+    to ask for fewer issues. One measurement carries that, taken on this repo
+    2026-08-03 at 137 open issues:
     `gh issue list --state open --limit 500 --json number,title,labels,state,updatedAt,url`
-    piped to `wc -c` — that call returns ~48 KB, rising to ~408 KB with `,body`
-    appended and falling to ~18 KB through a compact one-line-per-issue
-    `--template`. Field selection is what makes a
+    piped to `wc -c` returns ~49 KB, and appending `,body` to that same call takes it
+    to ~421 KB. Field selection is what makes a
     **complete** list affordable, which is why it comes first — but it bounds the
-    bytes *per row*, not the total, so a backlog large enough to overflow even the
-    compact form needs **paging**: fetch successive pages and concatenate them all.
+    bytes *per row*, not the total, so a backlog large enough to overflow even a
+    field-limited response needs **paging**: fetch successive pages and concatenate
+    them all.
     Still never by lowering the row count, which trades this loud failure for the
     silent one below.
   - **Silent truncation** — the same failure as the PR list above, and the worse of
@@ -104,15 +104,20 @@ like good news, it looks like a missing handoff.
     **two** ceilings rather than one: your requested limit, and the backend's own
     maximum. Equalling either means assume there are more.
 
-    The second ceiling is the one a bare "did I get exactly `--limit` rows?" check
-    cannot see — ask a backend that caps at 100 for 500 and you get 100, which equals
-    neither your limit nor the end of the data, so the rule never fires and a
-    truncated result reads as complete. Caps are the norm, not the corner: of the two
-    tracker MCP clients reachable from this session, Jira's
-    `searchJiraIssuesUsingJql` caps `maxResults` at **100** and Linear's `list_issues`
-    caps `limit` at **250**. Above your own cap, re-running higher is not available
-    and paging is the only route — both expose one (`nextPageToken`, `cursor`) — so
-    keep fetching until a short page ends the data.
+    A backend maximum announces itself in one of two ways, and only one is safe. It
+    may **reject** the over-cap request: both tracker MCP clients reachable from this
+    session do, declaring a JSON-Schema `maximum` that fails validation — Jira's
+    `searchJiraIssuesUsingJql` at `maxResults` **100**, Linear's `list_issues` at
+    `limit` **250**. That is the loud kind, and it is self-correcting: you learn the
+    ceiling from the error. Or it may **serve the cap and say nothing**, which is the
+    same well-formed, exit-zero shape as the default above.
+
+    Either kind lands you in the same place, which is the reason to track the second
+    ceiling at all: once you have requested the backend's maximum and received
+    exactly that many rows, you are at both ceilings at once and cannot tell a
+    complete list from a truncated one. Raising the limit is no longer available, so
+    **page** — both clients above expose it (`nextPageToken`, `cursor`) — and keep
+    fetching until a short page ends the data.
 
   Reaching for the wrong one is not hypothetical: `--limit 25` was adopted **in this
   repo** as the remedy for the overflow above and carried in the handoff as "the form
