@@ -4,6 +4,95 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-08-03 (the tracker gather, and a failure mode `#248` had not named)
+
+**Theme —** The shipped rule never changed after round one. Across **every** review round on
+`#260` and `#263`, each finding was in a claim written *about* the fix — and the dominant shape
+was not a drifted restatement but an inference presented as an observation, which `#248` does
+not currently describe. Both loops ended by **deleting** the claim that kept breaking rather
+than repairing it again.
+
+- **`#260` — `session-start`'s tracker gather gets a row limit** (`601a225`). Its PR bullet was
+  hardened in `e49ddf3`; the tracker bullet three lines below carried nothing, because
+  "field-limited" governs *which fields*, never *how many rows*. Field selection and the row
+  limit are separate controls, and the returned count is now suspect against **two** ceilings —
+  yours and the backend's.
+- **`#262` — the same gather in `parallel plan`** (`fd9506f`), by pointer rather than copy. A
+  truncation there does not shorten a briefing, it narrows the input to a set of isolated lanes,
+  and nothing downstream recovers the tickets past the cut.
+- **`#263` — prefer the backend's own has-more signal** (`56b42bf`). Row-count arithmetic is the
+  fallback, not the method. Evidence the previous PR could not have had: Linear at its schema
+  maximum answered `hasNextPage: true` — `#260`'s ceiling-equals-count case, reported outright
+  instead of inferred.
+- **`#258` — the handoff stops restating derived state** (`7546bdd`). The rule **replaced**
+  `wrap-up.md`'s "The invariant, not the figure" rather than joining it: that bullet is what
+  permitted the defect, since the stale line followed it exactly. This block is the rule's first
+  use.
+- **Filed:** `#264` (Jira's `nextPageToken` is an input, `endCursor` the output; the doc presents
+  them as symmetric with Linear's `cursor`), `#261` (filed and closed here), and **`CUS-1119`**
+  on cs-toolkit's own tracker. Occurrences on `#42`, `#44` (where a later comment retracts a fix
+  an earlier one proposed), `#143`, `#179`, `#248`.
+
+**Learned**
+
+- **The rule was never the defect.** Every finding was in the surrounding evidence — an untested
+  mechanism, a measurement that broke its own stated method, a citation to the wrong issue. What
+  ended both loops was removal: the byte-comparison row that drew defects in consecutive rounds
+  was cut rather than repaired again.
+- **`#248` may be named too narrowly.** Its framing is a restated fact drifting from its owner.
+  The dominant failure here was an **inference presented as an observation** — "ask for 500 and
+  you get 100" when both cited clients reject; "one field set across all three" when the template
+  rendered four of six. A restatement has a source to diff against; an untested assertion has
+  none, which is why nothing catches it. Both instances were found by a lens that **called the
+  tool** rather than read its schema. Enumerated on `#248`.
+- **The operator asking "is that actually true?" was the cheapest intervention available**, and
+  it fired on claims inherited from this repo's own archive — including "no MCP server is
+  configured in this checkout", which was false and was the premise of a whole paragraph.
+- **A rate-limited bot's stub carries the same commit-range marker as a real review.** On one PR
+  that marker sat beside a genuine clean review; on the next, beside "we couldn't start this
+  review". Zero review objects in both. The discriminator is the actionable-comments marker —
+  which `review.noise_markers` deliberately discards. `#44`.
+
+**Decided this session (operator)**
+
+- **Both `wrap-up` runtimes harmonize in one pass.** Nothing relies on cs-toolkit's Codex
+  `session-wrap-up` skill, so `#93`'s *compatibility* half is retired and the slug becomes a plain
+  rename. Its *content-recovery* half stands: those forked lines may hold knowledge the shared doc
+  lacks, so map before deleting.
+- **The "Filed this session" list stays.** An event is not a tally — the enumeration is
+  recoverable only by a dated tracker query; a count beside it is what recounts keep finding
+  wrong. Written into `wrap-up.md`'s rule.
+
+**cs-toolkit pre-flight — this changes the next step**
+
+Established by comparing `kit-manifest.json` against the live checkout, not assumed:
+
+- **`parallel.md` is not installed there**, so the standing "convert the `/parallel` adapter"
+  had no target to point at. Most of the manifest is likewise absent, including
+  `fallback-review-panel.md` and `safety-critical-changes.md` — sessions there have no panel
+  doctrine when a bot goes down.
+- **Its `session-start.md` is content-identical to kit `6bf4443` but byte-different** — a
+  markdown formatter reflowed tables and re-wrapped paragraphs. `kit_doctor` compares bytes, so
+  a formatter in an adopter makes kit-owned docs read as drifted permanently. Bears on `#51`.
+- **`CUS-1119`** — its `list_dev_backlog.py` caps at 40, does not page, and applies the cap
+  *before* filtering, against a Linear project whose size is on that ticket. The kit fix does not
+  reach it.
+
+**Open, and owned by nothing yet**
+
+- **Carried forward:** `#243` (still the precondition for the `triage-friction-log` /
+  `post-merge-systemize` conversions, not for `/parallel`), `#256`, `#248`, `#264`, `#236`,
+  `#231`, `#213`, `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`, `#124`, `#169`,
+  `#93`, `#143`.
+
+▶ Next: **cs-toolkit — install the shared workflows first, then convert `/parallel` and
+`/wrap-up` together.** Install at current `main`, not at whatever the repo last saw. Then
+`/parallel` (a ~200-line fork with its shared doc now present) and `/wrap-up` on **both**
+runtimes in one pass — `.claude/commands/wrap-up.md` and `.agents/skills/session-wrap-up/`,
+renaming that slug to `wrap-up`. Use the method `in-parallel-oy/cs-toolkit#1826` proved: map
+every section before deleting any, and contribute anything generic upstream first. Every
+conversion so far has found a kit bug the fork was hiding.
+
 ### 2026-08-03 (the conversion proved itself, and the record kept outrunning the work)
 
 **Theme —** Three kit PRs merged, one closed unmerged, one adopter converted. The durable

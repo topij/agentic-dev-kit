@@ -43,6 +43,53 @@ invocation, the way `pr-watch.md` names `pr_watch.py`. Worth checking at the sam
 `--carry-forward` is the channel the round-N prompts should have used, since this session
 passed prior-round framing as hand-written prose in the lens brief instead.
 
+**Second occurrence, same day, on PR `#294`** — every lens prompt hand-authored again, across
+many more rounds than the entry above, before this was noticed. Two things that only show at
+this volume, and both are arguments for the engine rather than for discipline:
+
+- **The brief is unverified input and nothing treats it as such.** One prompt carried a
+  diffstat I had never measured; a lens caught it only because it independently ran
+  `git show --stat`. A rendered prompt cannot contain a figure the author invented.
+- **Round-to-round framing drift is invisible and load-bearing.** Later rounds aimed lenses
+  at the previous round's defect shape, which is useful — but hand-writing it means no round
+  can be compared with another, and "this round found less" is uninterpretable when the brief
+  also changed. `--carry-forward` exists for exactly this.
+
+The panel also wrote into the live checkout twice on this PR, by routes that differ —
+`cp -R` of a linked worktree (`#270`'s third occurrence) and, separately, a cwd that resets
+to the repo root between tool calls (its fourth). The fourth comment calls that cwd route a
+new sub-mechanism; `#270`'s **first** comment already named a cwd reset as a proximate
+cause, so what is new there is the route reaching `init.sh`, not the observation. Both are on `#270`, with a cockpit before/after baseline as the
+proposed control. That two distinct routes reached the same damage is itself the argument
+for a rendered prompt: a control stated once in an engine, rather than remembered per round
+per lens.
+
+## 2026-08-04 — `/adopt`'s guard could not be verified by anything the repo runs
+
+Severity **H**. Not a workflow bug; a gap in what the kit can check.
+
+PR `#294` put a safety-critical guard into `.claude/commands/adopt.md` — shell that decided
+whether `init.sh` would overwrite an adopter's file. **`make test` passes in full without
+executing a line of it.** No test, no linter, no CI covers a fenced block in a workflow doc,
+and the defects found there were each real: a locale-dependent marker match, a scratch path
+that evaporated between blocks, an unscoped `grep` that resolved a decoy path, a BSD-only
+`mktemp` that silently built an empty-tree probe on Linux.
+
+Every one was found by a human or a lens *running the snippet by hand*. That is not a
+review-thoroughness problem — it is that the kit ships prose containing executable payloads
+and has no way to execute them.
+
+Proposed fix, smallest first: a check that **extracts fenced shell blocks from
+`.claude/commands/` and `docs/agentic-dev-kit/` and syntax-checks each with the shell its
+fence names** — `sh -n` for ```` ```sh ````, `bash -n` for ```` ```bash ```` — would have
+caught the portability and quoting defects, though not the semantic ones. Matching the
+checker to the fence matters: `dash -n` rejects a bash array with
+`Syntax error: "(" unexpected` while `bash -n` accepts it, so checking every block with
+`sh -n` would fail valid `bash` fences on a dash-based CI and pass them on macOS, where
+`/bin/sh` is bash in POSIX mode. Both reproduced with `dash -n` and `bash -n` in `/Users/topi/Coding/agentic-dev-kit`. The durable
+answer is the one `#294` reached by exhaustion: a predicate an engine owns is never restated
+in a document — see `#297`.
+
 ## 2026-08-03 — Backlog migrated to GitHub Issues (#250–#256)
 
 Ninth sweep, LLM-only mode ([#6](https://github.com/topij/agentic-dev-kit/issues/6) still not
