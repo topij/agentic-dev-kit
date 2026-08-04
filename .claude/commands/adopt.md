@@ -30,7 +30,7 @@ Run these probes and record the answers — they drive the plan:
 
 - **Living plan?** `ls ROADMAP.md PLAN.md docs/plan.md docs/handoff.md handoff.md 2>/dev/null`. If one exists, the repo already practices Principle #1 — you'll point the kit at it, not add a second plan.
 - **Skill collisions?** Inspect `.claude/commands/` and `.agents/skills/`. Which of the kit's workflows already exist for either runtime? Keep the adopter's implementation and install only the missing adapters.
-- **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough, and a wrong call here destroys files. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* (`init.sh:1260-1275`) — not just the two entry points, because the `cp -r` quickstart lands `docs/handoff.md` and `docs/friction-log.md` pre-marked, making those the likeliest to carry a marker:
+- **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough, and a wrong call here destroys files. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* (`init.sh:1260-1263` for the four, `:1274-1275` for the entry points) — not just the two entry points. **All four narrative docs ship pre-marked** with `devkit-template: unrendered`, so a repo that took the `cp -r` quickstart has four marker-carrying files before it has any of its own; verified on the shipped copies of all four:
 
   **Read the four narrative paths out of `config/dev-model.yaml`'s `paths:` section
   yourself and substitute them as literals below.** Do not resolve them with a `grep` for
@@ -376,7 +376,7 @@ themselves from what it prints.**
   uv run <engines-dir>/kit_doctor.py --manifest <kit checkout>/kit-manifest.json
   ```
 
-  Bare, it compares this repo against the baseline Step 3c just wrote from these same
+  Bare, it compares this repo against the baseline Step 3b just wrote from these same
   files, so every recorded file matches *by construction* and the check establishes
   nothing — it would pass over a file that was copied wrong. The kit's manifest is an
   independent reference, and it is also the only one carrying `required_by`, which is
@@ -393,7 +393,7 @@ themselves from what it prints.**
   git -C <kit checkout> rev-parse HEAD    # the baseline: line shows its first 12 chars
   ```
 
-  `baseline: none recorded` means Step 3c's `--record-install` did not run at all.
+  `baseline: none recorded` means Step 3b's `--record-install` did not run at all.
 - Confirm the repo's CI/lint scope **skips** the kit files (or add a kit-dir exclude if lint is repo-wide).
 
 ## Step 5 — Record the friction (the flywheel's first turn)
