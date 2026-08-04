@@ -11,6 +11,38 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-04
+
+**`fallback-review-panel.md` never mentions `panel_prompt.py`, so a panel is run by
+hand-authoring every lens prompt — the exact failure that engine exists to prevent.**
+Severity **H**.
+
+Ran seven panel rounds on PR `#289` and hand-wrote both lens prompts each round, from the
+doctrine, because the doctrine's "Running it" section describes what a lens must be told and
+never says anything renders it. Only afterwards did `scripts/panel_prompt.py` turn up. Its
+own docstring opens with the reason it exists:
+
+> Assemble a fallback-review-panel launch prompt instead of hand-authoring it. … **Nothing
+> rendered that.** Every prompt was hand-written from the doctrine, once per lens per round,
+> and `#214` records what it cost.
+
+Established rather than assumed: `git grep panel_prompt` outside the script, its own tests,
+`kit-manifest.json` and `kit_doctor.py`'s `KIT_OWNED` returns nothing. So the engine is
+shipped, kit-owned and tested, and unreachable from the only document that tells you to run a
+panel — which means every adopter hand-authors prompts too.
+
+What it cost here is the failure `#214` names: an omitted contract item is **invisible**,
+because a lens cannot report the absence of an instruction it never received. The three
+properties the script guarantees — the contract quoted rather than restated, the base resolved
+from the remote every run, and identical inputs producing an identical prompt so a round's
+framing differences are deliberate — were all things I re-established by hand each round, and
+the third one I simply did not have: my round-to-round prompt variance was not deliberate.
+
+Proposed fix: `fallback-review-panel.md` "Running it" step 2 names the engine and shows the
+invocation, the way `pr-watch.md` names `pr_watch.py`. Worth checking at the same time whether
+`--carry-forward` is the channel the round-N prompts should have used, since this session
+passed prior-round framing as hand-written prose in the lens brief instead.
+
 ## 2026-08-03 — Backlog migrated to GitHub Issues (#250–#256)
 
 Ninth sweep, LLM-only mode ([#6](https://github.com/topij/agentic-dev-kit/issues/6) still not

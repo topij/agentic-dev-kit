@@ -14,13 +14,88 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-03 — **The review lever that hid a bug.** `#51`'s local half shipped,
-and then an adopter's reviewer found a defect in it that the PR's own later rounds did not
-catch — later ones under an instruction of mine saying that area was covered, but not the one
-aimed straight at it. Aim moves finding-yield, which is why `#209` now recommends it; a wrong
-coverage claim moves it the other way, and neither explains all of it.
+Last updated: 2026-08-04 — **The kit could not hold its own entry points, and shipped one of
+them to every adopter.** `#288` fixed both halves. The durable result is the operator's
+standing goal that reframed the ranking — Codex as an equal-enough development environment —
+and a review record where the code converged early and the prose never did.
 
-## Latest session — 2026-08-03 (the aim lever, and the bug the later rounds did not catch)
+## Latest session — 2026-08-04 (the kit's own entry points, and a claim class that outlived the code)
+
+**Theme —** `seed_doc` had two categories, a shipped skeleton and a file the adopter is using,
+and the kit's own entry points are a third. Both halves of `#288` followed: `CLAUDE.md` rode
+the `cp -r` quickstart into every adopter with nothing rendering, removing or reporting it, so
+their Claude sessions loaded *the kit's* contract; and `AGENTS.md` was reached by file
+**absence**, so the kit could not ship one and a Codex session working in the kit had no entry
+point at all. `#274`'s class, on the two files whose whole job is to be read in the reading
+repo.
+
+- **`#288` — the third category** (`af004b9`, PR `#289`). `KIT_OWN_MARKER` on the kit's own
+  root `AGENTS.md` and `CLAUDE.md`; an adopter's `init.sh` renders over both; a file carrying
+  neither marker is still never touched. `AGENTS.md` holds the contract, `CLAUDE.md` imports
+  it with `@AGENTS.md`, so one file states it and both runtimes load it in full.
+- **`kit_doctor` now checks both entry points**, through a predicate that must agree with
+  `_seedable`. Both sides pin `LC_ALL=C`: `[[:space:]]` is locale-dependent and they matched
+  different characters under any real locale.
+- **Filed:** `#290`, `#291`, `#292`. **Occurrences:** `#211`, `#120`, `#248`, `#209`, `#274`,
+  and `#270`.
+
+**Learned**
+
+- **Each repair to the seed guard introduced the next defect**, all in one predicate. The two
+  that destroyed a real file with no backup were both found by *running* `init.sh` against a
+  hand-built fixture, never by reading it. `#211`'s thesis; the enumeration is on `#211`.
+- **"What checks this new check" was answered wrong three times running** — a guard clause
+  added to prevent silent overwrites was itself unpinned; the check added to catch an
+  incomplete adoption was itself unchecked; the test added to pin a locale fix was itself
+  locale-dependent and would have passed with the fix removed. Each found by mutation, none by
+  reading. On `#211`.
+- **The claims that survived review longest were the ones whose *form* looked rigorous** — a
+  stated `grep` method whose scope was one file while the stale site sat in another, and a
+  comment citing "the C locale" in a script that pinned no locale. A cited mechanism reads as
+  verification and is not. Enumerated on `#248` as a sub-shape it did not name.
+- **The code converged before the prose did, and the gap was most of the review.** The
+  destructive findings stopped early; the rounds after them returned record and coverage
+  findings almost exclusively. Evidence for `#120` over `#211` — on `#120`.
+- **A lens wrote into the live checkout through the isolation route the doctrine prescribes.**
+  `cp -R` of a *linked worktree* copies its `gitdir:` pointer, so the copy is not independent
+  and `init.sh` in it rewrote the real repo's `.git/hooks/`. Invisible to the contract's own
+  attestation, which reports on the handed tree. `#270`.
+- **The local gate is weaker than CI.** An apostrophe in an `awk` comment closed the
+  single-quoted program; `make test` reported a mass of unrelated pytest failures while CI's
+  `sh -n init.sh` names the line. `#292`.
+
+**Decided this session (operator)**
+
+- **Codex as an equal-enough development environment, as soon as possible.** This is a
+  standing goal and it lives on no ticket. It moved `#243` back off the backlog — but
+  **sliced**: `adopt` + `upgrade` first, since the daily loop already works on Codex and the
+  four missing workflows are lifecycle and maintenance.
+- **Merged without a dual-lens pass at the merging head.** The last panel ran three commits
+  earlier; no receipt was recorded, because one would have claimed coverage that does not
+  exist and the engine refuses it once the head moves. The merge gate was the operator's
+  decision plus green CI plus a bot review of the parent — stated on `#289` rather than left
+  to be inferred from a missing receipt.
+
+**Open, and owned by nothing yet**
+
+- **`#290` and `#291` are one complaint** — a single boolean cannot carry what `kit_doctor`'s
+  narrative check now sees, so a directory named `AGENTS.md` reports `in use` and the kit's
+  own repo warns about its own entry points forever.
+- **Carried forward:** `#243`, `#273`, `#105`, `#285`, `#283`, `#287`, `#286`, `#248`, `#264`,
+  `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`, `#203`, `#190`,
+  `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`#273` direction 1** — one note on `safety-critical-changes.md` line 10 saying
+`.claude/rules/` binds Claude only. It is the smallest step toward the Codex goal above and the
+only one whose failure is *silent*: cs-toolkit follows that sentence today and its safety
+doctrine reaches one of its two runtimes, so a Codex session touching a kill-path there is
+unbound and nothing reports it. Then `#105` (a Codex adopter arriving via `/adopt` still gets
+no entry point — this session fixed only the `init.sh` path). Read `#243`'s own scope note
+before starting it: its line count is measured, stale, and growing.
+
+______________________________________________________________________
+
+## Earlier session — 2026-08-03 (the aim lever, and the bug the later rounds did not catch)
 
 **Theme —** `#51`'s local half shipped, and the durable result is not the feature. What cost
 more to learn than the code did is about *review*: an adopter upgrade found a defect that the
@@ -282,91 +357,6 @@ runtimes in one pass — `.claude/commands/wrap-up.md` and `.agents/skills/sessi
 renaming that slug to `wrap-up`. Use the method `in-parallel-oy/cs-toolkit#1826` proved: map
 every section before deleting any, and contribute anything generic upstream first. Every
 conversion so far has found a kit bug the fork was hiding.
-
-______________________________________________________________________
-
-## Earlier session — 2026-08-03 (the conversion proved itself, and the record kept outrunning the work)
-
-**Theme —** Three kit PRs merged, one closed unmerged, one adopter converted. The durable
-result is not any of them: it is that **a claim written about work already done was wrong in
-every review round of one paragraph**, and the thing that finally held was replacing the claim
-with an enumeration a grep can check. `#248`.
-
-- **`#238` — `session-start` gains a Remediation check** (`b5b9547`). The kit shipped an
-  archival mechanism and a briefing where the briefing never read what the archiver swept:
-  `paths.handoff_history` and `paths.friction_log_archive` were consumed by nothing.
-- **`#237` — the PR limit and its lost caveat** (`e49ddf3`). The shipped `--limit 20` was
-  *below* `gh`'s own default. Both halves came from diffing the four shared workflows against
-  the cs-toolkit adapters they were generalized out of; that survey found nothing else, and
-  its result is recorded on the PR.
-- **The fail-closed rule** (`6bf4443`). A source that fails now reports unavailable rather
-  than its empty value. Found by CodeRabbit reviewing **cs-toolkit's copy**, not this repo's.
-- **`#244` closed unmerged**, under a bound declared before its second lens reported. Its
-  provenance rule was disproven on its own example — `git check-ref-format` accepts `$()` in a
-  branch name, and `git branch --show-current` is in this workflow's own gather. `#245`.
-- **cs-toolkit `/session-start` converted** to pointer + appendix. Every section of the fork
-  was mapped before anything was deleted; the one with no home was contributed upstream as
-  `#238` first. The conversion was **run**, not only mapped — the mapping and the run are on
-  that PR.
-- **Ninth friction-log sweep** (`#257`, `e2e8719`). Fifteen entries routed: seven into new
-  issues (`#250`–`#256`), six into five occurrence comments (two entries shared one comment on
-  `#205`), two already tagged `#198`. Twelve writes, fifteen entries — not the same number.
-  CodeRabbit was rate-limited, so the merge stands on a `fallback:panel` receipt.
-
-**Learned**
-
-- **The record outran the work in every round, on one paragraph.** Four consecutive scope
-  sentences each claimed more than was implemented, including one caught by its author's own
-  grep before push. That is not four typos: an enumeration restating a list from six
-  paragraphs above will drift from it. `#248` carries the rounds and three candidate
-  directions.
-- **Provenance is not a safety test.** "Who authored this string" says nothing about what
-  characters it contains, and the shell only cares about the latter. `#245`.
-- **A verification harness earned its place by being rewritten until it discriminated.** Twice
-  a check returned the same result whichever branch was live and would have been reported as a
-  pass; both were caught by asking what the *other* branch returns.
-- **`gh` resolves the repo from the working directory, and a forge write is not retractable
-  the way a file write is.** A comment landed on an unrelated merged PR in another repo that
-  happened to share the number, and the write reported success. `#246`.
-- **Half the kit is not thin** — four workflows exist only as Claude adapters with their
-  doctrine inline and no Codex equivalent, so Codex can run half the kit by omission. This is
-  what makes `#236`'s adapter half intractable and is now its precondition. `#243`.
-- **The record outran the work again, in the session that named it.** Two more position claims
-  were wrong — "four" sections where three was right, and a marker called first that is third —
-  both inside sentences citing `#224` *for the position problem*. The second survived because
-  the author repaired the visibly-broken clause and left the one needing a `grep`. Occurrence
-  data on `#248`, and evidence for its "stop restating the structure" direction over the other
-  two.
-
-**Decided this session (operator)**
-
-- **Branch patterns must uniquify within a day** — a second same-day run is the expected case,
-  not the edge one. All three patterns are `{date}`-only; `state/triage/frozen-inbox_2026-07-29-b.json`
-  is a hand-applied workaround from when triage hit it. Reproduced live today:
-  `gh pr view chore/update-handoff-2026-08-03` answers `#249 MERGED`, this morning's wrap-up.
-  Broadened onto `#256`; this session's own branch carries the `{date}-{time}` shape.
-- **The handoff stops restating derived state.** `session-start` already gathers the friction
-  log and grades its entries, so a budget line here is a second copy that can only go stale —
-  it did, on `#257`'s merge, and it was the only misleading line in this block. Rule: the
-  handoff carries what cannot be recomputed; if a command prints it, it belongs to the command.
-  `#258`.
-
-**Open, and owned by nothing yet**
-
-- **Filed this session:** `#243`, `#245`, `#246`, `#248`, `#250`–`#256`, `#258`, plus `#240`
-  and `#241` (the three withdrawn search recipes and the constraints any fourth must meet).
-- **Carried forward:** `#236` (now narrowed to engines/doctrine plus Step 5), `#231`, `#213`,
-  `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#93`.
-
-▶ Next: **convert cs-toolkit's `/parallel` adapter** with the method
-`in-parallel-oy/cs-toolkit#1826` proved — map every
-section before deleting any, contribute anything generic upstream first, then run it. It is a
-200-line fork with a shared workflow already in the kit and no Codex counterpart, so it is the
-same single-runtime shape as the one just done. Each conversion so far has found a kit bug the
-fork was hiding; that is the reason to keep going rather than to batch them. `wrap-up` is the
-one to leave for later — it carries `#93`'s Codex slug mismatch, and
-`triage-friction-log`/`post-merge-systemize` cannot be converted at all until `#243` gives them
-shared workflows.
 
 ______________________________________________________________________
 
