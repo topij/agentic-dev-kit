@@ -47,7 +47,7 @@ Run these probes and record the answers — they drive the plan:
     elif [ ! -f "$f" ];                  then s="NOT_A_REGULAR_FILE — not seedable; resolve by hand"
     elif head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
          | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
-    then s="MARKED — init.sh WILL RENDER OVER IT (blocking, see Step 2)"
+    then s="MARKED — init.sh WILL RENDER OVER IT (tell the operator, Step 3b)"
     else s="IN_USE — init.sh leaves it byte-identical"
     fi
     printf '%s: %s\n' "$f" "$s"
@@ -79,14 +79,16 @@ Run these probes and record the answers — they drive the plan:
   overwrite an existing file" contract. The adopter who hits it took the pre-`#288`
   `cp -r` quickstart and then edited what landed — a shipped path, not an edge case.
 
-  **A `MARKED` entry point blocks the adoption until the operator resolves it** (Step 2).
-  Do not orchestrate a backup-and-restore around `init.sh` to preserve it. That was tried
-  here and abandoned: it needs the file destroyed and then rebuilt, and every layer added
-  to make that safe became a defect site of its own — a restore that left the marker in
-  place so the *next* `init.sh` destroyed it with no backup, a verification that reported
-  clean over a destroyed file, a scratch path that evaporated between steps so the backup
-  never happened, and a stale classification that routed around every guard. The
-  mechanical fix belongs in `init.sh` (a no-clobber mode), not in prose here.
+  **This classification is the single most useful thing `/adopt` produces**, and it is all
+  it does about the hazard: it is read-only, it is advisory, and it goes to the operator in
+  Step 3b, who runs `init.sh` themselves. `/adopt` does not gate, back up, restore, or
+  re-render anything.
+
+  That is a deliberate retreat. Four mechanisms were built here to run `init.sh` safely — a
+  backup-and-restore, a re-classify-and-diff, an advisory gate, a gate fused to the run —
+  and every one shipped a new way to destroy an adopter's file. The mechanical fix belongs
+  in `init.sh` (a no-clobber mode, `#297`), where a test can hold it. Prose in a markdown
+  file cannot: nothing executes it.
 
 - **Config dir?** `ls -d config 2>/dev/null` — where `config/dev-model.yaml` goes (repo root if there's no `config/`).
 - **`scripts/` layout?** `ls scripts 2>/dev/null`. **Default to vendoring the kit's engines under `scripts/devkit/`.** It is required when `scripts/` is organized into subdirs or has colliding filenames, and it is the right call anyway whenever the repo lints or formats repo-wide (next bullet) — a directory is the only unit you can exclude without maintaining a filename list. Flat `scripts/` is only appropriate for a repo with no repo-wide lint and no collisions.
@@ -113,7 +115,7 @@ Present a table the operator confirms **before any write**:
 | parallel + `state_paths` (#3) | none | **install** under `scripts/devkit/` (see Step 1 on when flat `scripts/` is acceptable) |
 | `pr-watch` (#5), safety rule (#6) | none | **install** |
 | Root entry points | e.g. `AGENTS.md` ABSENT, `CLAUDE.md` IN_USE | **seed the absent one** from `docs/templates/` via `init.sh`; an IN_USE one is left byte-identical |
-| — a `MARKED` entry point | e.g. `AGENTS.md` MARKED | **BLOCKING.** Name the file and stop. The operator either deletes line 1 themselves (keeping their content) or explicitly accepts that `init.sh` will discard everything below it. `/adopt` does neither on their behalf |
+| — a `MARKED` target | e.g. `AGENTS.md` MARKED | **Name it in the plan and again in the Step 3b handoff.** The operator deletes line 1 themselves to keep the content, or lets `init.sh` render over it. `/adopt` does neither on their behalf and does not run `init.sh` at all |
 | pre-push hook | not installed | **install** the shim (`init.sh` does this; nothing else does) |
 | tracker | e.g. GitHub Issues | `tracker.backend: github-issues` |
 | review bot | e.g. CodeRabbit (org) | `review.bots: [coderabbit]` |
@@ -134,188 +136,83 @@ For each piece, **copy only if the target doesn't already exist**:
 - **Engine scripts** → `scripts/devkit/` (flat `scripts/` only under the Step-1 conditions). Set `paths.engines` to that directory; do not rewrite prompt files. The engines find the repo root by walking up for `.git`, which is unbounded, so any depth works in a real checkout. In a tree with **no `.git` at all** the two implementations differ: the *Python* engines (`scripts/lib/kitconfig.py`) fall back to depth arithmetic calibrated for `scripts/`, which resolves a vendored layout to the wrong directory — a known, deliberate limitation (issue #60). The *shell* engines (`scripts/lib/repo_root.sh`) have no fallback and exit with `error: no .git repository found above …`. Both fail loudly rather than guessing, by different routes.
 - **Safety doctrine** → `docs/agentic-dev-kit/safety-critical-changes.md`; install the thin `.claude/rules/safety-critical-changes.md` adapter when absent and merge `docs/AGENTS-sections.md` into an existing `AGENTS.md` when applicable.
 - **Lint-containment doctrine** → `docs/agentic-dev-kit/adopting-into-a-linted-repo.md`. Install it whenever Step 1 found repo-wide lint or format, and apply its exclusions **in the same commit as the engines** — an engine that gets autoformatted before the exclusion lands is already drifted. `kit_doctor` tracks this file, so skipping it shows up as a permanent `missing`.
-- **`config/dev-model.yaml`** — stamp the Step-1 values: `paths.handoff` → the existing plan (and `paths.handoff_history` / the `doc_budgets` entry to match), `paths.engines`, `runtime`, `tracker`, `review`, and `models`. **`review:` must exist as a key before Step 3b runs**, even if you only know `review.bots` — `init.sh` fills a *partial* `review:` section in completely, but cannot create one from nothing and emits seven `could not add review.*` warnings instead (measured; the `runtime:` section has no such limitation, which is why this is easy to miss).
-- **`docs/templates/`** — all six `.md.tmpl` files. They are **manifest-tracked**, so omitting them is not merely a missed convenience: `kit_doctor` then reports six extra `missing` entries tagged `[template]` (measured), and Step 4 tells you to expect `missing` only for pieces Step 2 deliberately dropped. They are also the input Step 3b renders from.
-- **`init.sh`** — copy it to the adopter root. It is manifest-*untracked*, so it does not affect the baseline; Step 3b runs it.
-- **`friction-log.md`** — seeded by Step 3b from the template, not hand-copied.
+- **`config/dev-model.yaml`** — stamp the Step-1 values: `paths.handoff` → the existing plan (and `paths.handoff_history` / the `doc_budgets` entry to match), `paths.engines`, `runtime`, `tracker`, `review`, and `models`. **`review:` must exist as a key before the operator runs `init.sh`**, even if you only know `review.bots` — `init.sh` fills a *partial* `review:` section in completely, but cannot create one from nothing and emits seven `could not add review.*` warnings instead (measured; the `runtime:` section has no such limitation, which is why this is easy to miss).
+- **`docs/templates/`** — all six `.md.tmpl` files. They are **manifest-tracked**, so omitting them is not merely a missed convenience: `kit_doctor` then reports six extra `missing` entries tagged `[template]` (measured), and Step 4 tells you to expect `missing` only for pieces Step 2 deliberately dropped. They are also what `init.sh` renders from when the operator runs it.
+- **`init.sh`** — copy it to the adopter root. It is manifest-*untracked*, so it does not affect the baseline. The operator runs it (Step 3b).
+- **`friction-log.md`** — do not hand-copy it. `init.sh` seeds it from the template when the operator runs it, at the configured `paths.friction_log`.
 - Copy `PRINCIPLES.md`, `docs/parallel-dev.md`, and the shared workflow/safety docs under `docs/agentic-dev-kit/` for reference.
 
 **Never overwrite an existing file.** If something you didn't anticipate collides, stop
 and ask the operator.
 
-### Step 3b — run `init.sh` non-interactively
+### Step 3b — hand `init.sh` to the operator, and stop
 
-#### 3b.1 — Gate and run, in ONE block
+**`/adopt` does not run `init.sh`. This is the end of what the skill does to the repo.**
 
-**The gate and the run must be one script. Do not split them.** A gate in its own fenced
-block is advisory only: `exit 1` ends *that* block, and nothing stops the next block from
-running `init.sh` anyway. Reproduced — the gate printed `BLOCKED`, `init.sh` ran as a
-separate process, and the adopter's content was destroyed with exit 0 and a `seeded`
-message.
+Everything up to here is additive: files copied into paths that were empty, and a config
+stamped. `init.sh` is different — it *renders over* any of six files whose first line
+carries a kit marker, with no backup, reporting only `seeded`. That is correct behaviour
+for `init.sh`, and it is the opposite of this skill's contract.
 
-**And it must cover all six targets, not the two entry points.** `init.sh` calls `seed_doc`
-six times (`init.sh:1260-1275`): the four narrative docs at their *configured* paths, plus
-`AGENTS.md` and `CLAUDE.md`. The `cp -r` quickstart lands `docs/handoff.md` and
-`docs/friction-log.md` pre-marked, so the four this once ignored are the ones *most* likely
-to carry a marker. Reproduced: a marked `docs/handoff.md` was destroyed while the gate said
-`safe to run init.sh` and every Step 4 check reported clean.
+Four attempts were made to run it safely from here: a backup-and-restore around it, then a
+re-classify-and-diff, then an advisory gate, then a gate fused to the run. Each was
+reviewed, each shipped a new way to destroy an adopter's file, and the last one's own fix
+contained three fresh defects that four independent reviewers had not seen — because a
+shell snippet in a markdown file is executed by nobody: no test runs it, no linter checks
+it, and this repo's `make test` passes 837 tests without touching a line of it. **A
+safety-critical guard cannot live in an untested medium.** `#297` moves it to `init.sh`,
+where CI can hold it.
 
-```bash
-set -eu
-cfg=config/dev-model.yaml
-val() { v=$(grep -E "^[[:space:]]+$1:" "$cfg" | head -1 | awk '{print $2}' | tr -d "\"'"); \
-        [ -n "$v" ] && printf '%s\n' "$v" || printf '%s\n' "$2"; }
+So: tell the operator what to check, and let them run it.
 
-# every path init.sh can render over — configured, not assumed
-targets="AGENTS.md
-CLAUDE.md
-$(val handoff docs/handoff.md)
-$(val handoff_history docs/handoff-history.md)
-$(val friction_log docs/friction-log.md)
-$(val friction_log_archive docs/friction-log-archive.md)"
+**Report to them, in these words:**
 
-# Collect, then test. Do NOT `exit 1` inside the loop: a piped `while` runs in a
-# SUBSHELL, so that exit ends the subshell and the script sails on into init.sh.
-# And do not lean on the loop's own status — its last command is the marker test,
-# which is non-zero exactly when the file is CLEAN. Both measured, in this doc.
-blocked=$(printf '%s\n' "$targets" | while read -r f; do
-  [ -n "$f" ] && [ -f "$f" ] || continue
-  if head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
-     | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
-  then printf '%s\n' "$f"
-  fi
-done) || true          # see the `|| true` note below
+> The adoption is staged on this branch. The last step is `./init.sh`, and you should run
+> it yourself because it can overwrite files.
+>
+> `init.sh` renders a template over any of these six paths whose **first line** opens an
+> HTML comment beginning `devkit-template: unrendered` or `devkit-source: kit-own` —
+> `AGENTS.md`, `CLAUDE.md`, and your configured `paths.handoff`, `paths.handoff_history`,
+> `paths.friction_log`, `paths.friction_log_archive`. There is no backup and the run
+> reports only `seeded`.
+>
+> Open each of those six and look at line 1. If any carries one of those markers **and you
+> want what is in the file**, delete line 1 first — that is how the kit records that the
+> file is yours, and `init.sh` will then leave it byte-identical. If a marked file is just
+> an unrendered skeleton, leave it and let `init.sh` fill it in.
+>
+> Then run `./init.sh` — interactively, so you see and confirm each prompt. It seeds the
+> missing docs and both entry points, installs the pre-push hook, and appends the kit's
+> `.gitignore` entries. Nothing else in this adoption does those things.
 
-if [ -n "$blocked" ]; then
-  printf 'BLOCKED: %s is MARKED — init.sh would render over it.\n' $blocked
-  exit 1
-fi
+State the six paths **resolved from their config**, not as the defaults above, and say
+which ones Step 1 found carrying a marker. That is the whole value `/adopt` adds here: it
+knows where to look and what it found, and the operator makes the call.
 
-# hash what init.sh must NOT change, in this same process — no file, no state
-# carried between blocks, because both were defect sites
-before=$(printf '%s\n' "$targets" | while read -r f; do
-           [ -n "$f" ] && [ -f "$f" ] && shasum -a 256 "$f"; done) || true
+Two things to warn them about, both measured, because neither is obvious from the output:
 
-./init.sh < /dev/null
+- If `tracker.project_name` contains a `/` and does not appear in this repo's `origin`
+  URL, a **non-interactive** run exits 1 with `error: non-interactive run would keep
+  tracker.project_name = …` before seeding anything — though *after* migrating the config.
+  Running interactively avoids it.
+- A `review:` key must already exist in the config, even with only `review.bots` under it.
+  `init.sh` fills a partial `review:` section completely but cannot create one from
+  nothing, and emits seven `could not add review.*` warnings instead. Step 3 stamps it.
 
-# anything init.sh reported `already in use` must be byte-identical
-printf '%s\n' "$before" | while read -r h f; do
-  [ -n "$f" ] || continue
-  now=$(shasum -a 256 "$f" | awk '{print $1}')
-  [ "$h" = "$now" ] || echo "*** $f CHANGED — it was in use and init.sh should not have touched it ***"
-done
-```
-
-**Both `|| true`s are load-bearing under `set -e`, and their absence is silent.** A
-`var=$(… | while …)` assignment inherits the loop's exit status, and that status is the
-loop body's last command — `[ -f "$f" ]`, which is **false whenever the last target does
-not exist**, i.e. the ordinary case for a repo that has not adopted yet. Without them,
-`set -e` kills the script at the assignment: no `BLOCKED`, no error, and `init.sh` never
-runs. Measured — the step aborted silently and looked like a passing gate.
-
-Two related traps in the same few lines, both also measured: do not `exit 1` *inside* the
-piped `while` (it runs in a subshell, so the script sails on into `init.sh`), and do not
-gate on the loop's own status (non-zero exactly when the file is **clean**, so the gate
-blocks every healthy repo).
-
-**If this blocks, stop and take it to the operator.** Two resolutions, both theirs:
-
-- **Keep their content** — they delete line 1 (the marker). That is `init.sh`'s own stated
-  resolution: *"the documented way to claim such a file is to delete line 1"*. The file
-  then classifies `IN_USE` and `init.sh` leaves it byte-identical. Take a copy outside the
-  repo first; never inside it, since this workflow ends by opening a PR and a `git add -A`
-  would publish their original.
-- **Accept the re-render** — explicitly, having been told the content is unrecoverable
-  afterwards.
-
-**Claiming the file *before* `init.sh` runs is what makes this safe**, and it is why the
-gate replaced a backup-and-restore: restoring afterwards requires destroying the file
-first. Delete line 1 first and there is nothing to destroy.
-
-Never delete line 1 on the operator's behalf: it edits a file the kit does not own, and the
-marker is the only thing distinguishing "an unfinished adoption" from "content someone
-deliberately kept."
-
-**What this gate is not.** It is a shell guard inside one block, so it binds anyone who
-runs *that block*. It cannot stop an agent that types `./init.sh` on its own, and it is not
-a substitute for the mechanical guarantee — a `--no-clobber` mode on `init.sh`, tracked as
-`#297`. Until that exists, this is the strongest thing available here, and its strength
-depends on the block being used as written.
-
-
-
-**Redirecting stdin is the whole mechanism, not a formality.** With no terminal
-attached, `init.sh` announces
-`note: no terminal attached — keeping all current config/dev-model.yaml values.` and
-every prompt takes the value you just stamped — so it never interrogates the operator
-and never overwrites a Step-1 decision. This is what seeds `AGENTS.md`, and it replaces
-the four things this skill used to tell you to do by hand:
-
-- **Seeds `AGENTS.md` and `CLAUDE.md`** from `docs/templates/`, each when the target is
-  missing **or carries a kit marker on line 1** — the second half is the destructive one
-  Step 1 classifies as `MARKED`. An entry point carrying *neither* marker is left
-  **byte-identical** and reported as `already in use`. Do not
-  hand-render these instead: `_seedable` is the guard whose three defects `#288`
-  closed by mutation testing — **two of them destroyed a real file** (a marker matched as
-  an unanchored substring; a locale-dependent `[[:space:]]` that let `init.sh` overwrite a
-  file `kit_doctor` called in use), and the third, a *directory* named `AGENTS.md`,
-  reported `seeded` having written nothing at that path, and `_render` substitutes through awk-via-`ENVIRON` specifically
-  because a tracker URL containing `/`, `&` or `\` is mangled by `sed` and by awk `-v`.
-  A hand-rolled copy-if-absent reintroduces that entire class.
-- **Installs the pre-push hook** as a shim honoring `core.hooksPath`, pointing at the
-  engines directory you chose. Nothing else in this skill did — so before this step,
-  every `/adopt` adoption left the kit's own mechanism-over-memory exemplar inert.
-- **Appends the `.gitignore` entries**, including **`config/*.local.yaml`**, which is
-  load-bearing: `kitconfig.load_config()` merges a gitignored
-  `config/dev-model.local.yaml` over the tracked config, and `docs/getting-started.md`
-  tells the operator to put their DM id there. Without it an identity lands in a tracked
-  path while every doc says it is ignored.
-- **Seeds the narrative docs** — and correctly declines the ones already in use, so an
-  adopter whose `paths.handoff` points at an existing `ROADMAP.md` keeps it untouched.
-
-**It rewrites `config/dev-model.yaml` in place.** Not lossily — comments survive — but
-it adds the `kit:` and `runtime:` sections and re-quotes scalars carrying YAML
-indicators (a tracker URL gains surrounding quotes). Commit the config before running so
-the rewrite is reviewable as its own diff.
-
-**Read its output.** Three outcomes matter — one is a hard failure, two are not:
-
-- **An `error: non-interactive run would keep tracker.project_name =` block → exit 1, and
-  nothing was done.** This guard fires only on a non-interactive run, only when
-  `tracker.project_name` contains a `/`, and only when it does not appear in this repo's
-  `origin` URL — i.e. the config names *another project's tracker*, into which the
-  workflows would file issues. It exits **before** any seeding, hook install or
-  `.gitignore` write — but **not** before the config migration: measured, a run that
-  hits this has already stamped `kit.version` and written the `runtime:` and `review.*`
-  sections. Nothing there is lost work and the migration is idempotent, so re-running
-  after fixing the value is correct; just do not read the failure as "it did nothing."
-  It is squarely reachable from Step 3, where `tracker` is one stamped item among six.
-  Fix the value; `init.sh` also names `DEVKIT_ALLOW_FOREIGN_TRACKER=1` for a deliberate
-  cross-repo tracker, which is not the common case — check the value is wrong before
-  reaching for the override. **Check the exit code**, since this is the one outcome
-  where the later lines never appear at all.
-- `<path> already in use — left untouched` — the guard working. Confirm the path named
-  is one you expected to keep.
-- `note: CLAUDE.md does not import AGENTS.md, and Claude Code reads CLAUDE.md only.` —
-  fires when the adopter had their own
-  `CLAUDE.md`, which the guard correctly refused to touch. The consequence is that the
-  two runtimes now read *different* contracts, which is the exact divergence the pair
-  exists to prevent. **Never edit their file to fix it**; raise it with the operator and
-  let them add the `@AGENTS.md` line.
 
 ### Step 3c — record the drift baseline
 
-**Last, once every copy above and Step 3b are done:**
+**Last, once every copy above is done — and before handing off to Step 3b:**
 
 ```bash
 uv run <engines-dir>/kit_doctor.py --record-install --from-kit <kit checkout>
 ```
 
 Order matters in one direction only: `docs/templates/` is manifest-tracked and must be
-copied *before* this runs. Step 3b's own writes are safely outside the baseline —
-`AGENTS.md`, `CLAUDE.md`, `init.sh` and `config/dev-model.yaml` are all
-manifest-untracked, the rendered entry points because they are adopter-owned and meant
-to be edited.
+copied *before* this runs. The operator's later `init.sh` run does not disturb the
+baseline — `AGENTS.md`, `CLAUDE.md`, `init.sh` and `config/dev-model.yaml` are all
+manifest-untracked, the rendered entry points because they are adopter-owned and meant to
+be edited. So recording here, before they run it, is correct and not a race.
 
 This writes `kit-manifest.json` here, recording which kit-owned files this adoption
 actually installed and the kit commit they came from. It is what lets a later
@@ -335,47 +232,27 @@ before re-running, and never silence it by dropping the flag.
 
 ## Step 4 — Verify
 
-- **Entry points** — two checks. Be exact about what they establish: the
-  byte-identity guarantee lives in **3b.1**, which hashes before and after `init.sh` in one
-  process. These two are the after-the-fact backstop, and they catch a *rendered-wrong* or
-  *gate-skipped* file, not silent corruption from some other cause:
+**Steps 4a and 4b below verify the staged adoption — the copies and the config. They do
+not verify `init.sh`, which the operator runs after this (Step 3b) and verifies for
+themselves from what it prints.**
+
+- **Entry points** — only meaningful *after* the operator has run `init.sh`, so run it
+  with them rather than reporting it as done:
 
   ```sh
-  # (a) anything that now exists must be fully rendered, not copied
   for f in AGENTS.md CLAUDE.md; do
     [ -f "$f" ] && echo "$f: $(grep -c '{{[A-Z_]*}}' "$f") unsubstituted tokens (want 0)"
   done
-
-  # (b) NONE of the six seed_doc targets may still carry a kit marker — 3b.1
-  #     gated on this, so a marker here means the gate was skipped and init.sh
-  #     may have clobbered that file. Same six paths as 3b.1, configured.
-  cfg=config/dev-model.yaml
-  val() { v=$(grep -E "^[[:space:]]+$1:" "$cfg" | head -1 | awk '{print $2}' | tr -d "\"'"); \
-          [ -n "$v" ] && printf '%s\n' "$v" || printf '%s\n' "$2"; }
-  printf '%s\n' "AGENTS.md
-  CLAUDE.md
-  $(val handoff docs/handoff.md)
-  $(val handoff_history docs/handoff-history.md)
-  $(val friction_log docs/friction-log.md)
-  $(val friction_log_archive docs/friction-log-archive.md)" | while read -r f; do
-    [ -n "$f" ] && [ -f "$f" ] || continue
-    head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
-      | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)' \
-      && echo "$f: *** STILL MARKED — 3b.1's gate did not run ***"
-  done
   ```
 
-  A non-zero token count means the file was *copied* rather than rendered, which is what
-  happens if someone substitutes `cp` for Step 3b. A surviving marker means the gate was
-  bypassed — check with the operator what that file looked like before, because `init.sh`
-  will have rendered over it.
+  A non-zero count means the file was *copied* rather than rendered — what happens if
+  someone substitutes `cp` for `init.sh`. There is deliberately nothing here that claims to
+  prove a file was not clobbered: `/adopt` no longer runs the thing that could clobber it,
+  and a stronger claim would need `#297`'s no-clobber mode, not another snippet in a
+  markdown file that nothing executes.
 
-  There is deliberately **no** backup-versus-restore comparison here. This skill no longer
-  destroys and rebuilds a `MARKED` file, so there is no restore to verify; 3b.1 refuses to
-  run instead. Anything stronger than the two checks above needs a no-clobber mode in
-  `init.sh`, not another prose guard.
-
-- **Hook** — resolve the directory the way `init.sh` does. `core.hooksPath` wins over
+- **Hook** — *only after the operator has run `init.sh`*; nothing in `/adopt` installs it.
+  Resolve the directory the way `init.sh` does. `core.hooksPath` wins over
   `.git/hooks` when set (pre-commit and several monorepo setups set it), so checking
   `.git/hooks/pre-push` can inspect a file git will never run — or miss the one it will:
 
@@ -474,6 +351,16 @@ issue upstream. This first entry *is* Principle #2 in action.
 ## Step 6 — Summarize + hand off
 
 Report what was **installed / skipped / config-pointed**, open a **draft PR**, and
-suggest the operator's first `/session-start` (Claude) or `$session-start` (Codex).
-Leave the merge to the operator — an
-adoption touches a lot of the repo and deserves a human review pass.
+leave the merge to the operator — an adoption touches a lot of the repo and deserves a
+human review pass.
+
+**Then repeat Step 3b's handoff as the last thing you say**, because it is the one action
+still outstanding and the adoption is not finished without it:
+
+1. the six seedable paths, resolved from *their* config, with the state Step 1 found for
+   each — and any `MARKED` one named explicitly, with what deleting line 1 does
+2. `./init.sh`, run by them, interactively
+3. `/session-start` (Claude) or `$session-start` (Codex) afterwards
+
+Do not describe the adoption as complete before they have run `init.sh`: until then the
+repo has no entry points, no pre-push hook, and no kit `.gitignore` entries.
