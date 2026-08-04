@@ -5,8 +5,10 @@
 # again after pulling a kit update (that is the supported upgrade path).
 # Idempotent: re-running re-prompts (showing the current value as the default),
 # migrates an older config schema forward without guessing over existing
-# values, and never clobbers a narrative doc that is already in use — only one
-# whose FIRST LINE still carries the shipped `devkit-template: unrendered` marker.
+# values, and never clobbers a doc that is already in use — only one that is
+# missing, or whose FIRST LINE opens an HTML comment beginning with one of two
+# markers: `devkit-template: unrendered` on a shipped narrative skeleton, or
+# `devkit-source: kit-own` on the kit's own root AGENTS.md / CLAUDE.md.
 #
 # Requires: sh, plus awk, grep, sed, mv, rm, cat, head, mkdir, chmod, touch,
 # basename, dirname, date and git. No non-stdlib dependencies.
@@ -31,8 +33,9 @@ Bootstraps the agentic-dev-kit in the current repo:
   4. Renders the four narrative docs and both root entry points — AGENTS.md
      (the contract) and CLAUDE.md (the Claude binding that imports it) — from
      docs/templates/, but only when a target is missing or its FIRST LINE
-     carries the unrendered marker or the kit-own marker, so a file you are
-     actually using is left byte-identical.
+     OPENS AN HTML COMMENT beginning with the unrendered marker or the kit-own
+     marker. A file that merely mentions a marker is in use and is left
+     byte-identical.
   5. Appends the kit's state-sandbox paths to .gitignore if they're
      missing (never duplicates a line on re-run).
   6. Installs the pre-push hook as a shim (honoring core.hooksPath).
@@ -624,21 +627,23 @@ migrate_kit_schema() {
 # to make the "seed only if absent" guard permanently false, and every adopter
 # started with an unrendered skeleton. The marker below is what distinguishes
 # "the pristine file the kit shipped" from "a handoff someone is actually
-# using": a file whose FIRST LINE does not carry it is in use and is never
-# touched — a rendered doc that merely quotes the marker in its body is in use
-# too, which is the whole point of anchoring to line 1 (see below).
+# using": a file whose FIRST LINE does not open a marker comment is in use and is
+# never touched — a rendered doc that merely quotes a marker is in use too, which
+# is the whole point of the anchoring `_seedable` does (see there for the exact
+# rule and the two destructive misses that produced it).
 #
-# The marker is matched on the FIRST LINE ONLY, which is where every shipped
-# skeleton carries it — a position the suite pins, since this guard now depends
-# on it. Matching it anywhere in the body meant any in-use file that merely
-# QUOTED the marker in prose was treated as pristine and silently overwritten —
-# no backup, and the run still reported "seeded". That hit EVERY target, not just
-# AGENTS.md: a rendered, in-use docs/handoff.md mentioning the marker was
-# destroyed the same way (verified against the pre-fix script). The guard defines
-# "in use" identically for all five; what is distinctive about AGENTS.md is only
-# that the kit ships no pre-marked skeleton of it, so it is reached by file
-# absence rather than marker presence — and it is the likeliest file to discuss
-# this convention (panel round 1 adversarial lens; scope corrected round 2).
+# The position matters and is pinned by the suite, since this guard depends on
+# it. Matching anywhere in the body meant any in-use file that merely QUOTED the
+# marker in prose was treated as pristine and silently overwritten — no backup,
+# and the run still reported "seeded". That hit EVERY target: a rendered, in-use
+# docs/handoff.md mentioning the marker was destroyed the same way (verified
+# against the pre-fix script).
+#
+# The guard defines "in use" identically for all six targets. AGENTS.md used to
+# be the exception — the kit shipped no pre-marked skeleton of it, so it was
+# reached by file ABSENCE rather than marker presence, and could therefore never
+# be shipped. It no longer is: the kit ships its own AGENTS.md and CLAUDE.md
+# carrying KIT_OWN_MARKER, and both go through the same predicate as the rest.
 TEMPLATE_MARKER="devkit-template: unrendered"
 
 # The kit's OWN entry points (root AGENTS.md and CLAUDE.md) carry this marker on
@@ -664,10 +669,6 @@ TEMPLATE_MARKER="devkit-template: unrendered"
 # processing above). `kit-own` costs one word and closes that off.
 KIT_OWN_MARKER="devkit-source: kit-own"
 
-# _seedable <path> — true when the target may be written: it is missing, or its
-# FIRST LINE carries either marker. Line 1 only, for both, for the reason the
-# TEMPLATE_MARKER comment above gives: matching anywhere let an in-use file that
-# merely QUOTED a marker in prose be destroyed with no backup.
 # _imports_agents_md <path> — true when the file carries an ACTIVE `@AGENTS.md`
 # import: one outside fenced code blocks and inline code spans. Claude Code does
 # not evaluate import syntax inside either, so a CLAUDE.md that merely DOCUMENTS
@@ -769,7 +770,17 @@ _opens_with_marker() {
 }
 
 _seedable() {
-  [ -f "$1" ] || return 0
+  # Missing is seedable; existing-but-not-a-regular-file never is. `[ -f ]`
+  # alone conflated the two: a DIRECTORY named AGENTS.md is not a regular file,
+  # so it read as missing, `mv` moved the rendered temp file INSIDE it, and the
+  # run reported `seeded AGENTS.md` having written nothing at that path (panel
+  # round 3, adversarial). A broken symlink lands here too, and is likewise left
+  # alone rather than silently replaced.
+  if [ -e "$1" ] || [ -L "$1" ]; then
+    [ -f "$1" ] || return 1
+  else
+    return 0
+  fi
   # Everything after line 1's opening `<!--`, leading blanks removed. Empty when
   # line 1 does not open an HTML comment at all, which is the common case for a
   # file the adopter wrote.
@@ -1060,8 +1071,9 @@ else
 fi
 set_field "review:" "" "^  bots:" "$bots_value"
 
-# ── seed narrative docs from templates ───────────────────────────────────
-# Rendered when the target is MISSING or its FIRST LINE carries the unrendered marker.
+# ── seed narrative docs and entry points from templates ──────────────────
+# Rendered when the target is MISSING, or its FIRST LINE opens an HTML comment
+# beginning with either marker — see `_seedable`.
 # The old "seed only if absent" guard could never fire: the kit ships these
 # files, so a copy-in / template-clone always landed them first and every
 # adopter was left with an unrendered skeleton.

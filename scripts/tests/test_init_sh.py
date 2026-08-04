@@ -926,6 +926,26 @@ def test_a_marker_quoted_in_prose_on_line_1_is_not_seedable(
             assert f"{target} already in use — left untouched" in result.stdout
 
 
+def test_a_non_regular_target_is_not_reported_as_seeded(tmp_path: Path) -> None:
+    """`[ -f ]` alone conflated "missing" with "exists but is not a regular
+    file", so a DIRECTORY named AGENTS.md read as missing: `mv` moved the
+    rendered temp file inside it and the run reported `seeded AGENTS.md` having
+    written nothing at that path. Found by the panel's adversarial lens, round 3,
+    with a live directory fixture.
+
+    No data was destroyed — this pins the false success message and the stray
+    temp file, which is what an adopter would act on."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    (repo / "AGENTS.md").mkdir()
+
+    result = _run_init(repo)
+
+    assert "seeded AGENTS.md" not in result.stdout
+    assert (repo / "AGENTS.md").is_dir()
+    strays = list((repo / "AGENTS.md").iterdir())
+    assert strays == [], f"render leaked a temp file into the directory: {strays}"
+
+
 @pytest.mark.parametrize("target", ["AGENTS.md", "CLAUDE.md"])
 def test_the_real_marker_comment_is_still_seedable(tmp_path: Path, target: str) -> None:
     """The control for the test above. Without it, a `_seedable` that simply
