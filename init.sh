@@ -687,38 +687,121 @@ KIT_OWN_MARKER="devkit-source: kit-own"
 # was treated as pristine and silently overwritten. That one was caught by a
 # review lens; this one by the review bot, in the PR that re-documented it.
 #
-# Residual, stated rather than discovered: an `@AGENTS.md` inside a Markdown link
-# target still counts. It is the permissive direction — it would suppress the
-# hint, not raise a false one — and no realistic CLAUDE.md links to it that way.
+# WHAT THIS IMPLEMENTS, and what it does not. Enough of CommonMark's inline and
+# leaf-block rules to tell a live import from a quoted one: fenced blocks (0-3
+# leading spaces, matched fence character and length, blank-only close), and code
+# spans delimited by backtick runs of EQUAL length, carried across lines. It is
+# not a Markdown parser. It does not implement backslash escapes, HTML blocks,
+# link reference definitions, or the rule that strips one space from each end of
+# a span's content — none of which change whether an `@AGENTS.md` is inside a
+# span or a fence, which is the only question asked here.
+#
+# Residuals, stated rather than discovered: an `@AGENTS.md` inside a Markdown
+# link target still counts, and so would one inside an HTML block. Both are the
+# permissive direction — they suppress the hint rather than raise a false one —
+# and no realistic CLAUDE.md writes either.
 _imports_agents_md() {
   awk '
+    # Length of the backtick run starting at pos, 0 if none.
+    function run(s, pos,   n) {
+      n = 0
+      while (substr(s, pos + n, 1) == "`") { n++ }
+      return n
+    }
+    # Leading indent in columns. A tab returns 4 so it can never open a fence.
+    function indent(s,   i, c, n) {
+      n = 0
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (c == " ") { n++ } else if (c == "\t") { return 4 } else { break }
+      }
+      return n
+    }
     {
       line = $0
-      bare = line
-      sub(/^[[:space:]]*/, "", bare)
-      # A fence opens with three or more of one character and closes only on a
-      # run of the SAME character at least as long — CommonMark. Toggling on any
-      # three read the inner ``` of a ````-fenced block as a close, so the lines
-      # after it were scanned as live prose (panel, adversarial lens).
-      # Counted rather than matched with an interval: `{3,}` is not in every awk.
-      if (substr(bare, 1, 3) == "```" || substr(bare, 1, 3) == "~~~") {
-        ch = substr(bare, 1, 1)
-        n = 0
-        while (substr(bare, n + 1, 1) == ch) { n++ }
-        # A CLOSING fence carries nothing but blanks after its run, so
-        # ``` still open  is content inside the block, not a close. An opening
-        # fence may carry an info string (```markdown) and is unrestricted.
-        tail = substr(bare, n + 1)
-        sub(/[[:space:]]*$/, "", tail)
-        if (!fence) { fence = 1; fchar = ch; flen = n }
-        else if (ch == fchar && n >= flen && tail == "") { fence = 0 }
+      from = 1
+
+      # 1. A code span already open from an earlier line closes on a run of
+      #    EXACTLY its own length. Until then every line is span content — a
+      #    fence marker inside one is content too, so this is checked first.
+      if (spanlen > 0) {
+        i = 1
+        closed = 0
+        while (i <= length(line)) {
+          if (substr(line, i, 1) == "`") {
+            n = run(line, i)
+            if (n == spanlen) { spanlen = 0; from = i + n; closed = 1; break }
+            i += n
+          } else { i++ }
+        }
+        if (!closed) { next }
+
+      # 2. Fences. At most THREE leading spaces — four makes it an indented code
+      #    block, which is not a fence, and treating it as one swallowed the
+      #    live import that followed. A fence closes only on a run of the same
+      #    character at least as long with nothing but blanks after it; an
+      #    opening fence may carry an info string (```markdown).
+      } else if (fence) {
+        bare = line
+        sub(/^[[:space:]]*/, "", bare)
+        if (indent(line) <= 3 && (substr(bare, 1, 3) == "```" || substr(bare, 1, 3) == "~~~")) {
+          ch = substr(bare, 1, 1)
+          n = 0
+          while (substr(bare, n + 1, 1) == ch) { n++ }
+          tail = substr(bare, n + 1)
+          sub(/[[:space:]]*$/, "", tail)
+          if (ch == fchar && n >= flen && tail == "") { fence = 0 }
+        }
         next
+      } else {
+        bare = line
+        sub(/^[[:space:]]*/, "", bare)
+        ind = indent(line)
+        if (ind <= 3 && (substr(bare, 1, 3) == "```" || substr(bare, 1, 3) == "~~~")) {
+          fchar = substr(bare, 1, 1)
+          flen = 0
+          while (substr(bare, flen + 1, 1) == fchar) { flen++ }
+          fence = 1
+          next
+        }
+        # Four or more spaces is an INDENTED CODE BLOCK: content, not live
+        # prose, and its backticks open nothing. Scanning it as prose let an
+        # unterminated run open a span that then swallowed the live import
+        # below — the same defect as reading the line as a fence, reached the
+        # other way. Known limit, and the safe direction: a lazy paragraph
+        # continuation indented four spaces IS live in CommonMark, and is
+        # skipped here, so the hint fires on a file that does import.
+        if (ind >= 4) { next }
       }
-      if (fence) { next }
-      while (match(line, /`[^`]*`/)) {
-        line = substr(line, 1, RSTART - 1) " " substr(line, RSTART + RLENGTH)
+
+      # 3. Whatever is left is live text with its code spans removed. A span is
+      #    delimited by runs of EQUAL length, so a ``double`` span is one span
+      #    and not two empty ones — the single-backtick regex this replaces read
+      #    ``@AGENTS.md`` as live prose and suppressed the hint. An unterminated
+      #    run opens a span that continues on the next line.
+      rest = substr(line, from)
+      live = ""
+      i = 1
+      while (i <= length(rest)) {
+        if (substr(rest, i, 1) == "`") {
+          n = run(rest, i)
+          j = i + n
+          closed = 0
+          while (j <= length(rest)) {
+            if (substr(rest, j, 1) == "`") {
+              m = run(rest, j)
+              if (m == n) { closed = 1; break }
+              j += m
+            } else { j++ }
+          }
+          if (closed) { live = live " "; i = j + n; continue }
+          spanlen = n
+          break
+        }
+        live = live substr(rest, i, 1)
+        i++
       }
-      if (line ~ /(^|[^[:alnum:]])@AGENTS\.md([^[:alnum:]]|$)/) { found = 1; exit }
+      if (live ~ /(^|[^[:alnum:]])@AGENTS\.md([^[:alnum:]]|$)/) { found = 1; exit }
     }
     END { exit !found }
   ' "$1"

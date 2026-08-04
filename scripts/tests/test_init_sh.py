@@ -1042,6 +1042,16 @@ def test_an_in_use_claude_md_without_the_import_is_reported(tmp_path: Path) -> N
         # middle line here does not close the block and @AGENTS.md is still
         # inside it (panel round 2, LOW).
         ("run with trailing text is not a close", "# mine\n\n```\n``` still open\n@AGENTS.md\n```\n"),
+        # Code spans are delimited by runs of EQUAL length, so this is ONE
+        # double-backtick span, not two empty single ones. The single-backtick
+        # regex this replaces stripped the delimiters and read the middle as
+        # live prose (CodeRabbit, PR #289).
+        ("double-backtick span", "# mine\n\n``@AGENTS.md``\n"),
+        ("triple-backtick span inline", "# mine\n\nsee ```@AGENTS.md``` here\n"),
+        # A span runs to its matching closer even across a newline.
+        ("multiline span", "# mine\n\n`@AGENTS.md\nstill inside the span`\n"),
+        # A run of a DIFFERENT length does not close the span.
+        ("inner shorter run does not close", "# mine\n\n``a ` b @AGENTS.md``\n"),
     ],
 )
 def test_an_inactive_agents_import_does_not_suppress_the_hint(
@@ -1070,17 +1080,33 @@ def test_an_inactive_agents_import_does_not_suppress_the_hint(
     )
 
 
-def test_an_active_agents_import_suppresses_the_hint(tmp_path: Path) -> None:
-    """The other direction, so the test above cannot pass by the hint always
-    firing — which it would if `_imports_agents_md` simply returned false."""
+@pytest.mark.parametrize(
+    ("label", "body"),
+    [
+        ("bare import, plus a code-span mention", "# mine\n\n@AGENTS.md\n\nSee `@AGENTS.md` above.\n"),
+        # Four leading spaces is an INDENTED CODE BLOCK, not a fence. Treating
+        # it as one opened a block that never closed and swallowed the real
+        # import below it — the hint then fired on a file that does import
+        # (CodeRabbit, PR #289).
+        ("after a four-space-indented backtick line", "# mine\n\n    ```\n    example\n\n@AGENTS.md\n"),
+        # A closed span must not leave the scanner inside one.
+        ("after a closed multiline span", "# mine\n\n`a\nb`\n\n@AGENTS.md\n"),
+    ],
+)
+def test_an_active_agents_import_suppresses_the_hint(
+    tmp_path: Path, label: str, body: str
+) -> None:
+    """The other direction, so the inactive-shape cases above cannot pass by the
+    hint always firing — which they would if `_imports_agents_md` simply
+    returned false. Each case here contains a genuinely live import."""
     repo = _fixture(tmp_path, config=shipped_config(), templates=True)
-    (repo / "CLAUDE.md").write_text(
-        "# mine\n\n@AGENTS.md\n\nSee `@AGENTS.md` above.\n", encoding="utf-8"
-    )
+    (repo / "CLAUDE.md").write_text(body, encoding="utf-8")
 
     result = _run_init(repo)
 
-    assert "does not import AGENTS.md" not in result.stdout
+    assert "does not import AGENTS.md" not in result.stdout, (
+        f"a live import was missed: {label}"
+    )
 
 
 # --------------------------------------------------------------------------- #
