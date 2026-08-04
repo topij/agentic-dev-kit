@@ -155,11 +155,38 @@ hypothetical: this kit already shipped a wrap-up that swept 228 lines of an adop
 uncommitted note through review and merge, which is why `wrap-up.md` now bans wildcard
 adds outright.
 
-Unless the operator explicitly chose to re-render it, restore it after Step 3b:
+Unless the operator explicitly chose to re-render it, restore it after Step 3b **and then
+claim it** — both halves, in this order:
 
 ```bash
-cp -p "$SCRATCH/AGENTS.md.pre-adopt" AGENTS.md
+cp -p "$SCRATCH/AGENTS.md.pre-adopt" AGENTS.md   # restore their content
+sed -i.bak '1d' AGENTS.md && rm -f AGENTS.md.bak # delete line 1: the marker
 ```
+
+**Restoring without deleting the marker leaves a landmine, and this is the single most
+important sentence in this step.** A byte-identical restore puts the marker back on line
+1, so the file is still `MARKED` — still seedable, forever. The next `./init.sh` destroys
+it again, and that time there is **no backup**, because the backup lives only here in
+`/adopt`'s one-time Step 3b. `init.sh` prints its own re-run as the supported upgrade
+path, and `/upgrade` Step 2 runs it; `/upgrade` reads a `devkit-source: kit-own` marker as
+*"the adoption never completed its seeding step"* and cannot tell that apart from content
+an operator deliberately preserved. Reproduced end-to-end: a correct, complete
+backup-and-restore cycle followed by one ordinary `./init.sh` — `seeded AGENTS.md`,
+content gone, nothing kept.
+
+Deleting line 1 is not a liberty taken with their file — it is `init.sh`'s own stated
+resolution: *"the documented way to claim such a file is to delete line 1"*. A file whose
+content the adopter wants and whose line 1 says the kit owns it is an incoherent state; the
+marker is the claim, and removing it is how the adopter takes ownership. Confirm the
+deletion with the operator alongside the preserve decision, then **re-run Step 1's
+classifier and require `IN USE`** — if it still reports `MARKED`, the file is not safe yet
+and nothing downstream will tell you.
+
+That classifier re-run checks the *marker deletion*, and it is not evidence the content
+came back: a file `init.sh` rendered also classifies `IN USE`, because the template's own
+first line is a `Rendered from …` comment rather than a marker. Measured. The hash
+comparison in Step 4 is what catches a skipped restore; these are two checks for two
+different failures, and neither substitutes for the other.
 
 Then hand them the `$SCRATCH` copy to reconcile — the rendered template and their edits
 both have a claim, and merging them is a judgment call, not something to do silently.
@@ -172,7 +199,8 @@ Then, with the config stamped and `docs/templates/` in place:
 ```
 
 **Redirecting stdin is the whole mechanism, not a formality.** With no terminal
-attached, `init.sh` announces `keeping all current config/dev-model.yaml values` and
+attached, `init.sh` announces
+`note: no terminal attached — keeping all current config/dev-model.yaml values.` and
 every prompt takes the value you just stamped — so it never interrogates the operator
 and never overwrites a Step-1 decision. This is what seeds `AGENTS.md`, and it replaces
 the four things this skill used to tell you to do by hand:
@@ -203,11 +231,26 @@ it adds the `kit:` and `runtime:` sections and re-quotes scalars carrying YAML
 indicators (a tracker URL gains surrounding quotes). Commit the config before running so
 the rewrite is reviewable as its own diff.
 
-**Read its output.** Two lines matter and neither is an error:
+**Read its output.** Three outcomes matter — one is a hard failure, two are not:
 
+- **`error: non-interactive run would keep tracker.project_name = '…'` → exit 1, and
+  nothing was done.** This guard fires only on a non-interactive run, only when
+  `tracker.project_name` contains a `/`, and only when it does not appear in this repo's
+  `origin` URL — i.e. the config names *another project's tracker*, into which the
+  workflows would file issues. It exits **before** any seeding, hook install or
+  `.gitignore` write — but **not** before the config migration: measured, a run that
+  hits this has already stamped `kit.version` and written the `runtime:` and `review.*`
+  sections. Nothing there is lost work and the migration is idempotent, so re-running
+  after fixing the value is correct; just do not read the failure as "it did nothing."
+  It is squarely reachable from Step 3, where `tracker` is one stamped item among six.
+  Fix the value; `init.sh` also names `DEVKIT_ALLOW_FOREIGN_TRACKER=1` for a deliberate
+  cross-repo tracker, which is not the common case — check the value is wrong before
+  reaching for the override. **Check the exit code**, since this is the one outcome
+  where the later lines never appear at all.
 - `<path> already in use — left untouched` — the guard working. Confirm the path named
   is one you expected to keep.
-- `note: CLAUDE.md does not import AGENTS.md` — fires when the adopter had their own
+- `note: CLAUDE.md does not import AGENTS.md, and Claude Code reads CLAUDE.md only.` —
+  fires when the adopter had their own
   `CLAUDE.md`, which the guard correctly refused to touch. The consequence is that the
   two runtimes now read *different* contracts, which is the exact divergence the pair
   exists to prevent. **Never edit their file to fix it**; raise it with the operator and
@@ -270,9 +313,32 @@ before re-running, and never silence it by dropping the flag.
   hash mismatch here means the guard did not hold on a file that was never supposed to
   change — stop and restore from `$SCRATCH` or from git before doing anything else.
 
-  A `MARKED` file the operator approved re-rendering is **not** in this list and must not
-  be: it was supposed to change. Verify that one by reading it, and confirm their
-  `$SCRATCH` copy still exists for reconciliation.
+  **A `MARKED` file is in neither check above, so verify it explicitly — both outcomes.**
+  It is absent from `inuse-hashes.txt` by design, and the token count cannot help: a
+  freshly-rendered template has 0 unsubstituted tokens too, so "0 tokens" reads identically
+  whether their content was restored or silently lost. Measured: skip the restore and
+  Step 4's other two checks both report clean over a destroyed file.
+
+  ```sh
+  # (a) PRESERVED — content restored, and the marker claimed
+  shasum -a 256 "$SCRATCH/AGENTS.md.pre-adopt"        # their original
+  tail -n +2 "$SCRATCH/AGENTS.md.pre-adopt" | shasum -a 256   # ...minus line 1
+  shasum -a 256 AGENTS.md                             # must equal the SECOND hash
+  head -n 1 AGENTS.md                                 # must NOT be a kit marker
+  ```
+
+  The comparison is against the backup **minus its first line**, because claiming the file
+  deletes that line — comparing against the unmodified backup fails on a correct restore
+  and is the check most likely to be written wrongly. Re-run Step 1's classifier as the
+  real gate: it must now say `IN USE`.
+
+  ```sh
+  # (b) RE-RENDERED (operator explicitly approved) — read it, and keep their copy
+  ls -l "$SCRATCH"/*.pre-adopt        # their original must still exist to reconcile
+  ```
+
+  For this branch there is nothing to hash: the file was *supposed* to change. Read it,
+  and confirm their `$SCRATCH` copy survives for reconciliation.
 - **Hook** — resolve the directory the way `init.sh` does. `core.hooksPath` wins over
   `.git/hooks` when set (pre-commit and several monorepo setups set it), so checking
   `.git/hooks/pre-push` can inspect a file git will never run — or miss the one it will:
