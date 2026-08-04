@@ -32,48 +32,36 @@ Run these probes and record the answers — they drive the plan:
 - **Skill collisions?** Inspect `.claude/commands/` and `.agents/skills/`. Which of the kit's workflows already exist for either runtime? Keep the adopter's implementation and install only the missing adapters.
 - **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough, and a wrong call here destroys files. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* (`init.sh:1260-1263` for the four, `:1274-1275` for the entry points) — not just the two entry points. **All four narrative docs ship pre-marked** with `devkit-template: unrendered`, so a repo that took the `cp -r` quickstart has four marker-carrying files before it has any of its own; verified on the shipped copies of all four:
 
-  **Read the four narrative paths out of `config/dev-model.yaml`'s `paths:` section
-  yourself and substitute them as literals below.** Do not resolve them with a `grep` for
-  the key: `init.sh` reads them **section-scoped** (`get_field "paths:" …`,
-  `init.sh:1228-1235`), and a bare `grep -E '^[[:space:]]+handoff:'` is not — a
-  same-named key under any other section wins. Measured, on a config with
-  `ci:\n  handoff: not-the-real-one.md` above `paths:`: the grep resolved
-  `not-the-real-one.md`, so the classifier reported a decoy as `ABSENT` and **never
-  mentioned the real, marker-carrying `docs/handoff.md` at all** — which `init.sh` then
-  destroyed. `awk '{print $2}'` also truncates a quoted path containing a space. You can
-  parse YAML correctly; the one-liner cannot.
+  **Read line 1 of each of the six yourself and report the state.** Do not run a shell
+  snippet for this — the predicate belongs to `init.sh` (`_seedable`), and every attempt to
+  restate it here diverged from it on some input: a locale-dependent `[[:space:]]`, a broken
+  symlink read as absent, a `grep` for a configured path that resolved a decoy under an
+  unrelated section. Read the four narrative paths out of `config/dev-model.yaml`'s `paths:`
+  section — you can parse YAML; a `grep` for the key cannot tell which section it is in.
 
-  ```sh
-  # replace the last four with the CONFIGURED paths before running
-  for f in AGENTS.md CLAUDE.md \
-           docs/handoff.md docs/handoff-history.md \
-           docs/friction-log.md docs/friction-log-archive.md; do
-    if   [ ! -e "$f" ] && [ ! -L "$f" ]; then s="ABSENT — init.sh will seed it"
-    elif [ ! -f "$f" ];                  then s="NOT_A_REGULAR_FILE — not seedable; resolve by hand"
-    elif head -n 1 "$f" 2>/dev/null | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
-         | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
-    then s="MARKED — init.sh WILL RENDER OVER IT (tell the operator, Step 3c)"
-    else s="IN_USE — init.sh leaves it byte-identical"
-    fi
-    printf '%s: %s\n' "$f" "$s"
-  done
-  ```
+  | line 1 of the file | state | what `init.sh` does |
+  |---|---|---|
+  | file absent | `ABSENT` | seeds it |
+  | not a regular file (directory, broken symlink) | `NOT_A_REGULAR_FILE` | leaves it, reports `already in use` |
+  | opens `<!-- devkit-template: unrendered` or `<!-- devkit-source: kit-own`, marker first in the comment | `MARKED` | **renders over it, no backup** |
+  | anything else | `IN_USE` | leaves it byte-identical |
 
-  Three details in that snippet are load-bearing, each for a reason that already cost this
-  repo a defect:
+  Two traps, both of which have caught this repo before:
 
-  - **`LC_ALL=C` on the `grep`, not only the `sed`.** `[[:space:]]` is locale-dependent,
-    and `init.sh`'s `_opens_with_marker` pins `LC_ALL=C` for exactly this. Unpinned, an
-    NBSP in the marker line — routine when text is pasted from a rich-text source — makes
-    this report `MARKED` while `init.sh` leaves the file untouched. Reproduced.
-  - **`[ ! -e ] && [ ! -L ]` for `ABSENT`.** `-e` alone is false for a *broken symlink*,
-    which would then read as `ABSENT — will be seeded`; `init.sh` requires a regular file
-    and leaves it alone. Same for a directory named `AGENTS.md`, which is `#288`'s round-3
-    defect. Neither is seedable, so both get their own state rather than a wrong one.
-  - **The labels match `init.sh`'s own `_seedable`.** Verified across the marker forms and
-    `#288`'s full near-miss set — mid-comment substring, `kit-ownership` prefix, marker on
-    line 2, `unrendered-ish` suffix, NBSP, broken symlink, directory. A divergence here
-    would mean this step lies about what is about to happen to the file.
+  - **The marker must be the first token of the comment.** `<!-- see the devkit-source:
+    kit-own convention -->` is prose and is **not** marked; `devkit-source: kit-ownership`
+    is a different string and is **not** marked either; a marker on line 2 does not count.
+  - **An odd blank beside the marker means not-marked.** `init.sh` compares under `LC_ALL=C`,
+    so an NBSP or other non-ASCII blank after the marker text fails to match and the file is
+    left alone. If you see anything but a plain space or tab there, treat it as `IN_USE`.
+
+  The two traps above are not stylistic: each was a real defect here, found by executing
+  rather than reading. The state names also match `init.sh`'s own `_seedable` exactly —
+  differential-tested across `#288`'s full near-miss set (mid-comment substring,
+  `kit-ownership` prefix, marker on line 2, `unrendered-ish` suffix, NBSP, CRLF, broken
+  symlink, directory, empty file), 0 divergences. That agreement is what makes this step
+  worth doing at all: if it disagreed with `_seedable`, it would be lying about what is
+  about to happen to the file.
 
   **`MARKED` is the dangerous state, it is not hypothetical, and this skill will not
   work around it.** A file whose first line carries a kit marker is *seedable*: `init.sh`
@@ -248,124 +236,32 @@ Two things to warn them about, both measured, because neither is obvious from th
 
 ## Step 4 — Verify
 
-**The checks below verify the staged adoption — the copies and the config. They do
-not verify `init.sh`, which the operator runs after this (Step 3c) and verifies for
-themselves from what it prints.**
+**These checks cover the staged adoption — the copies and the config. They do not cover
+`init.sh`, which the operator runs afterwards (Step 3c) and verifies from what it prints.**
 
-- **Entry points** — only meaningful *after* the operator has run `init.sh`, so run it
-  with them rather than reporting it as done:
+- **After the operator has run `init.sh`, go through its output with them.** It reports
+  every decision per file, so read it rather than re-deriving it:
+  - `seeded <path>` — the file was missing or unrendered, and now holds the template.
+  - `<path> already in use — left untouched` — it had content, and still does, byte for
+    byte. Confirm each path named here is one you expected to keep.
+  - `note: existing <path> left untouched (not a kit shim) — chain it to <src> by hand` —
+    the repo had its own `pre-push`, so **the kit's hook is not installed**. This is the
+    one outcome that silently leaves a mechanism absent; chain it.
+  - `note: CLAUDE.md does not import AGENTS.md` — the two runtimes will read different
+    contracts. Raise it; never edit their file to fix it.
+  - `installed <hookdir>/<hook> -> <src>` — the hook is in place, at the directory
+    `core.hooksPath` selects, which is not always `.git/hooks`.
 
-  ```sh
-  for f in AGENTS.md CLAUDE.md; do
-    if [ -f "$f" ]; then
-      echo "$f: $(grep -c '{{[A-Z_]*}}' "$f") unsubstituted tokens (want 0)"
-    elif [ -e "$f" ] || [ -L "$f" ]; then
-      echo "$f: *** exists but is not a regular file — init.sh left it alone; resolve by hand ***"
-    else
-      echo "$f: *** still missing — the operator has not run init.sh, or it declined ***"
-    fi
-  done
-  ```
+  Then have them confirm one thing the output cannot show: that any file they chose to keep
+  still reads the way they expect. `init.sh` reports what it *did*, which is not the same as
+  what they *wanted*.
 
-  A non-zero count means the file was *copied* rather than rendered — what happens if
-  someone substitutes `cp` for `init.sh`. There is deliberately nothing here that claims to
-  prove a file was not clobbered: `/adopt` no longer runs the thing that could clobber it,
-  and a stronger claim would need `#297`'s no-clobber mode, not another snippet in a
-  markdown file that nothing executes.
+  There is deliberately no verification snippet here. Every one this document shipped was
+  wrong on some input — a token count that read a destroyed file as clean, a hook check that
+  called any non-zero exit a pass, a `mktemp` that is BSD-only and silently built an
+  empty-tree probe on Linux. None of them were executed by any test. The checks worth having
+  belong in `init.sh` and `kit_doctor`, where CI runs them; `#297` carries that.
 
-- **Hook** — *only after the operator has run `init.sh`*; nothing in `/adopt` installs it.
-  Resolve the directory the way `init.sh` does. `core.hooksPath` wins over
-  `.git/hooks` when set (pre-commit and several monorepo setups set it), so checking
-  `.git/hooks/pre-push` can inspect a file git will never run — or miss the one it will:
-
-  ```sh
-  hookdir="$(git config --get core.hooksPath || git rev-parse --git-path hooks)"
-  grep -l devkit-hook-shim "$hookdir/pre-push"   # it is the kit's shim, not a stray hook
-  # strip surrounding quotes: `engines: "scripts/devkit"` is ordinary YAML, and an
-  # unstripped quote makes the match below fail on a correctly-installed hook
-  # substitute paths.engines as a LITERAL, the way Step 1 does. Do not grep for it:
-  # a bare `grep key:` is unscoped AND unbounded, so a same-named key anywhere else
-  # in the config yields a TWO-LINE value that silently corrupts everything downstream.
-  grep -o 'scripts/devkit' "$hookdir/pre-push"   # <-- your paths.engines, targeted by the shim
-  ```
-
-  `init.sh` refuses to replace a **non-shim** hook already at that path — it prints
-  `note: existing <path> left untouched (not a kit shim) — chain it to <src> by hand` and
-  moves on. That is the right call, and it means a repo with its own `pre-push` finishes
-  this step with the kit's hook **not installed**. Read for that line and chain it, rather
-  than assuming the hook is live because `init.sh` exited 0.
-
-  **Verify the hook by making it fire, not by looking at it.** A shim that exists, is
-  executable and names the right target can still be inert. Feed it a synthetic ref on
-  stdin and confirm it refuses:
-
-  ```sh
-  [ -x "$hookdir/pre-push" ] || echo "*** not executable — git will not run it ***"
-  pre=dev            # <-- your vcs.dev_branch_prefix, as a LITERAL (see below)
-  zero=0000000000000000000000000000000000000000
-  out=$(printf 'refs/heads/%s/probe %s refs/heads/%s/probe %s\n' \
-          "$pre" "$(git rev-parse HEAD)" "$pre" "$zero" \
-        | "$hookdir/pre-push" origin https://example.invalid 2>&1)
-  rc=$?
-  printf '%s\n' "$out"
-  case "$rc:$out" in
-    0:*)            echo "did not fire — see the fail-open note below" ;;
-    *"Refusing to push"*) echo "hook is live and refusing" ;;
-    *)              echo "*** non-zero for some OTHER reason — not the guard firing ***" ;;
-  esac
-  ```
-
-  That probe uses `HEAD`, so it only *fires* when the current branch's diff against
-  `origin/<protected_branch>` touches a narrative file. To prove the refusal path itself
-  on any branch, build a throwaway commit that does — with plumbing, so nothing in the
-  working tree or on any branch changes:
-
-  ```sh
-  prot=origin/main   # <-- your vcs.protected_branch, as a LITERAL. Hardcoding `main`
-                     # here would test the wrong base on a trunk/master repo; so would
-                     # grepping for it, differently and more quietly.
-  # `mktemp -t adopt-probe` is BSD-only: GNU coreutils rejects a bare prefix with
-  # `too few X's in template`. Use a full template, and FAIL rather than continue —
-  # an empty $idx makes write-tree return the EMPTY TREE, so the probe commit deletes
-  # every file, the hook fires for the wrong reason, and the check reports success.
-  idx=$(mktemp "${TMPDIR:-/tmp}/adopt-probe.XXXXXX") || { echo "mktemp failed"; exit 1; }
-  trap 'rm -f "$idx"' EXIT
-  set -e                          # the plumbing below must not continue past a failure
-  b=$(printf 'probe\n' | git hash-object -w --stdin)
-  GIT_INDEX_FILE=$idx git read-tree "$prot"
-  GIT_INDEX_FILE=$idx git update-index --add --cacheinfo 100644,$b,<your handoff path>
-  probe=$(git commit-tree "$(GIT_INDEX_FILE=$idx git write-tree)" -p "$prot" -m probe)
-  ```
-
-  Feed `$probe` as the sha in the `printf` above. Exit 1 with the refusal message is the
-  hook working.
-
-  **Every config value in this section is a literal you substitute, never a `grep`.** The
-  reason is measured, and it is not the one I first wrote here. A bare
-  `grep -E '^[[:space:]]+key:'` is unscoped *and* unbounded: with a same-named key
-  anywhere else in the config it returns **two lines**, and the variable becomes
-  `"decoyprefix\ndev"`. That corrupts the `printf` into three malformed refs, none
-  matching `refs/heads/<prefix>/*`, so the hook exits 0 and the `case` below reports
-  `did not fire` — **a false verdict on a hook that is working perfectly**, with a cause
-  the two fail-open notes do not cover. I had dismissed these three as "fails visibly
-  rather than destructively"; that was wrong for this one, and a lens disproved it by
-  running it.
-
-  The `case` above is why the assertion matches the **message** and not just the exit
-  code: a non-zero status can equally mean the hook is missing, not executable, or broke
-  on something unrelated, and reading that as "the guard fired" is how a dead hook passes
-  a check. Three outcomes, three verdicts.
-
-  Exit 0 means it did not fire, and the guard **fails open by design** in two distinct
-  cases — both expected rather than broken, and worth telling apart before you go hunting:
-
-  - **`origin/<protected_branch>` does not resolve** — a fresh clone with no fetched
-    remote. `git rev-parse --verify origin/<branch>` tells you.
-  - **The hook could not read `config/dev-model.yaml`** and fell back to its defaults, so
-    it looked for `origin/main` on a repo whose trunk is something else. It reads the
-    config through the engines' `lib/`, so this fires when the engines were installed
-    without it. Measured: on a `trunk` repo with `lib/` absent the probe reported *did not
-    fire*; with `lib/` present the same probe refused correctly.
 - Portability tests: run the kit's suites explicitly. `/adopt` does not install the kit's
   `Makefile`, and a mature repo's own `make test` will run *its* suite, not these:
 
