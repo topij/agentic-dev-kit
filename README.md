@@ -106,7 +106,8 @@ cp -r /path/to/agentic-dev-kit/. .
 ```
 
 `init.sh` stamps your answers into `config/dev-model.yaml`, renders the narrative
-docs and the root `AGENTS.md` entry point from `docs/templates/`, installs the
+docs and both root entry points — `AGENTS.md` and the `CLAUDE.md` that imports
+it — from `docs/templates/`, installs the
 pre-push hook, and adds four entries to `.gitignore` — `state/`, `.devkit_state_root`,
 `.claude/worktrees/` (isolated review lenses) and `reports/` (derived pipeline output).
 It adds a fifth, `.mcp.json`, **only** if that file exists and appears to hold literal
@@ -240,7 +241,7 @@ Each piece maps to one or more of the ten principles in
 |---|---|---|
 | `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan — read at session start, updated at session end. Older sessions sweep to the history file once it crosses a line budget. |
 | `docs/friction-log.md` + `docs/friction-log-archive.md` | #2 Friction flywheel | Append-only inbox for bugs and rough edges, triaged on a cadence: single incidents route down to your tracker, real patterns graduate up into a rule. |
-| `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above, plus the root `AGENTS.md` entry point for Codex-run adopters, on adopt or upgrade — never overwrites one already in use. |
+| `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above, plus both root entry points — `AGENTS.md` (the contract every runtime reads) and `CLAUDE.md` (which imports it, since Claude Code reads only the latter) — on adopt or upgrade. Never overwrites one already in use. |
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
 | `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, and `pr-watch`. |
 | `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the `--headless` JSON descriptor, the lane-contract preamble, the fan-out recipe. |

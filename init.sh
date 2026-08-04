@@ -28,10 +28,11 @@ Bootstraps the agentic-dev-kit in the current repo:
   2. Stamps the answers into config/dev-model.yaml in place.
   3. Migrates an older config schema forward in place (kit.version) and
      stamps the current generation.
-  4. Renders the four narrative docs and the root AGENTS.md entry point from
-     docs/templates/ — but only when a target is missing or its FIRST LINE
-     still carries the unrendered marker, so a file you are actually using is
-     left byte-identical.
+  4. Renders the four narrative docs and both root entry points — AGENTS.md
+     (the contract) and CLAUDE.md (the Claude binding that imports it) — from
+     docs/templates/, but only when a target is missing or its FIRST LINE
+     carries the unrendered marker or the kit-own marker, so a file you are
+     actually using is left byte-identical.
   5. Appends the kit's state-sandbox paths to .gitignore if they're
      missing (never duplicates a line on re-run).
   6. Installs the pre-push hook as a shim (honoring core.hooksPath).
