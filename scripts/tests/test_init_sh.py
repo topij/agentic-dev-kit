@@ -46,6 +46,36 @@ ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
+def locale_where_nbsp_is_blank() -> str | None:
+    """An installed locale under which the SHELL's `[[:space:]]` matches U+00A0,
+    or None if this machine has none.
+
+    Not "a UTF-8 locale" and not a hardcoded `en_US.UTF-8`: an uninstalled
+    locale name silently falls back to C, where `[[:space:]]` is ASCII-only —
+    so the test below would pass with the pin it exists to check REMOVED, in
+    exactly the minimal CI containers most likely to lack the locale. The probe
+    asks the shell the actual question instead of assuming an answer from the
+    locale's name.
+    """
+    try:
+        installed = subprocess.run(
+            ["locale", "-a"], capture_output=True, text=True, check=True
+        ).stdout.split()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    for name in installed:
+        if "utf" not in name.lower():
+            continue
+        probe = subprocess.run(
+            ["sh", "-c", 'case "$1" in [[:space:]]*) exit 0 ;; esac; exit 1', "sh", " "],
+            env=dict(os.environ, LC_ALL=name, LANG=name),
+            capture_output=True,
+        )
+        if probe.returncode == 0:
+            return name
+    return None
+
+
 def kit_own_marker() -> str:
     """`init.sh`'s KIT_OWN_MARKER literal, read at CALL time.
 
@@ -1007,15 +1037,23 @@ def test_a_unicode_blank_beside_the_marker_does_not_make_it_seedable(
     the doctor: init.sh would overwrite it and the doctor would say nothing.
     Panel round 7, adversarial, reproduced across four locales.
 
-    Runs under an explicitly UTF-8 environment, because that is the case that
-    failed; under LC_ALL=C it would pass even with the pin removed."""
+    Runs under a locale PROVED to classify U+00A0 as blank, not a hardcoded
+    name: under LC_ALL=C — which is where an uninstalled locale name lands —
+    this passes with the pin removed, so a hardcoded name would unpin the check
+    silently on any machine lacking that locale."""
+    locale_name = locale_where_nbsp_is_blank()
+    if locale_name is None:
+        pytest.skip(
+            "no installed locale classifies U+00A0 as blank, so the shell's "
+            "[[:space:]] cannot differ from C here and this pins nothing"
+        )
     repo = _fixture(tmp_path, config=shipped_config(), templates=True)
     original = f"<!--{blank}{kit_own_marker()} -->\n# ours, must survive\n"
     (repo / "CLAUDE.md").write_text(original, encoding="utf-8")
 
     env = _env(repo.parent)
-    env["LC_ALL"] = "en_US.UTF-8"
-    env["LANG"] = "en_US.UTF-8"
+    env["LC_ALL"] = locale_name
+    env["LANG"] = locale_name
     result = subprocess.run(
         ["sh", "init.sh"],
         cwd=repo,
