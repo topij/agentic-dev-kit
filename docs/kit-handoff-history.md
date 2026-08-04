@@ -4,6 +4,89 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-08-03 (the conversion proved itself, and the record kept outrunning the work)
+
+**Theme —** Three kit PRs merged, one closed unmerged, one adopter converted. The durable
+result is not any of them: it is that **a claim written about work already done was wrong in
+every review round of one paragraph**, and the thing that finally held was replacing the claim
+with an enumeration a grep can check. `#248`.
+
+- **`#238` — `session-start` gains a Remediation check** (`b5b9547`). The kit shipped an
+  archival mechanism and a briefing where the briefing never read what the archiver swept:
+  `paths.handoff_history` and `paths.friction_log_archive` were consumed by nothing.
+- **`#237` — the PR limit and its lost caveat** (`e49ddf3`). The shipped `--limit 20` was
+  *below* `gh`'s own default. Both halves came from diffing the four shared workflows against
+  the cs-toolkit adapters they were generalized out of; that survey found nothing else, and
+  its result is recorded on the PR.
+- **The fail-closed rule** (`6bf4443`). A source that fails now reports unavailable rather
+  than its empty value. Found by CodeRabbit reviewing **cs-toolkit's copy**, not this repo's.
+- **`#244` closed unmerged**, under a bound declared before its second lens reported. Its
+  provenance rule was disproven on its own example — `git check-ref-format` accepts `$()` in a
+  branch name, and `git branch --show-current` is in this workflow's own gather. `#245`.
+- **cs-toolkit `/session-start` converted** to pointer + appendix. Every section of the fork
+  was mapped before anything was deleted; the one with no home was contributed upstream as
+  `#238` first. The conversion was **run**, not only mapped — the mapping and the run are on
+  that PR.
+- **Ninth friction-log sweep** (`#257`, `e2e8719`). Fifteen entries routed: seven into new
+  issues (`#250`–`#256`), six into five occurrence comments (two entries shared one comment on
+  `#205`), two already tagged `#198`. Twelve writes, fifteen entries — not the same number.
+  CodeRabbit was rate-limited, so the merge stands on a `fallback:panel` receipt.
+
+**Learned**
+
+- **The record outran the work in every round, on one paragraph.** Four consecutive scope
+  sentences each claimed more than was implemented, including one caught by its author's own
+  grep before push. That is not four typos: an enumeration restating a list from six
+  paragraphs above will drift from it. `#248` carries the rounds and three candidate
+  directions.
+- **Provenance is not a safety test.** "Who authored this string" says nothing about what
+  characters it contains, and the shell only cares about the latter. `#245`.
+- **A verification harness earned its place by being rewritten until it discriminated.** Twice
+  a check returned the same result whichever branch was live and would have been reported as a
+  pass; both were caught by asking what the *other* branch returns.
+- **`gh` resolves the repo from the working directory, and a forge write is not retractable
+  the way a file write is.** A comment landed on an unrelated merged PR in another repo that
+  happened to share the number, and the write reported success. `#246`.
+- **Half the kit is not thin** — four workflows exist only as Claude adapters with their
+  doctrine inline and no Codex equivalent, so Codex can run half the kit by omission. This is
+  what makes `#236`'s adapter half intractable and is now its precondition. `#243`.
+- **The record outran the work again, in the session that named it.** Two more position claims
+  were wrong — "four" sections where three was right, and a marker called first that is third —
+  both inside sentences citing `#224` *for the position problem*. The second survived because
+  the author repaired the visibly-broken clause and left the one needing a `grep`. Occurrence
+  data on `#248`, and evidence for its "stop restating the structure" direction over the other
+  two.
+
+**Decided this session (operator)**
+
+- **Branch patterns must uniquify within a day** — a second same-day run is the expected case,
+  not the edge one. All three patterns are `{date}`-only; `state/triage/frozen-inbox_2026-07-29-b.json`
+  is a hand-applied workaround from when triage hit it. Reproduced live today:
+  `gh pr view chore/update-handoff-2026-08-03` answers `#249 MERGED`, this morning's wrap-up.
+  Broadened onto `#256`; this session's own branch carries the `{date}-{time}` shape.
+- **The handoff stops restating derived state.** `session-start` already gathers the friction
+  log and grades its entries, so a budget line here is a second copy that can only go stale —
+  it did, on `#257`'s merge, and it was the only misleading line in this block. Rule: the
+  handoff carries what cannot be recomputed; if a command prints it, it belongs to the command.
+  `#258`.
+
+**Open, and owned by nothing yet**
+
+- **Filed this session:** `#243`, `#245`, `#246`, `#248`, `#250`–`#256`, `#258`, plus `#240`
+  and `#241` (the three withdrawn search recipes and the constraints any fourth must meet).
+- **Carried forward:** `#236` (now narrowed to engines/doctrine plus Step 5), `#231`, `#213`,
+  `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#93`.
+
+▶ Next: **convert cs-toolkit's `/parallel` adapter** with the method
+`in-parallel-oy/cs-toolkit#1826` proved — map every
+section before deleting any, contribute anything generic upstream first, then run it. It is a
+200-line fork with a shared workflow already in the kit and no Codex counterpart, so it is the
+same single-runtime shape as the one just done. Each conversion so far has found a kit bug the
+fork was hiding; that is the reason to keep going rather than to batch them. `wrap-up` is the
+one to leave for later — it carries `#93`'s Codex slug mismatch, and
+`triage-friction-log`/`post-merge-systemize` cannot be converted at all until `#243` gives them
+shared workflows.
+
 ### 2026-08-02 (Phase 2's blockers closed, and withdrawal beating repair)
 
 **Theme —** Two PRs merged and one closed unmerged. In all three, the expensive part was a
