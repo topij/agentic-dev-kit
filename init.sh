@@ -671,9 +671,15 @@ KIT_OWN_MARKER="devkit-source: kit-own"
 # _imports_agents_md <path> — true when the file carries an ACTIVE `@AGENTS.md`
 # import: one outside fenced code blocks and inline code spans. Claude Code does
 # not evaluate import syntax inside either, so a CLAUDE.md that merely DOCUMENTS
-# the convention in backticks — which docs/templates/CLAUDE.md.tmpl does, and
-# which any adopter writing about it would — does not load the shared contract
-# and must not read as though it does.
+# the convention in backticks does not load the shared contract and must not
+# read as though it does.
+#
+# No file the kit ships is that shape — an earlier version of this comment said
+# docs/templates/CLAUDE.md.tmpl was, and a grep disproves it: its only
+# @AGENTS.md is the live import. The hazard is an adopter's own CLAUDE.md, and
+# the code-span form is what prose about the mechanism naturally reaches for —
+# docs/getting-started.md:44 writes it that way, though that file never reaches
+# this predicate, which only ever reads the adopter's root CLAUDE.md.
 #
 # This is the TEMPLATE_MARKER class again, one function over: that guard's first
 # version matched the marker anywhere in the body, so a file quoting it in prose
@@ -685,10 +691,24 @@ KIT_OWN_MARKER="devkit-source: kit-own"
 # hint, not raise a false one — and no realistic CLAUDE.md links to it that way.
 _imports_agents_md() {
   awk '
-    /^[[:space:]]*(```|~~~)/ { fence = !fence; next }
-    fence { next }
     {
       line = $0
+      bare = line
+      sub(/^[[:space:]]*/, "", bare)
+      # A fence opens with three or more of one character and closes only on a
+      # run of the SAME character at least as long — CommonMark. Toggling on any
+      # three read the inner ``` of a ````-fenced block as a close, so the lines
+      # after it were scanned as live prose (panel, adversarial lens).
+      # Counted rather than matched with an interval: `{3,}` is not in every awk.
+      if (substr(bare, 1, 3) == "```" || substr(bare, 1, 3) == "~~~") {
+        ch = substr(bare, 1, 1)
+        n = 0
+        while (substr(bare, n + 1, 1) == ch) { n++ }
+        if (!fence) { fence = 1; fchar = ch; flen = n }
+        else if (ch == fchar && n >= flen) { fence = 0 }
+        next
+      }
+      if (fence) { next }
       while (match(line, /`[^`]*`/)) {
         line = substr(line, 1, RSTART - 1) " " substr(line, RSTART + RLENGTH)
       }
@@ -698,12 +718,37 @@ _imports_agents_md() {
   ' "$1"
 }
 
+# _seedable <path> — true when the target may be written: it is missing, or its
+# FIRST LINE *opens an HTML comment* carrying either marker.
+#
+# Line 1 alone is not enough, and the anchor is the whole point. A SUBSTRING
+# match on line 1 means a real file whose first line merely TALKS ABOUT the
+# convention —
+#
+#   Note: the kit marks its own entry points `devkit-source: kit-own` on line 1.
+#
+# — reads as the kit's own and is overwritten, with no backup and a "seeded"
+# message indistinguishable from a first-time seed. Reproduced against BOTH
+# entry points by the panel's adversarial lens on PR #289.
+#
+# For AGENTS.md and CLAUDE.md that is a REGRESSION, not an inherited risk:
+# before the kit shipped its own, AGENTS.md was seeded by ABSENCE — so an
+# existing one was never touched whatever it contained — and CLAUDE.md had no
+# seeding path at all. The anchor keeps that property while letting the kit ship
+# both. It is applied to TEMPLATE_MARKER too: the two markers now flow through
+# one predicate, and leaving one loose while tightening the other would be the
+# same destructive bug with a different literal.
+#
+# Anchoring costs nothing real: every marker this script writes or ships is an
+# HTML comment at the very start of line 1, and prose quoting one is not. The
+# failure direction becomes "an oddly-formatted skeleton is not re-seeded",
+# which loses no data.
 _seedable() {
   [ -f "$1" ] || return 0
   _first="$(head -n 1 "$1" 2>/dev/null)"
   case "$_first" in
-    *"$TEMPLATE_MARKER"*) return 0 ;;
-    *"$KIT_OWN_MARKER"*) return 0 ;;
+    "<!--"*"$TEMPLATE_MARKER"*) return 0 ;;
+    "<!--"*"$KIT_OWN_MARKER"*) return 0 ;;
   esac
   return 1
 }

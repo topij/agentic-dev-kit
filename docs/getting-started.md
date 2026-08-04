@@ -45,13 +45,23 @@ the contract, and `CLAUDE.md`, which imports it with `@AGENTS.md` because Claude
 `CLAUDE.md` and not `AGENTS.md` — from `docs/templates/`, installs the pre-push hook, and
 adds the state sandbox to `.gitignore`.
 
-It renders a narrative doc when the target is **missing, or its first line still carries
-the shipped `devkit-template: unrendered` marker** — so a handoff you are actually using
-is left byte-identical, which is what makes re-running it the supported upgrade path. The
-first line specifically: a doc whose body quotes the marker lower down is in use, and
-seeding leaves it alone. (The older
-"only if it doesn't already exist" rule couldn't work: the kit *ships* those files, so a
-copy-in always landed them first and the seed step never fired.)
+It renders a target when it is **missing, or its first line opens an HTML comment
+carrying one of two markers** — so a handoff you are actually using is left
+byte-identical, which is what makes re-running it the supported upgrade path.
+
+- `devkit-template: unrendered` marks a **shipped skeleton** — the four narrative docs.
+- `devkit-source: kit-own` marks the **kit's own** root `AGENTS.md` and `CLAUDE.md`. The
+  kit ships those two because a session working in the kit needs a contract too, and the
+  `cp -r` quickstart therefore lands them in your root. This marker is what lets `init.sh`
+  render yours over them instead of mistaking them for files you are already using.
+
+Neither marker counts anywhere but the start of line 1, and prose does not qualify: a doc
+that *mentions* a marker — on line 1 or anywhere below — is in use, and seeding leaves it
+alone. Your rendered `AGENTS.md` and `CLAUDE.md` carry no marker at all, so once yours
+exist they are never re-rendered.
+
+(The older "only if it doesn't already exist" rule couldn't work: the kit *ships* those
+files, so a copy-in always landed them first and the seed step never fired.)
 
 Then open `config/dev-model.yaml` and fill in anything you skipped — especially
 the `tracker` and `models` blocks. That one file is where every skill and script

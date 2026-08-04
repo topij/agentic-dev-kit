@@ -882,6 +882,43 @@ def test_an_in_use_entry_point_is_still_never_touched(tmp_path: Path) -> None:
     assert "CLAUDE.md already in use — left untouched" in result.stdout
 
 
+@pytest.mark.parametrize("target", ["AGENTS.md", "CLAUDE.md", "docs/kit-friction-log.md"])
+def test_a_marker_quoted_in_prose_on_line_1_is_not_seedable(
+    tmp_path: Path, target: str
+) -> None:
+    """The destructive consumer of the anchor in `_seedable`, and the case the
+    line-1 rule alone does NOT cover.
+
+    `test_seeding_leaves_a_doc_that_merely_quotes_the_marker_untouched`
+    parametrizes the quote onto lines 2 and 3 — never line 1, which is the one
+    line the guard reads. A substring match there overwrote a real file with no
+    backup, printing `seeded <path>`, indistinguishable from a first-time seed.
+    Found by the panel's adversarial lens on PR #289 by running init.sh against
+    a hand-built fixture, not by reading the predicate.
+
+    Both markers, because both now flow through one predicate; and both entry
+    points, because for those two it is a REGRESSION rather than an inherited
+    risk — `AGENTS.md` used to be seeded by absence and `CLAUDE.md` not at all."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    for marker in (kit_own_marker(), "devkit-template: unrendered"):
+        path = repo / target
+        path.parent.mkdir(parents=True, exist_ok=True)
+        original = (
+            f"Note: the kit marks its own files `{marker}` on line 1.\n"
+            "\n"
+            "# Ours, hand written, must survive ./init.sh\n"
+        )
+        path.write_text(original, encoding="utf-8")
+
+        result = _run_init(repo)
+
+        assert path.read_text(encoding="utf-8") == original, (
+            f"{target} was DESTROYED — line 1 quotes '{marker}' in prose, which "
+            f"is not the kit's own marker comment"
+        )
+        assert f"{target} already in use — left untouched" in result.stdout
+
+
 def test_an_in_use_claude_md_without_the_import_is_reported(tmp_path: Path) -> None:
     """Leaving their file alone is correct and also leaves the two runtimes on
     different contracts, because Claude Code reads CLAUDE.md and not AGENTS.md.
@@ -902,6 +939,11 @@ def test_an_in_use_claude_md_without_the_import_is_reported(tmp_path: Path) -> N
         ("fenced block", "# mine\n\n```markdown\n@AGENTS.md\n```\n"),
         ("tilde fence", "# mine\n\n~~~\n@AGENTS.md\n~~~\n"),
         ("longer name", "# mine\n\n@AGENTS.mdx\n"),
+        # A ```-run does not close a ````-opened fence (CommonMark: the closer
+        # must be at least as long). Toggling on any three read the inner fence
+        # as a close and scanned the rest as live prose — panel, adversarial
+        # lens. The `@AGENTS.md` below is still inside the outer fence.
+        ("mismatched fence length", "# mine\n\n````\ntext\n```\n@AGENTS.md\n````\n"),
     ],
 )
 def test_an_inactive_agents_import_does_not_suppress_the_hint(
@@ -911,10 +953,15 @@ def test_an_inactive_agents_import_does_not_suppress_the_hint(
     fenced code blocks, so an `@AGENTS.md` in either is NOT an import and the
     file does not load the shared contract.
 
-    A substring match read all four of these as importing and stayed silent —
-    the TEMPLATE_MARKER "quotes it in prose" class, one function over, found by
-    the review bot on this PR. `docs/templates/CLAUDE.md.tmpl` contains the code-
-    span form itself, so this is the shipped shape and not a contrived one."""
+    A substring match read all of these as importing and stayed silent — the
+    TEMPLATE_MARKER "quotes it in prose" class, one function over, found by the
+    review bot on this PR.
+
+    No shipped file is one of these shapes; an earlier version of this docstring
+    claimed `docs/templates/CLAUDE.md.tmpl` was, and its only `@AGENTS.md` is the
+    live import. The case is an adopter's own CLAUDE.md — the code-span form is
+    what prose about the mechanism reaches for, as `docs/getting-started.md:44`
+    does, though that file never reaches the predicate."""
     repo = _fixture(tmp_path, config=shipped_config(), templates=True)
     (repo / "CLAUDE.md").write_text(body, encoding="utf-8")
 
