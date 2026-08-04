@@ -182,8 +182,18 @@ def test_marker_on_a_cr_delimited_first_line_is_still_detected(tmp_path):
     init.sh will seed straight over (panel round 3). Reading bytes keeps the two
     predicates on the same text."""
     root = _fake_repo(tmp_path)
+    # The fixture changed when init.sh's guard was anchored to the OPENING of
+    # line 1 (panel round 6). The old one — `# Title\r<!-- marker -->` — no
+    # longer discriminates: both predicates now correctly call it in use, since
+    # line 1 does not open with the marker comment under either reader.
+    #
+    # This one does. read_bytes ends line 1 at LF, as `head -n 1` does, so the
+    # whole file is line 1 and the CR after `<!--` is stripped as a blank,
+    # leaving the marker first — a skeleton. read_text translates the CR to a
+    # newline, ending line 1 at `<!--` alone, and reports the file in use while
+    # init.sh seeds straight over it.
     (root / "docs" / "handoff.md").write_bytes(
-        b"# Title\r<!-- devkit-template: unrendered -->\rbody\r"
+        b"<!--\rdevkit-template: unrendered -->\rbody\r"
     )
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 

@@ -1052,6 +1052,11 @@ def test_an_in_use_claude_md_without_the_import_is_reported(tmp_path: Path) -> N
         ("multiline span", "# mine\n\n`@AGENTS.md\nstill inside the span`\n"),
         # A run of a DIFFERENT length does not close the span.
         ("inner shorter run does not close", "# mine\n\n``a ` b @AGENTS.md``\n"),
+        # Claude Code strips block-level HTML comments before injecting, so an
+        # import inside one is not live — and this is a plausible thing to
+        # write (panel round 6, adversarial).
+        ("html comment", "# mine\n\n<!-- TODO: add the @AGENTS.md import -->\n"),
+        ("multiline html comment", "# mine\n\n<!-- TODO:\n@AGENTS.md\n-->\n"),
     ],
 )
 def test_an_inactive_agents_import_does_not_suppress_the_hint(
@@ -1091,6 +1096,13 @@ def test_an_inactive_agents_import_does_not_suppress_the_hint(
         ("after a four-space-indented backtick line", "# mine\n\n    ```\n    example\n\n@AGENTS.md\n"),
         # A closed span must not leave the scanner inside one.
         ("after a closed multiline span", "# mine\n\n`a\nb`\n\n@AGENTS.md\n"),
+        # A closed comment must not leave the scanner inside one — and the
+        # SHIPPED template opens with an HTML comment header above its import,
+        # so this is the shape that actually ships.
+        ("after a closed html comment", "<!-- header -->\n\n@AGENTS.md\n"),
+        ("after a closed multiline html comment", "<!-- a\nb -->\n\n@AGENTS.md\n"),
+        # A `<!--` inside a code span is span content, not a comment opener.
+        ("backticked comment opener", "# mine\n\n`<!--` then\n\n@AGENTS.md\n"),
     ],
 )
 def test_an_active_agents_import_suppresses_the_hint(

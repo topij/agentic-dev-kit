@@ -122,8 +122,9 @@ directory, not against its own location, so it still needs the templates present
 It only ever **adds** missing keys, never guesses over an existing value; it probes
 `paths.engines` from where engines actually are rather than defaulting; it stamps
 `kit.version`; it installs the pre-push hook as a shim (honoring `core.hooksPath`); and
-it leaves a narrative doc that is genuinely in use byte-identical, re-rendering only one
-whose **first line** still carries the unrendered marker.
+it leaves a doc that is genuinely in use byte-identical, re-rendering only one whose
+**first line opens an HTML comment beginning with** the unrendered marker or the kit-own
+marker — the second covering a root `AGENTS.md` / `CLAUDE.md` that is still the kit's own.
 
 Press Enter through every prompt to keep current values. Then re-read the diff of
 `config/dev-model.yaml` and confirm nothing you rely on changed.

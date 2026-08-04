@@ -691,15 +691,19 @@ KIT_OWN_MARKER="devkit-source: kit-own"
 # leaf-block rules to tell a live import from a quoted one: fenced blocks (0-3
 # leading spaces, matched fence character and length, blank-only close), and code
 # spans delimited by backtick runs of EQUAL length, carried across lines. It is
-# not a Markdown parser. It does not implement backslash escapes, HTML blocks,
-# link reference definitions, or the rule that strips one space from each end of
-# a span's content — none of which change whether an `@AGENTS.md` is inside a
-# span or a fence, which is the only question asked here.
+# not a Markdown parser. It does not implement backslash escapes, link reference
+# definitions, or the rule that strips one space from each end of a span's
+# content — none of which change whether an `@AGENTS.md` is inside a span, a
+# fence, or a comment, which is the only question asked here.
 #
-# Residuals, stated rather than discovered: an `@AGENTS.md` inside a Markdown
-# link target still counts, and so would one inside an HTML block. Both are the
-# permissive direction — they suppress the hint rather than raise a false one —
-# and no realistic CLAUDE.md writes either.
+# Residuals, stated rather than discovered:
+#   - an `@AGENTS.md` inside a Markdown LINK TARGET still counts;
+#   - one inside a BLOCKQUOTE counts, and that is probably right — a blockquote
+#     is live prose in CommonMark and Claude Code strips only code spans and
+#     fences, so `> @AGENTS.md` plausibly IS an import. Left counting rather
+#     than guessed at.
+# The first is the permissive direction — it suppresses the hint rather than
+# raising a false one — and no realistic CLAUDE.md writes it.
 _imports_agents_md() {
   awk '
     # Length of the backtick run starting at pos, 0 if none.
@@ -735,6 +739,17 @@ _imports_agents_md() {
           } else { i++ }
         }
         if (!closed) { next }
+
+      # 1b. An HTML comment open from an earlier line. Claude Code strips
+      #     block-level comments before injecting, so an @AGENTS.md inside one
+      #     is not an import — and `<!-- TODO: add the @AGENTS.md import -->`
+      #     is a plausible thing to write, which then suppressed the hint that
+      #     exists to catch exactly that (panel round 6, adversarial).
+      } else if (incomment) {
+        i = index(line, "-->")
+        if (i == 0) { next }
+        incomment = 0
+        from = i + 3
 
       # 2. Fences. At most THREE leading spaces — four makes it an indented code
       #    block, which is not a fence, and treating it as one swallowed the
@@ -797,6 +812,21 @@ _imports_agents_md() {
           if (closed) { live = live " "; i = j + n; continue }
           spanlen = n
           break
+        }
+        # An HTML comment, checked AFTER backticks so a `<!--` inside a code
+        # span stays span content — CommonMark parses code spans before inline
+        # HTML, and the templates here open with a comment on line 1.
+        #
+        # No apostrophe anywhere in this awk program: it is a single-quoted
+        # shell string, so one closes it and the next line becomes syntax. That
+        # is what happened when this comment first said "the repo" possessively
+        # — `sh -n` caught it, the suite reported 94 unrelated failures.
+        if (substr(rest, i, 4) == "<!--") {
+          j = index(substr(rest, i), "-->")
+          if (j == 0) { incomment = 1; break }
+          live = live " "
+          i = i + j + 2
+          continue
         }
         live = live substr(rest, i, 1)
         i++
