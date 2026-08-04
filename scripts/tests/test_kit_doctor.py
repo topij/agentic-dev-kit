@@ -279,6 +279,38 @@ def test_an_adopters_own_entry_point_is_reported_in_use(tmp_path, entry_point):
     assert report.narrative_rendered[entry_point] is True
 
 
+@pytest.mark.parametrize("shape", ["directory", "broken symlink", "unreadable"])
+def test_a_target_init_sh_will_not_touch_is_not_reported_as_unrendered(tmp_path, shape):
+    """`doc.is_file()` alone conflated three things with "missing", and only
+    missing warrants `run ./init.sh`.
+
+    A directory named AGENTS.md and a dangling symlink are both left alone by
+    `_seedable`, so telling the operator to run the command that will refuse them
+    is the no-op remedy round 2 removed. An unreadable file raised OSError out of
+    `read_bytes()` and aborted the ENTIRE report — thirty-two other files
+    undiagnosed because of one. Both found by the review bot on PR #289."""
+    root = _fake_repo(tmp_path)
+    target = root / "AGENTS.md"
+    if shape == "directory":
+        target.mkdir()
+    elif shape == "broken symlink":
+        target.symlink_to("no-such-file-9f2a.md")
+    else:
+        _write(target, "<!-- devkit-source: kit-own -->\n")
+        target.chmod(0o000)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    try:
+        report = kit_doctor.inspect(root, _manifest({}), config)
+    finally:
+        if shape == "unreadable":
+            target.chmod(0o644)
+
+    assert report.narrative_rendered["AGENTS.md"] is True
+    # The report still covers everything else — the point of not aborting.
+    assert "docs/handoff.md" in report.narrative_rendered
+
+
 def test_missing_manifest_entry_is_unknown_not_unchanged(tmp_path):
     root = _fake_repo(tmp_path)
     manifest = _manifest({"scripts/check_doc_budget.py": None})

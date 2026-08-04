@@ -1045,15 +1045,43 @@ def inspect(
         # init.sh seeded over it (panel round 3). Splitting the raw decode on "\n"
         # is what head -n 1 actually does.
         #
-        # Known remaining divergence, pre-existing and unrelated to line
-        # matching: an unreadable file makes init.sh's guard fail safe ("in
-        # use") while this raises PermissionError and aborts the whole run.
-        # Not filed as of this change, and deliberately not fixed here — note
+        # TWO shapes where `doc.is_file()` alone said the wrong thing, both
+        # reported by the review bot and both the divergence class above:
+        #
+        #   - a target that EXISTS but is not a regular file (a directory named
+        #     AGENTS.md, a dangling symlink) is not a file, so it reported as
+        #     "run ./init.sh" — which init.sh then refuses, leaving it
+        #     "already in use — left untouched". Wrong advice, and the same
+        #     no-op remedy round 2 removed. init.sh leaves such a target alone,
+        #     so this reports it alone too.
+        #   - an unreadable regular file raised OSError out of read_bytes and
+        #     aborted the WHOLE report, while init.sh's guard fails safe. A
+        #     diagnostic that dies on one unreadable file tells you nothing
+        #     about the other thirty-two.
+        #
+        # Both now resolve the way init.sh resolves them: left alone. Neither
+        # is *good* reporting — a directory named AGENTS.md is broken and this
+        # says "in use" — but agreeing with init.sh is the property being
+        # protected, and a third state is a Report shape change with JSON
+        # consumers behind it. Filed rather than smuggled into a fix round.
+        #
+        # Superseded note, kept for the reader who finds the old wording
+        # elsewhere: this divergence was previously recorded here as known,
+        # unfiled, and deliberately unfixed — note
         # that pr_watch and pr_followup_hook both treat an unreadable config as
         # "must never raise", so this check is the outlier.
-        narrative[str(rel)] = doc.is_file() and not _still_a_skeleton(
-            doc.read_bytes().decode("utf-8", "replace").split("\n", 1)[0]
-        )
+        if doc.exists() or doc.is_symlink():
+            if not doc.is_file():
+                narrative[str(rel)] = True  # not a regular file — init.sh leaves it
+                continue
+            try:
+                first_line = doc.read_bytes().decode("utf-8", "replace").split("\n", 1)[0]
+            except OSError:
+                narrative[str(rel)] = True  # unreadable — init.sh's guard fails safe
+                continue
+            narrative[str(rel)] = not _still_a_skeleton(first_line)
+        else:
+            narrative[str(rel)] = False  # missing — init.sh WILL seed it
 
     raw_version = get(config, "kit.version", None)
     raw_manifest_version = manifest.get("kit_version")
