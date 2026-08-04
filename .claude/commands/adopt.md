@@ -30,12 +30,21 @@ Run these probes and record the answers — they drive the plan:
 
 - **Living plan?** `ls ROADMAP.md PLAN.md docs/plan.md docs/handoff.md handoff.md 2>/dev/null`. If one exists, the repo already practices Principle #1 — you'll point the kit at it, not add a second plan.
 - **Skill collisions?** Inspect `.claude/commands/` and `.agents/skills/`. Which of the kit's workflows already exist for either runtime? Keep the adopter's implementation and install only the missing adapters.
-- **Root entry points?** Classify each of `AGENTS.md` and `CLAUDE.md` into one of **four** states. Presence alone is not enough, and a wrong call here destroys files:
+- **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough, and a wrong call here destroys files. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* (`init.sh:1260-1275`) — not just the two entry points, because the `cp -r` quickstart lands `docs/handoff.md` and `docs/friction-log.md` pre-marked, making those the likeliest to carry a marker:
 
   ```sh
-  for f in AGENTS.md CLAUDE.md; do
+  cfg=config/dev-model.yaml
+  val() { v=$(grep -E "^[[:space:]]+$1:" "$cfg" | head -1 | awk '{print $2}' | tr -d "\"'"); \
+          [ -n "$v" ] && printf '%s\n' "$v" || printf '%s\n' "$2"; }
+  printf '%s\n' "AGENTS.md
+  CLAUDE.md
+  $(val handoff docs/handoff.md)
+  $(val handoff_history docs/handoff-history.md)
+  $(val friction_log docs/friction-log.md)
+  $(val friction_log_archive docs/friction-log-archive.md)" | while read -r f; do
+    [ -n "$f" ] || continue
     if   [ ! -e "$f" ] && [ ! -L "$f" ]; then s="ABSENT — init.sh will seed it"
-    elif [ ! -f "$f" ];                  then s="NOT_A_REGULAR_FILE — init.sh refuses it"
+    elif [ ! -f "$f" ];                  then s="NOT_A_REGULAR_FILE — not seedable; resolve by hand"
     elif head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
          | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
     then s="MARKED — init.sh WILL RENDER OVER IT (blocking, see Step 2)"
@@ -122,7 +131,7 @@ For each piece, **copy only if the target doesn't already exist**:
 
 - **Shared workflows** → `docs/agentic-dev-kit/workflows/`.
 - **Runtime adapters** → `.claude/commands/` and `.agents/skills/` (skip any target that collides with an existing workflow).
-- **Engine scripts** → `scripts/devkit/` (flat `scripts/` only under the Step-1 conditions). Set `paths.engines` to that directory; do not rewrite prompt files. The engines find the repo root by walking up for `.git`, which is unbounded, so any depth works in a real checkout. In a tree with **no `.git` at all** the fallback is depth arithmetic calibrated for `scripts/` and resolves a vendored layout to the wrong directory — a known, deliberate limitation (issue #60); it fails loudly rather than guessing.
+- **Engine scripts** → `scripts/devkit/` (flat `scripts/` only under the Step-1 conditions). Set `paths.engines` to that directory; do not rewrite prompt files. The engines find the repo root by walking up for `.git`, which is unbounded, so any depth works in a real checkout. In a tree with **no `.git` at all** the two implementations differ: the *Python* engines (`scripts/lib/kitconfig.py`) fall back to depth arithmetic calibrated for `scripts/`, which resolves a vendored layout to the wrong directory — a known, deliberate limitation (issue #60). The *shell* engines (`scripts/lib/repo_root.sh`) have no fallback and exit with `error: no .git repository found above …`. Both fail loudly rather than guessing, by different routes.
 - **Safety doctrine** → `docs/agentic-dev-kit/safety-critical-changes.md`; install the thin `.claude/rules/safety-critical-changes.md` adapter when absent and merge `docs/AGENTS-sections.md` into an existing `AGENTS.md` when applicable.
 - **Lint-containment doctrine** → `docs/agentic-dev-kit/adopting-into-a-linted-repo.md`. Install it whenever Step 1 found repo-wide lint or format, and apply its exclusions **in the same commit as the engines** — an engine that gets autoformatted before the exclusion lands is already drifted. `kit_doctor` tracks this file, so skipping it shows up as a permanent `missing`.
 - **`config/dev-model.yaml`** — stamp the Step-1 values: `paths.handoff` → the existing plan (and `paths.handoff_history` / the `doc_budgets` entry to match), `paths.engines`, `runtime`, `tracker`, `review`, and `models`. **`review:` must exist as a key before Step 3b runs**, even if you only know `review.bots` — `init.sh` fills a *partial* `review:` section in completely, but cannot create one from nothing and emits seven `could not add review.*` warnings instead (measured; the `runtime:` section has no such limitation, which is why this is easy to miss).
@@ -136,51 +145,104 @@ and ask the operator.
 
 ### Step 3b — run `init.sh` non-interactively
 
-#### 3b.1 — Gate: refuse to run with an unresolved `MARKED` entry point
+#### 3b.1 — Gate and run, in ONE block
 
-Re-run Step 1's classifier **now**, immediately before `init.sh`. Step 1 may have run long
-before this point — a session ends and resumes, or Step 3's own work intervenes — and a
-marker-carrying file that appeared in the gap would be rendered over with no warning:
+**The gate and the run must be one script. Do not split them.** A gate in its own fenced
+block is advisory only: `exit 1` ends *that* block, and nothing stops the next block from
+running `init.sh` anyway. Reproduced — the gate printed `BLOCKED`, `init.sh` ran as a
+separate process, and the adopter's content was destroyed with exit 0 and a `seeded`
+message.
+
+**And it must cover all six targets, not the two entry points.** `init.sh` calls `seed_doc`
+six times (`init.sh:1260-1275`): the four narrative docs at their *configured* paths, plus
+`AGENTS.md` and `CLAUDE.md`. The `cp -r` quickstart lands `docs/handoff.md` and
+`docs/friction-log.md` pre-marked, so the four this once ignored are the ones *most* likely
+to carry a marker. Reproduced: a marked `docs/handoff.md` was destroyed while the gate said
+`safe to run init.sh` and every Step 4 check reported clean.
 
 ```bash
-for f in AGENTS.md CLAUDE.md; do
-  [ -f "$f" ] || continue
+set -eu
+cfg=config/dev-model.yaml
+val() { v=$(grep -E "^[[:space:]]+$1:" "$cfg" | head -1 | awk '{print $2}' | tr -d "\"'"); \
+        [ -n "$v" ] && printf '%s\n' "$v" || printf '%s\n' "$2"; }
+
+# every path init.sh can render over — configured, not assumed
+targets="AGENTS.md
+CLAUDE.md
+$(val handoff docs/handoff.md)
+$(val handoff_history docs/handoff-history.md)
+$(val friction_log docs/friction-log.md)
+$(val friction_log_archive docs/friction-log-archive.md)"
+
+# Collect, then test. Do NOT `exit 1` inside the loop: a piped `while` runs in a
+# SUBSHELL, so that exit ends the subshell and the script sails on into init.sh.
+# And do not lean on the loop's own status — its last command is the marker test,
+# which is non-zero exactly when the file is CLEAN. Both measured, in this doc.
+blocked=$(printf '%s\n' "$targets" | while read -r f; do
+  [ -n "$f" ] && [ -f "$f" ] || continue
   if head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
      | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
-  then echo "BLOCKED: $f is MARKED — init.sh would render over it. Resolve before continuing."; exit 1
+  then printf '%s\n' "$f"
   fi
+done) || true          # see the `|| true` note below
+
+if [ -n "$blocked" ]; then
+  printf 'BLOCKED: %s is MARKED — init.sh would render over it.\n' $blocked
+  exit 1
+fi
+
+# hash what init.sh must NOT change, in this same process — no file, no state
+# carried between blocks, because both were defect sites
+before=$(printf '%s\n' "$targets" | while read -r f; do
+           [ -n "$f" ] && [ -f "$f" ] && shasum -a 256 "$f"; done) || true
+
+./init.sh < /dev/null
+
+# anything init.sh reported `already in use` must be byte-identical
+printf '%s\n' "$before" | while read -r h f; do
+  [ -n "$f" ] || continue
+  now=$(shasum -a 256 "$f" | awk '{print $1}')
+  [ "$h" = "$now" ] || echo "*** $f CHANGED — it was in use and init.sh should not have touched it ***"
 done
-echo "no MARKED entry point — safe to run init.sh"
 ```
 
-**If this blocks, stop and take it to the operator.** There are exactly two resolutions,
-and both are theirs to choose:
+**Both `|| true`s are load-bearing under `set -e`, and their absence is silent.** A
+`var=$(… | while …)` assignment inherits the loop's exit status, and that status is the
+loop body's last command — `[ -f "$f" ]`, which is **false whenever the last target does
+not exist**, i.e. the ordinary case for a repo that has not adopted yet. Without them,
+`set -e` kills the script at the assignment: no `BLOCKED`, no error, and `init.sh` never
+runs. Measured — the step aborted silently and looked like a passing gate.
+
+Two related traps in the same few lines, both also measured: do not `exit 1` *inside* the
+piped `while` (it runs in a subshell, so the script sails on into `init.sh`), and do not
+gate on the loop's own status (non-zero exactly when the file is **clean**, so the gate
+blocks every healthy repo).
+
+**If this blocks, stop and take it to the operator.** Two resolutions, both theirs:
 
 - **Keep their content** — they delete line 1 (the marker). That is `init.sh`'s own stated
   resolution: *"the documented way to claim such a file is to delete line 1"*. The file
   then classifies `IN_USE` and `init.sh` leaves it byte-identical. Take a copy outside the
   repo first; never inside it, since this workflow ends by opening a PR and a `git add -A`
   would publish their original.
-- **Accept the re-render** — they say so explicitly, having been told the content is
-  unrecoverable afterwards.
+- **Accept the re-render** — explicitly, having been told the content is unrecoverable
+  afterwards.
 
-**Claiming the file *before* `init.sh` runs is what makes this safe, and it is why the gate
-replaced a backup-and-restore.** Restoring afterwards requires destroying the file first
-and rebuilding it, and every layer added to make that sequence safe became its own defect.
-Deleting line 1 first means there is nothing to destroy.
+**Claiming the file *before* `init.sh` runs is what makes this safe**, and it is why the
+gate replaced a backup-and-restore: restoring afterwards requires destroying the file
+first. Delete line 1 first and there is nothing to destroy.
 
-Never delete line 1 on the operator's behalf without their say-so: it edits a file the kit
-does not own, and the marker is the only thing distinguishing "an unfinished adoption" from
-"content someone deliberately kept."
+Never delete line 1 on the operator's behalf: it edits a file the kit does not own, and the
+marker is the only thing distinguishing "an unfinished adoption" from "content someone
+deliberately kept."
+
+**What this gate is not.** It is a shell guard inside one block, so it binds anyone who
+runs *that block*. It cannot stop an agent that types `./init.sh` on its own, and it is not
+a substitute for the mechanical guarantee — a `--no-clobber` mode on `init.sh`, tracked as
+`#297`. Until that exists, this is the strongest thing available here, and its strength
+depends on the block being used as written.
 
 
-#### 3b.2 — Run `init.sh`
-
-With the config stamped and `docs/templates/` in place:
-
-```bash
-./init.sh < /dev/null
-```
 
 **Redirecting stdin is the whole mechanism, not a formality.** With no terminal
 attached, `init.sh` announces
@@ -273,8 +335,10 @@ before re-running, and never silence it by dropping the flag.
 
 ## Step 4 — Verify
 
-- **Entry points** — two checks, and neither uses `git diff`, which reports nothing for an
-  untracked or gitignored file so a clobbered one would look clean:
+- **Entry points** — two checks. Be exact about what they establish: the
+  byte-identity guarantee lives in **3b.1**, which hashes before and after `init.sh` in one
+  process. These two are the after-the-fact backstop, and they catch a *rendered-wrong* or
+  *gate-skipped* file, not silent corruption from some other cause:
 
   ```sh
   # (a) anything that now exists must be fully rendered, not copied
@@ -282,10 +346,19 @@ before re-running, and never silence it by dropping the flag.
     [ -f "$f" ] && echo "$f: $(grep -c '{{[A-Z_]*}}' "$f") unsubstituted tokens (want 0)"
   done
 
-  # (b) no entry point may still carry a kit marker — 3b.1 gated on this, so a
-  #     marker here means the gate was skipped and init.sh may have clobbered it
-  for f in AGENTS.md CLAUDE.md; do
-    [ -f "$f" ] || continue
+  # (b) NONE of the six seed_doc targets may still carry a kit marker — 3b.1
+  #     gated on this, so a marker here means the gate was skipped and init.sh
+  #     may have clobbered that file. Same six paths as 3b.1, configured.
+  cfg=config/dev-model.yaml
+  val() { v=$(grep -E "^[[:space:]]+$1:" "$cfg" | head -1 | awk '{print $2}' | tr -d "\"'"); \
+          [ -n "$v" ] && printf '%s\n' "$v" || printf '%s\n' "$2"; }
+  printf '%s\n' "AGENTS.md
+  CLAUDE.md
+  $(val handoff docs/handoff.md)
+  $(val handoff_history docs/handoff-history.md)
+  $(val friction_log docs/friction-log.md)
+  $(val friction_log_archive docs/friction-log-archive.md)" | while read -r f; do
+    [ -n "$f" ] && [ -f "$f" ] || continue
     head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
       | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)' \
       && echo "$f: *** STILL MARKED — 3b.1's gate did not run ***"
