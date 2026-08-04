@@ -42,11 +42,18 @@ Run these probes and record the answers — they drive the plan:
   | line 1 of the file | state | what `init.sh` does |
   |---|---|---|
   | file absent | `ABSENT` | seeds it |
-  | not a regular file (directory, broken symlink) | `NOT_A_REGULAR_FILE` | leaves it, reports `already in use` |
+  | a directory, or a **broken** symlink | `NOT_A_REGULAR_FILE` | leaves it, reports `already in use` |
   | opens `<!-- devkit-template: unrendered` or `<!-- devkit-source: kit-own`, marker first in the comment | `MARKED` | **renders over it, no backup** |
   | anything else | `IN_USE` | leaves it byte-identical |
 
-  Two traps, both of which have caught this repo before:
+  **A *working* symlink is classified by its target, not by being a link.** `[ -f ]`
+  follows it, so a link whose target opens with a marker is `MARKED` and `init.sh` renders
+  over it — `mv` then replaces the **link** with the rendered file. The target keeps its
+  bytes; what is lost is the link relationship, and the run reports only `seeded`
+  (`init.sh:907-913`). Do not bucket "it's a symlink" as `NOT_A_REGULAR_FILE`: only a
+  *broken* one is.
+
+  Three traps, all of which have caught this repo before:
 
   - **The marker must be the first token of the comment.** `<!-- see the devkit-source:
     kit-own convention -->` is prose and is **not** marked; `devkit-source: kit-ownership`
@@ -173,8 +180,10 @@ before re-running, and never silence it by dropping the flag.
 
 **`/adopt` does not run `init.sh`. This is the end of what the skill does to the repo.**
 
-Everything up to here is additive: files copied into paths that were empty, and a config
-stamped. `init.sh` is different — it *renders over* any of six files whose first line
+Everything up to here is additive, with one stated exception: files copied into paths
+that were empty, a config stamped, and — only when the repo already had an `AGENTS.md` —
+the `docs/AGENTS-sections.md` merge Step 3 calls for, which edits a file the adopter owns
+and is theirs to approve like any other edit to it. `init.sh` is different — it *renders over* any of six files whose first line
 carries a kit marker, with no backup, reporting only `seeded`. That is correct behaviour
 for `init.sh`, and it is the opposite of this skill's contract.
 
@@ -305,7 +314,7 @@ tracker mismatch, a CI-scope surprise, a review-bot detection miss. Tag `[kit]` 
 anything that's a kit-side fix and open an issue upstream. This *is* Principle #2 in
 action.
 
-**Put it in the PR body, not in `friction-log.md`.** At this point the friction log
+**Put it in the PR body, not in the friction log.** At this point the friction log
 usually does not exist: `/adopt` no longer creates it, and `init.sh` seeds it from the
 template when the operator runs it — which is Step 3c, after everything here. Hand-writing
 the file now would be actively harmful, not merely early: a hand-written file carries no
@@ -314,7 +323,7 @@ template into it. You would permanently trade the seeded structure for a stub, t
 exact clobber-avoidance property this skill exists to preserve.
 
 So: the entries go in the PR body, and the Step 3c handoff tells the operator to move them
-into `friction-log.md` once they have run `init.sh`. If the repo already *had* a friction
+into `paths.friction_log` once they have run `init.sh`. If the repo already *had* a friction
 log (Step 1 classified it `IN_USE`), write to it directly — `init.sh` will leave it alone.
 
 ## Step 6 — Summarize + hand off
