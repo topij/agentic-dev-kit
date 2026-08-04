@@ -32,20 +32,25 @@ Run these probes and record the answers — they drive the plan:
 - **Skill collisions?** Inspect `.claude/commands/` and `.agents/skills/`. Which of the kit's workflows already exist for either runtime? Keep the adopter's implementation and install only the missing adapters.
 - **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough, and a wrong call here destroys files. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* (`init.sh:1260-1275`) — not just the two entry points, because the `cp -r` quickstart lands `docs/handoff.md` and `docs/friction-log.md` pre-marked, making those the likeliest to carry a marker:
 
+  **Read the four narrative paths out of `config/dev-model.yaml`'s `paths:` section
+  yourself and substitute them as literals below.** Do not resolve them with a `grep` for
+  the key: `init.sh` reads them **section-scoped** (`get_field "paths:" …`,
+  `init.sh:1228-1235`), and a bare `grep -E '^[[:space:]]+handoff:'` is not — a
+  same-named key under any other section wins. Measured, on a config with
+  `ci:\n  handoff: not-the-real-one.md` above `paths:`: the grep resolved
+  `not-the-real-one.md`, so the classifier reported a decoy as `ABSENT` and **never
+  mentioned the real, marker-carrying `docs/handoff.md` at all** — which `init.sh` then
+  destroyed. `awk '{print $2}'` also truncates a quoted path containing a space. You can
+  parse YAML correctly; the one-liner cannot.
+
   ```sh
-  cfg=config/dev-model.yaml
-  val() { v=$(grep -E "^[[:space:]]+$1:" "$cfg" | head -1 | awk '{print $2}' | tr -d "\"'"); \
-          [ -n "$v" ] && printf '%s\n' "$v" || printf '%s\n' "$2"; }
-  printf '%s\n' "AGENTS.md
-  CLAUDE.md
-  $(val handoff docs/handoff.md)
-  $(val handoff_history docs/handoff-history.md)
-  $(val friction_log docs/friction-log.md)
-  $(val friction_log_archive docs/friction-log-archive.md)" | while read -r f; do
-    [ -n "$f" ] || continue
+  # replace the last four with the CONFIGURED paths before running
+  for f in AGENTS.md CLAUDE.md \
+           docs/handoff.md docs/handoff-history.md \
+           docs/friction-log.md docs/friction-log-archive.md; do
     if   [ ! -e "$f" ] && [ ! -L "$f" ]; then s="ABSENT — init.sh will seed it"
     elif [ ! -f "$f" ];                  then s="NOT_A_REGULAR_FILE — not seedable; resolve by hand"
-    elif head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
+    elif head -n 1 "$f" 2>/dev/null | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
          | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
     then s="MARKED — init.sh WILL RENDER OVER IT (tell the operator, Step 3c)"
     else s="IN_USE — init.sh leaves it byte-identical"
@@ -111,7 +116,7 @@ Present a table the operator confirms **before any write**:
 | Living plan (#1) | e.g. has `ROADMAP.md` | **config-point** `paths.handoff` → it; keep it (or offer to rename → `handoff.md`) |
 | `wrap-up` skill | has its own | **skip** |
 | Codex adapters | none | **install** under `.agents/skills/` |
-| friction-log (#2) | none | **install** |
+| friction-log (#2) | none | **seeded by `init.sh`**, which the operator runs (Step 3c) — not by `/adopt` |
 | parallel + `state_paths` (#3) | none | **install** under `scripts/devkit/` (see Step 1 on when flat `scripts/` is acceptable) |
 | `pr-watch` (#5), safety rule (#6) | none | **install** |
 | Root entry points | e.g. `AGENTS.md` ABSENT, `CLAUDE.md` IN_USE | **seed the absent one** from `docs/templates/` via `init.sh`; an IN_USE one is left byte-identical |
@@ -133,7 +138,7 @@ For each piece, **copy only if the target doesn't already exist**:
 
 - **Shared workflows** → `docs/agentic-dev-kit/workflows/`.
 - **Runtime adapters** → `.claude/commands/` and `.agents/skills/` (skip any target that collides with an existing workflow).
-- **Engine scripts** → `scripts/devkit/` (flat `scripts/` only under the Step-1 conditions). Set `paths.engines` to that directory; do not rewrite prompt files. The engines find the repo root by walking up for `.git`, which is unbounded, so any depth works in a real checkout. In a tree with **no `.git` at all** the two implementations differ: the *Python* engines (`scripts/lib/kitconfig.py`) fall back to depth arithmetic calibrated for `scripts/`, which resolves a vendored layout to the wrong directory — a known, deliberate limitation (issue #60). The *shell* engines (`scripts/lib/repo_root.sh`) have no fallback and exit with `error: no .git repository found above …`. Both fail loudly rather than guessing, by different routes.
+- **Engine scripts** → `scripts/devkit/` (flat `scripts/` only under the Step-1 conditions). Set `paths.engines` to that directory; do not rewrite prompt files. The engines find the repo root by walking up for `.git`, which is unbounded, so any depth works in a real checkout. In a tree with **no `.git` at all** the two implementations differ: the *Python* engines (`scripts/lib/kitconfig.py`) fall back to depth arithmetic calibrated for `scripts/`, which resolves a vendored layout to the wrong directory — a known, deliberate limitation (issue #60). The *shell* engines have no fallback: `scripts/lib/repo_root.sh`'s `devkit_find_repo_root` just returns 1, and its callers exit — `scripts/dev_session.sh:65` prints `[dev-session] error: no .git repository found above …`, `scripts/reconcile_sessions.sh:54` the same with `[reconcile]`. Both fail loudly rather than guessing, by different routes.
 - **Safety doctrine** → `docs/agentic-dev-kit/safety-critical-changes.md`; install the thin `.claude/rules/safety-critical-changes.md` adapter when absent and merge `docs/AGENTS-sections.md` into an existing `AGENTS.md` when applicable.
 - **Lint-containment doctrine** → `docs/agentic-dev-kit/adopting-into-a-linted-repo.md`. Install it whenever Step 1 found repo-wide lint or format, and apply its exclusions **in the same commit as the engines** — an engine that gets autoformatted before the exclusion lands is already drifted. `kit_doctor` tracks this file, so skipping it shows up as a permanent `missing`.
 - **`config/dev-model.yaml`** — stamp the Step-1 values: `paths.handoff` → the existing plan (and `paths.handoff_history` / the `doc_budgets` entry to match), `paths.engines`, `runtime`, `tracker`, `review`, and `models`. **`review:` must exist as a key before the operator runs `init.sh`**, even if you only know `review.bots` — `init.sh` fills a *partial* `review:` section in completely, but cannot create one from nothing and emits seven `could not add review.*` warnings instead (measured; the `runtime:` section has no such limitation, which is why this is easy to miss).
@@ -187,9 +192,12 @@ for `init.sh`, and it is the opposite of this skill's contract.
 Four attempts were made to run it safely from here: a backup-and-restore around it, then a
 re-classify-and-diff, then an advisory gate, then a gate fused to the run. Each was
 reviewed, each shipped a new way to destroy an adopter's file, and the last one's own fix
-contained three fresh defects that four independent reviewers had not seen — because a
-shell snippet in a markdown file is executed by nobody: no test runs it, no linter checks
-it, and this repo's `make test` passes 837 tests without touching a line of it. **A
+contained three fresh defects — found not by any reviewer but by extracting the shipping
+snippet and running it. (No reviewer had *seen* that code: it was written after their
+pass. That is the point rather than a criticism of them — a fix round's own output gets
+reviewed only if someone reviews again, and here only execution caught it.) A shell
+snippet in a markdown file is executed by nobody: no test runs it, no linter checks it,
+and this repo's `make test` passes 837 tests without touching a line of it. **A
 safety-critical guard cannot live in an untested medium.** `#297` moves it to `init.sh`,
 where CI can hold it.
 
@@ -210,6 +218,10 @@ So: tell the operator what to check, and let them run it.
 > want what is in the file**, delete line 1 first — that is how the kit records that the
 > file is yours, and `init.sh` will then leave it byte-identical. If a marked file is just
 > an unrendered skeleton, leave it and let `init.sh` fill it in.
+>
+> Once it has run, move the adoption-friction entries from this PR's body into the seeded
+> `friction-log.md` — they are in the PR because the file did not exist while the adoption
+> was staged.
 >
 > Then run `./init.sh` — interactively, so you see and confirm each prompt. It seeds the
 > docs and entry points that are **missing or unrendered**, leaving anything in use
@@ -235,7 +247,7 @@ Two things to warn them about, both measured, because neither is obvious from th
 
 ## Step 4 — Verify
 
-**Steps 4a and 4b below verify the staged adoption — the copies and the config. They do
+**The checks below verify the staged adoption — the copies and the config. They do
 not verify `init.sh`, which the operator runs after this (Step 3c) and verifies for
 themselves from what it prints.**
 
@@ -270,6 +282,9 @@ themselves from what it prints.**
   grep -l devkit-hook-shim "$hookdir/pre-push"   # it is the kit's shim, not a stray hook
   # strip surrounding quotes: `engines: "scripts/devkit"` is ordinary YAML, and an
   # unstripped quote makes the match below fail on a correctly-installed hook
+  # unscoped, like every `grep key:` here — sanity-check the value looks like your
+  # engines dir before trusting a mismatch. A wrong value fails visibly rather than
+  # destructively, which is why this one is not worth resolving properly.
   eng="$(grep -E '^[[:space:]]+engines:' config/dev-model.yaml | awk '{print $2}' | tr -d "\"'")"
   grep -o "$eng" "$hookdir/pre-push"             # and it targets the engines dir you chose
   ```
@@ -376,10 +391,22 @@ themselves from what it prints.**
 
 ## Step 5 — Record the friction (the flywheel's first turn)
 
-Seed `friction-log.md`'s first dated entry with every adoption friction you hit — a
-skill collision, a namespacing rewrite, a tracker mismatch, a CI-scope surprise, a
-review-bot detection miss. Tag `[kit]` on anything that's a kit-side fix and open an
-issue upstream. This first entry *is* Principle #2 in action.
+Record every adoption friction you hit — a skill collision, a namespacing rewrite, a
+tracker mismatch, a CI-scope surprise, a review-bot detection miss. Tag `[kit]` on
+anything that's a kit-side fix and open an issue upstream. This *is* Principle #2 in
+action.
+
+**Put it in the PR body, not in `friction-log.md`.** At this point the friction log
+usually does not exist: `/adopt` no longer creates it, and `init.sh` seeds it from the
+template when the operator runs it — which is Step 3c, after everything here. Hand-writing
+the file now would be actively harmful, not merely early: a hand-written file carries no
+kit marker, so `_seedable` reads it as `IN_USE` and `init.sh` will *never* render the
+template into it. You would permanently trade the seeded structure for a stub, through the
+exact clobber-avoidance property this skill exists to preserve.
+
+So: the entries go in the PR body, and the Step 3c handoff tells the operator to move them
+into `friction-log.md` once they have run `init.sh`. If the repo already *had* a friction
+log (Step 1 classified it `IN_USE`), write to it directly — `init.sh` will leave it alone.
 
 ## Step 6 — Summarize + hand off
 
