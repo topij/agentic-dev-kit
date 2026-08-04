@@ -33,20 +33,43 @@ Run these probes and record the answers — they drive the plan:
 - **Root entry points?** Classify each of `AGENTS.md` and `CLAUDE.md` into **three** states, not two — presence alone is not enough, and getting this wrong destroys files:
 
   ```sh
+  # SCRATCH is an ABSOLUTE path OUTSIDE the adopter repo. Never a bare relative
+  # name: this workflow ends by opening a PR, and a `git add -A` anywhere in it
+  # sweeps a repo-root scratch file into the adoption commit.
+  SCRATCH=/tmp/adopt-$$ ; mkdir -p "$SCRATCH"
+
   for f in AGENTS.md CLAUDE.md; do
-    if [ ! -e "$f" ]; then echo "$f: ABSENT — will be seeded"
+    if [ ! -e "$f" ] && [ ! -L "$f" ]; then echo "$f: ABSENT — will be seeded"
+    elif [ ! -f "$f" ]; then echo "$f: NOT A REGULAR FILE — init.sh refuses it; resolve by hand"
     elif head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
-         | grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
-    then echo "$f: MARKED — init.sh WILL RENDER OVER IT"
+         | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
+    then echo "$f: MARKED — init.sh WILL RENDER OVER IT" ; MARKED="$MARKED $f"
     else echo "$f: IN USE — left byte-identical"
+         shasum -a 256 "$f" >> "$SCRATCH/inuse-hashes.txt"
     fi
   done
-  # record the hashes Step 4 verifies against (GNU spelling: sha256sum)
-  shasum -a 256 AGENTS.md CLAUDE.md 2>/dev/null > step1-hashes.txt
   ```
 
-  `step1-hashes.txt` is scratch — write it outside the worktree, or delete it before the
-  PR; it must not land in the adoption commit.
+  Three details in that snippet are load-bearing, each for a reason that has already
+  cost this repo a defect:
+
+  - **`LC_ALL=C` on the `grep`, not only the `sed`.** `[[:space:]]` is locale-dependent,
+    and `init.sh`'s `_opens_with_marker` pins `LC_ALL=C` for exactly this. Unpinned, an
+    NBSP in the marker line — routine when text is pasted from a rich-text source —
+    makes this snippet report `MARKED` while `init.sh` leaves the file untouched.
+    Reproduced. The divergence is safe in direction (it over-warns) and it still makes
+    the doc's own output a false statement about what is about to happen.
+  - **`[ ! -e ] && [ ! -L ]` for `ABSENT`.** `-e` alone is false for a *broken symlink*,
+    which would then be called `ABSENT — will be seeded`; `init.sh` requires a regular
+    file and leaves it untouched. Same for a directory named `AGENTS.md` — `#288`'s
+    round-3 defect. Neither is seedable, so both get their own state rather than a
+    wrong one.
+  - **Only `IN USE` files are hashed.** A `MARKED` file the operator *approves*
+    re-rendering is *supposed* to change, so recording its hash beside the others makes
+    Step 4 report a sanctioned outcome as a guard failure.
+
+  `$SCRATCH` holds nothing the adopter repo should ever see. Keep it out of the tree,
+  and when you stage, **name the paths** — never `git add -A` or `git add .`.
 
   **`MARKED` is the dangerous state and it is not hypothetical.** A file whose first
   line carries a kit marker is *seedable* — `init.sh` renders over it and reports only
@@ -121,14 +144,26 @@ and ask the operator.
 otherwise, and nothing else in this flow will stop that:
 
 ```bash
-# only for a file Step 1 classified MARKED
-cp -p AGENTS.md AGENTS.md.pre-adopt      # and/or CLAUDE.md
+# only for a file Step 1 classified MARKED — into $SCRATCH, never the repo root
+cp -p AGENTS.md "$SCRATCH/AGENTS.md.pre-adopt"      # and/or CLAUDE.md
 ```
 
-Unless the operator explicitly chose to re-render it, restore it after Step 3b and hand
-them the `.pre-adopt` copy to reconcile — the rendered template and their edits both have
-a claim, and merging them is a judgment call, not something to do silently. Never delete
-the `.pre-adopt` copy yourself.
+**The backup goes in `$SCRATCH`, outside the repo.** A `.pre-adopt` copy in the repo root
+is a full copy of the operator's original entry point sitting untracked in a workflow that
+ends by opening a PR — one `git add -A` and their content is published. That is not
+hypothetical: this kit already shipped a wrap-up that swept 228 lines of an adopter's
+uncommitted note through review and merge, which is why `wrap-up.md` now bans wildcard
+adds outright.
+
+Unless the operator explicitly chose to re-render it, restore it after Step 3b:
+
+```bash
+cp -p "$SCRATCH/AGENTS.md.pre-adopt" AGENTS.md
+```
+
+Then hand them the `$SCRATCH` copy to reconcile — the rendered template and their edits
+both have a claim, and merging them is a judgment call, not something to do silently.
+Never delete their copy yourself.
 
 Then, with the config stamped and `docs/templates/` in place:
 
@@ -215,19 +250,29 @@ before re-running, and never silence it by dropping the flag.
   gitignored file, so a destroyed one looks clean.
 
   ```sh
-  # every file that was ABSENT and got seeded: fully rendered?
+  # every entry point that now exists: fully rendered?
   for f in AGENTS.md CLAUDE.md; do
     [ -f "$f" ] && echo "$f: $(grep -c '{{[A-Z_]*}}' "$f") unsubstituted tokens (want 0)"
   done
-  # every file that was IN USE: byte-identical to what Step 1 recorded?
-  #   an ABSENT file has no Step-1 line, so it is simply not checked here
-  shasum -a 256 -c step1-hashes.txt
+  # every file Step 1 called IN USE: byte-identical?
+  #   guard the -s: with no pre-existing entry points the file is EMPTY, and
+  #   `shasum -c` on an empty file exits 1 with "no properly formatted SHA
+  #   checksum lines found" — a hard error on the commonest first-time adoption.
+  if [ -s "$SCRATCH/inuse-hashes.txt" ]; then
+    shasum -a 256 -c "$SCRATCH/inuse-hashes.txt"
+  else
+    echo "no pre-existing entry points to verify — both were seeded"
+  fi
   ```
 
   A non-zero token count is the failure worth catching: it means the file was *copied*
   rather than rendered, which is what happens if someone substitutes `cp` for Step 3b. A
-  hash mismatch on an `IN USE` file means the guard did not hold — stop and restore from
-  the `.pre-adopt` copy or from git before doing anything else.
+  hash mismatch here means the guard did not hold on a file that was never supposed to
+  change — stop and restore from `$SCRATCH` or from git before doing anything else.
+
+  A `MARKED` file the operator approved re-rendering is **not** in this list and must not
+  be: it was supposed to change. Verify that one by reading it, and confirm their
+  `$SCRATCH` copy still exists for reconciliation.
 - **Hook** — resolve the directory the way `init.sh` does. `core.hooksPath` wins over
   `.git/hooks` when set (pre-commit and several monorepo setups set it), so checking
   `.git/hooks/pre-push` can inspect a file git will never run — or miss the one it will:
@@ -235,15 +280,52 @@ before re-running, and never silence it by dropping the flag.
   ```sh
   hookdir="$(git config --get core.hooksPath || git rev-parse --git-path hooks)"
   grep -l devkit-hook-shim "$hookdir/pre-push"   # it is the kit's shim, not a stray hook
-  grep -o "$(grep -E '^[[:space:]]+engines:' config/dev-model.yaml | awk '{print $2}')" \
-    "$hookdir/pre-push"                          # and it targets the engines dir you chose
+  # strip surrounding quotes: `engines: "scripts/devkit"` is ordinary YAML, and an
+  # unstripped quote makes the match below fail on a correctly-installed hook
+  eng="$(grep -E '^[[:space:]]+engines:' config/dev-model.yaml | awk '{print $2}' | tr -d '"'"'"'')"
+  grep -o "$eng" "$hookdir/pre-push"             # and it targets the engines dir you chose
   ```
 
   `init.sh` refuses to replace a **non-shim** hook already at that path — it prints
-  `existing <path> left untouched (not a kit shim) — chain it to <src> by hand` and moves
-  on. That is the right call, and it means a repo with its own `pre-push` finishes this
-  step with the kit's hook **not installed**. Read for that line and chain it, rather than
-  assuming the hook is live because Step 3b exited 0.
+  `note: existing <path> left untouched (not a kit shim) — chain it to <src> by hand` and
+  moves on. That is the right call, and it means a repo with its own `pre-push` finishes
+  this step with the kit's hook **not installed**. Read for that line and chain it, rather
+  than assuming the hook is live because Step 3b exited 0.
+
+  **Verify the hook by making it fire, not by looking at it.** A shim that exists, is
+  executable and names the right target can still be inert. Feed it a synthetic ref on
+  stdin and confirm it refuses:
+
+  ```sh
+  pre="$(grep -E '^[[:space:]]+dev_branch_prefix:' config/dev-model.yaml \
+         | awk '{print $2}' | tr -d '"'"'"'')"
+  zero=0000000000000000000000000000000000000000
+  printf 'refs/heads/%s/probe %s refs/heads/%s/probe %s\n' \
+    "$pre" "$(git rev-parse HEAD)" "$pre" "$zero" \
+    | "$hookdir/pre-push" origin https://example.invalid
+  echo "exit=$?"
+  ```
+
+  That probe uses `HEAD`, so it only *fires* when the current branch's diff against
+  `origin/<protected_branch>` touches a narrative file. To prove the refusal path itself
+  on any branch, build a throwaway commit that does — with plumbing, so nothing in the
+  working tree or on any branch changes:
+
+  ```sh
+  b=$(printf 'probe\n' | git hash-object -w --stdin)
+  idx="$SCRATCH/probe.idx"
+  GIT_INDEX_FILE=$idx git read-tree origin/main
+  GIT_INDEX_FILE=$idx git update-index --add --cacheinfo 100644,$b,<your handoff path>
+  probe=$(git commit-tree "$(GIT_INDEX_FILE=$idx git write-tree)" -p origin/main -m probe)
+  ```
+
+  Feed `$probe` as the sha in the `printf` above. Exit 1 with the refusal message is the
+  hook working.
+
+  A non-zero exit with the refusal message is the hook working. Exit 0 means it did not
+  fire — and note the guard **fails open by design** when it cannot resolve
+  `origin/<protected_branch>`, so exit 0 on a fresh clone with no fetched remote is
+  expected rather than broken.
 - Portability tests: run the kit's suites explicitly. `/adopt` does not install the kit's
   `Makefile`, and a mature repo's own `make test` will run *its* suite, not these:
 
