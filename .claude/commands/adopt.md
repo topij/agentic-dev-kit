@@ -145,6 +145,7 @@ For each piece, **copy only if the target doesn't already exist**:
 - **`docs/templates/`** — all six `.md.tmpl` files. They are **manifest-tracked**, so omitting them is not merely a missed convenience: `kit_doctor` then reports six extra `missing` entries tagged `[template]` (measured), and Step 4 tells you to expect `missing` only for pieces Step 2 deliberately dropped. They are also what `init.sh` renders from when the operator runs it.
 - **`init.sh`** — copy it to the adopter root. It is manifest-*untracked*, so it does not affect the baseline. **If the adopter already has a root `init.sh`, STOP.** The copy-only-if-absent rule would silently skip it, and Step 3c would then tell the operator to run *their* script — `init.sh` is a common name for an unrelated bootstrap. Diff the two, and let the operator choose: keep the kit's under another name and hand off that path explicitly, or confirm theirs is a stale kit copy safe to replace. Never hand off a bare `./init.sh` you did not put there.
 - **`friction-log.md`** — do not hand-copy it. `init.sh` seeds it from the template when the operator runs it, at the configured `paths.friction_log`.
+- **`config/*.local.yaml` → `.gitignore`**, now, by hand — the one `.gitignore` entry that cannot wait for `init.sh`. `kitconfig.load_config()` merges a gitignored `config/dev-model.local.yaml` over the tracked config, and `docs/getting-started.md` tells the operator to put their Slack DM id there. Step 6 opens the PR *before* the operator runs `init.sh` (Step 3c), so anyone who creates that file in the gap — routine for someone who already knows the kit's local-override pattern — has an identity sitting untracked-but-not-ignored in an open PR. `init.sh` appends the full set later; this one entry is proactive because its window is the hazard.
 - Copy `PRINCIPLES.md`, `docs/parallel-dev.md`, and the shared workflow/safety docs under `docs/agentic-dev-kit/` for reference.
 
 **Never overwrite an existing file.** If something you didn't anticipate collides, stop
@@ -323,8 +324,13 @@ themselves from what it prints.**
   prot=origin/main   # <-- your vcs.protected_branch, as a LITERAL. Hardcoding `main`
                      # here would test the wrong base on a trunk/master repo; so would
                      # grepping for it, differently and more quietly.
-  idx=$(mktemp -t adopt-probe)    # unique per run; a stale shared index yields a bad $probe
+  # `mktemp -t adopt-probe` is BSD-only: GNU coreutils rejects a bare prefix with
+  # `too few X's in template`. Use a full template, and FAIL rather than continue —
+  # an empty $idx makes write-tree return the EMPTY TREE, so the probe commit deletes
+  # every file, the hook fires for the wrong reason, and the check reports success.
+  idx=$(mktemp "${TMPDIR:-/tmp}/adopt-probe.XXXXXX") || { echo "mktemp failed"; exit 1; }
   trap 'rm -f "$idx"' EXIT
+  set -e                          # the plumbing below must not continue past a failure
   b=$(printf 'probe\n' | git hash-object -w --stdin)
   GIT_INDEX_FILE=$idx git read-tree "$prot"
   GIT_INDEX_FILE=$idx git update-index --add --cacheinfo 100644,$b,<your handoff path>
