@@ -219,16 +219,16 @@ So: tell the operator what to check, and let them run it.
 > file is yours, and `init.sh` will then leave it byte-identical. If a marked file is just
 > an unrendered skeleton, leave it and let `init.sh` fill it in.
 >
-> Once it has run, move the adoption-friction entries from this PR's body into the seeded
-> `friction-log.md` — they are in the PR because the file did not exist while the adoption
-> was staged.
->
 > Then run `./init.sh` — interactively, so you see and confirm each prompt. It seeds the
 > docs and entry points that are **missing or unrendered**, leaving anything in use
 > byte-identical; installs the pre-push hook **unless a non-shim hook is already there**,
 > in which case it says so and leaves yours alone; and appends the kit's `.gitignore`
 > entries. Nothing else in this adoption does those things. Read what it prints — the
 > conditionals above are reported per file.
+>
+> Once it has run, move the adoption-friction entries from this PR's body into the seeded
+> `paths.friction_log` — they are in the PR because the file did not exist while the
+> adoption was staged.
 
 State the six paths **resolved from their config**, not as the defaults above, and say
 which ones Step 1 found carrying a marker. That is the whole value `/adopt` adds here: it
