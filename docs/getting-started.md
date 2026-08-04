@@ -55,10 +55,20 @@ byte-identical, which is what makes re-running it the supported upgrade path.
   `cp -r` quickstart therefore lands them in your root. This marker is what lets `init.sh`
   render yours over them instead of mistaking them for files you are already using.
 
-Neither marker counts anywhere but the start of line 1, and prose does not qualify: a doc
-that *mentions* a marker — on line 1 or anywhere below — is in use, and seeding leaves it
-alone. Your rendered `AGENTS.md` and `CLAUDE.md` carry no marker at all, so once yours
-exist they are never re-rendered.
+A marker counts only in one exact position — line 1 must **open an HTML comment whose
+first words are the marker**:
+
+```markdown
+<!-- devkit-source: kit-own — anything may follow -->
+```
+
+A comment that merely *talks about* a marker does not qualify, wherever it sits:
+`<!-- see the kit's devkit-source: kit-own convention -->` on line 1 is in use, and seeding
+leaves it alone. So is any mention below line 1. Your rendered `AGENTS.md` and `CLAUDE.md`
+carry no marker at all, so once yours exist they are never re-rendered.
+
+If you *do* want a marked file re-rendered — or want to keep one forever — line 1 is the
+whole control: delete it to claim the file, restore it to hand the file back.
 
 (The older "only if it doesn't already exist" rule couldn't work: the kit *ships* those
 files, so a copy-in always landed them first and the seed step never fired.)

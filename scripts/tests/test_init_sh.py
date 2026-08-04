@@ -901,22 +901,46 @@ def test_a_marker_quoted_in_prose_on_line_1_is_not_seedable(
     risk — `AGENTS.md` used to be seeded by absence and `CLAUDE.md` not at all."""
     repo = _fixture(tmp_path, config=shipped_config(), templates=True)
     for marker in (kit_own_marker(), "devkit-template: unrendered"):
-        path = repo / target
-        path.parent.mkdir(parents=True, exist_ok=True)
-        original = (
-            f"Note: the kit marks its own files `{marker}` on line 1.\n"
-            "\n"
-            "# Ours, hand written, must survive ./init.sh\n"
-        )
-        path.write_text(original, encoding="utf-8")
+        # Every shape that mentions a marker without BEING one. The HTML-comment
+        # forms are the sharp ones: anchoring only the left side (`<!--`) left
+        # them matching, which is how this guard destroyed a file for the second
+        # time — panel round 2, reproduced end-to-end against a real fixture.
+        for shape in (
+            f"Note: the kit marks its own files `{marker}` on line 1.",
+            f"<!-- see the kit's {marker} convention for why this file exists -->",
+            f"<!-- migration note: we dropped the {marker} line when we forked -->",
+            # Prefix-only: the marker is the first token but not a whole one.
+            f"<!-- {marker}ership notes, ours -->",
+        ):
+            path = repo / target
+            path.parent.mkdir(parents=True, exist_ok=True)
+            original = f"{shape}\n\n# Ours, hand written, must survive ./init.sh\n"
+            path.write_text(original, encoding="utf-8")
 
-        result = _run_init(repo)
+            result = _run_init(repo)
 
-        assert path.read_text(encoding="utf-8") == original, (
-            f"{target} was DESTROYED — line 1 quotes '{marker}' in prose, which "
-            f"is not the kit's own marker comment"
-        )
-        assert f"{target} already in use — left untouched" in result.stdout
+            assert path.read_text(encoding="utf-8") == original, (
+                f"{target} was DESTROYED — line 1 was {shape!r}, which mentions "
+                f"'{marker}' without being the kit's marker comment"
+            )
+            assert f"{target} already in use — left untouched" in result.stdout
+
+
+@pytest.mark.parametrize("target", ["AGENTS.md", "CLAUDE.md"])
+def test_the_real_marker_comment_is_still_seedable(tmp_path: Path, target: str) -> None:
+    """The control for the test above. Without it, a `_seedable` that simply
+    returned false would pass every negative case — and the kit's own entry
+    points would then never be rendered over in an adopter, which is the whole
+    mechanism. Uses the SHIPPED line 1 verbatim rather than a reconstruction."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    shipped_first_line = (REPO_ROOT / target).read_text(encoding="utf-8").split("\n", 1)[0]
+    assert kit_own_marker() in shipped_first_line  # positive control on the fixture
+    (repo / target).write_text(f"{shipped_first_line}\n# the kit's own\n", encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert f"seeded {target}" in result.stdout
+    assert "the kit's own" not in (repo / target).read_text(encoding="utf-8")
 
 
 def test_an_in_use_claude_md_without_the_import_is_reported(tmp_path: Path) -> None:
@@ -944,6 +968,10 @@ def test_an_in_use_claude_md_without_the_import_is_reported(tmp_path: Path) -> N
         # as a close and scanned the rest as live prose — panel, adversarial
         # lens. The `@AGENTS.md` below is still inside the outer fence.
         ("mismatched fence length", "# mine\n\n````\ntext\n```\n@AGENTS.md\n````\n"),
+        # A closing fence carries nothing but blanks after its run, so the
+        # middle line here does not close the block and @AGENTS.md is still
+        # inside it (panel round 2, LOW).
+        ("run with trailing text is not a close", "# mine\n\n```\n``` still open\n@AGENTS.md\n```\n"),
     ],
 )
 def test_an_inactive_agents_import_does_not_suppress_the_hint(

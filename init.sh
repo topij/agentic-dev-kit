@@ -704,8 +704,13 @@ _imports_agents_md() {
         ch = substr(bare, 1, 1)
         n = 0
         while (substr(bare, n + 1, 1) == ch) { n++ }
+        # A CLOSING fence carries nothing but blanks after its run, so
+        # ``` still open  is content inside the block, not a close. An opening
+        # fence may carry an info string (```markdown) and is unrestricted.
+        tail = substr(bare, n + 1)
+        sub(/[[:space:]]*$/, "", tail)
         if (!fence) { fence = 1; fchar = ch; flen = n }
-        else if (ch == fchar && n >= flen) { fence = 0 }
+        else if (ch == fchar && n >= flen && tail == "") { fence = 0 }
         next
       }
       if (fence) { next }
@@ -718,38 +723,60 @@ _imports_agents_md() {
   ' "$1"
 }
 
-# _seedable <path> — true when the target may be written: it is missing, or its
-# FIRST LINE *opens an HTML comment* carrying either marker.
+# _seedable <path> — true when the target may be written: it is missing, or line
+# 1 opens an HTML comment whose FIRST TOKEN is one of the two markers.
 #
-# Line 1 alone is not enough, and the anchor is the whole point. A SUBSTRING
-# match on line 1 means a real file whose first line merely TALKS ABOUT the
-# convention —
+# The precise property, because two looser versions of it shipped first and each
+# destroyed a real file with no backup, reported as `seeded`:
 #
-#   Note: the kit marks its own entry points `devkit-source: kit-own` on line 1.
+#   line 1 matches  <!--  [blanks]  <marker>  [blank or end]
 #
-# — reads as the kit's own and is overwritten, with no backup and a "seeded"
-# message indistinguishable from a first-time seed. Reproduced against BOTH
-# entry points by the panel's adversarial lens on PR #289.
+# Both ends are anchored. The left alone was not enough — an HTML comment that
+# merely mentions a marker mid-sentence passed. The right needs the trailing
+# blank or `devkit-source: kit-ownership` matches by prefix.
 #
-# For AGENTS.md and CLAUDE.md that is a REGRESSION, not an inherited risk:
-# before the kit shipped its own, AGENTS.md was seeded by ABSENCE — so an
+# What this does NOT claim: prose can still qualify if someone writes a comment
+# that opens with the marker text. That shape is the marker — the documented way
+# to claim such a file is to delete line 1 — so it is the accepted case rather
+# than a residual hole. What is excluded is a comment that talks ABOUT the
+# convention, which is the shape an adopter actually writes.
+#
+# For AGENTS.md and CLAUDE.md the loose form was a REGRESSION, not an inherited
+# risk: before the kit shipped its own, AGENTS.md was seeded by ABSENCE — an
 # existing one was never touched whatever it contained — and CLAUDE.md had no
 # seeding path at all. The anchor keeps that property while letting the kit ship
-# both. It is applied to TEMPLATE_MARKER too: the two markers now flow through
-# one predicate, and leaving one loose while tightening the other would be the
-# same destructive bug with a different literal.
+# both, and is applied to TEMPLATE_MARKER too: both markers flow through one
+# predicate, and leaving one loose would be the same bug with another literal.
 #
-# Anchoring costs nothing real: every marker this script writes or ships is an
-# HTML comment at the very start of line 1, and prose quoting one is not. The
-# failure direction becomes "an oddly-formatted skeleton is not re-seeded",
+# The failure direction is now "an oddly-formatted skeleton is not re-seeded",
 # which loses no data.
+# _opens_with_marker <rest-of-comment> <marker> — true when the comment's first
+# token IS the marker. Anchoring only the LEFT side (`<!--`) is not enough, and
+# that was this guard's second miss: `"<!--"*"$MARKER"*` still accepted
+#
+#   <!-- see the kit's devkit-source: kit-own convention for why this exists -->
+#
+# because the right side stayed an unanchored substring. Reproduced end-to-end by
+# the panel's adversarial lens, round 2 — a real file destroyed, no backup,
+# reported as `seeded`. The trailing `[[:space:]]*` arm is what stops
+# `devkit-source: kit-ownership` matching by prefix.
+_opens_with_marker() {
+  case "$1" in
+    "$2") return 0 ;;
+    "$2"[[:space:]]*) return 0 ;;
+  esac
+  return 1
+}
+
 _seedable() {
   [ -f "$1" ] || return 0
-  _first="$(head -n 1 "$1" 2>/dev/null)"
-  case "$_first" in
-    "<!--"*"$TEMPLATE_MARKER"*) return 0 ;;
-    "<!--"*"$KIT_OWN_MARKER"*) return 0 ;;
-  esac
+  # Everything after line 1's opening `<!--`, leading blanks removed. Empty when
+  # line 1 does not open an HTML comment at all, which is the common case for a
+  # file the adopter wrote.
+  _rest="$(head -n 1 "$1" 2>/dev/null | sed -n 's/^<!--[[:space:]]*//p')"
+  [ -n "$_rest" ] || return 1
+  _opens_with_marker "$_rest" "$TEMPLATE_MARKER" && return 0
+  _opens_with_marker "$_rest" "$KIT_OWN_MARKER" && return 0
   return 1
 }
 

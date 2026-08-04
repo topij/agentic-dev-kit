@@ -118,9 +118,12 @@ only `_`-separated names, so the hyphenated mixed-case shape the kit's own docs 
 (`"CF-Access-Client-Secret"`) is **not** detected and `.mcp.json` stays tracked
 ([#86](https://github.com/topij/agentic-dev-kit/issues/86), open). Do not rely on it —
 prefer `${ENV_VAR}` references so there is no literal to leak. It never overwrites a
-rendered doc that is already in use — only one whose **first line** still carries the
-shipped `devkit-template: unrendered` marker (or that is missing entirely). A doc
-that merely mentions the marker further down is in use, and is left alone.
+rendered doc that is already in use — only one that is missing entirely, or whose
+**first line opens an HTML comment beginning with** one of two markers: the shipped
+`devkit-template: unrendered` on a narrative skeleton, or `devkit-source: kit-own` on
+the kit's own root `AGENTS.md` / `CLAUDE.md`. A doc that merely *mentions* a marker —
+below line 1, or inside a line-1 comment that says anything else first — is in use, and
+is left alone.
 
 Ten minutes, start to finish. For a full worked example of a first session — from
 adoption through `wrap-up` — see **[`docs/getting-started.md`](docs/getting-started.md)**.
