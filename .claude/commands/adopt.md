@@ -33,22 +33,35 @@ Run these probes and record the answers — they drive the plan:
 - **Root entry points?** Classify each of `AGENTS.md` and `CLAUDE.md` into **three** states, not two — presence alone is not enough, and getting this wrong destroys files:
 
   ```sh
-  # SCRATCH is an ABSOLUTE path OUTSIDE the adopter repo. Never a bare relative
-  # name: this workflow ends by opening a PR, and a `git add -A` anywhere in it
-  # sweeps a repo-root scratch file into the adoption commit.
-  SCRATCH=/tmp/adopt-$$ ; mkdir -p "$SCRATCH"
+  # Substitute a REAL absolute path here and repeat that SAME LITERAL in Steps
+  # 3b and 4. Two rules, both measured:
+  #   - Never `$$`, and never rely on this variable surviving. Each fenced block
+  #     may run as its own process: `$$` differs, and exported vars are gone. An
+  #     unset $SCRATCH makes Step 3b's backup resolve to "/AGENTS.md.pre-adopt" —
+  #     it writes to the filesystem root or fails, so the backup never happens
+  #     and init.sh then destroys the file with nothing kept.
+  #   - Absolute, and OUTSIDE the adopter repo. This workflow ends by opening a
+  #     PR, and a `git add -A` sweeps a repo-root scratch file into the commit.
+  SCRATCH=/tmp/adopt-<repo>-<yyyymmdd>          # <-- replace before running
+  mkdir -p "$SCRATCH"
 
+  : > "$SCRATCH/step1-classes.txt"
   for f in AGENTS.md CLAUDE.md; do
-    if [ ! -e "$f" ] && [ ! -L "$f" ]; then echo "$f: ABSENT — will be seeded"
-    elif [ ! -f "$f" ]; then echo "$f: NOT A REGULAR FILE — init.sh refuses it; resolve by hand"
+    if   [ ! -e "$f" ] && [ ! -L "$f" ]; then s=ABSENT
+    elif [ ! -f "$f" ];                  then s=NOT_A_REGULAR_FILE
     elif head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
          | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
-    then echo "$f: MARKED — init.sh WILL RENDER OVER IT" ; MARKED="$MARKED $f"
-    else echo "$f: IN USE — left byte-identical"
-         shasum -a 256 "$f" >> "$SCRATCH/inuse-hashes.txt"
+    then s=MARKED
+    else s=IN_USE ; shasum -a 256 "$f" >> "$SCRATCH/inuse-hashes.txt"
     fi
+    printf '%s\t%s\n' "$s" "$f" | tee -a "$SCRATCH/step1-classes.txt"
   done
   ```
+
+  **The classification is written to a file, not held in a variable, and that is
+  load-bearing.** Steps 3b and 4 read `step1-classes.txt` and act on *every* file it
+  lists. A shell variable would not survive to those blocks, and a step that hardcodes
+  `AGENTS.md` silently skips a second `MARKED` file — which is the one an operator loses.
 
   Three details in that snippet are load-bearing, each for a reason that has already
   cost this repo a defect:
@@ -81,8 +94,9 @@ Run these probes and record the answers — they drive the plan:
   contract. The adopter who hits it is the one who took the pre-`#288` `cp -r` quickstart
   and then edited what landed, which is a shipped path, not an edge case.
 
-  Record the hashes above whatever the state: Step 4 verifies against them, because
-  `git diff` proves nothing for a file that is untracked or gitignored.
+  Step 4 verifies against the two artifacts this step wrote — `step1-classes.txt` and
+  `inuse-hashes.txt` — rather than against `git diff`, which proves nothing for a file
+  that is untracked or gitignored.
 - **Config dir?** `ls -d config 2>/dev/null` — where `config/dev-model.yaml` goes (repo root if there's no `config/`).
 - **`scripts/` layout?** `ls scripts 2>/dev/null`. **Default to vendoring the kit's engines under `scripts/devkit/`.** It is required when `scripts/` is organized into subdirs or has colliding filenames, and it is the right call anyway whenever the repo lints or formats repo-wide (next bullet) — a directory is the only unit you can exclude without maintaining a filename list. Flat `scripts/` is only appropriate for a repo with no repo-wide lint and no collisions.
 - **Tracker?** `gh issue list -L1 2>/dev/null` succeeds → GitHub Issues; else look for a Linear/Jira setup. Sets `tracker.backend`.
@@ -144,9 +158,18 @@ and ask the operator.
 otherwise, and nothing else in this flow will stop that:
 
 ```bash
-# only for a file Step 1 classified MARKED — into $SCRATCH, never the repo root
-cp -p AGENTS.md "$SCRATCH/AGENTS.md.pre-adopt"      # and/or CLAUDE.md
+SCRATCH=/tmp/adopt-<repo>-<yyyymmdd>   # the SAME literal you chose in Step 1
+[ -s "$SCRATCH/step1-classes.txt" ] || { echo "no Step 1 record at $SCRATCH — stop"; exit 1; }
+
+# back up EVERY file Step 1 classified MARKED, not just AGENTS.md
+awk -F'\t' '$1=="MARKED"{print $2}' "$SCRATCH/step1-classes.txt" | while read -r f; do
+  cp -p "$f" "$SCRATCH/$f.pre-adopt" && echo "backed up $f"
+done
 ```
+
+The `[ -s ]` guard is the point of that first line: a mistyped or unset `$SCRATCH` is
+otherwise silent, and a silent miss here means `init.sh` destroys the file with no copy
+anywhere. Fail loudly and stop.
 
 **The backup goes in `$SCRATCH`, outside the repo.** A `.pre-adopt` copy in the repo root
 is a full copy of the operator's original entry point sitting untracked in a workflow that
@@ -159,8 +182,11 @@ Unless the operator explicitly chose to re-render it, restore it after Step 3b *
 claim it** — both halves, in this order:
 
 ```bash
-cp -p "$SCRATCH/AGENTS.md.pre-adopt" AGENTS.md   # restore their content
-sed -i.bak '1d' AGENTS.md && rm -f AGENTS.md.bak # delete line 1: the marker
+awk -F'\t' '$1=="MARKED"{print $2}' "$SCRATCH/step1-classes.txt" | while read -r f; do
+  cp -p "$SCRATCH/$f.pre-adopt" "$f"          # restore their content
+  sed -i.bak '1d' "$f" && rm -f "$f.bak"      # delete line 1: the marker
+  echo "restored and claimed $f"
+done
 ```
 
 **Restoring without deleting the marker leaves a landmine, and this is the single most
@@ -320,11 +346,15 @@ before re-running, and never silence it by dropping the flag.
   Step 4's other two checks both report clean over a destroyed file.
 
   ```sh
-  # (a) PRESERVED — content restored, and the marker claimed
-  shasum -a 256 "$SCRATCH/AGENTS.md.pre-adopt"        # their original
-  tail -n +2 "$SCRATCH/AGENTS.md.pre-adopt" | shasum -a 256   # ...minus line 1
-  shasum -a 256 AGENTS.md                             # must equal the SECOND hash
-  head -n 1 AGENTS.md                                 # must NOT be a kit marker
+  SCRATCH=/tmp/adopt-<repo>-<yyyymmdd>   # the SAME literal from Step 1
+
+  # (a) PRESERVED — content restored, and the marker claimed, for EVERY MARKED file
+  awk -F'\t' '$1=="MARKED"{print $2}' "$SCRATCH/step1-classes.txt" | while read -r f; do
+    want=$(tail -n +2 "$SCRATCH/$f.pre-adopt" | shasum -a 256 | awk '{print $1}')
+    got=$(shasum -a 256 "$f" | awk '{print $1}')
+    [ "$want" = "$got" ] && echo "$f: restored OK" || echo "$f: *** MISMATCH ***"
+    head -n 1 "$f" | grep -q '^<!--' && echo "$f: *** line 1 still a comment — check the marker ***"
+  done
   ```
 
   The comparison is against the backup **minus its first line**, because claiming the file
@@ -348,7 +378,7 @@ before re-running, and never silence it by dropping the flag.
   grep -l devkit-hook-shim "$hookdir/pre-push"   # it is the kit's shim, not a stray hook
   # strip surrounding quotes: `engines: "scripts/devkit"` is ordinary YAML, and an
   # unstripped quote makes the match below fail on a correctly-installed hook
-  eng="$(grep -E '^[[:space:]]+engines:' config/dev-model.yaml | awk '{print $2}' | tr -d '"'"'"'')"
+  eng="$(grep -E '^[[:space:]]+engines:' config/dev-model.yaml | awk '{print $2}' | tr -d "\"'")"
   grep -o "$eng" "$hookdir/pre-push"             # and it targets the engines dir you chose
   ```
 
@@ -364,7 +394,7 @@ before re-running, and never silence it by dropping the flag.
 
   ```sh
   pre="$(grep -E '^[[:space:]]+dev_branch_prefix:' config/dev-model.yaml \
-         | awk '{print $2}' | tr -d '"'"'"'')"
+         | awk '{print $2}' | tr -d "\"'")"
   zero=0000000000000000000000000000000000000000
   printf 'refs/heads/%s/probe %s refs/heads/%s/probe %s\n' \
     "$pre" "$(git rev-parse HEAD)" "$pre" "$zero" \
