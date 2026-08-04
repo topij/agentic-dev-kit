@@ -107,9 +107,9 @@ Present a table the operator confirms **before any write**:
 | friction-log (#2) | none | **seeded by `init.sh`**, which the operator runs (Step 3c) — not by `/adopt` |
 | parallel + `state_paths` (#3) | none | **install** under `scripts/devkit/` (see Step 1 on when flat `scripts/` is acceptable) |
 | `pr-watch` (#5), safety rule (#6) | none | **install** |
-| Root entry points | e.g. `AGENTS.md` ABSENT, `CLAUDE.md` IN_USE | **seed the absent one** from `docs/templates/` via `init.sh`; an IN_USE one is left byte-identical |
+| Root entry points | e.g. `AGENTS.md` ABSENT, `CLAUDE.md` IN_USE | **the absent one gets seeded** from `docs/templates/` when **the operator runs `init.sh`** (Step 3c) — not by `/adopt`; an IN_USE one is left byte-identical |
 | — a `MARKED` target | e.g. `AGENTS.md` MARKED | **Name it in the plan and again in the Step 3c handoff.** The operator deletes line 1 themselves to keep the content, or lets `init.sh` render over it. `/adopt` does neither on their behalf and does not run `init.sh` at all |
-| pre-push hook | not installed | **install** the shim (`init.sh` does this; nothing else does) |
+| pre-push hook | not installed | **installed when the operator runs `init.sh`** (Step 3c) — nothing else installs it, so if they skip that step the repo has no hook |
 | tracker | e.g. GitHub Issues | `tracker.backend: github-issues` |
 | review bot | e.g. CodeRabbit (org) | `review.bots: [coderabbit]` |
 
