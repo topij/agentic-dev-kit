@@ -776,6 +776,14 @@ _seedable() {
   # run reported `seeded AGENTS.md` having written nothing at that path (panel
   # round 3, adversarial). A broken symlink lands here too, and is likewise left
   # alone rather than silently replaced.
+  #
+  # A SYMLINK to a regular file resolves as one, so a link whose target opens
+  # with a marker is seedable — and `mv` then replaces the LINK with the
+  # rendered file. The link target is left byte-identical (mv rewrites the
+  # directory entry, it does not follow), so no content is lost; what is lost is
+  # the link relationship, and the run says only `seeded`. Disclosed rather than
+  # changed: it follows from "marker on line 1 means the kit owns this file",
+  # and refusing to seed through a link would be a new rule no review asked for.
   if [ -e "$1" ] || [ -L "$1" ]; then
     [ -f "$1" ] || return 1
   else

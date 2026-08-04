@@ -968,6 +968,34 @@ def test_a_non_regular_target_is_not_reported_as_seeded(
         assert not path.exists()
 
 
+def test_seeding_through_a_symlink_replaces_the_link_not_its_target(tmp_path: Path) -> None:
+    """A symlink to a regular file resolves as one, so a link whose TARGET opens
+    with a marker is seedable — and `mv` then replaces the link itself.
+
+    Pins both halves of that, because only one of them is safe by luck: the link
+    target must be byte-identical afterwards (`mv` rewrites a directory entry
+    and does not follow), while the link is gone. Panel round 5, adversarial —
+    reported as an undisclosed, untested edge rather than a data-loss path, and
+    the behaviour is documented rather than changed."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / "victim.md"
+    marked = f"<!-- {kit_own_marker()} — the link target -->\n# canonical, shared\n"
+    victim.write_text(marked, encoding="utf-8")
+    (repo / "AGENTS.md").symlink_to(victim)
+    assert (repo / "AGENTS.md").is_symlink()  # positive control on the fixture
+
+    _run_init(repo)
+
+    assert victim.read_text(encoding="utf-8") == marked, (
+        "the render followed the symlink and overwrote its target — mv must "
+        "replace the directory entry, not dereference it"
+    )
+    assert not (repo / "AGENTS.md").is_symlink(), "the link survived — fixture never seeded"
+    assert "canonical, shared" not in (repo / "AGENTS.md").read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize("target", ["AGENTS.md", "CLAUDE.md"])
 def test_the_real_marker_comment_is_still_seedable(tmp_path: Path, target: str) -> None:
     """The control for the test above. Without it, a `_seedable` that simply
