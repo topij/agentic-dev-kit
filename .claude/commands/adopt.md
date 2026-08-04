@@ -30,7 +30,7 @@ Run these probes and record the answers — they drive the plan:
 
 - **Living plan?** `ls ROADMAP.md PLAN.md docs/plan.md docs/handoff.md handoff.md 2>/dev/null`. If one exists, the repo already practices Principle #1 — you'll point the kit at it, not add a second plan.
 - **Skill collisions?** Inspect `.claude/commands/` and `.agents/skills/`. Which of the kit's workflows already exist for either runtime? Keep the adopter's implementation and install only the missing adapters.
-- **Root entry points?** Classify each of `AGENTS.md` and `CLAUDE.md` into **three** states, not two — presence alone is not enough, and getting this wrong destroys files:
+- **Root entry points?** Classify each of `AGENTS.md` and `CLAUDE.md` into one of **four** states — presence alone is not enough, and getting this wrong destroys files:
 
   ```sh
   # Substitute a REAL absolute path here and repeat that SAME LITERAL in Steps
@@ -52,16 +52,22 @@ Run these probes and record the answers — they drive the plan:
     elif head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
          | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
     then s=MARKED
-    else s=IN_USE ; shasum -a 256 "$f" >> "$SCRATCH/inuse-hashes.txt"
+    else s=IN_USE
     fi
     printf '%s\t%s\n' "$s" "$f" | tee -a "$SCRATCH/step1-classes.txt"
   done
   ```
 
   **The classification is written to a file, not held in a variable, and that is
-  load-bearing.** Steps 3b and 4 read `step1-classes.txt` and act on *every* file it
-  lists. A shell variable would not survive to those blocks, and a step that hardcodes
-  `AGENTS.md` silently skips a second `MARKED` file — which is the one an operator loses.
+  load-bearing.** A shell variable does not survive to a later fenced block — each may run
+  as its own process — and a step that hardcodes `AGENTS.md` silently skips a second
+  `MARKED` file, which is the one an operator loses.
+
+  **This record drives the *plan*, not the writes.** Step 3b re-classifies immediately
+  before running `init.sh` and refuses to proceed if anything changed in between. Do not
+  add hashing here: Step 3 legitimately edits an existing `AGENTS.md` (the
+  `docs/AGENTS-sections.md` merge), so a hash taken now would make Step 4 flag the
+  workflow's own sanctioned edit as damage.
 
   Three details in that snippet are load-bearing, each for a reason that has already
   cost this repo a defect:
@@ -77,9 +83,11 @@ Run these probes and record the answers — they drive the plan:
     file and leaves it untouched. Same for a directory named `AGENTS.md` — `#288`'s
     round-3 defect. Neither is seedable, so both get their own state rather than a
     wrong one.
-  - **Only `IN USE` files are hashed.** A `MARKED` file the operator *approves*
-    re-rendering is *supposed* to change, so recording its hash beside the others makes
-    Step 4 report a sanctioned outcome as a guard failure.
+  - **`IN_USE` and `MARKED` are recorded separately** because Step 3b treats them
+    oppositely — one is backed up before `init.sh`, the other is hashed so Step 4 can
+    prove `init.sh` left it alone. A `MARKED` file the operator *approves* re-rendering is
+    *supposed* to change, so hashing it beside the others would make Step 4 report a
+    sanctioned outcome as a guard failure.
 
   `$SCRATCH` holds nothing the adopter repo should ever see. Keep it out of the tree,
   and when you stage, **name the paths** — never `git add -A` or `git add .`.
@@ -94,9 +102,9 @@ Run these probes and record the answers — they drive the plan:
   contract. The adopter who hits it is the one who took the pre-`#288` `cp -r` quickstart
   and then edited what landed, which is a shipped path, not an edge case.
 
-  Step 4 verifies against the two artifacts this step wrote — `step1-classes.txt` and
-  `inuse-hashes.txt` — rather than against `git diff`, which proves nothing for a file
-  that is untracked or gitignored.
+  Step 4 verifies against the artifacts **Step 3b** writes — `preflight-classes.txt` and
+  `preflight-hashes.txt`, both taken immediately before `init.sh` runs — rather than
+  against `git diff`, which proves nothing for a file that is untracked or gitignored.
 - **Config dir?** `ls -d config 2>/dev/null` — where `config/dev-model.yaml` goes (repo root if there's no `config/`).
 - **`scripts/` layout?** `ls scripts 2>/dev/null`. **Default to vendoring the kit's engines under `scripts/devkit/`.** It is required when `scripts/` is organized into subdirs or has colliding filenames, and it is the right call anyway whenever the repo lints or formats repo-wide (next bullet) — a directory is the only unit you can exclude without maintaining a filename list. Flat `scripts/` is only appropriate for a repo with no repo-wide lint and no collisions.
 - **Tracker?** `gh issue list -L1 2>/dev/null` succeeds → GitHub Issues; else look for a Linear/Jira setup. Sets `tracker.backend`.
@@ -121,7 +129,7 @@ Present a table the operator confirms **before any write**:
 | friction-log (#2) | none | **install** |
 | parallel + `state_paths` (#3) | none | **install** under `scripts/devkit/` (see Step 1 on when flat `scripts/` is acceptable) |
 | `pr-watch` (#5), safety rule (#6) | none | **install** |
-| Root entry points | e.g. `AGENTS.md` ABSENT, `CLAUDE.md` IN USE | **seed the absent one** from `docs/templates/` via `init.sh`; an IN USE one is left byte-identical |
+| Root entry points | e.g. `AGENTS.md` ABSENT, `CLAUDE.md` IN_USE | **seed the absent one** from `docs/templates/` via `init.sh`; an IN_USE one is left byte-identical |
 | — a `MARKED` entry point | e.g. `AGENTS.md` MARKED | **destructive — call it out by name and get an explicit yes.** Default to *preserving* it (Step 3b); re-rendering discards everything below line 1 |
 | pre-push hook | not installed | **install** the shim (`init.sh` does this; nothing else does) |
 | tracker | e.g. GitHub Issues | `tracker.backend: github-issues` |
@@ -154,20 +162,63 @@ and ask the operator.
 
 ### Step 3b — run `init.sh` non-interactively
 
-**First, preserve any `MARKED` entry point Step 1 found.** `init.sh` will render over it
-otherwise, and nothing else in this flow will stop that:
+Four sub-steps, and **the order is the mechanism**. Do not reorder them.
+
+#### 3b.1 — Re-classify NOW, and refuse to proceed if the world moved
+
+Step 1's classification drove the *plan*. It is not a safe basis for *acting*, and this is
+the failure it prevents: Step 1 may have run long before this point — a session ends and
+resumes, or Step 3's own work intervenes. If `AGENTS.md` was `ABSENT` at Step 1 and a
+marker-carrying file has appeared since, every guard below filters on `MARKED` in a record
+that does not list it, so it is never backed up, `init.sh` destroys it, and **all three of
+Step 4's checks report clean**. Reproduced end-to-end.
+
+So classify again, immediately before `init.sh`, and hash the `IN_USE` files *now*:
 
 ```bash
 SCRATCH=/tmp/adopt-<repo>-<yyyymmdd>   # the SAME literal you chose in Step 1
 [ -s "$SCRATCH/step1-classes.txt" ] || { echo "no Step 1 record at $SCRATCH — stop"; exit 1; }
 
-# back up EVERY file Step 1 classified MARKED, not just AGENTS.md
-awk -F'\t' '$1=="MARKED"{print $2}' "$SCRATCH/step1-classes.txt" | while read -r f; do
+: > "$SCRATCH/preflight-classes.txt"   # truncate: never append to a previous run
+: > "$SCRATCH/preflight-hashes.txt"
+for f in AGENTS.md CLAUDE.md; do
+  if   [ ! -e "$f" ] && [ ! -L "$f" ]; then s=ABSENT
+  elif [ ! -f "$f" ];                  then s=NOT_A_REGULAR_FILE
+  elif head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
+       | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
+  then s=MARKED
+  else s=IN_USE ; shasum -a 256 "$f" >> "$SCRATCH/preflight-hashes.txt"
+  fi
+  printf '%s\t%s\n' "$s" "$f" >> "$SCRATCH/preflight-classes.txt"
+done
+
+if ! diff -q "$SCRATCH/step1-classes.txt" "$SCRATCH/preflight-classes.txt" >/dev/null; then
+  echo "*** entry-point states changed since Step 1 — STOP and re-confirm the plan ***"
+  diff "$SCRATCH/step1-classes.txt" "$SCRATCH/preflight-classes.txt"
+  exit 1
+fi
+```
+
+Both files are **truncated, never appended**. An append-only hash file accumulates two
+lines for the same path across runs, and `shasum -c` then reports that path `FAILED` *and*
+`OK` in one output — over a file that is perfectly fine.
+
+**Hashing here rather than at Step 1 is also what stops a sanctioned edit reading as
+destruction.** Step 3 tells you to merge `docs/AGENTS-sections.md` into an existing
+`AGENTS.md`; that edit lands *between* Step 1 and here. A hash taken at Step 1 would make
+Step 4 flag it, and Step 4's remedy is "restore from git" — which would discard the merge
+the workflow just told you to make. The guarantee worth having is narrow and exact:
+**`init.sh` did not change this file**, not "nothing changed it since inspection."
+
+#### 3b.2 — Back up every `MARKED` file
+
+```bash
+awk -F'\t' '$1=="MARKED"{print $2}' "$SCRATCH/preflight-classes.txt" | while read -r f; do
   cp -p "$f" "$SCRATCH/$f.pre-adopt" && echo "backed up $f"
 done
 ```
 
-The `[ -s ]` guard is the point of that first line: a mistyped or unset `$SCRATCH` is
+The `[ -s ]` guard in 3b.1 is why this can be trusted: a mistyped or unset `$SCRATCH` is
 otherwise silent, and a silent miss here means `init.sh` destroys the file with no copy
 anywhere. Fail loudly and stop.
 
@@ -178,47 +229,9 @@ hypothetical: this kit already shipped a wrap-up that swept 228 lines of an adop
 uncommitted note through review and merge, which is why `wrap-up.md` now bans wildcard
 adds outright.
 
-Unless the operator explicitly chose to re-render it, restore it after Step 3b **and then
-claim it** — both halves, in this order:
+#### 3b.3 — Run `init.sh`
 
-```bash
-awk -F'\t' '$1=="MARKED"{print $2}' "$SCRATCH/step1-classes.txt" | while read -r f; do
-  cp -p "$SCRATCH/$f.pre-adopt" "$f"          # restore their content
-  sed -i.bak '1d' "$f" && rm -f "$f.bak"      # delete line 1: the marker
-  echo "restored and claimed $f"
-done
-```
-
-**Restoring without deleting the marker leaves a landmine, and this is the single most
-important sentence in this step.** A byte-identical restore puts the marker back on line
-1, so the file is still `MARKED` — still seedable, forever. The next `./init.sh` destroys
-it again, and that time there is **no backup**, because the backup lives only here in
-`/adopt`'s one-time Step 3b. `init.sh` prints its own re-run as the supported upgrade
-path, and `/upgrade` Step 2 runs it; `/upgrade` reads a `devkit-source: kit-own` marker as
-*"the adoption never completed its seeding step"* and cannot tell that apart from content
-an operator deliberately preserved. Reproduced end-to-end: a correct, complete
-backup-and-restore cycle followed by one ordinary `./init.sh` — `seeded AGENTS.md`,
-content gone, nothing kept.
-
-Deleting line 1 is not a liberty taken with their file — it is `init.sh`'s own stated
-resolution: *"the documented way to claim such a file is to delete line 1"*. A file whose
-content the adopter wants and whose line 1 says the kit owns it is an incoherent state; the
-marker is the claim, and removing it is how the adopter takes ownership. Confirm the
-deletion with the operator alongside the preserve decision, then **re-run Step 1's
-classifier and require `IN USE`** — if it still reports `MARKED`, the file is not safe yet
-and nothing downstream will tell you.
-
-That classifier re-run checks the *marker deletion*, and it is not evidence the content
-came back: a file `init.sh` rendered also classifies `IN USE`, because the template's own
-first line is a `Rendered from …` comment rather than a marker. Measured. The hash
-comparison in Step 4 is what catches a skipped restore; these are two checks for two
-different failures, and neither substitutes for the other.
-
-Then hand them the `$SCRATCH` copy to reconcile — the rendered template and their edits
-both have a claim, and merging them is a judgment call, not something to do silently.
-Never delete their copy yourself.
-
-Then, with the config stamped and `docs/templates/` in place:
+With the config stamped and `docs/templates/` in place:
 
 ```bash
 ./init.sh < /dev/null
@@ -235,10 +248,11 @@ the four things this skill used to tell you to do by hand:
   missing **or carries a kit marker on line 1** — the second half is the destructive one
   Step 1 classifies as `MARKED`. An entry point carrying *neither* marker is left
   **byte-identical** and reported as `already in use`. Do not
-  hand-render these instead: `_seedable` is the guard whose three separate
-  file-destroying defects `#288` closed by mutation testing (a *directory* named
-  `AGENTS.md`; a marker matched as an unanchored substring; a locale-dependent
-  `[[:space:]]`), and `_render` substitutes through awk-via-`ENVIRON` specifically
+  hand-render these instead: `_seedable` is the guard whose three defects `#288`
+  closed by mutation testing — **two of them destroyed a real file** (a marker matched as
+  an unanchored substring; a locale-dependent `[[:space:]]` that let `init.sh` overwrite a
+  file `kit_doctor` called in use), and the third, a *directory* named `AGENTS.md`,
+  reported `seeded` having written nothing at that path, and `_render` substitutes through awk-via-`ENVIRON` specifically
   because a tracker URL containing `/`, `&` or `\` is mangled by `sed` and by awk `-v`.
   A hand-rolled copy-if-absent reintroduces that entire class.
 - **Installs the pre-push hook** as a shim honoring `core.hooksPath`, pointing at the
@@ -259,7 +273,7 @@ the rewrite is reviewable as its own diff.
 
 **Read its output.** Three outcomes matter — one is a hard failure, two are not:
 
-- **`error: non-interactive run would keep tracker.project_name = '…'` → exit 1, and
+- **An `error: non-interactive run would keep tracker.project_name =` block → exit 1, and
   nothing was done.** This guard fires only on a non-interactive run, only when
   `tracker.project_name` contains a `/`, and only when it does not appear in this repo's
   `origin` URL — i.e. the config names *another project's tracker*, into which the
@@ -281,6 +295,48 @@ the rewrite is reviewable as its own diff.
   two runtimes now read *different* contracts, which is the exact divergence the pair
   exists to prevent. **Never edit their file to fix it**; raise it with the operator and
   let them add the `@AGENTS.md` line.
+
+#### 3b.4 — Restore and claim every preserved `MARKED` file
+
+Unless the operator explicitly chose to re-render it, **now** — after `init.sh` has
+overwritten it — restore their content and claim the file. Both halves, in this order:
+
+```bash
+awk -F'\t' '$1=="MARKED"{print $2}' "$SCRATCH/preflight-classes.txt" | while read -r f; do
+  cp -p "$SCRATCH/$f.pre-adopt" "$f"          # restore their content
+  sed -i.bak '1d' "$f" && rm -f "$f.bak"      # delete line 1: the marker
+  echo "restored and claimed $f"
+done
+```
+
+**Restoring without deleting the marker leaves a landmine, and this is the single most
+important sentence in this step.** A byte-identical restore puts the marker back on line
+1, so the file is still `MARKED` — still seedable, forever. The next `./init.sh` destroys
+it again, and that time there is **no backup**, because the backup lives only here in
+`/adopt`'s one-time Step 3b. `init.sh` prints its own re-run as the supported upgrade
+path, and `/upgrade` Step 2 runs it; `/upgrade` reads a `devkit-source: kit-own` marker as
+*"the adoption never completed its seeding step"* and cannot tell that apart from content
+an operator deliberately preserved. Reproduced end-to-end: a correct, complete
+backup-and-restore cycle followed by one ordinary `./init.sh` — `seeded AGENTS.md`,
+content gone, nothing kept.
+
+Deleting line 1 is not a liberty taken with their file — it is `init.sh`'s own stated
+resolution: *"the documented way to claim such a file is to delete line 1"*. A file whose
+content the adopter wants and whose line 1 says the kit owns it is an incoherent state; the
+marker is the claim, and removing it is how the adopter takes ownership. Confirm the
+deletion with the operator alongside the preserve decision, then **re-run the classifier
+and require `IN_USE`** — if it still reports `MARKED`, the file is not safe yet and nothing
+downstream will tell you.
+
+That classifier re-run checks the *marker deletion*, and it is not evidence the content
+came back: a file `init.sh` rendered also classifies `IN_USE`, because the template's own
+first line is a `Rendered from …` comment rather than a marker. Measured. The hash
+comparison in Step 4 is what catches a skipped restore; these are two checks for two
+different failures, and neither substitutes for the other.
+
+Then hand them the `$SCRATCH` copy to reconcile — the rendered template and their edits
+both have a claim, and merging them is a judgment call, not something to do silently.
+Never delete their copy yourself.
 
 ### Step 3c — record the drift baseline
 
@@ -323,12 +379,12 @@ before re-running, and never silence it by dropping the flag.
   for f in AGENTS.md CLAUDE.md; do
     [ -f "$f" ] && echo "$f: $(grep -c '{{[A-Z_]*}}' "$f") unsubstituted tokens (want 0)"
   done
-  # every file Step 1 called IN USE: byte-identical?
+  # every file 3b.1 called IN_USE: byte-identical?
   #   guard the -s: with no pre-existing entry points the file is EMPTY, and
   #   `shasum -c` on an empty file exits 1 with "no properly formatted SHA
   #   checksum lines found" — a hard error on the commonest first-time adoption.
-  if [ -s "$SCRATCH/inuse-hashes.txt" ]; then
-    shasum -a 256 -c "$SCRATCH/inuse-hashes.txt"
+  if [ -s "$SCRATCH/preflight-hashes.txt" ]; then
+    shasum -a 256 -c "$SCRATCH/preflight-hashes.txt"
   else
     echo "no pre-existing entry points to verify — both were seeded"
   fi
@@ -340,7 +396,7 @@ before re-running, and never silence it by dropping the flag.
   change — stop and restore from `$SCRATCH` or from git before doing anything else.
 
   **A `MARKED` file is in neither check above, so verify it explicitly — both outcomes.**
-  It is absent from `inuse-hashes.txt` by design, and the token count cannot help: a
+  It is absent from `preflight-hashes.txt` by design, and the token count cannot help: a
   freshly-rendered template has 0 unsubstituted tokens too, so "0 tokens" reads identically
   whether their content was restored or silently lost. Measured: skip the restore and
   Step 4's other two checks both report clean over a destroyed file.
@@ -349,7 +405,7 @@ before re-running, and never silence it by dropping the flag.
   SCRATCH=/tmp/adopt-<repo>-<yyyymmdd>   # the SAME literal from Step 1
 
   # (a) PRESERVED — content restored, and the marker claimed, for EVERY MARKED file
-  awk -F'\t' '$1=="MARKED"{print $2}' "$SCRATCH/step1-classes.txt" | while read -r f; do
+  awk -F'\t' '$1=="MARKED"{print $2}' "$SCRATCH/preflight-classes.txt" | while read -r f; do
     want=$(tail -n +2 "$SCRATCH/$f.pre-adopt" | shasum -a 256 | awk '{print $1}')
     got=$(shasum -a 256 "$f" | awk '{print $1}')
     [ "$want" = "$got" ] && echo "$f: restored OK" || echo "$f: *** MISMATCH ***"
@@ -360,7 +416,7 @@ before re-running, and never silence it by dropping the flag.
   The comparison is against the backup **minus its first line**, because claiming the file
   deletes that line — comparing against the unmodified backup fails on a correct restore
   and is the check most likely to be written wrongly. Re-run Step 1's classifier as the
-  real gate: it must now say `IN USE`.
+  real gate: it must now say `IN_USE`.
 
   ```sh
   # (b) RE-RENDERED (operator explicitly approved) — read it, and keep their copy
@@ -438,7 +494,7 @@ before re-running, and never silence it by dropping the flag.
   uv run <engines-dir>/kit_doctor.py --manifest <kit checkout>/kit-manifest.json
   ```
 
-  Bare, it compares this repo against the baseline Step 3 just wrote from these same
+  Bare, it compares this repo against the baseline Step 3c just wrote from these same
   files, so every recorded file matches *by construction* and the check establishes
   nothing — it would pass over a file that was copied wrong. The kit's manifest is an
   independent reference, and it is also the only one carrying `required_by`, which is
@@ -455,7 +511,7 @@ before re-running, and never silence it by dropping the flag.
   git -C <kit checkout> rev-parse HEAD    # the baseline: line shows its first 12 chars
   ```
 
-  `baseline: none recorded` means Step 3's `--record-install` did not run at all.
+  `baseline: none recorded` means Step 3c's `--record-install` did not run at all.
 - Confirm the repo's CI/lint scope **skips** the kit files (or add a kit-dir exclude if lint is repo-wide).
 
 ## Step 5 — Record the friction (the flywheel's first turn)
