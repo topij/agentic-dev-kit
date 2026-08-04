@@ -47,7 +47,7 @@ Run these probes and record the answers — they drive the plan:
     elif [ ! -f "$f" ];                  then s="NOT_A_REGULAR_FILE — not seedable; resolve by hand"
     elif head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
          | LC_ALL=C grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
-    then s="MARKED — init.sh WILL RENDER OVER IT (tell the operator, Step 3b)"
+    then s="MARKED — init.sh WILL RENDER OVER IT (tell the operator, Step 3c)"
     else s="IN_USE — init.sh leaves it byte-identical"
     fi
     printf '%s: %s\n' "$f" "$s"
@@ -81,7 +81,7 @@ Run these probes and record the answers — they drive the plan:
 
   **This classification is the single most useful thing `/adopt` produces**, and it is all
   it does about the hazard: it is read-only, it is advisory, and it goes to the operator in
-  Step 3b, who runs `init.sh` themselves. `/adopt` does not gate, back up, restore, or
+  Step 3c, who runs `init.sh` themselves. `/adopt` does not gate, back up, restore, or
   re-render anything.
 
   That is a deliberate retreat. Four mechanisms were built here to run `init.sh` safely — a
@@ -115,7 +115,7 @@ Present a table the operator confirms **before any write**:
 | parallel + `state_paths` (#3) | none | **install** under `scripts/devkit/` (see Step 1 on when flat `scripts/` is acceptable) |
 | `pr-watch` (#5), safety rule (#6) | none | **install** |
 | Root entry points | e.g. `AGENTS.md` ABSENT, `CLAUDE.md` IN_USE | **seed the absent one** from `docs/templates/` via `init.sh`; an IN_USE one is left byte-identical |
-| — a `MARKED` target | e.g. `AGENTS.md` MARKED | **Name it in the plan and again in the Step 3b handoff.** The operator deletes line 1 themselves to keep the content, or lets `init.sh` render over it. `/adopt` does neither on their behalf and does not run `init.sh` at all |
+| — a `MARKED` target | e.g. `AGENTS.md` MARKED | **Name it in the plan and again in the Step 3c handoff.** The operator deletes line 1 themselves to keep the content, or lets `init.sh` render over it. `/adopt` does neither on their behalf and does not run `init.sh` at all |
 | pre-push hook | not installed | **install** the shim (`init.sh` does this; nothing else does) |
 | tracker | e.g. GitHub Issues | `tracker.backend: github-issues` |
 | review bot | e.g. CodeRabbit (org) | `review.bots: [coderabbit]` |
@@ -138,14 +138,44 @@ For each piece, **copy only if the target doesn't already exist**:
 - **Lint-containment doctrine** → `docs/agentic-dev-kit/adopting-into-a-linted-repo.md`. Install it whenever Step 1 found repo-wide lint or format, and apply its exclusions **in the same commit as the engines** — an engine that gets autoformatted before the exclusion lands is already drifted. `kit_doctor` tracks this file, so skipping it shows up as a permanent `missing`.
 - **`config/dev-model.yaml`** — stamp the Step-1 values: `paths.handoff` → the existing plan (and `paths.handoff_history` / the `doc_budgets` entry to match), `paths.engines`, `runtime`, `tracker`, `review`, and `models`. **`review:` must exist as a key before the operator runs `init.sh`**, even if you only know `review.bots` — `init.sh` fills a *partial* `review:` section in completely, but cannot create one from nothing and emits seven `could not add review.*` warnings instead (measured; the `runtime:` section has no such limitation, which is why this is easy to miss).
 - **`docs/templates/`** — all six `.md.tmpl` files. They are **manifest-tracked**, so omitting them is not merely a missed convenience: `kit_doctor` then reports six extra `missing` entries tagged `[template]` (measured), and Step 4 tells you to expect `missing` only for pieces Step 2 deliberately dropped. They are also what `init.sh` renders from when the operator runs it.
-- **`init.sh`** — copy it to the adopter root. It is manifest-*untracked*, so it does not affect the baseline. The operator runs it (Step 3b).
+- **`init.sh`** — copy it to the adopter root. It is manifest-*untracked*, so it does not affect the baseline. **If the adopter already has a root `init.sh`, STOP.** The copy-only-if-absent rule would silently skip it, and Step 3c would then tell the operator to run *their* script — `init.sh` is a common name for an unrelated bootstrap. Diff the two, and let the operator choose: keep the kit's under another name and hand off that path explicitly, or confirm theirs is a stale kit copy safe to replace. Never hand off a bare `./init.sh` you did not put there.
 - **`friction-log.md`** — do not hand-copy it. `init.sh` seeds it from the template when the operator runs it, at the configured `paths.friction_log`.
 - Copy `PRINCIPLES.md`, `docs/parallel-dev.md`, and the shared workflow/safety docs under `docs/agentic-dev-kit/` for reference.
 
 **Never overwrite an existing file.** If something you didn't anticipate collides, stop
 and ask the operator.
 
-### Step 3b — hand `init.sh` to the operator, and stop
+### Step 3b — record the drift baseline
+
+**Once every copy above is done, and before the Step 3c handoff:**
+
+```bash
+uv run <engines-dir>/kit_doctor.py --record-install --from-kit <kit checkout>
+```
+
+Order matters in one direction only: `docs/templates/` is manifest-tracked and must be
+copied *before* this runs. The operator's later `init.sh` run does not disturb the
+baseline — `AGENTS.md`, `CLAUDE.md`, `init.sh` and `config/dev-model.yaml` are all
+manifest-untracked, the rendered entry points because they are adopter-owned and meant to
+be edited. So recording here, before they run it, is correct and not a race.
+
+This writes `kit-manifest.json` here, recording which kit-owned files this adoption
+actually installed and the kit commit they came from. It is what lets a later
+`/upgrade` tell a **stale** file from a **hand-edited** one instead of guessing — the
+guess was wrong for the commonest case and told adopters to hunt for edits they never
+made (kit `#51`). Run it **after** the copies, so it records what landed; a sized-down
+adoption is recorded as exactly the subset it installed.
+
+**Pass `--from-kit`, and read what it prints.** With it, only files matching that
+checkout are recorded — which is what keeps the "copy only if the target doesn't already
+exist" rule above from backfiring. A file this adoption *retained* rather than copied
+(an adopter's own file already sitting at a kit-owned path) is not the kit's, and
+recording it would make the next `/upgrade` report it `STALE` — wording that says
+"replace them, nothing local is lost" about a file that is entirely theirs. Any such
+path is named on stderr and left out of the baseline; reconcile each with the operator
+before re-running, and never silence it by dropping the flag.
+
+### Step 3c — hand `init.sh` to the operator, and stop
 
 **`/adopt` does not run `init.sh`. This is the end of what the skill does to the repo.**
 
@@ -182,8 +212,11 @@ So: tell the operator what to check, and let them run it.
 > an unrendered skeleton, leave it and let `init.sh` fill it in.
 >
 > Then run `./init.sh` — interactively, so you see and confirm each prompt. It seeds the
-> missing docs and both entry points, installs the pre-push hook, and appends the kit's
-> `.gitignore` entries. Nothing else in this adoption does those things.
+> docs and entry points that are **missing or unrendered**, leaving anything in use
+> byte-identical; installs the pre-push hook **unless a non-shim hook is already there**,
+> in which case it says so and leaves yours alone; and appends the kit's `.gitignore`
+> entries. Nothing else in this adoption does those things. Read what it prints — the
+> conditionals above are reported per file.
 
 State the six paths **resolved from their config**, not as the defaults above, and say
 which ones Step 1 found carrying a marker. That is the whole value `/adopt` adds here: it
@@ -200,40 +233,10 @@ Two things to warn them about, both measured, because neither is obvious from th
   nothing, and emits seven `could not add review.*` warnings instead. Step 3 stamps it.
 
 
-### Step 3c — record the drift baseline
-
-**Last, once every copy above is done — and before handing off to Step 3b:**
-
-```bash
-uv run <engines-dir>/kit_doctor.py --record-install --from-kit <kit checkout>
-```
-
-Order matters in one direction only: `docs/templates/` is manifest-tracked and must be
-copied *before* this runs. The operator's later `init.sh` run does not disturb the
-baseline — `AGENTS.md`, `CLAUDE.md`, `init.sh` and `config/dev-model.yaml` are all
-manifest-untracked, the rendered entry points because they are adopter-owned and meant to
-be edited. So recording here, before they run it, is correct and not a race.
-
-This writes `kit-manifest.json` here, recording which kit-owned files this adoption
-actually installed and the kit commit they came from. It is what lets a later
-`/upgrade` tell a **stale** file from a **hand-edited** one instead of guessing — the
-guess was wrong for the commonest case and told adopters to hunt for edits they never
-made (kit `#51`). Run it **after** the copies, so it records what landed; a sized-down
-adoption is recorded as exactly the subset it installed.
-
-**Pass `--from-kit`, and read what it prints.** With it, only files matching that
-checkout are recorded — which is what keeps the "copy only if the target doesn't already
-exist" rule above from backfiring. A file this adoption *retained* rather than copied
-(an adopter's own file already sitting at a kit-owned path) is not the kit's, and
-recording it would make the next `/upgrade` report it `STALE` — wording that says
-"replace them, nothing local is lost" about a file that is entirely theirs. Any such
-path is named on stderr and left out of the baseline; reconcile each with the operator
-before re-running, and never silence it by dropping the flag.
-
 ## Step 4 — Verify
 
 **Steps 4a and 4b below verify the staged adoption — the copies and the config. They do
-not verify `init.sh`, which the operator runs after this (Step 3b) and verifies for
+not verify `init.sh`, which the operator runs after this (Step 3c) and verifies for
 themselves from what it prints.**
 
 - **Entry points** — only meaningful *after* the operator has run `init.sh`, so run it
@@ -241,7 +244,13 @@ themselves from what it prints.**
 
   ```sh
   for f in AGENTS.md CLAUDE.md; do
-    [ -f "$f" ] && echo "$f: $(grep -c '{{[A-Z_]*}}' "$f") unsubstituted tokens (want 0)"
+    if [ -f "$f" ]; then
+      echo "$f: $(grep -c '{{[A-Z_]*}}' "$f") unsubstituted tokens (want 0)"
+    elif [ -e "$f" ] || [ -L "$f" ]; then
+      echo "$f: *** exists but is not a regular file — init.sh left it alone; resolve by hand ***"
+    else
+      echo "$f: *** still missing — the operator has not run init.sh, or it declined ***"
+    fi
   done
   ```
 
@@ -269,20 +278,27 @@ themselves from what it prints.**
   `note: existing <path> left untouched (not a kit shim) — chain it to <src> by hand` and
   moves on. That is the right call, and it means a repo with its own `pre-push` finishes
   this step with the kit's hook **not installed**. Read for that line and chain it, rather
-  than assuming the hook is live because Step 3b exited 0.
+  than assuming the hook is live because `init.sh` exited 0.
 
   **Verify the hook by making it fire, not by looking at it.** A shim that exists, is
   executable and names the right target can still be inert. Feed it a synthetic ref on
   stdin and confirm it refuses:
 
   ```sh
+  [ -x "$hookdir/pre-push" ] || echo "*** not executable — git will not run it ***"
   pre="$(grep -E '^[[:space:]]+dev_branch_prefix:' config/dev-model.yaml \
          | awk '{print $2}' | tr -d "\"'")"
   zero=0000000000000000000000000000000000000000
-  printf 'refs/heads/%s/probe %s refs/heads/%s/probe %s\n' \
-    "$pre" "$(git rev-parse HEAD)" "$pre" "$zero" \
-    | "$hookdir/pre-push" origin https://example.invalid
-  echo "exit=$?"
+  out=$(printf 'refs/heads/%s/probe %s refs/heads/%s/probe %s\n' \
+          "$pre" "$(git rev-parse HEAD)" "$pre" "$zero" \
+        | "$hookdir/pre-push" origin https://example.invalid 2>&1)
+  rc=$?
+  printf '%s\n' "$out"
+  case "$rc:$out" in
+    0:*)            echo "did not fire — see the fail-open note below" ;;
+    *"Refusing to push"*) echo "hook is live and refusing" ;;
+    *)              echo "*** non-zero for some OTHER reason — not the guard firing ***" ;;
+  esac
   ```
 
   That probe uses `HEAD`, so it only *fires* when the current branch's diff against
@@ -291,20 +307,37 @@ themselves from what it prints.**
   working tree or on any branch changes:
 
   ```sh
+  # the CONFIGURED protected branch — hardcoding origin/main tests the wrong base,
+  # or fails outright, on a repo whose trunk is master/trunk/develop
+  prot="$(grep -E '^[[:space:]]+protected_branch:' config/dev-model.yaml \
+          | awk '{print $2}' | tr -d "\"'")"
+  prot="origin/${prot:-main}"
+  idx=$(mktemp -t adopt-probe)    # unique per run; a stale shared index yields a bad $probe
+  trap 'rm -f "$idx"' EXIT
   b=$(printf 'probe\n' | git hash-object -w --stdin)
-  idx=/tmp/adopt-probe.idx        # any path OUTSIDE the repo; a temp index, not a commit
-  GIT_INDEX_FILE=$idx git read-tree origin/main
+  GIT_INDEX_FILE=$idx git read-tree "$prot"
   GIT_INDEX_FILE=$idx git update-index --add --cacheinfo 100644,$b,<your handoff path>
-  probe=$(git commit-tree "$(GIT_INDEX_FILE=$idx git write-tree)" -p origin/main -m probe)
+  probe=$(git commit-tree "$(GIT_INDEX_FILE=$idx git write-tree)" -p "$prot" -m probe)
   ```
 
   Feed `$probe` as the sha in the `printf` above. Exit 1 with the refusal message is the
   hook working.
 
-  A non-zero exit with the refusal message is the hook working. Exit 0 means it did not
-  fire — and note the guard **fails open by design** when it cannot resolve
-  `origin/<protected_branch>`, so exit 0 on a fresh clone with no fetched remote is
-  expected rather than broken.
+  The `case` above is why the assertion matches the **message** and not just the exit
+  code: a non-zero status can equally mean the hook is missing, not executable, or broke
+  on something unrelated, and reading that as "the guard fired" is how a dead hook passes
+  a check. Three outcomes, three verdicts.
+
+  Exit 0 means it did not fire, and the guard **fails open by design** in two distinct
+  cases — both expected rather than broken, and worth telling apart before you go hunting:
+
+  - **`origin/<protected_branch>` does not resolve** — a fresh clone with no fetched
+    remote. `git rev-parse --verify origin/<branch>` tells you.
+  - **The hook could not read `config/dev-model.yaml`** and fell back to its defaults, so
+    it looked for `origin/main` on a repo whose trunk is something else. It reads the
+    config through the engines' `lib/`, so this fires when the engines were installed
+    without it. Measured: on a `trunk` repo with `lib/` absent the probe reported *did not
+    fire*; with `lib/` present the same probe refused correctly.
 - Portability tests: run the kit's suites explicitly. `/adopt` does not install the kit's
   `Makefile`, and a mature repo's own `make test` will run *its* suite, not these:
 
@@ -354,7 +387,7 @@ Report what was **installed / skipped / config-pointed**, open a **draft PR**, a
 leave the merge to the operator — an adoption touches a lot of the repo and deserves a
 human review pass.
 
-**Then repeat Step 3b's handoff as the last thing you say**, because it is the one action
+**Then repeat Step 3c's handoff as the last thing you say**, because it is the one action
 still outstanding and the adoption is not finished without it:
 
 1. the six seedable paths, resolved from *their* config, with the state Step 1 found for
@@ -362,5 +395,7 @@ still outstanding and the adoption is not finished without it:
 2. `./init.sh`, run by them, interactively
 3. `/session-start` (Claude) or `$session-start` (Codex) afterwards
 
-Do not describe the adoption as complete before they have run `init.sh`: until then the
-repo has no entry points, no pre-push hook, and no kit `.gitignore` entries.
+Do not describe the adoption as complete before they have run `init.sh`: until then any
+entry point they lacked is still missing, the pre-push hook is not installed, and the kit's
+`.gitignore` entries are absent. Say it that way rather than "the repo has no entry
+points" — a repo with its own `AGENTS.md` has one, and `init.sh` will leave it alone.
