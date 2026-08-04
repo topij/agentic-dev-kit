@@ -46,6 +46,24 @@ ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
+def kit_own_marker() -> str:
+    """`init.sh`'s KIT_OWN_MARKER literal, read at CALL time.
+
+    Derived rather than restated: a copy here would keep passing after the
+    literal was renamed in init.sh — assertion and code agreeing about a string
+    nothing looks for any more. Derived, a rename fails the shipped files that
+    still carry the old one, which is the failure that matters.
+
+    Call time, not module scope, for the reason `shipped_config()` gives below:
+    a read that raises during COLLECTION aborts the whole pytest session and
+    takes unrelated modules down with it (#226/#233), long before
+    `kit_repo_only` is consulted."""
+    text = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
+    match = re.search(r'^KIT_OWN_MARKER="([^"]+)"', text, re.MULTILINE)
+    assert match, "KIT_OWN_MARKER is not assigned in init.sh — was it renamed?"
+    return match.group(1)
+
+
 def shipped_config() -> str:
     """The kit's own `config/dev-model.yaml`, read at CALL time.
 
@@ -775,18 +793,106 @@ def test_seeding_leaves_a_doc_that_merely_quotes_the_marker_untouched(
     assert "AGENTS.md already in use — left untouched" in result.stdout
 
 
-def test_kit_ships_no_root_agents_md(tmp_path: Path) -> None:
-    """AGENTS.md is seeded by ABSENCE, not by a marker, so the guard holds only
-    while the kit itself ships no root AGENTS.md — and ./init.sh run in a kit
-    checkout creates one. Committing that would hand every `cp -r` adopter the
-    kit's own rendered file with the guard permanently false and no diagnostic:
-    the #8 failure the marker exists to prevent, re-entering through the one
-    target that has no marker (panel, adversarial lens; #8 corrected from a
-    misattribution to #37/#41 — that is the forgot-a-manifest-row class)."""
-    assert not (REPO_ROOT / "AGENTS.md").exists(), (
-        "the kit tree must not ship a root AGENTS.md — if ./init.sh was run here, "
-        "delete the generated AGENTS.md rather than committing it"
+@pytest.mark.parametrize("entry_point", ["AGENTS.md", "CLAUDE.md"])
+def test_kit_own_entry_points_carry_the_marker(entry_point: str) -> None:
+    """Replaces `test_kit_ships_no_root_agents_md`, which pinned the OLD
+    discriminator: AGENTS.md was seeded by ABSENCE, so the kit could not ship one
+    without handing every `cp -r` adopter its own rendered file with the guard
+    permanently false and no diagnostic.
+
+    That constraint is gone — the kit now ships BOTH entry points, so a session
+    working in the kit is bound by the kit's contract on either runtime — but the
+    failure it named is not, and it is now reachable through CLAUDE.md too, which
+    the kit shipped unmarked all along. The invariant that replaces it is the one
+    that actually prevents the failure: a kit-own entry point must carry
+    KIT_OWN_MARKER on LINE 1, which is what makes ./init.sh render over it in an
+    adopter instead of calling it "already in use".
+
+    Line 1 specifically, because that is all `_seedable` reads."""
+    marker = kit_own_marker()
+    path = REPO_ROOT / entry_point
+    assert path.is_file(), f"the kit must ship its own {entry_point}"
+    first_line = path.read_text(encoding="utf-8").split("\n", 1)[0]
+    assert marker in first_line, (
+        f"{entry_point} must carry '{marker}' on line 1 — without it "
+        f"./init.sh reports it 'already in use' in every `cp -r` adopter and "
+        f"leaves them the kit's contract, silently"
     )
+
+
+def test_kit_own_marked_file_is_reseeded_over(tmp_path: Path) -> None:
+    """The behaviour the marker buys, asserted end-to-end rather than by reading
+    the predicate: a file carrying KIT_OWN_MARKER is REPLACED, and what lands is
+    the adopter's values, not the kit's.
+
+    DISTINCTIVE values, for the reason
+    `test_agents_md_renders_the_configured_protected_branch` gives: the kit's own
+    `shipped_config()` names the project `agentic-dev-kit` and its handoff
+    `docs/kit-handoff.md`, so asserting those strings are absent cannot tell "the
+    kit's file was replaced" from "the adopter's file rendered the same words".
+    The first version of this test did exactly that and failed against correct
+    code."""
+    config = (
+        shipped_config()
+        .replace("name: agentic-dev-kit", "name: acme-q7")
+        .replace("handoff: docs/kit-handoff.md", "handoff: docs/plan-q7.md")
+    )
+    assert "acme-q7" in config and "docs/plan-q7.md" in config, (
+        "fixture config did not take the distinctive values — the substitutions "
+        "above no longer match config/dev-model.yaml"
+    )
+    repo = _fixture(tmp_path, config=config, templates=True)
+    kit_own_text = (
+        f"<!-- {kit_own_marker()} -->\n# the kit's own entry point\n"
+        "The living plan is `docs/kit-handoff.md`.\n"
+    )
+    for entry_point in ("AGENTS.md", "CLAUDE.md"):
+        (repo / entry_point).write_text(kit_own_text, encoding="utf-8")
+
+    result = _run_init(repo)
+
+    for entry_point in ("AGENTS.md", "CLAUDE.md"):
+        rendered = (repo / entry_point).read_text(encoding="utf-8")
+        assert rendered != kit_own_text, (
+            f"{entry_point} was left untouched — the kit-own marker did not "
+            f"make it seedable"
+        )
+        assert kit_own_marker() not in rendered
+        assert "docs/kit-handoff.md" not in rendered
+        assert "acme-q7" in rendered, f"{entry_point} did not render this repo's values"
+        assert "{{" not in rendered, f"unrendered token left in {entry_point}"
+        assert f"{entry_point} already in use" not in result.stdout
+
+
+def test_an_in_use_entry_point_is_still_never_touched(tmp_path: Path) -> None:
+    """The widened predicate must not widen what it destroys. An adopter's own
+    entry point carries NEITHER marker, and `seed_doc` takes no backup, so this
+    is the destructive consumer of the change above."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    mine = repo / "CLAUDE.md"
+    original = f"# CLAUDE.md — mine\n\nThe kit marks its own files `{kit_own_marker()}`.\n"
+    # Positive control: a fixture that lost the quoted marker would pass
+    # vacuously, since "left untouched" is also the no-marker outcome.
+    assert kit_own_marker() in original.split("\n")[2]
+    mine.write_text(original, encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert mine.read_text(encoding="utf-8") == original
+    assert "CLAUDE.md already in use — left untouched" in result.stdout
+
+
+def test_an_in_use_claude_md_without_the_import_is_reported(tmp_path: Path) -> None:
+    """Leaving their file alone is correct and also leaves the two runtimes on
+    different contracts, because Claude Code reads CLAUDE.md and not AGENTS.md.
+    init.sh must say so rather than edit their file."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    (repo / "CLAUDE.md").write_text("# CLAUDE.md — mine\n", encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert "does not import AGENTS.md" in result.stdout
+    assert (repo / "CLAUDE.md").read_text(encoding="utf-8") == "# CLAUDE.md — mine\n"
 
 
 # --------------------------------------------------------------------------- #

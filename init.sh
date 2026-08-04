@@ -640,6 +640,43 @@ migrate_kit_schema() {
 # this convention (panel round 1 adversarial lens; scope corrected round 2).
 TEMPLATE_MARKER="devkit-template: unrendered"
 
+# The kit's OWN entry points (root AGENTS.md and CLAUDE.md) carry this marker on
+# line 1 instead. They exist so a session working *in the kit* is bound by the
+# kit's contract — but the quickstart is `cp -r /path/to/agentic-dev-kit/. .`,
+# which lands them in the adopter's root, where every word of them is false.
+#
+# Without a marker they are reached by neither branch of the guard below: they
+# exist, and their first line is not TEMPLATE_MARKER, so seed_doc calls them
+# "already in use" and the adopter silently keeps the KIT's contract — pointing
+# at docs/kit-handoff.md, prescribing `make test`, naming the kit's tracker.
+# That is worse than the no-entry-point state it was added to fix, and it is
+# invisible: nothing reports it, because "left untouched" is also the correct
+# outcome for a file the adopter really is using.
+#
+# So the discriminator is a marker here too, and AGENTS.md stops being the one
+# target reached by ABSENCE. The kit may now ship both files; what it may not do
+# is ship them unmarked. `test_kit_own_entry_points_carry_the_marker` pins that.
+#
+# No apostrophe in the literal, deliberately: every marker here is matched from
+# shell, and this repo has already been bitten twice by a value that changed
+# meaning between quoting contexts (issue #62, and the awk `-v` escape
+# processing above). `kit-own` costs one word and closes that off.
+KIT_OWN_MARKER="devkit-source: kit-own"
+
+# _seedable <path> — true when the target may be written: it is missing, or its
+# FIRST LINE carries either marker. Line 1 only, for both, for the reason the
+# TEMPLATE_MARKER comment above gives: matching anywhere let an in-use file that
+# merely QUOTED a marker in prose be destroyed with no backup.
+_seedable() {
+  [ -f "$1" ] || return 0
+  _first="$(head -n 1 "$1" 2>/dev/null)"
+  case "$_first" in
+    *"$TEMPLATE_MARKER"*) return 0 ;;
+    *"$KIT_OWN_MARKER"*) return 0 ;;
+  esac
+  return 1
+}
+
 # _render <template> <target> — substitute the {{TOKENS}} and write.
 # awk (not sed) so a value containing / or & — a tracker URL, most obviously —
 # is substituted literally rather than reinterpreted as replacement syntax.
@@ -696,7 +733,7 @@ seed_doc() {
     echo "note: template $_tmpl missing — skipped $_target" >&2
     return 0
   fi
-  if [ -f "$_target" ] && ! head -n 1 "$_target" 2>/dev/null | grep -qF "$TEMPLATE_MARKER"; then
+  if ! _seedable "$_target"; then
     echo "$_target already in use — left untouched"
     return 0
   fi
@@ -971,11 +1008,28 @@ seed_doc "handoff" "$handoff_path"
 seed_doc "handoff-history" "$handoff_history_path"
 seed_doc "friction-log" "$friction_path"
 seed_doc "friction-log-archive" "$friction_archive_path"
-# The Codex-side entry point (#92): AGENTS.md is to Codex what CLAUDE.md is to
-# Claude. The kit ships no root AGENTS.md, so a fresh adopt seeds it from the
-# template; one an adopter is already using carries no marker and is never
-# touched — unlike an engine, the rendered file is the adopter's to extend.
+# The two runtime entry points (#92). AGENTS.md holds the contract; CLAUDE.md is
+# a thin binding that imports it, because Claude Code reads CLAUDE.md and NOT
+# AGENTS.md, and its `@path` import expands into context at session start. So one
+# file states the contract and both runtimes load it in full — the alternative,
+# a copy of the contract per runtime, is the fork `safety-critical-changes.md`
+# forbids and `#273` is filed about.
+#
+# Both are seeded, and both are reached by the kit-own marker rather than by
+# absence — see KIT_OWN_MARKER. An adopter's own file carries neither marker and
+# is never touched; unlike an engine, the rendered files are theirs to extend.
 seed_doc "AGENTS" "AGENTS.md"
+seed_doc "CLAUDE" "CLAUDE.md"
+
+# A CLAUDE.md the adopter was already using is left untouched, which is correct —
+# but then nothing pulls AGENTS.md into a Claude session, and the two runtimes
+# read different contracts. That is the exact divergence this pair exists to
+# prevent, reached through the guard that protects their file. Report it; never
+# edit their file to fix it.
+if [ -f CLAUDE.md ] && ! grep -qF "@AGENTS.md" CLAUDE.md; then
+  echo "note: CLAUDE.md does not import AGENTS.md, and Claude Code reads CLAUDE.md only."
+  echo "      Add a line '@AGENTS.md' near its top so both runtimes read one contract."
+fi
 
 # ── .gitignore: state sandbox paths ───────────────────────────────────────
 

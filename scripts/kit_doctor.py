@@ -210,10 +210,11 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("docs/templates/handoff-history.md.tmpl", "template"),
     ("docs/templates/friction-log.md.tmpl", "template"),
     ("docs/templates/friction-log-archive.md.tmpl", "template"),
-    # The AGENTS.md entry point renders from this (#92). Only the TEMPLATE is
-    # kit-owned: the rendered root AGENTS.md is the adopter's to extend, so it
-    # is listed in ADOPTER_OWNED below instead.
+    # The two runtime entry points render from these (#92). Only the TEMPLATES
+    # are kit-owned: the rendered root AGENTS.md and CLAUDE.md are the adopter's
+    # to extend, so both are listed in ADOPTER_OWNED below instead.
     ("docs/templates/AGENTS.md.tmpl", "template"),
+    ("docs/templates/CLAUDE.md.tmpl", "template"),
 )
 
 # Paths that are the ADOPTER's — expected to differ, never reported as drift.
@@ -225,9 +226,13 @@ ADOPTER_OWNED: tuple[str, ...] = (
     "docs/handoff-history.md",
     "docs/friction-log.md",
     "docs/friction-log-archive.md",
-    # Rendered from docs/templates/AGENTS.md.tmpl; unlike an engine it is meant
-    # to be edited, so it must never be reported as drift.
+    # Rendered from the templates above; unlike an engine both are meant to be
+    # edited, so neither may ever be reported as drift. CLAUDE.md joins the list
+    # because the kit now ships its own copy of each — before that it shipped
+    # neither, and a `cp -r` adopter kept the KIT's CLAUDE.md as their contract
+    # with nothing rendering over it and nothing reporting it.
     "AGENTS.md",
+    "CLAUDE.md",
     # This repo's own narrative files (see the note in config/dev-model.yaml).
     "docs/kit-handoff.md",
     "docs/kit-handoff-history.md",
