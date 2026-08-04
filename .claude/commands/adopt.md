@@ -46,13 +46,6 @@ Run these probes and record the answers — they drive the plan:
   | opens `<!-- devkit-template: unrendered` or `<!-- devkit-source: kit-own`, marker first in the comment | `MARKED` | **renders over it, no backup** |
   | anything else | `IN_USE` | leaves it byte-identical |
 
-  **A *working* symlink is classified by its target, not by being a link.** `[ -f ]`
-  follows it, so a link whose target opens with a marker is `MARKED` and `init.sh` renders
-  over it — `mv` then replaces the **link** with the rendered file. The target keeps its
-  bytes; what is lost is the link relationship, and the run reports only `seeded`
-  (`init.sh:907-913`). Do not bucket "it's a symlink" as `NOT_A_REGULAR_FILE`: only a
-  *broken* one is.
-
   Three traps, all of which have caught this repo before:
 
   - **The marker must be the first token of the comment.** `<!-- see the devkit-source:
@@ -61,8 +54,14 @@ Run these probes and record the answers — they drive the plan:
   - **An odd blank beside the marker means not-marked.** `init.sh` compares under `LC_ALL=C`,
     so an NBSP or other non-ASCII blank after the marker text fails to match and the file is
     left alone. If you see anything but a plain space or tab there, treat it as `IN_USE`.
+  - **A *working* symlink is classified by its target, not by being a link.** `[ -f ]`
+    follows it, so a link whose target opens with a marker is `MARKED` and `init.sh` renders
+    over it — `mv` then replaces the **link** with the rendered file. The target keeps its
+    bytes; what is lost is the link relationship, and the run reports only `seeded`
+    (`init.sh:907-913`). Do not bucket "it's a symlink" as `NOT_A_REGULAR_FILE`: only a
+    *broken* one is.
 
-  The two traps above are not stylistic: each was a real defect here, found by executing
+  The three traps above are not stylistic: each was a real defect here, found by executing
   rather than reading. The state names also match `init.sh`'s own `_seedable` exactly —
   differential-tested across `#288`'s full near-miss set (mid-comment substring,
   `kit-ownership` prefix, marker on line 2, `unrendered-ish` suffix, NBSP, CRLF, broken
@@ -139,7 +138,7 @@ For each piece, **copy only if the target doesn't already exist**:
 - **`config/dev-model.yaml`** — stamp the Step-1 values: `paths.handoff` → the existing plan (and `paths.handoff_history` / the `doc_budgets` entry to match), `paths.engines`, `runtime`, `tracker`, `review`, and `models`. **`review:` must exist as a key before the operator runs `init.sh`**, even if you only know `review.bots` — `init.sh` fills a *partial* `review:` section in completely, but cannot create one from nothing and emits seven `could not add review.*` warnings instead (measured; the `runtime:` section has no such limitation, which is why this is easy to miss).
 - **`docs/templates/`** — all six `.md.tmpl` files. They are **manifest-tracked**, so omitting them is not merely a missed convenience: `kit_doctor` then reports six extra `missing` entries tagged `[template]` (measured), and Step 4 tells you to expect `missing` only for pieces Step 2 deliberately dropped. They are also what `init.sh` renders from when the operator runs it.
 - **`init.sh`** — copy it to the adopter root. It is manifest-*untracked*, so it does not affect the baseline. **If the adopter already has a root `init.sh`, STOP.** The copy-only-if-absent rule would silently skip it, and Step 3c would then tell the operator to run *their* script — `init.sh` is a common name for an unrelated bootstrap. Diff the two, and let the operator choose: keep the kit's under another name and hand off that path explicitly, or confirm theirs is a stale kit copy safe to replace. Never hand off a bare `./init.sh` you did not put there.
-- **`friction-log.md`** — do not hand-copy it. `init.sh` seeds it from the template when the operator runs it, at the configured `paths.friction_log`.
+- **The friction log (`paths.friction_log`)** — do not hand-copy it. `init.sh` seeds it from the template, at the configured path, when the operator runs it.
 - **`config/*.local.yaml` → `.gitignore`**, now, by hand — the one `.gitignore` entry that cannot wait for `init.sh`. `kitconfig.load_config()` merges a gitignored `config/dev-model.local.yaml` over the tracked config, and `docs/getting-started.md` tells the operator to put their Slack DM id there. Step 6 opens the PR *before* the operator runs `init.sh` (Step 3c), so anyone who creates that file in the gap — routine for someone who already knows the kit's local-override pattern — has an identity sitting untracked-but-not-ignored in an open PR. `init.sh` appends the full set later; this one entry is proactive because its window is the hazard.
 - Copy `PRINCIPLES.md`, `docs/parallel-dev.md`, and the shared workflow/safety docs under `docs/agentic-dev-kit/` for reference.
 
@@ -180,10 +179,12 @@ before re-running, and never silence it by dropping the flag.
 
 **`/adopt` does not run `init.sh`. This is the end of what the skill does to the repo.**
 
-Everything up to here is additive, with one stated exception: files copied into paths
-that were empty, a config stamped, and — only when the repo already had an `AGENTS.md` —
-the `docs/AGENTS-sections.md` merge Step 3 calls for, which edits a file the adopter owns
-and is theirs to approve like any other edit to it. `init.sh` is different — it *renders over* any of six files whose first line
+Everything up to here is **additive in the sense that nothing existing is removed or
+rewritten**: files copied into paths that were empty, a config stamped, and lines appended
+to files the repo already had — a `.gitignore` entry, a lint exclusion. One step goes
+further and merges content: `docs/AGENTS-sections.md` into an existing `AGENTS.md`, which
+interleaves with their prose rather than appending to it, and is theirs to approve like
+any other edit to a file they own. `init.sh` is different — it *renders over* any of six files whose first line
 carries a kit marker, with no backup, reporting only `seeded`. That is correct behaviour
 for `init.sh`, and it is the opposite of this skill's contract.
 
@@ -256,7 +257,8 @@ Two things to warn them about, both measured, because neither is obvious from th
   - `note: existing <path> left untouched (not a kit shim) — chain it to <src> by hand` —
     the repo had its own `pre-push`, so **the kit's hook is not installed**. This is the
     one outcome that silently leaves a mechanism absent; chain it.
-  - `note: CLAUDE.md does not import AGENTS.md` — the two runtimes will read different
+  - `note: CLAUDE.md does not import AGENTS.md, and Claude Code reads CLAUDE.md only.` —
+    the two runtimes will read different
     contracts. Raise it; never edit their file to fix it.
   - `installed <hookdir>/<hook> -> <src>` — the hook is in place, at the directory
     `core.hooksPath` selects, which is not always `.git/hooks`.
@@ -342,5 +344,6 @@ still outstanding and the adoption is not finished without it:
 
 Do not describe the adoption as complete before they have run `init.sh`: until then any
 entry point they lacked is still missing, the pre-push hook is not installed, and the kit's
-`.gitignore` entries are absent. Say it that way rather than "the repo has no entry
+`.gitignore` entries are absent apart from the `config/*.local.yaml` line Step 3 added.
+Say it that way rather than "the repo has no entry
 points" — a repo with its own `AGENTS.md` has one, and `init.sh` will leave it alone.
