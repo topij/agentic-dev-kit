@@ -30,7 +30,36 @@ Run these probes and record the answers — they drive the plan:
 
 - **Living plan?** `ls ROADMAP.md PLAN.md docs/plan.md docs/handoff.md handoff.md 2>/dev/null`. If one exists, the repo already practices Principle #1 — you'll point the kit at it, not add a second plan.
 - **Skill collisions?** Inspect `.claude/commands/` and `.agents/skills/`. Which of the kit's workflows already exist for either runtime? Keep the adopter's implementation and install only the missing adapters.
-- **Root entry points?** `ls AGENTS.md CLAUDE.md 2>/dev/null`. Record which are **absent** — that is what Step 3's `init.sh` run seeds, and it is the whole reason a Codex adopter arriving here ends up with an entry point at all (issue #105). When one is present, read it, merge the relevant snippets, and never replace it; the seed guard leaves it alone on its own, but you should still know what it says.
+- **Root entry points?** Classify each of `AGENTS.md` and `CLAUDE.md` into **three** states, not two — presence alone is not enough, and getting this wrong destroys files:
+
+  ```sh
+  for f in AGENTS.md CLAUDE.md; do
+    if [ ! -e "$f" ]; then echo "$f: ABSENT — will be seeded"
+    elif head -n 1 "$f" | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p' \
+         | grep -qE '^(devkit-template: unrendered|devkit-source: kit-own)([[:space:]]|$)'
+    then echo "$f: MARKED — init.sh WILL RENDER OVER IT"
+    else echo "$f: IN USE — left byte-identical"
+    fi
+  done
+  # record the hashes Step 4 verifies against (GNU spelling: sha256sum)
+  shasum -a 256 AGENTS.md CLAUDE.md 2>/dev/null > step1-hashes.txt
+  ```
+
+  `step1-hashes.txt` is scratch — write it outside the worktree, or delete it before the
+  PR; it must not land in the adoption commit.
+
+  **`MARKED` is the dangerous state and it is not hypothetical.** A file whose first
+  line carries a kit marker is *seedable* — `init.sh` renders over it and reports only
+  `seeded`, with **no backup**. Verified: an `AGENTS.md` opening with
+  `<!-- devkit-source: kit-own -->` and carrying paragraphs of adopter doctrine below it
+  was replaced wholesale, and the doctrine was unrecoverable. That is correct for
+  `init.sh` on a fresh repo or an upgrade — the marker is how the kit re-renders its own
+  skeletons — but it directly contradicts this skill's "never overwrite an existing file"
+  contract. The adopter who hits it is the one who took the pre-`#288` `cp -r` quickstart
+  and then edited what landed, which is a shipped path, not an edge case.
+
+  Record the hashes above whatever the state: Step 4 verifies against them, because
+  `git diff` proves nothing for a file that is untracked or gitignored.
 - **Config dir?** `ls -d config 2>/dev/null` — where `config/dev-model.yaml` goes (repo root if there's no `config/`).
 - **`scripts/` layout?** `ls scripts 2>/dev/null`. **Default to vendoring the kit's engines under `scripts/devkit/`.** It is required when `scripts/` is organized into subdirs or has colliding filenames, and it is the right call anyway whenever the repo lints or formats repo-wide (next bullet) — a directory is the only unit you can exclude without maintaining a filename list. Flat `scripts/` is only appropriate for a repo with no repo-wide lint and no collisions.
 - **Tracker?** `gh issue list -L1 2>/dev/null` succeeds → GitHub Issues; else look for a Linear/Jira setup. Sets `tracker.backend`.
@@ -55,7 +84,8 @@ Present a table the operator confirms **before any write**:
 | friction-log (#2) | none | **install** |
 | parallel + `state_paths` (#3) | none | **install** under `scripts/devkit/` (see Step 1 on when flat `scripts/` is acceptable) |
 | `pr-watch` (#5), safety rule (#6) | none | **install** |
-| Root entry points | e.g. has `CLAUDE.md`, no `AGENTS.md` | **seed the absent one** from `docs/templates/` via `init.sh`; the present one is left byte-identical |
+| Root entry points | e.g. `AGENTS.md` ABSENT, `CLAUDE.md` IN USE | **seed the absent one** from `docs/templates/` via `init.sh`; an IN USE one is left byte-identical |
+| — a `MARKED` entry point | e.g. `AGENTS.md` MARKED | **destructive — call it out by name and get an explicit yes.** Default to *preserving* it (Step 3b); re-rendering discards everything below line 1 |
 | pre-push hook | not installed | **install** the shim (`init.sh` does this; nothing else does) |
 | tracker | e.g. GitHub Issues | `tracker.backend: github-issues` |
 | review bot | e.g. CodeRabbit (org) | `review.bots: [coderabbit]` |
@@ -87,7 +117,20 @@ and ask the operator.
 
 ### Step 3b — run `init.sh` non-interactively
 
-Once the config above is stamped and `docs/templates/` is in place:
+**First, preserve any `MARKED` entry point Step 1 found.** `init.sh` will render over it
+otherwise, and nothing else in this flow will stop that:
+
+```bash
+# only for a file Step 1 classified MARKED
+cp -p AGENTS.md AGENTS.md.pre-adopt      # and/or CLAUDE.md
+```
+
+Unless the operator explicitly chose to re-render it, restore it after Step 3b and hand
+them the `.pre-adopt` copy to reconcile — the rendered template and their edits both have
+a claim, and merging them is a judgment call, not something to do silently. Never delete
+the `.pre-adopt` copy yourself.
+
+Then, with the config stamped and `docs/templates/` in place:
 
 ```bash
 ./init.sh < /dev/null
@@ -99,9 +142,10 @@ every prompt takes the value you just stamped — so it never interrogates the o
 and never overwrites a Step-1 decision. This is what seeds `AGENTS.md`, and it replaces
 the four things this skill used to tell you to do by hand:
 
-- **Seeds `AGENTS.md` and `CLAUDE.md`** from `docs/templates/`, each only when the
-  target is missing or carries a kit marker on line 1. An entry point the adopter
-  already wrote is left **byte-identical** and reported as `already in use`. Do not
+- **Seeds `AGENTS.md` and `CLAUDE.md`** from `docs/templates/`, each when the target is
+  missing **or carries a kit marker on line 1** — the second half is the destructive one
+  Step 1 classifies as `MARKED`. An entry point carrying *neither* marker is left
+  **byte-identical** and reported as `already in use`. Do not
   hand-render these instead: `_seedable` is the guard whose three separate
   file-destroying defects `#288` closed by mutation testing (a *directory* named
   `AGENTS.md`; a marker matched as an unanchored substring; a locale-dependent
@@ -166,17 +210,40 @@ before re-running, and never silence it by dropping the flag.
 
 ## Step 4 — Verify
 
-- **Entry points and hook** — check the result, not that Step 3b printed something:
+- **Entry points** — verify **every** file Step 3b could have touched, against the Step-1
+  hashes. Do not use `git diff` for this: it reports nothing for an untracked or
+  gitignored file, so a destroyed one looks clean.
 
   ```sh
-  grep -c '{{[A-Z_]*}}' AGENTS.md   # 0 — an unsubstituted token means _render was skipped
-  ls -l .git/hooks/pre-push          # a shim pointing at your engines dir
-  git diff --stat -- CLAUDE.md       # empty when the adopter already had one
+  # every file that was ABSENT and got seeded: fully rendered?
+  for f in AGENTS.md CLAUDE.md; do
+    [ -f "$f" ] && echo "$f: $(grep -c '{{[A-Z_]*}}' "$f") unsubstituted tokens (want 0)"
+  done
+  # every file that was IN USE: byte-identical to what Step 1 recorded?
+  #   an ABSENT file has no Step-1 line, so it is simply not checked here
+  shasum -a 256 -c step1-hashes.txt
   ```
 
-  A non-zero token count with the file present is the failure worth catching: it means
-  the file was *copied* rather than rendered, which is what happens if someone
-  substitutes `cp` for Step 3b.
+  A non-zero token count is the failure worth catching: it means the file was *copied*
+  rather than rendered, which is what happens if someone substitutes `cp` for Step 3b. A
+  hash mismatch on an `IN USE` file means the guard did not hold — stop and restore from
+  the `.pre-adopt` copy or from git before doing anything else.
+- **Hook** — resolve the directory the way `init.sh` does. `core.hooksPath` wins over
+  `.git/hooks` when set (pre-commit and several monorepo setups set it), so checking
+  `.git/hooks/pre-push` can inspect a file git will never run — or miss the one it will:
+
+  ```sh
+  hookdir="$(git config --get core.hooksPath || git rev-parse --git-path hooks)"
+  grep -l devkit-hook-shim "$hookdir/pre-push"   # it is the kit's shim, not a stray hook
+  grep -o "$(grep -E '^[[:space:]]+engines:' config/dev-model.yaml | awk '{print $2}')" \
+    "$hookdir/pre-push"                          # and it targets the engines dir you chose
+  ```
+
+  `init.sh` refuses to replace a **non-shim** hook already at that path — it prints
+  `existing <path> left untouched (not a kit shim) — chain it to <src> by hand` and moves
+  on. That is the right call, and it means a repo with its own `pre-push` finishes this
+  step with the kit's hook **not installed**. Read for that line and chain it, rather than
+  assuming the hook is live because Step 3b exited 0.
 - Portability tests: run the kit's suites explicitly. `/adopt` does not install the kit's
   `Makefile`, and a mature repo's own `make test` will run *its* suite, not these:
 
