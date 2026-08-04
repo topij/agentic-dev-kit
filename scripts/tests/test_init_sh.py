@@ -46,6 +46,54 @@ ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
+def locale_where_nbsp_is_blank() -> str | None:
+    """An installed locale under which the SHELL's `[[:space:]]` matches U+00A0,
+    or None if this machine has none.
+
+    Not "a UTF-8 locale" and not a hardcoded `en_US.UTF-8`: an uninstalled
+    locale name silently falls back to C, where `[[:space:]]` is ASCII-only —
+    so the test below would pass with the pin it exists to check REMOVED, in
+    exactly the minimal CI containers most likely to lack the locale. The probe
+    asks the shell the actual question instead of assuming an answer from the
+    locale's name.
+    """
+    try:
+        installed = subprocess.run(
+            ["locale", "-a"], capture_output=True, text=True, check=True
+        ).stdout.split()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    for name in installed:
+        if "utf" not in name.lower():
+            continue
+        probe = subprocess.run(
+            ["sh", "-c", 'case "$1" in [[:space:]]*) exit 0 ;; esac; exit 1', "sh", " "],
+            env=dict(os.environ, LC_ALL=name, LANG=name),
+            capture_output=True,
+        )
+        if probe.returncode == 0:
+            return name
+    return None
+
+
+def kit_own_marker() -> str:
+    """`init.sh`'s KIT_OWN_MARKER literal, read at CALL time.
+
+    Derived rather than restated: a copy here would keep passing after the
+    literal was renamed in init.sh — assertion and code agreeing about a string
+    nothing looks for any more. Derived, a rename fails the shipped files that
+    still carry the old one, which is the failure that matters.
+
+    Call time, not module scope, for the reason `shipped_config()` gives below:
+    a read that raises during COLLECTION aborts the whole pytest session and
+    takes unrelated modules down with it (#226/#233), long before
+    `kit_repo_only` is consulted."""
+    text = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
+    match = re.search(r'^KIT_OWN_MARKER="([^"]+)"', text, re.MULTILINE)
+    assert match, "KIT_OWN_MARKER is not assigned in init.sh — was it renamed?"
+    return match.group(1)
+
+
 def shipped_config() -> str:
     """The kit's own `config/dev-model.yaml`, read at CALL time.
 
@@ -775,17 +823,376 @@ def test_seeding_leaves_a_doc_that_merely_quotes_the_marker_untouched(
     assert "AGENTS.md already in use — left untouched" in result.stdout
 
 
-def test_kit_ships_no_root_agents_md(tmp_path: Path) -> None:
-    """AGENTS.md is seeded by ABSENCE, not by a marker, so the guard holds only
-    while the kit itself ships no root AGENTS.md — and ./init.sh run in a kit
-    checkout creates one. Committing that would hand every `cp -r` adopter the
-    kit's own rendered file with the guard permanently false and no diagnostic:
-    the #8 failure the marker exists to prevent, re-entering through the one
-    target that has no marker (panel, adversarial lens; #8 corrected from a
-    misattribution to #37/#41 — that is the forgot-a-manifest-row class)."""
-    assert not (REPO_ROOT / "AGENTS.md").exists(), (
-        "the kit tree must not ship a root AGENTS.md — if ./init.sh was run here, "
-        "delete the generated AGENTS.md rather than committing it"
+@pytest.mark.parametrize("entry_point", ["AGENTS.md", "CLAUDE.md"])
+def test_kit_own_entry_points_carry_the_marker(entry_point: str) -> None:
+    """Replaces `test_kit_ships_no_root_agents_md`, which pinned the OLD
+    discriminator: AGENTS.md was seeded by ABSENCE, so the kit could not ship one
+    without handing every `cp -r` adopter its own rendered file with the guard
+    permanently false and no diagnostic.
+
+    That constraint is gone — the kit now ships BOTH entry points, so a session
+    working in the kit is bound by the kit's contract on either runtime — but the
+    failure it named is not, and it is now reachable through CLAUDE.md too, which
+    the kit shipped unmarked all along. The invariant that replaces it is the one
+    that actually prevents the failure: a kit-own entry point must carry
+    KIT_OWN_MARKER on LINE 1, which is what makes ./init.sh render over it in an
+    adopter instead of calling it "already in use".
+
+    Line 1 specifically, because that is all `_seedable` reads."""
+    marker = kit_own_marker()
+    path = REPO_ROOT / entry_point
+    assert path.is_file(), f"the kit must ship its own {entry_point}"
+    first_line = path.read_text(encoding="utf-8").split("\n", 1)[0]
+    assert marker in first_line, (
+        f"{entry_point} must carry '{marker}' on line 1 — without it "
+        f"./init.sh reports it 'already in use' in every `cp -r` adopter and "
+        f"leaves them the kit's contract, silently"
+    )
+
+
+def test_kit_own_marked_file_is_reseeded_over(tmp_path: Path) -> None:
+    """The behaviour the marker buys, asserted end-to-end rather than by reading
+    the predicate: a file carrying KIT_OWN_MARKER is REPLACED, and what lands is
+    the adopter's values, not the kit's.
+
+    DISTINCTIVE values, for the reason
+    `test_agents_md_renders_the_configured_protected_branch` gives: the kit's own
+    `shipped_config()` names the project `agentic-dev-kit` and its handoff
+    `docs/kit-handoff.md`, so asserting those strings are absent cannot tell "the
+    kit's file was replaced" from "the adopter's file rendered the same words".
+    The first version of this test did exactly that and failed against correct
+    code."""
+    config = (
+        shipped_config()
+        .replace("name: agentic-dev-kit", "name: acme-q7")
+        .replace("handoff: docs/kit-handoff.md", "handoff: docs/plan-q7.md")
+    )
+    assert "acme-q7" in config and "docs/plan-q7.md" in config, (
+        "fixture config did not take the distinctive values — the substitutions "
+        "above no longer match config/dev-model.yaml"
+    )
+    repo = _fixture(tmp_path, config=config, templates=True)
+    kit_own_text = (
+        f"<!-- {kit_own_marker()} -->\n# the kit's own entry point\n"
+        "The living plan is `docs/kit-handoff.md`.\n"
+    )
+    for entry_point in ("AGENTS.md", "CLAUDE.md"):
+        (repo / entry_point).write_text(kit_own_text, encoding="utf-8")
+
+    result = _run_init(repo)
+
+    for entry_point in ("AGENTS.md", "CLAUDE.md"):
+        rendered = (repo / entry_point).read_text(encoding="utf-8")
+        assert rendered != kit_own_text, (
+            f"{entry_point} was left untouched — the kit-own marker did not "
+            f"make it seedable"
+        )
+        assert kit_own_marker() not in rendered
+        assert "docs/kit-handoff.md" not in rendered
+        assert "acme-q7" in rendered, f"{entry_point} did not render this repo's values"
+        assert "{{" not in rendered, f"unrendered token left in {entry_point}"
+        assert f"{entry_point} already in use" not in result.stdout
+
+
+def test_an_in_use_entry_point_is_still_never_touched(tmp_path: Path) -> None:
+    """The widened predicate must not widen what it destroys. An adopter's own
+    entry point carries NEITHER marker, and `seed_doc` takes no backup, so this
+    is the destructive consumer of the change above."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    mine = repo / "CLAUDE.md"
+    original = f"# CLAUDE.md — mine\n\nThe kit marks its own files `{kit_own_marker()}`.\n"
+    # Positive control: a fixture that lost the quoted marker would pass
+    # vacuously, since "left untouched" is also the no-marker outcome.
+    assert kit_own_marker() in original.split("\n")[2]
+    mine.write_text(original, encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert mine.read_text(encoding="utf-8") == original
+    assert "CLAUDE.md already in use — left untouched" in result.stdout
+
+
+@pytest.mark.parametrize("target", ["AGENTS.md", "CLAUDE.md", "docs/kit-friction-log.md"])
+def test_a_marker_quoted_in_prose_on_line_1_is_not_seedable(
+    tmp_path: Path, target: str
+) -> None:
+    """The destructive consumer of the anchor in `_seedable`, and the case the
+    line-1 rule alone does NOT cover.
+
+    `test_seeding_leaves_a_doc_that_merely_quotes_the_marker_untouched`
+    parametrizes the quote onto lines 2 and 3 — never line 1, which is the one
+    line the guard reads. A substring match there overwrote a real file with no
+    backup, printing `seeded <path>`, indistinguishable from a first-time seed.
+    Found by the panel's adversarial lens on PR #289 by running init.sh against
+    a hand-built fixture, not by reading the predicate.
+
+    Both markers, because both now flow through one predicate; and both entry
+    points, because for those two it is a REGRESSION rather than an inherited
+    risk — `AGENTS.md` used to be seeded by absence and `CLAUDE.md` not at all."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    for marker in (kit_own_marker(), "devkit-template: unrendered"):
+        # Every shape that mentions a marker without BEING one. The HTML-comment
+        # forms are the sharp ones: anchoring only the left side (`<!--`) left
+        # them matching, which is how this guard destroyed a file for the second
+        # time — panel round 2, reproduced end-to-end against a real fixture.
+        for shape in (
+            f"Note: the kit marks its own files `{marker}` on line 1.",
+            f"<!-- see the kit's {marker} convention for why this file exists -->",
+            f"<!-- migration note: we dropped the {marker} line when we forked -->",
+            # Prefix-only: the marker is the first token but not a whole one.
+            f"<!-- {marker}ership notes, ours -->",
+        ):
+            path = repo / target
+            path.parent.mkdir(parents=True, exist_ok=True)
+            original = f"{shape}\n\n# Ours, hand written, must survive ./init.sh\n"
+            path.write_text(original, encoding="utf-8")
+
+            result = _run_init(repo)
+
+            assert path.read_text(encoding="utf-8") == original, (
+                f"{target} was DESTROYED — line 1 was {shape!r}, which mentions "
+                f"'{marker}' without being the kit's marker comment"
+            )
+            assert f"{target} already in use — left untouched" in result.stdout
+
+
+@pytest.mark.parametrize("target", ["AGENTS.md", "CLAUDE.md"])
+@pytest.mark.parametrize("shape", ["directory", "broken symlink"])
+def test_a_non_regular_target_is_not_reported_as_seeded(
+    tmp_path: Path, target: str, shape: str
+) -> None:
+    """`[ -f ]` alone conflated "missing" with "exists but is not a regular
+    file", so a DIRECTORY named AGENTS.md read as missing: `mv` moved the
+    rendered temp file inside it and the run reported `seeded AGENTS.md` having
+    written nothing at that path. Panel round 3, adversarial, live fixture.
+
+    BOTH shapes, because they are pinned by different halves of the guard and
+    round 3 shipped only the first: `[ -e ]` catches the directory, `[ -L ]`
+    catches the broken symlink — `-e` follows the link and is FALSE for a
+    dangling one, so without the `-L` disjunct a broken symlink reads as missing
+    and is silently replaced, reported `seeded`. Round 4's adversarial lens
+    mutated `-L` away and the whole suite stayed green.
+
+    BOTH targets, because the guard is claimed to define "in use" identically
+    for every target while `CLAUDE.md` alone has target-specific logic nearby
+    (the `@AGENTS.md` import hint), so a future special-case there would not be
+    caught by an AGENTS.md-only fixture."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    path = repo / target
+    if shape == "directory":
+        path.mkdir()
+    else:
+        path.symlink_to("no-such-target-9f2a.md")
+        assert path.is_symlink() and not path.exists()  # positive control: dangling
+
+    result = _run_init(repo)
+
+    assert f"seeded {target}" not in result.stdout
+    assert f"{target} already in use — left untouched" in result.stdout
+    if shape == "directory":
+        assert path.is_dir()
+        strays = list(path.iterdir())
+        assert strays == [], f"render leaked a temp file into the directory: {strays}"
+    else:
+        assert path.is_symlink(), f"{target} was replaced — the broken symlink was overwritten"
+        assert not path.exists()
+
+
+def test_seeding_through_a_symlink_replaces_the_link_not_its_target(tmp_path: Path) -> None:
+    """A symlink to a regular file resolves as one, so a link whose TARGET opens
+    with a marker is seedable — and `mv` then replaces the link itself.
+
+    Pins both halves of that, because only one of them is safe by luck: the link
+    target must be byte-identical afterwards (`mv` rewrites a directory entry
+    and does not follow), while the link is gone. Panel round 5, adversarial —
+    reported as an undisclosed, untested edge rather than a data-loss path, and
+    the behaviour is documented rather than changed."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / "victim.md"
+    marked = f"<!-- {kit_own_marker()} — the link target -->\n# canonical, shared\n"
+    victim.write_text(marked, encoding="utf-8")
+    (repo / "AGENTS.md").symlink_to(victim)
+    assert (repo / "AGENTS.md").is_symlink()  # positive control on the fixture
+
+    _run_init(repo)
+
+    assert victim.read_text(encoding="utf-8") == marked, (
+        "the render followed the symlink and overwrote its target — mv must "
+        "replace the directory entry, not dereference it"
+    )
+    assert not (repo / "AGENTS.md").is_symlink(), "the link survived — fixture never seeded"
+    assert "canonical, shared" not in (repo / "AGENTS.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("blank", [" ", " ", "　"])
+def test_a_unicode_blank_beside_the_marker_does_not_make_it_seedable(
+    tmp_path: Path, blank: str
+) -> None:
+    """`[[:space:]]` is LOCALE-DEPENDENT, and nothing here pins the locale by
+    default. Under the UTF-8 locale a developer machine actually runs, the shell
+    matched these while `kit_doctor`'s `POSIX_BLANKS` did not — so a marker line
+    whose space had been typo'd to NBSP was seedable to init.sh and "in use" to
+    the doctor: init.sh would overwrite it and the doctor would say nothing.
+    Panel round 7, adversarial, reproduced across four locales.
+
+    Runs under a locale PROVED to classify U+00A0 as blank, not a hardcoded
+    name: under LC_ALL=C — which is where an uninstalled locale name lands —
+    this passes with the pin removed, so a hardcoded name would unpin the check
+    silently on any machine lacking that locale."""
+    locale_name = locale_where_nbsp_is_blank()
+    if locale_name is None:
+        pytest.skip(
+            "no installed locale classifies U+00A0 as blank, so the shell's "
+            "[[:space:]] cannot differ from C here and this pins nothing"
+        )
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    original = f"<!--{blank}{kit_own_marker()} -->\n# ours, must survive\n"
+    (repo / "CLAUDE.md").write_text(original, encoding="utf-8")
+
+    env = _env(repo.parent)
+    env["LC_ALL"] = locale_name
+    env["LANG"] = locale_name
+    result = subprocess.run(
+        ["sh", "init.sh"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=env,
+    )
+
+    assert (repo / "CLAUDE.md").read_text(encoding="utf-8") == original, (
+        "a Unicode blank beside the marker made the file seedable under a UTF-8 "
+        "locale — init.sh and kit_doctor then disagree about whether it is in use"
+    )
+    assert "CLAUDE.md already in use — left untouched" in result.stdout
+
+
+@pytest.mark.parametrize("target", ["AGENTS.md", "CLAUDE.md"])
+def test_the_real_marker_comment_is_still_seedable(tmp_path: Path, target: str) -> None:
+    """The control for the test above. Without it, a `_seedable` that simply
+    returned false would pass every negative case — and the kit's own entry
+    points would then never be rendered over in an adopter, which is the whole
+    mechanism. Uses the SHIPPED line 1 verbatim rather than a reconstruction."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    shipped_first_line = (REPO_ROOT / target).read_text(encoding="utf-8").split("\n", 1)[0]
+    assert kit_own_marker() in shipped_first_line  # positive control on the fixture
+    (repo / target).write_text(f"{shipped_first_line}\n# the kit's own\n", encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert f"seeded {target}" in result.stdout
+    assert "the kit's own" not in (repo / target).read_text(encoding="utf-8")
+
+
+def test_an_in_use_claude_md_without_the_import_is_reported(tmp_path: Path) -> None:
+    """Leaving their file alone is correct and also leaves the two runtimes on
+    different contracts, because Claude Code reads CLAUDE.md and not AGENTS.md.
+    init.sh must say so rather than edit their file."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    (repo / "CLAUDE.md").write_text("# CLAUDE.md — mine\n", encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert "does not import AGENTS.md" in result.stdout
+    assert (repo / "CLAUDE.md").read_text(encoding="utf-8") == "# CLAUDE.md — mine\n"
+
+
+@pytest.mark.parametrize(
+    ("label", "body"),
+    [
+        ("code span", "# mine\n\nAdd `@AGENTS.md` near the top to import the contract.\n"),
+        ("fenced block", "# mine\n\n```markdown\n@AGENTS.md\n```\n"),
+        ("tilde fence", "# mine\n\n~~~\n@AGENTS.md\n~~~\n"),
+        ("longer name", "# mine\n\n@AGENTS.mdx\n"),
+        # A ```-run does not close a ````-opened fence (CommonMark: the closer
+        # must be at least as long). Toggling on any three read the inner fence
+        # as a close and scanned the rest as live prose — panel, adversarial
+        # lens. The `@AGENTS.md` below is still inside the outer fence.
+        ("mismatched fence length", "# mine\n\n````\ntext\n```\n@AGENTS.md\n````\n"),
+        # A closing fence carries nothing but blanks after its run, so the
+        # middle line here does not close the block and @AGENTS.md is still
+        # inside it (panel round 2, LOW).
+        ("run with trailing text is not a close", "# mine\n\n```\n``` still open\n@AGENTS.md\n```\n"),
+        # Code spans are delimited by runs of EQUAL length, so this is ONE
+        # double-backtick span, not two empty single ones. The single-backtick
+        # regex this replaces stripped the delimiters and read the middle as
+        # live prose (CodeRabbit, PR #289).
+        ("double-backtick span", "# mine\n\n``@AGENTS.md``\n"),
+        ("triple-backtick span inline", "# mine\n\nsee ```@AGENTS.md``` here\n"),
+        # A span runs to its matching closer even across a newline.
+        ("multiline span", "# mine\n\n`@AGENTS.md\nstill inside the span`\n"),
+        # A run of a DIFFERENT length does not close the span.
+        ("inner shorter run does not close", "# mine\n\n``a ` b @AGENTS.md``\n"),
+        # Claude Code strips block-level HTML comments before injecting, so an
+        # import inside one is not live — and this is a plausible thing to
+        # write (panel round 6, adversarial).
+        ("html comment", "# mine\n\n<!-- TODO: add the @AGENTS.md import -->\n"),
+        ("multiline html comment", "# mine\n\n<!-- TODO:\n@AGENTS.md\n-->\n"),
+    ],
+)
+def test_an_inactive_agents_import_does_not_suppress_the_hint(
+    tmp_path: Path, label: str, body: str
+) -> None:
+    """Claude Code does not evaluate import syntax inside Markdown code spans or
+    fenced code blocks, so an `@AGENTS.md` in either is NOT an import and the
+    file does not load the shared contract.
+
+    A substring match read all of these as importing and stayed silent — the
+    TEMPLATE_MARKER "quotes it in prose" class, one function over, found by the
+    review bot on this PR.
+
+    No shipped file is one of these shapes; an earlier version of this docstring
+    claimed `docs/templates/CLAUDE.md.tmpl` was, and its only `@AGENTS.md` is the
+    live import. The case is an adopter's own CLAUDE.md — the code-span form is
+    what prose about the mechanism reaches for, as `docs/getting-started.md:44`
+    does, though that file never reaches the predicate."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    (repo / "CLAUDE.md").write_text(body, encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert "does not import AGENTS.md" in result.stdout, (
+        f"an @AGENTS.md in a {label} was read as an active import"
+    )
+
+
+@pytest.mark.parametrize(
+    ("label", "body"),
+    [
+        ("bare import, plus a code-span mention", "# mine\n\n@AGENTS.md\n\nSee `@AGENTS.md` above.\n"),
+        # Four leading spaces is an INDENTED CODE BLOCK, not a fence. Treating
+        # it as one opened a block that never closed and swallowed the real
+        # import below it — the hint then fired on a file that does import
+        # (CodeRabbit, PR #289).
+        ("after a four-space-indented backtick line", "# mine\n\n    ```\n    example\n\n@AGENTS.md\n"),
+        # A closed span must not leave the scanner inside one.
+        ("after a closed multiline span", "# mine\n\n`a\nb`\n\n@AGENTS.md\n"),
+        # A closed comment must not leave the scanner inside one — and the
+        # SHIPPED template opens with an HTML comment header above its import,
+        # so this is the shape that actually ships.
+        ("after a closed html comment", "<!-- header -->\n\n@AGENTS.md\n"),
+        ("after a closed multiline html comment", "<!-- a\nb -->\n\n@AGENTS.md\n"),
+        # A `<!--` inside a code span is span content, not a comment opener.
+        ("backticked comment opener", "# mine\n\n`<!--` then\n\n@AGENTS.md\n"),
+    ],
+)
+def test_an_active_agents_import_suppresses_the_hint(
+    tmp_path: Path, label: str, body: str
+) -> None:
+    """The other direction, so the inactive-shape cases above cannot pass by the
+    hint always firing — which they would if `_imports_agents_md` simply
+    returned false. Each case here contains a genuinely live import."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    (repo / "CLAUDE.md").write_text(body, encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert "does not import AGENTS.md" not in result.stdout, (
+        f"a live import was missed: {label}"
     )
 
 

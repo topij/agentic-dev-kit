@@ -6,6 +6,7 @@
     "docs/friction-log.md",
     "docs/friction-log-archive.md",
     "AGENTS.md",
+    "CLAUDE.md",
     "docs/kit-handoff.md",
     "docs/kit-handoff-history.md",
     "docs/kit-friction-log.md",
@@ -54,6 +55,10 @@
       "role": "template",
       "sha256": "d8c138c219430f099835df87d3ba5f2e0c5b1099a2a5928a2cbe021866f3abd7"
     },
+    "docs/templates/CLAUDE.md.tmpl": {
+      "role": "template",
+      "sha256": "e3195e5484d13f90122aa5ffacd9192e07b8445f5f0ab0cd44feced058fd23b3"
+    },
     "docs/templates/friction-log-archive.md.tmpl": {
       "role": "template",
       "sha256": "af4a138e4a5ebe5634c55e7e417cd6b9f362bf3a35182b033f72876cd88180cf"
@@ -96,7 +101,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "d1809a132f7c50e205caed50bbd686035dc90675c27bd0bfc4475ba8face3717"
+      "sha256": "b6cf06d14834366d33791963a160fc73ec796df36c3123f3a21d2d574de041d2"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [

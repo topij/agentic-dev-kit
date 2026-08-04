@@ -40,16 +40,38 @@ cp -r /path/to/agentic-dev-kit/. .
 
 `init.sh` prompts you for a handful of values — project name, agent runtime, tracker board,
 the protected branch, your review bot — and stamps them into `config/dev-model.yaml`.
-It renders the four narrative docs and the root `AGENTS.md` entry point from
-`docs/templates/`, installs the pre-push hook, and adds the state sandbox to `.gitignore`.
+It renders the four narrative docs and both root entry points — `AGENTS.md`, which holds
+the contract, and `CLAUDE.md`, which imports it with `@AGENTS.md` because Claude Code reads
+`CLAUDE.md` and not `AGENTS.md` — from `docs/templates/`, installs the pre-push hook, and
+adds the state sandbox to `.gitignore`.
 
-It renders a narrative doc when the target is **missing, or its first line still carries
-the shipped `devkit-template: unrendered` marker** — so a handoff you are actually using
-is left byte-identical, which is what makes re-running it the supported upgrade path. The
-first line specifically: a doc whose body quotes the marker lower down is in use, and
-seeding leaves it alone. (The older
-"only if it doesn't already exist" rule couldn't work: the kit *ships* those files, so a
-copy-in always landed them first and the seed step never fired.)
+It renders a target when it is **missing, or its first line opens an HTML comment
+carrying one of two markers** — so a handoff you are actually using is left
+byte-identical, which is what makes re-running it the supported upgrade path.
+
+- `devkit-template: unrendered` marks a **shipped skeleton** — the four narrative docs.
+- `devkit-source: kit-own` marks the **kit's own** root `AGENTS.md` and `CLAUDE.md`. The
+  kit ships those two because a session working in the kit needs a contract too, and the
+  `cp -r` quickstart therefore lands them in your root. This marker is what lets `init.sh`
+  render yours over them instead of mistaking them for files you are already using.
+
+A marker counts only in one exact position — line 1 must **open an HTML comment whose
+first words are the marker**:
+
+```markdown
+<!-- devkit-source: kit-own — anything may follow -->
+```
+
+A comment that merely *talks about* a marker does not qualify, wherever it sits:
+`<!-- see the kit's devkit-source: kit-own convention -->` on line 1 is in use, and seeding
+leaves it alone. So is any mention below line 1. Your rendered `AGENTS.md` and `CLAUDE.md`
+carry no marker at all, so once yours exist they are never re-rendered.
+
+If you *do* want a marked file re-rendered — or want to keep one forever — line 1 is the
+whole control: delete it to claim the file, restore it to hand the file back.
+
+(The older "only if it doesn't already exist" rule couldn't work: the kit *ships* those
+files, so a copy-in always landed them first and the seed step never fired.)
 
 Then open `config/dev-model.yaml` and fill in anything you skipped — especially
 the `tracker` and `models` blocks. That one file is where every skill and script

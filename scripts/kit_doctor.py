@@ -210,10 +210,11 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("docs/templates/handoff-history.md.tmpl", "template"),
     ("docs/templates/friction-log.md.tmpl", "template"),
     ("docs/templates/friction-log-archive.md.tmpl", "template"),
-    # The AGENTS.md entry point renders from this (#92). Only the TEMPLATE is
-    # kit-owned: the rendered root AGENTS.md is the adopter's to extend, so it
-    # is listed in ADOPTER_OWNED below instead.
+    # The two runtime entry points render from these (#92). Only the TEMPLATES
+    # are kit-owned: the rendered root AGENTS.md and CLAUDE.md are the adopter's
+    # to extend, so both are listed in ADOPTER_OWNED below instead.
     ("docs/templates/AGENTS.md.tmpl", "template"),
+    ("docs/templates/CLAUDE.md.tmpl", "template"),
 )
 
 # Paths that are the ADOPTER's — expected to differ, never reported as drift.
@@ -225,9 +226,13 @@ ADOPTER_OWNED: tuple[str, ...] = (
     "docs/handoff-history.md",
     "docs/friction-log.md",
     "docs/friction-log-archive.md",
-    # Rendered from docs/templates/AGENTS.md.tmpl; unlike an engine it is meant
-    # to be edited, so it must never be reported as drift.
+    # Rendered from the templates above; unlike an engine both are meant to be
+    # edited, so neither may ever be reported as drift. CLAUDE.md joins the list
+    # because the kit now ships its own copy of each — before that it shipped
+    # neither, and a `cp -r` adopter kept the KIT's CLAUDE.md as their contract
+    # with nothing rendering over it and nothing reporting it.
     "AGENTS.md",
+    "CLAUDE.md",
     # This repo's own narrative files (see the note in config/dev-model.yaml).
     "docs/kit-handoff.md",
     "docs/kit-handoff-history.md",
@@ -236,6 +241,57 @@ ADOPTER_OWNED: tuple[str, ...] = (
     "README.md",
     ".gitignore",
 )
+
+# The two line-1 markers `init.sh` seeds by, and the rule for reading one. This
+# MUST agree with `init.sh`'s `_seedable`, because the two answer the same
+# question about the same file and a disagreement makes the doctor prescribe a
+# remedy `init.sh` then refuses to perform.
+#
+# It has diverged twice. Round 2 anchored `init.sh` to line 1 and this to the
+# whole file; round 6 anchored `init.sh` to the opening HTML comment and left
+# this a bare substring, so a doc whose line-1 comment merely MENTIONS a marker
+# was reported "still an unrendered template — run ./init.sh" while `init.sh`
+# correctly left it alone.
+SEED_MARKERS: tuple[str, ...] = ("devkit-template: unrendered", "devkit-source: kit-own")
+
+# `[[:space:]]` in the C locale. That class is LOCALE-DEPENDENT in the shell, so
+# `init.sh` pins `LC_ALL=C` at both places it uses one — without that, a UTF-8
+# locale made the shell match NBSP and U+2028 where this does not, and the two
+# predicates disagreed about a file `init.sh` would overwrite (panel round 7).
+# If that pin is ever removed, this set stops describing the other side.
+POSIX_BLANKS = " \t\n\v\f\r"
+
+
+def _still_a_skeleton(first_line: str) -> bool:
+    """True when line 1 opens an HTML comment whose first token is a seed marker.
+
+    `<!--`, optional blanks, the marker, then a blank or the end. Prose that
+    merely mentions a marker does not qualify, and neither does
+    `devkit-source: kit-ownership` — the boundary is what stops a prefix match.
+
+    **This MUST agree with `init.sh`'s `_seedable` on every input**, and they are
+    two independent implementations in two languages held together by this
+    sentence and by matched test shapes — not by shared code. They have diverged
+    three times; see SEED_MARKERS for the account. A disagreement is never
+    cosmetic: the doctor then prescribes `run ./init.sh` for a file `init.sh`
+    will refuse to touch, or stays silent about one it will overwrite.
+    """
+    if not first_line.startswith("<!--"):
+        return False
+    # POSIX_BLANKS, not " \t": `sed`'s `[[:space:]]` and the shell's
+    # `[[:space:]]` glob both include CR, and `head -n 1` ends at LF only — so on
+    # a CR-delimited file a marker comment can be followed by CR where this saw a
+    # non-blank and disagreed with init.sh. Python's `str.isspace()` would also
+    # accept Unicode spaces the C locale does not; the explicit set keeps the two
+    # predicates reading the same characters.
+    rest = first_line[len("<!--") :].lstrip(POSIX_BLANKS)
+    for marker in SEED_MARKERS:
+        if rest == marker:
+            return True
+        if rest.startswith(marker) and rest[len(marker)] in POSIX_BLANKS:
+            return True
+    return False
+
 
 # `paths.engines` default in the kit's own layout — the prefix remapped onto an
 # adopter's configured engines directory.
@@ -959,8 +1015,19 @@ def inspect(
     )
 
     narrative: dict[str, bool] = {}
-    for key in ("paths.handoff", "paths.friction_log"):
-        rel = get(config, key, None)
+    targets = [get(config, key, None) for key in ("paths.handoff", "paths.friction_log")]
+    # The two root entry points are seeded by the same `seed_doc` and gated by the
+    # same predicate, so they belong to the same check — and `/upgrade` Step 1 now
+    # says so in as many words. Omitting them left the failure this PR exists to
+    # fix INVISIBLE to the tool whose job is finding it: a `cp -r` adopter whose
+    # `./init.sh` never completed keeps the kit's own contract in both files, and
+    # the doctor reported a clean bill of health (panel round 6, adversarial).
+    #
+    # Literal names, matching init.sh: unlike the narrative docs these are not
+    # configurable — Claude Code reads `CLAUDE.md` at the repo root and nowhere
+    # else, so there is no path key to resolve.
+    targets += ["AGENTS.md", "CLAUDE.md"]
+    for rel in targets:
         if not rel:
             continue
         doc = root / str(rel)
@@ -978,16 +1045,43 @@ def inspect(
         # init.sh seeded over it (panel round 3). Splitting the raw decode on "\n"
         # is what head -n 1 actually does.
         #
-        # Known remaining divergence, pre-existing and unrelated to line
-        # matching: an unreadable file makes init.sh's guard fail safe ("in
-        # use") while this raises PermissionError and aborts the whole run.
-        # Not filed as of this change, and deliberately not fixed here — note
+        # TWO shapes where `doc.is_file()` alone said the wrong thing, both
+        # reported by the review bot and both the divergence class above:
+        #
+        #   - a target that EXISTS but is not a regular file (a directory named
+        #     AGENTS.md, a dangling symlink) is not a file, so it reported as
+        #     "run ./init.sh" — which init.sh then refuses, leaving it
+        #     "already in use — left untouched". Wrong advice, and the same
+        #     no-op remedy round 2 removed. init.sh leaves such a target alone,
+        #     so this reports it alone too.
+        #   - an unreadable regular file raised OSError out of read_bytes and
+        #     aborted the WHOLE report, while init.sh's guard fails safe. A
+        #     diagnostic that dies on one unreadable file tells you nothing
+        #     about the other thirty-two.
+        #
+        # Both now resolve the way init.sh resolves them: left alone. Neither
+        # is *good* reporting — a directory named AGENTS.md is broken and this
+        # says "in use" — but agreeing with init.sh is the property being
+        # protected, and a third state is a Report shape change with JSON
+        # consumers behind it. Filed rather than smuggled into a fix round.
+        #
+        # Superseded note, kept for the reader who finds the old wording
+        # elsewhere: this divergence was previously recorded here as known,
+        # unfiled, and deliberately unfixed — note
         # that pr_watch and pr_followup_hook both treat an unreadable config as
         # "must never raise", so this check is the outlier.
-        narrative[str(rel)] = doc.is_file() and (
-            "devkit-template: unrendered"
-            not in doc.read_bytes().decode("utf-8", "replace").split("\n", 1)[0]
-        )
+        if doc.exists() or doc.is_symlink():
+            if not doc.is_file():
+                narrative[str(rel)] = True  # not a regular file — init.sh leaves it
+                continue
+            try:
+                first_line = doc.read_bytes().decode("utf-8", "replace").split("\n", 1)[0]
+            except OSError:
+                narrative[str(rel)] = True  # unreadable — init.sh's guard fails safe
+                continue
+            narrative[str(rel)] = not _still_a_skeleton(first_line)
+        else:
+            narrative[str(rel)] = False  # missing — init.sh WILL seed it
 
     raw_version = get(config, "kit.version", None)
     raw_manifest_version = manifest.get("kit_version")
@@ -1088,10 +1182,15 @@ def render(report: Report) -> str:
         + ("installed" if report.hooks_installed else "NOT installed — run ./init.sh")
     )
     for doc, rendered in report.narrative_rendered.items():
-        lines.append(
-            f"  {'✓' if rendered else '⚠'} {doc}: "
-            + ("in use" if rendered else "still an unrendered template — run ./init.sh")
-        )
+        # An entry point that is still the KIT's own is a different fact from a
+        # narrative skeleton that was never rendered, and the remedy reads
+        # differently: the file is not blank, it is confidently wrong about this
+        # repo. Same command, so the distinction is in the words only.
+        if doc in ("AGENTS.md", "CLAUDE.md"):
+            unrendered = "still the kit's own contract, not yours — run ./init.sh"
+        else:
+            unrendered = "still an unrendered template — run ./init.sh"
+        lines.append(f"  {'✓' if rendered else '⚠'} {doc}: " + ("in use" if rendered else unrendered))
 
     by_state: dict[str, list[FileStatus]] = {}
     for f in report.files:

@@ -5,8 +5,10 @@
 # again after pulling a kit update (that is the supported upgrade path).
 # Idempotent: re-running re-prompts (showing the current value as the default),
 # migrates an older config schema forward without guessing over existing
-# values, and never clobbers a narrative doc that is already in use — only one
-# whose FIRST LINE still carries the shipped `devkit-template: unrendered` marker.
+# values, and never clobbers a doc that is already in use — only one that is
+# missing, or whose FIRST LINE opens an HTML comment beginning with one of two
+# markers: `devkit-template: unrendered` on a shipped narrative skeleton, or
+# `devkit-source: kit-own` on the kit's own root AGENTS.md / CLAUDE.md.
 #
 # Requires: sh, plus awk, grep, sed, mv, rm, cat, head, mkdir, chmod, touch,
 # basename, dirname, date and git. No non-stdlib dependencies.
@@ -28,10 +30,12 @@ Bootstraps the agentic-dev-kit in the current repo:
   2. Stamps the answers into config/dev-model.yaml in place.
   3. Migrates an older config schema forward in place (kit.version) and
      stamps the current generation.
-  4. Renders the four narrative docs and the root AGENTS.md entry point from
-     docs/templates/ — but only when a target is missing or its FIRST LINE
-     still carries the unrendered marker, so a file you are actually using is
-     left byte-identical.
+  4. Renders the four narrative docs and both root entry points — AGENTS.md
+     (the contract) and CLAUDE.md (the Claude binding that imports it) — from
+     docs/templates/, but only when a target is missing or its FIRST LINE
+     OPENS AN HTML COMMENT beginning with the unrendered marker or the kit-own
+     marker. A file that merely mentions a marker is in use and is left
+     byte-identical.
   5. Appends the kit's state-sandbox paths to .gitignore if they're
      missing (never duplicates a line on re-run).
   6. Installs the pre-push hook as a shim (honoring core.hooksPath).
@@ -623,22 +627,307 @@ migrate_kit_schema() {
 # to make the "seed only if absent" guard permanently false, and every adopter
 # started with an unrendered skeleton. The marker below is what distinguishes
 # "the pristine file the kit shipped" from "a handoff someone is actually
-# using": a file whose FIRST LINE does not carry it is in use and is never
-# touched — a rendered doc that merely quotes the marker in its body is in use
-# too, which is the whole point of anchoring to line 1 (see below).
+# using": a file whose FIRST LINE does not open a marker comment is in use and is
+# never touched — a rendered doc that merely quotes a marker is in use too, which
+# is the whole point of the anchoring `_seedable` does (see there for the exact
+# rule and the two destructive misses that produced it).
 #
-# The marker is matched on the FIRST LINE ONLY, which is where every shipped
-# skeleton carries it — a position the suite pins, since this guard now depends
-# on it. Matching it anywhere in the body meant any in-use file that merely
-# QUOTED the marker in prose was treated as pristine and silently overwritten —
-# no backup, and the run still reported "seeded". That hit EVERY target, not just
-# AGENTS.md: a rendered, in-use docs/handoff.md mentioning the marker was
-# destroyed the same way (verified against the pre-fix script). The guard defines
-# "in use" identically for all five; what is distinctive about AGENTS.md is only
-# that the kit ships no pre-marked skeleton of it, so it is reached by file
-# absence rather than marker presence — and it is the likeliest file to discuss
-# this convention (panel round 1 adversarial lens; scope corrected round 2).
+# The position matters and is pinned by the suite, since this guard depends on
+# it. Matching anywhere in the body meant any in-use file that merely QUOTED the
+# marker in prose was treated as pristine and silently overwritten — no backup,
+# and the run still reported "seeded". That hit EVERY target: a rendered, in-use
+# docs/handoff.md mentioning the marker was destroyed the same way (verified
+# against the pre-fix script).
+#
+# The guard defines "in use" identically for all six targets. AGENTS.md used to
+# be the exception — the kit shipped no pre-marked skeleton of it, so it was
+# reached by file ABSENCE rather than marker presence, and could therefore never
+# be shipped. It no longer is: the kit ships its own AGENTS.md and CLAUDE.md
+# carrying KIT_OWN_MARKER, and both go through the same predicate as the rest.
 TEMPLATE_MARKER="devkit-template: unrendered"
+
+# The kit's OWN entry points (root AGENTS.md and CLAUDE.md) carry this marker on
+# line 1 instead. They exist so a session working *in the kit* is bound by the
+# kit's contract — but the quickstart is `cp -r /path/to/agentic-dev-kit/. .`,
+# which lands them in the adopter's root, where every word of them is false.
+#
+# Without a marker they are reached by neither branch of the guard below: they
+# exist, and their first line is not TEMPLATE_MARKER, so seed_doc calls them
+# "already in use" and the adopter silently keeps the KIT's contract — pointing
+# at docs/kit-handoff.md, prescribing `make test`, naming the kit's tracker.
+# That is worse than the no-entry-point state it was added to fix, and it is
+# invisible: nothing reports it, because "left untouched" is also the correct
+# outcome for a file the adopter really is using.
+#
+# So the discriminator is a marker here too, and AGENTS.md stops being the one
+# target reached by ABSENCE. The kit may now ship both files; what it may not do
+# is ship them unmarked. `test_kit_own_entry_points_carry_the_marker` pins that.
+#
+# No apostrophe in the literal, deliberately: every marker here is matched from
+# shell, and this repo has already been bitten twice by a value that changed
+# meaning between quoting contexts (issue #62, and the awk `-v` escape
+# processing above). `kit-own` costs one word and closes that off.
+KIT_OWN_MARKER="devkit-source: kit-own"
+
+# _imports_agents_md <path> — true when the file carries an ACTIVE `@AGENTS.md`
+# import: one outside fenced code blocks and inline code spans. Claude Code does
+# not evaluate import syntax inside either, so a CLAUDE.md that merely DOCUMENTS
+# the convention in backticks does not load the shared contract and must not
+# read as though it does.
+#
+# No file the kit ships is that shape — an earlier version of this comment said
+# docs/templates/CLAUDE.md.tmpl was, and a grep disproves it: its only
+# @AGENTS.md is the live import. The hazard is an adopter's own CLAUDE.md, and
+# the code-span form is what prose about the mechanism naturally reaches for —
+# docs/getting-started.md:44 writes it that way, though that file never reaches
+# this predicate, which only ever reads the adopter's root CLAUDE.md.
+#
+# This is the TEMPLATE_MARKER class again, one function over: that guard's first
+# version matched the marker anywhere in the body, so a file quoting it in prose
+# was treated as pristine and silently overwritten. That one was caught by a
+# review lens; this one by the review bot, in the PR that re-documented it.
+#
+# WHAT THIS IMPLEMENTS, and what it does not. Enough of CommonMark's inline and
+# leaf-block rules to tell a live import from a quoted one: fenced blocks (0-3
+# leading spaces, matched fence character and length, blank-only close), and code
+# spans delimited by backtick runs of EQUAL length, carried across lines. It is
+# not a Markdown parser. It does not implement backslash escapes, link reference
+# definitions, or the rule that strips one space from each end of a span's
+# content — none of which change whether an `@AGENTS.md` is inside a span, a
+# fence, or a comment, which is the only question asked here.
+#
+# Residuals, stated rather than discovered:
+#   - an `@AGENTS.md` inside a Markdown LINK TARGET still counts;
+#   - one inside a BLOCKQUOTE counts, and that is probably right — a blockquote
+#     is live prose in CommonMark and Claude Code strips only code spans and
+#     fences, so `> @AGENTS.md` plausibly IS an import. Left counting rather
+#     than guessed at.
+# The first is the permissive direction — it suppresses the hint rather than
+# raising a false one — and no realistic CLAUDE.md writes it.
+_imports_agents_md() {
+  awk '
+    # Length of the backtick run starting at pos, 0 if none.
+    function run(s, pos,   n) {
+      n = 0
+      while (substr(s, pos + n, 1) == "`") { n++ }
+      return n
+    }
+    # Leading indent in columns. A tab returns 4 so it can never open a fence.
+    function indent(s,   i, c, n) {
+      n = 0
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (c == " ") { n++ } else if (c == "\t") { return 4 } else { break }
+      }
+      return n
+    }
+    {
+      line = $0
+      from = 1
+
+      # 1. A code span already open from an earlier line closes on a run of
+      #    EXACTLY its own length. Until then every line is span content — a
+      #    fence marker inside one is content too, so this is checked first.
+      if (spanlen > 0) {
+        i = 1
+        closed = 0
+        while (i <= length(line)) {
+          if (substr(line, i, 1) == "`") {
+            n = run(line, i)
+            if (n == spanlen) { spanlen = 0; from = i + n; closed = 1; break }
+            i += n
+          } else { i++ }
+        }
+        if (!closed) { next }
+
+      # 1b. An HTML comment open from an earlier line. Claude Code strips
+      #     block-level comments before injecting, so an @AGENTS.md inside one
+      #     is not an import — and `<!-- TODO: add the @AGENTS.md import -->`
+      #     is a plausible thing to write, which then suppressed the hint that
+      #     exists to catch exactly that (panel round 6, adversarial).
+      } else if (incomment) {
+        i = index(line, "-->")
+        if (i == 0) { next }
+        incomment = 0
+        from = i + 3
+
+      # 2. Fences. At most THREE leading spaces — four makes it an indented code
+      #    block, which is not a fence, and treating it as one swallowed the
+      #    live import that followed. A fence closes only on a run of the same
+      #    character at least as long with nothing but blanks after it; an
+      #    opening fence may carry an info string (```markdown).
+      } else if (fence) {
+        bare = line
+        sub(/^[[:space:]]*/, "", bare)
+        if (indent(line) <= 3 && (substr(bare, 1, 3) == "```" || substr(bare, 1, 3) == "~~~")) {
+          ch = substr(bare, 1, 1)
+          n = 0
+          while (substr(bare, n + 1, 1) == ch) { n++ }
+          tail = substr(bare, n + 1)
+          sub(/[[:space:]]*$/, "", tail)
+          if (ch == fchar && n >= flen && tail == "") { fence = 0 }
+        }
+        next
+      } else {
+        bare = line
+        sub(/^[[:space:]]*/, "", bare)
+        ind = indent(line)
+        if (ind <= 3 && (substr(bare, 1, 3) == "```" || substr(bare, 1, 3) == "~~~")) {
+          fchar = substr(bare, 1, 1)
+          flen = 0
+          while (substr(bare, flen + 1, 1) == fchar) { flen++ }
+          fence = 1
+          next
+        }
+        # Four or more spaces is an INDENTED CODE BLOCK: content, not live
+        # prose, and its backticks open nothing. Scanning it as prose let an
+        # unterminated run open a span that then swallowed the live import
+        # below — the same defect as reading the line as a fence, reached the
+        # other way. Known limit, and the safe direction: a lazy paragraph
+        # continuation indented four spaces IS live in CommonMark, and is
+        # skipped here, so the hint fires on a file that does import.
+        if (ind >= 4) { next }
+      }
+
+      # 3. Whatever is left is live text with its code spans removed. A span is
+      #    delimited by runs of EQUAL length, so a ``double`` span is one span
+      #    and not two empty ones — the single-backtick regex this replaces read
+      #    ``@AGENTS.md`` as live prose and suppressed the hint. An unterminated
+      #    run opens a span that continues on the next line.
+      rest = substr(line, from)
+      live = ""
+      i = 1
+      while (i <= length(rest)) {
+        if (substr(rest, i, 1) == "`") {
+          n = run(rest, i)
+          j = i + n
+          closed = 0
+          while (j <= length(rest)) {
+            if (substr(rest, j, 1) == "`") {
+              m = run(rest, j)
+              if (m == n) { closed = 1; break }
+              j += m
+            } else { j++ }
+          }
+          if (closed) { live = live " "; i = j + n; continue }
+          spanlen = n
+          break
+        }
+        # An HTML comment, checked AFTER backticks so a `<!--` inside a code
+        # span stays span content — CommonMark parses code spans before inline
+        # HTML, and the templates here open with a comment on line 1.
+        #
+        # No apostrophe anywhere in this awk program: it is a single-quoted
+        # shell string, so one closes it and the next line becomes syntax. That
+        # is what happened when this comment first said "the repo" possessively
+        # — `sh -n` caught it, the suite reported 94 unrelated failures.
+        if (substr(rest, i, 4) == "<!--") {
+          j = index(substr(rest, i), "-->")
+          if (j == 0) { incomment = 1; break }
+          live = live " "
+          i = i + j + 2
+          continue
+        }
+        live = live substr(rest, i, 1)
+        i++
+      }
+      if (live ~ /(^|[^[:alnum:]])@AGENTS\.md([^[:alnum:]]|$)/) { found = 1; exit }
+    }
+    END { exit !found }
+  ' "$1"
+}
+
+# _seedable <path> — true when the target may be written: it is missing, or line
+# 1 opens an HTML comment whose FIRST TOKEN is one of the two markers.
+#
+# The precise property, because two looser versions of it shipped first and each
+# destroyed a real file with no backup, reported as `seeded`:
+#
+#   line 1 matches  <!--  [blanks]  <marker>  [blank or end]
+#
+# Both ends are anchored. The left alone was not enough — an HTML comment that
+# merely mentions a marker mid-sentence passed. The right needs the trailing
+# blank or `devkit-source: kit-ownership` matches by prefix.
+#
+# What this does NOT claim: prose can still qualify if someone writes a comment
+# that opens with the marker text. That shape is the marker — the documented way
+# to claim such a file is to delete line 1 — so it is the accepted case rather
+# than a residual hole. What is excluded is a comment that talks ABOUT the
+# convention, which is the shape an adopter actually writes.
+#
+# For AGENTS.md and CLAUDE.md the loose form was a REGRESSION, not an inherited
+# risk: before the kit shipped its own, AGENTS.md was seeded by ABSENCE — an
+# existing one was never touched whatever it contained — and CLAUDE.md had no
+# seeding path at all. The anchor keeps that property while letting the kit ship
+# both, and is applied to TEMPLATE_MARKER too: both markers flow through one
+# predicate, and leaving one loose would be the same bug with another literal.
+#
+# The failure direction is now "an oddly-formatted skeleton is not re-seeded",
+# which loses no data.
+# _opens_with_marker <rest-of-comment> <marker> — true when the comment's first
+# token IS the marker. Anchoring only the LEFT side (`<!--`) is not enough, and
+# that was this guard's second miss: `"<!--"*"$MARKER"*` still accepted
+#
+#   <!-- see the kit's devkit-source: kit-own convention for why this exists -->
+#
+# because the right side stayed an unanchored substring. Reproduced end-to-end by
+# the panel's adversarial lens, round 2 — a real file destroyed, no backup,
+# reported as `seeded`. The trailing `[[:space:]]*` arm is what stops
+# `devkit-source: kit-ownership` matching by prefix.
+#
+# LC_ALL=C, in a subshell so it is scoped to the comparison: `[[:space:]]` is
+# LOCALE-DEPENDENT, and nothing else here pins the locale. Under the UTF-8
+# locale a developer machine actually runs, the shell matched NBSP and U+2028
+# while kit_doctor's POSIX_BLANKS did not — so a marker line whose space had
+# been typo'd to NBSP (routine when text is pasted from a rich-text source) was
+# SEEDABLE to init.sh and "in use" to the doctor. init.sh would overwrite it and
+# the doctor would say nothing (panel round 7, adversarial, reproduced across
+# four locales). Pinning to C makes the two agree AND picks the safe side: an
+# odd blank now means "leave it alone" rather than "overwrite it".
+_opens_with_marker() {
+  (
+    LC_ALL=C
+    export LC_ALL
+    case "$1" in
+      "$2") exit 0 ;;
+      "$2"[[:space:]]*) exit 0 ;;
+    esac
+    exit 1
+  )
+}
+
+_seedable() {
+  # Missing is seedable; existing-but-not-a-regular-file never is. `[ -f ]`
+  # alone conflated the two: a DIRECTORY named AGENTS.md is not a regular file,
+  # so it read as missing, `mv` moved the rendered temp file INSIDE it, and the
+  # run reported `seeded AGENTS.md` having written nothing at that path (panel
+  # round 3, adversarial). A broken symlink lands here too, and is likewise left
+  # alone rather than silently replaced.
+  #
+  # A SYMLINK to a regular file resolves as one, so a link whose target opens
+  # with a marker is seedable — and `mv` then replaces the LINK with the
+  # rendered file. The link target is left byte-identical (mv rewrites the
+  # directory entry, it does not follow), so no content is lost; what is lost is
+  # the link relationship, and the run says only `seeded`. Disclosed rather than
+  # changed: it follows from "marker on line 1 means the kit owns this file",
+  # and refusing to seed through a link would be a new rule no review asked for.
+  if [ -e "$1" ] || [ -L "$1" ]; then
+    [ -f "$1" ] || return 1
+  else
+    return 0
+  fi
+  # Everything after line 1's opening `<!--`, leading blanks removed. Empty when
+  # line 1 does not open an HTML comment at all, which is the common case for a
+  # file the adopter wrote.
+  # LC_ALL=C for the same reason as `_opens_with_marker`: this `[[:space:]]` is
+  # locale-dependent too, and the two must strip the same characters the doctor
+  # strips.
+  _rest="$(head -n 1 "$1" 2>/dev/null | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p')"
+  [ -n "$_rest" ] || return 1
+  _opens_with_marker "$_rest" "$TEMPLATE_MARKER" && return 0
+  _opens_with_marker "$_rest" "$KIT_OWN_MARKER" && return 0
+  return 1
+}
 
 # _render <template> <target> — substitute the {{TOKENS}} and write.
 # awk (not sed) so a value containing / or & — a tracker URL, most obviously —
@@ -696,7 +985,7 @@ seed_doc() {
     echo "note: template $_tmpl missing — skipped $_target" >&2
     return 0
   fi
-  if [ -f "$_target" ] && ! head -n 1 "$_target" 2>/dev/null | grep -qF "$TEMPLATE_MARKER"; then
+  if ! _seedable "$_target"; then
     echo "$_target already in use — left untouched"
     return 0
   fi
@@ -920,8 +1209,9 @@ else
 fi
 set_field "review:" "" "^  bots:" "$bots_value"
 
-# ── seed narrative docs from templates ───────────────────────────────────
-# Rendered when the target is MISSING or its FIRST LINE carries the unrendered marker.
+# ── seed narrative docs and entry points from templates ──────────────────
+# Rendered when the target is MISSING, or its FIRST LINE opens an HTML comment
+# beginning with either marker — see `_seedable`.
 # The old "seed only if absent" guard could never fire: the kit ships these
 # files, so a copy-in / template-clone always landed them first and every
 # adopter was left with an unrendered skeleton.
@@ -971,11 +1261,28 @@ seed_doc "handoff" "$handoff_path"
 seed_doc "handoff-history" "$handoff_history_path"
 seed_doc "friction-log" "$friction_path"
 seed_doc "friction-log-archive" "$friction_archive_path"
-# The Codex-side entry point (#92): AGENTS.md is to Codex what CLAUDE.md is to
-# Claude. The kit ships no root AGENTS.md, so a fresh adopt seeds it from the
-# template; one an adopter is already using carries no marker and is never
-# touched — unlike an engine, the rendered file is the adopter's to extend.
+# The two runtime entry points (#92). AGENTS.md holds the contract; CLAUDE.md is
+# a thin binding that imports it, because Claude Code reads CLAUDE.md and NOT
+# AGENTS.md, and its `@path` import expands into context at session start. So one
+# file states the contract and both runtimes load it in full — the alternative,
+# a copy of the contract per runtime, is the fork `safety-critical-changes.md`
+# forbids and `#273` is filed about.
+#
+# Both are seeded, and both are reached by the kit-own marker rather than by
+# absence — see KIT_OWN_MARKER. An adopter's own file carries neither marker and
+# is never touched; unlike an engine, the rendered files are theirs to extend.
 seed_doc "AGENTS" "AGENTS.md"
+seed_doc "CLAUDE" "CLAUDE.md"
+
+# A CLAUDE.md the adopter was already using is left untouched, which is correct —
+# but then nothing pulls AGENTS.md into a Claude session, and the two runtimes
+# read different contracts. That is the exact divergence this pair exists to
+# prevent, reached through the guard that protects their file. Report it; never
+# edit their file to fix it.
+if [ -f CLAUDE.md ] && ! _imports_agents_md CLAUDE.md; then
+  echo "note: CLAUDE.md does not import AGENTS.md, and Claude Code reads CLAUDE.md only."
+  echo "      Add a line '@AGENTS.md' near its top so both runtimes read one contract."
+fi
 
 # ── .gitignore: state sandbox paths ───────────────────────────────────────
 

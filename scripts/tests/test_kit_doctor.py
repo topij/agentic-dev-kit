@@ -182,14 +182,133 @@ def test_marker_on_a_cr_delimited_first_line_is_still_detected(tmp_path):
     init.sh will seed straight over (panel round 3). Reading bytes keeps the two
     predicates on the same text."""
     root = _fake_repo(tmp_path)
+    # The fixture changed when init.sh's guard was anchored to the OPENING of
+    # line 1 (panel round 6). The old one — `# Title\r<!-- marker -->` — no
+    # longer discriminates: both predicates now correctly call it in use, since
+    # line 1 does not open with the marker comment under either reader.
+    #
+    # This one does. read_bytes ends line 1 at LF, as `head -n 1` does, so the
+    # whole file is line 1 and the CR after `<!--` is stripped as a blank,
+    # leaving the marker first — a skeleton. read_text translates the CR to a
+    # newline, ending line 1 at `<!--` alone, and reports the file in use while
+    # init.sh seeds straight over it.
     (root / "docs" / "handoff.md").write_bytes(
-        b"# Title\r<!-- devkit-template: unrendered -->\rbody\r"
+        b"<!--\rdevkit-template: unrendered -->\rbody\r"
     )
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 
     report = kit_doctor.inspect(root, _manifest({}), config)
 
     assert report.narrative_rendered["docs/handoff.md"] is False
+
+
+@pytest.mark.parametrize(
+    ("skeleton", "first_line"),
+    [
+        # The two shipped shapes.
+        (True, "<!-- devkit-template: unrendered — ./init.sh renders this. -->"),
+        (True, "<!-- devkit-source: kit-own — the kit's own entry point. -->"),
+        (True, "<!--   devkit-template: unrendered   -->"),
+        # No blank between the marker and `-->` — BOTH predicates reject this,
+        # verified against the shell rather than assumed. The shipped markers
+        # always carry a space, and the boundary that stops `kit-ownership`
+        # cannot also admit `kit-own-->`. Conservative direction: a hand-written
+        # tight marker is left alone rather than overwritten.
+        (False, "<!--devkit-source: kit-own-->"),
+        (True, "<!-- devkit-source: kit-own"),
+        # A CR after the marker is a blank to `sed` and the shell glob, so it
+        # must be one here. `" \t"` alone made the two disagree on a
+        # CR-delimited file.
+        (True, "<!-- devkit-source: kit-own\r-->"),
+        # Mentions, not markers — line 1 must OPEN with the marker comment.
+        (False, "Note: the kit marks its files `devkit-source: kit-own` on line 1."),
+        (False, "<!-- see the kit's devkit-source: kit-own convention -->"),
+        (False, "<!-- migration note: we dropped the devkit-template: unrendered line -->"),
+        # Prefix collision — the boundary after the marker is what stops it.
+        (False, "<!-- devkit-source: kit-ownership notes, ours -->"),
+        (False, "# CLAUDE.md — mine"),
+        (False, ""),
+        (False, "<!--"),
+    ],
+)
+def test_still_a_skeleton_matches_init_sh_s_rule(skeleton, first_line):
+    """The Python half of a predicate whose two halves have diverged three times:
+    round 2 anchored `init.sh` to line 1 and left this reading the whole file;
+    round 6 anchored `init.sh` to the opening comment and left this a bare
+    substring; the first fix for THAT compared the boundary with `" \\t"` while
+    `sed` uses `[[:space:]]`, which includes CR.
+
+    A disagreement is never cosmetic here — the doctor prescribes `run ./init.sh`
+    for a file `init.sh` will refuse to touch, or stays silent about one it will
+    overwrite. These shapes mirror `test_a_marker_quoted_in_prose_on_line_1_is_not_seedable`
+    on the shell side deliberately, so the two suites pin the same boundary."""
+    assert kit_doctor._still_a_skeleton(first_line) is skeleton
+
+
+@pytest.mark.parametrize("entry_point", ["AGENTS.md", "CLAUDE.md"])
+def test_a_kit_own_entry_point_is_reported_as_unrendered(tmp_path, entry_point):
+    """The round-6 HIGH: `/upgrade` Step 1 promises this check and `inspect()`
+    did not implement it, so a `cp -r` adopter whose `./init.sh` never completed
+    got a CLEAN report while both entry points still carried the kit's contract.
+
+    Mutation-checked rather than assumed — deleting the entry points from
+    `inspect()`'s target list left the whole suite green (panel round 7,
+    correctness), which is how the gap survived the round that fixed it."""
+    root = _fake_repo(tmp_path)
+    _write(root / entry_point, "<!-- devkit-source: kit-own — the kit's own -->\n# kit\n")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    report = kit_doctor.inspect(root, _manifest({}), config)
+
+    assert entry_point in report.narrative_rendered, (
+        f"{entry_point} is not even checked — `/upgrade` Step 1 says it is"
+    )
+    assert report.narrative_rendered[entry_point] is False
+
+
+@pytest.mark.parametrize("entry_point", ["AGENTS.md", "CLAUDE.md"])
+def test_an_adopters_own_entry_point_is_reported_in_use(tmp_path, entry_point):
+    """The control. Without it, a check that always reported False would satisfy
+    the test above while telling every adopter to re-run ./init.sh forever."""
+    root = _fake_repo(tmp_path)
+    _write(root / entry_point, "# ours, hand written\n")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    report = kit_doctor.inspect(root, _manifest({}), config)
+
+    assert report.narrative_rendered[entry_point] is True
+
+
+@pytest.mark.parametrize("shape", ["directory", "broken symlink", "unreadable"])
+def test_a_target_init_sh_will_not_touch_is_not_reported_as_unrendered(tmp_path, shape):
+    """`doc.is_file()` alone conflated three things with "missing", and only
+    missing warrants `run ./init.sh`.
+
+    A directory named AGENTS.md and a dangling symlink are both left alone by
+    `_seedable`, so telling the operator to run the command that will refuse them
+    is the no-op remedy round 2 removed. An unreadable file raised OSError out of
+    `read_bytes()` and aborted the ENTIRE report — thirty-two other files
+    undiagnosed because of one. Both found by the review bot on PR #289."""
+    root = _fake_repo(tmp_path)
+    target = root / "AGENTS.md"
+    if shape == "directory":
+        target.mkdir()
+    elif shape == "broken symlink":
+        target.symlink_to("no-such-file-9f2a.md")
+    else:
+        _write(target, "<!-- devkit-source: kit-own -->\n")
+        target.chmod(0o000)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    try:
+        report = kit_doctor.inspect(root, _manifest({}), config)
+    finally:
+        if shape == "unreadable":
+            target.chmod(0o644)
+
+    assert report.narrative_rendered["AGENTS.md"] is True
+    # The report still covers everything else — the point of not aborting.
+    assert "docs/handoff.md" in report.narrative_rendered
 
 
 def test_missing_manifest_entry_is_unknown_not_unchanged(tmp_path):

@@ -106,7 +106,8 @@ cp -r /path/to/agentic-dev-kit/. .
 ```
 
 `init.sh` stamps your answers into `config/dev-model.yaml`, renders the narrative
-docs and the root `AGENTS.md` entry point from `docs/templates/`, installs the
+docs and both root entry points — `AGENTS.md` and the `CLAUDE.md` that imports
+it — from `docs/templates/`, installs the
 pre-push hook, and adds four entries to `.gitignore` — `state/`, `.devkit_state_root`,
 `.claude/worktrees/` (isolated review lenses) and `reports/` (derived pipeline output).
 It adds a fifth, `.mcp.json`, **only** if that file exists and appears to hold literal
@@ -117,9 +118,12 @@ only `_`-separated names, so the hyphenated mixed-case shape the kit's own docs 
 (`"CF-Access-Client-Secret"`) is **not** detected and `.mcp.json` stays tracked
 ([#86](https://github.com/topij/agentic-dev-kit/issues/86), open). Do not rely on it —
 prefer `${ENV_VAR}` references so there is no literal to leak. It never overwrites a
-rendered doc that is already in use — only one whose **first line** still carries the
-shipped `devkit-template: unrendered` marker (or that is missing entirely). A doc
-that merely mentions the marker further down is in use, and is left alone.
+rendered doc that is already in use — only one that is missing entirely, or whose
+**first line opens an HTML comment beginning with** one of two markers: the shipped
+`devkit-template: unrendered` on a narrative skeleton, or `devkit-source: kit-own` on
+the kit's own root `AGENTS.md` / `CLAUDE.md`. A doc that merely *mentions* a marker —
+below line 1, or inside a line-1 comment that says anything else first — is in use, and
+is left alone.
 
 Ten minutes, start to finish. For a full worked example of a first session — from
 adoption through `wrap-up` — see **[`docs/getting-started.md`](docs/getting-started.md)**.
@@ -240,7 +244,7 @@ Each piece maps to one or more of the ten principles in
 |---|---|---|
 | `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan — read at session start, updated at session end. Older sessions sweep to the history file once it crosses a line budget. |
 | `docs/friction-log.md` + `docs/friction-log-archive.md` | #2 Friction flywheel | Append-only inbox for bugs and rough edges, triaged on a cadence: single incidents route down to your tracker, real patterns graduate up into a rule. |
-| `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above, plus the root `AGENTS.md` entry point for Codex-run adopters, on adopt or upgrade — never overwrites one already in use. |
+| `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above, plus both root entry points — `AGENTS.md` (the contract every runtime reads) and `CLAUDE.md` (which imports it, since Claude Code reads only the latter) — on adopt or upgrade. Never overwrites one already in use. |
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
 | `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, and `pr-watch`. |
 | `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the `--headless` JSON descriptor, the lane-contract preamble, the fan-out recipe. |

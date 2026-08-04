@@ -54,9 +54,12 @@ The report gives you, per kit-owned file: `unchanged` / `differs` / `missing` /
   the live breakage where every workflow's `<engine-dir>/…` reference points at nothing.
   Nothing else validates this value, so nothing else would have told you.
 - **pre-push hook installed** — a shipped-but-uninstalled hook binds nothing.
-- **narrative docs rendered** — a doc whose **first line** still carries
-  `devkit-template: unrendered` means the adoption never completed its seeding step. A
-  doc that merely quotes the marker further down is in use and is reported as such.
+- **narrative docs and entry points rendered** — a file whose **first line opens an HTML
+  comment beginning with** `devkit-template: unrendered` (a narrative skeleton) or
+  `devkit-source: kit-own` (a root `AGENTS.md` / `CLAUDE.md` that is still the kit's own)
+  means the adoption never completed its seeding step. A file that merely quotes a marker
+  — further down, or after other words inside a line-1 comment — is in use and is reported
+  as such.
 
 **What `differs` splits into depends on whether this repo has a *trusted* baseline.** A
 baseline is `kit-manifest.json` here recording what *this repo installed*, written by
@@ -108,8 +111,8 @@ The templates have to land **before** `init.sh` runs, not with the other file co
 them it prints `note: template … missing — skipped` and seeds nothing. For a repo whose
 narrative docs are already in use that is merely noise (they would have been left untouched
 anyway), but a **partially-adopted** repo missing one of the seeded docs would silently not
-get it seeded — including the root `AGENTS.md`, which on this upgrade path is how an existing
-adopter first receives one at all.
+get it seeded — including the root `AGENTS.md` and `CLAUDE.md`, which on this upgrade path is
+how an existing adopter first receives either at all.
 
 Note this is also why running `/tmp/agentic-dev-kit/init.sh` in place of the copy is *not*
 equivalent: every path it reads — the config, the templates — resolves against the working
@@ -119,8 +122,9 @@ directory, not against its own location, so it still needs the templates present
 It only ever **adds** missing keys, never guesses over an existing value; it probes
 `paths.engines` from where engines actually are rather than defaulting; it stamps
 `kit.version`; it installs the pre-push hook as a shim (honoring `core.hooksPath`); and
-it leaves a narrative doc that is genuinely in use byte-identical, re-rendering only one
-whose **first line** still carries the unrendered marker.
+it leaves a doc that is genuinely in use byte-identical, re-rendering only one whose
+**first line opens an HTML comment beginning with** the unrendered marker or the kit-own
+marker — the second covering a root `AGENTS.md` / `CLAUDE.md` that is still the kit's own.
 
 Press Enter through every prompt to keep current values. Then re-read the diff of
 `config/dev-model.yaml` and confirm nothing you rely on changed.

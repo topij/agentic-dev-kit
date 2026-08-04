@@ -11,8 +11,9 @@
 # named "install-hooks" should touch. On a repo whose narrative docs still
 # carry the `devkit-template: unrendered` marker on line 1 (an adopter who has
 # not yet claimed them) that seeding rewrites those docs; in this kit's own
-# repo, whose plan lives at docs/kit-*.md and is in use, it instead creates a
-# root AGENTS.md. Either way it is a side effect this target must not have.
+# repo, whose plan lives at docs/kit-*.md and is in use, it instead re-renders
+# the root AGENTS.md and CLAUDE.md, which carry the kit-own marker and so are
+# seedable here. Either way it is a side effect this target must not have.
 # So this target extracts and runs just the install_hooks()
 # function body straight out of init.sh — it always reflects init.sh's
 # current logic, never a stale/diverged copy — after resolving

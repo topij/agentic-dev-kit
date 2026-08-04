@@ -1,0 +1,22 @@
+<!-- Rendered from docs/templates/CLAUDE.md.tmpl by ./init.sh.
+     Unlike an engine, this file is MEANT TO BE EDITED — it is adopter-owned.
+     Keep it thin: it is the Claude *binding*, and the contract it imports is
+     the shared one. Anything you add below the import reaches Claude and not
+     your other runtimes, which is the right home only for genuinely
+     Claude-specific instructions. -->
+
+@AGENTS.md
+
+# Claude Code — {{PROJECT_NAME}}
+
+Claude Code reads `CLAUDE.md` and **not** `AGENTS.md`, so this file imports the
+contract rather than restating it: an `@path` import is expanded into context at
+session start, so the imported file arrives in full. One file states the
+contract and every runtime loads it — a per-runtime copy is a fork, and a fork
+drifts.
+
+Anything below this line is Claude-only. Anything that must reach every runtime
+belongs in [`AGENTS.md`](AGENTS.md).
+
+- Path-scoped rules in `.claude/rules/` bind **this runtime only**. Put nothing
+  there that a session on another runtime also needs.
