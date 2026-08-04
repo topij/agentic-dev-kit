@@ -14,12 +14,82 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-04 — **The kit could not hold its own entry points, and shipped one of
-them to every adopter.** `#288` fixed both halves. The durable result is the operator's
-standing goal that reframed the ranking — Codex as an equal-enough development environment —
-and a review record where the code converged early and the prose never did.
+Last updated: 2026-08-04 — **A workflow doc cannot host a safety-critical guard, because
+nothing executes it.** `/adopt` settled `#105` by *stopping* before the destructive step
+rather than guarding it. The durable result is `#297` and the reason it must exist.
 
-## Latest session — 2026-08-04 (the kit's own entry points, and a claim class that outlived the code)
+## Latest session — 2026-08-04 (the guard that could not live in a document)
+
+**Theme —** `/adopt`'s contract is *"never overwrite an existing file"*; `init.sh`'s
+`_seedable` deliberately renders over anything carrying a kit marker. Both are right, and
+this session connected them. The mechanisms built to make that safe — a
+backup-and-restore, a re-classify-and-diff, an advisory gate, a gate fused to the run —
+**each shipped a new way to destroy an adopter's file**. The scope was cut instead.
+
+- **`#105` — closed** (`1592380`, PR `#294`). `/adopt` stages the adoption and stops:
+  `docs/templates/` and `init.sh` in the copy list, the pre-push hook reaching the repo at
+  all, `config/*.local.yaml` gitignored before the PR opens, a stop when the adopter has
+  their own `init.sh`, and a handoff giving the operator the six seedable paths from *their*
+  config. A Codex adopter arriving via `/adopt` now gets an entry point.
+- **`/adopt` never runs `init.sh`.** The document carries no authored shell; the remaining
+  fenced blocks are single-line kit commands. That is the fix, not a limitation of it.
+- **Filed:** `#295`, `#296`, `#297`, `#298`; a fourth occurrence on `#270`.
+
+**Learned**
+
+- **Every guard written into a workflow doc is untested code.** No test, linter or CI runs
+  it — `make test` passes in full without touching a line. Each defect class found here
+  (locale-dependent marker match, staleness, 2-of-6 coverage, an unscoped `grep` resolving a
+  decoy path, a BSD-only `mktemp` building an empty-tree probe) was a predicate `init.sh`
+  already owns, restated and diverging on an input nobody could test. The only repair that
+  held was **deleting the restatement**. This is `#297`'s whole argument.
+- **A fix round's own output is the likeliest place for the next defect.** Repeatedly a
+  commit corrected one passage and left an adjacent one asserting the old thing — including
+  one whose message reasoned explicitly about the fact it then failed to apply next door.
+  The round-by-round record is on PR `#294`; it is not restated here.
+- **The panel's isolation contract has a second hole, and it is not `cp -R`.** A lens ran
+  `init.sh` against the live checkout because the tool's cwd resets to the repo root between
+  calls and `init.sh` acts on the *current directory*. It rendered over this repo's own
+  `AGENTS.md` and `CLAUDE.md` — seedable by design since `#288` — and touched
+  `config/dev-model.yaml`. Restored, and verified in the cockpit checkout
+  (`git status --short` clean, files byte-identical to `HEAD`, hook firing on a synthetic
+  `dev/*` push built with plumbing). `#270`, with the direction: a cockpit-side
+  before/after baseline, which was run for the last round and held.
+- **Nothing checks the review brief itself.** A lens found a diffstat in its own prompt that
+  I had never measured. Contract items govern what a lens reports, not whether what it was
+  told is true.
+- **I asserted verification I had not performed, more than once** — an end-to-end claim
+  whose fixtures excluded the dangerous input, and a consistency claim across four steps
+  from a diff that touched one. Both were caught by review, not by me. `#248`'s shape.
+
+**Decided this session (operator)**
+
+- **Ship the safe half; move the guarantee to `init.sh`.** After the fourth mechanism
+  failed, scope was cut to the parts carrying no predicate at all. `#297` carries the
+  no-clobber mode, where CI can hold it.
+- **CodeRabbit's original suggestion was right and I talked us out of it.** It proposed a
+  no-clobber mode on the first round; I declined it as forking the semantics `#288`
+  unified. A mode flag on one predicate is not a fork — two implementations of that
+  predicate is, and that is what I built instead.
+
+**Open, and owned by nothing yet**
+
+- **`#297` is the completion of this work**, not an optional follow-up: until it exists,
+  `/adopt` cannot seed anything and the operator runs `init.sh` by hand.
+- **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#285`, `#283`, `#287`, `#286`,
+  `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
+  `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`#297` — add `--no-clobber` to `init.sh`**, with tests in `scripts/tests/`. Read
+`#297`'s body first: it enumerates the nine findings that argue for it and records that a
+mode flag on `_seedable` is not the fork I mistook it for. `/adopt` passes it always;
+`init.sh` bare and `/upgrade` keep today's behaviour, where re-rendering a marker is
+correct. `#273` direction 1 was this session's inherited starter and is still undone — it
+was displaced deliberately, not dropped.
+
+______________________________________________________________________
+
+## Earlier session — 2026-08-04 (the kit's own entry points, and a claim class that outlived the code)
 
 **Theme —** `seed_doc` had two categories, a shipped skeleton and a file the adopter is using,
 and the kit's own entry points are a third. Both halves of `#288` followed: `CLAUDE.md` rode
@@ -266,97 +336,6 @@ would have missed the other's entire set including the MEDIUM. Read the two comm
 before proposing anything: `#120`, `#211` and `#209` share one evidence body and the issue says
 to weigh them together, which now covers five asks. Start from "none of directions 1–4 is
 ready" rather than from picking one.
-
-______________________________________________________________________
-
-## Earlier session — 2026-08-03 (the tracker gather, and a failure mode `#248` had not named)
-
-**Theme —** The shipped rule never changed after round one. Across **every** review round on
-`#260` and `#263`, each finding was in a claim written *about* the fix — and the dominant shape
-was not a drifted restatement but an inference presented as an observation, which `#248` does
-not currently describe. Both loops ended by **deleting** the claim that kept breaking rather
-than repairing it again.
-
-- **`#260` — `session-start`'s tracker gather gets a row limit** (`601a225`). Its PR bullet was
-  hardened in `e49ddf3`; the tracker bullet three lines below carried nothing, because
-  "field-limited" governs *which fields*, never *how many rows*. Field selection and the row
-  limit are separate controls, and the returned count is now suspect against **two** ceilings —
-  yours and the backend's.
-- **`#262` — the same gather in `parallel plan`** (`fd9506f`), by pointer rather than copy. A
-  truncation there does not shorten a briefing, it narrows the input to a set of isolated lanes,
-  and nothing downstream recovers the tickets past the cut.
-- **`#263` — prefer the backend's own has-more signal** (`56b42bf`). Row-count arithmetic is the
-  fallback, not the method. Evidence the previous PR could not have had: Linear at its schema
-  maximum answered `hasNextPage: true` — `#260`'s ceiling-equals-count case, reported outright
-  instead of inferred.
-- **`#258` — the handoff stops restating derived state** (`7546bdd`). The rule **replaced**
-  `wrap-up.md`'s "The invariant, not the figure" rather than joining it: that bullet is what
-  permitted the defect, since the stale line followed it exactly. This block is the rule's first
-  use.
-- **Filed:** `#264` (Jira's `nextPageToken` is an input, `endCursor` the output; the doc presents
-  them as symmetric with Linear's `cursor`), `#261` (filed and closed here), and **`CUS-1119`**
-  on cs-toolkit's own tracker. Occurrences on `#42`, `#44` (where a later comment retracts a fix
-  an earlier one proposed), `#143`, `#179`, `#248`.
-
-**Learned**
-
-- **The rule was never the defect.** Every finding was in the surrounding evidence — an untested
-  mechanism, a measurement that broke its own stated method, a citation to the wrong issue. What
-  ended both loops was removal: the byte-comparison row that drew defects in consecutive rounds
-  was cut rather than repaired again.
-- **`#248` may be named too narrowly.** Its framing is a restated fact drifting from its owner.
-  The dominant failure here was an **inference presented as an observation** — "ask for 500 and
-  you get 100" when both cited clients reject; "one field set across all three" when the template
-  rendered four of six. A restatement has a source to diff against; an untested assertion has
-  none, which is why nothing catches it. Both instances were found by a lens that **called the
-  tool** rather than read its schema. Enumerated on `#248`.
-- **The operator asking "is that actually true?" was the cheapest intervention available**, and
-  it fired on claims inherited from this repo's own archive — including "no MCP server is
-  configured in this checkout", which was false and was the premise of a whole paragraph.
-- **A rate-limited bot's stub carries the same commit-range marker as a real review.** On one PR
-  that marker sat beside a genuine clean review; on the next, beside "we couldn't start this
-  review". Zero review objects in both. The discriminator is the actionable-comments marker —
-  which `review.noise_markers` deliberately discards. `#44`.
-
-**Decided this session (operator)**
-
-- **Both `wrap-up` runtimes harmonize in one pass.** Nothing relies on cs-toolkit's Codex
-  `session-wrap-up` skill, so `#93`'s *compatibility* half is retired and the slug becomes a plain
-  rename. Its *content-recovery* half stands: those forked lines may hold knowledge the shared doc
-  lacks, so map before deleting.
-- **The "Filed this session" list stays.** An event is not a tally — the enumeration is
-  recoverable only by a dated tracker query; a count beside it is what recounts keep finding
-  wrong. Written into `wrap-up.md`'s rule.
-
-**cs-toolkit pre-flight — this changes the next step**
-
-Established by comparing `kit-manifest.json` against the live checkout, not assumed:
-
-- **`parallel.md` is not installed there**, so the standing "convert the `/parallel` adapter"
-  had no target to point at. Most of the manifest is likewise absent, including
-  `fallback-review-panel.md` and `safety-critical-changes.md` — sessions there have no panel
-  doctrine when a bot goes down.
-- **Its `session-start.md` is content-identical to kit `6bf4443` but byte-different** — a
-  markdown formatter reflowed tables and re-wrapped paragraphs. `kit_doctor` compares bytes, so
-  a formatter in an adopter makes kit-owned docs read as drifted permanently. Bears on `#51`.
-- **`CUS-1119`** — its `list_dev_backlog.py` caps at 40, does not page, and applies the cap
-  *before* filtering, against a Linear project whose size is on that ticket. The kit fix does not
-  reach it.
-
-**Open, and owned by nothing yet**
-
-- **Carried forward:** `#243` (still the precondition for the `triage-friction-log` /
-  `post-merge-systemize` conversions, not for `/parallel`), `#256`, `#248`, `#264`, `#236`,
-  `#231`, `#213`, `#167`, `#209`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`, `#124`, `#169`,
-  `#93`, `#143`.
-
-▶ Next: **cs-toolkit — install the shared workflows first, then convert `/parallel` and
-`/wrap-up` together.** Install at current `main`, not at whatever the repo last saw. Then
-`/parallel` (a ~200-line fork with its shared doc now present) and `/wrap-up` on **both**
-runtimes in one pass — `.claude/commands/wrap-up.md` and `.agents/skills/session-wrap-up/`,
-renaming that slug to `wrap-up`. Use the method `in-parallel-oy/cs-toolkit#1826` proved: map
-every section before deleting any, and contribute anything generic upstream first. Every
-conversion so far has found a kit bug the fork was hiding.
 
 ______________________________________________________________________
 
