@@ -926,24 +926,46 @@ def test_a_marker_quoted_in_prose_on_line_1_is_not_seedable(
             assert f"{target} already in use — left untouched" in result.stdout
 
 
-def test_a_non_regular_target_is_not_reported_as_seeded(tmp_path: Path) -> None:
+@pytest.mark.parametrize("target", ["AGENTS.md", "CLAUDE.md"])
+@pytest.mark.parametrize("shape", ["directory", "broken symlink"])
+def test_a_non_regular_target_is_not_reported_as_seeded(
+    tmp_path: Path, target: str, shape: str
+) -> None:
     """`[ -f ]` alone conflated "missing" with "exists but is not a regular
     file", so a DIRECTORY named AGENTS.md read as missing: `mv` moved the
     rendered temp file inside it and the run reported `seeded AGENTS.md` having
-    written nothing at that path. Found by the panel's adversarial lens, round 3,
-    with a live directory fixture.
+    written nothing at that path. Panel round 3, adversarial, live fixture.
 
-    No data was destroyed — this pins the false success message and the stray
-    temp file, which is what an adopter would act on."""
+    BOTH shapes, because they are pinned by different halves of the guard and
+    round 3 shipped only the first: `[ -e ]` catches the directory, `[ -L ]`
+    catches the broken symlink — `-e` follows the link and is FALSE for a
+    dangling one, so without the `-L` disjunct a broken symlink reads as missing
+    and is silently replaced, reported `seeded`. Round 4's adversarial lens
+    mutated `-L` away and the whole suite stayed green.
+
+    BOTH targets, because the guard is claimed to define "in use" identically
+    for every target while `CLAUDE.md` alone has target-specific logic nearby
+    (the `@AGENTS.md` import hint), so a future special-case there would not be
+    caught by an AGENTS.md-only fixture."""
     repo = _fixture(tmp_path, config=shipped_config(), templates=True)
-    (repo / "AGENTS.md").mkdir()
+    path = repo / target
+    if shape == "directory":
+        path.mkdir()
+    else:
+        path.symlink_to("no-such-target-9f2a.md")
+        assert path.is_symlink() and not path.exists()  # positive control: dangling
 
     result = _run_init(repo)
 
-    assert "seeded AGENTS.md" not in result.stdout
-    assert (repo / "AGENTS.md").is_dir()
-    strays = list((repo / "AGENTS.md").iterdir())
-    assert strays == [], f"render leaked a temp file into the directory: {strays}"
+    assert f"seeded {target}" not in result.stdout
+    assert f"{target} already in use — left untouched" in result.stdout
+    if shape == "directory":
+        assert path.is_dir()
+        strays = list(path.iterdir())
+        assert strays == [], f"render leaked a temp file into the directory: {strays}"
+    else:
+        assert path.is_symlink(), f"{target} was replaced — the broken symlink was overwritten"
+        assert not path.exists()
 
 
 @pytest.mark.parametrize("target", ["AGENTS.md", "CLAUDE.md"])
