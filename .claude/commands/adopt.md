@@ -222,7 +222,9 @@ So: tell the operator what to check, and let them run it.
 > docs and entry points that are **missing or unrendered**, leaving anything in use
 > byte-identical; installs the pre-push hook **unless a non-shim hook is already there**,
 > in which case it says so and leaves yours alone; and appends the kit's `.gitignore`
-> entries. Nothing else in this adoption does those things. Read what it prints — the
+> entries — all of them except `config/*.local.yaml`, which the adoption already added
+> because it could not wait for this step. Nothing else in the adoption seeds a doc,
+> installs the hook, or adds the rest of those ignores. Read what it prints — the
 > conditionals above are reported per file.
 >
 > Once it has run, move the adoption-friction entries from this PR's body into the seeded
