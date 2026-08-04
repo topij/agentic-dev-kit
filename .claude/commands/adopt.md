@@ -282,11 +282,10 @@ themselves from what it prints.**
   grep -l devkit-hook-shim "$hookdir/pre-push"   # it is the kit's shim, not a stray hook
   # strip surrounding quotes: `engines: "scripts/devkit"` is ordinary YAML, and an
   # unstripped quote makes the match below fail on a correctly-installed hook
-  # unscoped, like every `grep key:` here — sanity-check the value looks like your
-  # engines dir before trusting a mismatch. A wrong value fails visibly rather than
-  # destructively, which is why this one is not worth resolving properly.
-  eng="$(grep -E '^[[:space:]]+engines:' config/dev-model.yaml | awk '{print $2}' | tr -d "\"'")"
-  grep -o "$eng" "$hookdir/pre-push"             # and it targets the engines dir you chose
+  # substitute paths.engines as a LITERAL, the way Step 1 does. Do not grep for it:
+  # a bare `grep key:` is unscoped AND unbounded, so a same-named key anywhere else
+  # in the config yields a TWO-LINE value that silently corrupts everything downstream.
+  grep -o 'scripts/devkit' "$hookdir/pre-push"   # <-- your paths.engines, targeted by the shim
   ```
 
   `init.sh` refuses to replace a **non-shim** hook already at that path — it prints
@@ -301,8 +300,7 @@ themselves from what it prints.**
 
   ```sh
   [ -x "$hookdir/pre-push" ] || echo "*** not executable — git will not run it ***"
-  pre="$(grep -E '^[[:space:]]+dev_branch_prefix:' config/dev-model.yaml \
-         | awk '{print $2}' | tr -d "\"'")"
+  pre=dev            # <-- your vcs.dev_branch_prefix, as a LITERAL (see below)
   zero=0000000000000000000000000000000000000000
   out=$(printf 'refs/heads/%s/probe %s refs/heads/%s/probe %s\n' \
           "$pre" "$(git rev-parse HEAD)" "$pre" "$zero" \
@@ -322,11 +320,9 @@ themselves from what it prints.**
   working tree or on any branch changes:
 
   ```sh
-  # the CONFIGURED protected branch — hardcoding origin/main tests the wrong base,
-  # or fails outright, on a repo whose trunk is master/trunk/develop
-  prot="$(grep -E '^[[:space:]]+protected_branch:' config/dev-model.yaml \
-          | awk '{print $2}' | tr -d "\"'")"
-  prot="origin/${prot:-main}"
+  prot=origin/main   # <-- your vcs.protected_branch, as a LITERAL. Hardcoding `main`
+                     # here would test the wrong base on a trunk/master repo; so would
+                     # grepping for it, differently and more quietly.
   idx=$(mktemp -t adopt-probe)    # unique per run; a stale shared index yields a bad $probe
   trap 'rm -f "$idx"' EXIT
   b=$(printf 'probe\n' | git hash-object -w --stdin)
@@ -337,6 +333,17 @@ themselves from what it prints.**
 
   Feed `$probe` as the sha in the `printf` above. Exit 1 with the refusal message is the
   hook working.
+
+  **Every config value in this section is a literal you substitute, never a `grep`.** The
+  reason is measured, and it is not the one I first wrote here. A bare
+  `grep -E '^[[:space:]]+key:'` is unscoped *and* unbounded: with a same-named key
+  anywhere else in the config it returns **two lines**, and the variable becomes
+  `"decoyprefix\ndev"`. That corrupts the `printf` into three malformed refs, none
+  matching `refs/heads/<prefix>/*`, so the hook exits 0 and the `case` below reports
+  `did not fire` — **a false verdict on a hook that is working perfectly**, with a cause
+  the two fail-open notes do not cover. I had dismissed these three as "fails visibly
+  rather than destructively"; that was wrong for this one, and a lens disproved it by
+  running it.
 
   The `case` above is why the assertion matches the **message** and not just the exit
   code: a non-zero status can equally mean the hook is missing, not executable, or broke
