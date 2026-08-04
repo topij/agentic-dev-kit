@@ -668,6 +668,36 @@ KIT_OWN_MARKER="devkit-source: kit-own"
 # FIRST LINE carries either marker. Line 1 only, for both, for the reason the
 # TEMPLATE_MARKER comment above gives: matching anywhere let an in-use file that
 # merely QUOTED a marker in prose be destroyed with no backup.
+# _imports_agents_md <path> — true when the file carries an ACTIVE `@AGENTS.md`
+# import: one outside fenced code blocks and inline code spans. Claude Code does
+# not evaluate import syntax inside either, so a CLAUDE.md that merely DOCUMENTS
+# the convention in backticks — which docs/templates/CLAUDE.md.tmpl does, and
+# which any adopter writing about it would — does not load the shared contract
+# and must not read as though it does.
+#
+# This is the TEMPLATE_MARKER class again, one function over: that guard's first
+# version matched the marker anywhere in the body, so a file quoting it in prose
+# was treated as pristine and silently overwritten. That one was caught by a
+# review lens; this one by the review bot, in the PR that re-documented it.
+#
+# Residual, stated rather than discovered: an `@AGENTS.md` inside a Markdown link
+# target still counts. It is the permissive direction — it would suppress the
+# hint, not raise a false one — and no realistic CLAUDE.md links to it that way.
+_imports_agents_md() {
+  awk '
+    /^[[:space:]]*(```|~~~)/ { fence = !fence; next }
+    fence { next }
+    {
+      line = $0
+      while (match(line, /`[^`]*`/)) {
+        line = substr(line, 1, RSTART - 1) " " substr(line, RSTART + RLENGTH)
+      }
+      if (line ~ /(^|[^[:alnum:]])@AGENTS\.md([^[:alnum:]]|$)/) { found = 1; exit }
+    }
+    END { exit !found }
+  ' "$1"
+}
+
 _seedable() {
   [ -f "$1" ] || return 0
   _first="$(head -n 1 "$1" 2>/dev/null)"
@@ -1027,7 +1057,7 @@ seed_doc "CLAUDE" "CLAUDE.md"
 # read different contracts. That is the exact divergence this pair exists to
 # prevent, reached through the guard that protects their file. Report it; never
 # edit their file to fix it.
-if [ -f CLAUDE.md ] && ! grep -qF "@AGENTS.md" CLAUDE.md; then
+if [ -f CLAUDE.md ] && ! _imports_agents_md CLAUDE.md; then
   echo "note: CLAUDE.md does not import AGENTS.md, and Claude Code reads CLAUDE.md only."
   echo "      Add a line '@AGENTS.md' near its top so both runtimes read one contract."
 fi

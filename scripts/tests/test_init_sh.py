@@ -895,6 +895,49 @@ def test_an_in_use_claude_md_without_the_import_is_reported(tmp_path: Path) -> N
     assert (repo / "CLAUDE.md").read_text(encoding="utf-8") == "# CLAUDE.md — mine\n"
 
 
+@pytest.mark.parametrize(
+    ("label", "body"),
+    [
+        ("code span", "# mine\n\nAdd `@AGENTS.md` near the top to import the contract.\n"),
+        ("fenced block", "# mine\n\n```markdown\n@AGENTS.md\n```\n"),
+        ("tilde fence", "# mine\n\n~~~\n@AGENTS.md\n~~~\n"),
+        ("longer name", "# mine\n\n@AGENTS.mdx\n"),
+    ],
+)
+def test_an_inactive_agents_import_does_not_suppress_the_hint(
+    tmp_path: Path, label: str, body: str
+) -> None:
+    """Claude Code does not evaluate import syntax inside Markdown code spans or
+    fenced code blocks, so an `@AGENTS.md` in either is NOT an import and the
+    file does not load the shared contract.
+
+    A substring match read all four of these as importing and stayed silent —
+    the TEMPLATE_MARKER "quotes it in prose" class, one function over, found by
+    the review bot on this PR. `docs/templates/CLAUDE.md.tmpl` contains the code-
+    span form itself, so this is the shipped shape and not a contrived one."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    (repo / "CLAUDE.md").write_text(body, encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert "does not import AGENTS.md" in result.stdout, (
+        f"an @AGENTS.md in a {label} was read as an active import"
+    )
+
+
+def test_an_active_agents_import_suppresses_the_hint(tmp_path: Path) -> None:
+    """The other direction, so the test above cannot pass by the hint always
+    firing — which it would if `_imports_agents_md` simply returned false."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    (repo / "CLAUDE.md").write_text(
+        "# mine\n\n@AGENTS.md\n\nSee `@AGENTS.md` above.\n", encoding="utf-8"
+    )
+
+    result = _run_init(repo)
+
+    assert "does not import AGENTS.md" not in result.stdout
+
+
 # --------------------------------------------------------------------------- #
 # .gitignore appends
 # --------------------------------------------------------------------------- #
