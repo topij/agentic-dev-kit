@@ -996,6 +996,43 @@ def test_seeding_through_a_symlink_replaces_the_link_not_its_target(tmp_path: Pa
     assert "canonical, shared" not in (repo / "AGENTS.md").read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize("blank", [" ", " ", "　"])
+def test_a_unicode_blank_beside_the_marker_does_not_make_it_seedable(
+    tmp_path: Path, blank: str
+) -> None:
+    """`[[:space:]]` is LOCALE-DEPENDENT, and nothing here pins the locale by
+    default. Under the UTF-8 locale a developer machine actually runs, the shell
+    matched these while `kit_doctor`'s `POSIX_BLANKS` did not — so a marker line
+    whose space had been typo'd to NBSP was seedable to init.sh and "in use" to
+    the doctor: init.sh would overwrite it and the doctor would say nothing.
+    Panel round 7, adversarial, reproduced across four locales.
+
+    Runs under an explicitly UTF-8 environment, because that is the case that
+    failed; under LC_ALL=C it would pass even with the pin removed."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    original = f"<!--{blank}{kit_own_marker()} -->\n# ours, must survive\n"
+    (repo / "CLAUDE.md").write_text(original, encoding="utf-8")
+
+    env = _env(repo.parent)
+    env["LC_ALL"] = "en_US.UTF-8"
+    env["LANG"] = "en_US.UTF-8"
+    result = subprocess.run(
+        ["sh", "init.sh"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=env,
+    )
+
+    assert (repo / "CLAUDE.md").read_text(encoding="utf-8") == original, (
+        "a Unicode blank beside the marker made the file seedable under a UTF-8 "
+        "locale — init.sh and kit_doctor then disagree about whether it is in use"
+    )
+    assert "CLAUDE.md already in use — left untouched" in result.stdout
+
+
 @pytest.mark.parametrize("target", ["AGENTS.md", "CLAUDE.md"])
 def test_the_real_marker_comment_is_still_seedable(tmp_path: Path, target: str) -> None:
     """The control for the test above. Without it, a `_seedable` that simply

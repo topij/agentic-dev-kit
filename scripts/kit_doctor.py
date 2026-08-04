@@ -254,17 +254,27 @@ ADOPTER_OWNED: tuple[str, ...] = (
 # correctly left it alone.
 SEED_MARKERS: tuple[str, ...] = ("devkit-template: unrendered", "devkit-source: kit-own")
 
-# `[[:space:]]` in the C locale — what `sed` and the shell's case glob match.
+# `[[:space:]]` in the C locale. That class is LOCALE-DEPENDENT in the shell, so
+# `init.sh` pins `LC_ALL=C` at both places it uses one — without that, a UTF-8
+# locale made the shell match NBSP and U+2028 where this does not, and the two
+# predicates disagreed about a file `init.sh` would overwrite (panel round 7).
+# If that pin is ever removed, this set stops describing the other side.
 POSIX_BLANKS = " \t\n\v\f\r"
 
 
 def _still_a_skeleton(first_line: str) -> bool:
     """True when line 1 opens an HTML comment whose first token is a seed marker.
 
-    Mirrors `init.sh`'s `_seedable`: `<!--`, optional blanks, the marker, then a
-    blank or the end. Prose that merely mentions a marker does not qualify, and
-    neither does `devkit-source: kit-ownership` — the boundary is what stops a
-    prefix match.
+    `<!--`, optional blanks, the marker, then a blank or the end. Prose that
+    merely mentions a marker does not qualify, and neither does
+    `devkit-source: kit-ownership` — the boundary is what stops a prefix match.
+
+    **This MUST agree with `init.sh`'s `_seedable` on every input**, and they are
+    two independent implementations in two languages held together by this
+    sentence and by matched test shapes — not by shared code. They have diverged
+    three times; see SEED_MARKERS for the account. A disagreement is never
+    cosmetic: the doctor then prescribes `run ./init.sh` for a file `init.sh`
+    will refuse to touch, or stays silent about one it will overwrite.
     """
     if not first_line.startswith("<!--"):
         return False

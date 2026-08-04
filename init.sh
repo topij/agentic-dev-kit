@@ -874,12 +874,26 @@ _imports_agents_md() {
 # the panel's adversarial lens, round 2 — a real file destroyed, no backup,
 # reported as `seeded`. The trailing `[[:space:]]*` arm is what stops
 # `devkit-source: kit-ownership` matching by prefix.
+#
+# LC_ALL=C, in a subshell so it is scoped to the comparison: `[[:space:]]` is
+# LOCALE-DEPENDENT, and nothing else here pins the locale. Under the UTF-8
+# locale a developer machine actually runs, the shell matched NBSP and U+2028
+# while kit_doctor's POSIX_BLANKS did not — so a marker line whose space had
+# been typo'd to NBSP (routine when text is pasted from a rich-text source) was
+# SEEDABLE to init.sh and "in use" to the doctor. init.sh would overwrite it and
+# the doctor would say nothing (panel round 7, adversarial, reproduced across
+# four locales). Pinning to C makes the two agree AND picks the safe side: an
+# odd blank now means "leave it alone" rather than "overwrite it".
 _opens_with_marker() {
-  case "$1" in
-    "$2") return 0 ;;
-    "$2"[[:space:]]*) return 0 ;;
-  esac
-  return 1
+  (
+    LC_ALL=C
+    export LC_ALL
+    case "$1" in
+      "$2") exit 0 ;;
+      "$2"[[:space:]]*) exit 0 ;;
+    esac
+    exit 1
+  )
 }
 
 _seedable() {
@@ -905,7 +919,10 @@ _seedable() {
   # Everything after line 1's opening `<!--`, leading blanks removed. Empty when
   # line 1 does not open an HTML comment at all, which is the common case for a
   # file the adopter wrote.
-  _rest="$(head -n 1 "$1" 2>/dev/null | sed -n 's/^<!--[[:space:]]*//p')"
+  # LC_ALL=C for the same reason as `_opens_with_marker`: this `[[:space:]]` is
+  # locale-dependent too, and the two must strip the same characters the doctor
+  # strips.
+  _rest="$(head -n 1 "$1" 2>/dev/null | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p')"
   [ -n "$_rest" ] || return 1
   _opens_with_marker "$_rest" "$TEMPLATE_MARKER" && return 0
   _opens_with_marker "$_rest" "$KIT_OWN_MARKER" && return 0
