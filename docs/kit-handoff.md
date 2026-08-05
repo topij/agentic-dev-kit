@@ -73,10 +73,9 @@ somebody else's filesystem or config, restated where nothing can execute the res
 - **`#297` is still the unbuilt half of `#105`** — it was this session's inherited starter
   and was displaced, not dropped.
 - **The closing-keyword check that works is a scratchpad script, not something this repo
-  runs.** It pairs each keyword with the next reference *anywhere* after it rather than on one
-  line; it then caught the same shape in a PR body before merge, and again in a panel
-  report. Landing it belongs
-  with the friction entry, not inside a fix round.
+  runs** — `#308`, with the draft's evidence. `#309` and `#310` were routed the same way:
+  straight to the tracker rather than parked, because each already had a reproduction, a
+  mechanism and a fix. `#310` is why they were parked in the first place.
 - **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#285`, `#283`, `#287`, `#286`,
   `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
   `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
