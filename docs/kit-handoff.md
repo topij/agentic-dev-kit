@@ -33,7 +33,8 @@ somebody else's filesystem or config, restated where nothing can execute the res
 - **`#302`** — settled in PR `#306`. The trigger matched its phrase anywhere in a command, so
   anything quoting it mandated a non-terminating watch loop for a PR that did not exist.
   `tool_response` is now the discriminator; the command only selects candidates.
-- **Filed this session:** `#304`, `#305`. A further occurrence on `#270`.
+- **Filed this session:** `#304`, `#305`, and — routed straight from the wrap-up inbox
+  rather than parked — `#308`, `#309`, `#310`. A further occurrence on `#270`.
 
 **Learned**
 
