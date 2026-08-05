@@ -33,8 +33,9 @@ somebody else's filesystem or config, restated where nothing can execute the res
 - **`#302`** — settled in PR `#306`. The trigger matched its phrase anywhere in a command, so
   anything quoting it mandated a non-terminating watch loop for a PR that did not exist.
   `tool_response` is now the discriminator; the command only selects candidates.
-- **Filed this session:** `#304`, `#305`, and — routed straight from the wrap-up inbox
-  rather than parked — `#308`, `#309`, `#310`. A further occurrence on `#270`.
+- **Filed this session:** `#304`, `#305`, `#310` — written straight to the tracker; and
+  `#308`, `#309` — routed out of the wrap-up inbox rather than left parked there.
+  A further occurrence on `#270`.
 
 **Learned**
 
@@ -74,9 +75,9 @@ somebody else's filesystem or config, restated where nothing can execute the res
 - **`#297` is still the unbuilt half of `#105`** — it was this session's inherited starter
   and was displaced, not dropped.
 - **The closing-keyword check that works is a scratchpad script, not something this repo
-  runs** — `#308`, with the draft's evidence. `#309` and `#310` were routed the same way:
-  straight to the tracker rather than parked, because each already had a reproduction, a
-  mechanism and a proposed repair. `#310` is why they were parked to begin with.
+  runs** — `#308`, with the draft's evidence. It and `#309` came out of the inbox, because
+  each already had a reproduction, a mechanism and a proposed repair. `#310` is the write-up
+  of why they were parked at all, and was never an inbox entry itself.
 - **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#285`, `#283`, `#287`, `#286`,
   `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
   `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
