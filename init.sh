@@ -1021,13 +1021,26 @@ register_pr_hook() {
     return 0
   fi
 
-  if [ -e .codex/hooks.json ]; then
+  # `.codex` existing as a NON-DIRECTORY aborts the whole bootstrap: `mkdir -p`
+  # fails, and init.sh runs under `set -eu`, so the run dies mid-function before
+  # the Claude check and the closing banner. init.sh's own usage says "safe to
+  # re-run at any time"; this guard keeps that true.
+  if [ -e .codex ] && [ ! -d .codex ]; then
+    echo "note: .codex exists and is not a directory — cannot register the PR"
+    echo "      follow-through hook for Codex. Resolve by hand, then re-run."
+  elif [ -e .codex/hooks.json ]; then
     # Existence is not registration. A .codex/hooks.json the adopter already had
     # for something else leaves this hook unwired, and reporting only "left
     # untouched" tells them nothing is wrong. Same content check the Claude
     # branch below does — the two branches differ in whether the kit may WRITE
     # the file, not in whether it checks what is in it.
-    if grep -q pr_followup_hook .codex/hooks.json 2>/dev/null; then
+    if [ ! -r .codex/hooks.json ]; then
+      # `grep` fails the same way on "absent" and "unreadable", which would
+      # report a registered hook as missing and send the operator to add a
+      # duplicate. Say what is actually known instead.
+      echo "note: .codex/hooks.json is not readable — cannot tell whether the PR"
+      echo "      follow-through hook is registered. Check it by hand."
+    elif grep -q pr_followup_hook .codex/hooks.json 2>/dev/null; then
       echo ".codex/hooks.json already registers the PR follow-through hook"
     else
       echo "note: .codex/hooks.json exists but does NOT register the PR follow-through"
@@ -1057,8 +1070,9 @@ register_pr_hook() {
 }
 CODEXHOOK
     echo "seeded .codex/hooks.json (PR follow-through hook, --runtime codex)"
-    echo "  note: Codex requires the operator to trust a project hook via /hooks"
-    echo "        before it runs. Until then it is registered but inert."
+    echo "  note: per Codex's documented trust model, a project hook must be"
+    echo "        trusted via /hooks before it runs — until then this is"
+    echo "        registered but inert. Not yet confirmed against a live run."
   fi
 
   if [ -f .claude/settings.json ] && grep -q pr_followup_hook .claude/settings.json 2>/dev/null; then

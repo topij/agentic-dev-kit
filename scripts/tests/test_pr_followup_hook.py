@@ -637,3 +637,75 @@ def test_lens_compute_never_leaks_across_runtimes():
 
     assert module._lens_compute_phrase({}, _Kit, "claude") != ""
     assert module._lens_compute_phrase({}, _Kit, "codex") == ""
+
+# ── the two mutation survivors the #303 panel found ─────────────────────────
+# Both are on the exact lines this change exists to fix, and both survived the
+# whole suite: the pieces were tested, the WIRING was not.
+
+
+def test_main_threads_the_parsed_runtime_all_the_way_to_the_reminder(monkeypatch, capsys):
+    """Kills: `build_reminder(runtime)` reverted to `build_reminder()` in main().
+
+    Every other test either calls `main()` without touching argv, or calls
+    `build_reminder(runtime)` directly — so `--runtime` could be parsed and then
+    silently dropped, and nothing noticed."""
+    hook = _load_hook()
+    monkeypatch.setattr(
+        hook,
+        "_load_review_config",
+        lambda runtime="claude": ([], f"/{runtime}-sentinel", "scripts", [], "src", ""),
+    )
+    monkeypatch.setattr("sys.argv", ["pr_followup_hook.py", "--runtime", "codex"])
+    monkeypatch.setattr("sys.stdin", io.StringIO(_payload("gh pr create")))
+
+    assert hook.main() == 0
+    emitted = json.loads(capsys.readouterr().out)["hookSpecificOutput"]["additionalContext"]
+    assert "/codex-sentinel" in emitted
+    assert "/claude-sentinel" not in emitted
+
+
+def test_load_review_config_reads_the_key_for_the_runtime_it_was_given(monkeypatch, tmp_path):
+    """Kills: the f-string reverted to the literal `review.fallback_commands.claude`.
+
+    The sibling runtime test monkeypatches `_load_review_config` away, so the real
+    function body — the thing that was hardcoded before #301 — had no coverage."""
+    hook = _load_hook()
+    hook._load_review_config()  # prime the kitconfig import
+    import kitconfig  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        kitconfig,
+        "load_config",
+        lambda *_a, **_k: {
+            "review": {
+                "bots": ["b"],
+                "fallback_commands": {"claude": "/claude-cmd", "codex": "/codex-cmd"},
+            }
+        },
+    )
+    assert hook._load_review_config("codex")[1] == "/codex-cmd"
+    assert hook._load_review_config("claude")[1] == "/claude-cmd"
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--runtime"],                      # trailing flag, no value
+        ["--runtime="],                     # empty value
+        ["--runtime", "--codex"],           # value is itself a flag
+        ["--runtime", "c\u00f6dex"],         # unicode near-miss
+        ["--runtime", "fallback_commands"], # a real config key, wrong slot
+    ],
+)
+def test_malformed_runtime_degrades_to_the_default_rather_than_a_missing_key(argv):
+    """Every malformed shape resolves to the default. That is the documented
+    choice — but it means a malformed CODEX invocation renders CLAUDE's values,
+    the leakage class #301 exists to close, reached through a different door.
+    Pinned here so a future change to that trade-off is deliberate."""
+    module = _load_hook()
+    assert module._runtime_from_argv(argv) == "claude"
+
+
+def test_first_runtime_flag_wins_when_repeated():
+    module = _load_hook()
+    assert module._runtime_from_argv(["--runtime", "codex", "--runtime", "claude"]) == "codex"

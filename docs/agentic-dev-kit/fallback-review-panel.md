@@ -58,16 +58,22 @@ it sees no change.
 **Each runtime reaches its own key by its own path**, and the key is inert until
 that path exists — so if you add a runtime here, give it one.
 
-- **Claude Code** — `scripts/hooks/pr_followup_hook.py` reads
-  `lens_compute.claude` and renders it into the reminder it fires when a PR is
-  opened or readied. It reads *only* that key: a value written for another
-  runtime must never leak into this one's instruction.
-- **Codex** — `.agents/skills/pr-watch/SKILL.md` step 5 names
-  `lens_compute.codex`, the same way it names `review.fallback_commands`. No
-  Python or shell reads either; the adapter is the consumer.
+`scripts/hooks/pr_followup_hook.py` reads `lens_compute.<runtime>` and renders it
+into the reminder it fires when a PR is opened or readied. **Which runtime it
+reads is passed to it**, `--runtime claude|codex`, by whichever registration
+invoked it — `.claude/settings.json` or `.codex/hooks.json`. It reads *only* the
+key for that runtime: an absent key yields no clause, and a value written for the
+other runtime never leaks into this one's instruction.
 
-Do not go looking in the hook for why a non-Claude key had no effect — by design
-it will never mention one.
+`.agents/skills/pr-watch/SKILL.md` step 5 also names `lens_compute.codex`, the way
+it names `review.fallback_commands` — so on Codex the key has two consumers, the
+adapter and the hook, and they must agree.
+
+This paragraph previously said no Python or shell read the Codex key and told you
+not to look in the hook for a non-Claude key. That was true until `#301` wired the
+hook onto Codex. It is recorded rather than quietly replaced because the sentence
+was confidently wrong for exactly as long as it took someone to change the code
+underneath it.
 
 **The two keys do not reach equally far, and the difference is per-runtime.** On
 Claude Code today the delegation tool takes a `model` parameter but no per-agent
