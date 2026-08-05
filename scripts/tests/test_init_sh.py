@@ -1672,7 +1672,9 @@ def test_the_advisory_matches_the_registrations_it_describes(tmp_path: Path) -> 
     claude_hook = next(
         h for h in claude_entry["hooks"] if "pr_followup_hook" in h.get("command", "")
     )
-    codex_hook = codex_entry["hooks"][0]
+    codex_hook = next(
+        h for h in codex_entry["hooks"] if "pr_followup_hook" in h.get("command", "")
+    )
 
     result = _run_init(_with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True)))
 
