@@ -52,7 +52,19 @@ def _run(module: ModuleType, monkeypatch, capsys, stdin_text: str) -> tuple[int,
 
 
 def _payload(command: str) -> str:
+    """No `tool_response` — the shape every pre-#302 test used, and the one that
+    still fires unconditionally because nothing readable settles it."""
     return json.dumps({"tool_input": {"command": command}})
+
+
+def _payload_with(command: str, stdout: str = "", stderr: str = "") -> str:
+    """The real PostToolUse shape: what the tool reported alongside the command."""
+    return json.dumps(
+        {
+            "tool_input": {"command": command},
+            "tool_response": {"stdout": stdout, "stderr": stderr, "interrupted": False},
+        }
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -748,3 +760,134 @@ def test_load_review_config_threads_the_runtime_into_lens_compute_too(monkeypatc
     claude_clause = hook._load_review_config("claude")[5]
     assert "claude-sentinel-model" in claude_clause
     assert "codex-sentinel-effort" not in claude_clause
+
+
+# ── #302: the command selects candidates, the response decides ───────────────
+# Every shape below was observed live, firing a MANDATORY watch-loop mandate
+# with zero open PRs. Two are self-referential: one is the commit that documented
+# the bug, the other is a review lens that had never heard of it.
+
+_MENTIONS = [
+    pytest.param(
+        'python3 -c \'print("run gh pr create when ready")\'',
+        "run gh pr create when ready\n",
+        id="echoes_the_phrase",
+    ),
+    pytest.param(
+        "grep -rn 'gh pr create' scripts/",
+        "scripts/hooks/pr_followup_hook.py:58:  gh pr create\n",
+        id="greps_for_the_phrase",
+    ),
+    pytest.param(
+        "uv run pytest -k 'gh pr ready' -q",
+        "1 passed in 0.4s\n",
+        id="a_test_selector_naming_it",
+    ),
+    pytest.param(
+        'git commit -m "note that gh pr create fires this hook"',
+        "[main abc1234] note that gh pr create fires this hook\n",
+        id="a_commit_message_documenting_it",
+    ),
+    pytest.param(
+        "gh pr create --help",
+        "Create a pull request on GitHub.\nUSAGE\n  gh pr create [flags]\n",
+        id="reading_its_own_help",
+    ),
+]
+
+
+@pytest.mark.parametrize("command,stdout", _MENTIONS)
+def test_a_command_that_merely_mentions_the_phrase_stays_silent(
+    monkeypatch, capsys, command, stdout
+):
+    hook = _load_hook()
+    exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stdout=stdout))
+
+    assert exit_code == 0
+    assert out == "", f"spurious mandate for a command that only mentions it: {command}"
+
+
+def test_a_real_pr_create_still_fires_on_the_url_it_printed(monkeypatch, capsys):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(
+            "gh pr create --title x --body y",
+            stdout="https://github.com/topij/agentic-dev-kit/pull/306\n",
+        ),
+    )
+
+    assert exit_code == 0
+    assert "MANDATORY" in json.loads(out)["hookSpecificOutput"]["additionalContext"]
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        'Pull request topij/agentic-dev-kit#306 is marked as "ready for review"\n',
+        # idempotent re-run: a real PR still exists, so the reminder is still owed
+        'Pull request topij/agentic-dev-kit#306 is already "ready for review"\n',
+    ],
+    ids=["marked_ready", "already_ready"],
+)
+def test_pr_ready_fires_on_its_stderr_ack_since_it_prints_no_url(monkeypatch, capsys, stderr):
+    """`gh pr ready` emits no URL — established from `gh`'s source, not assumed.
+    Its confirmation goes to stderr, so the URL check alone would miss it."""
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook, monkeypatch, capsys, _payload_with("gh pr ready 306", stderr=stderr)
+    )
+
+    assert exit_code == 0
+    assert "MANDATORY" in json.loads(out)["hookSpecificOutput"]["additionalContext"]
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        pytest.param(None, id="absent"),
+        pytest.param({}, id="empty_dict"),
+        pytest.param("", id="empty_string"),
+        pytest.param({"stdout": "", "stderr": ""}, id="captured_nothing"),
+    ],
+)
+def test_an_unreadable_response_fires_rather_than_risking_a_missed_reminder(
+    monkeypatch, capsys, response
+):
+    """The direction stays fail-loud where the payload cannot settle it.
+
+    `captured_nothing` is the load-bearing case: a runtime that does not capture
+    stderr makes a real `gh pr ready` look exactly like a command that printed
+    nothing, and a missed reminder costs the follow-through this hook exists to
+    guarantee.
+    """
+    hook = _load_hook()
+    payload = {"tool_input": {"command": "gh pr create --fill"}}
+    if response is not None:
+        payload["tool_response"] = response
+
+    exit_code, out = _run(hook, monkeypatch, capsys, json.dumps(payload))
+
+    assert exit_code == 0
+    assert "MANDATORY" in json.loads(out)["hookSpecificOutput"]["additionalContext"]
+
+
+def test_a_response_that_cannot_be_serialised_is_treated_as_unreadable(monkeypatch, capsys):
+    hook = _load_hook()
+    # a dict pytest can build but json cannot render — unreadable, so fail loud
+    assert hook.should_fire("gh pr create", None) is True
+    assert hook._response_text({"tool_response": {"k": {1, 2}}}) is None
+
+
+def test_should_fire_needs_the_command_first_whatever_the_response_says(monkeypatch, capsys):
+    """A PR URL in the output of an unrelated command must not fire it."""
+    hook = _load_hook()
+    assert (
+        hook.should_fire(
+            "gh pr view 306", "https://github.com/topij/agentic-dev-kit/pull/306"
+        )
+        is False
+    )
+    assert hook.should_fire(None, "https://github.com/x/y/pull/1") is False

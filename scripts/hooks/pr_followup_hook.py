@@ -33,7 +33,9 @@ Cron-safe: a no-op when `JOB_NAME` is set (the kit's own cron/CI signal — see
 `scripts/lib/state_paths/resolver.py`), so a scheduled workflow's own PR-opens never
 trigger it. Always exits 0 — a hook must never fail a session.
 
-Reads the PostToolUse JSON on stdin; the bash command is at `.tool_input.command`.
+Reads the PostToolUse JSON on stdin. The bash command is at `.tool_input.command`
+and what the tool reported is at `.tool_response` — BOTH are consulted, because
+the command alone matches anything that merely quotes it (#302).
 To inject context from a PostToolUse hook you print
 `{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": …}}`
 (plain stdout is not surfaced for PostToolUse).
@@ -47,15 +49,34 @@ import re
 import sys
 from pathlib import Path
 
-# Matches the phrase ANYWHERE in the command, so a command that merely quotes it
-# also fires and emits a spurious mandate — observed three times while wiring the
-# Codex registration, once from the comment documenting it. Anchoring to the start
-# would miss the ordinary `cd x && <the command>` form, and a missed reminder costs
-# more than a spurious one, so the direction stays fail-loud. The real discriminator
-# is `tool_response`, which both runtimes supply and this hook ignores: see #302.
-# Wider under Codex, whose matcher filters the tool name only, so every Bash command
-# reaches this regex.
+# The command is a NECESSARY condition, never a sufficient one (#302). It matches
+# the phrase anywhere, so a command that merely quotes, echoes, greps for or
+# documents it matches too — observed five times while wiring the Codex
+# registration, once from the comment documenting this very behaviour and once
+# from a review lens that had never heard of it. Anchoring to the start would
+# miss the ordinary `cd x && <the command>` form.
+#
+# So the command decides whether to LOOK, and `tool_response` decides whether to
+# fire. Both runtimes supply it on PostToolUse. The surface is wider under Codex,
+# whose matcher filters the tool name only, so every Bash command reaches here.
 _TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
+
+# What a real invocation leaves in the response, established from `gh`'s source
+# rather than assumed — the issue asked for that specifically, and the two
+# subcommands genuinely differ:
+#
+#   `gh pr create` prints the PR URL to STDOUT. That is its primary output.
+#   `gh pr ready`  prints NO url. It writes `Pull request owner/repo#N is marked
+#                  as "ready for review"` to STDERR, and the already-ready case
+#                  says `is already "ready for review"` — which still means a
+#                  real PR exists and still deserves the reminder.
+#
+# stderr's presence in `tool_response` is runtime-dependent, which is why an
+# EMPTY response counts as unreadable below rather than as evidence of nothing.
+_PR_URL = re.compile(r"https://\S+?/pull/\d+")
+# the backslash is optional because an unknown response shape gets serialised
+# below, and `json.dumps` escapes the quotes gh actually printed
+_READY_ACK = re.compile(r'is (?:marked as|already) \\?"ready for review')
 
 _DEFAULT_FALLBACK_COMMAND = "/code-review"
 # Which runtime's `review.*` keys to read. Both registrations pass it explicitly;
@@ -290,6 +311,54 @@ def _runtime_from_argv(argv: list[str]) -> str:
     return _DEFAULT_RUNTIME
 
 
+def _response_text(data: dict) -> str | None:
+    """Everything the tool reported, flattened — or None when there is nothing
+    to read.
+
+    None means "cannot settle it", and every such case fires. That includes an
+    EMPTY response, deliberately: a runtime that does not capture stderr renders
+    `gh pr ready` indistinguishable from a command that produced no output, and
+    a missed reminder costs the follow-through this hook exists to guarantee
+    while a spurious one costs a paragraph.
+    """
+    response = data.get("tool_response")
+    if isinstance(response, str):
+        return response.strip() or None
+    if isinstance(response, dict):
+        # the shapes both runtimes actually use, read as text so `gh`'s own
+        # quoting survives — serialising first would escape it
+        captured = [
+            value
+            for key in ("stdout", "stderr", "output", "content", "result", "text")
+            if isinstance(value := response.get(key), str)
+        ]
+        if captured:
+            # a dict whose captured text is all empty is NOT evidence of nothing:
+            # it is what a runtime that drops stderr makes `gh pr ready` look like
+            return "\n".join(captured).strip() or None
+    if isinstance(response, (dict, list)):
+        if not response:
+            return None
+        try:
+            return json.dumps(response) or None
+        except (TypeError, ValueError):
+            return None  # unserialisable — unreadable, so fail loud
+    return None
+
+
+def should_fire(command: object, response: str | None) -> bool:
+    """Whether this Bash call actually opened or readied a PR.
+
+    The command alone was the old gate and it mandated a watch loop for PRs that
+    did not exist. Now it only selects candidates; the response decides.
+    """
+    if not isinstance(command, str) or not _TRIGGER.search(command):
+        return False
+    if response is None:
+        return True  # nothing readable — fail loud
+    return bool(_PR_URL.search(response) or _READY_ACK.search(response))
+
+
 def main() -> int:
     runtime = _runtime_from_argv(sys.argv[1:])
     try:
@@ -305,7 +374,7 @@ def main() -> int:
 
     tool_input = data.get("tool_input")
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
-    if isinstance(command, str) and _TRIGGER.search(command):
+    if should_fire(command, _response_text(data)):
         print(
             json.dumps(
                 {
