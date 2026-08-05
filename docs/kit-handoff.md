@@ -25,12 +25,12 @@ written by the kit. The work that took the time was not the wiring: it was disco
 one function, the shape `#297` was filed about, twice over — a predicate about
 somebody else's filesystem or config, restated where nothing can execute the restatement.
 
-- **`#301` — closed** (PR `#303`). `pr_followup_hook.py` takes `--runtime`; it had hardcoded
+- **`#301`** — settled in PR `#303`. `pr_followup_hook.py` takes `--runtime`; it had hardcoded
   `review.fallback_commands.claude` and `lens_compute.claude`, which are runtime-keyed with
   different values, so registering it on Codex unchanged would have told that session to run
   Claude's review command at Claude's model. `.codex/hooks.json` added, `.claude/settings.json`
   updated, `init.sh` **prints both registrations whenever the engine is present, and writes neither**.
-- **`#302` — closed** (PR `#306`). The trigger matched its phrase anywhere in a command, so
+- **`#302`** — settled in PR `#306`. The trigger matched its phrase anywhere in a command, so
   anything quoting it mandated a non-terminating watch loop for a PR that did not exist.
   `tool_response` is now the discriminator; the command only selects candidates.
 - **Filed this session:** `#304`, `#305`. A further occurrence on `#270`.
@@ -75,7 +75,7 @@ somebody else's filesystem or config, restated where nothing can execute the res
 - **The closing-keyword check that works is a scratchpad script, not something this repo
   runs** — `#308`, with the draft's evidence. `#309` and `#310` were routed the same way:
   straight to the tracker rather than parked, because each already had a reproduction, a
-  mechanism and a fix. `#310` is why they were parked in the first place.
+  mechanism and a proposed repair. `#310` is why they were parked to begin with.
 - **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#285`, `#283`, `#287`, `#286`,
   `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
   `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
