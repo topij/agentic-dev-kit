@@ -955,3 +955,69 @@ def test_a_pr_url_buried_in_other_output_is_not_a_pr_being_opened(monkeypatch, c
         )
         is True
     )
+
+
+# ── the response shape is not ours to guess (#306, round-1 lens) ─────────────
+# Codex's PostToolUse schema types `tool_response` as `true` — any value, no
+# promised structure. An earlier version read six hardcoded keys and serialised
+# anything else with `json.dumps`, which escapes newlines, so the line-anchored
+# URL match could never fire on a serialised payload: a genuine `gh pr create`
+# under an unrecognised shape went SILENT. Every shape below carries the same
+# real PR URL and every one must fire.
+
+_URL = "https://github.com/topij/agentic-dev-kit/pull/306"
+
+_SHAPES = [
+    pytest.param({"stdout": _URL + "\n", "stderr": ""}, id="flat_stdout_stderr"),
+    pytest.param(_URL + "\n", id="plain_string"),
+    pytest.param({"output": {"stdout": _URL + "\n", "stderr": ""}, "exit_code": 0}, id="nested_output"),
+    pytest.param({"exec_output": _URL + "\n", "exit_code": 0}, id="unknown_key_name"),
+    pytest.param({"chunks": [{"type": "text", "text": _URL + "\n"}]}, id="list_of_content_blocks"),
+    pytest.param([{"text": _URL + "\n"}], id="top_level_list"),
+]
+
+
+@pytest.mark.parametrize("response", _SHAPES)
+def test_a_real_pr_create_fires_whatever_shape_the_runtime_reports_it_in(
+    monkeypatch, capsys, response
+):
+    hook = _load_hook()
+    payload = json.dumps(
+        {"tool_input": {"command": "gh pr create --fill"}, "tool_response": response}
+    )
+
+    exit_code, out = _run(hook, monkeypatch, capsys, payload)
+
+    assert exit_code == 0
+    assert out != "", "a real PR was opened and the reminder was silently dropped"
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        pytest.param({"stdout": None, "stderr": None}, id="known_keys_but_null"),
+        pytest.param({"exit_code": 0, "duration_ms": 12}, id="no_strings_at_all"),
+        pytest.param({"k": {1, 2}}, id="unserialisable"),
+        pytest.param([], id="empty_list"),
+    ],
+)
+def test_a_payload_carrying_no_readable_text_still_fails_loud(monkeypatch, capsys, response):
+    """These used to reach `json.dumps` and be read as evidence of nothing.
+    A payload with no strings cannot settle whether a PR was opened."""
+    hook = _load_hook()
+    assert hook._response_text({"tool_response": response}) is None
+    payload = json.dumps({"tool_input": {"command": "gh pr create --fill"}})
+    exit_code, out = _run(hook, monkeypatch, capsys, payload)
+    assert exit_code == 0 and out != ""
+
+
+def test_walking_for_strings_is_depth_bounded(monkeypatch, capsys):
+    """A pathological payload must not blow the stack — it exits 0 either way,
+    but a RecursionError escaping would be a crash, not a degraded reminder."""
+    hook = _load_hook()
+    deep: object = "https://github.com/o/r/pull/1"
+    for _ in range(60):
+        deep = {"nested": deep}
+
+    assert hook._response_text({"tool_response": deep}) is None  # past the bound
+    assert hook.should_fire("gh pr create", None) is True

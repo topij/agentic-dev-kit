@@ -93,7 +93,7 @@
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
-      "sha256": "843b038a0ed67f7a199a4922a4530b54586fa1288423daa49d76987561b59693"
+      "sha256": "d0fd58d873ac0175fdb9073549565ec1c3e0906ff037e6d3feef08f750452d52"
     },
     "scripts/hooks/pre-push": {
       "role": "hook",

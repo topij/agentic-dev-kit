@@ -71,18 +71,32 @@ _TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
 #                  says `is already "ready for review"` — which still means a
 #                  real PR exists and still deserves the reminder.
 #
-# stderr's presence in `tool_response` is runtime-dependent, which is why an
-# EMPTY response counts as unreadable below rather than as evidence of nothing.
-# ALONE ON ITS LINE. `gh pr create` prints the URL and nothing else, so this
-# still matches every real invocation — while a URL embedded in prose or JSON
-# does not. Found live: replying to a review comment with `gh api` fired this
-# hook, because the command text quoted the trigger phrase and the API's own
-# response carried `…/pull/306#discussion_r…`. The bare-substring form could
+# The URL must be ALONE ON ITS LINE. `gh pr create` prints it and nothing else,
+# so this still matches every real invocation — while a URL embedded in prose or
+# JSON does not. Found live: replying to a review comment with `gh api` fired
+# this hook, because the command text quoted the trigger phrase and the API's
+# own response carried `…/pull/306#discussion_r…`. The bare-substring form could
 # not tell that from a PR being opened.
 _PR_URL = re.compile(r"^\s*https://\S+/pull/\d+/?\s*$", re.MULTILINE)
-# the backslash is optional because an unknown response shape gets serialised
-# below, and `json.dumps` escapes the quotes gh actually printed
+
+# The optional backslash tolerates a runtime that hands us already-escaped text.
+# It is NOT load-bearing for anything this module does: nothing serialises the
+# response any more, because doing so was what broke `_PR_URL`'s line anchor.
 _READY_ACK = re.compile(r'is (?:marked as|already) \\?"ready for review')
+
+# What the two registered runtimes actually send, established from their own
+# sources by a review lens rather than assumed — an earlier version of this
+# comment claimed stderr capture was "runtime-dependent", and that is not what
+# either of them does:
+#
+#   Claude Code — an object with `stdout`, `stderr`, `interrupted`, `isImage`.
+#   Codex       — a plain JSON string built from `aggregated_output`, which
+#                 already concatenates stdout and stderr.
+#
+# Both are handled, and so is anything else, because `_iter_strings` below walks
+# for strings instead of naming keys. An EMPTY response still counts as
+# unreadable and fires: neither runtime promises a shape in its schema (Codex's
+# types `tool_response` as `true`), and a missed reminder is the costly failure.
 
 _DEFAULT_FALLBACK_COMMAND = "/code-review"
 # Which runtime's `review.*` keys to read. Both registrations pass it explicitly;
@@ -317,39 +331,48 @@ def _runtime_from_argv(argv: list[str]) -> str:
     return _DEFAULT_RUNTIME
 
 
+def _iter_strings(value: object, depth: int = 0):
+    """Every string anywhere in a response payload, whatever shape it arrived in.
+
+    Deliberately shape-agnostic. An earlier version read six hardcoded keys and
+    fell back to `json.dumps` for anything else — and `json.dumps` escapes real
+    newlines to the two characters `\\n`, so the line-anchored URL match below
+    could never fire on a serialised payload. A genuine `gh pr create` under an
+    unrecognised response shape went SILENT, which is the one failure this hook
+    must not have. A round-1 review lens found it.
+
+    Codex's own PostToolUse schema types `tool_response` as `true` — any value,
+    no promised structure — so guessing key names was never verifiable. Walking
+    for strings needs no such guess and preserves the line structure the
+    anchoring depends on.
+    """
+    if depth > 6:  # bounded: a payload cannot nest usefully deeper than this
+        return
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _iter_strings(item, depth + 1)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _iter_strings(item, depth + 1)
+
+
 def _response_text(data: dict) -> str | None:
     """Everything the tool reported, flattened — or None when there is nothing
     to read.
 
-    None means "cannot settle it", and every such case fires. That includes an
-    EMPTY response, deliberately: a runtime that does not capture stderr renders
-    `gh pr ready` indistinguishable from a command that produced no output, and
-    a missed reminder costs the follow-through this hook exists to guarantee
-    while a spurious one costs a paragraph.
+    None means "cannot settle it", and every such case fires. That includes a
+    payload carrying no strings at all, deliberately: a runtime that does not
+    capture stderr renders `gh pr ready` indistinguishable from a command that
+    printed nothing, and a missed reminder costs the follow-through this hook
+    exists to guarantee while a spurious one costs a paragraph.
     """
-    response = data.get("tool_response")
-    if isinstance(response, str):
-        return response.strip() or None
-    if isinstance(response, dict):
-        # the shapes both runtimes actually use, read as text so `gh`'s own
-        # quoting survives — serialising first would escape it
-        captured = [
-            value
-            for key in ("stdout", "stderr", "output", "content", "result", "text")
-            if isinstance(value := response.get(key), str)
-        ]
-        if captured:
-            # a dict whose captured text is all empty is NOT evidence of nothing:
-            # it is what a runtime that drops stderr makes `gh pr ready` look like
-            return "\n".join(captured).strip() or None
-    if isinstance(response, (dict, list)):
-        if not response:
-            return None
-        try:
-            return json.dumps(response) or None
-        except (TypeError, ValueError):
-            return None  # unserialisable — unreadable, so fail loud
-    return None
+    try:
+        captured = "\n".join(_iter_strings(data.get("tool_response")))
+    except RecursionError:  # pathological payload — unreadable, so fail loud
+        return None
+    return captured.strip() or None
 
 
 def should_fire(command: object, response: str | None) -> bool:
