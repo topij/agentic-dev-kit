@@ -1410,73 +1410,116 @@ def _with_pr_hook(repo: Path) -> Path:
     return repo
 
 # ── register_pr_hook (#301, #303) ────────────────────────────────────────────
-# Added after a panel found register_pr_hook had NO coverage at all, and that
-# mutating the seeded `--runtime codex` token survived the whole suite.
+# It REPORTS for both runtimes and writes neither. The seeding it used to do for
+# .codex/hooks.json was removed after a review round found a dangling symlink at
+# that path made `cat >` write outside .codex entirely — see the function's own
+# comment. So these tests assert on what it PRINTS, and that it writes nothing.
 
 
-def test_seeded_codex_hook_names_the_codex_runtime(tmp_path: Path) -> None:
-    """Kills: the heredoc's `--runtime codex` copy-pasted to `claude`.
+def _with_pr_hook(repo: Path) -> Path:
+    """`register_pr_hook` returns early when the engine is absent, so a fixture
+    that wants to exercise it must ship the file."""
+    hook = repo / "scripts" / "hooks" / "pr_followup_hook.py"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    return repo
 
-    That token is the whole point of #301 — without it a Codex session is told
-    to run Claude's review command — and nothing pinned it."""
+
+def test_register_pr_hook_reports_both_runtimes_and_writes_neither(tmp_path: Path) -> None:
     repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
-    _run_init(repo)
-    seeded = (repo / ".codex" / "hooks.json").read_text(encoding="utf-8")
-    assert "--runtime codex" in seeded
-    assert "--runtime claude" not in seeded
-    assert "pr_followup_hook.py" in seeded
-    json.loads(seeded)  # and it must be valid JSON, not merely contain the token
-
-
-def test_seeded_codex_hook_points_at_the_configured_engines_dir(tmp_path: Path) -> None:
-    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
-    _run_init(repo)
-    seeded = json.loads((repo / ".codex" / "hooks.json").read_text(encoding="utf-8"))
-    command = seeded["hooks"]["PostToolUse"][0]["hooks"][0]["command"]
-    assert "scripts/hooks/pr_followup_hook.py" in command
-
-
-def test_an_existing_codex_hooks_json_is_never_rewritten(tmp_path: Path) -> None:
-    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
-    codex = repo / ".codex"
-    codex.mkdir()
-    theirs = '{"hooks": {"SessionStart": [{"matcher": "*", "hooks": []}]}}\n'
-    (codex / "hooks.json").write_text(theirs, encoding="utf-8")
 
     result = _run_init(repo)
 
-    assert (codex / "hooks.json").read_text(encoding="utf-8") == theirs
-    assert "does NOT register" in result.stdout
+    assert "--runtime codex" in result.stdout
+    assert "--runtime claude" in result.stdout
+    # the whole point of the redesign: no write, so no filesystem shape to guard
+    assert not (repo / ".codex").exists()
+    assert not (repo / ".claude" / "settings.json").exists()
 
 
-@pytest.mark.parametrize(
-    ("shape", "expected"),
-    [
-        ("plain_file", "is not a directory"),
-        ("dangling_symlink", "dangling symlink"),
-        ("unusable_dir", "not writable/searchable"),
-    ],
-)
-def test_an_unusable_codex_path_is_reported_and_the_run_still_finishes(
-    tmp_path: Path, shape: str, expected: str
-) -> None:
-    """Each of these aborted the whole bootstrap under `set -eu` before the guard
-    covered it — dying mid-function, before the Claude check and the banner,
-    while init.sh's own usage promises it is safe to re-run."""
+def test_register_pr_hook_names_the_configured_engines_dir(tmp_path: Path) -> None:
+    """Kills: `${engines_dir}` hardcoded to `scripts`.
+
+    The previous version of this test used a config with no `paths.engines`, so
+    the detected fallback was the literal string `scripts` — the same value a
+    hardcoded version produces, which made the test unable to tell them apart.
+    A review round mutated the interpolation away and the whole suite stayed
+    green. This fixture puts the engines somewhere the fallback would never
+    produce."""
+    repo = _fixture(tmp_path, config=V1_CONFIG, git=True)
+    hook = repo / "scripts" / "devkit" / "hooks" / "pr_followup_hook.py"
+    hook.parent.mkdir(parents=True)
+    hook.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    (repo / "scripts" / "devkit" / "pr_watch.py").write_text("", encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert "scripts/devkit/hooks/pr_followup_hook.py" in result.stdout
+
+
+def test_register_pr_hook_recognises_an_existing_registration(tmp_path: Path) -> None:
     repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
     codex = repo / ".codex"
+    codex.mkdir()
+    (codex / "hooks.json").write_text(
+        '{"hooks": {"PostToolUse": [{"hooks": [{"command": "pr_followup_hook.py"}]}]}}\n',
+        encoding="utf-8",
+    )
+
+    result = _run_init(repo)
+
+    assert ".codex/hooks.json already registers" in result.stdout
+    assert "Codex does not register" not in result.stdout
+
+
+@pytest.mark.parametrize("shape", ["plain_file", "dangling_symlink", "unusable_dir", "hooks_json_dangling"])
+def test_no_codex_shape_can_make_the_run_write_or_abort(tmp_path: Path, shape: str) -> None:
+    """Each of these broke the seeding version — the last one by following a
+    symlink and writing the payload OUTSIDE .codex while reporting success.
+    With nothing written, every shape is inert."""
+    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
+    codex = repo / ".codex"
+    escaped = repo / "escaped.json"
+
     if shape == "plain_file":
         codex.write_text("not a directory\n", encoding="utf-8")
     elif shape == "dangling_symlink":
         codex.symlink_to(repo / "no-such-target")
-    else:
+    elif shape == "unusable_dir":
         codex.mkdir()
         codex.chmod(0o000)
+    else:
+        codex.mkdir()
+        (codex / "hooks.json").symlink_to(escaped)
 
     try:
-        result = _run_init(repo)  # check=True: a non-zero exit fails the test
-        assert expected in result.stdout
-        assert "bootstrapped" in result.stdout  # reached the end, did not abort
+        result = _run_init(repo)  # check=True — a non-zero exit fails the test
+        assert "bootstrapped" in result.stdout
+        assert not escaped.exists(), "init.sh wrote through a symlink, outside .codex"
     finally:
         if shape == "unusable_dir":
             codex.chmod(0o755)
+
+
+def test_both_shipped_registrations_name_their_own_runtime() -> None:
+    """Kills: `--runtime claude` in .claude/settings.json flipped to codex.
+
+    Nothing else covers those two files. `kit-manifest.json` does not track
+    either, so the drift check cannot see a hand-edit, and `init.sh` no longer
+    writes them — so these literals are only as correct as this assertion."""
+    root = REPO_ROOT
+    claude = (root / ".claude" / "settings.json").read_text(encoding="utf-8")
+    codex = (root / ".codex" / "hooks.json").read_text(encoding="utf-8")
+
+    assert "pr_followup_hook.py" in claude
+    assert "--runtime claude" in claude
+    assert "--runtime codex" not in claude
+
+    assert "pr_followup_hook.py" in codex
+    assert "--runtime codex" in codex
+    assert "--runtime claude" not in codex
+
+    # and the Codex registration must be valid JSON with the tool-name matcher,
+    # since Codex has no config-level `if:` and this is the only narrowing
+    parsed = json.loads(codex)
+    assert parsed["hooks"]["PostToolUse"][0]["matcher"] == "^Bash$"

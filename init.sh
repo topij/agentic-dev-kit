@@ -1021,84 +1021,45 @@ register_pr_hook() {
     return 0
   fi
 
-  # Anything at `.codex` that is not a USABLE directory aborts the whole
-  # bootstrap: `mkdir -p` or the `cat >` below fails, init.sh runs under
-  # `set -eu`, and the run dies mid-function before the Claude check and the
-  # closing banner. init.sh's own usage says "safe to re-run at any time", so
-  # each unusable shape is reported and skipped instead.
+  # BOTH runtimes are REPORTED, neither is written. That symmetry is the whole
+  # design, and it was reached the expensive way (#303).
   #
-  # `-e` alone cannot express this, and testing only "not a directory" missed
-  # two of the three shapes (both found by review):
-  #   - a DANGLING SYMLINK — `-e` follows the link and reports absent, so the
-  #     seeding branch runs and `mkdir -p` then fails on the existing link.
-  #   - an UNREADABLE/UNSEARCHABLE directory — `-e .codex/hooks.json` is false
-  #     because the directory cannot be searched, not because the file is
-  #     missing, so the seeding branch runs and the `cat >` dies.
-  # Hence: test the link first, then the type, then usability, then contents.
-  if [ -L .codex ] && [ ! -e .codex ]; then
-    echo "note: .codex is a dangling symlink — cannot register the PR"
-    echo "      follow-through hook for Codex. Resolve by hand, then re-run."
-  elif [ -e .codex ] && [ ! -d .codex ]; then
-    echo "note: .codex exists and is not a directory — cannot register the PR"
-    echo "      follow-through hook for Codex. Resolve by hand, then re-run."
-  elif [ -d .codex ] && { [ ! -w .codex ] || [ ! -x .codex ]; }; then
-    echo "note: .codex is not writable/searchable — cannot register the PR"
-    echo "      follow-through hook for Codex. Fix its permissions, then re-run."
-  elif [ -e .codex/hooks.json ]; then
-    # Existence is not registration. A .codex/hooks.json the adopter already had
-    # for something else leaves this hook unwired, and reporting only "left
-    # untouched" tells them nothing is wrong. Same content check the Claude
-    # branch below does — the two branches differ in whether the kit may WRITE
-    # the file, not in whether it checks what is in it.
-    if [ ! -r .codex/hooks.json ]; then
-      # `grep` fails the same way on "absent" and "unreadable", which would
-      # report a registered hook as missing and send the operator to add a
-      # duplicate. Say what is actually known instead.
-      echo "note: .codex/hooks.json is not readable — cannot tell whether the PR"
-      echo "      follow-through hook is registered. Check it by hand."
-    elif grep -q pr_followup_hook .codex/hooks.json 2>/dev/null; then
-      echo ".codex/hooks.json already registers the PR follow-through hook"
-    else
-      echo "note: .codex/hooks.json exists but does NOT register the PR follow-through"
-      echo "      hook. Add to hooks.PostToolUse (matcher \"^Bash\$\"):"
-      echo "        python3 \"\$(git rev-parse --show-toplevel)/${_hook_src}\" --runtime codex"
-      echo "      Not merged for you: the file is yours, and merging JSON from sh is"
-      echo "      the clobber this kit refuses elsewhere."
-    fi
+  # An earlier version seeded `.codex/hooks.json` when absent, reasoning that it
+  # is a file the kit may own while `.claude/settings.json` is the adopter's.
+  # Every guard that write then needed came from a review finding — a
+  # non-directory `.codex`, an unreadable one, a dangling symlink at `.codex` —
+  # and the round after those landed found a fifth shape underneath: a DANGLING
+  # SYMLINK at `.codex/hooks.json` itself. There `[ -e ]` is false, because it
+  # follows the link to a missing target, so the seeding branch ran and `cat >`
+  # followed the symlink — writing the hook JSON to whatever the link pointed
+  # at, outside `.codex`, while printing `seeded .codex/hooks.json` and exiting
+  # 0. Reproduced live, unmutated.
+  #
+  # Reporting has none of that surface: no write, no filesystem shapes to
+  # enumerate, no symlink to follow. And it costs the adopter almost nothing,
+  # because Codex requires them to trust a project hook via `/hooks` before it
+  # runs at all — a seeded file is inert until they act, so seeding never bought
+  # an automatic outcome, only a saved paste.
+  #
+  # `grep -q` on a path that may be absent, unreadable, a directory or a broken
+  # link fails identically in every case, which is fine when the only
+  # consequence is printing instructions the adopter can ignore.
+  if [ -f .codex/hooks.json ] && grep -q pr_followup_hook .codex/hooks.json 2>/dev/null; then
+    echo ".codex/hooks.json already registers the PR follow-through hook"
   else
-    mkdir -p .codex
-    cat > .codex/hooks.json <<CODEXHOOK
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "^Bash$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"\$(git rev-parse --show-toplevel)/${_hook_src}\" --runtime codex",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  }
-}
-CODEXHOOK
-    echo "seeded .codex/hooks.json (PR follow-through hook, --runtime codex)"
-    echo "  note: per Codex's documented trust model, a project hook must be"
-    echo "        trusted via /hooks before it runs — until then this is"
-    echo "        registered but inert. Not yet confirmed against a live run."
+    echo "note: Codex does not register the PR follow-through hook here. Add to"
+    echo "      .codex/hooks.json under hooks.PostToolUse, matcher \"^Bash\$\":"
+    echo "        python3 \"\$(git rev-parse --show-toplevel)/${_hook_src}\" --runtime codex"
+    echo "      Codex then needs you to trust it via /hooks before it runs."
   fi
 
   if [ -f .claude/settings.json ] && grep -q pr_followup_hook .claude/settings.json 2>/dev/null; then
     echo ".claude/settings.json already registers the PR follow-through hook"
   else
-    echo "note: .claude/settings.json does NOT register the PR follow-through hook."
-    echo "      Add it under hooks.PostToolUse (matcher Bash, if: \"Bash(gh pr *)\"):"
+    echo "note: Claude does not register the PR follow-through hook here. Add to"
+    echo "      .claude/settings.json under hooks.PostToolUse, matcher Bash,"
+    echo "      with if: \"Bash(gh pr *)\":"
     echo "        python3 \"\$CLAUDE_PROJECT_DIR/${_hook_src}\" --runtime claude"
-    echo "      Not done for you: that file is yours and merging JSON into it is"
-    echo "      the clobber this kit refuses elsewhere."
   fi
 }
 
