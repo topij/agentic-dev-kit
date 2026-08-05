@@ -331,23 +331,36 @@ def _runtime_from_argv(argv: list[str]) -> str:
     return _DEFAULT_RUNTIME
 
 
+class _Unreadable(Exception):
+    """The payload could not be walked in full, so nothing about it is settled."""
+
+
+_MAX_DEPTH = 6
+
+
 def _iter_strings(value: object, depth: int = 0):
     """Every string anywhere in a response payload, whatever shape it arrived in.
 
     Deliberately shape-agnostic. An earlier version read six hardcoded keys and
     fell back to `json.dumps` for anything else — and `json.dumps` escapes real
-    newlines to the two characters `\\n`, so the line-anchored URL match below
-    could never fire on a serialised payload. A genuine `gh pr create` under an
-    unrecognised response shape went SILENT, which is the one failure this hook
-    must not have. A round-1 review lens found it.
+    newlines, so the line-anchored URL match below could never fire on a
+    serialised payload. A genuine `gh pr create` under an unrecognised shape went
+    SILENT. Codex's PostToolUse schema types `tool_response` as `true` — any
+    value, no promised structure — so guessing key names was never verifiable.
 
-    Codex's own PostToolUse schema types `tool_response` as `true` — any value,
-    no promised structure — so guessing key names was never verifiable. Walking
-    for strings needs no such guess and preserves the line structure the
-    anchoring depends on.
+    Depth-bounded, and exceeding the bound RAISES rather than truncating. That
+    distinction is the whole point: truncating returns a shorter string, which
+    reads downstream as "readable, and the evidence is not in it" — silence.
+    A second review round proved that regression on the `ready` path, with a
+    payload carrying shallow noise beside an acknowledgement nested too deep:
+    the noise kept the response non-empty, the ack was dropped, and the run went
+    quiet where the code this replaced would have fired.
+
+    Values only, not keys — no runtime shape puts content in a key, and walking
+    keys would let an arbitrary label masquerade as tool output.
     """
-    if depth > 6:  # bounded: a payload cannot nest usefully deeper than this
-        return
+    if depth > _MAX_DEPTH:
+        raise _Unreadable
     if isinstance(value, str):
         yield value
     elif isinstance(value, dict):
@@ -359,18 +372,18 @@ def _iter_strings(value: object, depth: int = 0):
 
 
 def _response_text(data: dict) -> str | None:
-    """Everything the tool reported, flattened — or None when there is nothing
-    to read.
+    """Everything the tool reported, flattened — or None when the payload cannot
+    settle whether a PR was opened.
 
-    None means "cannot settle it", and every such case fires. That includes a
-    payload carrying no strings at all, deliberately: a runtime that does not
-    capture stderr renders `gh pr ready` indistinguishable from a command that
-    printed nothing, and a missed reminder costs the follow-through this hook
-    exists to guarantee while a spurious one costs a paragraph.
+    None means "cannot settle it", and every such case fires: no strings at all,
+    and now also a payload too deep to walk. A runtime that does not capture
+    stderr renders `gh pr ready` indistinguishable from a command that printed
+    nothing, and a missed reminder costs the follow-through this hook exists to
+    guarantee while a spurious one costs a paragraph.
     """
     try:
         captured = "\n".join(_iter_strings(data.get("tool_response")))
-    except RecursionError:  # pathological payload — unreadable, so fail loud
+    except (_Unreadable, RecursionError):
         return None
     return captured.strip() or None
 

@@ -990,6 +990,12 @@ def test_a_real_pr_create_fires_whatever_shape_the_runtime_reports_it_in(
 
     assert exit_code == 0
     assert out != "", "a real PR was opened and the reminder was silently dropped"
+    # …and it fired because the URL was FOUND, not because the payload was
+    # unreadable and fail-loud caught it. A round-2 lens showed this test passed
+    # either way: cutting the depth bound to 1, and deleting list handling
+    # outright, both left the whole suite green because `out != ""` cannot tell
+    # a successful walk from a total miss.
+    assert _URL in (hook._response_text({"tool_response": response}) or "")
 
 
 @pytest.mark.parametrize(
@@ -1021,3 +1027,43 @@ def test_walking_for_strings_is_depth_bounded(monkeypatch, capsys):
 
     assert hook._response_text({"tool_response": deep}) is None  # past the bound
     assert hook.should_fire("gh pr create", None) is True
+
+
+def test_shallow_noise_beside_deep_evidence_does_not_buy_silence(monkeypatch, capsys):
+    """The regression a round-2 lens proved, as a fixture.
+
+    Fail-loud triggers only when a payload yields NOTHING readable. So a payload
+    with an irrelevant shallow string beside evidence nested past the bound used
+    to read as "readable, and the evidence is not in it" — silence, on a PR that
+    really was readied. The bound now raises instead of truncating, so a payload
+    that cannot be walked in full settles nothing and fires.
+    """
+    hook = _load_hook()
+    ack = 'Pull request o/r#1 is marked as "ready for review"'
+    buried: object = ack
+    for _ in range(hook._MAX_DEPTH + 2):
+        buried = {"nested": buried}
+
+    payload = {"noise": "duration_ms=12", "buried": buried}
+    assert hook._response_text({"tool_response": payload}) is None
+    assert hook.should_fire("gh pr ready 1", hook._response_text({"tool_response": payload}))
+
+    # and the same shape inside the bound is walked rather than abandoned
+    shallow: object = ack
+    for _ in range(hook._MAX_DEPTH - 2):
+        shallow = {"nested": shallow}
+    assert ack in (hook._response_text({"tool_response": {"n": "x", "b": shallow}}) or "")
+
+
+def test_a_list_in_the_payload_is_actually_walked(monkeypatch, capsys):
+    """Deleting `_iter_strings`'s list branch left the whole suite green, because
+    every list fixture still fired — via fail-loud, not via being read."""
+    hook = _load_hook()
+    found = hook._response_text({"tool_response": [{"text": "https://x/pull/9\n"}]})
+    assert found is not None and "https://x/pull/9" in found
+
+
+def test_content_in_a_key_is_not_treated_as_tool_output(monkeypatch, capsys):
+    """Values only. Walking keys would let an arbitrary label pose as output."""
+    hook = _load_hook()
+    assert hook._response_text({"tool_response": {"https://x/pull/9": None}}) is None
