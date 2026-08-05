@@ -1593,9 +1593,12 @@ def test_register_pr_hook_names_the_configured_engines_dir(tmp_path: Path) -> No
     claude_line = next(ln for ln in result.stdout.splitlines() if "--runtime claude" in ln)
     assert "scripts/devkit/hooks/pr_followup_hook.py" in codex_line
     assert "scripts/devkit/hooks/pr_followup_hook.py" in claude_line
-    # and neither may fall back to the default this fixture deliberately avoids
-    assert '"scripts/hooks/pr_followup_hook.py"' not in codex_line
-    assert '/scripts/hooks/pr_followup_hook.py"' not in claude_line
+    # The Claude line may not fall back to the default this fixture avoids. The
+    # symmetrical check on the Codex line was VACUOUS and is gone: its template
+    # always puts `)/` before the interpolation, so a leading-quote needle could
+    # never match whether the value was right or wrong. The positive assertion
+    # above already catches a Codex-side fallback — verified by mutation.
+    assert "/scripts/hooks/pr_followup_hook.py\"" not in claude_line
 
 
 @pytest.mark.parametrize("shape", ["plain_file", "dangling_symlink", "unusable_dir", "hooks_json_dangling"])
@@ -1712,4 +1715,13 @@ def test_both_shipped_registrations_name_their_own_runtime() -> None:
     # and the Codex registration must be valid JSON with the tool-name matcher,
     # since Codex has no config-level `if:` and this is the only narrowing
     parsed = json.loads(codex)
-    assert parsed["hooks"]["PostToolUse"][0]["matcher"] == "^Bash$"
+    # by content, like the two selections in the sibling test. This was the
+    # THIRD instance of the same positional read; the first two were fixed in
+    # 483fa3e and 3a67c45, and 3a67c45's message claimed "both levels filter by
+    # content now, on both runtimes" while this one sat a test below, untouched.
+    codex_pr_entry = next(
+        e
+        for e in parsed["hooks"]["PostToolUse"]
+        if any("pr_followup_hook" in h.get("command", "") for h in e["hooks"])
+    )
+    assert codex_pr_entry["matcher"] == "^Bash$"

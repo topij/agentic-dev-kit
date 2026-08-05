@@ -1016,8 +1016,8 @@ seed_doc() {
 # `.codex/hooks.json` seeded because it is "a file the kit can own",
 # `.claude/settings.json` merely reported. The function below records why that
 # asymmetry was abandoned. The banner is corrected rather than deleted because
-# it survived the change that falsified it, six lines above the function it
-# describes, and that is worth one sentence to the next person who edits here:
+# it survived the change that falsified it while sitting directly above the
+# function it describes, and that is worth one sentence to whoever edits here:
 # when you change a function, the comment ABOVE it is not part of the diff you
 # are reading.
 register_pr_hook() {
