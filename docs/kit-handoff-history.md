@@ -4,6 +4,98 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-08-03 (three conversions, and a defect class that only exists in shipped docs)
+
+**Theme —** `/session-start` was already converted; this session did the rest. `/parallel` and
+`/wrap-up` now point at shared workflows, `/wrap-up` on **both** runtimes. The durable result is
+not the conversions: it is that every conversion produced a defect where prose was **correct in
+the repo that wrote it and false in the repo that reads it** — and that installing kit docs into
+a repo with a fresh reviewer is the cheapest oracle found so far for finding them.
+
+- **cs-toolkit `#1830` — install the shared workflows** (`bfcb4104`). Nine docs; `docs/agentic-dev-kit/`
+  had held one. Sessions there had no panel doctrine when the bot went down. Its
+  `session-start.md` was **content**-stale, not byte-stale as the previous handoff recorded —
+  two commits behind, so the repo where the silent tracker truncation was hit was running the
+  session-start without the fix for it.
+- **kit `#268` — two rules recovered from the `/parallel` fork** (`8e57562`), and **cs-toolkit
+  `#1831`** (`2ee66143`) converting it, 200 lines to 64.
+- **kit `#272` — the validation step** (`c7eb7ea`), and **cs-toolkit `#1832`** converting
+  `/wrap-up` on both runtimes, 197 lines to 62, renaming the Codex slug.
+- **kit `#276` and cs-toolkit `#1833`** — the validation step demonstrated its own gap in the
+  commit that introduced it, and the repair. See below.
+- **Filed:** `#269`, `#270`, `#271`, `#273`, `#274` (the defect class above), plus an occurrence
+  and a correction on `#61` and the fourth measurement on `#209`.
+
+**Learned**
+
+- **The defect class.** Five instances: the hook-install claim (true of cs-toolkit's `make`
+  target, false of `init.sh`); the advice that followed from it; "no record of it **in this
+  repo**", which inverts in an adopter because there *this repo* is the one holding the record;
+  a `docs/plan/handoff/` path that never existed; and an archiver substitution that renamed the
+  script but not its `--target-lines` flag. Each was written correctly and read wrongly. `#248`
+  did not describe this and nothing else did either; filed as `#274`.
+- **Installing kit docs into an adopter is a review oracle.** CodeRabbit found 12 findings on
+  `#1830` against files it had reviewed long ago upstream — including a hardcoded prefix in a
+  file that documents three ways that prefix can differ.
+- **The `/wrap-up` fork inverted the pattern.** The other conversions found kit bugs the fork
+  was hiding; this fork was running a remedy the kit lacked, and had open as `#119`. Its
+  validation step had no upstream equivalent — seven distinctive phrases, zero hits.
+- **The panel found a false claim by executing it**, in a paragraph written while citing `#248`
+  for that exact failure. Verifying the cheap sub-claims is not verifying the claim.
+- **Seeing an untracked file is not a control; staging by name is.** The validation step added
+  in `#272` was defeated on its first live use, in the same commit: `git add -A` swept 228 lines
+  of an adopter's uncommitted design note into a wrap-up PR, through review and merge. The
+  pre-commit check **did** list the file. It was read for intent — "pre-existing, not mine" —
+  rather than as a staging hazard, which is why "surface untracked files" would not have helped
+  and is the fix that was **not** shipped. `#276` bans wildcard adds in the workflow instead;
+  cs-toolkit `#1833` reverted the sweep, content verified byte-identical three ways.
+- **The panel's own contract has a write channel it forbids.** Two live incidents: a scratch
+  clone whose `origin` pointed at the handed tree took a pushed ref, and a lens deleted this
+  repo's installed `pre-push` after inferring from an untracked path that it had created it.
+  Both invisible to `git status --short`, which the contract names as its attestation. `#270`.
+- **`paths.engines` carries two meanings** and cannot be right in an adopter with divergent
+  originals. The obvious fix is foreclosed: relocating kit engines puts them under a formatter
+  that rewrites them. Attempted and reverted. `#269`.
+- **The kit tells adopters to bind doctrine through `.claude/rules/`**, listed first among three
+  "equivalent" options, and that one binds a single runtime. cs-toolkit has 427 lines behind it,
+  including its 66-line safety doctrine, reaching one of its two runtimes. `#273`.
+
+**Decided this session (operator)**
+
+- **Kit-owned docs are exempt from an adopter's formatters.** cs-toolkit's hook would have
+  rewritten 8 of 9 installed docs, making every one read as a local edit permanently, with no
+  adopter-side way to re-stamp the baseline. The exemption was verified in both directions and
+  has since held twice while the same commits reformatted adapter files beside them.
+- **`#209` is a decision to take, not a build to schedule** — and after the conversions, which
+  is what happened. The build edits the doctrine it reforms, which `#213` measured at five
+  rounds.
+- **Two kit PRs merged on operator sign-off without a third panel**, both after their bot went
+  rate-limited mid-PR. Recorded on each PR rather than left to be inferred from a missing
+  receipt.
+
+**Open, and owned by nothing yet**
+
+- **cs-toolkit's own wrap-up is in flight**, run through the newly converted `/wrap-up` so the
+  conversion gets an end-to-end exercise rather than only a review. Two things it cannot do:
+  its friction inbox is over budget with four un-graduated dated sections, and graduating them
+  needs tracker writes plus operator approval (`triage-friction-log`, a separate pass); and its
+  `chore/update-plan-<date>` convention already collided with an earlier PR the same day, which
+  is `#256` reproduced a third time.
+- **Carried forward:** `#243` (still the precondition for the `triage-friction-log` and
+  `post-merge-systemize` conversions — those two are what remain of the adapter work), `#209`,
+  `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`,
+  `#124`, `#169`, `#143`, `#93` (its content-recovery half is now discharged; its compatibility
+  half was retired by operator decision).
+
+▶ Next: **take the `#209` decision.** It is the operator's, it is cheap, and its input will not
+get better — four measurements now, and this session added the one that bears on the direction
+the issue currently recommends. Direction 1 would have reduced round 2 of `#268` to a single
+lens, and that round's two lenses returned **disjoint** finding sets, so whichever ran alone
+would have missed the other's entire set including the MEDIUM. Read the two comments on `#209`
+before proposing anything: `#120`, `#211` and `#209` share one evidence body and the issue says
+to weigh them together, which now covers five asks. Start from "none of directions 1–4 is
+ready" rather than from picking one.
+
 ### 2026-08-03 (the tracker gather, and a failure mode `#248` had not named)
 
 **Theme —** The shipped rule never changed after round one. Across **every** review round on
