@@ -1017,9 +1017,27 @@ def test_a_payload_carrying_no_readable_text_still_fails_loud(monkeypatch, capsy
     assert exit_code == 0 and out != ""
 
 
+def test_a_payload_too_deep_for_json_load_still_exits_zero(monkeypatch, capsys):
+    """`json.load` raises RecursionError before this module sees the payload.
+
+    A lens ran the real script on a 200k-deep array and got exit 1, against a
+    docstring promising a hook never fails a session. `_iter_strings`'s depth
+    bound cannot help — the parse never completes. Pre-existing, and the
+    previous version of this test asserted the property in its docstring while
+    exercising a path `json.load` can never reach.
+    """
+    hook = _load_hook()
+    text = '{"tool_input": {"command": "gh pr create"}, "tool_response": '
+    text += "[" * 200_000 + '"x"' + "]" * 200_000 + "}"
+
+    exit_code, out = _run(hook, monkeypatch, capsys, text)
+
+    assert exit_code == 0
+    assert out == ""
+
+
 def test_walking_for_strings_is_depth_bounded(monkeypatch, capsys):
-    """A pathological payload must not blow the stack — it exits 0 either way,
-    but a RecursionError escaping would be a crash, not a degraded reminder."""
+    """The walk's own bound, distinct from the parser's above."""
     hook = _load_hook()
     deep: object = "https://github.com/o/r/pull/1"
     for _ in range(60):

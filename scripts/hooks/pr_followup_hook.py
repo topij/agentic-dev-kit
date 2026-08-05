@@ -419,7 +419,13 @@ def main() -> int:
     runtime = _runtime_from_argv(sys.argv[1:])
     try:
         data = json.load(sys.stdin)
-    except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
+    except (json.JSONDecodeError, ValueError, UnicodeDecodeError, RecursionError):
+        # RecursionError is raised by `json.load` itself on deeply nested input,
+        # before any of this module's code runs — so `_iter_strings`'s own depth
+        # bound cannot help. Without it here a 200k-deep payload exits 1, which
+        # this module's docstring promises never happens. Pre-existing; found by
+        # a review lens that ran the real script rather than reading it, after a
+        # a comment added on this PR implied the case was already handled.
         return 0  # malformed payload — never block the session
 
     if os.environ.get("JOB_NAME"):
