@@ -1491,7 +1491,9 @@ def test_register_pr_hook_names_the_configured_engines_dir(tmp_path: Path) -> No
     assert "scripts/devkit/hooks/pr_followup_hook.py" in result.stdout
 
 
-def test_register_pr_hook_recognises_an_existing_registration(tmp_path: Path) -> None:
+def test_register_pr_hook_reports_a_mention_without_calling_it_a_registration(
+    tmp_path: Path,
+) -> None:
     repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
     codex = repo / ".codex"
     codex.mkdir()
@@ -1502,8 +1504,43 @@ def test_register_pr_hook_recognises_an_existing_registration(tmp_path: Path) ->
 
     result = _run_init(repo)
 
-    assert ".codex/hooks.json already registers" in result.stdout
-    assert "Codex does not register" not in result.stdout
+    # narrowed after CodeRabbit pointed out the substring proves a mention, not
+    # a registration: the run reports what it saw and names /hooks as the judge
+    assert ".codex/hooks.json mentions the PR follow-through hook" in result.stdout
+    assert "not checked here" in result.stdout
+    assert "no PR follow-through hook found for Codex" not in result.stdout
+
+
+def test_a_mention_under_the_wrong_event_is_not_reported_as_registered(
+    tmp_path: Path,
+) -> None:
+    """CodeRabbit's finding on `#303`, as a fixture.
+
+    `pr_followup_hook` under `SessionStart` means Codex will never run this on
+    a `Bash` call — the adopter is unprotected. The old wording said "already
+    registers" and sent them away believing otherwise.
+
+    The fix is not to parse the JSON and decide. It is to stop claiming a
+    conclusion the check cannot reach: report the mention, name `/hooks` as
+    the authority. This test pins that distinction, so a future edit that
+    "helpfully" restores the stronger wording fails here.
+    """
+    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
+    codex = repo / ".codex"
+    codex.mkdir()
+    (codex / "hooks.json").write_text(
+        '{"hooks": {"SessionStart": [{"hooks": ['
+        '{"command": "pr_followup_hook.py --runtime codex"}]}]}}\n',
+        encoding="utf-8",
+    )
+
+    result = _run_init(repo)
+
+    assert "mentions the PR follow-through hook" in result.stdout
+    assert "/hooks in a Codex session" in result.stdout
+    # the claim the adopter must not be given, in any of its historical forms
+    for overclaim in ("already registers", "is registered", "will run"):
+        assert overclaim not in result.stdout
 
 
 @pytest.mark.parametrize("shape", ["plain_file", "dangling_symlink", "unusable_dir", "hooks_json_dangling"])

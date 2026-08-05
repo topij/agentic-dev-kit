@@ -1052,19 +1052,32 @@ register_pr_hook() {
   # `grep -q` on a path that may be absent, unreadable, a directory or a broken
   # link fails identically in every case, which is fine when the only
   # consequence is printing instructions the adopter can ignore.
+  #
+  # What this grep establishes is that the string appears in the file — NOT that
+  # Codex will run it. A mention under `SessionStart`, or in any other event,
+  # matches too. CodeRabbit flagged that on this PR (#303) and proposed parsing
+  # the JSON to require a `hooks.PostToolUse` entry. That is declined on purpose:
+  # a structural predicate about a runtime's config, restated in sh, is the
+  # exact shape that produced every defect this function has had — it is why the
+  # seed was removed. So the claim is narrowed to what was actually observed and
+  # the authority is named. `/hooks` decides, not this script.
   if [ -f .codex/hooks.json ] && grep -q pr_followup_hook .codex/hooks.json 2>/dev/null; then
-    echo ".codex/hooks.json already registers the PR follow-through hook"
+    echo ".codex/hooks.json mentions the PR follow-through hook. Whether Codex will"
+    echo "      run it — the right event, a trusted hook — is not checked here; run"
+    echo "      /hooks in a Codex session to see what it actually loaded."
   else
-    echo "note: Codex does not register the PR follow-through hook here. Add to"
+    echo "note: no PR follow-through hook found for Codex here. Add to"
     echo "      .codex/hooks.json under hooks.PostToolUse, matcher \"^Bash\$\":"
     echo "        python3 \"\$(git rev-parse --show-toplevel)/${_hook_src}\" --runtime codex"
     echo "      Codex then needs you to trust it via /hooks before it runs."
   fi
 
+  # Same narrowing as above, for the same reason.
   if [ -f .claude/settings.json ] && grep -q pr_followup_hook .claude/settings.json 2>/dev/null; then
-    echo ".claude/settings.json already registers the PR follow-through hook"
+    echo ".claude/settings.json mentions the PR follow-through hook. Whether it is"
+    echo "      wired to PostToolUse is not checked here; /hooks lists what loaded."
   else
-    echo "note: Claude does not register the PR follow-through hook here. Add to"
+    echo "note: no PR follow-through hook found for Claude here. Add to"
     echo "      .claude/settings.json under hooks.PostToolUse, matcher Bash,"
     echo "      with if: \"Bash(gh pr *)\":"
     echo "        python3 \"\$CLAUDE_PROJECT_DIR/${_hook_src}\" --runtime claude"
