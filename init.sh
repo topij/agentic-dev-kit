@@ -1022,7 +1022,20 @@ register_pr_hook() {
   fi
 
   if [ -e .codex/hooks.json ]; then
-    echo ".codex/hooks.json already exists — left untouched"
+    # Existence is not registration. A .codex/hooks.json the adopter already had
+    # for something else leaves this hook unwired, and reporting only "left
+    # untouched" tells them nothing is wrong. Same content check the Claude
+    # branch below does — the two branches differ in whether the kit may WRITE
+    # the file, not in whether it checks what is in it.
+    if grep -q pr_followup_hook .codex/hooks.json 2>/dev/null; then
+      echo ".codex/hooks.json already registers the PR follow-through hook"
+    else
+      echo "note: .codex/hooks.json exists but does NOT register the PR follow-through"
+      echo "      hook. Add to hooks.PostToolUse (matcher \"^Bash\$\"):"
+      echo "        python3 \"\$(git rev-parse --show-toplevel)/${_hook_src}\" --runtime codex"
+      echo "      Not merged for you: the file is yours, and merging JSON from sh is"
+      echo "      the clobber this kit refuses elsewhere."
+    fi
   else
     mkdir -p .codex
     cat > .codex/hooks.json <<CODEXHOOK
