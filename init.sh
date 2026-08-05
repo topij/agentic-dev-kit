@@ -1026,62 +1026,41 @@ register_pr_hook() {
     return 0
   fi
 
-  # BOTH runtimes are REPORTED, neither is written. That symmetry is the whole
-  # design, and it was reached the expensive way (#303).
+  # This reads nothing and writes nothing. It prints, every run, and that is
+  # the third and final position on a question `#303` got wrong twice.
   #
-  # An earlier version seeded `.codex/hooks.json` when absent, reasoning that it
-  # is a file the kit may own while `.claude/settings.json` is the adopter's.
-  # Every guard that write then needed came from a review finding — a
-  # non-directory `.codex`, an unreadable one, a dangling symlink at `.codex` —
-  # and the round after those landed found a fifth shape underneath: a DANGLING
-  # SYMLINK at `.codex/hooks.json` itself. There `[ -e ]` is false, because it
-  # follows the link to a missing target, so the seeding branch ran and `cat >`
-  # followed the symlink — writing the hook JSON to whatever the link pointed
-  # at, outside `.codex`, while printing `seeded .codex/hooks.json` and exiting
-  # 0. Reproduced live, unmutated.
+  # First it SEEDED `.codex/hooks.json` when absent — a file the kit reasoned it
+  # could own. Four review rounds each found a filesystem shape the last round's
+  # guards missed, ending with a dangling symlink AT `.codex/hooks.json`, where
+  # `[ -e ]` is false and `cat >` follows the link: the payload landed outside
+  # `.codex` while the run printed `seeded` and exited 0. The write came out.
   #
-  # Reporting has none of that surface: no write, no filesystem shapes to
-  # enumerate, no symlink to follow. And it costs the adopter almost nothing,
-  # because Codex requires them to trust a project hook via `/hooks` before it
-  # runs at all — a seeded file is inert until they act, so seeding never bought
-  # an automatic outcome, only a saved paste.
+  # Then it still READ those paths, to decide whether to print instructions.
+  # That check needed a `-f` rather than `-e` or a FIFO would hang it forever,
+  # and a substring match cannot tell a `PostToolUse` entry from a mention under
+  # any other event — so a stray occurrence suppressed the setup instructions
+  # for an adopter who was not actually covered. CodeRabbit found that one.
   #
-  # `-f` and not `-e`: `-e` is true for a FIFO, and `grep -q` on a FIFO blocks
-  # until a writer appears, which here is never — `init.sh` would hang with no
-  # output and no error. `-f` is false for one, so grep is never reached.
-  # `grep -q` on a path that may be absent, unreadable, a directory or a broken
-  # link fails identically in every case, which is fine when the only
-  # consequence is printing instructions the adopter can ignore.
+  # The pattern is the same both times, and it is worth naming because it will
+  # recur: a predicate about the adopter's filesystem or a runtime's config,
+  # restated here, where nothing can execute the restatement to check it. Each
+  # repair added a guard and the next round found the shape the guard missed.
+  # What ended it was deleting the predicate, not guarding it better.
   #
-  # What this grep establishes is that the string appears in the file — NOT that
-  # Codex will run it. A mention under `SessionStart`, or in any other event,
-  # matches too. CodeRabbit flagged that on this PR (#303) and proposed parsing
-  # the JSON to require a `hooks.PostToolUse` entry. That is declined on purpose:
-  # a structural predicate about a runtime's config, restated in sh, is the
-  # exact shape that produced every defect this function has had — it is why the
-  # seed was removed. So the claim is narrowed to what was actually observed and
-  # the authority is named. `/hooks` decides, not this script.
-  if [ -f .codex/hooks.json ] && grep -q pr_followup_hook .codex/hooks.json 2>/dev/null; then
-    echo ".codex/hooks.json mentions the PR follow-through hook. Whether Codex will"
-    echo "      run it — the right event, a trusted hook — is not checked here; run"
-    echo "      /hooks in a Codex session to see what it actually loaded."
-  else
-    echo "note: no PR follow-through hook found for Codex here. Add to"
-    echo "      .codex/hooks.json under hooks.PostToolUse, matcher \"^Bash\$\":"
-    echo "        python3 \"\$(git rev-parse --show-toplevel)/${_hook_src}\" --runtime codex"
-    echo "      Codex then needs you to trust it via /hooks before it runs."
-  fi
-
-  # Same narrowing as above, for the same reason.
-  if [ -f .claude/settings.json ] && grep -q pr_followup_hook .claude/settings.json 2>/dev/null; then
-    echo ".claude/settings.json mentions the PR follow-through hook. Whether it is"
-    echo "      wired to PostToolUse is not checked here; /hooks lists what loaded."
-  else
-    echo "note: no PR follow-through hook found for Claude here. Add to"
-    echo "      .claude/settings.json under hooks.PostToolUse, matcher Bash,"
-    echo "      with if: \"Bash(gh pr *)\":"
-    echo "        python3 \"\$CLAUDE_PROJECT_DIR/${_hook_src}\" --runtime claude"
-  fi
+  # So: no branch. Print both, say they are skippable, and name the authority.
+  # `/hooks` is the only thing that can report what a runtime actually loaded —
+  # including the trust step Codex requires, which nothing here could establish
+  # anyway. An adopter re-reading eight lines they have already acted on is a
+  # smaller cost than any of the three defects above.
+  echo "note: the PR follow-through hook is registered by hand, once per runtime."
+  echo "      Skip whichever you have already done — \`/hooks\` in a session lists"
+  echo "      what that runtime actually loaded, which is the authority here."
+  echo "      Codex — .codex/hooks.json, under hooks.PostToolUse, matcher \"^Bash\$\":"
+  echo "        python3 \"\$(git rev-parse --show-toplevel)/${_hook_src}\" --runtime codex"
+  echo "        Codex also needs you to trust the hook via /hooks before it runs."
+  echo "      Claude — .claude/settings.json, under hooks.PostToolUse, matcher Bash,"
+  echo "      with if: \"Bash(gh pr *)\":"
+  echo "        python3 \"\$CLAUDE_PROJECT_DIR/${_hook_src}\" --runtime claude"
 }
 
 install_hooks() {

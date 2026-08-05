@@ -1421,21 +1421,22 @@ def _with_pr_hook(repo: Path) -> Path:
 def test_a_fifo_at_either_config_path_cannot_wedge_the_run(
     tmp_path: Path, fifo_at: str
 ) -> None:
-    """The guards are `-f`, not `-e`, and that single token is load-bearing.
+    """`register_pr_hook` reads neither config path, and this is the shape that
+    proves it rather than asserting it.
 
-    `grep -q` on a FIFO blocks until someone opens the write end. Nothing ever
-    does, so `-e` here is not a slower run — it is `init.sh` hanging forever
-    with no output and no error, which is worse than any failure it could
-    report. `-f` is false for a FIFO, so the guard short-circuits and grep is
-    never reached.
+    A FIFO is the one entry that does not fail fast: anything opening it for
+    reading blocks until a writer appears, which here is never. So a run that
+    completes over a FIFO at these paths cannot have read them — where a run
+    that merely errors could have.
 
-    A FIFO cannot arrive by clone (git has no mode for one), so this is not a
-    shape an adopter stumbles into. It is here because a round-4 review lens
-    mutated `-f` to `-e` and the whole suite stayed green while the real
-    `init.sh` hung until killed. The token had no defender.
+    This began as a guard test. A round-4 lens mutated the `-f` in
+    `[ -f .codex/hooks.json ]` to `-e`, the whole suite stayed green, and the
+    real `init.sh` hung until killed. The guard was then deleted along with the
+    check it protected, so the test now pins the stronger property: a future
+    edit that reintroduces any read of these paths fails here.
 
-    The timeout is the assertion: a regression fails by raising TimeoutExpired
-    rather than by hanging CI.
+    The timeout is the assertion — a regression raises TimeoutExpired instead
+    of hanging CI.
     """
     repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
     target = repo / fifo_at
@@ -1489,58 +1490,6 @@ def test_register_pr_hook_names_the_configured_engines_dir(tmp_path: Path) -> No
     result = _run_init(repo)
 
     assert "scripts/devkit/hooks/pr_followup_hook.py" in result.stdout
-
-
-def test_register_pr_hook_reports_a_mention_without_calling_it_a_registration(
-    tmp_path: Path,
-) -> None:
-    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
-    codex = repo / ".codex"
-    codex.mkdir()
-    (codex / "hooks.json").write_text(
-        '{"hooks": {"PostToolUse": [{"hooks": [{"command": "pr_followup_hook.py"}]}]}}\n',
-        encoding="utf-8",
-    )
-
-    result = _run_init(repo)
-
-    # narrowed after CodeRabbit pointed out the substring proves a mention, not
-    # a registration: the run reports what it saw and names /hooks as the judge
-    assert ".codex/hooks.json mentions the PR follow-through hook" in result.stdout
-    assert "not checked here" in result.stdout
-    assert "no PR follow-through hook found for Codex" not in result.stdout
-
-
-def test_a_mention_under_the_wrong_event_is_not_reported_as_registered(
-    tmp_path: Path,
-) -> None:
-    """CodeRabbit's finding on `#303`, as a fixture.
-
-    `pr_followup_hook` under `SessionStart` means Codex will never run this on
-    a `Bash` call — the adopter is unprotected. The old wording said "already
-    registers" and sent them away believing otherwise.
-
-    The fix is not to parse the JSON and decide. It is to stop claiming a
-    conclusion the check cannot reach: report the mention, name `/hooks` as
-    the authority. This test pins that distinction, so a future edit that
-    "helpfully" restores the stronger wording fails here.
-    """
-    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
-    codex = repo / ".codex"
-    codex.mkdir()
-    (codex / "hooks.json").write_text(
-        '{"hooks": {"SessionStart": [{"hooks": ['
-        '{"command": "pr_followup_hook.py --runtime codex"}]}]}}\n',
-        encoding="utf-8",
-    )
-
-    result = _run_init(repo)
-
-    assert "mentions the PR follow-through hook" in result.stdout
-    assert "/hooks in a Codex session" in result.stdout
-    # the claim the adopter must not be given, in any of its historical forms
-    for overclaim in ("already registers", "is registered", "will run"):
-        assert overclaim not in result.stdout
 
 
 @pytest.mark.parametrize("shape", ["plain_file", "dangling_symlink", "unusable_dir", "hooks_json_dangling"])
