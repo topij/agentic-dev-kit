@@ -1408,24 +1408,38 @@ def test_both_lens_compute_comments_state_that_effort_is_not_enforced():
 # comment. So these tests assert on what it PRINTS, and that it writes nothing.
 
 
-def _snapshot(path: Path) -> tuple[str, ...]:
+def _snapshot(path: Path) -> tuple:
     """Everything about `path` that a write could change, for any file type.
 
     Deliberately not `read_text()`: these fixtures point it at a symlink, an
     unreadable directory and a plain file, and the shape under test is the one
     thing that must not decide how thoroughly it is checked.
+
+    Recursive, and that is load-bearing. The first version recorded a
+    directory's child NAMES only, so deleting `.codex/hooks.json` and writing a
+    regular file back under the same name left the snapshot identical — a
+    round-6 lens did exactly that and all four parametrizations passed. Each
+    child now carries its own type and content or link target.
+
+    Symlinks are tested before existence: a dangling one is `exists() == False`
+    and must still be recorded as the symlink it is, since replacing it with a
+    real file is precisely the regression above.
     """
-    if not path.is_symlink() and not path.exists():
-        return ("absent",)
     if path.is_symlink():
         return ("symlink", str(path.readlink()))
+    if not path.exists():
+        return ("absent",)
     if path.is_dir():
         try:
-            return ("dir", *sorted(c.name for c in path.iterdir()))
+            children = sorted(path.iterdir(), key=lambda c: c.name)
         except PermissionError:
             # mode 000 — unreadable is itself the state being preserved
             return ("dir", "unreadable", oct(path.stat().st_mode))
-    return ("file", path.read_text(encoding="utf-8"))
+        return ("dir", *((c.name, _snapshot(c)) for c in children))
+    try:
+        return ("file", path.read_text(encoding="utf-8"))
+    except (PermissionError, UnicodeDecodeError) as exc:
+        return ("file", type(exc).__name__)
 
 
 def _with_pr_hook(repo: Path) -> Path:
@@ -1475,9 +1489,13 @@ def test_a_fifo_at_either_config_path_cannot_wedge_the_run(
 
     assert result.returncode == 0
     assert "bootstrapped" in result.stdout
-    # and it still said its piece about the runtime whose path is not a FIFO
-    other = "claude" if fifo_at.startswith(".codex") else "codex"
-    assert f"--runtime {other}" in result.stdout
+    # BOTH, including the runtime whose own path is the FIFO. Checking only the
+    # other one let a round-6 lens gate the Codex block behind `[ ! -e ... ]` —
+    # an existence test that never opens the file, so it cannot hang, and the
+    # instructions vanish for an adopter who has an unusable config there. That
+    # is the suppression bug this design deleted the read to prevent.
+    assert "--runtime codex" in result.stdout
+    assert "--runtime claude" in result.stdout
 
 
 def test_register_pr_hook_reports_both_runtimes_and_writes_neither(tmp_path: Path) -> None:
@@ -1568,7 +1586,16 @@ def test_register_pr_hook_names_the_configured_engines_dir(tmp_path: Path) -> No
 
     result = _run_init(repo)
 
-    assert "scripts/devkit/hooks/pr_followup_hook.py" in result.stdout
+    # per line, not "somewhere in stdout": a round-6 lens hardcoded ONLY the
+    # Codex line and the whole suite stayed green, because the Claude line's
+    # correct interpolation satisfied the single substring check for both
+    codex_line = next(ln for ln in result.stdout.splitlines() if "--runtime codex" in ln)
+    claude_line = next(ln for ln in result.stdout.splitlines() if "--runtime claude" in ln)
+    assert "scripts/devkit/hooks/pr_followup_hook.py" in codex_line
+    assert "scripts/devkit/hooks/pr_followup_hook.py" in claude_line
+    # and neither may fall back to the default this fixture deliberately avoids
+    assert '"scripts/hooks/pr_followup_hook.py"' not in codex_line
+    assert '/scripts/hooks/pr_followup_hook.py"' not in claude_line
 
 
 @pytest.mark.parametrize("shape", ["plain_file", "dangling_symlink", "unusable_dir", "hooks_json_dangling"])
@@ -1596,10 +1623,15 @@ def test_no_codex_shape_can_make_the_run_write_or_abort(tmp_path: Path, shape: s
     try:
         result = _run_init(repo)  # check=True — a non-zero exit fails the test
         assert "bootstrapped" in result.stdout
-        # `escaped.json` is only reachable by the two symlink shapes, so it was
-        # the sole write-evidence for all four and proved nothing for the other
-        # two — a round-5 lens added `printf PWNED > .codex` and every
-        # parametrization still passed. The snapshot covers every shape.
+        # Two assertions, each covering what the other cannot. `escaped.json`
+        # is only reachable by the two symlink shapes, so it proved nothing for
+        # the other two — a round-5 lens added `printf PWNED > .codex` and every
+        # parametrization still passed. The snapshot closes that, but not the
+        # symlink-escape shape: for a DIRECTORY it records entry names only, so
+        # a write THROUGH a child symlink to an external target leaves it
+        # unchanged. A round-6 lens established that by writing through the link
+        # and watching the snapshot assertion pass while `escaped.exists()`
+        # caught it. Neither line is redundant; do not drop either.
         assert _snapshot(codex) == before, f"init.sh modified .codex ({shape})"
         assert not escaped.exists(), "init.sh wrote through a symlink, outside .codex"
     finally:
@@ -1624,7 +1656,14 @@ def test_the_advisory_matches_the_registrations_it_describes(tmp_path: Path) -> 
     claude_cfg = json.loads(
         (REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
     )
-    codex_entry = codex_cfg["hooks"]["PostToolUse"][0]
+    # both sides selected by content, not position: `[0]` is correct today
+    # only because .codex/hooks.json has exactly one PostToolUse entry, and a
+    # second unrelated hook would silently move this onto the wrong one
+    codex_entry = next(
+        e
+        for e in codex_cfg["hooks"]["PostToolUse"]
+        if any("pr_followup_hook" in h.get("command", "") for h in e["hooks"])
+    )
     claude_entry = next(
         e
         for e in claude_cfg["hooks"]["PostToolUse"]
