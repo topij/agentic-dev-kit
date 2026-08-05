@@ -38,7 +38,9 @@ Bootstraps the agentic-dev-kit in the current repo:
      byte-identical.
   5. Appends the kit's state-sandbox paths to .gitignore if they're
      missing (never duplicates a line on re-run).
-  6. Installs the pre-push hook as a shim (honoring core.hooksPath).
+  6. Installs the pre-push hook as a shim (honoring core.hooksPath), and
+     reports — never writes — the PR follow-through hook's registration for
+     each runtime that is missing it.
   7. Prints the runtime-specific session-start invocation.
 
 Safe to re-run at any time. Run it from the repo root (the directory that
@@ -1001,20 +1003,23 @@ seed_doc() {
 # shim rather than copying the hook body, so the hook stays current when the
 # engine is updated, and rather than a relative symlink, so it survives the
 # engines dir being vendored at any depth.
-# ── PR follow-through hook registration (#301) ───────────────────────────
+# ── PR follow-through hook registration (#301, #303) ─────────────────────
 # The git hooks above are installed by writing a shim. THIS hook is different:
-# it is a runtime hook, registered in a runtime's own config, and the two
-# runtimes need opposite treatment.
-#
-#   Codex  — `.codex/hooks.json` is a file the kit can own. Seeded when absent,
-#            never touched when present.
-#   Claude — `.claude/settings.json` is the adopter's, usually already exists,
-#            and merging JSON into it from sh is the kind of surgery this kit
-#            tells /adopt not to attempt. Reported, never edited.
+# it is a runtime hook, registered in a runtime's own config, and the kit
+# REPORTS both registrations rather than writing either.
 #
 # Both registrations pass `--runtime`, because the hook reads
 # `review.fallback_commands.<runtime>` and `review.fallback_panel.lens_compute.
 # <runtime>`; without it a Codex session is told to run Claude's review command.
+#
+# This banner previously said the two runtimes "need opposite treatment" —
+# `.codex/hooks.json` seeded because it is "a file the kit can own",
+# `.claude/settings.json` merely reported. The function below records why that
+# asymmetry was abandoned. The banner is corrected rather than deleted because
+# it survived the change that falsified it, six lines above the function it
+# describes, and that is worth one sentence to the next person who edits here:
+# when you change a function, the comment ABOVE it is not part of the diff you
+# are reading.
 register_pr_hook() {
   _hook_src="${engines_dir}/hooks/pr_followup_hook.py"
   if [ ! -f "$_hook_src" ]; then
@@ -1041,6 +1046,9 @@ register_pr_hook() {
   # runs at all — a seeded file is inert until they act, so seeding never bought
   # an automatic outcome, only a saved paste.
   #
+  # `-f` and not `-e`: `-e` is true for a FIFO, and `grep -q` on a FIFO blocks
+  # until a writer appears, which here is never — `init.sh` would hang with no
+  # output and no error. `-f` is false for one, so grep is never reached.
   # `grep -q` on a path that may be absent, unreadable, a directory or a broken
   # link fails identically in every case, which is fine when the only
   # consequence is printing instructions the adopter can ignore.

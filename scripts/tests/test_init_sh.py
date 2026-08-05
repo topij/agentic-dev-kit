@@ -1401,14 +1401,6 @@ def test_both_lens_compute_comments_state_that_effort_is_not_enforced():
     assert caveat in cfg_comment, "the reference config must not either"
 
 
-def _with_pr_hook(repo: Path) -> Path:
-    """`register_pr_hook` returns early when the engine is absent, so a fixture
-    that wants to exercise it must ship the file."""
-    hook = repo / "scripts" / "hooks" / "pr_followup_hook.py"
-    hook.parent.mkdir(parents=True, exist_ok=True)
-    hook.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
-    return repo
-
 # ── register_pr_hook (#301, #303) ────────────────────────────────────────────
 # It REPORTS for both runtimes and writes neither. The seeding it used to do for
 # .codex/hooks.json was removed after a review round found a dangling symlink at
@@ -1423,6 +1415,48 @@ def _with_pr_hook(repo: Path) -> Path:
     hook.parent.mkdir(parents=True, exist_ok=True)
     hook.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
     return repo
+
+
+@pytest.mark.parametrize("fifo_at", [".codex/hooks.json", ".claude/settings.json"])
+def test_a_fifo_at_either_config_path_cannot_wedge_the_run(
+    tmp_path: Path, fifo_at: str
+) -> None:
+    """The guards are `-f`, not `-e`, and that single token is load-bearing.
+
+    `grep -q` on a FIFO blocks until someone opens the write end. Nothing ever
+    does, so `-e` here is not a slower run — it is `init.sh` hanging forever
+    with no output and no error, which is worse than any failure it could
+    report. `-f` is false for a FIFO, so the guard short-circuits and grep is
+    never reached.
+
+    A FIFO cannot arrive by clone (git has no mode for one), so this is not a
+    shape an adopter stumbles into. It is here because a round-4 review lens
+    mutated `-f` to `-e` and the whole suite stayed green while the real
+    `init.sh` hung until killed. The token had no defender.
+
+    The timeout is the assertion: a regression fails by raising TimeoutExpired
+    rather than by hanging CI.
+    """
+    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
+    target = repo / fifo_at
+    target.parent.mkdir(parents=True, exist_ok=True)
+    os.mkfifo(target)
+
+    result = subprocess.run(
+        ["sh", "init.sh"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=_env(repo.parent),
+        timeout=60,
+    )
+
+    assert result.returncode == 0
+    assert "bootstrapped" in result.stdout
+    # and it still said its piece about the runtime whose path is not a FIFO
+    other = "claude" if fifo_at.startswith(".codex") else "codex"
+    assert f"--runtime {other}" in result.stdout
 
 
 def test_register_pr_hook_reports_both_runtimes_and_writes_neither(tmp_path: Path) -> None:
