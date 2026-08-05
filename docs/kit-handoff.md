@@ -29,7 +29,7 @@ somebody else's filesystem or config, restated where nothing can execute the res
   `review.fallback_commands.claude` and `lens_compute.claude`, which are runtime-keyed with
   different values, so registering it on Codex unchanged would have told that session to run
   Claude's review command at Claude's model. `.codex/hooks.json` added, `.claude/settings.json`
-  updated, `init.sh` **prints both registrations every run and writes neither**.
+  updated, `init.sh` **prints both registrations whenever the engine is present, and writes neither**.
 - **`#302` — closed** (PR `#306`). The trigger matched its phrase anywhere in a command, so
   anything quoting it mandated a non-terminating watch loop for a PR that did not exist.
   `tool_response` is now the discriminator; the command only selects candidates.
