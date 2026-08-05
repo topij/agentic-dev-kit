@@ -29,6 +29,7 @@ import re
 import shutil
 import subprocess
 import sys
+import json
 from pathlib import Path
 
 import pytest
@@ -1398,3 +1399,84 @@ def test_both_lens_compute_comments_state_that_effort_is_not_enforced():
 
     assert caveat in init_comment, "init.sh must not promise an effort guarantee"
     assert caveat in cfg_comment, "the reference config must not either"
+
+
+def _with_pr_hook(repo: Path) -> Path:
+    """`register_pr_hook` returns early when the engine is absent, so a fixture
+    that wants to exercise it must ship the file."""
+    hook = repo / "scripts" / "hooks" / "pr_followup_hook.py"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    return repo
+
+# ── register_pr_hook (#301, #303) ────────────────────────────────────────────
+# Added after a panel found register_pr_hook had NO coverage at all, and that
+# mutating the seeded `--runtime codex` token survived the whole suite.
+
+
+def test_seeded_codex_hook_names_the_codex_runtime(tmp_path: Path) -> None:
+    """Kills: the heredoc's `--runtime codex` copy-pasted to `claude`.
+
+    That token is the whole point of #301 — without it a Codex session is told
+    to run Claude's review command — and nothing pinned it."""
+    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
+    _run_init(repo)
+    seeded = (repo / ".codex" / "hooks.json").read_text(encoding="utf-8")
+    assert "--runtime codex" in seeded
+    assert "--runtime claude" not in seeded
+    assert "pr_followup_hook.py" in seeded
+    json.loads(seeded)  # and it must be valid JSON, not merely contain the token
+
+
+def test_seeded_codex_hook_points_at_the_configured_engines_dir(tmp_path: Path) -> None:
+    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
+    _run_init(repo)
+    seeded = json.loads((repo / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    command = seeded["hooks"]["PostToolUse"][0]["hooks"][0]["command"]
+    assert "scripts/hooks/pr_followup_hook.py" in command
+
+
+def test_an_existing_codex_hooks_json_is_never_rewritten(tmp_path: Path) -> None:
+    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
+    codex = repo / ".codex"
+    codex.mkdir()
+    theirs = '{"hooks": {"SessionStart": [{"matcher": "*", "hooks": []}]}}\n'
+    (codex / "hooks.json").write_text(theirs, encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert (codex / "hooks.json").read_text(encoding="utf-8") == theirs
+    assert "does NOT register" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("shape", "expected"),
+    [
+        ("plain_file", "is not a directory"),
+        ("dangling_symlink", "dangling symlink"),
+        ("unusable_dir", "not writable/searchable"),
+    ],
+)
+def test_an_unusable_codex_path_is_reported_and_the_run_still_finishes(
+    tmp_path: Path, shape: str, expected: str
+) -> None:
+    """Each of these aborted the whole bootstrap under `set -eu` before the guard
+    covered it — dying mid-function, before the Claude check and the banner,
+    while init.sh's own usage promises it is safe to re-run."""
+    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
+    codex = repo / ".codex"
+    if shape == "plain_file":
+        codex.write_text("not a directory\n", encoding="utf-8")
+    elif shape == "dangling_symlink":
+        codex.symlink_to(repo / "no-such-target")
+    else:
+        codex.mkdir()
+        codex.chmod(0o000)
+
+    try:
+        result = _run_init(repo)  # check=True: a non-zero exit fails the test
+        assert expected in result.stdout
+        assert "bootstrapped" in result.stdout  # reached the end, did not abort
+    finally:
+        if shape == "unusable_dir":
+            codex.chmod(0o755)

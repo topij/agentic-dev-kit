@@ -709,3 +709,42 @@ def test_malformed_runtime_degrades_to_the_default_rather_than_a_missing_key(arg
 def test_first_runtime_flag_wins_when_repeated():
     module = _load_hook()
     assert module._runtime_from_argv(["--runtime", "codex", "--runtime", "claude"]) == "codex"
+
+def test_load_review_config_threads_the_runtime_into_lens_compute_too(monkeypatch):
+    """Kills: `_lens_compute_phrase(config, kitconfig, runtime)` losing its third
+    argument and silently defaulting to claude.
+
+    The sibling leak test exercises `_lens_compute_phrase` DIRECTLY with an
+    explicit runtime, so it cannot see that call site drop the argument. That is
+    the same shape as the two survivors the previous round found: the piece was
+    tested, the wiring was not. Against this repo's own config the mutation is
+    live, not theoretical — a Codex reminder would say "model sonnet", which is
+    Claude's model."""
+    hook = _load_hook()
+    hook._load_review_config()  # prime the kitconfig import
+    import kitconfig  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        kitconfig,
+        "load_config",
+        lambda *_a, **_k: {
+            "review": {
+                "bots": ["b"],
+                "fallback_panel": {
+                    "lenses": [{"name": "one"}, {"name": "two"}],
+                    "lens_compute": {
+                        "claude": {"model": "claude-sentinel-model"},
+                        "codex": {"effort": "codex-sentinel-effort"},
+                    },
+                },
+            }
+        },
+    )
+
+    codex_clause = hook._load_review_config("codex")[5]
+    assert "codex-sentinel-effort" in codex_clause
+    assert "claude-sentinel-model" not in codex_clause
+
+    claude_clause = hook._load_review_config("claude")[5]
+    assert "claude-sentinel-model" in claude_clause
+    assert "codex-sentinel-effort" not in claude_clause

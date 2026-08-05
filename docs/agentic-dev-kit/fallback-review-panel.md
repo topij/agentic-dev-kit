@@ -65,15 +65,30 @@ invoked it — `.claude/settings.json` or `.codex/hooks.json`. It reads *only* t
 key for that runtime: an absent key yields no clause, and a value written for the
 other runtime never leaks into this one's instruction.
 
-`.agents/skills/pr-watch/SKILL.md` step 5 also names `lens_compute.codex`, the way
-it names `review.fallback_commands` — so on Codex the key has two consumers, the
-adapter and the hook, and they must agree.
+**`scripts/panel_prompt.py` reads it too**, and is the consumer that matters most:
+it takes its own `--runtime` and renders the compute into the launch prompt a lens
+actually receives, so it is the mechanical path rather than an instruction someone
+follows. `.agents/skills/pr-watch/SKILL.md` step 5 names `lens_compute.codex` as
+well, and `kit_doctor.py` tracks the hook partly because of this key. Anything
+changing the key's meaning has to move all of them together.
 
-This paragraph previously said no Python or shell read the Codex key and told you
-not to look in the hook for a non-Claude key. That was true until `#301` wired the
-hook onto Codex. It is recorded rather than quietly replaced because the sentence
-was confidently wrong for exactly as long as it took someone to change the code
-underneath it.
+Two corrections are recorded here rather than made silently, because the second is
+worse than the first:
+
+1. This paragraph used to say **no Python or shell reads the Codex key** and told
+   you not to look in the hook for a non-Claude key. `#301` wiring the hook onto
+   Codex made that false.
+2. The rewrite that fixed (1) said the key then had **two** consumers and that (1)
+   had been true until `#301`. Both wrong: `panel_prompt.py` has read
+   `lens_compute.<runtime>` since `#219` (2026-08-02), three days earlier, so the
+   original claim was already false before the hook existed — and the repo's own
+   friction log had recorded that this file never mentions `panel_prompt.py` the
+   day before the rewrite.
+
+The lesson is cheap to state and was expensive twice: **enumerate the consumers,
+never count them.** A number beside a list is the thing that goes stale, and a
+correction asserting a new number is how a stale claim gets replaced by a fresh
+wrong one.
 
 **The two keys do not reach equally far, and the difference is per-runtime.** On
 Claude Code today the delegation tool takes a `model` parameter but no per-agent

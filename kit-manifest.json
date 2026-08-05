@@ -25,7 +25,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "948a9c350ae1954ea4d60dfea8cc63c50c6b782f5a81e6feb05326aa4e2e4076"
+      "sha256": "56f0bfa1ebd0e5803394cd75c77c4ff9d2feedbc0ecf7283fa9865994389ae40"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",

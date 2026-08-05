@@ -499,7 +499,7 @@ migrate_kit_schema() {
     # independent and BOTH OPTIONAL — set either, both, or neither; a runtime
     # exposing one control carries one key. Omit a runtime and its lenses inherit
     # the cockpit session'"'"'s compute, which is the behaviour before this key
-    # existed. Read by scripts/hooks/pr_followup_hook.py.
+    # existed. Read by scripts/hooks/pr_followup_hook.py and scripts/panel_prompt.py.
     #
     # HOW FAR EACH KEY REACHES depends on the runtime, and on Claude Code today
     # they differ. Its delegation tool takes a `model` parameter, so `model` is a
@@ -1021,13 +1021,29 @@ register_pr_hook() {
     return 0
   fi
 
-  # `.codex` existing as a NON-DIRECTORY aborts the whole bootstrap: `mkdir -p`
-  # fails, and init.sh runs under `set -eu`, so the run dies mid-function before
-  # the Claude check and the closing banner. init.sh's own usage says "safe to
-  # re-run at any time"; this guard keeps that true.
-  if [ -e .codex ] && [ ! -d .codex ]; then
+  # Anything at `.codex` that is not a USABLE directory aborts the whole
+  # bootstrap: `mkdir -p` or the `cat >` below fails, init.sh runs under
+  # `set -eu`, and the run dies mid-function before the Claude check and the
+  # closing banner. init.sh's own usage says "safe to re-run at any time", so
+  # each unusable shape is reported and skipped instead.
+  #
+  # `-e` alone cannot express this, and testing only "not a directory" missed
+  # two of the three shapes (both found by review):
+  #   - a DANGLING SYMLINK — `-e` follows the link and reports absent, so the
+  #     seeding branch runs and `mkdir -p` then fails on the existing link.
+  #   - an UNREADABLE/UNSEARCHABLE directory — `-e .codex/hooks.json` is false
+  #     because the directory cannot be searched, not because the file is
+  #     missing, so the seeding branch runs and the `cat >` dies.
+  # Hence: test the link first, then the type, then usability, then contents.
+  if [ -L .codex ] && [ ! -e .codex ]; then
+    echo "note: .codex is a dangling symlink — cannot register the PR"
+    echo "      follow-through hook for Codex. Resolve by hand, then re-run."
+  elif [ -e .codex ] && [ ! -d .codex ]; then
     echo "note: .codex exists and is not a directory — cannot register the PR"
     echo "      follow-through hook for Codex. Resolve by hand, then re-run."
+  elif [ -d .codex ] && { [ ! -w .codex ] || [ ! -x .codex ]; }; then
+    echo "note: .codex is not writable/searchable — cannot register the PR"
+    echo "      follow-through hook for Codex. Fix its permissions, then re-run."
   elif [ -e .codex/hooks.json ]; then
     # Existence is not registration. A .codex/hooks.json the adopter already had
     # for something else leaves this hook unwired, and reporting only "left
