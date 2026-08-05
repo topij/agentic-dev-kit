@@ -14,11 +14,83 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-04 — **A workflow doc cannot host a safety-critical guard, because
-nothing executes it.** `/adopt` settled `#105` by *stopping* before the destructive step
-rather than guarding it. The durable result is `#297` and the reason it must exist.
+Last updated: 2026-08-05 — **A predicate you cannot decide is deleted, not guarded.**
+Twice more this session, on the same function. The shape now has a name and four
+instances; `#297` is still the unbuilt half of the last one.
 
-## Latest session — 2026-08-04 (the guard that could not live in a document)
+## Latest session — 2026-08-05 (the runtime hook, and two predicates deleted)
+
+**Theme —** Both runtimes now fire the PR follow-through hook, and neither registration is
+written by the kit. The work that took the time was not the wiring: it was discovering, on
+one function, the shape `#297` was filed about, twice over — a predicate about
+somebody else's filesystem or config, restated where nothing can execute the restatement.
+
+- **`#301` — closed** (PR `#303`). `pr_followup_hook.py` takes `--runtime`; it had hardcoded
+  `review.fallback_commands.claude` and `lens_compute.claude`, which are runtime-keyed with
+  different values, so registering it on Codex unchanged would have told that session to run
+  Claude's review command at Claude's model. `.codex/hooks.json` added, `.claude/settings.json`
+  updated, `init.sh` **prints both registrations every run and writes neither**.
+- **`#302` — closed** (PR `#306`). The trigger matched its phrase anywhere in a command, so
+  anything quoting it mandated a non-terminating watch loop for a PR that did not exist.
+  `tool_response` is now the discriminator; the command only selects candidates.
+- **Filed this session:** `#304`, `#305`. A further occurrence on `#270`.
+
+**Learned**
+
+- **Delete the predicate; a guard round finds the shape the last guard missed.** `init.sh`
+  first *seeded* `.codex/hooks.json`, then merely *read* it to decide whether to print. Each
+  was retired only after its guards had been beaten — the seed by a dangling symlink at the
+  leaf, where `[ -e ]` is false and `cat >` follows the link out of the directory; the read
+  by a substring that cannot distinguish a `PostToolUse` entry from a mention under any other
+  event. The same shape, on `/adopt`, is what `#294` and `#297` are about.
+- **Verifying the output and guessing the input is the same error wearing a coat.** `#306`
+  established `gh`'s stdout/stderr formats from `gh`'s source, exactly as the ticket demanded
+  — and then read that evidence out of a `tool_response` whose shape it had guessed. Codex's
+  schema types that field as `true`: any value. A review lens found the resulting silent miss.
+- **A negated closing keyword in a heading closes the issue listed under it.** `#303`'s squash
+  message said `## Filed, not fixed` above a list naming `#302`; GitHub paired them across the
+  blank line and list marker, and the same message said in prose that it stays open. Found by
+  going to work on `#302` and finding it closed. The contract in `AGENTS.md` already covers
+  this ("in any form, even negated") — what failed was the check, which looked for a keyword
+  and a reference on one line.
+- **The panel's own output is the next round's input.** Rounds repeatedly found defects in the
+  tests written to close the previous round's findings. That is what a fix round is, and it is
+  why `#305` exists.
+- **`panel_prompt.py` rendered every lens prompt this session** — the friction entry proposing
+  it is now validated by use rather than by argument, including `--carry-forward` for the
+  round-to-round aim that had been hand-written prose.
+
+**Decided this session (operator)**
+
+- **Record rather than repair, below a severity floor.** Applied once where it cost something:
+  `#306` ships a doubled word in a comment, because repairing it would move the head off the
+  sha both lenses reviewed. Stated in the squash message rather than hidden. `#305` argues the
+  general case and is deliberately not self-answered — a stopping rule authored mid-loop by
+  the party who wants the loop to end has the worst possible provenance.
+
+**Open, and owned by nothing yet**
+
+- **`#297` is still the unbuilt half of `#105`** — it was this session's inherited starter
+  and was displaced, not dropped.
+- **The closing-keyword check that works is a scratchpad script, not something this repo
+  runs.** It pairs each keyword with the next reference *anywhere* after it rather than on one
+  line; it then caught the same shape in a PR body before merge, and again in a panel
+  report. Landing it belongs
+  with the friction entry, not inside a fix round.
+- **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#285`, `#283`, `#287`, `#286`,
+  `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
+  `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`#304` — `./init.sh` in this repo overwrites its own `AGENTS.md`/`CLAUDE.md`**,
+destroying the kit-own marker one-way and reporting it as `seeded`. Read its body: it
+reproduces the defect, records that `make test` then fails on this checkout, and notes that
+`README.md` documents re-running `init.sh` as the upgrade step. It also names the smaller of
+two fixes — `seed_doc` re-emitting the marker — which needs none of the kit-repo detection
+`#291` wants. `#297` remains the larger inherited item.
+
+______________________________________________________________________
+
+## Session — 2026-08-04 (the guard that could not live in a document)
 
 **Theme —** `/adopt`'s contract is *"never overwrite an existing file"*; `init.sh`'s
 `_seedable` deliberately renders over anything carrying a kit marker. Both are right, and
@@ -242,100 +314,6 @@ smallest of the four filed today, it is on the path every pre-`#51` adopter take
 next upgrade, and the fix is prose in a file that is already `/upgrade`-refreshed. `#281` is
 the next-largest and is a real guard defect, but it needs a test over the near-miss keys
 rather than a wording change.
-
-______________________________________________________________________
-
-## Earlier session — 2026-08-03 (three conversions, and a defect class that only exists in shipped docs)
-
-**Theme —** `/session-start` was already converted; this session did the rest. `/parallel` and
-`/wrap-up` now point at shared workflows, `/wrap-up` on **both** runtimes. The durable result is
-not the conversions: it is that every conversion produced a defect where prose was **correct in
-the repo that wrote it and false in the repo that reads it** — and that installing kit docs into
-a repo with a fresh reviewer is the cheapest oracle found so far for finding them.
-
-- **cs-toolkit `#1830` — install the shared workflows** (`bfcb4104`). Nine docs; `docs/agentic-dev-kit/`
-  had held one. Sessions there had no panel doctrine when the bot went down. Its
-  `session-start.md` was **content**-stale, not byte-stale as the previous handoff recorded —
-  two commits behind, so the repo where the silent tracker truncation was hit was running the
-  session-start without the fix for it.
-- **kit `#268` — two rules recovered from the `/parallel` fork** (`8e57562`), and **cs-toolkit
-  `#1831`** (`2ee66143`) converting it, 200 lines to 64.
-- **kit `#272` — the validation step** (`c7eb7ea`), and **cs-toolkit `#1832`** converting
-  `/wrap-up` on both runtimes, 197 lines to 62, renaming the Codex slug.
-- **kit `#276` and cs-toolkit `#1833`** — the validation step demonstrated its own gap in the
-  commit that introduced it, and the repair. See below.
-- **Filed:** `#269`, `#270`, `#271`, `#273`, `#274` (the defect class above), plus an occurrence
-  and a correction on `#61` and the fourth measurement on `#209`.
-
-**Learned**
-
-- **The defect class.** Five instances: the hook-install claim (true of cs-toolkit's `make`
-  target, false of `init.sh`); the advice that followed from it; "no record of it **in this
-  repo**", which inverts in an adopter because there *this repo* is the one holding the record;
-  a `docs/plan/handoff/` path that never existed; and an archiver substitution that renamed the
-  script but not its `--target-lines` flag. Each was written correctly and read wrongly. `#248`
-  did not describe this and nothing else did either; filed as `#274`.
-- **Installing kit docs into an adopter is a review oracle.** CodeRabbit found 12 findings on
-  `#1830` against files it had reviewed long ago upstream — including a hardcoded prefix in a
-  file that documents three ways that prefix can differ.
-- **The `/wrap-up` fork inverted the pattern.** The other conversions found kit bugs the fork
-  was hiding; this fork was running a remedy the kit lacked, and had open as `#119`. Its
-  validation step had no upstream equivalent — seven distinctive phrases, zero hits.
-- **The panel found a false claim by executing it**, in a paragraph written while citing `#248`
-  for that exact failure. Verifying the cheap sub-claims is not verifying the claim.
-- **Seeing an untracked file is not a control; staging by name is.** The validation step added
-  in `#272` was defeated on its first live use, in the same commit: `git add -A` swept 228 lines
-  of an adopter's uncommitted design note into a wrap-up PR, through review and merge. The
-  pre-commit check **did** list the file. It was read for intent — "pre-existing, not mine" —
-  rather than as a staging hazard, which is why "surface untracked files" would not have helped
-  and is the fix that was **not** shipped. `#276` bans wildcard adds in the workflow instead;
-  cs-toolkit `#1833` reverted the sweep, content verified byte-identical three ways.
-- **The panel's own contract has a write channel it forbids.** Two live incidents: a scratch
-  clone whose `origin` pointed at the handed tree took a pushed ref, and a lens deleted this
-  repo's installed `pre-push` after inferring from an untracked path that it had created it.
-  Both invisible to `git status --short`, which the contract names as its attestation. `#270`.
-- **`paths.engines` carries two meanings** and cannot be right in an adopter with divergent
-  originals. The obvious fix is foreclosed: relocating kit engines puts them under a formatter
-  that rewrites them. Attempted and reverted. `#269`.
-- **The kit tells adopters to bind doctrine through `.claude/rules/`**, listed first among three
-  "equivalent" options, and that one binds a single runtime. cs-toolkit has 427 lines behind it,
-  including its 66-line safety doctrine, reaching one of its two runtimes. `#273`.
-
-**Decided this session (operator)**
-
-- **Kit-owned docs are exempt from an adopter's formatters.** cs-toolkit's hook would have
-  rewritten 8 of 9 installed docs, making every one read as a local edit permanently, with no
-  adopter-side way to re-stamp the baseline. The exemption was verified in both directions and
-  has since held twice while the same commits reformatted adapter files beside them.
-- **`#209` is a decision to take, not a build to schedule** — and after the conversions, which
-  is what happened. The build edits the doctrine it reforms, which `#213` measured at five
-  rounds.
-- **Two kit PRs merged on operator sign-off without a third panel**, both after their bot went
-  rate-limited mid-PR. Recorded on each PR rather than left to be inferred from a missing
-  receipt.
-
-**Open, and owned by nothing yet**
-
-- **cs-toolkit's own wrap-up is in flight**, run through the newly converted `/wrap-up` so the
-  conversion gets an end-to-end exercise rather than only a review. Two things it cannot do:
-  its friction inbox is over budget with four un-graduated dated sections, and graduating them
-  needs tracker writes plus operator approval (`triage-friction-log`, a separate pass); and its
-  `chore/update-plan-<date>` convention already collided with an earlier PR the same day, which
-  is `#256` reproduced a third time.
-- **Carried forward:** `#243` (still the precondition for the `triage-friction-log` and
-  `post-merge-systemize` conversions — those two are what remain of the adapter work), `#209`,
-  `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`,
-  `#124`, `#169`, `#143`, `#93` (its content-recovery half is now discharged; its compatibility
-  half was retired by operator decision).
-
-▶ Next: **take the `#209` decision.** It is the operator's, it is cheap, and its input will not
-get better — four measurements now, and this session added the one that bears on the direction
-the issue currently recommends. Direction 1 would have reduced round 2 of `#268` to a single
-lens, and that round's two lenses returned **disjoint** finding sets, so whichever ran alone
-would have missed the other's entire set including the MEDIUM. Read the two comments on `#209`
-before proposing anything: `#120`, `#211` and `#209` share one evidence body and the issue says
-to weigh them together, which now covers five asks. Start from "none of directions 1–4 is
-ready" rather than from picking one.
 
 ______________________________________________________________________
 

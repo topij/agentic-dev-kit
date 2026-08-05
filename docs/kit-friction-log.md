@@ -11,6 +11,53 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-05
+
+**A negated closing keyword in a heading closes the issue listed beneath it, and the
+check this repo's contract calls for cannot see that shape.** Severity **H**.
+
+`#303`'s squash message carried a section heading `## Filed, not fixed` above a list whose
+first item named `#302`. GitHub paired them across a blank line, a list marker and a
+backtick. That same message said in prose that the issue stays open. It was closed on
+merge, and found by going to work on it.
+
+The contract in `AGENTS.md` already forbids this — *"in any form, even negated"*. What
+failed was the implementation. The sweep being run looked for a keyword and an issue
+reference within a short window **on one line**, which is the shape a human writes by
+accident (`fixes #302`), not the shape a document produces structurally, where a heading
+governs the list under it. "Filed, not fixed" is a natural heading for precisely the case
+where you are listing issues you want left open, so the failure is aimed at its own use case.
+
+Proposed fix: a check that pairs each closing keyword with the next issue reference
+*anywhere* after it, regardless of intervening markup, and requires the author to confirm
+each pairing. Loud on purpose — a false positive costs a glance, a false negative silently
+closes tracked work. A draft ran against the message that slipped through and flagged the
+exact pairing; it then caught the same shape in a PR body before merge, and again in a
+panel report. It also flags `Principle #8`, which is the acceptable cost. Not landed:
+adding a mechanism inside a fix round is a measured source of later findings, and this one
+wants its own change. The blast radius of the original incident was audited — every issue
+that message referenced was checked, and only the one was affected.
+
+**Building a lens's scratch copy has a second failure that looks exactly like isolation
+breaking, and is not.** Severity **M**.
+
+`rsync -a` of a linked worktree copies `__pycache__`, and pytest's cached bytecode carries
+`co_filename` from wherever it was first compiled. Mutation-test tracebacks in the isolated
+copy therefore print paths under the live repo and read precisely like the copy having
+written there. It is cosmetic — `__file__` still resolves to the loaded source, so the right
+file is under test — but it cost real time and nearly caused a valid mutation kill to be
+discarded as a false result. Established by re-running with `__pycache__` excluded and
+`PYTHONDONTWRITEBYTECODE=1`, in `/Users/topi/Coding/agentic-dev-kit`, which reproduced the
+same failures with scratch-relative paths.
+
+The first failure of the same step — `rsync -a` copying the `.git` **gitlink file**, so the
+copy resolves back into the live repository — is recorded on `#270` rather than restated
+here. Both argue the same fix: `git clone` is the safe default
+for a lens scratch copy because it cannot inherit either problem, and that belongs in the
+rendered contract now that `panel_prompt.py` produces it, not in a per-round hand-written
+addendum. The addendum is how the gitlink instance happened — it specified rsync excludes
+without `.git`, and a lens read it as the recipe.
+
 ## 2026-08-04
 
 **`fallback-review-panel.md` never mentions `panel_prompt.py`, so a panel is run by
