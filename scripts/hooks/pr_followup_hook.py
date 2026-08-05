@@ -352,11 +352,25 @@ def should_fire(command: object, response: str | None) -> bool:
     The command alone was the old gate and it mandated a watch loop for PRs that
     did not exist. Now it only selects candidates; the response decides.
     """
-    if not isinstance(command, str) or not _TRIGGER.search(command):
+    if not isinstance(command, str):
+        return False
+    actions = {match.group(1) for match in _TRIGGER.finditer(command)}
+    if not actions:
         return False
     if response is None:
         return True  # nothing readable — fail loud
-    return bool(_PR_URL.search(response) or _READY_ACK.search(response))
+
+    # Each action is matched against ITS OWN evidence. Accepting either signal
+    # for either action let a command that merely mentions `gh pr ready` fire on
+    # any PR URL in its output, and vice versa — CodeRabbit found that.
+    #
+    # ANY, not ALL: `gh pr create --draft && gh pr ready` is one command with
+    # both actions, and its response may carry only the URL if the runtime drops
+    # stderr. Requiring every action's evidence would go silent on a PR that was
+    # genuinely just opened, which is the failure this hook exists to prevent.
+    if "create" in actions and _PR_URL.search(response):
+        return True
+    return bool("ready" in actions and _READY_ACK.search(response))
 
 
 def main() -> int:

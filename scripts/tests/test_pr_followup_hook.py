@@ -891,3 +891,32 @@ def test_should_fire_needs_the_command_first_whatever_the_response_says(monkeypa
         is False
     )
     assert hook.should_fire(None, "https://github.com/x/y/pull/1") is False
+
+
+def test_each_action_is_matched_against_its_own_evidence(monkeypatch, capsys):
+    """CodeRabbit on `#306`: accepting either signal for either action let a
+    command merely mentioning `gh pr ready` fire on any PR URL in its output."""
+    hook = _load_hook()
+    url = "https://github.com/topij/agentic-dev-kit/pull/306"
+    ack = 'Pull request topij/agentic-dev-kit#306 is marked as "ready for review"'
+
+    # mismatched pairs stay silent
+    assert hook.should_fire("echo 'next: gh pr ready 306'", url) is False
+    assert hook.should_fire("echo 'next: gh pr create'", ack) is False
+    # matched pairs fire
+    assert hook.should_fire("gh pr create --fill", url) is True
+    assert hook.should_fire("gh pr ready 306", ack) is True
+
+
+def test_one_command_doing_both_fires_on_either_signal_alone(monkeypatch, capsys):
+    """`gh pr create --draft && gh pr ready` is one command with two actions.
+
+    ANY, not ALL: a runtime that drops stderr carries only the URL, and
+    requiring both would go silent on a PR that was genuinely just opened.
+    """
+    hook = _load_hook()
+    both = "gh pr create --draft --fill && gh pr ready"
+
+    assert hook.should_fire(both, "https://github.com/topij/agentic-dev-kit/pull/306") is True
+    assert hook.should_fire(both, 'Pull request x#1 is marked as "ready for review"') is True
+    assert hook.should_fire(both, "nothing relevant here") is False
