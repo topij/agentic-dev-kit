@@ -24,6 +24,7 @@ against regression like any other test here.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -1398,3 +1399,329 @@ def test_both_lens_compute_comments_state_that_effort_is_not_enforced():
 
     assert caveat in init_comment, "init.sh must not promise an effort guarantee"
     assert caveat in cfg_comment, "the reference config must not either"
+
+
+# ── register_pr_hook (#301, #303) ────────────────────────────────────────────
+# It REPORTS for both runtimes and writes neither. The seeding it used to do for
+# .codex/hooks.json was removed after a review round found a dangling symlink at
+# that path made `cat >` write outside .codex entirely — see the function's own
+# comment. So these tests assert on what it PRINTS, and that it writes nothing.
+
+
+def _snapshot(path: Path) -> tuple:
+    """Everything about `path` that a write could change, for any file type.
+
+    Deliberately not `read_text()`: these fixtures point it at a symlink, an
+    unreadable directory and a plain file, and the shape under test is the one
+    thing that must not decide how thoroughly it is checked.
+
+    Recursive, and that is load-bearing. The first version recorded a
+    directory's child NAMES only, so deleting `.codex/hooks.json` and writing a
+    regular file back under the same name left the snapshot identical — a
+    round-6 lens did exactly that and all four parametrizations passed. Each
+    child now carries its own type and content or link target.
+
+    Symlinks are tested before existence: a dangling one is `exists() == False`
+    and must still be recorded as the symlink it is, since replacing it with a
+    real file is precisely the regression above.
+    """
+    if path.is_symlink():
+        return ("symlink", str(path.readlink()))
+    if not path.exists():
+        return ("absent",)
+    if path.is_dir():
+        try:
+            children = sorted(path.iterdir(), key=lambda c: c.name)
+        except PermissionError:
+            # mode 000 — unreadable is itself the state being preserved
+            return ("dir", "unreadable", oct(path.stat().st_mode))
+        return ("dir", *((c.name, _snapshot(c)) for c in children))
+    try:
+        return ("file", path.read_text(encoding="utf-8"))
+    except (PermissionError, UnicodeDecodeError) as exc:
+        return ("file", type(exc).__name__)
+
+
+def _with_pr_hook(repo: Path) -> Path:
+    """`register_pr_hook` returns early when the engine is absent, so a fixture
+    that wants to exercise it must ship the file."""
+    hook = repo / "scripts" / "hooks" / "pr_followup_hook.py"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    return repo
+
+
+@pytest.mark.parametrize("fifo_at", [".codex/hooks.json", ".claude/settings.json"])
+def test_a_fifo_at_either_config_path_cannot_wedge_the_run(
+    tmp_path: Path, fifo_at: str
+) -> None:
+    """`register_pr_hook` reads neither config path, and this is the shape that
+    proves it rather than asserting it.
+
+    A FIFO is the one entry that does not fail fast: anything opening it for
+    reading blocks until a writer appears, which here is never. So a run that
+    completes over a FIFO at these paths cannot have read them — where a run
+    that merely errors could have.
+
+    This began as a guard test. A round-4 lens mutated the `-f` in
+    `[ -f .codex/hooks.json ]` to `-e`, the whole suite stayed green, and the
+    real `init.sh` hung until killed. The guard was then deleted along with the
+    check it protected, so the test now pins the stronger property: a future
+    edit that reintroduces any read of these paths fails here.
+
+    The timeout is the assertion — a regression raises TimeoutExpired instead
+    of hanging CI.
+    """
+    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
+    target = repo / fifo_at
+    target.parent.mkdir(parents=True, exist_ok=True)
+    os.mkfifo(target)
+
+    result = subprocess.run(
+        ["sh", "init.sh"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=_env(repo.parent),
+        timeout=60,
+    )
+
+    assert result.returncode == 0
+    assert "bootstrapped" in result.stdout
+    # BOTH, including the runtime whose own path is the FIFO. Checking only the
+    # other one let a round-6 lens gate the Codex block behind `[ ! -e ... ]` —
+    # an existence test that never opens the file, so it cannot hang, and the
+    # instructions vanish for an adopter who has an unusable config there. That
+    # is the suppression bug this design deleted the read to prevent.
+    assert "--runtime codex" in result.stdout
+    assert "--runtime claude" in result.stdout
+
+
+def test_register_pr_hook_reports_both_runtimes_and_writes_neither(tmp_path: Path) -> None:
+    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    assert "--runtime codex" in result.stdout
+    assert "--runtime claude" in result.stdout
+    # the whole point of the redesign: no write, so no filesystem shape to guard
+    assert not (repo / ".codex").exists()
+    assert not (repo / ".claude" / "settings.json").exists()
+
+
+@pytest.mark.parametrize("shape", ["directory", "dangling_symlink"])
+def test_no_advisory_when_the_engine_path_is_not_a_file(tmp_path: Path, shape: str) -> None:
+    """Kills: `[ ! -f "$_hook_src" ]` weakened to `-e`.
+
+    `-e` is true for a directory and false for a dangling symlink, so both
+    shapes are needed to pin the guard from each side. A directory at the
+    engine path under `-e` would print a registration naming something that
+    cannot be executed — instructions that fail for the adopter with no clue
+    why. A round-5 lens mutated this and the suite stayed green.
+    """
+    repo = _fixture(tmp_path, config=V1_CONFIG, git=True)
+    hook = repo / "scripts" / "hooks" / "pr_followup_hook.py"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    if shape == "directory":
+        hook.mkdir()
+    else:
+        hook.symlink_to(repo / "no-such-engine")
+
+    result = _run_init(repo)
+
+    assert "bootstrapped" in result.stdout
+    assert "--runtime codex" not in result.stdout
+    assert "--runtime claude" not in result.stdout
+
+
+def test_the_printed_commands_are_pasteable_verbatim(tmp_path: Path) -> None:
+    """The advisory is text an adopter copies into a JSON file, so the two
+    variable idioms in it must survive to their stdout UNEXPANDED.
+
+    Both are one backslash away from breaking silently. Drop it from
+    `\\$(git rev-parse --show-toplevel)` and `init.sh` runs the substitution
+    itself at print time, baking the absolute path of whatever machine ran the
+    bootstrap into a snippet meant to be portable. The adopter pastes it, it
+    works on their machine, and it is wrong for every other checkout — no
+    error anywhere.
+
+    A round-5 lens made exactly that edit and the whole suite stayed green,
+    because every other assertion here matches loose substrings. These two
+    are exact, which is the point: substring assertions cannot see expansion.
+    """
+    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    assert (
+        '        python3 "$(git rev-parse --show-toplevel)/scripts/hooks/'
+        'pr_followup_hook.py" --runtime codex' in result.stdout
+    )
+    assert (
+        '        python3 "$CLAUDE_PROJECT_DIR/scripts/hooks/'
+        'pr_followup_hook.py" --runtime claude' in result.stdout
+    )
+    # the matcher an adopter must reproduce exactly, quotes and anchors included
+    assert 'matcher "^Bash$"' in result.stdout
+    assert 'with if: "Bash(gh pr *)"' in result.stdout
+    # nothing expanded: no absolute path from THIS machine leaked into the paste
+    assert str(repo) not in result.stdout.split("note: the PR follow-through")[-1]
+
+
+def test_register_pr_hook_names_the_configured_engines_dir(tmp_path: Path) -> None:
+    """Kills: `${engines_dir}` hardcoded to `scripts`.
+
+    The previous version of this test used a config with no `paths.engines`, so
+    the detected fallback was the literal string `scripts` — the same value a
+    hardcoded version produces, which made the test unable to tell them apart.
+    A review round mutated the interpolation away and the whole suite stayed
+    green. This fixture puts the engines somewhere the fallback would never
+    produce."""
+    repo = _fixture(tmp_path, config=V1_CONFIG, git=True)
+    hook = repo / "scripts" / "devkit" / "hooks" / "pr_followup_hook.py"
+    hook.parent.mkdir(parents=True)
+    hook.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    (repo / "scripts" / "devkit" / "pr_watch.py").write_text("", encoding="utf-8")
+
+    result = _run_init(repo)
+
+    # per line, not "somewhere in stdout": a round-6 lens hardcoded ONLY the
+    # Codex line and the whole suite stayed green, because the Claude line's
+    # correct interpolation satisfied the single substring check for both
+    codex_line = next(ln for ln in result.stdout.splitlines() if "--runtime codex" in ln)
+    claude_line = next(ln for ln in result.stdout.splitlines() if "--runtime claude" in ln)
+    assert "scripts/devkit/hooks/pr_followup_hook.py" in codex_line
+    assert "scripts/devkit/hooks/pr_followup_hook.py" in claude_line
+    # The Claude line may not fall back to the default this fixture avoids. The
+    # symmetrical check on the Codex line was VACUOUS and is gone: its template
+    # always puts `)/` before the interpolation, so a leading-quote needle could
+    # never match whether the value was right or wrong. The positive assertion
+    # above already catches a Codex-side fallback — verified by mutation.
+    assert "/scripts/hooks/pr_followup_hook.py\"" not in claude_line
+
+
+@pytest.mark.parametrize("shape", ["plain_file", "dangling_symlink", "unusable_dir", "hooks_json_dangling"])
+def test_no_codex_shape_can_make_the_run_write_or_abort(tmp_path: Path, shape: str) -> None:
+    """Each of these broke the seeding version — the last one by following a
+    symlink and writing the payload OUTSIDE .codex while reporting success.
+    With nothing written, every shape is inert."""
+    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
+    codex = repo / ".codex"
+    escaped = repo / "escaped.json"
+
+    if shape == "plain_file":
+        codex.write_text("not a directory\n", encoding="utf-8")
+    elif shape == "dangling_symlink":
+        codex.symlink_to(repo / "no-such-target")
+    elif shape == "unusable_dir":
+        codex.mkdir()
+        codex.chmod(0o000)
+    else:
+        codex.mkdir()
+        (codex / "hooks.json").symlink_to(escaped)
+
+    before = _snapshot(codex)
+
+    try:
+        result = _run_init(repo)  # check=True — a non-zero exit fails the test
+        assert "bootstrapped" in result.stdout
+        # Two assertions, each covering what the other cannot. `escaped.json`
+        # is only reachable by the two symlink shapes, so it proved nothing for
+        # the other two — a round-5 lens added `printf PWNED > .codex` and every
+        # parametrization still passed. The snapshot closes that, but not the
+        # symlink-escape shape: for a DIRECTORY it records entry names only, so
+        # a write THROUGH a child symlink to an external target leaves it
+        # unchanged. A round-6 lens established that by writing through the link
+        # and watching the snapshot assertion pass while `escaped.exists()`
+        # caught it. Neither line is redundant; do not drop either.
+        assert _snapshot(codex) == before, f"init.sh modified .codex ({shape})"
+        assert not escaped.exists(), "init.sh wrote through a symlink, outside .codex"
+    finally:
+        if shape == "unusable_dir":
+            codex.chmod(0o755)
+
+
+def test_the_advisory_matches_the_registrations_it_describes(tmp_path: Path) -> None:
+    """The printed instructions and the two shipped files are the same claim in
+    two places, and nothing tied them together.
+
+    A round-5 lens mutated the printed matcher, the printed `if:`, the printed
+    env-var idiom, and the shipped `.claude/settings.json`'s own matcher and
+    `if` — four edits, each leaving the whole suite green. Static prose
+    describing a file that nothing compares it against drifts silently, and
+    this advisory is the ONLY route by which the hook reaches a new adopter.
+
+    So every expected value here is READ FROM the shipped file rather than
+    written down again. Editing either side alone fails this.
+    """
+    codex_cfg = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    claude_cfg = json.loads(
+        (REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
+    )
+    # both sides selected by content, not position: `[0]` is correct today
+    # only because .codex/hooks.json has exactly one PostToolUse entry, and a
+    # second unrelated hook would silently move this onto the wrong one
+    codex_entry = next(
+        e
+        for e in codex_cfg["hooks"]["PostToolUse"]
+        if any("pr_followup_hook" in h.get("command", "") for h in e["hooks"])
+    )
+    claude_entry = next(
+        e
+        for e in claude_cfg["hooks"]["PostToolUse"]
+        if any("pr_followup_hook" in h.get("command", "") for h in e["hooks"])
+    )
+    claude_hook = next(
+        h for h in claude_entry["hooks"] if "pr_followup_hook" in h.get("command", "")
+    )
+    codex_hook = next(
+        h for h in codex_entry["hooks"] if "pr_followup_hook" in h.get("command", "")
+    )
+
+    result = _run_init(_with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True)))
+
+    # the two command strings, verbatim — unexpanded, as an adopter pastes them
+    assert codex_hook["command"] in result.stdout
+    assert claude_hook["command"] in result.stdout
+    # and the narrowing each runtime applies, from the file rather than restated
+    assert f'matcher "{codex_entry["matcher"]}"' in result.stdout
+    assert f'matcher "{claude_entry["matcher"]}"' in result.stdout
+    assert f'if: "{claude_hook["if"]}"' in result.stdout
+    # `if` lives on the hook entry beside `command`, not next to `matcher`, and
+    # the advisory has to say so — an adopter who nests it wrong gets no error
+    assert "if" not in claude_entry, "shipped file moved `if`; the advisory now lies"
+    assert "beside `command`" in result.stdout
+
+
+def test_both_shipped_registrations_name_their_own_runtime() -> None:
+    """Kills: `--runtime claude` in .claude/settings.json flipped to codex.
+
+    Nothing else covers those two files. `kit-manifest.json` does not track
+    either, so the drift check cannot see a hand-edit, and `init.sh` no longer
+    writes them — so these literals are only as correct as this assertion."""
+    root = REPO_ROOT
+    claude = (root / ".claude" / "settings.json").read_text(encoding="utf-8")
+    codex = (root / ".codex" / "hooks.json").read_text(encoding="utf-8")
+
+    assert "pr_followup_hook.py" in claude
+    assert "--runtime claude" in claude
+    assert "--runtime codex" not in claude
+
+    assert "pr_followup_hook.py" in codex
+    assert "--runtime codex" in codex
+    assert "--runtime claude" not in codex
+
+    # and the Codex registration must be valid JSON with the tool-name matcher,
+    # since Codex has no config-level `if:` and this is the only narrowing
+    parsed = json.loads(codex)
+    # by content, like the two selections in the sibling test. This was the
+    # THIRD instance of the same positional read; the first two were fixed in
+    # 483fa3e and 3a67c45, and 3a67c45's message claimed "both levels filter by
+    # content now, on both runtimes" while this one sat a test below, untouched.
+    codex_pr_entry = next(
+        e
+        for e in parsed["hooks"]["PostToolUse"]
+        if any("pr_followup_hook" in h.get("command", "") for h in e["hooks"])
+    )
+    assert codex_pr_entry["matcher"] == "^Bash$"

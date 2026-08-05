@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
 """PostToolUse hook: after a PR is opened / marked ready, mandate the watch-fix loop.
 
-Wired in `.claude/settings.json` under `hooks.PostToolUse` with matcher `Bash` and
-`if: "Bash(gh pr *)"`. The `if` pre-filters to `gh pr …` commands; this script
-further narrows to `gh pr create` / `gh pr ready` (the moments a PR goes live for
-review) and injects an `additionalContext` instruction so the session runs the
-kit's PR follow-through loop (Principle #5 in `PRINCIPLES.md`) without being asked.
+Registered on BOTH runtimes, and told which one it is running under via
+`--runtime claude|codex` (#301):
+
+  - `.claude/settings.json` — `hooks.PostToolUse`, matcher `Bash`, plus an
+    `if: "Bash(gh pr *)"` config-level pre-filter.
+  - `.codex/hooks.json` — `hooks.PostToolUse`, matcher `^Bash$`. Codex's matcher
+    filters the TOOL NAME only, with no equivalent of Claude's `if`, so this
+    script is invoked on every Bash call there and does all the narrowing itself.
+
+Either way it narrows to `gh pr create` / `gh pr ready` (the moments a PR goes
+live for review) and injects an `additionalContext` instruction so the session
+runs the kit's PR follow-through loop (Principle #5 in `PRINCIPLES.md`) without
+being asked. Both runtimes honour the same `hookSpecificOutput.additionalContext`
+contract.
 This closes the gap where the kit only had prose asking the agent to run `/pr-watch`
 unasked (Principle #8: "a rule that lives only in a doc is a wish").
 
@@ -38,27 +47,44 @@ import re
 import sys
 from pathlib import Path
 
+# Matches the phrase ANYWHERE in the command, so a command that merely quotes it
+# also fires and emits a spurious mandate — observed three times while wiring the
+# Codex registration, once from the comment documenting it. Anchoring to the start
+# would miss the ordinary `cd x && <the command>` form, and a missed reminder costs
+# more than a spurious one, so the direction stays fail-loud. The real discriminator
+# is `tool_response`, which both runtimes supply and this hook ignores: see #302.
+# Wider under Codex, whose matcher filters the tool name only, so every Bash command
+# reaches this regex.
 _TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
 
 _DEFAULT_FALLBACK_COMMAND = "/code-review"
+# Which runtime's `review.*` keys to read. Both registrations pass it explicitly;
+# the default keeps a pre-#301 `.claude/settings.json` that passes no argument
+# working after an engine refresh, rather than silently emitting no reminder.
+_DEFAULT_RUNTIME = "claude"
+_KNOWN_RUNTIMES = ("claude", "codex")
 _DEFAULT_ENGINES_DIR = "scripts"
 _DEFAULT_PANEL_RECEIPT_SOURCE = "fallback:panel"
 
 
-def _lens_compute_phrase(config, kitconfig) -> str:
-    """Render ``review.fallback_panel.lens_compute.claude`` as an instruction clause.
+def _lens_compute_phrase(config, kitconfig, runtime: str = _DEFAULT_RUNTIME) -> str:
+    """Render ``review.fallback_panel.lens_compute.<runtime>`` as an instruction clause.
 
     Returns ``""`` when unset or unusable, which means "lenses inherit the
     cockpit's own compute" — the behaviour before this key existed, and the
     default for any adopter who never sets it.
 
     ``model`` and ``effort`` are independent and each optional, so a runtime that
-    exposes only one control sets only that key. Keyed by runtime for the same
-    reason ``review.fallback_commands.claude`` is: this hook only ever runs under
-    Claude Code, and a value written for another runtime must not leak into this
-    one's instruction.
+    exposes only one control sets only that key. Keyed by runtime because a value
+    written for one must never leak into the other's instruction — which is what
+    happened before `#301`: this hook hardcoded `.claude` while its docstring said
+    "this hook only ever runs under Claude Code", true when written and false the
+    moment it was registered on Codex.
+
+    An absent key for `runtime` yields `""` — lenses inherit the session's own
+    compute. It never falls back to the other runtime's value.
     """
-    compute = kitconfig.get(config, "review.fallback_panel.lens_compute.claude", None)
+    compute = kitconfig.get(config, f"review.fallback_panel.lens_compute.{runtime}", None)
     if not isinstance(compute, dict):
         return ""
     parts = []
@@ -83,10 +109,10 @@ def _lens_compute_phrase(config, kitconfig) -> str:
     return f" Run each lens at {' and '.join(parts)}, per review.fallback_panel.lens_compute."
 
 
-def _load_review_config() -> tuple[list[str], str, str, list[str], str, str]:
-    """Read ``(review.bots, review.fallback_commands.claude, paths.engines,
+def _load_review_config(runtime: str = _DEFAULT_RUNTIME) -> tuple[list[str], str, str, list[str], str, str]:
+    """Read ``(review.bots, review.fallback_commands.<runtime>, paths.engines,
     review.fallback_panel lens names, review.fallback_panel.receipt_source,
-    rendered review.fallback_panel.lens_compute.claude clause)``.
+    rendered review.fallback_panel.lens_compute.<runtime> clause)``.
 
     Best-effort: any failure (missing config, kitconfig unimportable, malformed
     values) falls back to generic defaults rather than raising — this hook must
@@ -100,7 +126,9 @@ def _load_review_config() -> tuple[list[str], str, str, list[str], str, str]:
 
         config = kitconfig.load_config()
         bots = kitconfig.get_str_list(config, "review.bots", [])
-        fallback = kitconfig.get(config, "review.fallback_commands.claude", _DEFAULT_FALLBACK_COMMAND)
+        fallback = kitconfig.get(
+            config, f"review.fallback_commands.{runtime}", _DEFAULT_FALLBACK_COMMAND
+        )
         engines = kitconfig.get(config, "paths.engines", _DEFAULT_ENGINES_DIR)
         if not isinstance(fallback, str) or not fallback:
             fallback = _DEFAULT_FALLBACK_COMMAND
@@ -126,7 +154,7 @@ def _load_review_config() -> tuple[list[str], str, str, list[str], str, str]:
         if not isinstance(panel_source, str) or not panel_source.strip():
             panel_source = _DEFAULT_PANEL_RECEIPT_SOURCE
         try:
-            lens_compute = _lens_compute_phrase(config, kitconfig)
+            lens_compute = _lens_compute_phrase(config, kitconfig, runtime)
         except Exception:
             # Scoped deliberately. This is the least consequential of the six
             # fields, and sharing the outer `except` let a fault confined to it
@@ -215,7 +243,7 @@ def _fallback_instruction(
     )
 
 
-def build_reminder() -> str:
+def build_reminder(runtime: str = _DEFAULT_RUNTIME) -> str:
     (
         bots,
         fallback_command,
@@ -223,7 +251,7 @@ def build_reminder() -> str:
         lenses,
         panel_source,
         lens_compute,
-    ) = _load_review_config()
+    ) = _load_review_config(runtime)
     bot_desc = _bot_description(bots)
     return (
         "A pull request was just opened or marked ready for review. Per the kit's "
@@ -243,7 +271,27 @@ def build_reminder() -> str:
     )
 
 
+def _runtime_from_argv(argv: list[str]) -> str:
+    """`--runtime <name>` or `--runtime=<name>`; `_DEFAULT_RUNTIME` when absent.
+
+    An unknown name falls back to the default rather than rendering
+    `review.fallback_commands.<typo>` as a missing key and advertising the generic
+    default command — a typo in a hook registration would otherwise degrade the
+    reminder silently, which is the failure class this hook exists to remove.
+    """
+    for i, arg in enumerate(argv):
+        value = None
+        if arg == "--runtime" and i + 1 < len(argv):
+            value = argv[i + 1]
+        elif arg.startswith("--runtime="):
+            value = arg.split("=", 1)[1]
+        if value:
+            return value if value in _KNOWN_RUNTIMES else _DEFAULT_RUNTIME
+    return _DEFAULT_RUNTIME
+
+
 def main() -> int:
+    runtime = _runtime_from_argv(sys.argv[1:])
     try:
         data = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
@@ -263,7 +311,7 @@ def main() -> int:
                 {
                     "hookSpecificOutput": {
                         "hookEventName": "PostToolUse",
-                        "additionalContext": build_reminder(),
+                        "additionalContext": build_reminder(runtime),
                     }
                 }
             )

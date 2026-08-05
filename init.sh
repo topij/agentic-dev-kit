@@ -38,7 +38,9 @@ Bootstraps the agentic-dev-kit in the current repo:
      byte-identical.
   5. Appends the kit's state-sandbox paths to .gitignore if they're
      missing (never duplicates a line on re-run).
-  6. Installs the pre-push hook as a shim (honoring core.hooksPath).
+  6. Installs the pre-push hook as a shim (honoring core.hooksPath), and
+     reports — never writes — the PR follow-through hook's registration for
+     each runtime that is missing it.
   7. Prints the runtime-specific session-start invocation.
 
 Safe to re-run at any time. Run it from the repo root (the directory that
@@ -499,7 +501,7 @@ migrate_kit_schema() {
     # independent and BOTH OPTIONAL — set either, both, or neither; a runtime
     # exposing one control carries one key. Omit a runtime and its lenses inherit
     # the cockpit session'"'"'s compute, which is the behaviour before this key
-    # existed. Read by scripts/hooks/pr_followup_hook.py.
+    # existed. Read by scripts/hooks/pr_followup_hook.py and scripts/panel_prompt.py.
     #
     # HOW FAR EACH KEY REACHES depends on the runtime, and on Claude Code today
     # they differ. Its delegation tool takes a `model` parameter, so `model` is a
@@ -1001,6 +1003,67 @@ seed_doc() {
 # shim rather than copying the hook body, so the hook stays current when the
 # engine is updated, and rather than a relative symlink, so it survives the
 # engines dir being vendored at any depth.
+# ── PR follow-through hook registration (#301, #303) ─────────────────────
+# The git hooks above are installed by writing a shim. THIS hook is different:
+# it is a runtime hook, registered in a runtime's own config, and the kit
+# REPORTS both registrations rather than writing either.
+#
+# Both registrations pass `--runtime`, because the hook reads
+# `review.fallback_commands.<runtime>` and `review.fallback_panel.lens_compute.
+# <runtime>`; without it a Codex session is told to run Claude's review command.
+#
+# This banner previously said the two runtimes "need opposite treatment" —
+# `.codex/hooks.json` seeded because it is "a file the kit can own",
+# `.claude/settings.json` merely reported. The function below records why that
+# asymmetry was abandoned. The banner is corrected rather than deleted because
+# it survived the change that falsified it while sitting directly above the
+# function it describes, and that is worth one sentence to whoever edits here:
+# when you change a function, the comment ABOVE it is not part of the diff you
+# are reading.
+register_pr_hook() {
+  _hook_src="${engines_dir}/hooks/pr_followup_hook.py"
+  if [ ! -f "$_hook_src" ]; then
+    return 0
+  fi
+
+  # This reads nothing and writes nothing. It prints, every run, and that is
+  # the third and final position on a question `#303` got wrong twice.
+  #
+  # First it SEEDED `.codex/hooks.json` when absent — a file the kit reasoned it
+  # could own. Four review rounds each found a filesystem shape the last round's
+  # guards missed, ending with a dangling symlink AT `.codex/hooks.json`, where
+  # `[ -e ]` is false and `cat >` follows the link: the payload landed outside
+  # `.codex` while the run printed `seeded` and exited 0. The write came out.
+  #
+  # Then it still READ those paths, to decide whether to print instructions.
+  # That check needed a `-f` rather than `-e` or a FIFO would hang it forever,
+  # and a substring match cannot tell a `PostToolUse` entry from a mention under
+  # any other event — so a stray occurrence suppressed the setup instructions
+  # for an adopter who was not actually covered. CodeRabbit found that one.
+  #
+  # The pattern is the same both times, and it is worth naming because it will
+  # recur: a predicate about the adopter's filesystem or a runtime's config,
+  # restated here, where nothing can execute the restatement to check it. Each
+  # repair added a guard and the next round found the shape the guard missed.
+  # What ended it was deleting the predicate, not guarding it better.
+  #
+  # So: no branch. Print both, say they are skippable, and name the authority.
+  # `/hooks` is the only thing that can report what a runtime actually loaded —
+  # including the trust step Codex requires, which nothing here could establish
+  # anyway. An adopter re-reading eight lines they have already acted on is a
+  # smaller cost than any of the three defects above.
+  echo "note: the PR follow-through hook is registered by hand, once per runtime."
+  echo "      Skip whichever you have already done — \`/hooks\` in a session lists"
+  echo "      what that runtime actually loaded, which is the authority here."
+  echo "      Codex — .codex/hooks.json, under hooks.PostToolUse, matcher \"^Bash\$\":"
+  echo "        python3 \"\$(git rev-parse --show-toplevel)/${_hook_src}\" --runtime codex"
+  echo "        Codex also needs you to trust the hook via /hooks before it runs."
+  echo "      Claude — .claude/settings.json, under hooks.PostToolUse, matcher \"Bash\"."
+  echo "      \`if\` goes on the hook entry beside \`command\`, not next to \`matcher\`:"
+  echo "        python3 \"\$CLAUDE_PROJECT_DIR/${_hook_src}\" --runtime claude"
+  echo "        with if: \"Bash(gh pr *)\""
+}
+
 install_hooks() {
   if ! git rev-parse --git-dir >/dev/null 2>&1; then
     echo "note: not a git repo yet — run 'git init' then re-run ./init.sh to install hooks" >&2
@@ -1337,6 +1400,7 @@ fi
 # ── git hooks ────────────────────────────────────────────────────────────
 
 install_hooks
+register_pr_hook
 
 # ── done ───────────────────────────────────────────────────────────────
 

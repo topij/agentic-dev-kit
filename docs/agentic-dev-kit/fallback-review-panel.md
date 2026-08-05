@@ -58,16 +58,37 @@ it sees no change.
 **Each runtime reaches its own key by its own path**, and the key is inert until
 that path exists — so if you add a runtime here, give it one.
 
-- **Claude Code** — `scripts/hooks/pr_followup_hook.py` reads
-  `lens_compute.claude` and renders it into the reminder it fires when a PR is
-  opened or readied. It reads *only* that key: a value written for another
-  runtime must never leak into this one's instruction.
-- **Codex** — `.agents/skills/pr-watch/SKILL.md` step 5 names
-  `lens_compute.codex`, the same way it names `review.fallback_commands`. No
-  Python or shell reads either; the adapter is the consumer.
+`scripts/hooks/pr_followup_hook.py` reads `lens_compute.<runtime>` and renders it
+into the reminder it fires when a PR is opened or readied. **Which runtime it
+reads is passed to it**, `--runtime claude|codex`, by whichever registration
+invoked it — `.claude/settings.json` or `.codex/hooks.json`. It reads *only* the
+key for that runtime: an absent key yields no clause, and a value written for the
+other runtime never leaks into this one's instruction.
 
-Do not go looking in the hook for why a non-Claude key had no effect — by design
-it will never mention one.
+**`scripts/panel_prompt.py` reads it too**, and is the consumer that matters most:
+it takes its own `--runtime` and renders the compute into the launch prompt a lens
+actually receives, so it is the mechanical path rather than an instruction someone
+follows. `.agents/skills/pr-watch/SKILL.md` step 5 names `lens_compute.codex` as
+well, and `kit_doctor.py` tracks the hook partly because of this key. Anything
+changing the key's meaning has to move all of them together.
+
+Two corrections are recorded here rather than made silently, because the second is
+worse than the first:
+
+1. This paragraph used to say **no Python or shell reads the Codex key** and told
+   you not to look in the hook for a non-Claude key. `#301` wiring the hook onto
+   Codex made that false.
+2. The rewrite that fixed (1) said the key then had **two** consumers and that (1)
+   had been true until `#301`. Both wrong: `panel_prompt.py` has read
+   `lens_compute.<runtime>` since `#219` (2026-08-02), three days earlier, so the
+   original claim was already false before the hook existed — and the repo's own
+   friction log had recorded that this file never mentions `panel_prompt.py` the
+   day before the rewrite.
+
+The lesson is cheap to state and was expensive twice: **enumerate the consumers,
+never count them.** A number beside a list is the thing that goes stale, and a
+correction asserting a new number is how a stale claim gets replaced by a fresh
+wrong one.
 
 **The two keys do not reach equally far, and the difference is per-runtime.** On
 Claude Code today the delegation tool takes a `model` parameter but no per-agent

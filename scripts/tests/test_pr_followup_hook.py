@@ -148,7 +148,7 @@ def test_reminder_names_configured_bots_not_a_hardcoded_bot(monkeypatch):
         # defaulted on the except path, so `None` is not a value the real
         # function can return, and a mock that returns one could mask a
         # type-shape bug instead of exposing it.
-        lambda: (
+        lambda *_a, **_k: (
             ["zzz-sentinel-bot"],
             "/code-review",
             "scripts",
@@ -179,7 +179,7 @@ def test_reminder_names_configured_bots_on_the_panel_branch_too(monkeypatch):
     monkeypatch.setattr(
         hook,
         "_load_review_config",
-        lambda: (
+        lambda *_a, **_k: (
             ["zzz-sentinel-bot"],
             "/code-review",
             "scripts",
@@ -217,7 +217,7 @@ def test_reminder_points_at_the_panel_not_the_degraded_one_lens_mode(monkeypatch
     monkeypatch.setattr(
         hook,
         "_load_review_config",
-        lambda: (
+        lambda *_a, **_k: (
             ["zzz-sentinel-bot"],
             "/code-review",
             "scripts",
@@ -488,7 +488,7 @@ def test_lens_compute_never_reaches_the_degraded_one_lens_branch(monkeypatch):
     monkeypatch.setattr(
         hook,
         "_load_review_config",
-        lambda: (
+        lambda *_a, **_k: (
             ["zzz-sentinel-bot"],
             "/code-review",
             "scripts",
@@ -538,7 +538,7 @@ def test_lens_compute_actually_reaches_the_panel_instruction(monkeypatch):
     monkeypatch.setattr(
         hook,
         "_load_review_config",
-        lambda: (
+        lambda *_a, **_k: (
             ["zzz-sentinel-bot"],
             "/code-review",
             "scripts",
@@ -580,3 +580,171 @@ def test_a_fault_confined_to_lens_compute_does_not_drop_the_panel(monkeypatch):
     assert "PANEL" in hook._fallback_instruction(
         "/code-review", lenses, panel_source, "scripts", lens_compute
     )
+
+# ── #301: the runtime is a parameter, not a hardcoded key ────────────────────
+
+
+def test_runtime_from_argv_reads_both_spellings():
+    module = _load_hook()
+    assert module._runtime_from_argv(["--runtime", "codex"]) == "codex"
+    assert module._runtime_from_argv(["--runtime=codex"]) == "codex"
+
+
+def test_runtime_defaults_to_claude_so_a_pre_301_registration_still_works():
+    """`.claude/settings.json` passed no argument before #301; an engine refresh
+    must not silence the hook for an adopter who has not updated their settings."""
+    module = _load_hook()
+    assert module._runtime_from_argv([]) == "claude"
+
+
+def test_an_unknown_runtime_falls_back_rather_than_reading_a_missing_key():
+    """A typo would otherwise resolve `review.fallback_commands.<typo>` to the
+    generic default and degrade the reminder silently."""
+    module = _load_hook()
+    assert module._runtime_from_argv(["--runtime", "emacs"]) == "claude"
+
+
+def test_each_runtime_gets_its_own_fallback_command(monkeypatch):
+    """The defect #301 exists to fix: registering this hook on Codex while it
+    hardcoded `.claude` told a Codex session to run Claude's review command."""
+    hook = _load_hook()
+    seen = {}
+
+    def _fake(runtime="claude"):
+        seen["runtime"] = runtime
+        return (["somebot"], f"/{runtime}-only", "scripts", [], "fallback:panel", "")
+
+    monkeypatch.setattr(hook, "_load_review_config", _fake)
+
+    claude = hook.build_reminder("claude")
+    assert seen["runtime"] == "claude"
+    assert "/claude-only" in claude and "/codex-only" not in claude
+
+    codex = hook.build_reminder("codex")
+    assert seen["runtime"] == "codex"
+    assert "/codex-only" in codex and "/claude-only" not in codex
+
+
+def test_lens_compute_never_leaks_across_runtimes():
+    """An absent key for this runtime yields no clause — it must not fall back to
+    the other runtime's model/effort."""
+    module = _load_hook()
+
+    class _Kit:
+        @staticmethod
+        def get(config, path, default=None):
+            return {"model": "sonnet"} if path.endswith(".claude") else default
+
+    assert module._lens_compute_phrase({}, _Kit, "claude") != ""
+    assert module._lens_compute_phrase({}, _Kit, "codex") == ""
+
+# ── the two mutation survivors the #303 panel found ─────────────────────────
+# Both are on the exact lines this change exists to fix, and both survived the
+# whole suite: the pieces were tested, the WIRING was not.
+
+
+def test_main_threads_the_parsed_runtime_all_the_way_to_the_reminder(monkeypatch, capsys):
+    """Kills: `build_reminder(runtime)` reverted to `build_reminder()` in main().
+
+    Every other test either calls `main()` without touching argv, or calls
+    `build_reminder(runtime)` directly — so `--runtime` could be parsed and then
+    silently dropped, and nothing noticed."""
+    hook = _load_hook()
+    monkeypatch.setattr(
+        hook,
+        "_load_review_config",
+        lambda runtime="claude": ([], f"/{runtime}-sentinel", "scripts", [], "src", ""),
+    )
+    monkeypatch.setattr("sys.argv", ["pr_followup_hook.py", "--runtime", "codex"])
+    monkeypatch.setattr("sys.stdin", io.StringIO(_payload("gh pr create")))
+
+    assert hook.main() == 0
+    emitted = json.loads(capsys.readouterr().out)["hookSpecificOutput"]["additionalContext"]
+    assert "/codex-sentinel" in emitted
+    assert "/claude-sentinel" not in emitted
+
+
+def test_load_review_config_reads_the_key_for_the_runtime_it_was_given(monkeypatch, tmp_path):
+    """Kills: the f-string reverted to the literal `review.fallback_commands.claude`.
+
+    The sibling runtime test monkeypatches `_load_review_config` away, so the real
+    function body — the thing that was hardcoded before #301 — had no coverage."""
+    hook = _load_hook()
+    hook._load_review_config()  # prime the kitconfig import
+    import kitconfig  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        kitconfig,
+        "load_config",
+        lambda *_a, **_k: {
+            "review": {
+                "bots": ["b"],
+                "fallback_commands": {"claude": "/claude-cmd", "codex": "/codex-cmd"},
+            }
+        },
+    )
+    assert hook._load_review_config("codex")[1] == "/codex-cmd"
+    assert hook._load_review_config("claude")[1] == "/claude-cmd"
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--runtime"],                      # trailing flag, no value
+        ["--runtime="],                     # empty value
+        ["--runtime", "--codex"],           # value is itself a flag
+        ["--runtime", "c\u00f6dex"],         # unicode near-miss
+        ["--runtime", "fallback_commands"], # a real config key, wrong slot
+    ],
+)
+def test_malformed_runtime_degrades_to_the_default_rather_than_a_missing_key(argv):
+    """Every malformed shape resolves to the default. That is the documented
+    choice — but it means a malformed CODEX invocation renders CLAUDE's values,
+    the leakage class #301 exists to close, reached through a different door.
+    Pinned here so a future change to that trade-off is deliberate."""
+    module = _load_hook()
+    assert module._runtime_from_argv(argv) == "claude"
+
+
+def test_first_runtime_flag_wins_when_repeated():
+    module = _load_hook()
+    assert module._runtime_from_argv(["--runtime", "codex", "--runtime", "claude"]) == "codex"
+
+def test_load_review_config_threads_the_runtime_into_lens_compute_too(monkeypatch):
+    """Kills: `_lens_compute_phrase(config, kitconfig, runtime)` losing its third
+    argument and silently defaulting to claude.
+
+    The sibling leak test exercises `_lens_compute_phrase` DIRECTLY with an
+    explicit runtime, so it cannot see that call site drop the argument. That is
+    the same shape as the two survivors the previous round found: the piece was
+    tested, the wiring was not. Against this repo's own config the mutation is
+    live, not theoretical — a Codex reminder would say "model sonnet", which is
+    Claude's model."""
+    hook = _load_hook()
+    hook._load_review_config()  # prime the kitconfig import
+    import kitconfig  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        kitconfig,
+        "load_config",
+        lambda *_a, **_k: {
+            "review": {
+                "bots": ["b"],
+                "fallback_panel": {
+                    "lenses": [{"name": "one"}, {"name": "two"}],
+                    "lens_compute": {
+                        "claude": {"model": "claude-sentinel-model"},
+                        "codex": {"effort": "codex-sentinel-effort"},
+                    },
+                },
+            }
+        },
+    )
+
+    codex_clause = hook._load_review_config("codex")[5]
+    assert "codex-sentinel-effort" in codex_clause
+    assert "claude-sentinel-model" not in codex_clause
+
+    claude_clause = hook._load_review_config("claude")[5]
+    assert "claude-sentinel-model" in claude_clause
+    assert "codex-sentinel-effort" not in claude_clause
