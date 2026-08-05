@@ -920,3 +920,38 @@ def test_one_command_doing_both_fires_on_either_signal_alone(monkeypatch, capsys
     assert hook.should_fire(both, "https://github.com/topij/agentic-dev-kit/pull/306") is True
     assert hook.should_fire(both, 'Pull request x#1 is marked as "ready for review"') is True
     assert hook.should_fire(both, "nothing relevant here") is False
+
+
+def test_a_pr_url_buried_in_other_output_is_not_a_pr_being_opened(monkeypatch, capsys):
+    """Found live while this PR was open, by this PR's own hook.
+
+    Replying to a review comment with `gh api …/comments/N/replies` fired the
+    mandate: the command text quoted the trigger phrase (it was explaining the
+    fix) and the API's JSON response carried
+    `https://github.com/…/pull/306#discussion_r…`. Command matched, URL matched,
+    no PR opened.
+
+    `gh pr create` prints the URL alone on its line and nothing else, so
+    anchoring costs no real invocation.
+    """
+    hook = _load_hook()
+    quoting = "gh api repos/o/r/pulls/306/comments/1/replies -f body='use gh pr create'"
+
+    assert (
+        hook.should_fire(
+            quoting,
+            '{"html_url": "https://github.com/topij/agentic-dev-kit/pull/306#discussion_r37"}',
+        )
+        is False
+    )
+    # a URL mentioned mid-sentence is not one either
+    assert hook.should_fire("gh pr create --fill", "see https://x/pull/1 for details") is False
+    # but the real thing, alone on its line, still fires — with or without noise around it
+    assert hook.should_fire("gh pr create --fill", "https://github.com/o/r/pull/306\n") is True
+    assert (
+        hook.should_fire(
+            "gh pr create --fill",
+            "Warning: 3 uncommitted changes\nhttps://github.com/o/r/pull/306\n",
+        )
+        is True
+    )

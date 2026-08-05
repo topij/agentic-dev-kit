@@ -73,7 +73,13 @@ _TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
 #
 # stderr's presence in `tool_response` is runtime-dependent, which is why an
 # EMPTY response counts as unreadable below rather than as evidence of nothing.
-_PR_URL = re.compile(r"https://\S+?/pull/\d+")
+# ALONE ON ITS LINE. `gh pr create` prints the URL and nothing else, so this
+# still matches every real invocation — while a URL embedded in prose or JSON
+# does not. Found live: replying to a review comment with `gh api` fired this
+# hook, because the command text quoted the trigger phrase and the API's own
+# response carried `…/pull/306#discussion_r…`. The bare-substring form could
+# not tell that from a PR being opened.
+_PR_URL = re.compile(r"^\s*https://\S+/pull/\d+/?\s*$", re.MULTILINE)
 # the backslash is optional because an unknown response shape gets serialised
 # below, and `json.dumps` escapes the quotes gh actually printed
 _READY_ACK = re.compile(r'is (?:marked as|already) \\?"ready for review')
