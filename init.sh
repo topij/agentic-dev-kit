@@ -1058,9 +1058,10 @@ register_pr_hook() {
   echo "      Codex — .codex/hooks.json, under hooks.PostToolUse, matcher \"^Bash\$\":"
   echo "        python3 \"\$(git rev-parse --show-toplevel)/${_hook_src}\" --runtime codex"
   echo "        Codex also needs you to trust the hook via /hooks before it runs."
-  echo "      Claude — .claude/settings.json, under hooks.PostToolUse, matcher Bash,"
-  echo "      with if: \"Bash(gh pr *)\":"
+  echo "      Claude — .claude/settings.json, under hooks.PostToolUse, matcher \"Bash\"."
+  echo "      \`if\` goes on the hook entry beside \`command\`, not next to \`matcher\`:"
   echo "        python3 \"\$CLAUDE_PROJECT_DIR/${_hook_src}\" --runtime claude"
+  echo "        with if: \"Bash(gh pr *)\""
 }
 
 install_hooks() {

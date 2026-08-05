@@ -1408,6 +1408,26 @@ def test_both_lens_compute_comments_state_that_effort_is_not_enforced():
 # comment. So these tests assert on what it PRINTS, and that it writes nothing.
 
 
+def _snapshot(path: Path) -> tuple[str, ...]:
+    """Everything about `path` that a write could change, for any file type.
+
+    Deliberately not `read_text()`: these fixtures point it at a symlink, an
+    unreadable directory and a plain file, and the shape under test is the one
+    thing that must not decide how thoroughly it is checked.
+    """
+    if not path.is_symlink() and not path.exists():
+        return ("absent",)
+    if path.is_symlink():
+        return ("symlink", str(path.readlink()))
+    if path.is_dir():
+        try:
+            return ("dir", *sorted(c.name for c in path.iterdir()))
+        except PermissionError:
+            # mode 000 — unreadable is itself the state being preserved
+            return ("dir", "unreadable", oct(path.stat().st_mode))
+    return ("file", path.read_text(encoding="utf-8"))
+
+
 def _with_pr_hook(repo: Path) -> Path:
     """`register_pr_hook` returns early when the engine is absent, so a fixture
     that wants to exercise it must ship the file."""
@@ -1472,6 +1492,65 @@ def test_register_pr_hook_reports_both_runtimes_and_writes_neither(tmp_path: Pat
     assert not (repo / ".claude" / "settings.json").exists()
 
 
+@pytest.mark.parametrize("shape", ["directory", "dangling_symlink"])
+def test_no_advisory_when_the_engine_path_is_not_a_file(tmp_path: Path, shape: str) -> None:
+    """Kills: `[ ! -f "$_hook_src" ]` weakened to `-e`.
+
+    `-e` is true for a directory and false for a dangling symlink, so both
+    shapes are needed to pin the guard from each side. A directory at the
+    engine path under `-e` would print a registration naming something that
+    cannot be executed — instructions that fail for the adopter with no clue
+    why. A round-5 lens mutated this and the suite stayed green.
+    """
+    repo = _fixture(tmp_path, config=V1_CONFIG, git=True)
+    hook = repo / "scripts" / "hooks" / "pr_followup_hook.py"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    if shape == "directory":
+        hook.mkdir()
+    else:
+        hook.symlink_to(repo / "no-such-engine")
+
+    result = _run_init(repo)
+
+    assert "bootstrapped" in result.stdout
+    assert "--runtime codex" not in result.stdout
+    assert "--runtime claude" not in result.stdout
+
+
+def test_the_printed_commands_are_pasteable_verbatim(tmp_path: Path) -> None:
+    """The advisory is text an adopter copies into a JSON file, so the two
+    variable idioms in it must survive to their stdout UNEXPANDED.
+
+    Both are one backslash away from breaking silently. Drop it from
+    `\\$(git rev-parse --show-toplevel)` and `init.sh` runs the substitution
+    itself at print time, baking the absolute path of whatever machine ran the
+    bootstrap into a snippet meant to be portable. The adopter pastes it, it
+    works on their machine, and it is wrong for every other checkout — no
+    error anywhere.
+
+    A round-5 lens made exactly that edit and the whole suite stayed green,
+    because every other assertion here matches loose substrings. These two
+    are exact, which is the point: substring assertions cannot see expansion.
+    """
+    repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    assert (
+        '        python3 "$(git rev-parse --show-toplevel)/scripts/hooks/'
+        'pr_followup_hook.py" --runtime codex' in result.stdout
+    )
+    assert (
+        '        python3 "$CLAUDE_PROJECT_DIR/scripts/hooks/'
+        'pr_followup_hook.py" --runtime claude' in result.stdout
+    )
+    # the matcher an adopter must reproduce exactly, quotes and anchors included
+    assert 'matcher "^Bash$"' in result.stdout
+    assert 'with if: "Bash(gh pr *)"' in result.stdout
+    # nothing expanded: no absolute path from THIS machine leaked into the paste
+    assert str(repo) not in result.stdout.split("note: the PR follow-through")[-1]
+
+
 def test_register_pr_hook_names_the_configured_engines_dir(tmp_path: Path) -> None:
     """Kills: `${engines_dir}` hardcoded to `scripts`.
 
@@ -1512,13 +1591,63 @@ def test_no_codex_shape_can_make_the_run_write_or_abort(tmp_path: Path, shape: s
         codex.mkdir()
         (codex / "hooks.json").symlink_to(escaped)
 
+    before = _snapshot(codex)
+
     try:
         result = _run_init(repo)  # check=True — a non-zero exit fails the test
         assert "bootstrapped" in result.stdout
+        # `escaped.json` is only reachable by the two symlink shapes, so it was
+        # the sole write-evidence for all four and proved nothing for the other
+        # two — a round-5 lens added `printf PWNED > .codex` and every
+        # parametrization still passed. The snapshot covers every shape.
+        assert _snapshot(codex) == before, f"init.sh modified .codex ({shape})"
         assert not escaped.exists(), "init.sh wrote through a symlink, outside .codex"
     finally:
         if shape == "unusable_dir":
             codex.chmod(0o755)
+
+
+def test_the_advisory_matches_the_registrations_it_describes(tmp_path: Path) -> None:
+    """The printed instructions and the two shipped files are the same claim in
+    two places, and nothing tied them together.
+
+    A round-5 lens mutated the printed matcher, the printed `if:`, the printed
+    env-var idiom, and the shipped `.claude/settings.json`'s own matcher and
+    `if` — four edits, each leaving the whole suite green. Static prose
+    describing a file that nothing compares it against drifts silently, and
+    this advisory is the ONLY route by which the hook reaches a new adopter.
+
+    So every expected value here is READ FROM the shipped file rather than
+    written down again. Editing either side alone fails this.
+    """
+    codex_cfg = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    claude_cfg = json.loads(
+        (REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
+    )
+    codex_entry = codex_cfg["hooks"]["PostToolUse"][0]
+    claude_entry = next(
+        e
+        for e in claude_cfg["hooks"]["PostToolUse"]
+        if any("pr_followup_hook" in h.get("command", "") for h in e["hooks"])
+    )
+    claude_hook = next(
+        h for h in claude_entry["hooks"] if "pr_followup_hook" in h.get("command", "")
+    )
+    codex_hook = codex_entry["hooks"][0]
+
+    result = _run_init(_with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True)))
+
+    # the two command strings, verbatim — unexpanded, as an adopter pastes them
+    assert codex_hook["command"] in result.stdout
+    assert claude_hook["command"] in result.stdout
+    # and the narrowing each runtime applies, from the file rather than restated
+    assert f'matcher "{codex_entry["matcher"]}"' in result.stdout
+    assert f'matcher "{claude_entry["matcher"]}"' in result.stdout
+    assert f'if: "{claude_hook["if"]}"' in result.stdout
+    # `if` lives on the hook entry beside `command`, not next to `matcher`, and
+    # the advisory has to say so — an adopter who nests it wrong gets no error
+    assert "if" not in claude_entry, "shipped file moved `if`; the advisory now lies"
+    assert "beside `command`" in result.stdout
 
 
 def test_both_shipped_registrations_name_their_own_runtime() -> None:
