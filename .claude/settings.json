@@ -32,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/hooks/pr_followup_hook.py\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/hooks/pr_followup_hook.py\" --runtime claude",
             "if": "Bash(gh pr *)",
             "timeout": 10
           }

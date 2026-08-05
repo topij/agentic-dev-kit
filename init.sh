@@ -1001,6 +1001,64 @@ seed_doc() {
 # shim rather than copying the hook body, so the hook stays current when the
 # engine is updated, and rather than a relative symlink, so it survives the
 # engines dir being vendored at any depth.
+# ── PR follow-through hook registration (#301) ───────────────────────────
+# The git hooks above are installed by writing a shim. THIS hook is different:
+# it is a runtime hook, registered in a runtime's own config, and the two
+# runtimes need opposite treatment.
+#
+#   Codex  — `.codex/hooks.json` is a file the kit can own. Seeded when absent,
+#            never touched when present.
+#   Claude — `.claude/settings.json` is the adopter's, usually already exists,
+#            and merging JSON into it from sh is the kind of surgery this kit
+#            tells /adopt not to attempt. Reported, never edited.
+#
+# Both registrations pass `--runtime`, because the hook reads
+# `review.fallback_commands.<runtime>` and `review.fallback_panel.lens_compute.
+# <runtime>`; without it a Codex session is told to run Claude's review command.
+register_pr_hook() {
+  _hook_src="${engines_dir}/hooks/pr_followup_hook.py"
+  if [ ! -f "$_hook_src" ]; then
+    return 0
+  fi
+
+  if [ -e .codex/hooks.json ]; then
+    echo ".codex/hooks.json already exists — left untouched"
+  else
+    mkdir -p .codex
+    cat > .codex/hooks.json <<CODEXHOOK
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"\$(git rev-parse --show-toplevel)/${_hook_src}\" --runtime codex",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+CODEXHOOK
+    echo "seeded .codex/hooks.json (PR follow-through hook, --runtime codex)"
+    echo "  note: Codex requires the operator to trust a project hook via /hooks"
+    echo "        before it runs. Until then it is registered but inert."
+  fi
+
+  if [ -f .claude/settings.json ] && grep -q pr_followup_hook .claude/settings.json 2>/dev/null; then
+    echo ".claude/settings.json already registers the PR follow-through hook"
+  else
+    echo "note: .claude/settings.json does NOT register the PR follow-through hook."
+    echo "      Add it under hooks.PostToolUse (matcher Bash, if: \"Bash(gh pr *)\"):"
+    echo "        python3 \"\$CLAUDE_PROJECT_DIR/${_hook_src}\" --runtime claude"
+    echo "      Not done for you: that file is yours and merging JSON into it is"
+    echo "      the clobber this kit refuses elsewhere."
+  fi
+}
+
 install_hooks() {
   if ! git rev-parse --git-dir >/dev/null 2>&1; then
     echo "note: not a git repo yet — run 'git init' then re-run ./init.sh to install hooks" >&2
@@ -1337,6 +1395,7 @@ fi
 # ── git hooks ────────────────────────────────────────────────────────────
 
 install_hooks
+register_pr_hook
 
 # ── done ───────────────────────────────────────────────────────────────
 

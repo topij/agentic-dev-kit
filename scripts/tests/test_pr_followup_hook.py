@@ -148,7 +148,7 @@ def test_reminder_names_configured_bots_not_a_hardcoded_bot(monkeypatch):
         # defaulted on the except path, so `None` is not a value the real
         # function can return, and a mock that returns one could mask a
         # type-shape bug instead of exposing it.
-        lambda: (
+        lambda *_a, **_k: (
             ["zzz-sentinel-bot"],
             "/code-review",
             "scripts",
@@ -179,7 +179,7 @@ def test_reminder_names_configured_bots_on_the_panel_branch_too(monkeypatch):
     monkeypatch.setattr(
         hook,
         "_load_review_config",
-        lambda: (
+        lambda *_a, **_k: (
             ["zzz-sentinel-bot"],
             "/code-review",
             "scripts",
@@ -217,7 +217,7 @@ def test_reminder_points_at_the_panel_not_the_degraded_one_lens_mode(monkeypatch
     monkeypatch.setattr(
         hook,
         "_load_review_config",
-        lambda: (
+        lambda *_a, **_k: (
             ["zzz-sentinel-bot"],
             "/code-review",
             "scripts",
@@ -488,7 +488,7 @@ def test_lens_compute_never_reaches_the_degraded_one_lens_branch(monkeypatch):
     monkeypatch.setattr(
         hook,
         "_load_review_config",
-        lambda: (
+        lambda *_a, **_k: (
             ["zzz-sentinel-bot"],
             "/code-review",
             "scripts",
@@ -538,7 +538,7 @@ def test_lens_compute_actually_reaches_the_panel_instruction(monkeypatch):
     monkeypatch.setattr(
         hook,
         "_load_review_config",
-        lambda: (
+        lambda *_a, **_k: (
             ["zzz-sentinel-bot"],
             "/code-review",
             "scripts",
@@ -580,3 +580,60 @@ def test_a_fault_confined_to_lens_compute_does_not_drop_the_panel(monkeypatch):
     assert "PANEL" in hook._fallback_instruction(
         "/code-review", lenses, panel_source, "scripts", lens_compute
     )
+
+# ── #301: the runtime is a parameter, not a hardcoded key ────────────────────
+
+
+def test_runtime_from_argv_reads_both_spellings():
+    module = _load_hook()
+    assert module._runtime_from_argv(["--runtime", "codex"]) == "codex"
+    assert module._runtime_from_argv(["--runtime=codex"]) == "codex"
+
+
+def test_runtime_defaults_to_claude_so_a_pre_301_registration_still_works():
+    """`.claude/settings.json` passed no argument before #301; an engine refresh
+    must not silence the hook for an adopter who has not updated their settings."""
+    module = _load_hook()
+    assert module._runtime_from_argv([]) == "claude"
+
+
+def test_an_unknown_runtime_falls_back_rather_than_reading_a_missing_key():
+    """A typo would otherwise resolve `review.fallback_commands.<typo>` to the
+    generic default and degrade the reminder silently."""
+    module = _load_hook()
+    assert module._runtime_from_argv(["--runtime", "emacs"]) == "claude"
+
+
+def test_each_runtime_gets_its_own_fallback_command(monkeypatch):
+    """The defect #301 exists to fix: registering this hook on Codex while it
+    hardcoded `.claude` told a Codex session to run Claude's review command."""
+    hook = _load_hook()
+    seen = {}
+
+    def _fake(runtime="claude"):
+        seen["runtime"] = runtime
+        return (["somebot"], f"/{runtime}-only", "scripts", [], "fallback:panel", "")
+
+    monkeypatch.setattr(hook, "_load_review_config", _fake)
+
+    claude = hook.build_reminder("claude")
+    assert seen["runtime"] == "claude"
+    assert "/claude-only" in claude and "/codex-only" not in claude
+
+    codex = hook.build_reminder("codex")
+    assert seen["runtime"] == "codex"
+    assert "/codex-only" in codex and "/claude-only" not in codex
+
+
+def test_lens_compute_never_leaks_across_runtimes():
+    """An absent key for this runtime yields no clause — it must not fall back to
+    the other runtime's model/effort."""
+    module = _load_hook()
+
+    class _Kit:
+        @staticmethod
+        def get(config, path, default=None):
+            return {"model": "sonnet"} if path.endswith(".claude") else default
+
+    assert module._lens_compute_phrase({}, _Kit, "claude") != ""
+    assert module._lens_compute_phrase({}, _Kit, "codex") == ""
