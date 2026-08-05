@@ -52,7 +52,19 @@ def _run(module: ModuleType, monkeypatch, capsys, stdin_text: str) -> tuple[int,
 
 
 def _payload(command: str) -> str:
+    """No `tool_response` — the shape every pre-#302 test used, and the one that
+    still fires unconditionally because nothing readable settles it."""
     return json.dumps({"tool_input": {"command": command}})
+
+
+def _payload_with(command: str, stdout: str = "", stderr: str = "") -> str:
+    """The real PostToolUse shape: what the tool reported alongside the command."""
+    return json.dumps(
+        {
+            "tool_input": {"command": command},
+            "tool_response": {"stdout": stdout, "stderr": stderr, "interrupted": False},
+        }
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -748,3 +760,328 @@ def test_load_review_config_threads_the_runtime_into_lens_compute_too(monkeypatc
     claude_clause = hook._load_review_config("claude")[5]
     assert "claude-sentinel-model" in claude_clause
     assert "codex-sentinel-effort" not in claude_clause
+
+
+# ── #302: the command selects candidates, the response decides ───────────────
+# Every shape below was observed live, firing a MANDATORY watch-loop mandate
+# with zero open PRs. Two are self-referential: one is the commit that documented
+# the bug, the other is a review lens that had never heard of it.
+
+_MENTIONS = [
+    pytest.param(
+        'python3 -c \'print("run gh pr create when ready")\'',
+        "run gh pr create when ready\n",
+        id="echoes_the_phrase",
+    ),
+    pytest.param(
+        "grep -rn 'gh pr create' scripts/",
+        "scripts/hooks/pr_followup_hook.py:58:  gh pr create\n",
+        id="greps_for_the_phrase",
+    ),
+    pytest.param(
+        "uv run pytest -k 'gh pr ready' -q",
+        "1 passed in 0.4s\n",
+        id="a_test_selector_naming_it",
+    ),
+    pytest.param(
+        'git commit -m "note that gh pr create fires this hook"',
+        "[main abc1234] note that gh pr create fires this hook\n",
+        id="a_commit_message_documenting_it",
+    ),
+    pytest.param(
+        "gh pr create --help",
+        "Create a pull request on GitHub.\nUSAGE\n  gh pr create [flags]\n",
+        id="reading_its_own_help",
+    ),
+]
+
+
+@pytest.mark.parametrize("command,stdout", _MENTIONS)
+def test_a_command_that_merely_mentions_the_phrase_stays_silent(
+    monkeypatch, capsys, command, stdout
+):
+    hook = _load_hook()
+    exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stdout=stdout))
+
+    assert exit_code == 0
+    assert out == "", f"spurious mandate for a command that only mentions it: {command}"
+
+
+def test_a_real_pr_create_still_fires_on_the_url_it_printed(monkeypatch, capsys):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(
+            "gh pr create --title x --body y",
+            stdout="https://github.com/topij/agentic-dev-kit/pull/306\n",
+        ),
+    )
+
+    assert exit_code == 0
+    assert "MANDATORY" in json.loads(out)["hookSpecificOutput"]["additionalContext"]
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        'Pull request topij/agentic-dev-kit#306 is marked as "ready for review"\n',
+        # idempotent re-run: a real PR still exists, so the reminder is still owed
+        'Pull request topij/agentic-dev-kit#306 is already "ready for review"\n',
+    ],
+    ids=["marked_ready", "already_ready"],
+)
+def test_pr_ready_fires_on_its_stderr_ack_since_it_prints_no_url(monkeypatch, capsys, stderr):
+    """`gh pr ready` emits no URL — established from `gh`'s source, not assumed.
+    Its confirmation goes to stderr, so the URL check alone would miss it."""
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook, monkeypatch, capsys, _payload_with("gh pr ready 306", stderr=stderr)
+    )
+
+    assert exit_code == 0
+    assert "MANDATORY" in json.loads(out)["hookSpecificOutput"]["additionalContext"]
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        pytest.param(None, id="absent"),
+        pytest.param({}, id="empty_dict"),
+        pytest.param("", id="empty_string"),
+        pytest.param({"stdout": "", "stderr": ""}, id="captured_nothing"),
+    ],
+)
+def test_an_unreadable_response_fires_rather_than_risking_a_missed_reminder(
+    monkeypatch, capsys, response
+):
+    """The direction stays fail-loud where the payload cannot settle it.
+
+    `captured_nothing` is the load-bearing case: a runtime that does not capture
+    stderr makes a real `gh pr ready` look exactly like a command that printed
+    nothing, and a missed reminder costs the follow-through this hook exists to
+    guarantee.
+    """
+    hook = _load_hook()
+    payload = {"tool_input": {"command": "gh pr create --fill"}}
+    if response is not None:
+        payload["tool_response"] = response
+
+    exit_code, out = _run(hook, monkeypatch, capsys, json.dumps(payload))
+
+    assert exit_code == 0
+    assert "MANDATORY" in json.loads(out)["hookSpecificOutput"]["additionalContext"]
+
+
+def test_a_response_that_cannot_be_serialised_is_treated_as_unreadable(monkeypatch, capsys):
+    hook = _load_hook()
+    # a dict pytest can build but json cannot render — unreadable, so fail loud
+    assert hook.should_fire("gh pr create", None) is True
+    assert hook._response_text({"tool_response": {"k": {1, 2}}}) is None
+
+
+def test_should_fire_needs_the_command_first_whatever_the_response_says(monkeypatch, capsys):
+    """A PR URL in the output of an unrelated command must not fire it."""
+    hook = _load_hook()
+    assert (
+        hook.should_fire(
+            "gh pr view 306", "https://github.com/topij/agentic-dev-kit/pull/306"
+        )
+        is False
+    )
+    assert hook.should_fire(None, "https://github.com/x/y/pull/1") is False
+
+
+def test_each_action_is_matched_against_its_own_evidence(monkeypatch, capsys):
+    """CodeRabbit on `#306`: accepting either signal for either action let a
+    command merely mentioning `gh pr ready` fire on any PR URL in its output."""
+    hook = _load_hook()
+    url = "https://github.com/topij/agentic-dev-kit/pull/306"
+    ack = 'Pull request topij/agentic-dev-kit#306 is marked as "ready for review"'
+
+    # mismatched pairs stay silent
+    assert hook.should_fire("echo 'next: gh pr ready 306'", url) is False
+    assert hook.should_fire("echo 'next: gh pr create'", ack) is False
+    # matched pairs fire
+    assert hook.should_fire("gh pr create --fill", url) is True
+    assert hook.should_fire("gh pr ready 306", ack) is True
+
+
+def test_one_command_doing_both_fires_on_either_signal_alone(monkeypatch, capsys):
+    """`gh pr create --draft && gh pr ready` is one command with two actions.
+
+    ANY, not ALL: a runtime that drops stderr carries only the URL, and
+    requiring both would go silent on a PR that was genuinely just opened.
+    """
+    hook = _load_hook()
+    both = "gh pr create --draft --fill && gh pr ready"
+
+    assert hook.should_fire(both, "https://github.com/topij/agentic-dev-kit/pull/306") is True
+    assert hook.should_fire(both, 'Pull request x#1 is marked as "ready for review"') is True
+    assert hook.should_fire(both, "nothing relevant here") is False
+
+
+def test_a_pr_url_buried_in_other_output_is_not_a_pr_being_opened(monkeypatch, capsys):
+    """Found live while this PR was open, by this PR's own hook.
+
+    Replying to a review comment with `gh api …/comments/N/replies` fired the
+    mandate: the command text quoted the trigger phrase (it was explaining the
+    fix) and the API's JSON response carried
+    `https://github.com/…/pull/306#discussion_r…`. Command matched, URL matched,
+    no PR opened.
+
+    `gh pr create` prints the URL alone on its line and nothing else, so
+    anchoring costs no real invocation.
+    """
+    hook = _load_hook()
+    quoting = "gh api repos/o/r/pulls/306/comments/1/replies -f body='use gh pr create'"
+
+    assert (
+        hook.should_fire(
+            quoting,
+            '{"html_url": "https://github.com/topij/agentic-dev-kit/pull/306#discussion_r37"}',
+        )
+        is False
+    )
+    # a URL mentioned mid-sentence is not one either
+    assert hook.should_fire("gh pr create --fill", "see https://x/pull/1 for details") is False
+    # but the real thing, alone on its line, still fires — with or without noise around it
+    assert hook.should_fire("gh pr create --fill", "https://github.com/o/r/pull/306\n") is True
+    assert (
+        hook.should_fire(
+            "gh pr create --fill",
+            "Warning: 3 uncommitted changes\nhttps://github.com/o/r/pull/306\n",
+        )
+        is True
+    )
+
+
+# ── the response shape is not ours to guess (#306, round-1 lens) ─────────────
+# Codex's PostToolUse schema types `tool_response` as `true` — any value, no
+# promised structure. An earlier version read six hardcoded keys and serialised
+# anything else with `json.dumps`, which escapes newlines, so the line-anchored
+# URL match could never fire on a serialised payload: a genuine `gh pr create`
+# under an unrecognised shape went SILENT. Every shape below carries the same
+# real PR URL and every one must fire.
+
+_URL = "https://github.com/topij/agentic-dev-kit/pull/306"
+
+_SHAPES = [
+    pytest.param({"stdout": _URL + "\n", "stderr": ""}, id="flat_stdout_stderr"),
+    pytest.param(_URL + "\n", id="plain_string"),
+    pytest.param({"output": {"stdout": _URL + "\n", "stderr": ""}, "exit_code": 0}, id="nested_output"),
+    pytest.param({"exec_output": _URL + "\n", "exit_code": 0}, id="unknown_key_name"),
+    pytest.param({"chunks": [{"type": "text", "text": _URL + "\n"}]}, id="list_of_content_blocks"),
+    pytest.param([{"text": _URL + "\n"}], id="top_level_list"),
+]
+
+
+@pytest.mark.parametrize("response", _SHAPES)
+def test_a_real_pr_create_fires_whatever_shape_the_runtime_reports_it_in(
+    monkeypatch, capsys, response
+):
+    hook = _load_hook()
+    payload = json.dumps(
+        {"tool_input": {"command": "gh pr create --fill"}, "tool_response": response}
+    )
+
+    exit_code, out = _run(hook, monkeypatch, capsys, payload)
+
+    assert exit_code == 0
+    assert out != "", "a real PR was opened and the reminder was silently dropped"
+    # …and it fired because the URL was FOUND, not because the payload was
+    # unreadable and fail-loud caught it. A round-2 lens showed this test passed
+    # either way: cutting the depth bound to 1, and deleting list handling
+    # outright, both left the whole suite green because `out != ""` cannot tell
+    # a successful walk from a total miss.
+    assert _URL in (hook._response_text({"tool_response": response}) or "")
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        pytest.param({"stdout": None, "stderr": None}, id="known_keys_but_null"),
+        pytest.param({"exit_code": 0, "duration_ms": 12}, id="no_strings_at_all"),
+        pytest.param({"k": {1, 2}}, id="unserialisable"),
+        pytest.param([], id="empty_list"),
+    ],
+)
+def test_a_payload_carrying_no_readable_text_still_fails_loud(monkeypatch, capsys, response):
+    """These used to reach `json.dumps` and be read as evidence of nothing.
+    A payload with no strings cannot settle whether a PR was opened."""
+    hook = _load_hook()
+    assert hook._response_text({"tool_response": response}) is None
+    payload = json.dumps({"tool_input": {"command": "gh pr create --fill"}})
+    exit_code, out = _run(hook, monkeypatch, capsys, payload)
+    assert exit_code == 0 and out != ""
+
+
+def test_a_payload_too_deep_for_json_load_still_exits_zero(monkeypatch, capsys):
+    """`json.load` raises RecursionError before this module sees the payload.
+
+    A lens ran the real script on a 200k-deep array and got exit 1, against a
+    docstring promising a hook never fails a session. `_iter_strings`'s depth
+    bound cannot help — the parse never completes. Pre-existing, and the
+    previous version of this test asserted the property in its docstring while
+    exercising a path `json.load` can never reach.
+    """
+    hook = _load_hook()
+    text = '{"tool_input": {"command": "gh pr create"}, "tool_response": '
+    text += "[" * 200_000 + '"x"' + "]" * 200_000 + "}"
+
+    exit_code, out = _run(hook, monkeypatch, capsys, text)
+
+    assert exit_code == 0
+    assert out == ""
+
+
+def test_walking_for_strings_is_depth_bounded(monkeypatch, capsys):
+    """The walk's own bound, distinct from the parser's above."""
+    hook = _load_hook()
+    deep: object = "https://github.com/o/r/pull/1"
+    for _ in range(60):
+        deep = {"nested": deep}
+
+    assert hook._response_text({"tool_response": deep}) is None  # past the bound
+    assert hook.should_fire("gh pr create", None) is True
+
+
+def test_shallow_noise_beside_deep_evidence_does_not_buy_silence(monkeypatch, capsys):
+    """The regression a round-2 lens proved, as a fixture.
+
+    Fail-loud triggers only when a payload yields NOTHING readable. So a payload
+    with an irrelevant shallow string beside evidence nested past the bound used
+    to read as "readable, and the evidence is not in it" — silence, on a PR that
+    really was readied. The bound now raises instead of truncating, so a payload
+    that cannot be walked in full settles nothing and fires.
+    """
+    hook = _load_hook()
+    ack = 'Pull request o/r#1 is marked as "ready for review"'
+    buried: object = ack
+    for _ in range(hook._MAX_DEPTH + 2):
+        buried = {"nested": buried}
+
+    payload = {"noise": "duration_ms=12", "buried": buried}
+    assert hook._response_text({"tool_response": payload}) is None
+    assert hook.should_fire("gh pr ready 1", hook._response_text({"tool_response": payload}))
+
+    # and the same shape inside the bound is walked rather than abandoned
+    shallow: object = ack
+    for _ in range(hook._MAX_DEPTH - 2):
+        shallow = {"nested": shallow}
+    assert ack in (hook._response_text({"tool_response": {"n": "x", "b": shallow}}) or "")
+
+
+def test_a_list_in_the_payload_is_actually_walked(monkeypatch, capsys):
+    """Deleting `_iter_strings`'s list branch left the whole suite green, because
+    every list fixture still fired — via fail-loud, not via being read."""
+    hook = _load_hook()
+    found = hook._response_text({"tool_response": [{"text": "https://x/pull/9\n"}]})
+    assert found is not None and "https://x/pull/9" in found
+
+
+def test_content_in_a_key_is_not_treated_as_tool_output(monkeypatch, capsys):
+    """Values only. Walking keys would let an arbitrary label pose as output."""
+    hook = _load_hook()
+    assert hook._response_text({"tool_response": {"https://x/pull/9": None}}) is None

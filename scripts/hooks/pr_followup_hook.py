@@ -33,7 +33,9 @@ Cron-safe: a no-op when `JOB_NAME` is set (the kit's own cron/CI signal — see
 `scripts/lib/state_paths/resolver.py`), so a scheduled workflow's own PR-opens never
 trigger it. Always exits 0 — a hook must never fail a session.
 
-Reads the PostToolUse JSON on stdin; the bash command is at `.tool_input.command`.
+Reads the PostToolUse JSON on stdin. The bash command is at `.tool_input.command`
+and what the tool reported is at `.tool_response` — BOTH are consulted, because
+the command alone matches anything that merely quotes it (#302).
 To inject context from a PostToolUse hook you print
 `{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": …}}`
 (plain stdout is not surfaced for PostToolUse).
@@ -47,15 +49,54 @@ import re
 import sys
 from pathlib import Path
 
-# Matches the phrase ANYWHERE in the command, so a command that merely quotes it
-# also fires and emits a spurious mandate — observed three times while wiring the
-# Codex registration, once from the comment documenting it. Anchoring to the start
-# would miss the ordinary `cd x && <the command>` form, and a missed reminder costs
-# more than a spurious one, so the direction stays fail-loud. The real discriminator
-# is `tool_response`, which both runtimes supply and this hook ignores: see #302.
-# Wider under Codex, whose matcher filters the tool name only, so every Bash command
-# reaches this regex.
+# The command is a NECESSARY condition, never a sufficient one (#302). It matches
+# the phrase anywhere, so a command that merely quotes, echoes, greps for or
+# documents it matches too — observed five times while wiring the Codex
+# registration, once from the comment documenting this very behaviour and once
+# from a review lens that had never heard of it. Anchoring to the start would
+# miss the ordinary `cd x && <the command>` form.
+#
+# So the command decides whether to LOOK, and `tool_response` decides whether to
+# fire. Both runtimes supply it on PostToolUse. The surface is wider under Codex,
+# whose matcher filters the tool name only, so every Bash command reaches here.
 _TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
+
+# What a real invocation leaves in the response, established from `gh`'s source
+# rather than assumed — the issue asked for that specifically, and the two
+# subcommands genuinely differ:
+#
+#   `gh pr create` prints the PR URL to STDOUT. That is its primary output.
+#   `gh pr ready`  prints NO url. It writes `Pull request owner/repo#N is marked
+#                  as "ready for review"` to STDERR, and the already-ready case
+#                  says `is already "ready for review"` — which still means a
+#                  real PR exists and still deserves the reminder.
+#
+# The URL must be ALONE ON ITS LINE. `gh pr create` prints it and nothing else,
+# so this still matches every real invocation — while a URL embedded in prose or
+# JSON does not. Found live: replying to a review comment with `gh api` fired
+# this hook, because the command text quoted the trigger phrase and the API's
+# own response carried `…/pull/306#discussion_r…`. The bare-substring form could
+# not tell that from a PR being opened.
+_PR_URL = re.compile(r"^\s*https://\S+/pull/\d+/?\s*$", re.MULTILINE)
+
+# The optional backslash tolerates a runtime that hands us already-escaped text.
+# It is NOT load-bearing for anything this module does: nothing serialises the
+# response any more, because doing so was what broke `_PR_URL`'s line anchor.
+_READY_ACK = re.compile(r'is (?:marked as|already) \\?"ready for review')
+
+# What the two registered runtimes actually send, established from their own
+# sources by a review lens rather than assumed — an earlier version of this
+# comment claimed stderr capture was "runtime-dependent", and that is not what
+# either of them does:
+#
+#   Claude Code — an object with `stdout`, `stderr`, `interrupted`, `isImage`.
+#   Codex       — a plain JSON string built from `aggregated_output`, which
+#                 already concatenates stdout and stderr.
+#
+# Both are handled, and so is anything else, because `_iter_strings` below walks
+# for strings instead of naming keys. An EMPTY response still counts as
+# unreadable and fires: neither runtime promises a shape in its schema (Codex's
+# types `tool_response` as `true`), and a missed reminder is the costly failure.
 
 _DEFAULT_FALLBACK_COMMAND = "/code-review"
 # Which runtime's `review.*` keys to read. Both registrations pass it explicitly;
@@ -290,11 +331,101 @@ def _runtime_from_argv(argv: list[str]) -> str:
     return _DEFAULT_RUNTIME
 
 
+class _Unreadable(Exception):
+    """The payload could not be walked in full, so nothing about it is settled."""
+
+
+_MAX_DEPTH = 6
+
+
+def _iter_strings(value: object, depth: int = 0):
+    """Every string anywhere in a response payload, whatever shape it arrived in.
+
+    Deliberately shape-agnostic. An earlier version read six hardcoded keys and
+    fell back to `json.dumps` for anything else — and `json.dumps` escapes real
+    newlines, so the line-anchored URL match below could never fire on a
+    serialised payload. A genuine `gh pr create` under an unrecognised shape went
+    SILENT. Codex's PostToolUse schema types `tool_response` as `true` — any
+    value, no promised structure — so guessing key names was never verifiable.
+
+    Depth-bounded, and exceeding the bound RAISES rather than truncating. That
+    distinction is the whole point: truncating returns a shorter string, which
+    reads downstream as "readable, and the evidence is not in it" — silence.
+    A second review round proved that regression on the `ready` path, with a
+    payload carrying shallow noise beside an acknowledgement nested too deep:
+    the noise kept the response non-empty, the ack was dropped, and the run went
+    quiet where the code this replaced would have fired.
+
+    Values only, not keys — no runtime shape puts content in a key, and walking
+    keys would let an arbitrary label masquerade as tool output.
+    """
+    if depth > _MAX_DEPTH:
+        raise _Unreadable
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _iter_strings(item, depth + 1)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _iter_strings(item, depth + 1)
+
+
+def _response_text(data: dict) -> str | None:
+    """Everything the tool reported, flattened — or None when the payload cannot
+    settle whether a PR was opened.
+
+    None means "cannot settle it", and every such case fires: no strings at all,
+    and now also a payload too deep to walk. A runtime that does not capture
+    stderr renders `gh pr ready` indistinguishable from a command that printed
+    nothing, and a missed reminder costs the follow-through this hook exists to
+    guarantee while a spurious one costs a paragraph.
+    """
+    try:
+        captured = "\n".join(_iter_strings(data.get("tool_response")))
+    except (_Unreadable, RecursionError):
+        return None
+    return captured.strip() or None
+
+
+def should_fire(command: object, response: str | None) -> bool:
+    """Whether this Bash call actually opened or readied a PR.
+
+    The command alone was the old gate and it mandated a watch loop for PRs that
+    did not exist. Now it only selects candidates; the response decides.
+    """
+    if not isinstance(command, str):
+        return False
+    actions = {match.group(1) for match in _TRIGGER.finditer(command)}
+    if not actions:
+        return False
+    if response is None:
+        return True  # nothing readable — fail loud
+
+    # Each action is matched against ITS OWN evidence. Accepting either signal
+    # for either action let a command that merely mentions `gh pr ready` fire on
+    # any PR URL in its output, and vice versa — CodeRabbit found that.
+    #
+    # ANY, not ALL: `gh pr create --draft && gh pr ready` is one command with
+    # both actions, and its response may carry only the URL if the runtime drops
+    # stderr. Requiring every action's evidence would go silent on a PR that was
+    # genuinely just opened, which is the failure this hook exists to prevent.
+    if "create" in actions and _PR_URL.search(response):
+        return True
+    return bool("ready" in actions and _READY_ACK.search(response))
+
+
 def main() -> int:
     runtime = _runtime_from_argv(sys.argv[1:])
     try:
         data = json.load(sys.stdin)
-    except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
+    except (json.JSONDecodeError, ValueError, UnicodeDecodeError, RecursionError):
+        # RecursionError is raised by `json.load` itself on deeply nested input,
+        # before any of this module's code runs — so `_iter_strings`'s own depth
+        # bound cannot help. Without it here a 200k-deep payload exits 1, which
+        # this module's docstring promises never happens. Pre-existing; found by
+        # a review lens that ran the real script rather than reading it, after a
+        # a comment added on this PR implied the case was already handled.
         return 0  # malformed payload — never block the session
 
     if os.environ.get("JOB_NAME"):
@@ -305,7 +436,7 @@ def main() -> int:
 
     tool_input = data.get("tool_input")
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
-    if isinstance(command, str) and _TRIGGER.search(command):
+    if should_fire(command, _response_text(data)):
         print(
             json.dumps(
                 {
