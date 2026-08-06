@@ -26,7 +26,10 @@ content change still regresses it.
 
 - **PR `#337` is open, reviewed, and deliberately unmerged.** `/upgrade` Step 2 now runs
   `./init.sh --no-clobber`, so a marked-but-edited file is declined instead of rendered over
-  with no backup. Verified with `make test` in `/Users/topi/Coding/agentic-dev-kit`: 955 passed.
+  with no backup. Verified with `make test` in `/Users/topi/Coding/agentic-dev-kit`, on that
+  PR's branch — the figure is not restated here, and the branch has to be named because this
+  record sits on a different one where the same command in the same directory prints a
+  different number.
 - **`adopt` and `upgrade` are now shared workflow definitions**, with thin bindings per runtime
   and `KIT_OWNED` entries; Codex gains `$adopt` and `$upgrade`, which it had not had. The move
   was required — `#330`'s fix lands in `upgrade.md` and would otherwise have reached one
@@ -74,10 +77,17 @@ content change still regresses it.
 
 **Open, and owned by nothing yet**
 
-- **`#337` and `#334` both need an operator merge and neither has CI.** GitHub Actions has been
-  in a major outage since 15:22Z; both branches have zero workflow runs. The panel substituted
-  for what CI would confirm — each lens ran `make test` in its own isolated clone — which is
-  evidence, not a green tick.
+- **`#337` and `#334` both need an operator merge and neither has CI.** Both branches have zero
+  workflow runs. **They are not queued — the push events were dropped**, so Actions recovering
+  will not create them: the incident open since 15:22Z later throttled webhooks to a fraction of
+  deliveries, and runs on other branches completed well into that window, which is what makes
+  "still queued" the wrong read. `#345` has the measurement and the recovery route, and the
+  route matters: a new commit would re-trigger CI and **invalidate the review receipt bound to
+  the reviewed sha**, while closing and reopening the PR re-fires `pull_request` without moving
+  the head. The panel substituted for what CI would confirm — each lens ran the suite in its own
+  isolated clone — which is evidence, not a green tick.
+- **The friction inbox is over its budget** and this session widened it. Not swept here;
+  graduating it needs tracker writes and operator approval, which is `triage-friction-log`'s job.
 - **`#342` is the largest of the new ones**: three Major correctness gaps in `adopt.md`, now
   reachable and refreshable for the first time.
 - **Carried forward:** `#304`, `#291`, `#243`, `#273`, `#290`, `#283`, `#287`, `#292`, `#248`,
