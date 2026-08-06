@@ -49,9 +49,11 @@ itself would have made an adopter's `AGENTS.md` permanently re-seedable.
   caught it was tracing the repair into an adopter tree before writing code — not review, and
   not the ticket's own reasoning.
 - **Building the mechanical guard is what finds the bug elsewhere.** The `#285` lane's
-  regression test surfaced the same hardcoded-path shape in seven further kit-owned engines
-  (`#316`). That ticket argued "the pattern reproduces itself on contact"; the test
-  established it rather than the argument.
+  regression test surfaced the same hardcoded-path shape in seven further kit-owned engines,
+  filed as `#316`. The prediction being borne out is **`#285`'s own** — its body argues for a
+  mechanical fix over a careful edit because "the pattern reproduces itself on contact" — and
+  the test established that rather than the argument. (`#316` records the seven; it does not
+  contain that phrase, and an earlier draft of this line implied it did.)
 - **A contract in the prompt is still prose.** A lane given the `prompt_preamble` verbatim
   idle-stalled against its first two clauses; its sibling, given the identical bytes, did
   not. `#320`, with the direction: the cockpit already owns a check that classifies this.
