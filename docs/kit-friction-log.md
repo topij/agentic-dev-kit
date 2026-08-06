@@ -11,6 +11,30 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-06 — second occurrence of the entry below
+
+**The bot was rate limited again, on a second consecutive session, and this time it went
+down *mid-PR*.** Severity **M**. Recorded here rather than filed because it sharpens the
+entry below rather than adding a new claim; the graduating shape has not changed.
+
+CodeRabbit reviewed PR `#328` at `4576f40` and raised three findings. The fixes for **its
+own findings** moved the head, and it was rate limited by the time that head existed — so
+the sha that merged carried only the fallback panel's review. That is the entry below's
+"one review of a superseded sha, then nothing", reproduced without a batch: one PR, one
+fix round.
+
+What this adds to the open question below is a discriminator the first occurrence could not
+supply. That entry's candidates were a rate-limit tier question, a batch-concurrency effect
+(three lanes opening PRs within the hour), or a bad day. **This session opened one PR**, so
+batch concurrency is not what exhausted the quota here. Two sessions, two outages, different
+shapes — which points at the tier rather than at how the work is sequenced, and makes the
+proposed graduating shape ("record when the fallback carried review, so the rate is visible")
+worth more than it was, since the rate is now the thing in question.
+
+Not filed, still: the remedy is an account decision or an observability change, and the
+entry below already holds the argument. A third occurrence should graduate rather than
+accumulate.
+
 ## 2026-08-06
 
 **The configured review bot carried none of the merged review across a batch, so every lane

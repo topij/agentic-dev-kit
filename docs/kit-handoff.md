@@ -14,10 +14,83 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-06 — **Phase 1's kit side is done; its done-when is not.** `#286`
-shipped in PR `#322`, closing the kit-side work. The phase closes in cs-toolkit, not here.
+Last updated: 2026-08-06 — **Phase 2 shipped, and with it the kit-side critical path.**
+`#297` merged as PR `#328`. What the convergence plan has left on the critical path is
+cs-toolkit's work, not this repo's.
 
-## Latest session — 2026-08-06 (`#286`, and a review that kept finding the same shape)
+## Latest session — 2026-08-06 (`#297`, and a diagnosis corrected within the hour)
+
+**Theme —** Phase 2 shipped after a two-lens panel. The rest of the session went to a CI
+failure that looked like this repo's and was not — the correction is the part worth reading.
+
+- **`#297` shipped in PR `#328`** (merged `dc38c48`). `_seedable` returns a tri-state, so
+  `seed_doc` can tell ABSENT from MARKED and the mode is read at that **one call site** —
+  never inside the predicate, which is the fork `#297` exists to prevent. An unknown
+  argument now exits 2 rather than being skipped past. `/adopt` Step 3c hands the operator
+  `./init.sh --no-clobber` instead of asking them to inspect six line-1s. Verified with
+  `make test` in `/Users/topi/Coding/agentic-dev-kit`: 952 passed.
+- **`#329` is in PR `#334`, open and deliberately unmerged.** CI's `push:` trigger is scoped
+  to the protected branch; `scripts/tests/test_ci_workflow.py` pins that literal against
+  `vcs.protected_branch`, which is the only thing that can — a workflow cannot read the
+  config and GitHub forbids expressions in `on:`. Verified with `make test` in the same
+  checkout: 955 passed. **Held** because it cannot be validated while Actions is down: its
+  own evidence is "one run, not two", and it currently produces zero, which is
+  indistinguishable from having broken PR CI entirely.
+- **Filed this session:** `#329`, `#330`, `#331`, `#332`, `#333`, `#335`. Occurrence
+  comments on `#243` and `#305`.
+
+**Learned**
+
+- **Ask whether the provider is up before diagnosing the repo.** `#329` was filed
+  attributing 15-minute job starvation to this repo's duplicate CI runs; githubstatus.com
+  read `Actions: major_outage`, against an incident opened 15:22Z that predates every
+  starved run. What disproved the local claim was a run
+  with **no sibling to compete with** — PR `#328`'s merge to `main` produced zero check runs
+  under the old unscoped trigger. Corrected on the issue rather than by editing it, and the
+  workflow gap that permitted it is `#335`.
+- **Re-running during an outage is what created the second defect.** The re-run made a check
+  row vanish from the rollup instead of turning green, wedging `pr_watch`'s monotone
+  false-settle guard permanently (`#333`, measured over eight polls at an unchanged head).
+- **A test that names a property can cover half of it.** The byte-identical `--no-clobber`
+  test exercised one of `_seedable`'s two marker arms; mutating the other left it green, and
+  the kill came from an unrelated test that happened to use the other literal. Found by
+  mutation testing, not by review.
+- **The panel reviewed what shipped; the bot reviewed the design.** CodeRabbit went rate
+  limited after reviewing `4576f40`, so the fixes for its own three findings were never
+  bot-reviewed. `#305`'s shape, hit twice in one PR.
+
+**Decided this session (operator)**
+
+- **Record rather than repair**, again on a comment defect: PR `#328` ships a duplicated
+  comment paragraph in `init.sh`. Repairing it moves the head off the sha both lenses
+  reviewed, and `safety-critical-changes.md` gives that class no delta-pass exit — so three
+  lines of comment would have cost a full panel. Stated on the PR, recorded on `#305`.
+- **Run the panel** rather than wait out the bot's rate limit.
+- **Hold `#334`** rather than merge a CI-trigger change on a green that cannot be obtained.
+
+**Open, and owned by nothing yet**
+
+- **The critical path leaves this repo.** Phase 3 needs cs-toolkit's Phase 0 and its fixer
+  predicate (`done` → `converged`); its `pr_watch.py` still carries `decide_done`, and
+  `.codex/hooks.json` is absent there. Both are cs-toolkit PRs.
+- **`#330` does not block Phase 3.** Measured this session: all six of cs-toolkit's seedable
+  paths classify IN_USE under `init.sh`'s own `_seedable`, spliced from the script rather
+  than reimplemented. Re-run that before Phase 3 executes rather than trusting the snapshot.
+- **`#331`, `#332`, `#333`, `#335` are all `pr-watch` loop defects** found by using it. They
+  tax every future PR, and Phase 3 is the largest one in the plan.
+- **Carried forward:** `#304`, `#291`, `#243`, `#273`, `#290`, `#283`, `#287`, `#292`,
+  `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`,
+  `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`pr-watch 334` once GitHub Actions recovers** — the check is one `toolkit` run on
+that PR rather than two, and a run on `main` after it merges; if zero runs still appear, the
+change broke PR CI and `test_pull_request_remains_a_trigger` is the thing to read. That is a
+gate, not the substance: the substance is **cs-toolkit's Phase 0 and its fixer predicate**,
+which gate Phase 3 and are that repo's PRs, per `docs/kit-convergence-plan.md`.
+
+______________________________________________________________________
+
+## Session — 2026-08-06 (`#286`, and a review that kept finding the same shape)
 
 **Theme —** One inline lane, steered live because `#286`'s three open questions were
 operator decisions. All three were answered before code was written; none changed under
@@ -254,77 +327,6 @@ reproduces the defect, records that `make test` then fails on this checkout, and
 `README.md` documents re-running `init.sh` as the upgrade step. It also names the smaller of
 two fixes — `seed_doc` re-emitting the marker — which needs none of the kit-repo detection
 `#291` wants. `#297` remains the larger inherited item.
-
-______________________________________________________________________
-
-## Session — 2026-08-04 (the guard that could not live in a document)
-
-**Theme —** `/adopt`'s contract is *"never overwrite an existing file"*; `init.sh`'s
-`_seedable` deliberately renders over anything carrying a kit marker. Both are right, and
-this session connected them. The mechanisms built to make that safe — a
-backup-and-restore, a re-classify-and-diff, an advisory gate, a gate fused to the run —
-**each shipped a new way to destroy an adopter's file**. The scope was cut instead.
-
-- **`#105` — closed** (`1592380`, PR `#294`). `/adopt` stages the adoption and stops:
-  `docs/templates/` and `init.sh` in the copy list, the pre-push hook reaching the repo at
-  all, `config/*.local.yaml` gitignored before the PR opens, a stop when the adopter has
-  their own `init.sh`, and a handoff giving the operator the six seedable paths from *their*
-  config. A Codex adopter arriving via `/adopt` now gets an entry point.
-- **`/adopt` never runs `init.sh`.** The document carries no authored shell; the remaining
-  fenced blocks are single-line kit commands. That is the fix, not a limitation of it.
-- **Filed:** `#295`, `#296`, `#297`, `#298`; a fourth occurrence on `#270`.
-
-**Learned**
-
-- **Every guard written into a workflow doc is untested code.** No test, linter or CI runs
-  it — `make test` passes in full without touching a line. Each defect class found here
-  (locale-dependent marker match, staleness, 2-of-6 coverage, an unscoped `grep` resolving a
-  decoy path, a BSD-only `mktemp` building an empty-tree probe) was a predicate `init.sh`
-  already owns, restated and diverging on an input nobody could test. The only repair that
-  held was **deleting the restatement**. This is `#297`'s whole argument.
-- **A fix round's own output is the likeliest place for the next defect.** Repeatedly a
-  commit corrected one passage and left an adjacent one asserting the old thing — including
-  one whose message reasoned explicitly about the fact it then failed to apply next door.
-  The round-by-round record is on PR `#294`; it is not restated here.
-- **The panel's isolation contract has a second hole, and it is not `cp -R`.** A lens ran
-  `init.sh` against the live checkout because the tool's cwd resets to the repo root between
-  calls and `init.sh` acts on the *current directory*. It rendered over this repo's own
-  `AGENTS.md` and `CLAUDE.md` — seedable by design since `#288` — and touched
-  `config/dev-model.yaml`. Restored, and verified in the cockpit checkout
-  (`git status --short` clean, files byte-identical to `HEAD`, hook firing on a synthetic
-  `dev/*` push built with plumbing). `#270`, with the direction: a cockpit-side
-  before/after baseline, which was run for the last round and held.
-- **Nothing checks the review brief itself.** A lens found a diffstat in its own prompt that
-  I had never measured. Contract items govern what a lens reports, not whether what it was
-  told is true.
-- **I asserted verification I had not performed, more than once** — an end-to-end claim
-  whose fixtures excluded the dangerous input, and a consistency claim across four steps
-  from a diff that touched one. Both were caught by review, not by me. `#248`'s shape.
-
-**Decided this session (operator)**
-
-- **Ship the safe half; move the guarantee to `init.sh`.** After the fourth mechanism
-  failed, scope was cut to the parts carrying no predicate at all. `#297` carries the
-  no-clobber mode, where CI can hold it.
-- **CodeRabbit's original suggestion was right and I talked us out of it.** It proposed a
-  no-clobber mode on the first round; I declined it as forking the semantics `#288`
-  unified. A mode flag on one predicate is not a fork — two implementations of that
-  predicate is, and that is what I built instead.
-
-**Open, and owned by nothing yet**
-
-- **`#297` is the completion of this work**, not an optional follow-up: until it exists,
-  `/adopt` cannot seed anything and the operator runs `init.sh` by hand.
-- **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#285`, `#283`, `#287`, `#286`,
-  `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
-  `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
-
-▶ Next: **`#297` — add `--no-clobber` to `init.sh`**, with tests in `scripts/tests/`. Read
-`#297`'s body first: it enumerates the nine findings that argue for it and records that a
-mode flag on `_seedable` is not the fork I mistook it for. `/adopt` passes it always;
-`init.sh` bare and `/upgrade` keep today's behaviour, where re-rendering a marker is
-correct. `#273` direction 1 was this session's inherited starter and is still undone — it
-was displaced deliberately, not dropped.
 
 ______________________________________________________________________
 

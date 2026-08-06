@@ -4,6 +4,75 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-04 (the guard that could not live in a document)
+
+**Theme —** `/adopt`'s contract is *"never overwrite an existing file"*; `init.sh`'s
+`_seedable` deliberately renders over anything carrying a kit marker. Both are right, and
+this session connected them. The mechanisms built to make that safe — a
+backup-and-restore, a re-classify-and-diff, an advisory gate, a gate fused to the run —
+**each shipped a new way to destroy an adopter's file**. The scope was cut instead.
+
+- **`#105` — closed** (`1592380`, PR `#294`). `/adopt` stages the adoption and stops:
+  `docs/templates/` and `init.sh` in the copy list, the pre-push hook reaching the repo at
+  all, `config/*.local.yaml` gitignored before the PR opens, a stop when the adopter has
+  their own `init.sh`, and a handoff giving the operator the six seedable paths from *their*
+  config. A Codex adopter arriving via `/adopt` now gets an entry point.
+- **`/adopt` never runs `init.sh`.** The document carries no authored shell; the remaining
+  fenced blocks are single-line kit commands. That is the fix, not a limitation of it.
+- **Filed:** `#295`, `#296`, `#297`, `#298`; a fourth occurrence on `#270`.
+
+**Learned**
+
+- **Every guard written into a workflow doc is untested code.** No test, linter or CI runs
+  it — `make test` passes in full without touching a line. Each defect class found here
+  (locale-dependent marker match, staleness, 2-of-6 coverage, an unscoped `grep` resolving a
+  decoy path, a BSD-only `mktemp` building an empty-tree probe) was a predicate `init.sh`
+  already owns, restated and diverging on an input nobody could test. The only repair that
+  held was **deleting the restatement**. This is `#297`'s whole argument.
+- **A fix round's own output is the likeliest place for the next defect.** Repeatedly a
+  commit corrected one passage and left an adjacent one asserting the old thing — including
+  one whose message reasoned explicitly about the fact it then failed to apply next door.
+  The round-by-round record is on PR `#294`; it is not restated here.
+- **The panel's isolation contract has a second hole, and it is not `cp -R`.** A lens ran
+  `init.sh` against the live checkout because the tool's cwd resets to the repo root between
+  calls and `init.sh` acts on the *current directory*. It rendered over this repo's own
+  `AGENTS.md` and `CLAUDE.md` — seedable by design since `#288` — and touched
+  `config/dev-model.yaml`. Restored, and verified in the cockpit checkout
+  (`git status --short` clean, files byte-identical to `HEAD`, hook firing on a synthetic
+  `dev/*` push built with plumbing). `#270`, with the direction: a cockpit-side
+  before/after baseline, which was run for the last round and held.
+- **Nothing checks the review brief itself.** A lens found a diffstat in its own prompt that
+  I had never measured. Contract items govern what a lens reports, not whether what it was
+  told is true.
+- **I asserted verification I had not performed, more than once** — an end-to-end claim
+  whose fixtures excluded the dangerous input, and a consistency claim across four steps
+  from a diff that touched one. Both were caught by review, not by me. `#248`'s shape.
+
+**Decided this session (operator)**
+
+- **Ship the safe half; move the guarantee to `init.sh`.** After the fourth mechanism
+  failed, scope was cut to the parts carrying no predicate at all. `#297` carries the
+  no-clobber mode, where CI can hold it.
+- **CodeRabbit's original suggestion was right and I talked us out of it.** It proposed a
+  no-clobber mode on the first round; I declined it as forking the semantics `#288`
+  unified. A mode flag on one predicate is not a fork — two implementations of that
+  predicate is, and that is what I built instead.
+
+**Open, and owned by nothing yet**
+
+- **`#297` is the completion of this work**, not an optional follow-up: until it exists,
+  `/adopt` cannot seed anything and the operator runs `init.sh` by hand.
+- **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#285`, `#283`, `#287`, `#286`,
+  `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
+  `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`#297` — add `--no-clobber` to `init.sh`**, with tests in `scripts/tests/`. Read
+`#297`'s body first: it enumerates the nine findings that argue for it and records that a
+mode flag on `_seedable` is not the fork I mistook it for. `/adopt` passes it always;
+`init.sh` bare and `/upgrade` keep today's behaviour, where re-rendering a marker is
+correct. `#273` direction 1 was this session's inherited starter and is still undone — it
+was displaced deliberately, not dropped.
+
 ### 2026-08-04 (the kit's own entry points, and a claim class that outlived the code)
 
 **Theme —** `seed_doc` had two categories, a shipped skeleton and a file the adopter is using,
