@@ -2322,7 +2322,7 @@ def test_a_legacy_baseline_is_told_what_would_split_its_count(tmp_path, capsys):
     out = capsys.readouterr().out
 
     assert "declares no install set" in out
-    assert "Either it predates the declared" in out
+    assert "Commonly it predates the declared" in out
     assert "--record-install" in out
     assert "intact for this adoption" not in out, (
         "a report that cannot judge scope claimed the install was intact"
@@ -2796,3 +2796,33 @@ def test_a_brand_new_partial_baseline_is_not_called_old(tmp_path, capsys):
     # Both causes named, and the unverified one carries its own next step.
     assert "did not match the source kit" in out
     assert "reconcile those first" in out
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [("not_installed", "a string, not a list"), ("files", ["a list, not a dict"])],
+)
+def test_a_malformed_baseline_reaches_the_same_note_and_it_does_not_claim_two_causes(
+    tmp_path, capsys, key, value
+):
+    """A third route to the scope-less state, and the reason the note stopped
+    saying "Either … or": `_declared_scope` declines to read a scope out of a
+    malformed `files` OR `not_installed`, so a corrupt baseline lands on the
+    same branch as an old one and a partial one. Two causes presented as
+    exhaustive is the error this note was fixed for one round earlier — it must
+    not be reintroduced by naming two of three. (CodeRabbit, PR #322.)
+    """
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    baseline[key] = value
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+    assert not report.declared_scope_known
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert "declares no install set" in out
+    assert "Either it predates" not in out, "two causes were presented as exhaustive"
+    assert "malformed" in out, "the malformed route is not named at all"

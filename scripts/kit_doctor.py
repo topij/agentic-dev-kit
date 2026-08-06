@@ -1562,10 +1562,11 @@ def render(report: Report) -> str:
             # (Panel, adversarial lens, round 4.)
             lines.append(
                 "            This baseline declares no install set, so a deliberate omission\n"
-                "            cannot be told from a deletion. Either it predates the declared\n"
+                "            cannot be told from a deletion. Commonly it predates the declared\n"
                 "            set, or --record-install suppressed it because some present file\n"
-                "            did not match the source kit. Re-run --record-install — and if it\n"
-                "            reports unverified paths, reconcile those first."
+                "            did not match the source kit; a malformed `files` or\n"
+                "            `not_installed` value reads the same way. Re-run --record-install\n"
+                "            — and if it reports unverified paths, reconcile those first."
             )
     else:
         lines.append(

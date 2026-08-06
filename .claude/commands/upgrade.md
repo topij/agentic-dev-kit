@@ -282,11 +282,13 @@ after the record, the second that a file you were offered in Step 3 was neither 
 nor recorded as declined. Anything else means Step 3 left something.
 
 A **`missing`** count surviving this step is itself a finding: Step 4 writes the declared
-set, so the state it eliminates should not be reachable here. Three causes, and the third
-is the one you will actually hit:
+set, so the state it eliminates should not be reachable here. The report's own `baseline:`
+note names the causes; these are the ones worth knowing, and the second is the one you
+will actually hit:
 
 - `--record-install` did not run, or ran against a different root.
-- The baseline predates the declared install set.
+- The baseline predates the declared install set, or its `files` / `not_installed` value
+  is malformed — `kit_doctor` declines to read a scope out of either, rather than guess.
 - **Step 4 reported unverified paths.** One kit-owned file that is present but does not
   byte-match the source kit suppresses the **entire** `not_installed` key — the record is
   partial, so it declares no scope at all, for every file rather than just that one — and
