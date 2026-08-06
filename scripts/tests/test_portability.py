@@ -1171,7 +1171,15 @@ def test_python_engine_root_walk_supports_namespacing(tmp_path: Path) -> None:
 
 
 def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
-    for name in ("session-start", "wrap-up", "pr-watch", "parallel"):
+    # Extended for `adopt` and `upgrade` when #330 moved them to shared workflow
+    # definitions. This tuple is the ONLY thing validating `.agents/skills/*`, and
+    # it is a hardcoded restatement of "every dual-runtime skill" — so adding a
+    # skill without adding it here drops coverage silently, which is exactly what
+    # this change did until a review lens caught it. Deriving the set from the
+    # filesystem instead is #341, filed rather than built here because a fix round
+    # addresses the finding and not the mechanism around it
+    # (safety-critical-changes.md rule 3).
+    for name in ("session-start", "wrap-up", "pr-watch", "parallel", "adopt", "upgrade"):
         skill_dir = REPO_ROOT / ".agents" / "skills" / name
         skill_text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
         assert skill_text.startswith("---\n")
