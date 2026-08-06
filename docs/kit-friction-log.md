@@ -11,6 +11,37 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-06
+
+**The configured review bot was unavailable for an entire batch, so every lane paid for a
+manual fallback panel.** Severity **M**. Parked here rather than filed, deliberately — see
+the last paragraph.
+
+Three lanes ran; the two that opened PRs (`#315`, `#317`) both found CodeRabbit reporting
+`Review rate limited` on its status check and `review limit reached` in comments, and both
+ran the two-lens fallback panel instead. Zero independent bot review across the batch.
+
+**Nothing malfunctioned, which is why this is not a ticket.** The detection worked on both
+surfaces `config/dev-model.yaml`'s `unavailable_markers` covers — the status-check wording
+and the comment wording — which is exactly the dual-surface case `#23` was filed about, and
+it behaved correctly on both. The fallback fired as designed. A down bot was treated as an
+action signal rather than a review waiver, per Principle #5.
+
+What is new is **frequency and its cost**: the outage was not one PR's bad luck but the
+condition for the whole session, so the panel stopped being the exception and became the
+review path. That has a price the kit has measured before (`review.fallback_panel`'s own
+comment in `config/dev-model.yaml` records two panels' output-token cost from 2026-08-01)
+and no observability — nothing tracks how often the fallback carries review, so "the bot is
+usually up" is an assumption no command can check.
+
+Not filed because the actionable shape is unclear on one occurrence. It could be a rate-limit
+tier problem (an account question, not a kit one), a batch-concurrency problem (three lanes
+opening PRs inside an hour may be what exhausts the quota — in which case staggering is the
+fix and it is cheap), or simply a bad day. Distinguishing those needs a second occurrence,
+which is what this entry exists to make recognisable. If it recurs, the graduating shape is
+probably *"record when the fallback carried review, so the rate is visible"* rather than
+anything about the bot.
+
 ## 2026-08-04
 
 **`fallback-review-panel.md` never mentions `panel_prompt.py`, so a panel is run by

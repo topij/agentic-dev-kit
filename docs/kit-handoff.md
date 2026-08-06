@@ -14,11 +14,80 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-06 — **The convergence questions are settled and the sequence is
-agreed.** `docs/kit-convergence-plan.md` is now the record of both; the chosen kit-side
-starter is `#304`.
+Last updated: 2026-08-06 — **The first parallel batch ran; Phase 1 is half done.** `#285`
+shipped in PR `#317`, `#292` in PR `#315`. The kit-side starter `#304` did not ship: its
+named repair carries an adopter-side regression, and it now folds into `#297`.
 
-## Latest session — 2026-08-06 (the planning session the convergence doc asked for)
+## Latest session — 2026-08-06 (the first parallel batch, and a fix that should not be built)
+
+**Theme —** Three isolated lanes off one cockpit. Two landed. The third produced a finding
+instead of a commit, which is the outcome worth recording: the repair `#304` names for
+itself would have made an adopter's `AGENTS.md` permanently re-seedable.
+
+- **`#292` shipped in PR `#315`.** `make test` and `mutation-test` now run CI's lint and
+  shell-syntax gates before pytest. `#292` stays open — nothing pins that the targets
+  actually depend on the new gates, so a symmetric revert still passes; the residual is on
+  the issue and in the Makefile.
+- **`#285` shipped in PR `#317`.** `kit_doctor`'s Usage block writes `<engine-dir>`, with a
+  test pinning the invariant across `KIT_OWNED`.
+- **`#304` did not ship, deliberately.** Its "smallest fix" — `seed_doc` re-emitting
+  `KIT_OWN_MARKER` — is unconditional, so in the adopter tree `#297`'s body describes it
+  leaves the seeded file permanently seedable instead of protected after one overwrite. The
+  trace is on `#304`; a pointer is on `#297`. Both safe variants need a kit-repo detector
+  that does not exist.
+- **Filed this session:** `#316`, `#318` (from the `#285` lane), `#319`, `#320`. Occurrence
+  comments on `#305`, `#304`, `#297`.
+- **Batch reconciled** with `scripts/reconcile_sessions.sh fix-292-make-test-parity
+  fix-285-kit-doctor-paths fix-304-seed-marker`, run in
+  `/Users/topi/Coding/agentic-dev-kit`: `launched 3, merged 2, parked 1`. The parked lane is
+  `fix-304-seed-marker` (`EMPTY — 0 commits, never started`).
+
+**Learned**
+
+- **A ticket's own proposed repair can carry the defect class the ticket cites.** `#304` was
+  written after `#294`, names `#294`'s lessons, and its named repair has `#294`'s shape. What
+  caught it was tracing the repair into an adopter tree before writing code — not review, and
+  not the ticket's own reasoning.
+- **Building the mechanical guard is what finds the bug elsewhere.** The `#285` lane's
+  regression test surfaced the same hardcoded-path shape in seven further kit-owned engines
+  (`#316`). That ticket argued "the pattern reproduces itself on contact"; the test
+  established it rather than the argument.
+- **A contract in the prompt is still prose.** A lane given the `prompt_preamble` verbatim
+  idle-stalled against its first two clauses; its sibling, given the identical bytes, did
+  not. `#320`, with the direction: the cockpit already owns a check that classifies this.
+- **A panel that finds something cannot leave two-lens coverage at head.** Both merged PRs
+  carry a single-lens `fallback:delta` receipt, because fixing a finding moves the head off
+  the reviewed sha. `#305`, reframed there from a stopping rule to a coverage question.
+
+**Decided this session (operator)**
+
+- **Hybrid lane launch.** `parallel-headless.md` forbids an env-incapable launcher for a
+  state-writing lane, and no in-session mechanism here can replace a spawned process's
+  environment. So the two standard lanes ran as sub-agents with the sandbox carried by the
+  on-disk marker and the refuse-flag reduced to a prompt instruction; the high-stakes lane
+  stayed attended, where `activate` sets it mechanically.
+- **Fold `#304` into `#297` rather than ship the smaller repair.** The lane produces a
+  finding, not a commit.
+
+**Open, and owned by nothing yet**
+
+- **`#297` now carries `#304`'s work** as well as its own, and is Phase 2 of the convergence
+  plan's critical path.
+- **Phase 1 is half done** — `#285` landed, `#286` remains, and its body leaves three
+  questions open that want an operator rather than a spec.
+- **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#283`, `#287`, `#286`, `#292`,
+  `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`,
+  `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`#286` — the remaining half of Phase 1.** Read its body first: it leaves three
+things undecided (what happens when the kit adds a file, whether declaring is opt-in, and
+where the declared set lives), so this wants live steering rather than a delegated spec.
+`#297` — now carrying `#304` — is the Phase 2 follow-on, and the Codex `SessionStart` budget
+hooks plus cs-toolkit's Phase 0 still run in parallel per `docs/kit-convergence-plan.md`.
+
+______________________________________________________________________
+
+## Session — 2026-08-06 (the planning session the convergence doc asked for)
 
 **Theme —** Planning only; no engine, hook or workflow changed. The convergence plan's
 questions are settled — 1, 2, 4 and 5 by operator decision, 3 by verification — and its
@@ -275,86 +344,6 @@ doctrine reaches one of its two runtimes, so a Codex session touching a kill-pat
 unbound and nothing reports it. Then `#105` (a Codex adopter arriving via `/adopt` still gets
 no entry point — this session fixed only the `init.sh` path). Read `#243`'s own scope note
 before starting it: its line count is measured, stale, and growing.
-
-______________________________________________________________________
-
-## Earlier session — 2026-08-03 (the aim lever, and the bug the later rounds did not catch)
-
-**Theme —** `#51`'s local half shipped, and the durable result is not the feature. What cost
-more to learn than the code did is about *review*: an adopter upgrade found a defect that the
-PR's later review rounds did not catch — and the cheapest explanation fails, because the round
-pointed directly at the guards it lived in missed it too.
-
-- **`#278` — `kit_commit` in the manifest, and `differs` split three ways** (`a042c82`).
-  `STALE` / `LOCALLY EDITED` / `STALE and EDITED`, stated as fact rather than inferred from
-  `kit.version`, which tracks the config schema and so never moved when kit files did.
-- **`#280` — the fix that reopened the hole** (`d3faafb`). `#278`'s round-3 change replaced
-  `.get("files") or {}` with an isinstance check and dropped the `None` handling; `None` is
-  the sentinel for "no `--from-kit`", so verification silently switched off. Found by
-  cs-toolkit's reviewer one commit after `#278` merged.
-- **cs-toolkit upgraded** to the fixed kit, which was the first real use of `--record-install`
-  and is where `#283` was found.
-
-**Learned**
-
-- **The design premise was wrong, and only measuring the adopter showed it.** `#51`'s comment
-  said the local column "is already computed today". It is computed; the baseline it computes
-  against was never written by any install path, so it had drifted nineteen days from the
-  files beside it. Shipping the field alone would have relocated the false accusation rather
-  than removing it.
-- **Carry-forward can subtract attention — but it is not the whole story here.** No total is
-  given, because every total I gave this was wrong and the enumeration is what holds. From the
-  archived launch briefs: the bug entered in the fix for **round 3** (`accf8fa`), which round 4
-  then reviewed; **round 4's brief aimed at those guards** ("whether each actually guards what
-  it claims") and missed it;
-  **rounds 5 and 6 named "the three isinstance degrade sites" as already covered**; **round 7
-  reviewed a prose-only delta under a blanket "everything else is already covered"**. So a
-  wrong coverage claim removed most of the chances and something else removed the one that was
-  aimed. Recorded on `#211`, which the `#209` decision below recommends: a carry-forward
-  asserting coverage should have to name the test or mutation that establishes it.
-
-  **The briefs those figures come from are session scratch, not committed**, so a later reader
-  cannot re-derive this from the repo. `#280`'s merged body and commit message state it
-  differently again; treat this bullet as the account of record and that one as superseded.
-- **Rounds 2 and 4 on `#278` returned disjoint lens sets**; the first convergence came at
-  round 5. Direct evidence on the question `#209` turns on — recorded on `#278` itself, not on
-  `#209`, which a review lens checked and found bare.
-- **The configured bot reviewed a minority of heads while its check went green on all of
-  them.** Its check surface carries no signal about whether a review happened — occurrence and
-  the per-head table on `#45`.
-- **A guard resting on an incidental property is not a guard.** `#278`'s first
-  release-manifest check needed a `required_by` edge to fire, which is an accident of the
-  current import graph. A lens called it fragile; cs-toolkit's real manifest then turned out
-  to have none, so the original guard would have missed the live case.
-
-**Decided this session (operator)**
-
-- **`#209` — no proportionality valve.** None of directions 1–4 adopted, each refuted by a
-  counter-example from a different PR; the issue body's recommendation of direction 1 is
-  struck so a reader of the body cannot act on it. Next moves are `#211` then `#120`, both
-  aimed at the finding *population* rather than the pass size.
-- **Kit findings surfaced in an adopter route upstream, not into the adopter's PR.** A local
-  edit to a kit-owned file reports `LOCALLY EDITED` on every later upgrade, which is the
-  signal the baseline exists to give.
-
-**Filed this session:** `#279`, `#281`, `#282`, `#283`; occurrences on `#45`, `#211`, `#270`.
-
-**Open, and owned by nothing yet**
-
-- **`#243` is still the precondition** for the `triage-friction-log` and
-  `post-merge-systemize` conversions — the two that remain of the adapter work.
-- **cs-toolkit's friction inbox is over budget with un-graduated dated sections.** Needs
-  tracker writes plus operator approval, so it is `triage-friction-log`'s job and not a
-  wrap-up's.
-- **Carried forward:** `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#120`, `#216`, `#220`,
-  `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
-
-▶ Next: **`#283`** — one paragraph in `/upgrade` Step 4 saying a copied release manifest must
-be removed before `--record-install`, and that the mode exits 1 on a partial record. It is the
-smallest of the four filed today, it is on the path every pre-`#51` adopter takes on their
-next upgrade, and the fix is prose in a file that is already `/upgrade`-refreshed. `#281` is
-the next-largest and is a real guard defect, but it needs a test over the near-miss keys
-rather than a wording change.
 
 ______________________________________________________________________
 
