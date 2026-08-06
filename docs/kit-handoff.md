@@ -14,11 +14,44 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-05 — **A predicate you cannot decide is deleted, not guarded.**
-Twice more this session, on the same function. The shape now has a name and four
-instances; `#297` is still the unbuilt half of the last one.
+Last updated: 2026-08-06 — **The convergence questions are settled and the sequence is
+agreed.** `docs/kit-convergence-plan.md` is now the record of both; the chosen kit-side
+starter is `#304`.
 
-## Latest session — 2026-08-05 (the runtime hook, and two predicates deleted)
+## Latest session — 2026-08-06 (the planning session the convergence doc asked for)
+
+**Theme —** Planning only; no engine, hook or workflow changed. The convergence plan's
+questions are settled — 1, 2, 4 and 5 by operator decision, 3 by verification — and its
+phase shape is now an agreed sequence. `docs/kit-convergence-plan.md` is the record:
+the decisions with their evidence, the sequence with its done-whens, and the
+re-verification notes all live there, not here.
+
+- **Question 3 verified: Codex exposes `SessionStart`.** The sources and the remaining
+  fire-it-and-see obligation are in the convergence doc's settled-questions list.
+- **Re-derived live before deciding**, per the doc's own instruction: `kit_doctor
+  --manifest` run in cs-toolkit, the forked hook measured against the kit's current one,
+  `#285` / `#286` / `#297` re-read against the plan's claims. The claims held; the
+  deltas are recorded in the doc's verified-state section.
+- **One dependency the doc had missed is now in the sequence:** cs-toolkit's nightly
+  fixer still reads `done`, which gates the engine swap — cs-toolkit's own config phased
+  its adoption around exactly this, and the constraint had not reached the kit's plan.
+
+**Open, and owned by nothing yet**
+
+- **`#297` and `#304`** are now placed in the agreed sequence rather than free-floating;
+  `#304` is the chosen kit-side starter.
+- **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#285`, `#283`, `#287`, `#286`,
+  `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
+  `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`#304`** — its body names the smaller repair (`seed_doc` re-emitting the
+kit-own marker). The sequence's other immediate items — the Codex SessionStart budget
+hooks (kit-side) and Phase 0, un-forking cs-toolkit's hook (a cs-toolkit session) —
+run in parallel with it, per `docs/kit-convergence-plan.md`.
+
+______________________________________________________________________
+
+## Session — 2026-08-05 (the runtime hook, and two predicates deleted)
 
 **Theme —** Both runtimes now fire the PR follow-through hook, and neither registration is
 written by the kit. The work that took the time was not the wiring: it was discovering, on
