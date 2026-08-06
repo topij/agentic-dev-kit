@@ -1414,6 +1414,23 @@ def render(report: Report) -> str:
                 f"  ✗ NOT intact for this adoption — {n_absent} file(s) absent that should be "
                 f"installed{declined_note}"
             )
+        elif not by_state.get("unchanged") and not n_differ:
+            # "Intact" is a claim about an install set, and an EMPTY set has
+            # nothing to be intact. Recording a tree where nothing was ever
+            # copied produces a well-formed baseline declining all of
+            # KIT_OWNED, which would otherwise print the same confident ✓ as a
+            # healthy sized-down adoption — under a `✗ paths.engines` line
+            # saying every workflow reference resolves to nothing.
+            #
+            # That reads WORSE than the wording it replaced: `missing
+            # (sized-down adoption, or incomplete)` at least floated
+            # "incomplete". Exit stays 0 — an empty adoption is not broken, and
+            # the installation-level checks above already carry the ✗ — but
+            # this line must not bless it. (Fallback panel, adversarial lens.)
+            lines.append(
+                f"  ⚠ nothing is installed here — all {n_declined} kit-owned file(s) are "
+                "declined, so this is an empty adoption rather than an intact one"
+            )
         elif n_declined:
             lines.append(f"  ✓ intact for this adoption — {n_declined} file(s) declined")
         else:

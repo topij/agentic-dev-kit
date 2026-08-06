@@ -2464,3 +2464,89 @@ def test_a_malformed_files_map_cannot_be_read_as_a_declared_scope(tmp_path):
     # `missing`, not `declined` and not `new-upstream`: nothing is known here.
     assert _states(report)[ENGINE] == "missing"
     assert report.declined == [] and report.new_upstream == []
+
+
+# --- render-layer coverage for the split (fallback panel, adversarial lens) ---
+#
+# The state layer was pinned; the RENDER layer was not, and that is where #286's
+# own bug can reappear. `render` gates its headline verdict on `report.broken`,
+# so a gate narrowed to `missing-required` alone prints "✓ intact" directly above
+# an itemised deletion warning — the same "deleting engines said nothing" failure,
+# one layer up. The whole suite passed under that mutation before these tests.
+
+
+def test_a_deletion_alone_makes_the_report_say_NOT_intact(tmp_path, capsys):
+    """`removed` with no `missing-required` anywhere — the state that reaches
+    the headline verdict only through `broken`'s second member."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    target.unlink()
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+    assert [f.state for f in report.broken] == ["removed"], (
+        "fixture is confounded: something other than `removed` reached the verdict"
+    )
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert "✗ NOT intact for this adoption" in out
+    assert "✓ intact for this adoption" not in out, (
+        "the report called an adoption intact while itemising a deleted file below it"
+    )
+    # The itemised warning and the headline must agree — the contradiction is
+    # the actual defect, so pin that both halves are present together.
+    assert "deleted since" in out
+
+
+def test_removed_beats_declined_when_a_baseline_lists_a_path_in_both(tmp_path):
+    """The precedence the code comments call load-bearing, pinned. Only a
+    hand-edited baseline reaches it — an honest `record_install_manifest` run
+    partitions every path into exactly one map — but it is a documented safety
+    property, and swapping the two branches passed the whole suite before this.
+    """
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    baseline["not_installed"] = sorted({*baseline["not_installed"], ENGINE})
+    target.unlink()
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+    assert ENGINE in baseline["files"] and ENGINE in baseline["not_installed"], (
+        "fixture is confounded: the path is not in both maps"
+    )
+    assert _states(report)[ENGINE] == "removed", (
+        "a contradictory baseline resolved to silence rather than to the finding"
+    )
+    assert [f.path for f in report.broken] == [ENGINE]
+
+
+def test_an_empty_adoption_is_not_called_intact(tmp_path, capsys):
+    """An install set with nothing in it has nothing to be intact. Recording a
+    tree where no kit file was ever copied yields a well-formed baseline
+    declining all of KIT_OWNED — which printed the same confident ✓ as a
+    healthy sized-down adoption, underneath a `✗ paths.engines` line saying
+    every workflow reference resolves to nothing."""
+    root = tmp_path
+    _write(
+        root / "config" / "dev-model.yaml",
+        "kit:\n  version: 2\npaths:\n  handoff: docs/handoff.md\n"
+        "  friction_log: docs/friction-log.md\n  engines: scripts\n",
+    )
+    _write(root / "docs" / "handoff.md", "# real handoff\n")
+    _write(root / "docs" / "friction-log.md", "# real inbox\n")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    written, unverified = kit_doctor.record_install_manifest(root, config, 2, "abc123")
+    assert written["files"] == {} and unverified == [], "fixture is confounded"
+
+    report = kit_doctor.inspect(root, _manifest({}), config, written)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert "✓ intact for this adoption" not in out, (
+        "a tree with nothing installed was reported as an intact adoption"
+    )
+    assert "nothing is installed here" in out
+    assert "empty adoption rather than an intact one" in out
