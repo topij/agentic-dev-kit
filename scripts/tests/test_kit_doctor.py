@@ -2306,7 +2306,7 @@ def test_the_report_names_new_upstream_files_and_does_not_count_them_missing(tmp
 
     line = next(ln for ln in out.splitlines() if ln.startswith("  files:"))
     assert line == "  files: 1 unchanged, 0 differ, 0 missing, 0 unknown"
-    assert "1 file(s) the kit added since your baseline" in out
+    assert "1 file(s) this baseline does not mention either way" in out
     # Named, because "which" is always the next question.
     assert newcomer in out
     assert "/upgrade" in out
@@ -2571,3 +2571,110 @@ def test_a_removed_file_is_counted_and_named_on_the_summary_line(tmp_path, capsy
 
     # Both halves: the file is COUNTED, and the count says which kind it is.
     assert line == "  files: 0 unchanged, 0 differ, 1 missing (1 recorded as installed here), 0 unknown", line
+
+
+# --- `unknown-version` is a PRESENT file (fallback panel, correctness lens r2) ---
+#
+# It means "this file is here and its drift cannot be judged" — an absence of
+# information, not of a file. The verdict block read it as neither, so a tree
+# holding only unjudgeable files reported "nothing is installed here", and a
+# full install reported a bare ✓ three lines above "drift cannot be judged".
+
+
+def _unjudgeable_case(tmp_path, *, also_installed: bool):
+    """One present file the COMPARISON manifest has no entry for. With
+    `also_installed`, a second file is present and recorded, so the tree is a
+    normal install rather than an otherwise-empty one."""
+    root = _fake_repo(tmp_path)
+    other = "scripts/lib/kitconfig.py"
+    if also_installed:
+        _write(root / other, "recorded and matching\n")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    installed = {other: kit_doctor.sha256_of(root / other)} if also_installed else {}
+    baseline = _scoped_baseline(installed)
+    # ENGINE is present on disk but in neither map and absent from the
+    # comparison manifest, which is what makes it `unknown-version`.
+    baseline["not_installed"] = [p for p in baseline["not_installed"] if p != ENGINE]
+    report = kit_doctor.inspect(root, _manifest(installed), config, baseline)
+    assert _states(report)[ENGINE] == "unknown-version", _states(report)[ENGINE]
+    return report
+
+
+def test_a_tree_holding_only_unjudgeable_files_is_not_called_empty(tmp_path, capsys):
+    """`scripts/check_doc_budget.py` is on disk. Saying "nothing is installed
+    here" is a plain falsehood, not an imprecision."""
+    report = _unjudgeable_case(tmp_path, also_installed=False)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert "nothing is installed here" not in out, (
+        "a tree with a file on disk was reported as an empty adoption"
+    )
+    assert "drift unjudgeable for 1 present file(s)" in out
+
+
+def test_the_intact_verdict_carries_the_unjudgeable_caveat(tmp_path, capsys):
+    """Both skill docs tell an operator to skim for this line, so it must not
+    read as an all-clear while the section below says a file cannot be judged."""
+    report = _unjudgeable_case(tmp_path, also_installed=True)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    verdict = next(ln for ln in out.splitlines() if "intact for this adoption" in ln)
+    assert "drift unjudgeable for 1 present file(s), listed below" in verdict, verdict
+    assert not verdict.lstrip().startswith("✓"), (
+        f"a bare ✓ stood above an unjudgeable file: {verdict}"
+    )
+    # The caveat must point at something real.
+    assert "drift cannot be judged" in out
+
+
+def test_an_empty_adoption_does_not_say_all_declined_when_some_were_never_offered(
+    tmp_path, capsys
+):
+    """"all N declined" is only true when `declined` accounts for every absence.
+    At 0 declined and 33 new-upstream it read "all 0 kit-owned file(s) are
+    declined" directly above the itemised 33-file list contradicting it —
+    the headline/detail contradiction this PR closed twice for `removed`,
+    reintroduced in the adjacent branch. (Panel, adversarial lens, round 2.)
+    """
+    root = _fake_repo(tmp_path)
+    (root / "scripts" / "check_doc_budget.py").unlink()
+    every = [rel for rel, _role in kit_doctor.KIT_OWNED]
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    # Nothing installed, nothing declined, everything unmentioned.
+    baseline = {"kit_version": 2, "kit_commit": "abc", "files": {}, "not_installed": []}
+    print(kit_doctor.render(kit_doctor.inspect(root, _manifest({}), config, baseline)))
+    out = capsys.readouterr().out
+
+    assert "all 0 kit-owned file(s)" not in out, "the verdict claimed 'all 0 ... declined'"
+    assert f"0 declined and {len(every)} never offered" in out
+    assert "nothing is installed here" in out
+
+
+def test_the_unmentioned_state_does_not_assert_what_only_an_intact_record_supports(
+    tmp_path, capsys
+):
+    """One deleted key turns a `removed` finding into this line at exit 0, for a
+    file that WAS installed and then deleted. The baseline is the trust root and
+    is not integrity-protected, so the two are indistinguishable here — which
+    means the wording must not claim the kit did anything."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    written, _ = kit_doctor.record_install_manifest(root, config, 2, "abc123")
+    recorded = written["files"][ENGINE]["sha256"]
+    target.unlink()
+    del written["files"][ENGINE]  # the single edit that flips the verdict
+
+    report = kit_doctor.inspect(root, _manifest({ENGINE: recorded}), config, written)
+    assert _states(report)[ENGINE] == "new-upstream", "fixture is confounded"
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert "the kit added since your baseline" not in out, (
+        "the report asserted the kit added a file, which only an intact baseline could support"
+    )
+    assert "this baseline does not mention either way" in out
+    # The likely cause is still named — hedged, not deleted.
+    assert "most likely added to the kit since it was recorded" in out

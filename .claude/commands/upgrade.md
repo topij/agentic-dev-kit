@@ -167,9 +167,14 @@ that installed nothing still shows no `missing-required`.
   answer. Do not re-litigate it: re-asking every upgrade is the noise the declared set
   exists to remove. Raise it only if the operator asks what was left out, or if a
   `missing-required` above now names it.
-- **`new-upstream`** → **this is the decision `/upgrade` owns.** The kit gained the file
-  after this repo's baseline was recorded, so no declared set could have mentioned it and
-  nobody has ever been asked. Ask now, once, per file — the same "decide, don't assume"
+- **`new-upstream`** → **this is the decision `/upgrade` owns.** The baseline mentions the
+  file in neither map; the ordinary cause is that the kit gained it after the baseline was
+  recorded, so no declared set could have mentioned it and nobody has ever been asked.
+  **Treat a `new-upstream` file you recognise as one this repo once installed as a
+  finding, not as a new offer** — a damaged baseline produces this same state, and the
+  report cannot tell the two apart (see `kit_doctor.py`'s `new-upstream` docstring). If
+  that happens, restore from git history rather than accepting it as new.
+  Otherwise ask now, once, per file — the same "decide, don't assume"
   conversation as `missing` below, but with a bounded list: only what is genuinely new
   since the last record. Whichever way it goes, Step 4's `--record-install` is what makes
   the answer durable; skip it and the same file is `new-upstream` again next upgrade.

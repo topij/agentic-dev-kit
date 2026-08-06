@@ -44,11 +44,23 @@ verifies it still holds. Per kit-owned file it reports one of:
     engines moved the number and said nothing, because the healthy state was
     reported in the same words.
 ``new-upstream``
-    Not installed, and the baseline knows nothing about it either way — so the
-    kit gained it after this repo's baseline was recorded, and no declared set
-    could have mentioned it. Informational, never a finding: it is neither
-    broken nor declined, it has simply never been offered. `/upgrade` is where
-    it gets accepted or declined.
+    Not installed, and the baseline mentions it in NEITHER map. The ordinary
+    cause is that the kit gained it after this repo's baseline was recorded, so
+    no declared set could have mentioned it. Informational, never a finding: it
+    is neither broken nor declined, it has simply never been offered.
+    `/upgrade` is where it gets accepted or declined.
+
+    **This state is where a damaged baseline shows up, and it cannot tell the
+    two apart.** Deleting one key from ``files`` turns a ``removed`` finding
+    (exit 1) into this line (exit 0) for a file that WAS installed and then
+    deleted — the same absence-from-both-maps shape, reached by corruption
+    instead of by a kit release. Nothing here can separate them: the baseline is
+    the trust root, ``_baseline_trusted`` keys on the PRESENCE of ``kit_commit``
+    rather than on integrity, and a record that lies about itself defeats every
+    conclusion drawn from it. So the report states what it knows — the baseline
+    does not mention these — and names the likely cause as likely. Making the
+    distinction mechanical needs an integrity-protected baseline, which is a
+    larger change than this axis.
 ``missing-required``
     Not installed, but an engine that IS installed needs it — so this install
     is broken, not sized down. The distinction exists because the old report had
@@ -1401,6 +1413,23 @@ def render(report: Report) -> str:
     # be answered. "Intact" is a claim about the DECLARED set, so it needs one;
     # without a declared set the count above stays ambiguous and the baseline
     # block below says so instead.
+    # `unknown-version` means the file IS PRESENT and its drift cannot be
+    # judged — it is an absence of information, not an absence of a file. Two
+    # consequences, and the first is what made the empty-adoption branch below
+    # state a falsehood: a tree holding only unjudgeable files is not empty.
+    #
+    # The second is softer and applies to every branch: none of these verdicts
+    # is an all-clear while some file's drift is unjudgeable, and both skill
+    # docs tell an operator to skim for exactly this ✓/✗/⚠ line. So the verdict
+    # keeps its own subject — the install SET, which is genuinely knowable here
+    # — and carries the caveat rather than swallowing it.
+    # (Fallback panel, correctness lens, round 2.)
+    n_unjudgeable = len(by_state.get("unknown-version", []))
+    unjudged_note = (
+        f" (drift unjudgeable for {n_unjudgeable} present file(s), listed below)"
+        if n_unjudgeable
+        else ""
+    )
     if report.declared_scope_known:
         if report.broken:
             # Never "intact" while something is absent that should not be —
@@ -1417,9 +1446,9 @@ def render(report: Report) -> str:
             declined_note = f", {n_declined} declined" if n_declined else ""
             lines.append(
                 f"  ✗ NOT intact for this adoption — {n_absent} file(s) absent that should be "
-                f"installed{declined_note}"
+                f"installed{declined_note}{unjudged_note}"
             )
-        elif not by_state.get("unchanged") and not n_differ:
+        elif not by_state.get("unchanged") and not n_differ and not n_unjudgeable:
             # "Intact" is a claim about an install set, and an EMPTY set has
             # nothing to be intact. Recording a tree where nothing was ever
             # copied produces a well-formed baseline declining all of
@@ -1432,22 +1461,49 @@ def render(report: Report) -> str:
             # "incomplete". Exit stays 0 — an empty adoption is not broken, and
             # the installation-level checks above already carry the ✗ — but
             # this line must not bless it. (Fallback panel, adversarial lens.)
+            # "all N declined" is only true when `declined` accounts for every
+            # absence. With `new-upstream` files it is false, and at 0 declined
+            # it read "all 0 kit-owned file(s) are declined" directly above an
+            # itemised 33-file list — the headline/detail contradiction this
+            # round closed twice for `removed`, reintroduced in the one
+            # adjacent branch neither fix touched. (Panel, adversarial, r2.)
+            breakdown = (
+                f"{n_declined} declined and {n_new_upstream} never offered"
+                if n_new_upstream
+                else f"all {n_declined} kit-owned file(s) declined"
+            )
             lines.append(
-                f"  ⚠ nothing is installed here — all {n_declined} kit-owned file(s) are "
-                "declined, so this is an empty adoption rather than an intact one"
+                f"  ⚠ nothing is installed here — {breakdown}, so this is an empty adoption "
+                "rather than an intact one"
             )
         elif n_declined:
-            lines.append(f"  ✓ intact for this adoption — {n_declined} file(s) declined")
+            lines.append(
+                f"  {'⚠' if n_unjudgeable else '✓'} intact for this adoption — "
+                f"{n_declined} file(s) declined{unjudged_note}"
+            )
         else:
-            lines.append("  ✓ intact for this adoption — full install, nothing declined")
+            lines.append(
+                f"  {'⚠' if n_unjudgeable else '✓'} intact for this adoption — full install, "
+                f"nothing declined{unjudged_note}"
+            )
     if n_new_upstream:
         # Informational, and outside the intact/not-intact verdict on purpose:
         # these are neither installed nor declined, so they say nothing about
         # whether this repo is healthy. Listed by name because the count alone
         # is not actionable — the operator's next question is always "which".
+        # States what is KNOWN — the baseline mentions these in neither map —
+        # rather than the inference. "The kit added them since" is the ordinary
+        # cause and not a fact this can establish: the same shape is what a
+        # damaged baseline produces, and one deleted key turns a `removed`
+        # finding into this reassuring line at exit 0. The baseline is the trust
+        # root and is not integrity-protected (`_baseline_trusted` keys on the
+        # PRESENCE of `kit_commit`), so no reading here can rule that out — but
+        # the wording must not claim what only an intact record would support.
+        # (Panel, adversarial lens, round 2.)
         lines.append(
-            f"  ⓘ {n_new_upstream} file(s) the kit added since your baseline — "
-            "never offered here, so neither installed nor declined:"
+            f"  ⓘ {n_new_upstream} file(s) this baseline does not mention either way — "
+            "neither installed nor declined, so most likely added to the kit since it was "
+            "recorded:"
         )
         for f in report.new_upstream:
             lines.append(f"      {f.path}")
