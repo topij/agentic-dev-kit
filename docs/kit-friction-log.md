@@ -13,34 +13,44 @@
 
 ## 2026-08-06
 
-**The configured review bot was unavailable for an entire batch, so every lane paid for a
-manual fallback panel.** Severity **M**. Parked here rather than filed, deliberately — see
-the last paragraph.
+**The configured review bot carried none of the merged review across a batch, so every lane
+paid for a manual fallback panel.** Severity **M**. Parked here rather than filed,
+deliberately — see the last paragraph.
 
-Three lanes ran; the two that opened PRs (`#315`, `#317`) both found CodeRabbit reporting
-`Review rate limited` on its status check and `review limit reached` in comments, and both
-ran the two-lens fallback panel instead. Zero independent bot review across the batch.
+Three lanes were **launched**; two opened PRs (`#315`, `#317`) and the third never started.
+Both PRs carried `Review rate limited` on the CodeRabbit status check and `review limit
+reached` in comments, and both ran the two-lens fallback panel.
 
-**Nothing malfunctioned, which is why this is not a ticket.** The detection worked on both
-surfaces `config/dev-model.yaml`'s `unavailable_markers` covers — the status-check wording
-and the comment wording — which is exactly the dual-surface case `#23` was filed about, and
-it behaved correctly on both. The fallback fired as designed. A down bot was treated as an
-action signal rather than a review waiver, per Principle #5.
+**Checked rather than assumed, because the loose version was wrong.**
+`gh api repos/topij/agentic-dev-kit/pulls/<n>/reviews` reports one CodeRabbit review on
+`#315`, against `46ebd9e` — that PR's **first** commit, not the head that merged — and none
+on `#317`. So this was not "no bot review": it was one review of a superseded sha, then
+nothing. A bot that never ran and a bot whose output aged out under a fix round are different
+problems, and the second is `#305`'s.
 
-What is new is **frequency and its cost**: the outage was not one PR's bad luck but the
-condition for the whole session, so the panel stopped being the exception and became the
-review path. That has a price the kit has measured before (`review.fallback_panel`'s own
-comment in `config/dev-model.yaml` records two panels' output-token cost from 2026-08-01)
-and no observability — nothing tracks how often the fallback carries review, so "the bot is
-usually up" is an assumption no command can check.
+**The marker is not the inverse of coverage.** On the wrap-up PR carrying this entry,
+`pr_watch` reported an `unavailable` hit (`review limit reached`) **and**
+`coverage … covers_head: true` in the same poll. `unavailable` reports that wording appeared,
+not that review was absent — `covers_head` is what the merge gate actually reads, so nothing
+is currently wrong, but the name promises more than it checks.
 
-Not filed because the actionable shape is unclear on one occurrence. It could be a rate-limit
-tier problem (an account question, not a kit one), a batch-concurrency problem (three lanes
-opening PRs inside an hour may be what exhausts the quota — in which case staggering is the
-fix and it is cheap), or simply a bad day. Distinguishing those needs a second occurrence,
-which is what this entry exists to make recognisable. If it recurs, the graduating shape is
-probably *"record when the fallback carried review, so the rate is visible"* rather than
-anything about the bot.
+**No engine misbehaved, which is most of why this is not a ticket.** Both surfaces
+`unavailable_markers` covers fired (the `#23` case), the fallback ran, a limited bot was an
+action signal rather than a waiver per Principle #5, and the gate still demanded a receipt
+bound to head.
+
+What is new is **frequency**: this was the session's condition rather than one PR's bad luck,
+so the panel became the review path instead of the exception. It has a cost the kit has
+measured before (`review.fallback_panel`'s comment in `config/dev-model.yaml`) and no
+observability — nothing records how often the fallback carried review, so "the bot is usually
+up" is an assumption no command can check.
+
+Not filed because one occurrence does not distinguish the candidates: a rate-limit tier
+question (an account matter, not a kit one), a batch-concurrency effect (three lanes opening
+PRs within the hour may be what exhausts the quota, making staggering the cheap answer), or a
+bad day. A second occurrence would separate them, which is what this entry exists to make
+recognisable. The graduating shape is probably *"record when the fallback carried review, so
+the rate is visible"* rather than anything about the bot.
 
 ## 2026-08-04
 
