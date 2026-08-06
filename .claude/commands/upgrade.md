@@ -286,13 +286,18 @@ set, so the state it eliminates should not be reachable here. Three causes, and 
 is the one you will actually hit:
 
 - `--record-install` did not run, or ran against a different root.
-- The baseline predates the declared install set (it would also say so — see the
-  `baseline:` note).
+- The baseline predates the declared install set.
 - **Step 4 reported unverified paths.** One kit-owned file that is present but does not
   byte-match the source kit suppresses the **entire** `not_installed` key — the record is
   partial, so it declares no scope at all, for every file rather than just that one — and
   `--record-install` exits 1 saying so. A local patch you kept but did not set aside per
   Step 4's ordering rule is the usual way in. Reconcile the paths it named, then re-run.
+
+**The `baseline:` note cannot tell the second cause from the third**, so do not read it as
+deciding between them: an absent declared set is the only evidence either leaves, and a
+baseline written moments ago by a current kit looks identical to an old one. The note says
+so. What distinguishes them is Step 4's own output — `--record-install` exits 1 and lists
+the unverified paths — so check that, not the note.
 
 That exception, stated once: a local patch you chose to keep in Step 3 reports
 `LOCALLY EDITED`, which is the baseline working as intended. Name it in the PR body so

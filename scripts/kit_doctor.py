@@ -1551,10 +1551,21 @@ def render(report: Report) -> str:
         # noise — which is the failure mode #286 is about, and reproducing it in
         # the fix's own advice line would be its own joke.
         if not report.declared_scope_known and by_state.get("missing"):
+            # Says "declares no install set" rather than "predates" it, because
+            # this cannot tell those apart and the second is often false. A
+            # baseline written SECONDS AGO by a current kit lands here whenever
+            # `--record-install` hit an unverified path: that suppresses
+            # `not_installed` wholesale, while `kit_commit` is written anyway,
+            # so the manifest is trusted, scope-less, and brand new. Both causes
+            # reach this branch with identical evidence — an absent key — so the
+            # note names both and lets the operator tell which.
+            # (Panel, adversarial lens, round 4.)
             lines.append(
-                "            This baseline predates the declared install set, so a deliberate\n"
-                "            omission cannot be told from a deletion. Re-run --record-install\n"
-                "            to split the count above."
+                "            This baseline declares no install set, so a deliberate omission\n"
+                "            cannot be told from a deletion. Either it predates the declared\n"
+                "            set, or --record-install suppressed it because some present file\n"
+                "            did not match the source kit. Re-run --record-install — and if it\n"
+                "            reports unverified paths, reconcile those first."
             )
     else:
         lines.append(

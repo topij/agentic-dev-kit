@@ -2321,7 +2321,8 @@ def test_a_legacy_baseline_is_told_what_would_split_its_count(tmp_path, capsys):
     print(kit_doctor.render(_inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, legacy)))
     out = capsys.readouterr().out
 
-    assert "predates the declared install set" in out
+    assert "declares no install set" in out
+    assert "Either it predates the declared" in out
     assert "--record-install" in out
     assert "intact for this adoption" not in out, (
         "a report that cannot judge scope claimed the install was intact"
@@ -2766,3 +2767,32 @@ def test_the_not_intact_verdict_carries_the_caveat_too(tmp_path, capsys):
     verdict = next(ln for ln in out.splitlines() if "intact for this adoption" in ln)
     assert verdict.lstrip().startswith("✗"), verdict
     assert "drift unjudgeable for 1 present file(s)" in verdict, verdict
+
+
+def test_a_brand_new_partial_baseline_is_not_called_old(tmp_path, capsys):
+    """A baseline written SECONDS AGO by a current kit lands on the same branch
+    as a genuinely old one: an unverified path suppresses `not_installed` while
+    `kit_commit` is written anyway, so the record is trusted, scope-less, and
+    new. The note used to assert it "predates the declared install set" — false,
+    and it points the operator away from the reconcile step they actually need.
+    (Panel, adversarial lens, round 4.)
+    """
+    root = _fake_repo(tmp_path)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    written, unverified = kit_doctor.record_install_manifest(
+        root, config, 2, "b" * 40, source_files={ENGINE: {"sha256": "0" * 64}}
+    )
+    assert unverified == [ENGINE] and "not_installed" not in written, "fixture is confounded"
+
+    report = kit_doctor.inspect(root, _manifest({}), config, written)
+    assert report.baseline_trusted and not report.declared_scope_known
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert "This baseline predates the declared install set" not in out, (
+        "a baseline written this run was reported as predating the feature"
+    )
+    assert "declares no install set" in out
+    # Both causes named, and the unverified one carries its own next step.
+    assert "did not match the source kit" in out
+    assert "reconcile those first" in out
