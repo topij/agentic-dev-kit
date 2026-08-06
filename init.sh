@@ -10,6 +10,10 @@
 # markers: `devkit-template: unrendered` on a shipped narrative skeleton, or
 # `devkit-source: kit-own` on the kit's own root AGENTS.md / CLAUDE.md.
 #
+# `--no-clobber` narrows that to MISSING ONLY, and reports every marker-carrying
+# file it therefore declined. It exists because a caller who did not put those
+# files there cannot know which of the two things a marker means — see usage().
+#
 # Requires: sh, plus awk, grep, sed, mv, rm, cat, head, mkdir, chmod, touch,
 # basename, dirname, date and git. No non-stdlib dependencies.
 
@@ -19,7 +23,7 @@ CONFIG_FILE="config/dev-model.yaml"
 
 usage() {
   cat <<'EOF'
-Usage: ./init.sh [--help]
+Usage: ./init.sh [--no-clobber] [--help]
 
 Bootstraps the agentic-dev-kit in the current repo:
 
@@ -43,16 +47,59 @@ Bootstraps the agentic-dev-kit in the current repo:
      each runtime that is missing it.
   7. Prints the runtime-specific session-start invocation.
 
+Options:
+
+  --no-clobber  Seed only genuinely-ABSENT targets in step 4. A target that
+                already exists is never written, including one carrying a kit
+                marker — each is reported as
+                `left untouched (--no-clobber): <path>` and listed again in a
+                summary at the end, so nothing is declined silently.
+
+                Use it when you do not know what is in those six files. The
+                cost is that a PRISTINE skeleton is left unrendered too: the
+                markers say "the kit may own this file", not "this file is
+                still the kit's", and no flag can tell a shipped skeleton from
+                an adopter's own doctrine written under the same first line.
+                Delete such a file (or re-run without the flag) to have it
+                rendered.
+
 Safe to re-run at any time. Run it from the repo root (the directory that
 contains config/dev-model.yaml).
 EOF
 }
 
+# Seeding mode. 0 = today's behaviour (a marker means the kit owns the file and
+# renders over it); 1 = --no-clobber, where an EXISTING marker-carrying file is
+# reported and left byte-identical. See seed_doc for where the flag is read.
+NO_CLOBBER=0
+# Newline-delimited list of what --no-clobber declined, for the end-of-run
+# summary. Newlines rather than spaces so a configured path containing one
+# survives the round trip.
+NO_CLOBBER_SKIPPED=""
+
+# An UNRECOGNIZED argument is an error, not something to skip past. This loop
+# used to ignore anything that was not --help, which for a safety flag is the
+# worst available behaviour: `./init.sh --no-clobbler` would render over the
+# adopter's files and exit 0, having silently declined the guarantee its caller
+# asked for. Failing here costs a typo'd run and saves a destroyed file.
+#
+# The residual, stated because nothing in this script can close it: an init.sh
+# copy PREDATING this flag ignores `--no-clobber` the same silent way. `/adopt`
+# copies the current script, so the pairing is right there; an operator running
+# the flag against an older vendored copy is the case with no mechanical guard.
 for arg in "$@"; do
   case "$arg" in
     --help|-h)
       usage
       exit 0
+      ;;
+    --no-clobber)
+      NO_CLOBBER=1
+      ;;
+    *)
+      echo "error: unknown argument '$arg'" >&2
+      echo "Run './init.sh --help' for the supported flags." >&2
+      exit 2
       ;;
   esac
 done
@@ -839,8 +886,23 @@ _imports_agents_md() {
   ' "$1"
 }
 
-# _seedable <path> — true when the target may be written: it is missing, or line
-# 1 opens an HTML comment whose FIRST TOKEN is one of the two markers.
+# _seedable <path> — classifies the target. Three outcomes, not two, because
+# `--no-clobber` needs to tell the two SEEDABLE cases apart while leaving one
+# implementation of what the markers mean:
+#
+#   0  ABSENT  — nothing is there; writing it destroys nothing
+#   2  MARKED  — a regular file whose line 1 carries a marker
+#   1  IN USE  — anything else, including a non-regular target
+#
+# `0` and `2` are both "may be written" under the default mode, which is why
+# every caller must test for `!= 1` rather than for `= 0`. The MODE LIVES AT THE
+# CALL SITE (`seed_doc`), deliberately: `#297` is the ticket about a second
+# implementation of this predicate drifting from the first, so the flag must not
+# reach in here and become a second answer to "is this file the kit's". It only
+# changes what is done with the answer.
+#
+# The precise property, because two looser versions of it shipped first and each
+# destroyed a real file with no backup, reported as `seeded`:
 #
 # The precise property, because two looser versions of it shipped first and each
 # destroyed a real file with no backup, reported as `seeded`:
@@ -918,6 +980,10 @@ _seedable() {
   else
     return 0
   fi
+  # Past here the target EXISTS, so every remaining seedable answer is `2`
+  # (MARKED) — the case `--no-clobber` refuses. Returning `0` from here would
+  # make the flag inert while every test that only checks "was it written"
+  # stayed green.
   # Everything after line 1's opening `<!--`, leading blanks removed. Empty when
   # line 1 does not open an HTML comment at all, which is the common case for a
   # file the adopter wrote.
@@ -926,8 +992,8 @@ _seedable() {
   # strips.
   _rest="$(head -n 1 "$1" 2>/dev/null | LC_ALL=C sed -n 's/^<!--[[:space:]]*//p')"
   [ -n "$_rest" ] || return 1
-  _opens_with_marker "$_rest" "$TEMPLATE_MARKER" && return 0
-  _opens_with_marker "$_rest" "$KIT_OWN_MARKER" && return 0
+  _opens_with_marker "$_rest" "$TEMPLATE_MARKER" && return 2
+  _opens_with_marker "$_rest" "$KIT_OWN_MARKER" && return 2
   return 1
 }
 
@@ -987,8 +1053,24 @@ seed_doc() {
     echo "note: template $_tmpl missing — skipped $_target" >&2
     return 0
   fi
-  if ! _seedable "$_target"; then
+  # `|| _verdict=$?` keeps `_seedable` in a condition context, which is what
+  # suspends errexit inside it — its marker arms are `&& return`, and a bare
+  # call would make a no-marker file abort the whole run.
+  _verdict=0
+  _seedable "$_target" || _verdict=$?
+  if [ "$_verdict" -eq 1 ]; then
     echo "$_target already in use — left untouched"
+    return 0
+  fi
+  # MARKED (2) and only MARKED is what --no-clobber declines: the file exists
+  # and the kit cannot tell a pristine skeleton from an adopter's own doctrine
+  # under the same marker. ABSENT (0) is still seeded — a flag that also
+  # suppressed those would leave an adoption with no narrative docs at all,
+  # which is not "no-clobber", it is "no-op".
+  if [ "$_verdict" -eq 2 ] && [ "$NO_CLOBBER" -eq 1 ]; then
+    echo "left untouched (--no-clobber): $_target"
+    NO_CLOBBER_SKIPPED="${NO_CLOBBER_SKIPPED}${_target}
+"
     return 0
   fi
   mkdir -p "$(dirname "$_target")"
@@ -1409,6 +1491,22 @@ echo "agentic-dev-kit is bootstrapped (kit schema v2)."
 echo "Review config/dev-model.yaml for any remaining values (paths, doc_budgets,"
 echo "models, review.fallback_panel.lenses) and edit to taste."
 echo ""
+# The per-file `left untouched (--no-clobber):` lines are printed where the
+# decision happens, hundreds of lines of output earlier. Repeat them here: the
+# operator has to ACT on this list — each path is a file the run deliberately
+# did not finish — and a notice they scrolled past is one they did not get.
+if [ -n "$NO_CLOBBER_SKIPPED" ]; then
+  echo "--no-clobber left these existing files untouched:"
+  printf '%s' "$NO_CLOBBER_SKIPPED" | while IFS= read -r _skipped; do
+    [ -n "$_skipped" ] && echo "  $_skipped"
+  done
+  echo ""
+  echo "Each carries a kit marker on line 1, which is how the kit says it MAY own"
+  echo "a file — not that the file is still the kit's. Open each one: if it is an"
+  echo "unrendered skeleton, delete it and re-run to have it seeded; if it holds"
+  echo "your own content, delete line 1 to claim it permanently."
+  echo ""
+fi
 echo "Upgrading later: pull the new kit files, then re-run ./init.sh — it"
 echo "migrates an older config forward in place and never touches a narrative"
 echo "doc that is actually in use."
