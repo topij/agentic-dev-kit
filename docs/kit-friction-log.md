@@ -11,6 +11,44 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-06 — second occurrence of the entry below
+
+**The bot was rate limited again, on a second consecutive session, and this time it went
+down *mid-PR*.** Severity **M**. Recorded here rather than filed because it sharpens the
+entry below rather than adding a new claim; the graduating shape has not changed.
+
+CodeRabbit reviewed PR `#328` at `4576f40` and raised three findings. The fixes for **its
+own findings** moved the head, and it was rate limited by the time that head existed — so
+the sha that merged carried only the fallback panel's review. That is the entry below's
+"one review of a superseded sha, then nothing", reproduced without a batch: one PR, one
+fix round.
+
+**The open question below is now answered, and by the bot rather than by inference.** That
+entry listed three candidates — a rate-limit tier question, a batch-concurrency effect (three
+lanes opening PRs within the hour), or a bad day — and said a second occurrence would separate
+them. On the wrap-up PR the bot stated the cause itself:
+
+> **Review limit reached.** `@topij`, you've reached your PR review limit, so we couldn't
+> start this review. **Next review available in: 52 minutes.** You've used all free OSS
+> reviews for now.
+
+So it is the **tier**: a free-OSS quota that refills on a timer, not a batch effect and not
+chance. Two independent supports — this session opened a *single* PR and still exhausted it,
+so sequencing is not the driver.
+
+That changes the graduating shape. "Record when the fallback carried review, so the rate is
+visible" was written when the rate was the unknown; the unknown now is **what the quota
+actually is and whether the work fits inside it**, which observability alone does not answer.
+The bot's own suggestions (pause incremental auto-reviews, label-based opt-in, request review
+when the PR is ready) are configuration this repo could adopt without an account change —
+worth weighing against a paid tier rather than assuming either.
+
+Still not filed, deliberately: the remedy is now clearly an **operator decision** (accept the
+quota and let the panel carry the overflow, change the bot's trigger configuration, or pay),
+and none of those is a kit change. The value of this entry is that the decision is now
+informed. It should graduate at the next triage sweep rather than wait for a third occurrence,
+since waiting can no longer teach anything new.
+
 ## 2026-08-06
 
 **The configured review bot carried none of the merged review across a batch, so every lane
