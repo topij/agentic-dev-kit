@@ -76,9 +76,10 @@
 # `check-syntax` fixes — it names ruff as the blocker instead of pytest as
 # the (false) verdict — but it is a real gap a mutation author should expect.
 #
-# Both targets otherwise run the same suites MINUS the byte-comparison drift
-# check (issues #33, #112). Use `mutation-test` — never plain `make test` —
-# when deciding whether a deliberate mutation was caught, because
+# `test` runs both suites in full. `mutation-test` runs the same suites MINUS
+# the byte-comparison drift check (issues #33, #112). Use `mutation-test` —
+# never plain `make test` — when deciding whether a deliberate mutation was
+# caught, because
 # `test_kit_repo_self_check_is_clean` rehashes every kit-owned file and so
 # fails for ANY mutation to one, behavioural coverage or not. A run that
 # leaves it in reports a kill for every mutation to a KIT_OWNED file — the
