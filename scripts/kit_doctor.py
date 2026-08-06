@@ -1372,10 +1372,6 @@ def render(report: Report) -> str:
     for f in report.files:
         by_state.setdefault(f.state, []).append(f)
 
-    # `missing` counts BOTH absent states, so the total does not change meaning
-    # for anyone reading this line as "how much of the kit is not here"; the
-    # parenthetical is what says how much of that absence is breakage. Rendered
-    # only when non-zero, so a healthy install's summary line is unchanged.
     n_required_missing = len(by_state.get("missing-required", []))
     n_removed = len(by_state.get("removed", []))
     n_declined = len(by_state.get("declined", []))
@@ -1386,6 +1382,13 @@ def render(report: Report) -> str:
     # keep #286's permanent number and merely footnote it, which is the shape
     # this issue exists to remove: a count an operator must remember to ignore
     # stops being read.
+    #
+    # The parenthetical is what says how much of that absence is breakage, and
+    # is rendered only when non-zero, so a healthy install's summary line is
+    # unchanged. (The comment that used to stand here said `missing` counts
+    # "BOTH absent states" and that the total "does not change meaning" — true
+    # before this axis existed, and flatly contradicting the paragraph above it
+    # afterwards. CodeRabbit, PR #322.)
     n_absent = len(by_state.get("missing", [])) + n_required_missing + n_removed
     notes = []
     if n_required_missing:

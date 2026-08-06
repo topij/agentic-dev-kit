@@ -317,8 +317,15 @@ Two things to warn them about, both measured, because neither is obvious from th
   added since a baseline written minutes ago.
 
   If Step 3b reported unverified paths, there is **no** declared set — it suppresses one
-  rather than record a partial claim — so the absences read `missing` here and the
-  `intact` line is absent. That is the unreconciled-path signal, not a second failure.
+  rather than record a partial claim, for **every** file rather than just the unverified
+  ones — so the absences read `missing` here and the `intact` line is absent. That is the
+  unreconciled-path signal, not a second failure.
+
+  **It does not clear itself.** Reconcile each path Step 3b named on stderr with the
+  operator, re-run `--record-install --from-kit <kit checkout>`, then re-run `kit_doctor`
+  and confirm the `intact` line appears. Leaving it means the adoption carries no declared
+  scope at all, so every later `/upgrade` re-asks about every absent file — the
+  conversation the declared set exists to end.
 
   **Then check the `baseline:` line by comparing the sha it prints**, not merely that it
   is present. It reports what the baseline *claims*, so a leftover baseline from an
