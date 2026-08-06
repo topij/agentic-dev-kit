@@ -4,6 +4,80 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-08-04 (the kit's own entry points, and a claim class that outlived the code)
+
+**Theme —** `seed_doc` had two categories, a shipped skeleton and a file the adopter is using,
+and the kit's own entry points are a third. Both halves of `#288` followed: `CLAUDE.md` rode
+the `cp -r` quickstart into every adopter with nothing rendering, removing or reporting it, so
+their Claude sessions loaded *the kit's* contract; and `AGENTS.md` was reached by file
+**absence**, so the kit could not ship one and a Codex session working in the kit had no entry
+point at all. `#274`'s class, on the two files whose whole job is to be read in the reading
+repo.
+
+- **`#288` — the third category** (`af004b9`, PR `#289`). `KIT_OWN_MARKER` on the kit's own
+  root `AGENTS.md` and `CLAUDE.md`; an adopter's `init.sh` renders over both; a file carrying
+  neither marker is still never touched. `AGENTS.md` holds the contract, `CLAUDE.md` imports
+  it with `@AGENTS.md`, so one file states it and both runtimes load it in full.
+- **`kit_doctor` now checks both entry points**, through a predicate that must agree with
+  `_seedable`. Locale was the hazard: `[[:space:]]` is locale-dependent, and the two sides
+  matched different characters under any real locale.
+- **Filed:** `#290`, `#291`, `#292`. **Occurrences:** `#211`, `#120`, `#248`, `#209`, `#274`,
+  and `#270`.
+
+**Learned**
+
+- **Each repair to the seed guard introduced the next defect**, all in one predicate. The two
+  that destroyed a real file with no backup were both found by *running* `init.sh` against a
+  hand-built fixture, never by reading it. `#211`'s thesis; the enumeration is on `#211`.
+- **"What checks this new check" was answered wrong three times running** — a guard clause
+  added to prevent silent overwrites was itself unpinned; the check added to catch an
+  incomplete adoption was itself unchecked; the test added to pin a locale fix was itself
+  locale-dependent and would have passed with the fix removed. Each found by mutation, none by
+  reading. On `#211`.
+- **The claims that survived review longest were the ones whose *form* looked rigorous** — a
+  stated `grep` method whose scope was one file while the stale site sat in another, and a
+  comment citing "the C locale" in a script that pinned no locale. A cited mechanism reads as
+  verification and is not. Enumerated on `#248` as a sub-shape it did not name.
+- **The code converged before the prose did, and the gap was most of the review.** The
+  destructive findings stopped early; the rounds after them returned record and coverage
+  findings almost exclusively. Evidence for `#120` over `#211` — on `#120`.
+- **A lens wrote into the live checkout through the isolation route the doctrine prescribes.**
+  `cp -R` of a *linked worktree* copies its `gitdir:` pointer, so the copy is not independent
+  and `init.sh` in it rewrote the real repo's `.git/hooks/`. Invisible to the contract's own
+  attestation, which reports on the handed tree. `#270`.
+- **The local gate is weaker than CI.** An apostrophe in an `awk` comment closed the
+  single-quoted program; `make test` reported a mass of unrelated pytest failures while CI's
+  `sh -n init.sh` names the line. `#292`.
+
+**Decided this session (operator)**
+
+- **Codex as an equal-enough development environment, as soon as possible.** This is a
+  standing goal and it lives on no ticket. It moved `#243` back off the backlog — but
+  **sliced**: `adopt` + `upgrade` first, since the daily loop already works on Codex and the
+  four missing workflows are lifecycle and maintenance.
+- **Merged without a dual-lens pass at the merging head.** The last panel ran three commits
+  earlier; no receipt was recorded, because one would have claimed coverage that does not
+  exist and the engine refuses it once the head moves. The merge gate was the operator's
+  decision plus green CI plus a bot review of the parent — stated on `#289` rather than left
+  to be inferred from a missing receipt.
+
+**Open, and owned by nothing yet**
+
+- **`#290` and `#291` are one complaint** — a single boolean cannot carry what `kit_doctor`'s
+  narrative check now sees, so a directory named `AGENTS.md` reports `in use` and the kit's
+  own repo warns about its own entry points forever.
+- **Carried forward:** `#243`, `#273`, `#105`, `#285`, `#283`, `#287`, `#286`, `#248`, `#264`,
+  `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`, `#203`, `#190`,
+  `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`#273` direction 1** — one note on `safety-critical-changes.md` line 10 saying
+`.claude/rules/` binds Claude only. It is the smallest step toward the Codex goal above and the
+only one whose failure is *silent*: cs-toolkit follows that sentence today and its safety
+doctrine reaches one of its two runtimes, so a Codex session touching a kill-path there is
+unbound and nothing reports it. Then `#105` (a Codex adopter arriving via `/adopt` still gets
+no entry point — this session fixed only the `init.sh` path). Read `#243`'s own scope note
+before starting it: its line count is measured, stale, and growing.
+
 ### 2026-08-03 (the aim lever, and the bug the later rounds did not catch)
 
 **Theme —** `#51`'s local half shipped, and the durable result is not the feature. What cost
