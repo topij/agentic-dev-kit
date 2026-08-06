@@ -129,7 +129,12 @@ Usage (``<engine-dir>`` is ``paths.engines`` in config/dev-model.yaml, default
                                                     # drift by cause
 
 Exit codes:
-    0 — every kit-owned file is `unchanged` (or intentionally absent)
+    0 — every kit-owned file is `unchanged`, or absent without being a finding:
+        `declined` (intentionally absent), `missing` (absent, intent unknown),
+        or `new-upstream`. The last is deliberately in this list and is NOT
+        "intentionally absent" — nobody has been asked about it yet — which is
+        why this line no longer says that of every absence. It exits 0 because
+        a kit release must not turn an adopter's CI red.
     1 — at least one file `differs`, is `stale`, `locally-edited`,
         `stale-and-edited`, `unknown-version`, `missing-required`, or
         `removed`. The last two are not drift, but they are a broken

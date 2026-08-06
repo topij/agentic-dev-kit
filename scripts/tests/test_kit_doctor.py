@@ -2550,3 +2550,24 @@ def test_an_empty_adoption_is_not_called_intact(tmp_path, capsys):
     )
     assert "nothing is installed here" in out
     assert "empty adoption rather than an intact one" in out
+
+
+def test_a_removed_file_is_counted_and_named_on_the_summary_line(tmp_path, capsys):
+    """The summary line's `removed` contribution, pinned. Deleting both the
+    parenthetical and `n_removed`'s term in `n_absent` left the whole suite
+    green: a deleted file would then read `0 missing` on the count line while
+    the section below itemised it — the same headline/detail contradiction the
+    intact verdict had. (Fallback panel, correctness lens.)
+    """
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    target.unlink()
+
+    print(kit_doctor.render(_inspect(root, {ENGINE: recorded}, baseline)))
+    out = capsys.readouterr().out
+    line = next(ln for ln in out.splitlines() if ln.startswith("  files:"))
+
+    # Both halves: the file is COUNTED, and the count says which kind it is.
+    assert line == "  files: 0 unchanged, 0 differ, 1 missing (1 recorded as installed here), 0 unknown", line
