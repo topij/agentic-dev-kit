@@ -50,10 +50,24 @@
 #
 # test
 # ----
-# Runs the same gates CI's `test` job runs before the pytest suites, in CI's
-# order (lint, then shell syntax, then the executable check, then pytest) —
-# see #292. A syntax or lint failure now surfaces as itself instead of as
-# noise in the pytest suite's output.
+# Runs the same gates the `toolkit` job in `.github/workflows/test.yml` runs
+# before its pytest step, in that job's order (lint, then shell syntax, then
+# the executable check, then pytest) — see #292. A syntax or lint failure now
+# surfaces as itself instead of as noise in the pytest suite's output.
+#
+# KNOWN GAP, not closed by this change: nothing in this repo's own test suite
+# pins that `test`/`mutation-test` actually DEPEND on `lint`+`check-syntax` —
+# only that the two targets stay equal to EACH OTHER (see the invariant
+# described under `mutation-test` below). Drop `lint check-syntax` from both
+# targets' prerequisite lines at once and the full local suite still reports
+# 896 passed; nothing notices. CI does not help here either — `test.yml`
+# never invokes `make`, so its steps are independent of whatever this
+# Makefile says. Verified by two independent review lenses (fallback panel,
+# PR #315) via that exact mutation. Closing it needs a test that reads
+# `make -n test` / `make -n mutation-test` output for the CI-parity commands
+# themselves, not just their relation to each other — out of scope here
+# (adding a test file is outside this change's footprint); flagged for a
+# follow-up rather than silently left unmentioned.
 #
 # mutation-test
 # -------------
