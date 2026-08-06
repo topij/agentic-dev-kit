@@ -1128,7 +1128,8 @@ def _marked_but_mine(marker: str) -> str:
 
 
 @pytest.mark.kit_repo_only("docs/templates")
-def test_no_clobber_leaves_a_marked_file_byte_identical(tmp_path: Path) -> None:
+@pytest.mark.parametrize("marker", [kit_own_marker, template_marker])
+def test_no_clobber_leaves_a_marked_file_byte_identical(tmp_path: Path, marker) -> None:
     """The core claim, with the bare run as its positive control IN THE SAME
     TEST.
 
@@ -1136,8 +1137,18 @@ def test_no_clobber_leaves_a_marked_file_byte_identical(tmp_path: Path) -> None:
     fixture that lost its marker — and "left untouched" is also the outcome for
     an unmarked file, so nothing about the assertion would look wrong. Running
     the identical bytes both ways proves the marker is live and that the FLAG is
-    what changed the outcome."""
-    original = _marked_but_mine(kit_own_marker())
+    what changed the outcome.
+
+    BOTH markers, because `_seedable` reaches its MARKED verdict from two
+    separate arms and this test originally exercised one. Mutating the other arm
+    to the pre-change `return 0` left this test green — it was caught only
+    incidentally, by the summary test, which happened to use the other literal.
+    A defence that depends on which literal an unrelated test picked is not one.
+
+    The parameters are the FUNCTIONS, not their values: these helpers read
+    init.sh at call time, and calling them at module scope would run during
+    collection, where a raise takes the whole session down (#226/#233)."""
+    original = _marked_but_mine(marker())
 
     clobbered = _fixture(tmp_path / "bare", config=shipped_config(), templates=True)
     (clobbered / "AGENTS.md").write_text(original, encoding="utf-8")
