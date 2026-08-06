@@ -95,6 +95,17 @@ def kit_own_marker() -> str:
     return match.group(1)
 
 
+def template_marker() -> str:
+    """`init.sh`'s TEMPLATE_MARKER literal, derived at call time for the reasons
+    `kit_own_marker` gives above. Older tests in this module spell this one as a
+    literal; those are not rewritten here (out of this change's footprint), but
+    new callers should prefer this."""
+    text = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
+    match = re.search(r'^TEMPLATE_MARKER="([^"]+)"', text, re.MULTILINE)
+    assert match, "TEMPLATE_MARKER is not assigned in init.sh — was it renamed?"
+    return match.group(1)
+
+
 def shipped_config() -> str:
     """The kit's own `config/dev-model.yaml`, read at CALL time.
 
@@ -200,13 +211,19 @@ def _fixture(
     return repo
 
 
-def _run_init(repo: Path) -> subprocess.CompletedProcess[str]:
+def _run_init(
+    repo: Path, *args: str, check: bool = True
+) -> subprocess.CompletedProcess[str]:
     # stdin explicitly closed so ask() keeps defaults even when the test runner
     # itself is attached to a terminal.
+    #
+    # `check=False` is for the arguments init.sh must REFUSE — an unknown flag
+    # exits non-zero by design, and check=True would report that as an error in
+    # the test rather than as the behaviour under test.
     return subprocess.run(
-        ["sh", "init.sh"],
+        ["sh", "init.sh", *args],
         cwd=repo,
-        check=True,
+        check=check,
         capture_output=True,
         text=True,
         stdin=subprocess.DEVNULL,
@@ -1087,6 +1104,158 @@ def test_the_real_marker_comment_is_still_seedable(tmp_path: Path, target: str) 
 
     assert f"seeded {target}" in result.stdout
     assert "the kit's own" not in (repo / target).read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- #
+# --no-clobber (#297)
+# --------------------------------------------------------------------------- #
+# The mode exists because `/adopt`'s contract ("never overwrite an existing
+# file") and `_seedable`'s ("a marker means the kit may render over this") are
+# both right and jointly destructive: an adopter who took the pre-#288 `cp -r`
+# quickstart and then EDITED what landed owns a file that still carries a marker.
+# PR #294 tried four times to make that safe from a workflow document and shipped
+# a new way to destroy a file each time; #297 records the nine findings. These
+# tests are the reason to move it here — a markdown snippet is executed by
+# nothing, and `make test` passed in full while every one of those defects shipped.
+
+
+def _marked_but_mine(marker: str) -> str:
+    """A file in the state the flag exists for: a real kit marker on line 1, and
+    the adopter's own content below it. Indistinguishable from a pristine
+    skeleton by anything init.sh can read, which is why the answer is to refuse
+    rather than to classify harder."""
+    return f"<!-- {marker} -->\n# my own doctrine\n\nparagraphs I would lose\n"
+
+
+@pytest.mark.kit_repo_only("docs/templates")
+def test_no_clobber_leaves_a_marked_file_byte_identical(tmp_path: Path) -> None:
+    """The core claim, with the bare run as its positive control IN THE SAME
+    TEST.
+
+    Asserting only "the file survived --no-clobber" passes vacuously against a
+    fixture that lost its marker — and "left untouched" is also the outcome for
+    an unmarked file, so nothing about the assertion would look wrong. Running
+    the identical bytes both ways proves the marker is live and that the FLAG is
+    what changed the outcome."""
+    original = _marked_but_mine(kit_own_marker())
+
+    clobbered = _fixture(tmp_path / "bare", config=shipped_config(), templates=True)
+    (clobbered / "AGENTS.md").write_text(original, encoding="utf-8")
+    bare = _run_init(clobbered)
+    assert (clobbered / "AGENTS.md").read_text(encoding="utf-8") != original, (
+        "positive control failed: the bare run did NOT render over this fixture, "
+        "so it is not in the MARKED state and the --no-clobber assertion below "
+        "would pass for the wrong reason"
+    )
+    assert "seeded AGENTS.md" in bare.stdout
+
+    protected = _fixture(tmp_path / "flagged", config=shipped_config(), templates=True)
+    (protected / "AGENTS.md").write_text(original, encoding="utf-8")
+
+    result = _run_init(protected, "--no-clobber")
+
+    assert (protected / "AGENTS.md").read_text(encoding="utf-8") == original
+    assert "left untouched (--no-clobber): AGENTS.md" in result.stdout
+    assert "seeded AGENTS.md" not in result.stdout
+
+
+@pytest.mark.kit_repo_only("docs/templates")
+def test_no_clobber_still_seeds_a_genuinely_absent_target(tmp_path: Path) -> None:
+    """The flag narrows seeding to ABSENT targets; it does not switch seeding
+    off. Every assertion in this section's other tests is about a file NOT being
+    written, so all of them pass against an init.sh that writes nothing at all —
+    this is the one that fails."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    absent = repo / "docs" / "kit-handoff.md"
+    assert not absent.exists()  # positive control on the fixture
+
+    result = _run_init(repo, "--no-clobber")
+
+    assert f"seeded {absent.relative_to(repo)}" in result.stdout
+    rendered = absent.read_text(encoding="utf-8")
+    assert "{{" not in rendered, "an absent target was seeded but left unrendered"
+
+
+@pytest.mark.kit_repo_only("docs/templates")
+def test_no_clobber_keeps_the_in_use_wording_for_an_unmarked_file(tmp_path: Path) -> None:
+    """The two skip reasons must stay distinguishable in the output. An unmarked
+    file was never seedable in either mode, and reporting it under the
+    --no-clobber banner would put it in the end-of-run list of files the
+    operator is told to go open and act on — busywork over files the kit was
+    never going to touch."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    original = "# CLAUDE.md — mine, no marker anywhere\n"
+    (repo / "CLAUDE.md").write_text(original, encoding="utf-8")
+
+    result = _run_init(repo, "--no-clobber")
+
+    assert (repo / "CLAUDE.md").read_text(encoding="utf-8") == original
+    assert "CLAUDE.md already in use — left untouched" in result.stdout
+    assert "left untouched (--no-clobber): CLAUDE.md" not in result.stdout
+
+
+@pytest.mark.kit_repo_only("docs/templates")
+def test_no_clobber_summarizes_every_file_it_declined(tmp_path: Path) -> None:
+    """The per-file line is printed where the decision happens, hundreds of
+    lines of output before the run ends. The operator has to ACT on each one, so
+    the run repeats them at the end.
+
+    Both call sites are covered on purpose: `seed_doc` is called once for the
+    four narrative docs at their CONFIGURED paths and once for the two root
+    entry points, and a summary fed from only one of those loops would still
+    look right in a single-file test."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    (repo / "docs").mkdir(parents=True, exist_ok=True)
+    declined = ("AGENTS.md", "docs/kit-friction-log.md")
+    for path in declined:
+        (repo / path).write_text(_marked_but_mine(template_marker()), encoding="utf-8")
+
+    result = _run_init(repo, "--no-clobber")
+
+    tail = result.stdout.split("--no-clobber left these existing files untouched:")
+    assert len(tail) == 2, "the end-of-run summary was not printed"
+    for path in declined:
+        assert f"\n  {path}\n" in tail[1], f"{path} missing from the summary"
+        assert (repo / path).read_text(encoding="utf-8") == _marked_but_mine(template_marker())
+
+
+@pytest.mark.kit_repo_only("docs/templates")
+def test_no_summary_when_nothing_was_declined(tmp_path: Path) -> None:
+    """A summary printed over an empty list tells the operator to go open files
+    that do not exist, and trains them to ignore the block that matters."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+
+    result = _run_init(repo, "--no-clobber")
+
+    assert "--no-clobber left these existing files untouched:" not in result.stdout
+
+
+@pytest.mark.kit_repo_only("docs/templates")
+def test_an_unknown_flag_is_refused_before_anything_is_written(tmp_path: Path) -> None:
+    """A mistyped safety flag must not degrade to the destructive default.
+    `--no-clobbler` under the old parse loop was silently ignored: init.sh
+    rendered over the adopter's files and exited 0, having declined the
+    guarantee its caller asked for without saying so."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    original = _marked_but_mine(kit_own_marker())
+    (repo / "AGENTS.md").write_text(original, encoding="utf-8")
+
+    result = _run_init(repo, "--no-clobbler", check=False)
+
+    assert result.returncode != 0
+    assert "unknown argument '--no-clobbler'" in result.stderr
+    assert (repo / "AGENTS.md").read_text(encoding="utf-8") == original
+
+
+def test_help_documents_the_flag(tmp_path: Path) -> None:
+    """A safety mode nothing advertises is one an operator does not reach for.
+    `--help` is the only surface init.sh has for that."""
+    repo = _fixture(tmp_path, config=shipped_config())
+
+    result = _run_init(repo, "--help")
+
+    assert "--no-clobber" in result.stdout
+    assert "Usage: ./init.sh [--no-clobber] [--help]" in result.stdout
 
 
 def test_an_in_use_claude_md_without_the_import_is_reported(tmp_path: Path) -> None:

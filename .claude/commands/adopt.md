@@ -30,7 +30,7 @@ Run these probes and record the answers — they drive the plan:
 
 - **Living plan?** `ls ROADMAP.md PLAN.md docs/plan.md docs/handoff.md handoff.md 2>/dev/null`. If one exists, the repo already practices Principle #1 — you'll point the kit at it, not add a second plan.
 - **Skill collisions?** Inspect `.claude/commands/` and `.agents/skills/`. Which of the kit's workflows already exist for either runtime? Keep the adopter's implementation and install only the missing adapters.
-- **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough, and a wrong call here destroys files. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* (`init.sh:1260-1263` for the four, `:1274-1275` for the entry points) — not just the two entry points. **All four narrative docs ship pre-marked** with `devkit-template: unrendered`, so a repo that took the `cp -r` quickstart has four marker-carrying files before it has any of its own; verified on the shipped copies of all four:
+- **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* — read `init.sh`'s own `seed_doc` call sites for the list (four for the narrative paths, two for the entry points) rather than a line number; the two ranges cited here were stale within a release of being written. **All four narrative docs ship pre-marked** with `devkit-template: unrendered`, so a repo that took the `cp -r` quickstart has four marker-carrying files before it has any of its own; verified on the shipped copies of all four:
 
   **Read line 1 of each of the six yourself and report the state.** Do not run a shell
   snippet for this — the predicate belongs to `init.sh` (`_seedable`), and every attempt to
@@ -39,12 +39,16 @@ Run these probes and record the answers — they drive the plan:
   unrelated section. Read the four narrative paths out of `config/dev-model.yaml`'s `paths:`
   section — you can parse YAML; a `grep` for the key cannot tell which section it is in.
 
-  | line 1 of the file | state | what `init.sh` does |
-  |---|---|---|
-  | file absent | `ABSENT` | seeds it |
-  | a directory, or a **broken** symlink | `NOT_A_REGULAR_FILE` | leaves it, reports `already in use` |
-  | opens `<!-- devkit-template: unrendered` or `<!-- devkit-source: kit-own`, marker first in the comment | `MARKED` | **renders over it, no backup** |
-  | anything else | `IN_USE` | leaves it byte-identical |
+  | line 1 of the file | state | bare `init.sh` | `init.sh --no-clobber` |
+  |---|---|---|---|
+  | file absent | `ABSENT` | seeds it | seeds it |
+  | a directory, or a **broken** symlink | `NOT_A_REGULAR_FILE` | leaves it, reports `already in use` | same |
+  | opens `<!-- devkit-template: unrendered` or `<!-- devkit-source: kit-own`, marker first in the comment | `MARKED` | **renders over it, no backup** | leaves it, reports `left untouched (--no-clobber)` |
+  | anything else | `IN_USE` | leaves it byte-identical | same |
+
+  Step 3c hands the operator the right-hand column. Classify against the left one anyway:
+  it is what they fall back to, and the difference between the columns is the whole reason
+  a `MARKED` finding is worth reporting.
 
   Three traps, all of which have caught this repo before:
 
@@ -55,11 +59,12 @@ Run these probes and record the answers — they drive the plan:
     so an NBSP or other non-ASCII blank after the marker text fails to match and the file is
     left alone. If you see anything but a plain space or tab there, treat it as `IN_USE`.
   - **A *working* symlink is classified by its target, not by being a link.** `[ -f ]`
-    follows it, so a link whose target opens with a marker is `MARKED` and `init.sh` renders
-    over it — `mv` then replaces the **link** with the rendered file. The target keeps its
-    bytes; what is lost is the link relationship, and the run reports only `seeded`
-    (`init.sh:907-913`). Do not bucket "it's a symlink" as `NOT_A_REGULAR_FILE`: only a
-    *broken* one is.
+    follows it, so a link whose target opens with a marker is `MARKED` — a bare run then
+    replaces the **link** with the rendered file (`mv`), reporting only `seeded`. The target
+    keeps its bytes; what is lost is the link relationship. `--no-clobber` declines it like
+    any other `MARKED` target, so the link survives. Do not bucket "it's a symlink" as
+    `NOT_A_REGULAR_FILE`: only a *broken* one is. See `_seedable`'s own comments in
+    `init.sh` for why this follows from the marker rule rather than being a separate one.
 
   The three traps above are not stylistic: each was a real defect here, found by executing
   rather than reading. The state names also match `init.sh`'s own `_seedable` exactly —
@@ -69,25 +74,29 @@ Run these probes and record the answers — they drive the plan:
   worth doing at all: if it disagreed with `_seedable`, it would be lying about what is
   about to happen to the file.
 
-  **`MARKED` is the dangerous state, it is not hypothetical, and this skill will not
-  work around it.** A file whose first line carries a kit marker is *seedable*: `init.sh`
-  renders over it and reports only `seeded`, with **no backup**. Verified — an `AGENTS.md`
-  opening with `<!-- devkit-source: kit-own -->` and carrying paragraphs of adopter
-  doctrine below it was replaced wholesale, unrecoverably. That behaviour is correct for
-  `init.sh` on a fresh repo or an upgrade, and it flatly contradicts this skill's "never
-  overwrite an existing file" contract. The adopter who hits it took the pre-`#288`
-  `cp -r` quickstart and then edited what landed — a shipped path, not an edge case.
+  **`MARKED` is the state that costs something, and it is not hypothetical.** A file whose
+  first line carries a kit marker is *seedable*: a bare `init.sh` renders over it and
+  reports only `seeded`, with **no backup**. Verified — an `AGENTS.md` opening with
+  `<!-- devkit-source: kit-own -->` and carrying paragraphs of adopter doctrine below it
+  was replaced wholesale, unrecoverably. That behaviour is correct for `init.sh` on a fresh
+  repo or an upgrade, and it flatly contradicts this skill's "never overwrite an existing
+  file" contract. The adopter who hits it took the pre-`#288` `cp -r` quickstart and then
+  edited what landed — a shipped path, not an edge case.
 
-  **This classification is the single most useful thing `/adopt` produces**, and it is all
-  it does about the hazard: it is read-only, it is advisory, and it goes to the operator in
-  Step 3c, who runs `init.sh` themselves. `/adopt` does not gate, back up, restore, or
-  re-render anything.
+  **The destruction is now handled mechanically and this classification is still what makes
+  the outcome legible.** Step 3c hands the operator `./init.sh --no-clobber` (`#297`), which
+  refuses to write any existing file and names each one it declined — so a wrong call here
+  costs an unrendered skeleton and a second run, not a lost file. What the flag cannot do is
+  say *which* it was: it sees the same line 1 for a pristine skeleton and for an adopter's
+  own doctrine. That is what this classification tells them, and why it is still worth
+  producing carefully.
 
-  That is a deliberate retreat. Four mechanisms were built here to run `init.sh` safely — a
-  backup-and-restore, a re-classify-and-diff, an advisory gate, a gate fused to the run —
-  and every one shipped a new way to destroy an adopter's file. The mechanical fix belongs
-  in `init.sh` (a no-clobber mode, `#297`), where a test can hold it. Prose in a markdown
-  file cannot: nothing executes it.
+  `/adopt` remains read-only about it: it does not gate, back up, restore, re-render, or run
+  `init.sh`. That is a deliberate retreat — four mechanisms were built here to run `init.sh`
+  safely (a backup-and-restore, a re-classify-and-diff, an advisory gate, a gate fused to
+  the run) and every one shipped a new way to destroy an adopter's file. The mechanical fix
+  belongs in `init.sh`, where a test holds it. Prose in a markdown file cannot: nothing
+  executes it.
 
 - **Config dir?** `ls -d config 2>/dev/null` — where `config/dev-model.yaml` goes (repo root if there's no `config/`).
 - **`scripts/` layout?** `ls scripts 2>/dev/null`. **Default to vendoring the kit's engines under `scripts/devkit/`.** It is required when `scripts/` is organized into subdirs or has colliding filenames, and it is the right call anyway whenever the repo lints or formats repo-wide (next bullet) — a directory is the only unit you can exclude without maintaining a filename list. Flat `scripts/` is only appropriate for a repo with no repo-wide lint and no collisions.
@@ -114,7 +123,7 @@ Present a table the operator confirms **before any write**:
 | parallel + `state_paths` (#3) | none | **install** under `scripts/devkit/` (see Step 1 on when flat `scripts/` is acceptable) |
 | `pr-watch` (#5), safety rule (#6) | none | **install** |
 | Root entry points | e.g. `AGENTS.md` ABSENT, `CLAUDE.md` IN_USE | **the absent one gets seeded** from `docs/templates/` when **the operator runs `init.sh`** (Step 3c) — not by `/adopt`; an IN_USE one is left byte-identical |
-| — a `MARKED` target | e.g. `AGENTS.md` MARKED | **Name it in the plan and again in the Step 3c handoff.** The operator deletes line 1 themselves to keep the content, or lets `init.sh` render over it. `/adopt` does neither on their behalf and does not run `init.sh` at all |
+| — a `MARKED` target | e.g. `AGENTS.md` MARKED | **Name it in the plan and again in the Step 3c handoff.** Step 3c's `--no-clobber` leaves it alone and says so; the operator then deletes line 1 to keep the content permanently, or deletes the file to have it seeded. `/adopt` does neither on their behalf and does not run `init.sh` at all |
 | pre-push hook | not installed | **installed when the operator runs `init.sh`** (Step 3c) — nothing else installs it, so if they skip that step the repo has no hook |
 | tracker | e.g. GitHub Issues | `tracker.backend: github-issues` |
 | review bot | e.g. CodeRabbit (org) | `review.bots: [coderabbit]` |
@@ -195,7 +204,7 @@ rewritten**: files copied into paths that were empty, a config stamped, and line
 to files the repo already had — a `.gitignore` entry, a lint exclusion. One step goes
 further and merges content: `docs/AGENTS-sections.md` into an existing `AGENTS.md`, which
 interleaves with their prose rather than appending to it, and is theirs to approve like
-any other edit to a file they own. `init.sh` is different — it *renders over* any of six files whose first line
+any other edit to a file they own. `init.sh` is different — bare, it *renders over* any of six files whose first line
 carries a kit marker, with no backup, reporting only `seeded`. That is correct behaviour
 for `init.sh`, and it is the opposite of this skill's contract.
 
@@ -207,31 +216,48 @@ snippet and running it. (No reviewer had *seen* that code: it was written after 
 pass. That is the point rather than a criticism of them — a fix round's own output gets
 reviewed only if someone reviews again, and here only execution caught it.) A shell
 snippet in a markdown file is executed by nobody: no test runs it, no linter checks it,
-and this repo's `make test` passes 837 tests without touching a line of it. **A
-safety-critical guard cannot live in an untested medium.** `#297` moves it to `init.sh`,
-where CI can hold it.
+and this repo's `make test` passed in full without touching a line of it. **A
+safety-critical guard cannot live in an untested medium.**
 
-So: tell the operator what to check, and let them run it.
+`#297` moved it to `init.sh`, where CI holds it: **`./init.sh --no-clobber` seeds only
+genuinely-absent targets** and never writes an existing file, marker or no marker. Each one
+it declines is reported as `left untouched (--no-clobber): <path>` and again in a summary
+at the end of the run. That is the guarantee this step used to ask the operator to produce
+by hand, and it is now the flag they are handed.
+
+**Hand them the flag, always.** `/adopt` still does not run it — the run is interactive and
+theirs — but the command they are given carries the guarantee rather than depending on
+their reading of six line-1s.
+
+**What the flag does not decide, and must not be described as deciding:** a marker means
+the kit *may* own the file, not that the file is *still* the kit's. So `--no-clobber`
+leaves a genuinely pristine skeleton unrendered too, and the operator finishes those by
+hand. In an `/adopt` flow that is usually nothing — the narrative docs are seeded at
+configured paths this skill deliberately does not hand-copy, so they are absent and get
+seeded normally. It bites the adopter who took the `cp -r` quickstart, whose four narrative
+docs are present-and-marked. Step 1's classification is what tells them which case they are
+in; the flag is what makes guessing wrong survivable.
 
 **Report to them, in these words:**
 
-> The adoption is staged on this branch. The last step is `./init.sh`, and you should run
-> it yourself because it can overwrite files.
+> The adoption is staged on this branch. The last step is `./init.sh --no-clobber`, and you
+> should run it yourself so you see and confirm each prompt.
 >
-> `init.sh` renders a template over any of these six paths whose **first line** opens an
-> HTML comment beginning `devkit-template: unrendered` or `devkit-source: kit-own` —
-> `AGENTS.md`, `CLAUDE.md`, and your configured `paths.handoff`, `paths.handoff_history`,
-> `paths.friction_log`, `paths.friction_log_archive`. There is no backup and the run
-> reports only `seeded`.
+> **Run it with `--no-clobber`.** With that flag it writes only files that are genuinely
+> missing — it will not render over anything already on disk, including the six paths it
+> would otherwise claim by a marker on line 1 (`AGENTS.md`, `CLAUDE.md`, and your
+> configured `paths.handoff`, `paths.handoff_history`, `paths.friction_log`,
+> `paths.friction_log_archive`). Anything it declines is printed as
+> `left untouched (--no-clobber): <path>` and listed again at the end of the run.
 >
-> Open each of those six and look at line 1. If any carries one of those markers **and you
-> want what is in the file**, delete line 1 first — that is how the kit records that the
-> file is yours, and `init.sh` will then leave it byte-identical. If a marked file is just
-> an unrendered skeleton, leave it and let `init.sh` fill it in.
+> Read that end-of-run list, because those files are the ones the run did not finish. For
+> each: if it is an unrendered skeleton you want filled in, delete it and re-run; if it is
+> yours, delete line 1 to claim it permanently, and it will never be a candidate again.
+> Without the flag `init.sh` renders over every one of them with no backup, reporting only
+> `seeded` — which is right for a fresh repo and wrong here.
 >
-> Then run `./init.sh` — interactively, so you see and confirm each prompt. It seeds the
-> docs and entry points that are **missing or unrendered**, leaving anything in use
-> byte-identical; installs the pre-push hook **unless a non-shim hook is already there**,
+> It seeds the docs and entry points that are **missing**, leaving every file already on
+> disk byte-identical; installs the pre-push hook **unless a non-shim hook is already there**,
 > in which case it says so and leaves yours alone; and appends the kit's `.gitignore`
 > entries — all of them except `config/*.local.yaml`, which the adoption already added
 > because it could not wait for this step. Nothing else in the adoption seeds a doc,
@@ -264,9 +290,16 @@ Two things to warn them about, both measured, because neither is obvious from th
 
 - **After the operator has run `init.sh`, go through its output with them.** It reports
   every decision per file, so read it rather than re-deriving it:
-  - `seeded <path>` — the file was missing or unrendered, and now holds the template.
-  - `<path> already in use — left untouched` — it had content, and still does, byte for
-    byte. Confirm each path named here is one you expected to keep.
+  - `seeded <path>` — the file was missing, and now holds the template. (Without
+    `--no-clobber` this also covers a file that existed and carried a marker, which is why
+    Step 3c hands them the flag.)
+  - `<path> already in use — left untouched` — it had content and no marker, and still has
+    that content, byte for byte. Confirm each path named here is one you expected to keep.
+  - `left untouched (--no-clobber): <path>` — it existed AND carried a marker, so the flag
+    declined it. **These are the unfinished ones**, repeated in a summary at the end of the
+    run. Go through that list with them: a pristine skeleton wants deleting and a re-run; a
+    file of their own wants line 1 deleted so it is never a candidate again. An empty list
+    here means the adoption seeded everything it needed to.
   - `note: existing <path> left untouched (not a kit shim) — chain it to <src> by hand` —
     the repo had its own `pre-push`, so **the kit's hook is not installed**. This is the
     one outcome that silently leaves a mechanism absent; chain it.
@@ -368,7 +401,7 @@ still outstanding and the adoption is not finished without it:
 
 1. the six seedable paths, resolved from *their* config, with the state Step 1 found for
    each — and any `MARKED` one named explicitly, with what deleting line 1 does
-2. `./init.sh`, run by them, interactively
+2. `./init.sh --no-clobber`, run by them, interactively
 3. `/session-start` (Claude) or `$session-start` (Codex) afterwards
 
 Do not describe the adoption as complete before they have run `init.sh`: until then any
