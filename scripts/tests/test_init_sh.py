@@ -1171,6 +1171,42 @@ def test_no_clobber_leaves_a_marked_file_byte_identical(tmp_path: Path, marker) 
 
 
 @pytest.mark.kit_repo_only("docs/templates")
+def test_no_clobber_preserves_a_link_whose_target_is_marked(tmp_path: Path) -> None:
+    """The link case, which is the one place the two modes differ in what they
+    DESTROY rather than in what they write.
+
+    A working symlink resolves as a regular file, so a link whose TARGET opens
+    with a marker is MARKED. A bare run replaces the link with the rendered file
+    — `test_seeding_through_a_symlink_replaces_the_link_not_its_target` pins
+    that, and it is disclosed rather than fixed: the target keeps its bytes and
+    only the link relationship is lost. `--no-clobber` declines it like any
+    other MARKED target, so the relationship survives too.
+
+    Pinned because `.claude/commands/adopt.md` now states this in prose, and a
+    claim about behaviour that nothing executes is how the guard this whole
+    change exists to replace went wrong nine times (#294, #297). Raised by
+    CodeRabbit on PR #328."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / "victim.md"
+    marked = f"<!-- {kit_own_marker()} — the link target -->\n# canonical, shared\n"
+    victim.write_text(marked, encoding="utf-8")
+    (repo / "AGENTS.md").symlink_to(victim)
+    assert (repo / "AGENTS.md").is_symlink()  # positive control on the fixture
+
+    result = _run_init(repo, "--no-clobber")
+
+    assert (repo / "AGENTS.md").is_symlink(), (
+        "the link was replaced — --no-clobber must decline a MARKED target "
+        "whatever kind of directory entry reaches it"
+    )
+    assert (repo / "AGENTS.md").resolve() == victim.resolve()
+    assert victim.read_text(encoding="utf-8") == marked
+    assert "left untouched (--no-clobber): AGENTS.md" in result.stdout
+
+
+@pytest.mark.kit_repo_only("docs/templates")
 def test_no_clobber_still_seeds_a_genuinely_absent_target(tmp_path: Path) -> None:
     """The flag narrows seeding to ABSENT targets; it does not switch seeding
     off. Every assertion in this section's other tests is about a file NOT being
@@ -1253,7 +1289,10 @@ def test_an_unknown_flag_is_refused_before_anything_is_written(tmp_path: Path) -
 
     result = _run_init(repo, "--no-clobbler", check=False)
 
-    assert result.returncode != 0
+    # The exact status, not merely non-zero: usage() documents exit 2, and 1 is
+    # what init.sh's own pre-existing error paths return, so `!= 0` would pass
+    # against a run that failed for an unrelated reason. (CodeRabbit, PR #328.)
+    assert result.returncode == 2, result.stderr
     assert "unknown argument '--no-clobbler'" in result.stderr
     assert (repo / "AGENTS.md").read_text(encoding="utf-8") == original
 
