@@ -4,6 +4,84 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+### 2026-08-03 (the aim lever, and the bug the later rounds did not catch)
+
+**Theme —** `#51`'s local half shipped, and the durable result is not the feature. What cost
+more to learn than the code did is about *review*: an adopter upgrade found a defect that the
+PR's later review rounds did not catch — and the cheapest explanation fails, because the round
+pointed directly at the guards it lived in missed it too.
+
+- **`#278` — `kit_commit` in the manifest, and `differs` split three ways** (`a042c82`).
+  `STALE` / `LOCALLY EDITED` / `STALE and EDITED`, stated as fact rather than inferred from
+  `kit.version`, which tracks the config schema and so never moved when kit files did.
+- **`#280` — the fix that reopened the hole** (`d3faafb`). `#278`'s round-3 change replaced
+  `.get("files") or {}` with an isinstance check and dropped the `None` handling; `None` is
+  the sentinel for "no `--from-kit`", so verification silently switched off. Found by
+  cs-toolkit's reviewer one commit after `#278` merged.
+- **cs-toolkit upgraded** to the fixed kit, which was the first real use of `--record-install`
+  and is where `#283` was found.
+
+**Learned**
+
+- **The design premise was wrong, and only measuring the adopter showed it.** `#51`'s comment
+  said the local column "is already computed today". It is computed; the baseline it computes
+  against was never written by any install path, so it had drifted nineteen days from the
+  files beside it. Shipping the field alone would have relocated the false accusation rather
+  than removing it.
+- **Carry-forward can subtract attention — but it is not the whole story here.** No total is
+  given, because every total I gave this was wrong and the enumeration is what holds. From the
+  archived launch briefs: the bug entered in the fix for **round 3** (`accf8fa`), which round 4
+  then reviewed; **round 4's brief aimed at those guards** ("whether each actually guards what
+  it claims") and missed it;
+  **rounds 5 and 6 named "the three isinstance degrade sites" as already covered**; **round 7
+  reviewed a prose-only delta under a blanket "everything else is already covered"**. So a
+  wrong coverage claim removed most of the chances and something else removed the one that was
+  aimed. Recorded on `#211`, which the `#209` decision below recommends: a carry-forward
+  asserting coverage should have to name the test or mutation that establishes it.
+
+  **The briefs those figures come from are session scratch, not committed**, so a later reader
+  cannot re-derive this from the repo. `#280`'s merged body and commit message state it
+  differently again; treat this bullet as the account of record and that one as superseded.
+- **Rounds 2 and 4 on `#278` returned disjoint lens sets**; the first convergence came at
+  round 5. Direct evidence on the question `#209` turns on — recorded on `#278` itself, not on
+  `#209`, which a review lens checked and found bare.
+- **The configured bot reviewed a minority of heads while its check went green on all of
+  them.** Its check surface carries no signal about whether a review happened — occurrence and
+  the per-head table on `#45`.
+- **A guard resting on an incidental property is not a guard.** `#278`'s first
+  release-manifest check needed a `required_by` edge to fire, which is an accident of the
+  current import graph. A lens called it fragile; cs-toolkit's real manifest then turned out
+  to have none, so the original guard would have missed the live case.
+
+**Decided this session (operator)**
+
+- **`#209` — no proportionality valve.** None of directions 1–4 adopted, each refuted by a
+  counter-example from a different PR; the issue body's recommendation of direction 1 is
+  struck so a reader of the body cannot act on it. Next moves are `#211` then `#120`, both
+  aimed at the finding *population* rather than the pass size.
+- **Kit findings surfaced in an adopter route upstream, not into the adopter's PR.** A local
+  edit to a kit-owned file reports `LOCALLY EDITED` on every later upgrade, which is the
+  signal the baseline exists to give.
+
+**Filed this session:** `#279`, `#281`, `#282`, `#283`; occurrences on `#45`, `#211`, `#270`.
+
+**Open, and owned by nothing yet**
+
+- **`#243` is still the precondition** for the `triage-friction-log` and
+  `post-merge-systemize` conversions — the two that remain of the adapter work.
+- **cs-toolkit's friction inbox is over budget with un-graduated dated sections.** Needs
+  tracker writes plus operator approval, so it is `triage-friction-log`'s job and not a
+  wrap-up's.
+- **Carried forward:** `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#120`, `#216`, `#220`,
+  `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`#283`** — one paragraph in `/upgrade` Step 4 saying a copied release manifest must
+be removed before `--record-install`, and that the mode exits 1 on a partial record. It is the
+smallest of the four filed today, it is on the path every pre-`#51` adopter takes on their
+next upgrade, and the fix is prose in a file that is already `/upgrade`-refreshed. `#281` is
+the next-largest and is a real guard defect, but it needs a test over the near-miss keys
+rather than a wording change.
+
 ### 2026-08-03 (three conversions, and a defect class that only exists in shipped docs)
 
 **Theme —** `/session-start` was already converted; this session did the rest. `/parallel` and
