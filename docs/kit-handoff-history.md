@@ -19,8 +19,8 @@ repo.
   neither marker is still never touched. `AGENTS.md` holds the contract, `CLAUDE.md` imports
   it with `@AGENTS.md`, so one file states it and both runtimes load it in full.
 - **`kit_doctor` now checks both entry points**, through a predicate that must agree with
-  `_seedable`. Both sides pin `LC_ALL=C`: `[[:space:]]` is locale-dependent and they matched
-  different characters under any real locale.
+  `_seedable`. Locale was the hazard: `[[:space:]]` is locale-dependent, and the two sides
+  matched different characters under any real locale.
 - **Filed:** `#290`, `#291`, `#292`. **Occurrences:** `#211`, `#120`, `#248`, `#209`, `#274`,
   and `#270`.
 
