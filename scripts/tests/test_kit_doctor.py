@@ -2363,3 +2363,34 @@ def test_json_exposes_whether_the_scope_was_judgeable(tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["declared_scope_known"] is True
     assert {f["state"] for f in payload["files"]} == {"unchanged", "declined"}
+
+
+def test_the_not_intact_line_does_not_claim_a_provenance_it_lacks(tmp_path, capsys):
+    """`broken` holds two states with DIFFERENT sources: `removed` comes from
+    the baseline's record of an install, `missing-required` from the import
+    graph. A file can be `missing-required` while the baseline records it as
+    DECLINED — absent, needed, and on record as the opposite of installed.
+
+    An earlier draft of the summary line read "absent that this repo has on
+    record", which is false for exactly that file. Pinned because it is the
+    overstatement class #54 tracks, and nothing else here would catch it: the
+    per-file sections are correct, only the line above them was not.
+    """
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    lib = "scripts/lib/kitconfig.py"
+    baseline = _scoped_baseline({ENGINE: kit_doctor.sha256_of(target)})
+    assert lib in baseline["not_installed"], "fixture is confounded: the lib was not declined"
+
+    manifest = _manifest({ENGINE: kit_doctor.sha256_of(target), lib: None})
+    manifest["files"][lib]["required_by"] = [ENGINE]
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    print(kit_doctor.render(kit_doctor.inspect(root, manifest, config, baseline)))
+    out = capsys.readouterr().out
+
+    assert "✗ NOT intact for this adoption" in out
+    assert "has on record" not in out, (
+        "the summary claimed a declined file was recorded as installed here"
+    )
+    # The accurate claim, which holds for both states in `broken`.
+    assert "absent that should be installed" in out

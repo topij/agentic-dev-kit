@@ -1378,9 +1378,19 @@ def render(report: Report) -> str:
         if report.broken:
             # Never "intact" while something is absent that should not be —
             # the whole point of the split is that this case is now audible.
+            #
+            # Says "should be installed" and NOT "recorded as installed here",
+            # which an earlier draft did: `broken` holds TWO states with
+            # different provenance, and only `removed` comes from the baseline.
+            # A `missing-required` file may be one the repo recorded as
+            # DECLINED — absent, required by an installed engine, and on record
+            # as exactly the opposite of installed. The per-state sections below
+            # each name their own source; this line must not pick one of them
+            # and assert it for both (the overstatement class #54 tracks).
+            declined_note = f", {n_declined} declined" if n_declined else ""
             lines.append(
-                f"  ✗ NOT intact for this adoption — {n_absent} file(s) absent that this repo "
-                f"has on record{f', {n_declined} declined' if n_declined else ''}"
+                f"  ✗ NOT intact for this adoption — {n_absent} file(s) absent that should be "
+                f"installed{declined_note}"
             )
         elif n_declined:
             lines.append(f"  ✓ intact for this adoption — {n_declined} file(s) declined")
