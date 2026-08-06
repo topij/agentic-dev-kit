@@ -14,11 +14,66 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-06 — **The first parallel batch ran; Phase 1 is half done.** `#285`
-shipped in PR `#317`, `#292` in PR `#315`. The kit-side starter `#304` did not ship: its
-named repair carries an adopter-side regression, and it now folds into `#297`.
+Last updated: 2026-08-06 — **Phase 1's kit side is done; its done-when is not.** `#286`
+shipped in PR `#322`, closing the kit-side work. The phase closes in cs-toolkit, not here.
 
-## Latest session — 2026-08-06 (the first parallel batch, and a fix that should not be built)
+## Latest session — 2026-08-06 (`#286`, and a review that kept finding the same shape)
+
+**Theme —** One inline lane, steered live because `#286`'s three open questions were
+operator decisions. All three were answered before code was written; none changed under
+review.
+
+- **`#286` shipped in PR `#322`.** `--record-install` records `not_installed`, so an
+  absence resolves to `declined` / `removed` / `new-upstream` instead of one permanent
+  count. Verified with `make test` in `/Users/topi/Coding/agentic-dev-kit`: 943 passed.
+- **Phase 1's done-when is still open.** It asks that `kit_doctor` distinguish sized down
+  from broken *in cs-toolkit*, which needs a `--record-install` run there — adopter-side,
+  so it belongs to Phase 3 rather than to this PR. `#286` is closed; the phase is not.
+- **Operator decisions:** the declared set lives in the baseline (derived, not
+  hand-declared); a file the kit adds later gets its own state rather than defaulting
+  either way; declaring is opt-in via the key's presence, so an older baseline keeps its
+  existing report.
+- **Filed this session:** `#323`, `#324`, `#325`, `#326`.
+
+**Learned**
+
+- **A verdict line is a claim, and it drifted three times from the same blind spot.** Three
+  separate review rounds found a headline reading as an all-clear over something actionable
+  below it — for `removed`, then `unknown-version`, then `differs`. Each fix addressed the
+  case in hand and missed its sibling one line away. What ended it was routing all four
+  branches through one shared caveat rather than a fourth careful edit.
+- **The panel found what my own mutation testing could not.** Several findings were gaps in
+  the tests I had just written: I mutated the branches I was thinking about, and those were
+  the ones already covered. A lens picks its own targets, which is the property being paid
+  for.
+- **`#324` is the limit of what this axis can assert.** A path in neither map cannot be
+  told from a damaged record, because the baseline is the trust root and carries no
+  integrity check. PR `#322` hedges the wording and does not claim more.
+
+**Decided this session (operator)**
+
+- **Run the panel to convergence rather than to a round count.** Severity rose at round 3
+  (a HIGH after two Medium-only rounds), and the stopping rule is blast radius, not rounds.
+  Round 4 converged and the receipt was recorded then.
+
+**Open, and owned by nothing yet**
+
+- **`#297` is now the whole of the critical path's next step** — Phase 2, carrying `#304`.
+- **`#325` and `#326` are about the panel itself**, and the panel is now the review path
+  whenever the bot is limited, so they cost every PR rather than only this one.
+- **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#283`, `#287`, `#292`, `#248`,
+  `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`, `#203`,
+  `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`#297` — Phase 2 of the convergence plan**, and now the critical path's only
+open step on the kit side. Its done-when is that something can run `init.sh` in an adopter
+without the operator reasoning about which files it will overwrite; `#304` is adjacent and
+may share parts of the change. The Codex `SessionStart` budget hooks and cs-toolkit's Phase
+0 still run in parallel per `docs/kit-convergence-plan.md`.
+
+______________________________________________________________________
+
+## Session — 2026-08-06 (the first parallel batch, and a fix that should not be built)
 
 **Theme —** Three isolated lanes off one cockpit. Two landed. The third produced a finding
 instead of a commit, which is the outcome worth recording: the repair `#304` names for
@@ -270,82 +325,6 @@ mode flag on `_seedable` is not the fork I mistook it for. `/adopt` passes it al
 `init.sh` bare and `/upgrade` keep today's behaviour, where re-rendering a marker is
 correct. `#273` direction 1 was this session's inherited starter and is still undone — it
 was displaced deliberately, not dropped.
-
-______________________________________________________________________
-
-## Earlier session — 2026-08-04 (the kit's own entry points, and a claim class that outlived the code)
-
-**Theme —** `seed_doc` had two categories, a shipped skeleton and a file the adopter is using,
-and the kit's own entry points are a third. Both halves of `#288` followed: `CLAUDE.md` rode
-the `cp -r` quickstart into every adopter with nothing rendering, removing or reporting it, so
-their Claude sessions loaded *the kit's* contract; and `AGENTS.md` was reached by file
-**absence**, so the kit could not ship one and a Codex session working in the kit had no entry
-point at all. `#274`'s class, on the two files whose whole job is to be read in the reading
-repo.
-
-- **`#288` — the third category** (`af004b9`, PR `#289`). `KIT_OWN_MARKER` on the kit's own
-  root `AGENTS.md` and `CLAUDE.md`; an adopter's `init.sh` renders over both; a file carrying
-  neither marker is still never touched. `AGENTS.md` holds the contract, `CLAUDE.md` imports
-  it with `@AGENTS.md`, so one file states it and both runtimes load it in full.
-- **`kit_doctor` now checks both entry points**, through a predicate that must agree with
-  `_seedable`. Both sides pin `LC_ALL=C`: `[[:space:]]` is locale-dependent and they matched
-  different characters under any real locale.
-- **Filed:** `#290`, `#291`, `#292`. **Occurrences:** `#211`, `#120`, `#248`, `#209`, `#274`,
-  and `#270`.
-
-**Learned**
-
-- **Each repair to the seed guard introduced the next defect**, all in one predicate. The two
-  that destroyed a real file with no backup were both found by *running* `init.sh` against a
-  hand-built fixture, never by reading it. `#211`'s thesis; the enumeration is on `#211`.
-- **"What checks this new check" was answered wrong three times running** — a guard clause
-  added to prevent silent overwrites was itself unpinned; the check added to catch an
-  incomplete adoption was itself unchecked; the test added to pin a locale fix was itself
-  locale-dependent and would have passed with the fix removed. Each found by mutation, none by
-  reading. On `#211`.
-- **The claims that survived review longest were the ones whose *form* looked rigorous** — a
-  stated `grep` method whose scope was one file while the stale site sat in another, and a
-  comment citing "the C locale" in a script that pinned no locale. A cited mechanism reads as
-  verification and is not. Enumerated on `#248` as a sub-shape it did not name.
-- **The code converged before the prose did, and the gap was most of the review.** The
-  destructive findings stopped early; the rounds after them returned record and coverage
-  findings almost exclusively. Evidence for `#120` over `#211` — on `#120`.
-- **A lens wrote into the live checkout through the isolation route the doctrine prescribes.**
-  `cp -R` of a *linked worktree* copies its `gitdir:` pointer, so the copy is not independent
-  and `init.sh` in it rewrote the real repo's `.git/hooks/`. Invisible to the contract's own
-  attestation, which reports on the handed tree. `#270`.
-- **The local gate is weaker than CI.** An apostrophe in an `awk` comment closed the
-  single-quoted program; `make test` reported a mass of unrelated pytest failures while CI's
-  `sh -n init.sh` names the line. `#292`.
-
-**Decided this session (operator)**
-
-- **Codex as an equal-enough development environment, as soon as possible.** This is a
-  standing goal and it lives on no ticket. It moved `#243` back off the backlog — but
-  **sliced**: `adopt` + `upgrade` first, since the daily loop already works on Codex and the
-  four missing workflows are lifecycle and maintenance.
-- **Merged without a dual-lens pass at the merging head.** The last panel ran three commits
-  earlier; no receipt was recorded, because one would have claimed coverage that does not
-  exist and the engine refuses it once the head moves. The merge gate was the operator's
-  decision plus green CI plus a bot review of the parent — stated on `#289` rather than left
-  to be inferred from a missing receipt.
-
-**Open, and owned by nothing yet**
-
-- **`#290` and `#291` are one complaint** — a single boolean cannot carry what `kit_doctor`'s
-  narrative check now sees, so a directory named `AGENTS.md` reports `in use` and the kit's
-  own repo warns about its own entry points forever.
-- **Carried forward:** `#243`, `#273`, `#105`, `#285`, `#283`, `#287`, `#286`, `#248`, `#264`,
-  `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`, `#203`, `#190`,
-  `#187`, `#124`, `#169`, `#143`.
-
-▶ Next: **`#273` direction 1** — one note on `safety-critical-changes.md` line 10 saying
-`.claude/rules/` binds Claude only. It is the smallest step toward the Codex goal above and the
-only one whose failure is *silent*: cs-toolkit follows that sentence today and its safety
-doctrine reaches one of its two runtimes, so a Codex session touching a kill-path there is
-unbound and nothing reports it. Then `#105` (a Codex adopter arriving via `/adopt` still gets
-no entry point — this session fixed only the `init.sh` path). Read `#243`'s own scope note
-before starting it: its line count is measured, stale, and growing.
 
 ______________________________________________________________________
 
