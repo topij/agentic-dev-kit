@@ -23,17 +23,31 @@ the sha that merged carried only the fallback panel's review. That is the entry 
 "one review of a superseded sha, then nothing", reproduced without a batch: one PR, one
 fix round.
 
-What this adds to the open question below is a discriminator the first occurrence could not
-supply. That entry's candidates were a rate-limit tier question, a batch-concurrency effect
-(three lanes opening PRs within the hour), or a bad day. **This session opened one PR**, so
-batch concurrency is not what exhausted the quota here. Two sessions, two outages, different
-shapes — which points at the tier rather than at how the work is sequenced, and makes the
-proposed graduating shape ("record when the fallback carried review, so the rate is visible")
-worth more than it was, since the rate is now the thing in question.
+**The open question below is now answered, and by the bot rather than by inference.** That
+entry listed three candidates — a rate-limit tier question, a batch-concurrency effect (three
+lanes opening PRs within the hour), or a bad day — and said a second occurrence would separate
+them. On the wrap-up PR the bot stated the cause itself:
 
-Not filed, still: the remedy is an account decision or an observability change, and the
-entry below already holds the argument. A third occurrence should graduate rather than
-accumulate.
+> **Review limit reached.** `@topij`, you've reached your PR review limit, so we couldn't
+> start this review. **Next review available in: 52 minutes.** You've used all free OSS
+> reviews for now.
+
+So it is the **tier**: a free-OSS quota that refills on a timer, not a batch effect and not
+chance. Two independent supports — this session opened a *single* PR and still exhausted it,
+so sequencing is not the driver.
+
+That changes the graduating shape. "Record when the fallback carried review, so the rate is
+visible" was written when the rate was the unknown; the unknown now is **what the quota
+actually is and whether the work fits inside it**, which observability alone does not answer.
+The bot's own suggestions (pause incremental auto-reviews, label-based opt-in, request review
+when the PR is ready) are configuration this repo could adopt without an account change —
+worth weighing against a paid tier rather than assuming either.
+
+Still not filed, deliberately: the remedy is now clearly an **operator decision** (accept the
+quota and let the panel carry the overflow, change the bot's trigger configuration, or pay),
+and none of those is a kit change. The value of this entry is that the decision is now
+informed. It should graduate at the next triage sweep rather than wait for a third occurrence,
+since waiting can no longer teach anything new.
 
 ## 2026-08-06
 
