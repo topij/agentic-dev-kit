@@ -266,7 +266,10 @@ uv run <engine-dir>/check_doc_budget.py
 ```
 
 `kit_doctor` should now report zero mismatches of every kind — `differs`, `STALE`,
-`LOCALLY EDITED`, `STALE and LOCALLY EDITED` — and zero `unknown-version`. Because Step 4
+`STALE and LOCALLY EDITED` — and zero `unknown-version`. `LOCALLY EDITED` should be zero
+**except for the local patches you deliberately kept in Step 3 and can name**; see the
+paragraph below, which is the one expected exception rather than a caveat on the rule.
+Because Step 4
 has just written a declared install set, the absences should now read
 `✓ intact for this adoption — N file(s) declined` rather than a bare `missing` count, with
 **zero `removed` and zero `new-upstream`**: the first would mean something was deleted
@@ -277,9 +280,10 @@ A **`missing`** count surviving this step is itself a finding: Step 4 writes the
 set, so the state it eliminates should not be reachable here. It means `--record-install`
 did not run, or ran against a different root.
 
-The one expected exception is a local patch you chose to keep in Step 3: it reports
+That exception, stated once: a local patch you chose to keep in Step 3 reports
 `LOCALLY EDITED`, which is the baseline working as intended. Name it in the PR body so
-the next upgrade does not re-litigate it.
+the next upgrade does not re-litigate it. A `LOCALLY EDITED` file you cannot name is not
+this case — it is Step 3 leaving something.
 
 It should also now print a `baseline:` line naming the kit commit you installed from —
 and **the sha it names has to be checked, not just the line's presence.** On a repeat

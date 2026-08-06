@@ -949,18 +949,31 @@ def record_install_manifest(
                 unverified.append(_remap(rel, engines_dir))
                 continue
         files[rel] = {"sha256": digest, "role": role}
-    return {
+    recorded = {
         "kit_version": kit_version,
         "kit_commit": kit_commit,
         "files": files,
-        # ABSENT paths only. A path that is present but did not match
-        # `source_files` lands in `unverified` and in neither map, which is the
-        # correct record: it is installed, so no later run will ask this
-        # question about it, and calling it "not installed" here would be a
-        # plain falsehood in a file whose whole job is to be believed.
-        "not_installed": not_installed,
         "adopter_owned": list(ADOPTER_OWNED),
-    }, unverified
+    }
+    # `not_installed` is written ONLY when this record is complete, and an
+    # `unverified` path is exactly what makes it incomplete: that path is
+    # present but matched no source-kit file, so it is deliberately in neither
+    # map. An earlier version wrote the key anyway, reasoning that a present
+    # file will never be asked about — true when the record is written, and
+    # false the moment someone deletes it. `inspect` would then find it absent,
+    # in neither map, and call it `new-upstream`: "the kit added this since your
+    # baseline", asserted confidently about the adopter's own deleted file, and
+    # exiting 0. (CodeRabbit, PR #322.)
+    #
+    # Omitting the key degrades that path to plain `missing` — ambiguous, but
+    # ambiguous is what a partial record has earned, and the report already
+    # names the command that completes it. Same rule as the read side: the key
+    # must be PRESENT to claim a scope, so a scope that cannot be claimed
+    # honestly is not claimed at all. `--record-install` also exits 1 here and
+    # lists the unverified paths on stderr, so this is never silent.
+    if not unverified:
+        recorded["not_installed"] = not_installed
+    return recorded, unverified
 
 
 def _declared_scope(baseline: dict | None, trusted: bool) -> set[str] | None:
@@ -984,6 +997,15 @@ def _declared_scope(baseline: dict | None, trusted: bool) -> set[str] | None:
         return None
     declared = (baseline or {}).get("not_installed")
     if not isinstance(declared, list):
+        return None
+    # The `files` map must be READABLE too, not merely present — the two halves
+    # are one record and a scope claim needs both. `inspect` degrades a non-dict
+    # `files` to `{}`, so without this check a baseline carrying a valid
+    # `not_installed` beside a malformed `files` would classify every absent
+    # file that WAS installed as `declined` (silent) or `new-upstream`
+    # (informational) instead of `removed` (exit 1) — the malformed half
+    # deciding the answer for the sound one. (CodeRabbit, PR #322.)
+    if not isinstance((baseline or {}).get("files"), dict):
         return None
     return {item for item in declared if isinstance(item, str)}
 

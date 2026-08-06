@@ -2118,7 +2118,14 @@ def test_a_present_but_unverified_file_is_not_recorded_as_not_installed(tmp_path
 
     assert unverified == [ENGINE]
     assert ENGINE not in written["files"]
-    assert ENGINE not in written["not_installed"], (
+    # Not merely absent from the list — the whole key is suppressed, because an
+    # unverified path makes the record partial. That stronger property, and the
+    # misclassification it prevents, are pinned by
+    # `test_an_unverified_path_suppresses_the_declared_set_entirely` and
+    # `test_a_deleted_unverified_path_is_not_reported_as_a_new_kit_file`. Here
+    # the point is only that a file sitting on disk is never called "not
+    # installed", which holds under either shape.
+    assert ENGINE not in written.get("not_installed", []), (
         "a file that is present on disk was recorded as not installed"
     )
 
@@ -2394,3 +2401,66 @@ def test_the_not_intact_line_does_not_claim_a_provenance_it_lacks(tmp_path, caps
     )
     # The accurate claim, which holds for both states in `broken`.
     assert "absent that should be installed" in out
+
+
+# --- the declared set must not outlive the record's completeness (#322 review) ---
+
+
+def test_an_unverified_path_suppresses_the_declared_set_entirely(tmp_path):
+    """A present-but-unmatched path is in neither map BY DESIGN, so the record
+    is partial and cannot carry a scope claim.
+
+    Writing `not_installed` anyway was sound only at record time: the path is
+    present, so nothing asks about it. Delete it later and `inspect` finds it
+    absent and in neither map — which is the `new-upstream` signature.
+    """
+    root = _fake_repo(tmp_path)
+    written, unverified = kit_doctor.record_install_manifest(
+        root,
+        kit_doctor.load_config(root / "config" / "dev-model.yaml"),
+        2,
+        "abc123",
+        source_files={ENGINE: {"sha256": _sha("a different kit's copy")}},
+    )
+    assert unverified == [ENGINE], "fixture is confounded: nothing was unverified"
+    assert "not_installed" not in written, (
+        "a partial record claimed a complete declared install set"
+    )
+
+
+def test_a_deleted_unverified_path_is_not_reported_as_a_new_kit_file(tmp_path):
+    """The failure the suppression above prevents, driven end to end: the
+    adopter's OWN file, recorded as unjudgeable, then deleted."""
+    root = _fake_repo(tmp_path)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    written, _ = kit_doctor.record_install_manifest(
+        root, config, 2, "abc123", source_files={ENGINE: {"sha256": _sha("elsewhere")}}
+    )
+    (root / "scripts" / "check_doc_budget.py").unlink()
+
+    report = kit_doctor.inspect(root, _manifest({ENGINE: _sha("whatever")}), config, written)
+    state = _states(report)[ENGINE]
+    assert state != "new-upstream", (
+        "a deleted adopter-owned file was reported as a file the kit added since the baseline"
+    )
+    assert state == "missing", state
+    assert not report.declared_scope_known
+
+
+def test_a_malformed_files_map_cannot_be_read_as_a_declared_scope(tmp_path):
+    """The two halves are one record. `inspect` degrades a non-dict `files` to
+    `{}`, so a sound `not_installed` beside a malformed `files` would classify
+    every absent-but-installed file as `declined`/`new-upstream` — the
+    malformed half deciding the answer for the sound one."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    baseline["files"] = ["not", "a", "dict"]
+    target.unlink()
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+    assert not report.declared_scope_known
+    # `missing`, not `declined` and not `new-upstream`: nothing is known here.
+    assert _states(report)[ENGINE] == "missing"
+    assert report.declined == [] and report.new_upstream == []

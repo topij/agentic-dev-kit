@@ -308,8 +308,17 @@ Two things to warn them about, both measured, because neither is obvious from th
   independent reference, and it is also the only one carrying `required_by`, which is
   what makes the `missing-required` axis work at all.
 
-  Expect zero mismatches and `missing` containing only the pieces Step 2 deliberately
-  left out.
+  Expect zero mismatches. **Not `missing` — Step 3b just recorded a declared install
+  set**, so the pieces Step 2 deliberately left out now report as `declined` and the
+  count line reads `0 missing` followed by `✓ intact for this adoption — N file(s)
+  declined`. A surviving `missing` count means `--record-install` did not run, or ran
+  against a different root. Zero `removed` and zero `new-upstream` too: on a fresh
+  adoption there is nothing yet to have been deleted, and nothing the kit could have
+  added since a baseline written minutes ago.
+
+  If Step 3b reported unverified paths, there is **no** declared set — it suppresses one
+  rather than record a partial claim — so the absences read `missing` here and the
+  `intact` line is absent. That is the unreconciled-path signal, not a second failure.
 
   **Then check the `baseline:` line by comparing the sha it prints**, not merely that it
   is present. It reports what the baseline *claims*, so a leftover baseline from an
