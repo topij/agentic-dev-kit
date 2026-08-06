@@ -1,7 +1,13 @@
 # Upgrade
 
-Upgrade this repo's agentic-dev-kit installation. Non-destructive: runs on a branch, and
-never replaces a file without knowing it is safe to replace.
+Upgrade this repo's agentic-dev-kit installation. Runs on a branch, and replaces a file
+only where something established it is the kit's to replace — `init.sh --no-clobber` in
+Step 2 for the seeded docs, and your per-file decision in Step 3 for everything else.
+
+> **Do not simplify that sentence back to a blanket "non-destructive".** It said "never
+> replaces a file without knowing it is safe to replace" for as long as Step 2 ran `init.sh`
+> bare, which destroyed exactly the file it promised to protect (`#330`). A reassurance at
+> the top of a workflow is executed prose — it suppresses the check further down.
 
 > **The invariant this rests on.** Engines are **kit-owned**; config is **adopter-owned**.
 > Everything project-specific — paths, tracker, review-bot markers, CI policy, model
@@ -102,8 +108,44 @@ Take the fetched kit's copy first:
 cp /tmp/agentic-dev-kit/init.sh ./init.sh
 chmod +x init.sh                                  # the kit ships it 100755; a copy can lose the bit
 mkdir -p docs/templates && cp /tmp/agentic-dev-kit/docs/templates/*.tmpl docs/templates/
-./init.sh
+./init.sh --no-clobber
 ```
+
+**`--no-clobber` is not optional here, and it is the one flag that changes what this step
+can destroy.** Bare `init.sh` seeds two classes of target: one that is *absent*, and one
+that *exists carrying a kit marker on line 1*. The second class is where an adopter's own
+work lives — a repo that took the pre-`#288` `cp -r` quickstart got marked skeletons, and
+months of doctrine written into one does not remove the marker. `README.md` documents
+re-running `init.sh` as the supported upgrade path, so the exposed party is a long-running
+adopter, not a new one. Measured in two `git init` sandboxes against the merged `init.sh`:
+
+| target state | bare `./init.sh` | `./init.sh --no-clobber` |
+|---|---|---|
+| **absent** | `seeded AGENTS.md` | `seeded AGENTS.md` — unchanged by the flag |
+| marked, never edited | rendered | `left untouched (--no-clobber): AGENTS.md`, byte-identical |
+| **marked, edited by the adopter** | `seeded AGENTS.md` — **content gone, no backup** | declined, byte-identical |
+
+The first row is the one to read before worrying that this weakens the step: `--no-clobber`
+narrows seeding to genuinely-absent targets, and absent is precisely what the paragraph
+below needs it to still do. A partially-adopted repo missing `AGENTS.md` or `CLAUDE.md`
+still receives it.
+
+**What it costs, stated plainly:** a marked file that was *never* edited — a pristine
+skeleton — now stays unrendered where it used to be rendered. That is a real regression and
+it is why this is worth stating rather than burying. It is also the loudest line in the run:
+each decline is printed per-file *and* again in an end-of-run summary, so it cannot pass
+unnoticed. Resolve a file it names in one of two ways, both of which the operator owns:
+
+- **Keep the content** → delete line 1. The file is then yours and nothing seeds it again.
+- **Take the kit's version** → delete the file and re-run. It is now absent, so it seeds.
+
+Do neither on the operator's behalf. The whole point of the flag is that the choice between
+those two is not `init.sh`'s to make, and it is not this workflow's either.
+
+The narrower predicate that would render a pristine skeleton while still declining an edited
+one — comparing the file against the template it came from — is deliberately not built here:
+it needs `init.sh` to reason about which kit version a file was seeded from, which is a
+mechanism with its own failure modes and its own ticket.
 
 The templates have to land **before** `init.sh` runs, not with the other file copies in Step
 4: `init.sh` resolves `docs/templates/*.tmpl` relative to the working directory, so without
@@ -117,13 +159,18 @@ Note this is also why running `/tmp/agentic-dev-kit/init.sh` in place of the cop
 equivalent: every path it reads — the config, the templates — resolves against the working
 directory, not against its own location, so it still needs the templates present here.
 
-`init.sh` is the supported config upgrade path, and it is safe to re-run any number of times.
-It only ever **adds** missing keys, never guesses over an existing value; it probes
-`paths.engines` from where engines actually are rather than defaulting; it stamps
-`kit.version`; it installs the pre-push hook as a shim (honoring `core.hooksPath`); and
-it leaves a doc that is genuinely in use byte-identical, re-rendering only one whose
-**first line opens an HTML comment beginning with** the unrendered marker or the kit-own
-marker — the second covering a root `AGENTS.md` / `CLAUDE.md` that is still the kit's own.
+`init.sh` is the supported config upgrade path. **With `--no-clobber` it is safe to re-run
+any number of times**; bare, it is not, and the difference is the table above rather than a
+matter of degree. It only ever **adds** missing config keys, never guesses over an existing
+value; it probes `paths.engines` from where engines actually are rather than defaulting; it
+stamps `kit.version`; and it installs the pre-push hook as a shim (honoring
+`core.hooksPath`).
+
+For the seeded docs, what `--no-clobber` leaves standing is every file that already exists —
+whether it is genuinely in use or still carries a marker. A file whose **first line opens an
+HTML comment beginning with** the unrendered marker or the kit-own marker is the only kind
+bare `init.sh` would have re-rendered, and it is exactly the kind this run declines and
+reports instead.
 
 Press Enter through every prompt to keep current values. Then re-read the diff of
 `config/dev-model.yaml` and confirm nothing you rely on changed.
