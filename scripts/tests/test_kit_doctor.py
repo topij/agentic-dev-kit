@@ -22,6 +22,7 @@ diagnosable at all:
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -1832,3 +1833,205 @@ def test_from_kit_never_falls_back_to_recording_everything(tmp_path, capsys, mon
     assert recorded["files"] == {}, "an unusable source must bless nothing"
     assert code == 1, "and the partial record must not report success"
     assert "scripts/check_doc_budget.py" in capsys.readouterr().err
+
+
+# --- #285: the Usage block hardcoded `scripts/kit_doctor.py`, so every printed
+# example failed the moment an adopter vendored engines anywhere else (which
+# `paths.engines` exists to allow, and which docs/agentic-dev-kit/
+# adopting-into-a-linted-repo.md recommends). Fixed by writing
+# `<engine-dir>/kit_doctor.py` the way every workflow doc already does.
+#
+# `re.escape` even though KIT_ENGINE_PREFIX has no regex metacharacters today
+# — reading it from kit_doctor rather than writing "scripts" here means this
+# regex tracks the constant if it ever changes, instead of silently checking a
+# prefix the kit no longer uses.
+_BARE_ENGINE_PATH_RE = re.compile(
+    r"^\s*(?:#\s*)?(?:uv run\s+|python3?\s+|bash\s+|sh\s+)?"
+    rf"{re.escape(kit_doctor.KIT_ENGINE_PREFIX)}/\S+\.(?:py|sh)\b(?!:)"
+)
+
+
+def _bare_engine_path_lines(text: str) -> list[str]:
+    """Lines that hardcode `<KIT_ENGINE_PREFIX>/<name>.py` (or `.sh`) as if
+    that were the only place an adopter could have it installed — #285's bug
+    class, generalized past the one file it was found in.
+
+    Anchored to catch a command example (with or without a runner keyword,
+    with or without a leading `#`) while leaving incidental prose alone:
+
+    - The `scripts/...` token must OPEN the line (after stripping a comment
+      marker and an optional runner word). "... while `bash scripts/foo.sh`
+      dies on its ``source`` line" does not open its line, so a past-tense bug
+      account is never mistaken for an instruction to run something —
+      `kit_doctor.py` itself has two of these, describing #228 and #41.
+    - A colon immediately after the extension is excluded:
+      `scripts/pr_watch.py:summarize_checks` (a cross-reference to a specific
+      function, in `dev_session.sh`) and `scripts/kit_doctor.py:101` (a line
+      citation, in a handoff doc) name a location in the kit's OWN tree for a
+      reader already there — correct regardless of where the file is later
+      vendored, unlike a copy-paste command.
+
+    Deliberately NOT special-cased: KIT_OWNED's own `("scripts/…", role)`
+    tuple entries. They never match anyway — a line opening with `(` cannot
+    match a pattern anchored on `scripts/` — so the one place a literal
+    `scripts/` prefix is correct (the layout `_remap` reads) needs no carve-out.
+    """
+    return [line.strip() for line in text.splitlines() if _BARE_ENGINE_PATH_RE.match(line)]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "    as an ordinary `missing` while `bash scripts/dev_session.sh` dies on its",
+        "# `bash scripts/dev_session.sh` died on line 63. The Python-only version",
+        "See `scripts/kit_doctor.py:101` for the signal.",
+        "    # scripts/pr_watch.py:summarize_checks (the other cockpit CI surface)",
+        '    ("scripts/pr_watch.py", "engine"),',
+    ],
+)
+def test_the_detector_leaves_layout_specific_prose_alone(line):
+    """The two carve-outs `_bare_engine_path_lines` documents, each pinned to
+    the real line shape that motivated it (kit_doctor.py's own #228/#41 prose,
+    a handoff-doc line citation, dev_session.sh's cross-reference to a
+    `pr_watch.py` function, and a KIT_OWNED tuple entry)."""
+    assert _bare_engine_path_lines(line) == []
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "    uv run scripts/kit_doctor.py --json             # machine-readable",
+        "    python3 scripts/check_doc_budget.py            # report every tracked doc",
+        "#   scripts/dev_session.sh list [--watch [interval]]",
+    ],
+)
+def test_the_detector_catches_every_shape_the_kit_actually_used(line):
+    """The three shapes #285's sweep actually found: a `uv run` Python
+    example, a `python3` example, and a shell script's bare comment-block
+    usage line with no runner keyword at all."""
+    assert _bare_engine_path_lines(line) == [line.strip()]
+
+
+def test_kit_doctor_source_has_no_hardcoded_engine_prefix():
+    """Scans the file's own source text, not just the docstring's Usage
+    block: #285 named two more candidates for the same literal — the
+    `--help` text and the `hint:` lines in `main()` — and a whole-file scan
+    catches any of the three without needing to know which one moved."""
+    text = (REPO_ROOT / "scripts" / "kit_doctor.py").read_text(encoding="utf-8")
+    assert _bare_engine_path_lines(text) == []
+
+
+def test_help_output_has_no_hardcoded_engine_prefix(capsys):
+    """The rendered `--help` text is argparse's own composition of
+    `description` and each flag's `help=` — not the module docstring, so the
+    source-text scan above cannot see it. Run for real rather than inferred:
+    a static check of the `help=` string literals would miss a value built by
+    string concatenation or an f-string."""
+    with pytest.raises(SystemExit) as exc:
+        kit_doctor.main(["--help"])
+    assert exc.value.code == 0
+    assert _bare_engine_path_lines(capsys.readouterr().out) == []
+
+
+# Pre-existing instances of the SAME bug, in kit-owned engines #285 did not
+# scope its fix to. Found while building the general test below — that test
+# is what the issue calls "the only form that stops the next copied line", and
+# proving it actually catches something is what surfaced these. Each is a
+# Usage-block command example exactly like kit_doctor.py's former five lines,
+# now hardcoding `scripts/<name>` in a file this fix's footprint does not
+# cover; they need their own follow-up rather than a silent fix here.
+#
+# Pinned by EXACT line text rather than skipped, so the test keeps two
+# properties: a NEW hardcoded line anywhere in any kit-owned file still fails
+# immediately (the found set stops matching this one), and fixing one of
+# these seven files ALSO fails immediately (same reason) — which is the
+# prompt to delete that entry, not a false alarm. See
+# `test_shipped_manifest_required_by_matches_a_fresh_derivation` above for the
+# same self-obsoleting shape.
+_KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS: dict[str, list[str]] = {
+    "scripts/pr_watch.py": [
+        r"uv run scripts/pr_watch.py                 # current branch's PR, human summary",
+        r"uv run scripts/pr_watch.py 916 --json       # explicit PR, machine-readable",
+        r"uv run scripts/pr_watch.py --mark-seen      # ack exactly what the last poll reported",
+        r'uv run scripts/pr_watch.py 916 --record-review "fallback:codex" --head <polled-sha>',
+        r"uv run scripts/pr_watch.py 916 --assert-draft  # correct a drifted draft bit after `gh pr create --draft`",
+        r"uv run scripts/pr_watch.py 916 --assert-ready  # correct a drifted draft bit before `gh pr merge`",
+    ],
+    "scripts/check_doc_budget.py": [
+        r"python3 scripts/check_doc_budget.py            # report every tracked doc",
+        r"python3 scripts/check_doc_budget.py --quiet     # print only when over budget",
+        r"python3 scripts/check_doc_budget.py --strict    # exit 1 when over budget",
+        r"python3 scripts/check_doc_budget.py --json       # machine-readable",
+    ],
+    "scripts/archive_plan_sessions.py": [
+        r"uv run scripts/archive_plan_sessions.py                  # keep 6, apply",
+        r"uv run scripts/archive_plan_sessions.py --keep 5",
+        r"uv run scripts/archive_plan_sessions.py --target-lines <budget>  # sweep to a line budget",
+        r"uv run scripts/archive_plan_sessions.py --dry-run         # report only",
+        r"uv run scripts/archive_plan_sessions.py --plan docs/handoff.md --history docs/handoff-history.md",
+    ],
+    "scripts/panel_prompt.py": [
+        r"uv run scripts/panel_prompt.py --lens adversarial --head <sha>",
+        r"uv run scripts/panel_prompt.py --lens correctness --head <sha> \\",
+    ],
+    "scripts/check_memory_budget.py": [
+        r"python3 scripts/check_memory_budget.py            # report",
+        r"python3 scripts/check_memory_budget.py --quiet     # print only when over budget (the hook)",
+        r"python3 scripts/check_memory_budget.py --strict    # exit 1 when over budget",
+        r"python3 scripts/check_memory_budget.py --json       # machine-readable",
+    ],
+    "scripts/dev_session.sh": [
+        r"#   scripts/dev_session.sh new <scope> [--base <protected>] [--prefix <configured>]"
+        r" [--branch <full>] [--merge-class self|operator] [--force] [--headless]"
+        r" [--runtime <name>] [--launcher <command>]",
+        r"#   scripts/dev_session.sh list [--watch [interval]]",
+        r"#   scripts/dev_session.sh path <scope>",
+        r"#   scripts/dev_session.sh pr-watch <scope> [pr-watch options]",
+        r"#   scripts/dev_session.sh merge <scope>",
+        r"#   scripts/dev_session.sh rm <scope> [--force] [--keep-branch]",
+        r"#   scripts/dev_session.sh print-contract",
+    ],
+    "scripts/reconcile_sessions.sh": [
+        r"#   scripts/reconcile_sessions.sh <scope|branch> [...] [--prefix <configured>] [--base <configured>]",
+        r"#   scripts/reconcile_sessions.sh --match '<glob>' [--match '<glob>'] ...",
+        r"#   scripts/reconcile_sessions.sh                      # discover in-flight lanes",
+    ],
+}
+
+
+def test_no_shipped_kit_owned_file_hardcodes_a_bare_engine_path():
+    """#285's general form: the invariant its fix restored for
+    `kit_doctor.py` alone must hold across every file in `KIT_OWNED` — the
+    manifest-tracked, `/upgrade`-refreshed population `kit_doctor.py` itself
+    treats as "the kit" — and keep holding.
+
+    **Scope, precisely, because "kit-wide" overstates it.** `KIT_OWNED` is
+    engines, hooks and the shared `docs/agentic-dev-kit/` workflow/doctrine
+    docs — NOT `.claude/commands/*.md` or `.agents/skills/*/SKILL.md`, which
+    are runtime-specific bindings this test never reads. Found by the panel's
+    adversarial lens on this PR: two files there (`triage-friction-log.md`,
+    `post-merge-systemize.md`) already carry the identical hardcoded-`scripts/`
+    shape, naming engines that don't exist yet (#6, #7) — so nothing breaks
+    today, but nothing here would catch it if one of those files' scripts
+    landed, or if a currently-clean command/skill doc regressed. That gap is
+    real and is not this test's job to close; it needs its own coverage.
+
+    `kit_doctor.py` is deliberately ABSENT from
+    `_KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS`: this file's fix must hold
+    with no exception, which an entry here would quietly grant it.
+    """
+    found = {
+        rel: _bare_engine_path_lines((REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace"))
+        for rel, _role in kit_doctor.KIT_OWNED
+        if (REPO_ROOT / rel).is_file()
+    }
+    found = {rel: lines for rel, lines in found.items() if lines}
+    assert found == _KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS, (
+        "a kit-owned file's set of hardcoded-`scripts/`-path lines changed since "
+        "this test was written. If this is a NEW violation: fix it — write "
+        "`<engine-dir>/<name>` the way every workflow doc does (see "
+        "kit_doctor.py's own Usage block), or render it from paths.engines at "
+        "run time. If a KNOWN one from "
+        "_KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS was just fixed: delete its "
+        "entry above — do not widen the pin to make this pass."
+    )

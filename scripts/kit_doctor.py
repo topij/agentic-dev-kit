@@ -77,13 +77,15 @@ for an adopter. They are not interchangeable, and the second refuses to
 overwrite anything it did not write itself — see ``_was_written_by_record_install``
 for the signal and ``main``'s ``--record-install`` branch for the refusal.
 
-Usage:
-    uv run scripts/kit_doctor.py                    # human report
-    uv run scripts/kit_doctor.py --json             # machine-readable
-    uv run scripts/kit_doctor.py --generate-manifest  # (kit repo) refresh the manifest
-    uv run scripts/kit_doctor.py --record-install --from-kit <kit checkout>
+Usage (``<engine-dir>`` is ``paths.engines`` in config/dev-model.yaml, default
+``scripts`` — every workflow doc writes it the same way; see
+``docs/agentic-dev-kit/workflows/*.md``):
+    uv run <engine-dir>/kit_doctor.py                    # human report
+    uv run <engine-dir>/kit_doctor.py --json             # machine-readable
+    uv run <engine-dir>/kit_doctor.py --generate-manifest  # (kit repo) refresh the manifest
+    uv run <engine-dir>/kit_doctor.py --record-install --from-kit <kit checkout>
                                                     # (adopter) record the install baseline
-    uv run scripts/kit_doctor.py --manifest <kit checkout>/kit-manifest.json
+    uv run <engine-dir>/kit_doctor.py --manifest <kit checkout>/kit-manifest.json
                                                     # compare against upstream, splitting
                                                     # drift by cause
 
