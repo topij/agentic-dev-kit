@@ -183,7 +183,8 @@ performs the upgrade and lands it as a normal PR through cs-toolkit's own
 review; kit defects it surfaces route upstream as kit issues, not into the
 adopter's PR. Engines per cs-toolkit's declared Phase 2, the declared install
 set recorded, SessionStart wiring on both runtimes there. **Done when**
-`kit_doctor --manifest <kit>` reports no unexplained divergence.
+`kit_doctor --manifest <kit>/kit-manifest.json` reports no unexplained
+divergence.
 
 ### The kit track beside it
 
