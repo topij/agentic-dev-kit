@@ -4,6 +4,84 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-05 (the runtime hook, and two predicates deleted)
+
+**Theme —** Both runtimes now fire the PR follow-through hook, and neither registration is
+written by the kit. The work that took the time was not the wiring: it was discovering, on
+one function, the shape `#297` was filed about, twice over — a predicate about
+somebody else's filesystem or config, restated where nothing can execute the restatement.
+
+- **`#301`** — settled in PR `#303`. `pr_followup_hook.py` takes `--runtime`; it had hardcoded
+  `review.fallback_commands.claude` and `lens_compute.claude`, which are runtime-keyed with
+  different values, so registering it on Codex unchanged would have told that session to run
+  Claude's review command at Claude's model. `.codex/hooks.json` added, `.claude/settings.json`
+  updated, `init.sh` **prints both registrations whenever the engine is present, and writes neither**.
+- **`#302`** — settled in PR `#306`. The trigger matched its phrase anywhere in a command, so
+  anything quoting it mandated a non-terminating watch loop for a PR that did not exist.
+  `tool_response` is now the discriminator; the command only selects candidates.
+- **Filed this session:** `#304`, `#305`, `#310` — written straight to the tracker; and
+  `#308`, `#309` — routed out of the wrap-up inbox rather than left parked there.
+  A further occurrence on `#270`.
+
+**Learned**
+
+- **Delete the predicate; a guard round finds the shape the last guard missed.** `init.sh`
+  first *seeded* `.codex/hooks.json`, then merely *read* it to decide whether to print. Each
+  was retired only after its guards had been beaten — the seed by a dangling symlink at the
+  leaf, where `[ -e ]` is false and `cat >` follows the link out of the directory; the read
+  by a substring that cannot distinguish a `PostToolUse` entry from a mention under any other
+  event. The same shape, on `/adopt`, is what `#294` and `#297` are about.
+- **Verifying the output and guessing the input is the same error wearing a coat.** `#306`
+  established `gh`'s stdout/stderr formats from `gh`'s source, exactly as the ticket demanded
+  — and then read that evidence out of a `tool_response` whose shape it had guessed. Codex's
+  schema types that field as `true`: any value. A review lens found the resulting silent miss.
+- **A negated closing keyword in a heading closes the issue listed under it.** `#303`'s squash
+  message said `## Filed, not fixed` above a list naming `#302`; GitHub paired them across the
+  blank line and list marker, and the same message said in prose that it stays open. Found by
+  going to work on `#302` and finding it closed. The contract in `AGENTS.md` already covers
+  this ("in any form, even negated") — what failed was the check, which looked for a keyword
+  and a reference on one line.
+- **The panel's own output is the next round's input.** Rounds repeatedly found defects in the
+  tests written to close the previous round's findings. That is what a fix round is, and it is
+  why `#305` exists.
+- **`panel_prompt.py` rendered every lens prompt this session** — the friction entry proposing
+  it is now validated by use rather than by argument, including `--carry-forward` for the
+  round-to-round aim that had been hand-written prose.
+
+**Decided this session (operator)**
+
+- **Record rather than repair, below a severity floor.** Applied once where it cost something:
+  `#306` ships a doubled word in a comment, because repairing it would move the head off the
+  sha both lenses reviewed. Stated in the squash message rather than hidden. `#305` argues the
+  general case and is deliberately not self-answered — a stopping rule authored mid-loop by
+  the party who wants the loop to end has the worst possible provenance.
+
+**Open, and owned by nothing yet**
+
+- **`#297` is still the unbuilt half of `#105`** — it was this session's inherited starter
+  and was displaced, not dropped.
+- **The closing-keyword check that works is a scratchpad script, not something this repo
+  runs** — `#308`, with the draft's evidence. It and `#309` came out of the inbox, because
+  each already had a reproduction, a mechanism and a proposed repair. `#310` is the write-up
+  of why they were parked at all, and was never an inbox entry itself.
+- **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#285`, `#283`, `#287`, `#286`,
+  `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
+  `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **a planning session on `docs/kit-convergence-plan.md`.** The goal is cs-toolkit
+using the kit rather than its own copy, and Codex as a first-class runtime rather than a
+partially-wired one. That document records what was verified about both, what blocks, and
+five questions it deliberately does not answer — the first two branch the whole plan. Read
+it before proposing an order.
+
+Ready to start immediately if that planning lands on it: **`#304` — `./init.sh` in this
+repo overwrites its own `AGENTS.md`/`CLAUDE.md`**,
+destroying the kit-own marker one-way and reporting it as `seeded`. Read its body: it
+reproduces the defect, records that `make test` then fails on this checkout, and notes that
+`README.md` documents re-running `init.sh` as the upgrade step. It also names the smaller of
+two fixes — `seed_doc` re-emitting the marker — which needs none of the kit-repo detection
+`#291` wants. `#297` remains the larger inherited item.
+
 ## Session — 2026-08-04 (the guard that could not live in a document)
 
 **Theme —** `/adopt`'s contract is *"never overwrite an existing file"*; `init.sh`'s
