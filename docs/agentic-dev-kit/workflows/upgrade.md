@@ -1,13 +1,18 @@
 # Upgrade
 
-Upgrade this repo's agentic-dev-kit installation. Runs on a branch, and replaces a file
-only where something established it is the kit's to replace — `init.sh --no-clobber` in
-Step 2 for the seeded docs, and your per-file decision in Step 3 for everything else.
+Upgrade this repo's agentic-dev-kit installation. Runs on a branch. Two of its file
+replacements are unconditional and named here rather than implied — Step 2 overwrites
+`init.sh` and `docs/templates/*.tmpl` with the fetched kit's copies, because refreshing the
+installer is the point of the step. **Everything else is gated**: `init.sh --no-clobber` for
+the seeded docs, and your per-file decision in Step 3 for the engines.
 
-> **Do not simplify that sentence back to a blanket "non-destructive".** It said "never
-> replaces a file without knowing it is safe to replace" for as long as Step 2 ran `init.sh`
-> bare, which destroyed exactly the file it promised to protect (`#330`). A reassurance at
-> the top of a workflow is executed prose — it suppresses the check further down.
+> **Do not simplify that back to a blanket "non-destructive".** It said "never replaces a
+> file without knowing it is safe to replace" for as long as Step 2 ran `init.sh` bare, which
+> destroyed exactly the file it promised to protect (`#330`). A reassurance at the top of a
+> workflow is executed prose — it suppresses the check further down. The carve-out above is
+> deliberate for the same reason: an adopter who edited `init.sh` loses that edit here, and
+> `kit-manifest.json` does not track the file, so `kit_doctor` cannot report the drift either
+> (`#339`).
 
 > **The invariant this rests on.** Engines are **kit-owned**; config is **adopter-owned**.
 > Everything project-specific — paths, tracker, review-bot markers, CI policy, model

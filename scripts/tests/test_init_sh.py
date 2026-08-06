@@ -2015,8 +2015,13 @@ def test_upgrade_workflows_init_invocation_still_seeds_a_genuinely_absent_file(
     #330 argues against `--no-clobber` here on the grounds that it would stop a
     partially-adopted repo receiving `AGENTS.md`. It does not — the flag narrows
     seeding to ABSENT targets, and absent is this case — but nothing pinned that,
-    and upgrade.md:152-158 depends on it: this is the path by which an existing
-    adopter first receives either root entry point at all."""
+    and upgrade.md depends on it in the paragraph beginning "The templates have to
+    land **before** `init.sh` runs": that is the path by which an existing adopter
+    first receives either root entry point at all.
+
+    Cited by its opening words rather than by line number, which is the review
+    finding that produced this wording: the first draft said `upgrade.md:152-158`
+    and was already two lines stale in the same commit that wrote it."""
     repo = _fixture(tmp_path, config=shipped_config(), templates=True)
     assert not (repo / "AGENTS.md").exists()  # positive control on the fixture
 
