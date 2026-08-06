@@ -2001,7 +2001,20 @@ _KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS: dict[str, list[str]] = {
 
 def test_no_shipped_kit_owned_file_hardcodes_a_bare_engine_path():
     """#285's general form: the invariant its fix restored for
-    `kit_doctor.py` alone must hold kit-wide, and keep holding.
+    `kit_doctor.py` alone must hold across every file in `KIT_OWNED` — the
+    manifest-tracked, `/upgrade`-refreshed population `kit_doctor.py` itself
+    treats as "the kit" — and keep holding.
+
+    **Scope, precisely, because "kit-wide" overstates it.** `KIT_OWNED` is
+    engines, hooks and the shared `docs/agentic-dev-kit/` workflow/doctrine
+    docs — NOT `.claude/commands/*.md` or `.agents/skills/*/SKILL.md`, which
+    are runtime-specific bindings this test never reads. Found by the panel's
+    adversarial lens on this PR: two files there (`triage-friction-log.md`,
+    `post-merge-systemize.md`) already carry the identical hardcoded-`scripts/`
+    shape, naming engines that don't exist yet (#6, #7) — so nothing breaks
+    today, but nothing here would catch it if one of those files' scripts
+    landed, or if a currently-clean command/skill doc regressed. That gap is
+    real and is not this test's job to close; it needs its own coverage.
 
     `kit_doctor.py` is deliberately ABSENT from
     `_KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS`: this file's fix must hold
