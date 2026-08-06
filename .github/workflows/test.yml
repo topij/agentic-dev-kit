@@ -1,8 +1,48 @@
 name: Test
 
+# `push:` is scoped to the protected branch on purpose (#329). Unscoped, it
+# fires alongside `pull_request:` for every push to a PR branch, so ONE push
+# started TWO identical runs of this workflow at the same sha. They competed for
+# a runner and one lost: measured on PR #328, four runs were cancelled at
+# exactly 15m01s with `runner_name: ""` and zero steps executed, while their
+# siblings passed in 1m17s.
+#
+# That is worse than wasted minutes, because a starved job is not distinguishable
+# from a real one at the surface anyone reads: `gh pr checks` renders it
+# `toolkit fail 15m1s`, and `pr_watch.py` puts it in `checks.failing[]`, so a
+# green PR reads as red and a watch loop cannot converge. Re-running it made its
+# check row vanish from the rollup instead of turning green, which wedged
+# `pr_watch`'s false-settle guard permanently (#333).
+#
+# `main` is a literal here because a workflow file cannot read
+# `config/dev-model.yaml`, where `vcs.protected_branch` lives — and GitHub
+# forbids `${{ }}` expressions in `on:` triggers, so there is no in-file way to
+# resolve it either. This file is NOT kit-owned (no `.github/` entry in
+# kit-manifest.json) and never ships to an adopter, so the literal binds only
+# this repo. `test_ci_push_trigger_matches_the_configured_protected_branch`
+# pins it against the config so the two cannot drift silently.
+#
+# KNOWN CONSEQUENCE, stated rather than discovered: a branch with no open PR now
+# gets no CI. The repo's own contract is branch-and-open-a-PR, and `make test`
+# covers the local side, so this is a deliberate trade rather than an oversight.
 on:
   push:
+    branches: [main]
   pull_request:
+
+# Supersede a PR's own older run when it is pushed again, rather than letting
+# both queue for the same scarce runner — the starvation above is what makes
+# this worth having and not merely tidy.
+#
+# `head_ref || ref` because the two events name a branch differently
+# (`feature-x` vs `refs/heads/main`); either way the group is stable per branch.
+# Cancellation is limited to `pull_request` DELIBERATELY: on the protected
+# branch every commit must keep its own verdict, and a cancelled run there would
+# reintroduce exactly the cancelled-reads-as-failed confusion this change exists
+# to remove.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege for GITHUB_TOKEN. Without this the job inherits the
 # repository/organisation default, which is commonly write-capable — and this
