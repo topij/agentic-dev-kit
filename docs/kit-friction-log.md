@@ -11,6 +11,56 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-06 — the panel found the cockpit's own mutation harness, and it was the unsafe shape
+
+Severity **M**. Not filed: `#326` already owns the class and now carries this as an occurrence
+comment. Recorded here because of what it says about *how* it was found.
+
+The cockpit needed to mutation-test two new tests whose subject was a workflow document. It
+deliberately avoided `git checkout --` to revert, **because `#254`/`#326` say that is
+destructive against a file holding uncommitted work** — which this one was. It used a
+backup-by-copy and a `trap restore EXIT INT TERM` instead, and mutated the file **in the live
+checkout**.
+
+An adversarial review lens, reviewing the *PR*, found the harness lying in the shared scratch
+root and flagged it unprompted:
+
+> That writes into the tree I was handed, guarded only by a trap — not an isolated copy — and
+> a trap doesn't survive `SIGKILL`/sandbox crash.
+
+**The interesting part is that the cockpit was actively thinking about the adjacent hazard and
+still reached for the wrong shape.** It avoided the route the tickets name and invented a
+different unsafe one. That suggests the rule wants to be *"do not mutate the live tree"* rather
+than *"revert safely"* — a rule about reverting invites better reverting. Both lenses mutate
+clones, so the doctrine already says this for lenses; nothing says it for the cockpit, which is
+`#325`'s gap.
+
+No harm this time, and the reason is luck rather than process: the tree ended clean, and both
+lenses independently reproduced every mutation kill in their own clones, so no claim depended
+on the unsafe run.
+
+## 2026-08-06 — a third session in a row where the review bot's quota shaped the work
+
+Severity **M**. The entry below says this should graduate at the next triage sweep rather than
+wait for a further occurrence, and this is that further occurrence — so the graduation is now
+overdue rather than pending.
+
+New information, and it is the useful kind: **the quota refilled mid-PR and the bot reviewed
+after all.** It was quota-blocked when PR `#337` opened, so the fallback panel carried round 1;
+by round 2 it had recovered and reviewed that head, raising six findings the panel had not.
+Four were pre-existing defects in a document neither the panel nor any check had reason to look
+at.
+
+That changes the shape of the decision the entry below frames. The options were stated as
+accept the quota / reconfigure the trigger / pay, with the panel carrying the overflow. What
+this session shows is that the bot and the panel **found disjoint things** — the panel found
+two regressions the bot did not, and the bot found four pre-existing gaps the panel did not —
+so treating the panel as a *substitute* undersells both. Worth weighing at triage: the question
+may not be "how do we always have the bot" but "what does each actually cover", which affects
+whether paying is the right answer at all.
+
+Still an operator decision and still not a kit change.
+
 ## 2026-08-06 — second occurrence of the entry below
 
 **The bot was rate limited again, on a second consecutive session, and this time it went
