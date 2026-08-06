@@ -82,7 +82,14 @@ somebody else's filesystem or config, restated where nothing can execute the res
   `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
   `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
 
-▶ Next: **`#304` — `./init.sh` in this repo overwrites its own `AGENTS.md`/`CLAUDE.md`**,
+▶ Next: **a planning session on `docs/kit-convergence-plan.md`.** The goal is cs-toolkit
+using the kit rather than its own copy, and Codex as a first-class runtime rather than a
+partially-wired one. That document records what was verified about both, what blocks, and
+five questions it deliberately does not answer — the first two branch the whole plan. Read
+it before proposing an order.
+
+Ready to start immediately if that planning lands on it: **`#304` — `./init.sh` in this
+repo overwrites its own `AGENTS.md`/`CLAUDE.md`**,
 destroying the kit-own marker one-way and reporting it as `seeded`. Read its body: it
 reproduces the defect, records that `make test` then fails on this checkout, and notes that
 `README.md` documents re-running `init.sh` as the upgrade step. It also names the smaller of
