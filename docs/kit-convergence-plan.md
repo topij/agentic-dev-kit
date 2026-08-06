@@ -91,11 +91,31 @@ Open issues that bite **cs-toolkit's exact configuration**, not hypothetical one
 
 Dependencies are the point; the ordering follows from them.
 
-**Phase 0 — make divergence visible.** Independent of everything else, and safe:
-move the hook into the tracked engines path so drift is reportable at all; take
-the current engine version with it; replace the two stale files; record an install
-baseline. **Done when** `kit_doctor` in cs-toolkit reports the hook as a tracked
-file and its state is a fact rather than an absence.
+**Phase 0 — make divergence visible.** Independent of everything else, and the
+only phase that can start today. Move the hook into the tracked engines path so
+drift is reportable at all; take the current engine version with it; replace the
+two stale files; record an install baseline.
+
+**The move is not a file move.** cs-toolkit's `.claude/settings.json` invokes
+`scripts/hooks/pr_followup_hook.py` by absolute path, and any `.codex/hooks.json`
+it gains will too. Relocating the file without editing both registrations leaves
+each runtime invoking a path that no longer exists — and a hook pointing at a
+missing file does not error, it simply never fires. Silent, which is the failure
+class this kit keeps finding.
+
+**Nothing will repair that automatically.** `init.sh` prints both registrations
+and writes neither, deliberately (`#303`). That decision is right for safety and
+it means a path change is now entirely manual, on every runtime, in every adopter.
+Worth weighing when this phase is scheduled: the registrations must be edited in
+the same change as the move, not after it.
+
+**Done when** the hook FIRES on both runtimes from the new path — verified by
+running it, not by reading the config — and `kit_doctor` reports it as a tracked
+file whose state is a fact rather than an absence. A completion check that only
+asserts the file is tracked would pass on a dead hook.
+
+*(This paragraph exists because a review bot caught the original Phase 0 calling
+the move "safe" while omitting the registrations. It was neither safe nor a move.)*
 
 **Phase 1 — make the instrument honest.** `#285` and `#286` at minimum. **Done
 when** `kit_doctor` in cs-toolkit distinguishes *deliberately sized down* from
