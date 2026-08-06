@@ -2326,7 +2326,6 @@ def test_a_full_install_with_nothing_declined_does_not_carry_the_nudge(tmp_path,
     Reproducing #286's own noise in the fix's advice line would be its own
     joke."""
     root = _fake_repo(tmp_path)
-    target = root / "scripts" / "check_doc_budget.py"
     every = {rel for rel, _role in kit_doctor.KIT_OWNED}
     for rel in every - {ENGINE}:
         _write(root / rel, f"content of {rel}\n")
