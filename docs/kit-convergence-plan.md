@@ -1,10 +1,9 @@
 # Convergence plan — one kit, two runtimes, one adopter
 
-> **This is input to a planning session, not the plan.** It records what was
-> verified on 2026-08-05/06, what blocks, and the questions a planning session
-> has to settle. The phase shapes below are a proposal to argue with. Anything
-> here stated as fact names how it was established; anything stated as a guess
-> says so.
+> **The planning session ran on 2026-08-06 and this document now records its
+> result: the questions are settled and the sequence below is agreed, no longer
+> a proposal.** Anything here stated as fact names how it was established;
+> anything stated as a guess says so.
 >
 > The living plan remains `kit-handoff.md`. This document exists because the work
 > spans several sessions and the handoff is a handoff, not a roadmap.
@@ -36,6 +35,22 @@ Re-derive anything load-bearing before acting on it — some of it will have mov
 - `⚠ pre-push hook: NOT installed`.
 - `.devkit-install.json` absent, so there is no install record beyond the manifest.
 
+Re-run 2026-08-06, same command, same directory: unchanged in substance. The
+baseline lives inside cs-toolkit's own `kit-manifest.json` (written by
+`--record-install`), so "no record beyond the manifest" means the manifest *is*
+the record. The stale pair is `scripts/devkit/kit_doctor.py` and
+`docs/agentic-dev-kit/fallback-review-panel.md`.
+
+**The sized-down shape is declared in writing.** cs-toolkit's
+`config/dev-model.yaml` header (read 2026-08-06) states `ADOPTION STATUS:
+PHASE 1 (additive install only)` of a deliberately phased adoption, and names
+its own later phases with their blockers: Phase 2 (the kit's `pr_watch.py` +
+`dev_session.sh`) blocked until cs-toolkit's nightly fixer stops reading `done`
+— its `.claude/commands/pr-watch.md` still reads it, checked 2026-08-06 — and
+Phase 3 (the kit's `pre-push`) blocked on kit `#46`, still open. Question 1
+below was largely answered by this file; the session confirmed it as current
+intent rather than an artifact.
+
 ### The fork that matters
 
 `.claude/settings.json` there registers `scripts/hooks/pr_followup_hook.py` —
@@ -51,6 +66,11 @@ established by reading the file and grepping the manifest:
 
 **This is the clearest case of the fork the goal is about, and the cheapest to
 un-fork.** It is also the only divergence currently invisible to tooling.
+
+Measured 2026-08-06 (`wc -l` and `diff` against this repo's
+`scripts/hooks/pr_followup_hook.py`, run in cs-toolkit): the fork is a 66-line
+ancestor dated 2026-06-04; the kit's current hook is 454 lines. Un-forking is a
+replacement plus the hook's import closure, not a reconciliation of variants.
 
 ### Runtime parity, in the kit itself
 
@@ -87,13 +107,21 @@ Open issues that bite **cs-toolkit's exact configuration**, not hypothetical one
 - `#297` — `init.sh` has no no-clobber mode, which is why `/adopt` stages and
   stops rather than running it.
 
-## Proposed shape — argue with this
+## Agreed sequence — settled 2026-08-06
 
-Dependencies are the point; the ordering follows from them.
+Dependencies are the point; the ordering follows from them. Three items start
+immediately and in parallel; the critical path runs through the kit's
+instrument work to the upgrade session; one kit track runs beside it.
 
-**Phase 0 — make divergence visible.** Independent of everything else. Move the hook into the tracked engines path so
-drift is reportable at all; take the current engine version with it; replace the
-two stale files; record an install baseline.
+### Immediately, in parallel
+
+**Phase 0 — make divergence visible** (a cs-toolkit PR, through its own
+review). Independent of everything else. Move the hook into the tracked engines
+path so drift is reportable at all; take the current engine version and its
+import closure with it; **create `.codex/hooks.json` there with `--runtime
+codex`** (question 2's decision — today no hook of any kind fires for a Codex
+session in cs-toolkit); replace the two stale files; re-record the install
+baseline.
 
 **The move is not a file move.** cs-toolkit's `.claude/settings.json` invokes
 `scripts/hooks/pr_followup_hook.py` by absolute path, and any `.codex/hooks.json`
@@ -119,46 +147,88 @@ asserts the file is tracked would pass on a dead hook.
 *(This paragraph exists because a review bot caught the original Phase 0 calling
 the move "safe" while omitting the registrations. It was neither safe nor a move.)*
 
-**Phase 1 — make the instrument honest.** `#285` and `#286` at minimum. **Done
-when** `kit_doctor` in cs-toolkit distinguishes *deliberately sized down* from
-*broken*, and prints commands that work there.
+**`#304`, in the kit** — the ready starter, small and adjacent to the `init.sh`
+work below; its body names the smaller of two repairs (`seed_doc` re-emitting
+the kit-own marker).
+
+**The SessionStart budget hooks on Codex, in the kit.** Question 3 is settled:
+the event exists (see below), so this is the cheapest parity win available.
+Registration printed, never written, per the `#303` doctrine. **Done when** the
+hooks fire in a real Codex session — verified by running one, the same standard
+as Phase 0.
+
+### The critical path
+
+**Phase 1 — make the instrument honest.** `#285` and `#286` at minimum. `#286`
+is needed on every branch of question 1 — even at the staged destination,
+templates stay out of cs-toolkit (its narrative docs already exist and are in
+use), so a declared install set is what lets `kit_doctor` ever say "intact".
+**Done when** `kit_doctor` in cs-toolkit distinguishes *deliberately sized
+down* from *broken*, and prints commands that work there.
 
 **Phase 2 — make re-rendering safe.** `#297`. **Done when** something can run
 `init.sh` in an adopter without the operator having to reason about which files
-it will overwrite. `#304` is adjacent and may share the fix.
+it will overwrite. `#304` is adjacent and may share parts of the change.
 
-**Phase 3 — converge the install.** Vendor the remaining engines and the Codex
-bindings that exist. **Done when** `kit_doctor --manifest <kit>` reports no
-unexplained divergence.
+**The fixer predicate, in cs-toolkit.** Its nightly fixer reads `done` from its
+own `pr_watch.py`; the kit's `done` means MERGEABLE, so swapping engines
+without swapping the predicate to `converged` is a silent infinite poll —
+cs-toolkit's config says exactly this and phased its adoption around it. A
+small cs-toolkit PR; it gates only the engine swap. This dependency was missing
+from the first draft of this plan.
 
-**Phase 4 — close the runtime gaps in the kit.** The SessionStart hooks, then
-`#273`, then extracting shared definitions for the four Claude-only workflows.
-This is the largest piece and the least urgent for cs-toolkit specifically.
+**Phase 3 — converge the install.** After Phases 1 and 2 and the fixer
+predicate: an agent session working **in cs-toolkit** (question 5's decision)
+performs the upgrade and lands it as a normal PR through cs-toolkit's own
+review; kit defects it surfaces route upstream as kit issues, not into the
+adopter's PR. Engines per cs-toolkit's declared Phase 2, the declared install
+set recorded, SessionStart wiring on both runtimes there. **Done when**
+`kit_doctor --manifest <kit>` reports no unexplained divergence.
 
-Phases 0 and 1 can proceed in parallel. Phase 3 depends on 1 and 2. Phase 4 is
-independent of all of them and could start any time.
+### The kit track beside it
 
-## Questions the planning session must settle
+**Phase 4 — runtime parity in the kit, sliced** (questions 2 and 4). `#273`
+first — its failure mode is the silent one. Then shared definitions for `adopt`
+and `upgrade`, the slice the standing `#243` decision named — ideally before
+Phase 3 so the upgrade session can follow the shared definition, though not a
+hard gate.
 
-These are genuinely open. Deciding them by default is how this goes wrong.
+### Deferred tail, deliberately
 
-1. **Is cs-toolkit's sized-down adoption intentional and permanent, or an artifact
-   of when it was installed?** The whole plan branches here. If sized-down is the
-   destination, `#286` becomes the most important issue in the list and Phase 3
-   shrinks to almost nothing. If full adoption is the destination, Phase 3 is the
-   bulk of the work.
-2. **Is Codex meant to be first-class in cs-toolkit, or is it a Claude repo that
-   Codex occasionally visits?** Determines whether Phase 4 is on this critical
-   path or a separate track.
-3. **Does Codex expose a SessionStart event?** Not verified. If it does, the
-   budget-hook gap is the cheapest parity win available and belongs early. If not,
-   that gap needs a different answer entirely.
-4. **Should the four lifecycle workflows get shared definitions, or is
-   Claude-only correct for them?** There is a real argument that adoption and
-   upgrade are operator-driven and single-runtime is acceptable. `AGENTS.md`'s
-   parity rule suggests otherwise. This has not been argued either way.
-5. **Who runs the upgrade, and does it get reviewed?** cs-toolkit is a live repo.
-   An upgrade that lands a bad engine is a different risk class from a kit-side PR.
+Kit `#46` and then cs-toolkit's `pre-push` (its declared Phase 3 — the one
+piece of the staged destination with no schedule yet); shared definitions for
+`post-merge-systemize` and `triage-friction-log`; a binding for
+`parallel-headless`, which has a shared definition and no binding on either
+side.
+
+## The questions, settled — 2026-08-06
+
+Questions 1, 2, 4 and 5 are operator decisions from the planning session;
+question 3 was verified. The original phrasings are in this file's git history.
+
+1. **Staged adoption, as cs-toolkit's config writes it.** The sized-down
+   install is Phase 1 of cs-toolkit's own declared staging, and that staging is
+   confirmed as the destination — the later phases get scheduled (above) rather
+   than abandoned or collapsed into one push. Templates stay out permanently,
+   which is why `#286` survives every branch of this question.
+2. **Codex is first-class in both repos.** Matches the standing 2026-08-04
+   decision ("equal-enough development environment, as soon as possible").
+   Concretely: Phase 0 includes cs-toolkit's `.codex/hooks.json`, and Phase 4
+   is on this plan rather than on a someday-track.
+3. **Codex exposes SessionStart — verified.** Two sources, 2026-08-06: the
+   installed `codex-cli 0.42.0`'s user-level `~/.codex/hooks.json` on this
+   machine registers a `SessionStart` hook (written by a shipping third-party
+   integration whose status display depends on it firing), and current Codex
+   hooks documentation lists the event with `startup` / `resume` / `clear`
+   matchers — the same shape cs-toolkit's Claude config already uses. A
+   fire-it-and-see check is still owed by the implementing session; the
+   budget-hook item's done-when demands it.
+4. **The lifecycle workflows are extracted sliced: `adopt` + `upgrade` first.**
+   The daily loop already works on Codex; the two retro workflows follow later.
+   This re-affirms the `#243` slice rather than inventing a new scope.
+5. **The upgrade is an agent session in cs-toolkit, reviewed as a normal PR
+   there.** Kit findings route upstream as issues — the decision the `#278`
+   upgrade already operated under, now stated for this one.
 
 ## What this work will probably surface
 
