@@ -2035,3 +2035,794 @@ def test_no_shipped_kit_owned_file_hardcodes_a_bare_engine_path():
         "_KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS was just fixed: delete its "
         "entry above — do not widen the pin to make this pass."
     )
+
+
+# --- the declared install set (#286) ----------------------------------------
+#
+# `missing` answered two questions with one number: "deliberately sized down"
+# and "broken" were reported in the same words, forever. The cost was not the
+# ambiguity itself but its permanence — an adopter with 21 deliberate omissions
+# read the same line every run, and a deletion moving it to 25 said nothing.
+#
+# The split is DERIVED, not declared: `--record-install` already walks every
+# kit-owned path and already knows which were absent. Recording that is the
+# whole mechanism. These tests pin the three absent states it produces, the
+# two ways it must refuse to apply (no key, no trust), and — the property that
+# makes it worth having — that a deletion is now audible.
+
+
+def _scoped_baseline(
+    installed: dict[str, str],
+    *,
+    unrecorded: tuple[str, ...] = (),
+    kit_commit: str = "d3faafb",
+) -> dict:
+    """A baseline carrying `not_installed`, derived from the real KIT_OWNED.
+
+    `installed` maps a kit-layout path to its recorded sha. `unrecorded` names
+    paths left out of BOTH maps, which is how a file the kit gained after this
+    baseline was written looks from here — the case no declared set can
+    anticipate and the reason `new-upstream` exists.
+    """
+    every = {rel for rel, _role in kit_doctor.KIT_OWNED}
+    absent = sorted(every - set(installed) - set(unrecorded))
+    return {
+        "kit_version": 2,
+        "kit_commit": kit_commit,
+        "files": {p: {"sha256": h, "role": "engine"} for p, h in installed.items()},
+        "not_installed": absent,
+    }
+
+
+def _states(report) -> dict[str, str]:
+    return {f.path: f.state for f in report.files}
+
+
+def _inspect(root, manifest_entries, baseline):
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    return kit_doctor.inspect(root, _manifest(manifest_entries), config, baseline)
+
+
+ENGINE = "scripts/check_doc_budget.py"
+
+
+def test_record_install_records_what_was_absent_not_only_what_was_there(tmp_path):
+    """The declared set is a by-product of a walk `--record-install` already
+    does. Before #286 the absent branch was a bare `continue`."""
+    root = _fake_repo(tmp_path)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    written, unverified = kit_doctor.record_install_manifest(root, config, 2, "abc123")
+
+    assert unverified == []
+    assert set(written["files"]) == {ENGINE}
+    every = {rel for rel, _role in kit_doctor.KIT_OWNED}
+    # Derived from KIT_OWNED rather than listed: a new kit file must not fail
+    # this test, whose property is only that the two maps partition the set.
+    assert set(written["not_installed"]) == every - {ENGINE}
+    assert set(written["files"]).isdisjoint(written["not_installed"])
+
+
+def test_a_present_but_unverified_file_is_not_recorded_as_not_installed(tmp_path):
+    """`--from-kit` drops a file that does not match the source kit — it is
+    UNJUDGEABLE, not absent. Calling it "not installed" would be a plain
+    falsehood, and would later read as a deliberate omission of a file that is
+    sitting right there.
+    """
+    root = _fake_repo(tmp_path)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    # The adopter's own pre-existing file at a kit-owned path: present, and not
+    # what the kit ships.
+    written, unverified = kit_doctor.record_install_manifest(
+        root, config, 2, "abc123", source_files={ENGINE: {"sha256": _sha("something else")}}
+    )
+
+    assert unverified == [ENGINE]
+    assert ENGINE not in written["files"]
+    # Not merely absent from the list — the whole key is suppressed, because an
+    # unverified path makes the record partial. That stronger property, and the
+    # misclassification it prevents, are pinned by
+    # `test_an_unverified_path_suppresses_the_declared_set_entirely` and
+    # `test_a_deleted_unverified_path_is_not_reported_as_a_new_kit_file`. Here
+    # the point is only that a file sitting on disk is never called "not
+    # installed", which holds under either shape.
+    assert ENGINE not in written.get("not_installed", []), (
+        "a file that is present on disk was recorded as not installed"
+    )
+
+
+def test_an_absence_the_baseline_declared_is_not_a_finding(tmp_path):
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    baseline = _scoped_baseline({ENGINE: kit_doctor.sha256_of(target)})
+    report = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, baseline)
+
+    assert report.declared_scope_known
+    assert _states(report)["scripts/pr_watch.py"] == "declined"
+    assert report.broken == []
+    assert [f.path for f in report.files if f.state == "missing"] == [], (
+        "an absence stayed ambiguous while a declared set was available"
+    )
+
+
+def test_a_file_the_baseline_recorded_as_installed_and_is_now_gone_is_a_finding(tmp_path):
+    """#286's actual bug, stated as a test: under one undifferentiated count,
+    deleting an installed engine moved a number nobody reads."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    target.unlink()
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+    status = _states(report)[ENGINE]
+    assert status == "removed", status
+    assert [f.path for f in report.broken] == [ENGINE]
+
+
+def test_a_file_the_kit_added_after_the_baseline_is_neither_declined_nor_broken(tmp_path):
+    """The case no declared set can contain, and the one that is live in the
+    kit's own adopter today: a path in neither map is one the operator was
+    never offered."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    newcomer = "docs/templates/CLAUDE.md.tmpl"
+    baseline = _scoped_baseline(
+        {ENGINE: kit_doctor.sha256_of(target)}, unrecorded=(newcomer,)
+    )
+
+    report = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, baseline)
+    assert _states(report)[newcomer] == "new-upstream"
+    assert [f.path for f in report.new_upstream] == [newcomer]
+    assert report.broken == [], "a file that was never offered was called broken"
+
+
+def test_a_baseline_without_the_key_gets_the_old_report_not_an_inferred_one(tmp_path):
+    """Every baseline written before #286 lacks `not_installed`. Inferring
+    "declined" from its silence would assert an intent nobody expressed — and
+    would swallow `new-upstream`, which is absent from a pre-#286 baseline in
+    exactly the same way."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    legacy = _baseline({ENGINE: kit_doctor.sha256_of(target)}, kit_commit="d3faafb")
+    assert "not_installed" not in legacy
+
+    report = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, legacy)
+    assert report.baseline_trusted, "fixture is confounded: the trust gate, not the key, applied"
+    assert not report.declared_scope_known
+    assert _states(report)["scripts/pr_watch.py"] == "missing"
+    assert report.declined == [] and report.new_upstream == []
+
+
+def test_an_untrusted_baseline_carrying_the_key_still_cannot_declare_scope(tmp_path):
+    """`declined` is a claim about what happened after the baseline was
+    written, so it needs the same trust `locally-edited` needs. A hand-written
+    `not_installed` in a manifest no kit recorded must not silence anything."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    forged = _scoped_baseline({ENGINE: kit_doctor.sha256_of(target)})
+    del forged["kit_commit"]
+
+    report = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, forged)
+    assert not report.declared_scope_known
+    assert _states(report)["scripts/pr_watch.py"] == "missing"
+
+
+@pytest.mark.parametrize(
+    "value", [None, "scripts/pr_watch.py", {"scripts/pr_watch.py": True}, 7]
+)
+def test_a_malformed_declared_set_degrades_instead_of_aborting_the_report(tmp_path, value):
+    """Same degrade-don't-abort rule the `files` handling follows: this is a
+    read-only diagnostic, and a malformed key in one axis must not take the
+    whole report down. A truthy non-list is the hazard — `or []` passes it
+    through and `in` then means something else entirely."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    baseline = _scoped_baseline({ENGINE: kit_doctor.sha256_of(target)})
+    baseline["not_installed"] = value
+
+    report = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, baseline)
+    assert not report.declared_scope_known
+    assert _states(report)["scripts/pr_watch.py"] == "missing"
+
+
+def test_a_declared_absence_an_installed_engine_needs_is_still_broken(tmp_path):
+    """A path recorded as declined AND required by something installed is a
+    contradiction. The safe reading of a contradiction is the loud one."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    lib = "scripts/lib/kitconfig.py"
+    baseline = _scoped_baseline({ENGINE: kit_doctor.sha256_of(target)})
+    assert lib in baseline["not_installed"], "fixture is confounded: the lib was not declined"
+
+    manifest = _manifest({ENGINE: kit_doctor.sha256_of(target), lib: None})
+    manifest["files"][lib]["required_by"] = [ENGINE]
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config, baseline)
+
+    assert _states(report)[lib] == "missing-required"
+    assert [f.path for f in report.broken] == [lib]
+
+
+def test_a_deletion_changes_the_exit_code_a_declined_file_does_not(tmp_path):
+    """The pair that makes the split worth having, and the reason it is a
+    controlled comparison rather than two scenarios: BOTH trees are missing the
+    same file, from the same fixture. The ONLY difference is what the baseline
+    recorded about it — installed, or never installed. Before #286 both exited
+    0, because nothing distinguished them."""
+
+    def run(*, was_installed: bool) -> int:
+        root = _fake_repo(tmp_path / ("gone" if was_installed else "declined"))
+        target = root / "scripts" / "check_doc_budget.py"
+        recorded = kit_doctor.sha256_of(target)
+        baseline = (
+            _scoped_baseline({ENGINE: recorded}) if was_installed else _scoped_baseline({})
+        )
+        target.unlink()
+        (root / "kit-manifest.json").write_text(
+            json.dumps(_manifest({ENGINE: recorded})), encoding="utf-8"
+        )
+        (root / "baseline.json").write_text(json.dumps(baseline), encoding="utf-8")
+        return kit_doctor.main(
+            [
+                "--root",
+                str(root),
+                "--manifest",
+                str(root / "kit-manifest.json"),
+                "--baseline",
+                str(root / "baseline.json"),
+            ]
+        )
+
+    assert run(was_installed=True) == 1, "a deleted engine exited green"
+    assert run(was_installed=False) == 0, "a deliberately sized-down adoption failed its own gate"
+
+
+def test_the_report_says_intact_and_stops_repeating_the_count(tmp_path, capsys):
+    """The line #286 asked for. The declined files must NOT be itemised — a
+    per-file list of 21 deliberate omissions is the noise being removed."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    baseline = _scoped_baseline({ENGINE: kit_doctor.sha256_of(target)})
+    report = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, baseline)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    line = next(ln for ln in out.splitlines() if ln.startswith("  files:"))
+    assert line == "  files: 1 unchanged, 0 differ, 0 missing, 0 unknown"
+    assert f"✓ intact for this adoption — {len(kit_doctor.KIT_OWNED) - 1} file(s) declined" in out
+    assert "sized-down adoption, or incomplete" not in out
+    assert "scripts/pr_watch.py" not in out, "declined files were itemised"
+
+
+def test_the_report_names_new_upstream_files_and_does_not_count_them_missing(tmp_path, capsys):
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    newcomer = "docs/templates/CLAUDE.md.tmpl"
+    baseline = _scoped_baseline(
+        {ENGINE: kit_doctor.sha256_of(target)}, unrecorded=(newcomer,)
+    )
+    print(kit_doctor.render(_inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, baseline)))
+    out = capsys.readouterr().out
+
+    line = next(ln for ln in out.splitlines() if ln.startswith("  files:"))
+    assert line == "  files: 1 unchanged, 0 differ, 0 missing, 0 unknown"
+    assert "1 file(s) this baseline does not mention either way" in out
+    # Named, because "which" is always the next question.
+    assert newcomer in out
+    assert "/upgrade" in out
+
+
+def test_a_legacy_baseline_is_told_what_would_split_its_count(tmp_path, capsys):
+    """The nudge is the whole migration path for existing adopters, so it must
+    appear — and name the command."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    legacy = _baseline({ENGINE: kit_doctor.sha256_of(target)}, kit_commit="d3faafb")
+    print(kit_doctor.render(_inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, legacy)))
+    out = capsys.readouterr().out
+
+    assert "declares no install set" in out
+    assert "Commonly it predates the declared" in out
+    assert "--record-install" in out
+    assert "intact for this adoption" not in out, (
+        "a report that cannot judge scope claimed the install was intact"
+    )
+
+
+def test_a_full_install_with_nothing_declined_does_not_carry_the_nudge(tmp_path, capsys):
+    """The nudge is gated on there being an ambiguous absence to explain.
+    Reproducing #286's own noise in the fix's advice line would be its own
+    joke."""
+    root = _fake_repo(tmp_path)
+    every = {rel for rel, _role in kit_doctor.KIT_OWNED}
+    for rel in every - {ENGINE}:
+        _write(root / rel, f"content of {rel}\n")
+    installed = {rel: kit_doctor.sha256_of(root / rel) for rel in every}
+    legacy = _baseline(installed, kit_commit="d3faafb")
+    print(kit_doctor.render(_inspect(root, installed, legacy)))
+    out = capsys.readouterr().out
+
+    line = next(ln for ln in out.splitlines() if ln.startswith("  files:"))
+    assert line == f"  files: {len(every)} unchanged, 0 differ, 0 missing, 0 unknown"
+    assert "predates the declared install set" not in out
+
+
+def test_json_exposes_whether_the_scope_was_judgeable(tmp_path, capsys):
+    """Not derivable from `files`: a report with no absent file at all looks
+    identical either way."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    baseline = _scoped_baseline({ENGINE: kit_doctor.sha256_of(target)})
+    (root / "kit-manifest.json").write_text(
+        json.dumps(_manifest({ENGINE: kit_doctor.sha256_of(target)})), encoding="utf-8"
+    )
+    (root / "baseline.json").write_text(json.dumps(baseline), encoding="utf-8")
+    kit_doctor.main(
+        [
+            "--root",
+            str(root),
+            "--json",
+            "--manifest",
+            str(root / "kit-manifest.json"),
+            "--baseline",
+            str(root / "baseline.json"),
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["declared_scope_known"] is True
+    assert {f["state"] for f in payload["files"]} == {"unchanged", "declined"}
+
+
+def test_the_not_intact_line_does_not_claim_a_provenance_it_lacks(tmp_path, capsys):
+    """`broken` holds two states with DIFFERENT sources: `removed` comes from
+    the baseline's record of an install, `missing-required` from the import
+    graph. A file can be `missing-required` while the baseline records it as
+    DECLINED — absent, needed, and on record as the opposite of installed.
+
+    An earlier draft of the summary line read "absent that this repo has on
+    record", which is false for exactly that file. Pinned because it is the
+    overstatement class #54 tracks, and nothing else here would catch it: the
+    per-file sections are correct, only the line above them was not.
+    """
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    lib = "scripts/lib/kitconfig.py"
+    baseline = _scoped_baseline({ENGINE: kit_doctor.sha256_of(target)})
+    assert lib in baseline["not_installed"], "fixture is confounded: the lib was not declined"
+
+    manifest = _manifest({ENGINE: kit_doctor.sha256_of(target), lib: None})
+    manifest["files"][lib]["required_by"] = [ENGINE]
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    print(kit_doctor.render(kit_doctor.inspect(root, manifest, config, baseline)))
+    out = capsys.readouterr().out
+
+    assert "✗ NOT intact for this adoption" in out
+    assert "has on record" not in out, (
+        "the summary claimed a declined file was recorded as installed here"
+    )
+    # The accurate claim, which holds for both states in `broken`.
+    assert "absent that should be installed" in out
+
+
+# --- the declared set must not outlive the record's completeness (#322 review) ---
+
+
+def test_an_unverified_path_suppresses_the_declared_set_entirely(tmp_path):
+    """A present-but-unmatched path is in neither map BY DESIGN, so the record
+    is partial and cannot carry a scope claim.
+
+    Writing `not_installed` anyway was sound only at record time: the path is
+    present, so nothing asks about it. Delete it later and `inspect` finds it
+    absent and in neither map — which is the `new-upstream` signature.
+    """
+    root = _fake_repo(tmp_path)
+    written, unverified = kit_doctor.record_install_manifest(
+        root,
+        kit_doctor.load_config(root / "config" / "dev-model.yaml"),
+        2,
+        "abc123",
+        source_files={ENGINE: {"sha256": _sha("a different kit's copy")}},
+    )
+    assert unverified == [ENGINE], "fixture is confounded: nothing was unverified"
+    assert "not_installed" not in written, (
+        "a partial record claimed a complete declared install set"
+    )
+
+
+def test_a_deleted_unverified_path_is_not_reported_as_a_new_kit_file(tmp_path):
+    """The failure the suppression above prevents, driven end to end: the
+    adopter's OWN file, recorded as unjudgeable, then deleted."""
+    root = _fake_repo(tmp_path)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    written, _ = kit_doctor.record_install_manifest(
+        root, config, 2, "abc123", source_files={ENGINE: {"sha256": _sha("elsewhere")}}
+    )
+    (root / "scripts" / "check_doc_budget.py").unlink()
+
+    report = kit_doctor.inspect(root, _manifest({ENGINE: _sha("whatever")}), config, written)
+    state = _states(report)[ENGINE]
+    assert state != "new-upstream", (
+        "a deleted adopter-owned file was reported as a file the kit added since the baseline"
+    )
+    assert state == "missing", state
+    assert not report.declared_scope_known
+
+
+def test_a_malformed_files_map_cannot_be_read_as_a_declared_scope(tmp_path):
+    """The two halves are one record. `inspect` degrades a non-dict `files` to
+    `{}`, so a sound `not_installed` beside a malformed `files` would classify
+    every absent-but-installed file as `declined`/`new-upstream` — the
+    malformed half deciding the answer for the sound one."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    baseline["files"] = ["not", "a", "dict"]
+    target.unlink()
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+    assert not report.declared_scope_known
+    # `missing`, not `declined` and not `new-upstream`: nothing is known here.
+    assert _states(report)[ENGINE] == "missing"
+    assert report.declined == [] and report.new_upstream == []
+
+
+# --- render-layer coverage for the split (fallback panel, adversarial lens) ---
+#
+# The state layer was pinned; the RENDER layer was not, and that is where #286's
+# own bug can reappear. `render` gates its headline verdict on `report.broken`,
+# so a gate narrowed to `missing-required` alone prints "✓ intact" directly above
+# an itemised deletion warning — the same "deleting engines said nothing" failure,
+# one layer up. The whole suite passed under that mutation before these tests.
+
+
+def test_a_deletion_alone_makes_the_report_say_NOT_intact(tmp_path, capsys):
+    """`removed` with no `missing-required` anywhere — the state that reaches
+    the headline verdict only through `broken`'s second member."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    target.unlink()
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+    assert [f.state for f in report.broken] == ["removed"], (
+        "fixture is confounded: something other than `removed` reached the verdict"
+    )
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert "✗ NOT intact for this adoption" in out
+    assert "✓ intact for this adoption" not in out, (
+        "the report called an adoption intact while itemising a deleted file below it"
+    )
+    # The itemised warning and the headline must agree — the contradiction is
+    # the actual defect, so pin that both halves are present together.
+    assert "deleted since" in out
+
+
+def test_removed_beats_declined_when_a_baseline_lists_a_path_in_both(tmp_path):
+    """The precedence the code comments call load-bearing, pinned. Only a
+    hand-edited baseline reaches it — an honest `record_install_manifest` run
+    partitions every path into exactly one map — but it is a documented safety
+    property, and swapping the two branches passed the whole suite before this.
+    """
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    baseline["not_installed"] = sorted({*baseline["not_installed"], ENGINE})
+    target.unlink()
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+    assert ENGINE in baseline["files"] and ENGINE in baseline["not_installed"], (
+        "fixture is confounded: the path is not in both maps"
+    )
+    assert _states(report)[ENGINE] == "removed", (
+        "a contradictory baseline resolved to silence rather than to the finding"
+    )
+    assert [f.path for f in report.broken] == [ENGINE]
+
+
+def test_an_empty_adoption_is_not_called_intact(tmp_path, capsys):
+    """An install set with nothing in it has nothing to be intact. Recording a
+    tree where no kit file was ever copied yields a well-formed baseline
+    declining all of KIT_OWNED — which printed the same confident ✓ as a
+    healthy sized-down adoption, underneath a `✗ paths.engines` line saying
+    every workflow reference resolves to nothing."""
+    root = tmp_path
+    _write(
+        root / "config" / "dev-model.yaml",
+        "kit:\n  version: 2\npaths:\n  handoff: docs/handoff.md\n"
+        "  friction_log: docs/friction-log.md\n  engines: scripts\n",
+    )
+    _write(root / "docs" / "handoff.md", "# real handoff\n")
+    _write(root / "docs" / "friction-log.md", "# real inbox\n")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    written, unverified = kit_doctor.record_install_manifest(root, config, 2, "abc123")
+    assert written["files"] == {} and unverified == [], "fixture is confounded"
+
+    report = kit_doctor.inspect(root, _manifest({}), config, written)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert "✓ intact for this adoption" not in out, (
+        "a tree with nothing installed was reported as an intact adoption"
+    )
+    assert "nothing is installed here" in out
+    assert "empty adoption rather than an intact one" in out
+
+
+def test_a_removed_file_is_counted_and_named_on_the_summary_line(tmp_path, capsys):
+    """The summary line's `removed` contribution, pinned. Deleting both the
+    parenthetical and `n_removed`'s term in `n_absent` left the whole suite
+    green: a deleted file would then read `0 missing` on the count line while
+    the section below itemised it — the same headline/detail contradiction the
+    intact verdict had. (Fallback panel, correctness lens.)
+    """
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    target.unlink()
+
+    print(kit_doctor.render(_inspect(root, {ENGINE: recorded}, baseline)))
+    out = capsys.readouterr().out
+    line = next(ln for ln in out.splitlines() if ln.startswith("  files:"))
+
+    # Both halves: the file is COUNTED, and the count says which kind it is.
+    assert line == "  files: 0 unchanged, 0 differ, 1 missing (1 recorded as installed here), 0 unknown", line
+
+
+# --- `unknown-version` is a PRESENT file (fallback panel, correctness lens r2) ---
+#
+# It means "this file is here and its drift cannot be judged" — an absence of
+# information, not of a file. The verdict block read it as neither, so a tree
+# holding only unjudgeable files reported "nothing is installed here", and a
+# full install reported a bare ✓ three lines above "drift cannot be judged".
+
+
+def _unjudgeable_case(tmp_path, *, also_installed: bool):
+    """One present file the COMPARISON manifest has no entry for. With
+    `also_installed`, a second file is present and recorded, so the tree is a
+    normal install rather than an otherwise-empty one."""
+    root = _fake_repo(tmp_path)
+    other = "scripts/lib/kitconfig.py"
+    if also_installed:
+        _write(root / other, "recorded and matching\n")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    installed = {other: kit_doctor.sha256_of(root / other)} if also_installed else {}
+    baseline = _scoped_baseline(installed)
+    # ENGINE is present on disk but in neither map and absent from the
+    # comparison manifest, which is what makes it `unknown-version`.
+    baseline["not_installed"] = [p for p in baseline["not_installed"] if p != ENGINE]
+    report = kit_doctor.inspect(root, _manifest(installed), config, baseline)
+    assert _states(report)[ENGINE] == "unknown-version", _states(report)[ENGINE]
+    return report
+
+
+def test_a_tree_holding_only_unjudgeable_files_is_not_called_empty(tmp_path, capsys):
+    """`scripts/check_doc_budget.py` is on disk. Saying "nothing is installed
+    here" is a plain falsehood, not an imprecision."""
+    report = _unjudgeable_case(tmp_path, also_installed=False)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert "nothing is installed here" not in out, (
+        "a tree with a file on disk was reported as an empty adoption"
+    )
+    assert "drift unjudgeable for 1 present file(s)" in out
+
+
+def test_the_intact_verdict_carries_the_unjudgeable_caveat(tmp_path, capsys):
+    """Both skill docs tell an operator to skim for this line, so it must not
+    read as an all-clear while the section below says a file cannot be judged."""
+    report = _unjudgeable_case(tmp_path, also_installed=True)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    verdict = next(ln for ln in out.splitlines() if "intact for this adoption" in ln)
+    assert "drift unjudgeable for 1 present file(s), listed below" in verdict, verdict
+    assert not verdict.lstrip().startswith("✓"), (
+        f"a bare ✓ stood above an unjudgeable file: {verdict}"
+    )
+    # The caveat must point at something real.
+    assert "drift cannot be judged" in out
+
+
+def test_an_empty_adoption_does_not_say_all_declined_when_some_were_never_offered(
+    tmp_path, capsys
+):
+    """"all N declined" is only true when `declined` accounts for every absence.
+    At 0 declined and 33 new-upstream it read "all 0 kit-owned file(s) are
+    declined" directly above the itemised 33-file list contradicting it —
+    the headline/detail contradiction this PR closed twice for `removed`,
+    reintroduced in the adjacent branch. (Panel, adversarial lens, round 2.)
+    """
+    root = _fake_repo(tmp_path)
+    (root / "scripts" / "check_doc_budget.py").unlink()
+    every = [rel for rel, _role in kit_doctor.KIT_OWNED]
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    # Nothing installed, nothing declined, everything unmentioned.
+    baseline = {"kit_version": 2, "kit_commit": "abc", "files": {}, "not_installed": []}
+    print(kit_doctor.render(kit_doctor.inspect(root, _manifest({}), config, baseline)))
+    out = capsys.readouterr().out
+
+    assert "all 0 kit-owned file(s)" not in out, "the verdict claimed 'all 0 ... declined'"
+    assert f"0 declined and {len(every)} never offered" in out
+    assert "nothing is installed here" in out
+
+
+def test_the_unmentioned_state_does_not_assert_what_only_an_intact_record_supports(
+    tmp_path, capsys
+):
+    """One deleted key turns a `removed` finding into this line at exit 0, for a
+    file that WAS installed and then deleted. The baseline is the trust root and
+    is not integrity-protected, so the two are indistinguishable here — which
+    means the wording must not claim the kit did anything."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    written, _ = kit_doctor.record_install_manifest(root, config, 2, "abc123")
+    recorded = written["files"][ENGINE]["sha256"]
+    target.unlink()
+    del written["files"][ENGINE]  # the single edit that flips the verdict
+
+    report = kit_doctor.inspect(root, _manifest({ENGINE: recorded}), config, written)
+    assert _states(report)[ENGINE] == "new-upstream", "fixture is confounded"
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert "the kit added since your baseline" not in out, (
+        "the report asserted the kit added a file, which only an intact baseline could support"
+    )
+    assert "this baseline does not mention either way" in out
+    # The likely cause is still named — hedged, not deleted.
+    assert "most likely added to the kit since it was recorded" in out
+
+
+# --- the verdict caveats, pinned on EVERY branch (panel round 3) -------------
+#
+# `n_differ` reached none of the verdict branches: injecting `n_differ = 0`
+# before the whole block left all 196 tests green, while a STALE or LOCALLY
+# EDITED file sat under a bare `✓ intact for this adoption` at exit 1. And two
+# of the four branches carrying the caveat were themselves unpinned — the
+# "full install" ternary and the "NOT intact" f-string both survived removal.
+
+
+def _drifted_case(tmp_path, *, declined: bool):
+    """A present file whose hash matches neither the baseline nor the kit, so it
+    lands in the `differs` family — judged, actionable drift."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    other = "scripts/lib/kitconfig.py"
+    installed = {ENGINE: _sha("what was installed here")}
+    if not declined:
+        # Leave nothing declined, so the "full install" branch is the one hit.
+        _write(root / other, "second file\n")
+        installed[other] = kit_doctor.sha256_of(root / other)
+    baseline = _scoped_baseline(installed)
+    if not declined:
+        baseline["not_installed"] = []
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(
+        root, _manifest({**installed, ENGINE: _sha("what the kit ships")}), config, baseline
+    )
+    assert _states(report)[str(target.relative_to(root))] in (
+        "stale",
+        "locally-edited",
+        "stale-and-edited",
+        "differs",
+    ), _states(report)[str(target.relative_to(root))]
+    return report
+
+
+def test_judged_drift_stops_the_verdict_reading_as_an_all_clear(tmp_path, capsys):
+    """The HIGH from round 3: `unknown-version` got the caveat and `differs` did
+    not — the weaker case caveated, the stronger one bare."""
+    report = _drifted_case(tmp_path, declined=True)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    verdict = next(ln for ln in out.splitlines() if "intact for this adoption" in ln)
+    assert not verdict.lstrip().startswith("✓"), (
+        f"a bare ✓ stood above judged, actionable drift: {verdict}"
+    )
+    assert "1 present file(s) differ from the kit" in verdict, verdict
+
+
+def test_the_full_install_verdict_carries_the_caveat_too(tmp_path, capsys):
+    """The `else:` branch — nothing declined — was one of the two whose caveat
+    survived removal with the suite green."""
+    report = _drifted_case(tmp_path, declined=False)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    verdict = next(ln for ln in out.splitlines() if "intact for this adoption" in ln)
+    assert "full install, nothing declined" in verdict, verdict
+    assert not verdict.lstrip().startswith("✓"), verdict
+    assert "differ from the kit" in verdict, verdict
+
+
+def test_the_not_intact_verdict_carries_the_caveat_too(tmp_path, capsys):
+    """The `broken` branch — the other unpinned one. A tree can be both missing
+    a file it recorded AND holding one whose drift cannot be judged."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    gone = "scripts/lib/kitconfig.py"
+    _write(root / gone, "recorded, and about to vanish\n")
+    installed = {
+        ENGINE: kit_doctor.sha256_of(target),
+        gone: kit_doctor.sha256_of(root / gone),
+    }
+    baseline = _scoped_baseline(installed)
+    (root / gone).unlink()
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    # ENGINE present with no manifest entry -> unknown-version, beside the removal.
+    report = kit_doctor.inspect(root, _manifest({}), config, baseline)
+    assert [f.state for f in report.broken] == ["removed"], [f.state for f in report.broken]
+
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+    verdict = next(ln for ln in out.splitlines() if "intact for this adoption" in ln)
+    assert verdict.lstrip().startswith("✗"), verdict
+    assert "drift unjudgeable for 1 present file(s)" in verdict, verdict
+
+
+def test_a_brand_new_partial_baseline_is_not_called_old(tmp_path, capsys):
+    """A baseline written SECONDS AGO by a current kit lands on the same branch
+    as a genuinely old one: an unverified path suppresses `not_installed` while
+    `kit_commit` is written anyway, so the record is trusted, scope-less, and
+    new. The note used to assert it "predates the declared install set" — false,
+    and it points the operator away from the reconcile step they actually need.
+    (Panel, adversarial lens, round 4.)
+    """
+    root = _fake_repo(tmp_path)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    written, unverified = kit_doctor.record_install_manifest(
+        root, config, 2, "b" * 40, source_files={ENGINE: {"sha256": "0" * 64}}
+    )
+    assert unverified == [ENGINE] and "not_installed" not in written, "fixture is confounded"
+
+    report = kit_doctor.inspect(root, _manifest({}), config, written)
+    assert report.baseline_trusted and not report.declared_scope_known
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert "This baseline predates the declared install set" not in out, (
+        "a baseline written this run was reported as predating the feature"
+    )
+    assert "declares no install set" in out
+    # Both causes named, and the unverified one carries its own next step.
+    assert "did not match the source kit" in out
+    assert "reconcile those first" in out
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [("not_installed", "a string, not a list"), ("files", ["a list, not a dict"])],
+)
+def test_a_malformed_baseline_reaches_the_same_note_and_it_does_not_claim_two_causes(
+    tmp_path, capsys, key, value
+):
+    """A third route to the scope-less state, and the reason the note stopped
+    saying "Either … or": `_declared_scope` declines to read a scope out of a
+    malformed `files` OR `not_installed`, so a corrupt baseline lands on the
+    same branch as an old one and a partial one. Two causes presented as
+    exhaustive is the error this note was fixed for one round earlier — it must
+    not be reintroduced by naming two of three. (CodeRabbit, PR #322.)
+    """
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    baseline[key] = value
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+    assert not report.declared_scope_known
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert "declares no install set" in out
+    assert "Either it predates" not in out, "two causes were presented as exhaustive"
+    assert "malformed" in out, "the malformed route is not named at all"

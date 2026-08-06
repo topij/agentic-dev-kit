@@ -160,11 +160,22 @@ manifest-untracked, the rendered entry points because they are adopter-owned and
 be edited. So recording here, before they run it, is correct and not a race.
 
 This writes `kit-manifest.json` here, recording which kit-owned files this adoption
-actually installed and the kit commit they came from. It is what lets a later
+actually installed — and, as `not_installed`, the ones it deliberately did not — plus the
+kit commit they came from. It is what lets a later
 `/upgrade` tell a **stale** file from a **hand-edited** one instead of guessing — the
 guess was wrong for the commonest case and told adopters to hunt for edits they never
-made (kit `#51`). Run it **after** the copies, so it records what landed; a sized-down
-adoption is recorded as exactly the subset it installed.
+made (kit `#51`). The `not_installed` half does the same job one axis over: a **sized-down adoption
+is a supported state**, and recording it here is what lets `kit_doctor` later say "intact
+for this adoption" instead of reporting the same permanent count of absent files at every
+run, with a real deletion indistinguishable inside it (#286).
+
+**So a sized-down `/adopt` must still run this**, and against the full component list —
+the value is in what it records as *declined*, which is precisely the part a partial
+install would otherwise leave unstated. Do not skip it on the grounds that few files were
+copied; that is the case it helps most.
+
+Run it **after** the copies, so it records what landed: the subset this adoption
+installed, and the rest as declined.
 
 **Pass `--from-kit`, and read what it prints.** With it, only files matching that
 checkout are recorded — which is what keeps the "copy only if the target doesn't already
@@ -297,8 +308,24 @@ Two things to warn them about, both measured, because neither is obvious from th
   independent reference, and it is also the only one carrying `required_by`, which is
   what makes the `missing-required` axis work at all.
 
-  Expect zero mismatches and `missing` containing only the pieces Step 2 deliberately
-  left out.
+  Expect zero mismatches. **Not `missing` — Step 3b just recorded a declared install
+  set**, so the pieces Step 2 deliberately left out now report as `declined` and the
+  count line reads `0 missing` followed by `✓ intact for this adoption — N file(s)
+  declined`. A surviving `missing` count means `--record-install` did not run, or ran
+  against a different root. Zero `removed` and zero `new-upstream` too: on a fresh
+  adoption there is nothing yet to have been deleted, and nothing the kit could have
+  added since a baseline written minutes ago.
+
+  If Step 3b reported unverified paths, there is **no** declared set — it suppresses one
+  rather than record a partial claim, for **every** file rather than just the unverified
+  ones — so the absences read `missing` here and the `intact` line is absent. That is the
+  unreconciled-path signal, not a second failure.
+
+  **It does not clear itself.** Reconcile each path Step 3b named on stderr with the
+  operator, re-run `--record-install --from-kit <kit checkout>`, then re-run `kit_doctor`
+  and confirm the `intact` line appears. Leaving it means the adoption carries no declared
+  scope at all, so every later `/upgrade` re-asks about every absent file — the
+  conversation the declared set exists to end.
 
   **Then check the `baseline:` line by comparing the sha it prints**, not merely that it
   is present. It reports what the baseline *claims*, so a leftover baseline from an

@@ -45,8 +45,10 @@ Read `<engine-dir>` from `paths.engines`. If `kit_doctor.py` isn't installed yet
 kit's copy against this repo: `uv run /tmp/agentic-dev-kit/scripts/kit_doctor.py --root .
 --manifest /tmp/agentic-dev-kit/kit-manifest.json`.
 
-The report gives you, per kit-owned file: `unchanged` / `differs` / `missing` /
-`missing-required` / `unknown-version`, plus four installation-level checks.
+The report gives you, per kit-owned file: `unchanged` / `differs` /
+`unknown-version` / `missing-required`, and — for an absent file — one of `declined` /
+`removed` / `new-upstream` where this repo has a **declared install set**, or the older
+undifferentiated `missing` where it does not. Plus four installation-level checks.
 **Read all four** — each is a silent failure mode:
 
 - **config schema version** — unversioned or behind means migrations are pending.
@@ -155,10 +157,36 @@ that installed nothing still shows no `missing-required`.
   which. Do not carry it into the `missing` conversation below.
 - **`unchanged`** → copy the new version straight in. It is provably untouched, so there
   is nothing to lose.
-- **`missing`** → decide, don't assume. A sized-down adoption omits engines deliberately
+- **`removed`** → **not** an operator decision either, and not a sized-down adoption:
+  this repo's own baseline records the file AS installed and it is gone now. Restore it,
+  or — if the removal was deliberate — say so and let Step 4's `--record-install` write
+  the new intent. Do not carry it into the `missing`/`declined` conversation below; the
+  whole point of the state is that it is *not* one of those.
+- **`declined`** → nothing to do, and nothing to ask. This repo recorded the file as
+  absent when its baseline was written, so the omission is already the operator's
+  answer. Do not re-litigate it: re-asking every upgrade is the noise the declared set
+  exists to remove. Raise it only if the operator asks what was left out, or if a
+  `missing-required` above now names it.
+- **`new-upstream`** → **this is the decision `/upgrade` owns.** The baseline mentions the
+  file in neither map; the ordinary cause is that the kit gained it after the baseline was
+  recorded, so no declared set could have mentioned it and nobody has ever been asked.
+  **Treat a `new-upstream` file you recognise as one this repo once installed as a
+  finding, not as a new offer** — a damaged baseline produces this same state, and the
+  report cannot tell the two apart (see `kit_doctor.py`'s `new-upstream` docstring). If
+  that happens, restore from git history rather than accepting it as new.
+  Otherwise ask now, once, per file — the same "decide, don't assume"
+  conversation as `missing` below, but with a bounded list: only what is genuinely new
+  since the last record. Whichever way it goes, Step 4's `--record-install` is what makes
+  the answer durable; skip it and the same file is `new-upstream` again next upgrade.
+- **`missing`** → decide, don't assume. **You only see this state when the repo has no
+  declared install set** — a baseline predating it, or none at all — so the absences are
+  undifferentiated and the three states above cannot be told apart. A sized-down adoption
+  omits engines deliberately
   (one surveyed repo installs 2 of 6 on purpose). Ask the operator whether each missing
   piece is wanted before installing it. If a piece stays out, note it in the PR body so
-  the next upgrade doesn't re-litigate it. Nothing installed here depends on these **by
+  the next upgrade doesn't re-litigate it — and re-run `--record-install` in Step 4, which
+  is what stops the next upgrade needing the PR body at all. Nothing installed here
+  depends on these **by
   the graph `kit_doctor` derives**, which is what separates them from the bullet above.
   That graph covers **Python imports only** — it does not read shell `source`, so
   `lib/repo_root.sh` (which `dev_session.sh` and `reconcile_sessions.sh` both source)
@@ -212,8 +240,12 @@ entries are exactly where the risk is.
 uv run <engine-dir>/kit_doctor.py --record-install --from-kit /tmp/agentic-dev-kit
 ```
 
-This rewrites `kit-manifest.json` **here** to record what this repo now has installed,
-stamped with the kit commit it came from. Nothing else writes it: `/adopt` and `/upgrade`
+This rewrites `kit-manifest.json` **here** to record what this repo now has installed —
+**and, as `not_installed`, what it deliberately does not** — stamped with the kit commit
+it came from. That second list is what carries Step 3's decisions forward: an absence in
+it reports as `declined` rather than as an open question, so the next upgrade stops
+asking. Skip this step and every decline you just made is re-asked next time, which is
+the conversation the PR-body note was standing in for. Nothing else writes it: `/adopt` and `/upgrade`
 copied kit files in and left this file at whatever it was on the day it first arrived, so
 an adopter's baseline drifted further from its own tree with every upgrade. Measured on a
 real adopter (2026-08-03): its manifest recorded `wrap-up.md` at the kit's 2026-07-15
@@ -239,12 +271,40 @@ uv run <engine-dir>/check_doc_budget.py
 ```
 
 `kit_doctor` should now report zero mismatches of every kind — `differs`, `STALE`,
-`LOCALLY EDITED`, `STALE and LOCALLY EDITED` — and zero `unknown-version`, with `missing`
-containing only deliberately-omitted pieces. Anything else means Step 3 left something.
+`STALE and LOCALLY EDITED` — and zero `unknown-version`. `LOCALLY EDITED` should be zero
+**except for the local patches you deliberately kept in Step 3 and can name**; see the
+paragraph below, which is the one expected exception rather than a caveat on the rule.
+Because Step 4
+has just written a declared install set, the absences should now read
+`✓ intact for this adoption — N file(s) declined` rather than a bare `missing` count, with
+**zero `removed` and zero `new-upstream`**: the first would mean something was deleted
+after the record, the second that a file you were offered in Step 3 was neither installed
+nor recorded as declined. Anything else means Step 3 left something.
 
-The one expected exception is a local patch you chose to keep in Step 3: it reports
+A **`missing`** count surviving this step is itself a finding: Step 4 writes the declared
+set, so the state it eliminates should not be reachable here. The report's own `baseline:`
+note names the causes; these are the ones worth knowing, and the second is the one you
+will actually hit:
+
+- `--record-install` did not run, or ran against a different root.
+- The baseline predates the declared install set, or its `files` / `not_installed` value
+  is malformed — `kit_doctor` declines to read a scope out of either, rather than guess.
+- **Step 4 reported unverified paths.** One kit-owned file that is present but does not
+  byte-match the source kit suppresses the **entire** `not_installed` key — the record is
+  partial, so it declares no scope at all, for every file rather than just that one — and
+  `--record-install` exits 1 saying so. A local patch you kept but did not set aside per
+  Step 4's ordering rule is the usual way in. Reconcile the paths it named, then re-run.
+
+**The `baseline:` note cannot tell the second cause from the third**, so do not read it as
+deciding between them: an absent declared set is the only evidence either leaves, and a
+baseline written moments ago by a current kit looks identical to an old one. The note says
+so. What distinguishes them is Step 4's own output — `--record-install` exits 1 and lists
+the unverified paths — so check that, not the note.
+
+That exception, stated once: a local patch you chose to keep in Step 3 reports
 `LOCALLY EDITED`, which is the baseline working as intended. Name it in the PR body so
-the next upgrade does not re-litigate it.
+the next upgrade does not re-litigate it. A `LOCALLY EDITED` file you cannot name is not
+this case — it is Step 3 leaving something.
 
 It should also now print a `baseline:` line naming the kit commit you installed from —
 and **the sha it names has to be checked, not just the line's presence.** On a repeat

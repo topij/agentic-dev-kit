@@ -29,7 +29,38 @@ verifies it still holds. Per kit-owned file it reports one of:
 ``missing``
     Not installed, and nothing installed here needs it. Either a deliberately
     sized-down adoption or an incomplete one; the report can't tell, so it says
-    so rather than guessing.
+    so rather than guessing. Reachable only WITHOUT a declared install set —
+    with one, every absence resolves to `declined`, `removed` or `new-upstream`
+    below, and this state does not occur.
+``declined``
+    Not installed, and the baseline records that it was already absent when the
+    install was recorded — a deliberate omission. Not a finding: a sized-down
+    adoption is a supported state, so this is what "intact for this adoption"
+    is counted from.
+``removed``
+    Not installed, but the baseline records it AS installed. Something deleted
+    it after the install was recorded. This is the failure `missing` could not
+    report (issue #286): under one undifferentiated count, deleting four
+    engines moved the number and said nothing, because the healthy state was
+    reported in the same words.
+``new-upstream``
+    Not installed, and the baseline mentions it in NEITHER map. The ordinary
+    cause is that the kit gained it after this repo's baseline was recorded, so
+    no declared set could have mentioned it. Informational, never a finding: it
+    is neither broken nor declined, it has simply never been offered.
+    `/upgrade` is where it gets accepted or declined.
+
+    **This state is where a damaged baseline shows up, and it cannot tell the
+    two apart.** Deleting one key from ``files`` turns a ``removed`` finding
+    (exit 1) into this line (exit 0) for a file that WAS installed and then
+    deleted — the same absence-from-both-maps shape, reached by corruption
+    instead of by a kit release. Nothing here can separate them: the baseline is
+    the trust root, ``_baseline_trusted`` keys on the PRESENCE of ``kit_commit``
+    rather than on integrity, and a record that lies about itself defeats every
+    conclusion drawn from it. So the report states what it knows — the baseline
+    does not mention these — and names the likely cause as likely. Making the
+    distinction mechanical needs an integrity-protected baseline, which is a
+    larger change than this axis.
 ``missing-required``
     Not installed, but an engine that IS installed needs it — so this install
     is broken, not sized down. The distinction exists because the old report had
@@ -62,6 +93,26 @@ they all count as drift, and all of them exit 1. Without a trusted baseline —
 one carrying ``kit_commit``, which only ``--record-install`` writes — every
 mismatch stays ``differs`` and no cause is claimed.
 
+**The declared install set** works the same way one axis over, and is what
+splits ``missing`` into the three states above it. ``--record-install`` writes
+``not_installed``: the kit-owned paths that were absent at record time, which
+it already walks and until #286 simply dropped. An absence is then judged
+against the record rather than guessed at — declared out of scope, deleted
+since install, or newer than the baseline.
+
+Two properties of that split are deliberate and load-bearing:
+
+- **It is derived, never declared by hand.** ``--record-install`` knows exactly
+  which paths were absent when it ran; an operator-maintained list in the
+  config would be a second copy of that fact, and the copy is what goes stale.
+- **A baseline without the key gets the OLD behaviour, not a guessed one.**
+  Every baseline recorded before #286 predates ``not_installed``, and inferring
+  "declined" from its silence would assert an intent nobody expressed — and
+  would quietly absorb ``new-upstream`` into it, since a file the kit added
+  later is absent from a pre-#286 baseline in exactly the same way. So the key
+  must be PRESENT to enable the split; its absence keeps plain ``missing`` and
+  the report says why, with the one command that fixes it.
+
 Adopter-owned paths (the config, the narrative docs) are **never** compared —
 they are supposed to differ, and reporting them as drift would bury the signal.
 
@@ -90,12 +141,21 @@ Usage (``<engine-dir>`` is ``paths.engines`` in config/dev-model.yaml, default
                                                     # drift by cause
 
 Exit codes:
-    0 — every kit-owned file is `unchanged` (or intentionally absent)
+    0 — every kit-owned file is `unchanged`, or absent without being a finding:
+        `declined` (intentionally absent), `missing` (absent, intent unknown),
+        or `new-upstream`. The last is deliberately in this list and is NOT
+        "intentionally absent" — nobody has been asked about it yet — which is
+        why this line no longer says that of every absence. It exits 0 because
+        a kit release must not turn an adopter's CI red.
     1 — at least one file `differs`, is `stale`, `locally-edited`,
-        `stale-and-edited`, `unknown-version`, or `missing-required`. The last
-        one is not drift, but it is a broken
+        `stale-and-edited`, `unknown-version`, `missing-required`, or
+        `removed`. The last two are not drift, but they are a broken
         install, and the exit code an adopter gates CI on should not be green
-        for a tree whose engines cannot load their own library.
+        for a tree whose engines cannot load their own library. `declined` and
+        `new-upstream` are NOT in this set and never fail the gate: the first
+        is the supported sized-down state, and the second is a file the adopter
+        has never been asked about — failing CI on either would make the gate
+        fire on a healthy repo and on every kit release respectively.
         Under ``--record-install`` this same code means the baseline was
         written but some present kit-owned path was EXCLUDED from it — see that
         mode's stderr list. Exiting 0 there would let a caller that reads only
@@ -533,6 +593,11 @@ class Report:
     # claim about the kit's own copy is not, and `render` drops it (panel,
     # adversarial lens).
     baseline_is_comparison: bool = False
+    # Whether this run could judge absences against a recorded install set
+    # (#286). False is the pre-#286 report, and is what every baseline written
+    # before `not_installed` existed still gets — see `_declared_scope` for why
+    # that is not inferred.
+    declared_scope_known: bool = False
     files: list[FileStatus] = field(default_factory=list)
 
     @property
@@ -553,14 +618,34 @@ class Report:
         return [f for f in self.files if f.state == "missing"]
 
     @property
+    def declined(self) -> list[FileStatus]:
+        """Absences this repo's baseline records as deliberate."""
+        return [f for f in self.files if f.state == "declined"]
+
+    @property
+    def new_upstream(self) -> list[FileStatus]:
+        """Kit-owned files added after this repo's baseline was recorded."""
+        return [f for f in self.files if f.state == "new-upstream"]
+
+    @property
     def broken(self) -> list[FileStatus]:
-        """Files an installed engine needs and that are not installed.
+        """Files that are not installed and should be.
+
+        Two states, one conclusion: `missing-required` is absent-and-depended-on
+        (derived from the import graph), `removed` is absent-and-recorded-as-
+        installed (derived from the baseline). Both mean the tree is broken
+        rather than sized down, so both reach the exit code the same way — which
+        is what this property is for.
 
         Deliberately NOT folded into `drifted`: a file that is absent has not
         drifted from anything, and this report's whole position is that it does
         not claim more than it knows. They meet only at the exit code.
+
+        `declined` and `new-upstream` are deliberately absent from BOTH. Putting
+        either here would reinstate #286's bug with the sign flipped — a healthy
+        sized-down adoption failing its own CI gate.
         """
-        return [f for f in self.files if f.state == "missing-required"]
+        return [f for f in self.files if f.state in ("missing-required", "removed")]
 
 
 def sha256_of(path: Path) -> str:
@@ -856,6 +941,7 @@ def record_install_manifest(
     engines_dir = str(get(config, "paths.engines", KIT_ENGINE_PREFIX))
     files: dict[str, dict] = {}
     unverified: list[str] = []
+    not_installed: list[str] = []
     for rel, role in KIT_OWNED:
         target = root / _remap(rel, engines_dir)
         # Keyed by the KIT-layout path even when the file lives somewhere else
@@ -863,6 +949,11 @@ def record_install_manifest(
         # `inspect` can look both up with one key. The remap is applied to the
         # lookup, never to the key.
         if not target.is_file():
+            # The declared install set (#286), recorded rather than asked for:
+            # this loop already walks every kit-owned path and already knows
+            # which ones are absent — it just dropped that fact. Keeping it is
+            # what lets a later run tell a deliberate omission from a deletion.
+            not_installed.append(rel)
             continue
         digest = sha256_of(target)
         if source_files is not None:
@@ -875,12 +966,65 @@ def record_install_manifest(
                 unverified.append(_remap(rel, engines_dir))
                 continue
         files[rel] = {"sha256": digest, "role": role}
-    return {
+    recorded = {
         "kit_version": kit_version,
         "kit_commit": kit_commit,
         "files": files,
         "adopter_owned": list(ADOPTER_OWNED),
-    }, unverified
+    }
+    # `not_installed` is written ONLY when this record is complete, and an
+    # `unverified` path is exactly what makes it incomplete: that path is
+    # present but matched no source-kit file, so it is deliberately in neither
+    # map. An earlier version wrote the key anyway, reasoning that a present
+    # file will never be asked about — true when the record is written, and
+    # false the moment someone deletes it. `inspect` would then find it absent,
+    # in neither map, and call it `new-upstream`: "the kit added this since your
+    # baseline", asserted confidently about the adopter's own deleted file, and
+    # exiting 0. (CodeRabbit, PR #322.)
+    #
+    # Omitting the key degrades that path to plain `missing` — ambiguous, but
+    # ambiguous is what a partial record has earned, and the report already
+    # names the command that completes it. Same rule as the read side: the key
+    # must be PRESENT to claim a scope, so a scope that cannot be claimed
+    # honestly is not claimed at all. `--record-install` also exits 1 here and
+    # lists the unverified paths on stderr, so this is never silent.
+    if not unverified:
+        recorded["not_installed"] = not_installed
+    return recorded, unverified
+
+
+def _declared_scope(baseline: dict | None, trusted: bool) -> set[str] | None:
+    """The paths this repo recorded as deliberately not installed, or None.
+
+    None means "no declared set" and is NOT the same as an empty one: an empty
+    set is a full install (every kit-owned path present at record time), while
+    None is a baseline that never recorded the axis at all. They must report
+    differently — the first can say "intact", the second cannot say anything.
+
+    Requires `trusted`, for the same reason `_drift_state` does: an untrusted
+    baseline's contents cannot carry a claim about what happened after it was
+    written, and "declined" is exactly such a claim.
+
+    A non-list value degrades to None rather than raising — the same
+    degrade-don't-abort rule the `files` handling in `inspect` follows, and for
+    the same reason: this is a read-only diagnostic, and a malformed key in one
+    axis must not take the whole report down with it.
+    """
+    if not trusted:
+        return None
+    declared = (baseline or {}).get("not_installed")
+    if not isinstance(declared, list):
+        return None
+    # The `files` map must be READABLE too, not merely present — the two halves
+    # are one record and a scope claim needs both. `inspect` degrades a non-dict
+    # `files` to `{}`, so without this check a baseline carrying a valid
+    # `not_installed` beside a malformed `files` would classify every absent
+    # file that WAS installed as `declined` (silent) or `new-upstream`
+    # (informational) instead of `removed` (exit 1) — the malformed half
+    # deciding the answer for the sound one. (CodeRabbit, PR #322.)
+    if not isinstance((baseline or {}).get("files"), dict):
+        return None
+    return {item for item in declared if isinstance(item, str)}
 
 
 def _baseline_trusted(baseline: dict | None) -> bool:
@@ -951,6 +1095,7 @@ def inspect(
     # reachable at all (panel, adversarial lens).
     raw_baseline_files = (baseline or {}).get("files") if trusted else None
     baseline_files = raw_baseline_files if isinstance(raw_baseline_files, dict) else {}
+    declared_scope = _declared_scope(baseline, trusted)
 
     # Presence of EVERY kit-owned file, resolved before the status loop: whether
     # a missing file is a broken install or a sized-down one is a question about
@@ -970,12 +1115,40 @@ def inspect(
             # exists to keep the engines probe from getting wrong (#59).
             needed_by = [dep for dep in (entry.get("required_by") or []) if present.get(dep)]
             if needed_by:
+                # FIRST, ahead of the declared set: an engine that is installed
+                # needs this file, so the install is broken whatever the record
+                # says about intent. A path recorded as declined AND required by
+                # something installed is a contradiction, and the safe reading
+                # of a contradiction is the loud one.
                 names = ", ".join(PurePosixPath(dep).name for dep in needed_by)
                 statuses.append(
                     FileStatus(local_rel, role, "missing-required", f"needed by {names}")
                 )
-            else:
+            elif declared_scope is None:
+                # No declared set — the pre-#286 answer, unchanged and
+                # deliberately not improved by inference. `render` says why and
+                # names the command that fixes it.
                 statuses.append(FileStatus(local_rel, role, "missing"))
+            elif rel in baseline_files:
+                # Recorded as INSTALLED and now absent. Checked before the
+                # declared set so a malformed baseline listing a path in both
+                # resolves to the finding rather than to silence.
+                statuses.append(
+                    FileStatus(local_rel, role, "removed", "recorded as installed in this baseline")
+                )
+            elif rel in declared_scope:
+                statuses.append(
+                    FileStatus(local_rel, role, "declined", "absent when the baseline was recorded")
+                )
+            else:
+                # In neither map: the baseline predates the file's existence in
+                # the kit. Not an omission the adopter chose — one they were
+                # never offered.
+                statuses.append(
+                    FileStatus(
+                        local_rel, role, "new-upstream", "added to the kit since this baseline"
+                    )
+                )
             continue
         if expected is None:
             statuses.append(FileStatus(local_rel, role, "unknown-version", "no manifest entry"))
@@ -1097,6 +1270,7 @@ def inspect(
         hooks_installed=hooks_installed,
         narrative_rendered=narrative,
         baseline_trusted=trusted,
+        declared_scope_known=declared_scope is not None,
         # Passed in rather than inferred from paths: `main` knows it from the
         # resolved PATHS, which this function does not see.
         #
@@ -1198,15 +1372,30 @@ def render(report: Report) -> str:
     for f in report.files:
         by_state.setdefault(f.state, []).append(f)
 
-    # `missing` counts BOTH absent states, so the total does not change meaning
-    # for anyone reading this line as "how much of the kit is not here"; the
-    # parenthetical is what says how much of that absence is breakage. Rendered
-    # only when non-zero, so a healthy install's summary line is unchanged.
     n_required_missing = len(by_state.get("missing-required", []))
-    n_absent = len(by_state.get("missing", [])) + n_required_missing
-    absent_note = (
-        f" ({n_required_missing} required by an installed engine)" if n_required_missing else ""
-    )
+    n_removed = len(by_state.get("removed", []))
+    n_declined = len(by_state.get("declined", []))
+    n_new_upstream = len(by_state.get("new-upstream", []))
+    # `missing` counts the absences that are FINDINGS, which is what it always
+    # meant — the change is that `declined` and `new-upstream` are no longer
+    # among them, because they are now distinguishable. Counting them here would
+    # keep #286's permanent number and merely footnote it, which is the shape
+    # this issue exists to remove: a count an operator must remember to ignore
+    # stops being read.
+    #
+    # The parenthetical is what says how much of that absence is breakage, and
+    # is rendered only when non-zero, so a healthy install's summary line is
+    # unchanged. (The comment that used to stand here said `missing` counts
+    # "BOTH absent states" and that the total "does not change meaning" — true
+    # before this axis existed, and flatly contradicting the paragraph above it
+    # afterwards. CodeRabbit, PR #322.)
+    n_absent = len(by_state.get("missing", [])) + n_required_missing + n_removed
+    notes = []
+    if n_required_missing:
+        notes.append(f"{n_required_missing} required by an installed engine")
+    if n_removed:
+        notes.append(f"{n_removed} recorded as installed here")
+    absent_note = f" ({', '.join(notes)})" if notes else ""
     # `differ` counts all four mismatch states, so this line keeps meaning "how
     # many kit files are not what the kit ships" whether or not the baseline
     # let them be split. The breakdown below names the causes; counting only
@@ -1223,6 +1412,114 @@ def render(report: Report) -> str:
         f"{n_absent} missing{absent_note}, "
         f"{len(by_state.get('unknown-version', []))} unknown"
     )
+    # The line #286 asked for, and it only exists when the question can actually
+    # be answered. "Intact" is a claim about the DECLARED set, so it needs one;
+    # without a declared set the count above stays ambiguous and the baseline
+    # block below says so instead.
+    # `unknown-version` means the file IS PRESENT and its drift cannot be
+    # judged — it is an absence of information, not an absence of a file. Two
+    # consequences, and the first is what made the empty-adoption branch below
+    # state a falsehood: a tree holding only unjudgeable files is not empty.
+    #
+    # The second is softer and applies to every branch: none of these verdicts
+    # is an all-clear while some file's drift is unjudgeable, and both skill
+    # docs tell an operator to skim for exactly this ✓/✗/⚠ line. So the verdict
+    # keeps its own subject — the install SET, which is genuinely knowable here
+    # — and carries the caveat rather than swallowing it.
+    # (Fallback panel, correctness lens, round 2.)
+    n_unjudgeable = len(by_state.get("unknown-version", []))
+    # BOTH kinds of present-file drift, not just the unjudgeable one. An earlier
+    # version caveated `unknown-version` and left `n_differ` out, so a STALE or
+    # LOCALLY EDITED file — drift the report HAS judged, and the actionable kind
+    # — sat directly under a bare `✓ intact for this adoption` while the exit
+    # code was 1. That is the weaker case getting the caveat and the stronger
+    # one going without, in a line both skill docs tell an operator to skim.
+    # (Panel, adversarial lens, round 3.)
+    attention = []
+    if n_differ:
+        attention.append(f"{n_differ} present file(s) differ from the kit")
+    if n_unjudgeable:
+        attention.append(f"drift unjudgeable for {n_unjudgeable} present file(s)")
+    caveat = f" ({', '.join(attention)}, listed below)" if attention else ""
+    verdict_mark = "⚠" if attention else "✓"
+    if report.declared_scope_known:
+        if report.broken:
+            # Never "intact" while something is absent that should not be —
+            # the whole point of the split is that this case is now audible.
+            #
+            # Says "should be installed" and NOT "recorded as installed here",
+            # which an earlier draft did: `broken` holds TWO states with
+            # different provenance, and only `removed` comes from the baseline.
+            # A `missing-required` file may be one the repo recorded as
+            # DECLINED — absent, required by an installed engine, and on record
+            # as exactly the opposite of installed. The per-state sections below
+            # each name their own source; this line must not pick one of them
+            # and assert it for both (the overstatement class #54 tracks).
+            declined_note = f", {n_declined} declined" if n_declined else ""
+            lines.append(
+                f"  ✗ NOT intact for this adoption — {n_absent} file(s) absent that should be "
+                f"installed{declined_note}{caveat}"
+            )
+        elif not by_state.get("unchanged") and not n_differ and not n_unjudgeable:
+            # "Intact" is a claim about an install set, and an EMPTY set has
+            # nothing to be intact. Recording a tree where nothing was ever
+            # copied produces a well-formed baseline declining all of
+            # KIT_OWNED, which would otherwise print the same confident ✓ as a
+            # healthy sized-down adoption — under a `✗ paths.engines` line
+            # saying every workflow reference resolves to nothing.
+            #
+            # That reads WORSE than the wording it replaced: `missing
+            # (sized-down adoption, or incomplete)` at least floated
+            # "incomplete". Exit stays 0 — an empty adoption is not broken, and
+            # the installation-level checks above already carry the ✗ — but
+            # this line must not bless it. (Fallback panel, adversarial lens.)
+            # "all N declined" is only true when `declined` accounts for every
+            # absence. With `new-upstream` files it is false, and at 0 declined
+            # it read "all 0 kit-owned file(s) are declined" directly above an
+            # itemised 33-file list — the headline/detail contradiction this
+            # round closed twice for `removed`, reintroduced in the one
+            # adjacent branch neither fix touched. (Panel, adversarial, r2.)
+            breakdown = (
+                f"{n_declined} declined and {n_new_upstream} never offered"
+                if n_new_upstream
+                else f"all {n_declined} kit-owned file(s) declined"
+            )
+            lines.append(
+                f"  ⚠ nothing is installed here — {breakdown}, so this is an empty adoption "
+                "rather than an intact one"
+            )
+        elif n_declined:
+            lines.append(
+                f"  {verdict_mark} intact for this adoption — "
+                f"{n_declined} file(s) declined{caveat}"
+            )
+        else:
+            lines.append(
+                f"  {verdict_mark} intact for this adoption — full install, "
+                f"nothing declined{caveat}"
+            )
+    if n_new_upstream:
+        # Informational, and outside the intact/not-intact verdict on purpose:
+        # these are neither installed nor declined, so they say nothing about
+        # whether this repo is healthy. Listed by name because the count alone
+        # is not actionable — the operator's next question is always "which".
+        # States what is KNOWN — the baseline mentions these in neither map —
+        # rather than the inference. "The kit added them since" is the ordinary
+        # cause and not a fact this can establish: the same shape is what a
+        # damaged baseline produces, and one deleted key turns a `removed`
+        # finding into this reassuring line at exit 0. The baseline is the trust
+        # root and is not integrity-protected (`_baseline_trusted` keys on the
+        # PRESENCE of `kit_commit`), so no reading here can rule that out — but
+        # the wording must not claim what only an intact record would support.
+        # (Panel, adversarial lens, round 2.)
+        lines.append(
+            f"  ⓘ {n_new_upstream} file(s) this baseline does not mention either way — "
+            "neither installed nor declined, so most likely added to the kit since it was "
+            "recorded:"
+        )
+        for f in report.new_upstream:
+            lines.append(f"      {f.path}")
+        lines.append("      Run /upgrade to accept or decline them.")
     # ALWAYS emitted, in every combination. Both skill docs tell the operator to
     # read this line to confirm `--record-install` actually ran — and two
     # combinations used to print nothing at all (untrusted with zero mismatches;
@@ -1249,6 +1546,28 @@ def render(report: Report) -> str:
             lines.append(f"  baseline: {origin} — mismatches below are split by cause")
         else:
             lines.append(f"  baseline: {origin}")
+        # Gated on there being an ambiguous absence to explain. A full install
+        # has nothing for the declared set to split, so the nudge would be pure
+        # noise — which is the failure mode #286 is about, and reproducing it in
+        # the fix's own advice line would be its own joke.
+        if not report.declared_scope_known and by_state.get("missing"):
+            # Says "declares no install set" rather than "predates" it, because
+            # this cannot tell those apart and the second is often false. A
+            # baseline written SECONDS AGO by a current kit lands here whenever
+            # `--record-install` hit an unverified path: that suppresses
+            # `not_installed` wholesale, while `kit_commit` is written anyway,
+            # so the manifest is trusted, scope-less, and brand new. Both causes
+            # reach this branch with identical evidence — an absent key — so the
+            # note names both and lets the operator tell which.
+            # (Panel, adversarial lens, round 4.)
+            lines.append(
+                "            This baseline declares no install set, so a deliberate omission\n"
+                "            cannot be told from a deletion. Commonly it predates the declared\n"
+                "            set, or --record-install suppressed it because some present file\n"
+                "            did not match the source kit; a malformed `files` or\n"
+                "            `not_installed` value reads the same way. Re-run --record-install\n"
+                "            — and if it reports unverified paths, reconcile those first."
+            )
     else:
         lines.append(
             "  baseline: none recorded — cannot tell stale from locally edited."
@@ -1314,6 +1633,15 @@ def render(report: Report) -> str:
             "missing-required",
             "✗ NOT INSTALLED, and needed by an engine that is — this install is "
             "broken, not sized down. Install these before refreshing any engine",
+        ),
+        # Beside `missing-required` because they carry the same verdict from a
+        # different source: that one derives "should be here" from the import
+        # graph, this one from what the repo itself recorded installing. Neither
+        # is a sized-down adoption, which is the reading `missing` allowed.
+        (
+            "removed",
+            "✗ NOT INSTALLED, but this repo's baseline records it AS installed — deleted "
+            "since. Restore it, or re-run --record-install if the removal was deliberate",
         ),
         ("differs", differs_label),
         # The three split states. Each states a FACT rather than a likelihood,
@@ -1669,6 +1997,11 @@ def main(argv: list[str] | None = None) -> int:
                     "baseline_trusted": report.baseline_trusted,
                     "baseline_is_comparison": report.baseline_is_comparison,
                     "baseline_kit_commit": report.baseline_kit_commit,
+                    # Not derivable from `files` either: a report with no absent
+                    # file at all looks identical whether or not the declared
+                    # set was available, and a consumer deciding whether to
+                    # trust a `declined`/`missing` distinction needs to know.
+                    "declared_scope_known": report.declared_scope_known,
                     "files": [
                         {"path": f.path, "role": f.role, "state": f.state, "detail": f.detail}
                         for f in report.files
