@@ -2678,3 +2678,91 @@ def test_the_unmentioned_state_does_not_assert_what_only_an_intact_record_suppor
     assert "this baseline does not mention either way" in out
     # The likely cause is still named — hedged, not deleted.
     assert "most likely added to the kit since it was recorded" in out
+
+
+# --- the verdict caveats, pinned on EVERY branch (panel round 3) -------------
+#
+# `n_differ` reached none of the verdict branches: injecting `n_differ = 0`
+# before the whole block left all 196 tests green, while a STALE or LOCALLY
+# EDITED file sat under a bare `✓ intact for this adoption` at exit 1. And two
+# of the four branches carrying the caveat were themselves unpinned — the
+# "full install" ternary and the "NOT intact" f-string both survived removal.
+
+
+def _drifted_case(tmp_path, *, declined: bool):
+    """A present file whose hash matches neither the baseline nor the kit, so it
+    lands in the `differs` family — judged, actionable drift."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    other = "scripts/lib/kitconfig.py"
+    installed = {ENGINE: _sha("what was installed here")}
+    if not declined:
+        # Leave nothing declined, so the "full install" branch is the one hit.
+        _write(root / other, "second file\n")
+        installed[other] = kit_doctor.sha256_of(root / other)
+    baseline = _scoped_baseline(installed)
+    if not declined:
+        baseline["not_installed"] = []
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(
+        root, _manifest({**installed, ENGINE: _sha("what the kit ships")}), config, baseline
+    )
+    assert _states(report)[str(target.relative_to(root))] in (
+        "stale",
+        "locally-edited",
+        "stale-and-edited",
+        "differs",
+    ), _states(report)[str(target.relative_to(root))]
+    return report
+
+
+def test_judged_drift_stops_the_verdict_reading_as_an_all_clear(tmp_path, capsys):
+    """The HIGH from round 3: `unknown-version` got the caveat and `differs` did
+    not — the weaker case caveated, the stronger one bare."""
+    report = _drifted_case(tmp_path, declined=True)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    verdict = next(ln for ln in out.splitlines() if "intact for this adoption" in ln)
+    assert not verdict.lstrip().startswith("✓"), (
+        f"a bare ✓ stood above judged, actionable drift: {verdict}"
+    )
+    assert "1 present file(s) differ from the kit" in verdict, verdict
+
+
+def test_the_full_install_verdict_carries_the_caveat_too(tmp_path, capsys):
+    """The `else:` branch — nothing declined — was one of the two whose caveat
+    survived removal with the suite green."""
+    report = _drifted_case(tmp_path, declined=False)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    verdict = next(ln for ln in out.splitlines() if "intact for this adoption" in ln)
+    assert "full install, nothing declined" in verdict, verdict
+    assert not verdict.lstrip().startswith("✓"), verdict
+    assert "differ from the kit" in verdict, verdict
+
+
+def test_the_not_intact_verdict_carries_the_caveat_too(tmp_path, capsys):
+    """The `broken` branch — the other unpinned one. A tree can be both missing
+    a file it recorded AND holding one whose drift cannot be judged."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    gone = "scripts/lib/kitconfig.py"
+    _write(root / gone, "recorded, and about to vanish\n")
+    installed = {
+        ENGINE: kit_doctor.sha256_of(target),
+        gone: kit_doctor.sha256_of(root / gone),
+    }
+    baseline = _scoped_baseline(installed)
+    (root / gone).unlink()
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    # ENGINE present with no manifest entry -> unknown-version, beside the removal.
+    report = kit_doctor.inspect(root, _manifest({}), config, baseline)
+    assert [f.state for f in report.broken] == ["removed"], [f.state for f in report.broken]
+
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+    verdict = next(ln for ln in out.splitlines() if "intact for this adoption" in ln)
+    assert verdict.lstrip().startswith("✗"), verdict
+    assert "drift unjudgeable for 1 present file(s)" in verdict, verdict

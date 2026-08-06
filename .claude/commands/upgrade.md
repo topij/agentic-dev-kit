@@ -282,8 +282,17 @@ after the record, the second that a file you were offered in Step 3 was neither 
 nor recorded as declined. Anything else means Step 3 left something.
 
 A **`missing`** count surviving this step is itself a finding: Step 4 writes the declared
-set, so the state it eliminates should not be reachable here. It means `--record-install`
-did not run, or ran against a different root.
+set, so the state it eliminates should not be reachable here. Three causes, and the third
+is the one you will actually hit:
+
+- `--record-install` did not run, or ran against a different root.
+- The baseline predates the declared install set (it would also say so — see the
+  `baseline:` note).
+- **Step 4 reported unverified paths.** One kit-owned file that is present but does not
+  byte-match the source kit suppresses the **entire** `not_installed` key — the record is
+  partial, so it declares no scope at all, for every file rather than just that one — and
+  `--record-install` exits 1 saying so. A local patch you kept but did not set aside per
+  Step 4's ordering rule is the usual way in. Reconcile the paths it named, then re-run.
 
 That exception, stated once: a local patch you chose to keep in Step 3 reports
 `LOCALLY EDITED`, which is the baseline working as intended. Name it in the PR body so

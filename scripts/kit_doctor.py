@@ -1425,11 +1425,20 @@ def render(report: Report) -> str:
     # — and carries the caveat rather than swallowing it.
     # (Fallback panel, correctness lens, round 2.)
     n_unjudgeable = len(by_state.get("unknown-version", []))
-    unjudged_note = (
-        f" (drift unjudgeable for {n_unjudgeable} present file(s), listed below)"
-        if n_unjudgeable
-        else ""
-    )
+    # BOTH kinds of present-file drift, not just the unjudgeable one. An earlier
+    # version caveated `unknown-version` and left `n_differ` out, so a STALE or
+    # LOCALLY EDITED file — drift the report HAS judged, and the actionable kind
+    # — sat directly under a bare `✓ intact for this adoption` while the exit
+    # code was 1. That is the weaker case getting the caveat and the stronger
+    # one going without, in a line both skill docs tell an operator to skim.
+    # (Panel, adversarial lens, round 3.)
+    attention = []
+    if n_differ:
+        attention.append(f"{n_differ} present file(s) differ from the kit")
+    if n_unjudgeable:
+        attention.append(f"drift unjudgeable for {n_unjudgeable} present file(s)")
+    caveat = f" ({', '.join(attention)}, listed below)" if attention else ""
+    verdict_mark = "⚠" if attention else "✓"
     if report.declared_scope_known:
         if report.broken:
             # Never "intact" while something is absent that should not be —
@@ -1446,7 +1455,7 @@ def render(report: Report) -> str:
             declined_note = f", {n_declined} declined" if n_declined else ""
             lines.append(
                 f"  ✗ NOT intact for this adoption — {n_absent} file(s) absent that should be "
-                f"installed{declined_note}{unjudged_note}"
+                f"installed{declined_note}{caveat}"
             )
         elif not by_state.get("unchanged") and not n_differ and not n_unjudgeable:
             # "Intact" is a claim about an install set, and an EMPTY set has
@@ -1478,13 +1487,13 @@ def render(report: Report) -> str:
             )
         elif n_declined:
             lines.append(
-                f"  {'⚠' if n_unjudgeable else '✓'} intact for this adoption — "
-                f"{n_declined} file(s) declined{unjudged_note}"
+                f"  {verdict_mark} intact for this adoption — "
+                f"{n_declined} file(s) declined{caveat}"
             )
         else:
             lines.append(
-                f"  {'⚠' if n_unjudgeable else '✓'} intact for this adoption — full install, "
-                f"nothing declined{unjudged_note}"
+                f"  {verdict_mark} intact for this adoption — full install, "
+                f"nothing declined{caveat}"
             )
     if n_new_upstream:
         # Informational, and outside the intact/not-intact verdict on purpose:
