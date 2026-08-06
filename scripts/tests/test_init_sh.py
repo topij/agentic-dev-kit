@@ -1182,7 +1182,7 @@ def test_no_clobber_preserves_a_link_whose_target_is_marked(tmp_path: Path) -> N
     only the link relationship is lost. `--no-clobber` declines it like any
     other MARKED target, so the relationship survives too.
 
-    Pinned because `.claude/commands/adopt.md` now states this in prose, and a
+    Pinned because `docs/agentic-dev-kit/workflows/adopt.md` now states this in prose, and a
     claim about behaviour that nothing executes is how the guard this whole
     change exists to replace went wrong nine times (#294, #297). Raised by
     CodeRabbit on PR #328."""

@@ -4,7 +4,7 @@
 ``REPO_ROOT = Path(__file__).resolve().parents[2]``. From a file at
 ``scripts/tests/test_x.py`` that is the repo root — but only while the engines
 live at ``scripts/``. An adopter who vendors under ``paths.engines:
-scripts/devkit`` (the layout ``.claude/commands/adopt.md`` defaults to, and the
+scripts/devkit`` (the layout ``docs/agentic-dev-kit/workflows/adopt.md`` defaults to, and the
 one cs-toolkit actually uses) gets ``<repo>/scripts``, one directory short, and
 every path built from it names something that does not exist. Measured on a
 tree built exactly that way: two modules failed to import at all, which under a

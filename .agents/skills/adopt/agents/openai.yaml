@@ -1,0 +1,4 @@
+interface:
+  display_name: "Adopt"
+  short_description: "Install the kit into an existing repo"
+  default_prompt: "Use $adopt to inspect this repo, propose an install plan, and add only the kit pieces it lacks."

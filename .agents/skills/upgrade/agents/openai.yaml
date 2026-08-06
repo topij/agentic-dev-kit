@@ -1,0 +1,4 @@
+interface:
+  display_name: "Upgrade"
+  short_description: "Pull a kit update into this repo"
+  default_prompt: "Use $upgrade to migrate the config schema, refresh kit-owned engines, and diff anything that drifted."
