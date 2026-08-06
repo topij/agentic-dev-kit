@@ -91,17 +91,19 @@ Open issues that bite **cs-toolkit's exact configuration**, not hypothetical one
 
 Dependencies are the point; the ordering follows from them.
 
-**Phase 0 — make divergence visible.** Independent of everything else, and the
-only phase that can start today. Move the hook into the tracked engines path so
+**Phase 0 — make divergence visible.** Independent of everything else. Move the hook into the tracked engines path so
 drift is reportable at all; take the current engine version with it; replace the
 two stale files; record an install baseline.
 
 **The move is not a file move.** cs-toolkit's `.claude/settings.json` invokes
 `scripts/hooks/pr_followup_hook.py` by absolute path, and any `.codex/hooks.json`
 it gains will too. Relocating the file without editing both registrations leaves
-each runtime invoking a path that no longer exists — and a hook pointing at a
-missing file does not error, it simply never fires. Silent, which is the failure
-class this kit keeps finding.
+each runtime invoking a path that no longer exists. The interpreter does fail —
+`python3` on a missing script writes to stderr and exits 2, checked — but a
+`PostToolUse` hook failure does not halt the session, so what the operator
+actually observes is a hook that stopped firing. Exactly HOW each runtime
+surfaces hook stderr is not established here and is worth checking before
+relying on the failure being noticed.
 
 **Nothing will repair that automatically.** `init.sh` prints both registrations
 and writes neither, deliberately (`#303`). That decision is right for safety and
