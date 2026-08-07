@@ -375,21 +375,32 @@ def test_review_unavailable_overrides_coderabbit_summary_noise() -> None:
 Review limit reached. We couldn't start this review.
 """
     view = _green_view(
-        comments=[{"id": "notice-1", "author": {"login": "coderabbitai"}, "body": body}]
+        comments=[{"id": "notice-1", "author": {"login": "coderabbitai"}, "body": body}],
+        reviews=[
+            {"id": "notice-2", "author": {"login": "coderabbitai[bot]"}, "body": body}
+        ],
     )
+    inline = [
+        {"id": "notice-3", "author": {"login": "coderabbitai[bot]"}, "body": body}
+    ]
 
     report = pr_watch.build_report(
         view,
-        [],
+        inline,
         set(),
         review_receipt={"head": "abc123", "source": "coderabbit"},
     )
 
     assert report["done"] is False
-    assert len(report["new_comments"]) == 1
-    assert (
-        report["new_comments"][0]["review_unavailable_reason"] == "review limit reached"
-    )
+    assert len(report["new_comments"]) == 3
+    assert {
+        comment["kind"]: comment["review_unavailable_reason"]
+        for comment in report["new_comments"]
+    } == {
+        "issue": "review limit reached",
+        "review": "review limit reached",
+        "inline": "review limit reached",
+    }
 
 
 def test_non_reviewer_quoting_an_outage_message_remains_noise() -> None:
@@ -403,12 +414,18 @@ def test_non_reviewer_quoting_an_outage_message_remains_noise() -> None:
 The incident report says: Review limit reached. We couldn't start this review.
 """
     view = _green_view(
-        comments=[{"id": "mirror-1", "author": {"login": "linear-code"}, "body": body}]
+        comments=[{"id": "mirror-1", "author": {"login": "linear-code"}, "body": body}],
+        reviews=[
+            {"id": "mirror-2", "author": {"login": "review-reporter"}, "body": body}
+        ],
     )
+    inline = [
+        {"id": "mirror-3", "author": {"login": "coderabbit-impersonator"}, "body": body}
+    ]
 
     report = pr_watch.build_report(
         view,
-        [],
+        inline,
         set(),
         review_receipt={"head": "abc123", "source": "fallback:panel"},
     )
@@ -962,6 +979,7 @@ def test_a_non_reviewer_commenter_cannot_speak_for_the_bot() -> None:
     assert pr_watch._match_bot("coderabbitai", bots, anchored=True) == "coderabbit"
     assert pr_watch._match_bot("coderabbitai[bot]", bots, anchored=True) == "coderabbit"
     assert pr_watch._match_bot("xcoderabbit", bots, anchored=True) is None
+    assert pr_watch._match_bot("coderabbit-impersonator", bots, anchored=True) is None
 
     # …and quoted outage text from a non-reviewer never becomes an outage signal.
     comments = pr_watch.collect_comments(

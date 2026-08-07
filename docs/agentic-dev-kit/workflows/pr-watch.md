@@ -203,7 +203,8 @@ Self-pace on a bounded cadence — don't busy-wait:
   receipt.
 - **A bot's outage is detected on both trusted surfaces, and a queued bot is not a
   finished one.** `review.unavailable_markers` are matched against comments
-  authored by a configured `review.bots` entry *and* against that bot's
+  authored by the exact normalized login of a configured `review.bots` entry
+  (or an explicitly trusted service alias) *and* against that bot's
   status-check description — the same rate limit is worded differently on the two
   surfaces, and matching only comments made detection depend on which one the bot
   happened to use. Author scoping matters because tracker mirrors and humans can

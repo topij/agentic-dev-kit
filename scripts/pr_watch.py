@@ -277,11 +277,15 @@ _DEFAULT_INFORMATIONAL_CHECK_NAMES = ("coderabbit",)
 # about"). Keeping them separate is what lets a bot's check stay non-blocking
 # for `converged` while its state still informs the merge gate — the exact
 # split issues #19 and #23 need. Matched as a case-insensitive SUBSTRING of a
-# check name, and as a case-insensitive PREFIX of a comment author (that input
-# is not the repo's to control) — so `coderabbit` covers the check `CodeRabbit`
-# and the author `coderabbitai`. Keep entries specific enough not to collide
-# with a CI job name.
+# check name, and by exact normalized identity for a comment author (that input
+# is not the repo's to control). Known service aliases are enumerated below;
+# accepting prefixes would let `coderabbit-impersonator` speak for CodeRabbit.
+# Keep entries specific enough not to collide with a CI job name.
 _DEFAULT_REVIEW_BOTS = ("coderabbit",)
+
+_REVIEW_BOT_AUTHOR_ALIASES = {
+    "coderabbit": frozenset({"coderabbitai", "coderabbitai[bot]"}),
+}
 
 # How long a configured review bot's own check may sit non-terminal before the
 # merge gate stops waiting for it. Below the bound, a pending bot is "a review
@@ -1678,19 +1682,23 @@ def _match_bot(text: str, bots: tuple[str, ...], *, anchored: bool = False) -> s
     CodeRabbit``), and the comment author (``coderabbitai``), which no exact
     match spans.
 
-    ``anchored`` requires the text to START with the bot key, and is used for
+    ``anchored`` selects exact normalized author matching and is used for
     comment authors because that input is not the repo's to control: on a public
-    repo any account may comment, and an unrelated login merely *containing*
-    ``coderabbit`` (``xcoderabbit``) should not be read as the reviewer. Check
-    names come from the repo's own CI and bot configuration, so the looser match
-    is appropriate there. Different rules because the inputs have different
-    trust, not by oversight.
+    repo any account may comment. Each configured bot trusts its exact key, its
+    conventional ``[bot]`` form, and explicitly enumerated service aliases.
+    Check names come from the repo's own CI and bot configuration, so substring
+    matching remains appropriate there. Different rules because the inputs have
+    different trust, not by oversight.
     """
     low = str(text or "").strip().lower()
     if not low:
         return None
     if anchored:
-        return next((bot for bot in bots if low.startswith(bot)), None)
+        for bot in bots:
+            trusted = {bot, f"{bot}[bot]", *_REVIEW_BOT_AUTHOR_ALIASES.get(bot, ())}
+            if low in trusted:
+                return bot
+        return None
     return next((bot for bot in bots if bot in low), None)
 
 
