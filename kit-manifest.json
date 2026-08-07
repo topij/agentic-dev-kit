@@ -45,7 +45,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "8ff617cea10da4e0e2f2c89252c71a7ee1574148c017de3af557850a224fc8c3"
+      "sha256": "97baeb81e5c69ce074de47a5fef50623a8daac4dc88795e1d3615d9a4910dd93"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -97,7 +97,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "7324a1df01ba8aaf9a39a23ee1e00fb488f9a80ceaeac008cf2d40f33f426231"
+      "sha256": "8672fc436d7338d6c62115cfb76d3410452cb8c3e2cd03894ae27de1d355994b"
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
@@ -171,7 +171,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "3af30007de4b75a8dbcd88a5bbed8b882bf6faac73e2101ce845b8c3b6fc7477"
+      "sha256": "3d2b8fa38e6ac539117c404cffa3f3f5ca8d135f5c2ab00a266d7ceb75ae7cf0"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",

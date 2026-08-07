@@ -3085,6 +3085,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     parser.add_argument(
+        "--no-persist",
+        action="store_true",
+        help=(
+            "with a plain poll: report current PR state without rewriting the "
+            "per-PR seen, pending, check-baseline, or bot-clock state; use for "
+            "an act-time authorization check after the interactive watch loop"
+        ),
+    )
+    parser.add_argument(
         "--head",
         metavar="EXPECTED_SHA",
         help="exact head SHA reviewed; required with --record-review",
@@ -3150,6 +3159,13 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--allow-pending-bot-review is only valid with --record-review")
     if args.lenses and args.record_review is None:
         parser.error("--lenses is only valid with --record-review")
+    if args.no_persist and (
+        args.mark_seen
+        or args.record_review is not None
+        or args.assert_draft
+        or args.assert_ready
+    ):
+        parser.error("--no-persist is only valid with a plain poll")
 
     try:
         pr = resolve_pr(args.pr)
@@ -3227,7 +3243,8 @@ def main(argv: list[str] | None = None) -> int:
         backend=backend_name,
     )
 
-    persist_poll(pr, report, seen)
+    if not args.no_persist:
+        persist_poll(pr, report, seen)
 
     if args.json:
         print(json.dumps(report, ensure_ascii=False))

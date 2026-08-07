@@ -765,7 +765,7 @@ cmd_merge() {
     [[ -n "$repo_nwo" && -n "$pr" ]] || _die "could not resolve lane PR identity"
 
     report="$(GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" \
-        uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json)" \
+        uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist)" \
         || _die "pr-watch failed for PR #$pr"
     # Gate on `mergeable`: converged AND no deterministic merge blocker AND a
     # review receipt bound to this head. The report's `done` is an unchanged

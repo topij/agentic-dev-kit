@@ -674,7 +674,7 @@ def test_scope_pr_watch_and_merge_share_lane_state_and_pinned_repo(
     assert len(uv_calls) == 2
     assert all(line.startswith(expected_prefix) for line in uv_calls)
     assert "--record-review fallback:codex --head reviewed-head" in uv_calls[0]
-    assert uv_calls[1].endswith("8 --json")
+    assert uv_calls[1].endswith("8 --json --no-persist")
     gh_calls = call_log.read_text(encoding="utf-8")
     assert "|attacker/other|" not in gh_calls
     assert f"{repo}|unset|repo view" in gh_calls

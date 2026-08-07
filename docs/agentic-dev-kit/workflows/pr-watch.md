@@ -125,6 +125,24 @@ Repeat until the report says **converged**:
 
 1. **Pace the next poll** (see below), then go to step 1.
 
+## Read-only act-time poll
+
+The normal poll persists the report's comment acknowledgment set, check-count
+baseline, head, and bot-pending clock so the interactive loop can make progress.
+That is intentional during the loop, but it is the wrong side effect for a final
+authorization probe that must not silently acknowledge anything the operator has
+not read. Use:
+
+```sh
+uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist
+```
+
+`--no-persist` performs the same current-state reads and builds the same report,
+but leaves the per-PR state file unchanged. It is valid only for a plain poll; it
+cannot be combined with `--mark-seen`, `--record-review`, `--assert-draft`, or
+`--assert-ready`. A merge wrapper should use this mode for its last `mergeable`
+check, after the normal watch-and-acknowledge loop has finished.
+
 ## The draft-bit flags — they CORRECT, they do not check
 
 `--assert-draft` and `--assert-ready` are documented in `pr_watch.py`'s own docstring and
@@ -216,8 +234,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   it so future notices are authenticated. The report's
   `review_bots` block resolves each bot to:
   - **unavailable** — an outage announced on either surface. Rendered as
-    `⚠ review unavailable …`, and it never blocks anything: it's the action signal
-    to run the `review.fallback_panel` pass. It stays visible after you `--mark-seen` the
+    `⚠ review unavailable …`. The status entry itself adds no
+    `review_bots.blockers` item, but an unseen notice comment still blocks
+    `converged`, and unavailability never satisfies the current-head review gate:
+    `mergeable` stays blocked until the configured `review.fallback_panel` runs
+    and records a receipt. The outage stays visible after you `--mark-seen` the
     notice comment, so the gap is still readable at merge time. Only a
     **check**-surface outage cancels the pending block below: a check describes
     the bot's state now, while comments are the whole PR history unscoped by
@@ -238,7 +259,9 @@ Self-pace on a bounded cadence — don't busy-wait:
 
   None of this reaches `converged`. That is deliberate and load-bearing: the watch
   loop must be able to finish while a bot that never reports sits pending forever.
-  Every signal *above* feeds the merge gate only.
+  More precisely, none of the `review_bots` status or pending entries above reaches
+  `converged`; an unseen outage notice still does through `new_comments`. Those
+  status and pending signals feed the merge gate only.
 
   It also reports **`review_bots.coverage`** — the commit each bot's *last*
   review actually saw. A receipt binds to the head and a push invalidates it,
