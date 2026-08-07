@@ -130,9 +130,10 @@ instrument work to the upgrade session; one kit track runs beside it.
 
 **Phase 0 — make divergence visible** (a cs-toolkit PR, through its own
 review). Independent of everything else. Move the hook into the tracked engines
-path so drift is reportable at all; take the current engine version and its
-import closure with it; **create `.codex/hooks.json` there with `--runtime
-codex`** (question 2's decision — today no hook of any kind fires for a Codex
+path so drift is reportable at all; take the current engine version with it —
+its import closure is already satisfied at that destination, measured under
+*The fork that matters* above, so there is nothing further to carry; **create
+`.codex/hooks.json` there with `--runtime codex`** (question 2's decision — today no hook of any kind fires for a Codex
 session in cs-toolkit); replace the two stale files; re-record the install
 baseline.
 
