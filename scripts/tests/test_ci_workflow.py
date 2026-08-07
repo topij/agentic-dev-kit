@@ -296,11 +296,28 @@ _NORM_MUST_DIFFER = [
     ("${{ a | | b }}", "${{ a || b }}", "a split `||` is two tokens, not one"),
     ("${{ a = = b }}", "${{ a == b }}", "a split `==` is two tokens, not one"),
     ("${{ a }} - ${{ b }}", "${{ a }}-${{ b }}", "text outside the braces is content"),
+    # One entry per operator `_OPERATORS` declares, because a table covering only
+    # the operators that happen to appear in the two constants above is a table
+    # that pins the last bug rather than the property. Dropping `&&` or `!=` from
+    # `_OPERATORS` passed the whole suite until these existed.
+    ("${{ a & & b }}", "${{ a && b }}", "a split `&&` is two tokens, not one"),
+    ("${{ a ! = b }}", "${{ a != b }}", "a split `!=` is two tokens, not one"),
+    # `''` is how a GH literal escapes an embedded quote. A naive `'[^']*'` reads
+    # `'a''b'` as two adjacent literals and so equates it with `'a' 'b'`, which is
+    # a different value. That regression also passed the whole suite.
+    ("${{ x == 'a''b' }}", "${{ x == 'a' 'b' }}", "an escaped quote is one literal, not two"),
 ]
 _NORM_MUST_MATCH = [
     ("${{ a||b }}", "${{ a || b }}", "spacing around an operator is not meaning"),
     ("${{ a=='x' }}", "${{ a == 'x' }}", "…including next to a literal"),
     ("${{  a   ||   b  }}", "${{ a || b }}", "runs of whitespace are not meaning"),
+    # Same reason as the operator entries above: every operator, not just the two
+    # the shipped expressions use. Each of these fails if its operator is missing
+    # from `_OPERATORS`, which is round 3's defect shape waiting on four operators.
+    ("${{ a&&b }}", "${{ a && b }}", "spacing around `&&`"),
+    ("${{ a!=b }}", "${{ a != b }}", "spacing around `!=`"),
+    ("${{ a<=b }}", "${{ a <= b }}", "spacing around `<=`"),
+    ("${{ a>=b }}", "${{ a >= b }}", "spacing around `>=`"),
 ]
 
 
