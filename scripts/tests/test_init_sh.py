@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -1182,7 +1183,7 @@ def test_no_clobber_preserves_a_link_whose_target_is_marked(tmp_path: Path) -> N
     only the link relationship is lost. `--no-clobber` declines it like any
     other MARKED target, so the relationship survives too.
 
-    Pinned because `.claude/commands/adopt.md` now states this in prose, and a
+    Pinned because `docs/agentic-dev-kit/workflows/adopt.md` now states this in prose, and a
     claim about behaviour that nothing executes is how the guard this whole
     change exists to replace went wrong nine times (#294, #297). Raised by
     CodeRabbit on PR #328."""
@@ -1944,3 +1945,87 @@ def test_both_shipped_registrations_name_their_own_runtime() -> None:
         if any("pr_followup_hook" in h.get("command", "") for h in e["hooks"])
     )
     assert codex_pr_entry["matcher"] == "^Bash$"
+
+
+# --------------------------------------------------------------------------- #
+# The upgrade workflow's own `init.sh` invocation (#330)
+# --------------------------------------------------------------------------- #
+# These two run the command OUT OF THE DOCUMENT rather than a literal copied
+# from it, because the defect #330 reports is precisely a document drifting
+# from the behaviour it promises: `upgrade.md` ran `init.sh` bare while its own
+# opening line claimed it "never replaces a file without knowing it is safe to
+# replace". A test asserting `"--no-clobber" in text` would pass on a doc that
+# had moved the flag to a code block nothing tells you to run.
+#
+# This is also the friction log's 2026-08-04 entry (severity H) applied to one
+# case: the kit ships prose containing executable payloads and had no way to
+# execute them, so every defect in one was found by a human running it by hand.
+
+
+def _upgrade_init_argv() -> list[str]:
+    """The `./init.sh …` line from upgrade.md Step 2, as argv beyond the script.
+
+    Anchored on the `cp` of `init.sh` that opens that block so a future
+    `./init.sh` elsewhere in the document cannot be picked up instead.
+    """
+    doc = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+    ).read_text(encoding="utf-8")
+    blocks = re.findall(r"```(?:bash|sh)\n(.*?)```", doc, re.DOTALL)
+    matching = [b for b in blocks if "cp /tmp/agentic-dev-kit/init.sh" in b]
+    assert len(matching) == 1, f"expected one Step 2 refresh block, found {len(matching)}"
+    lines = [ln.strip() for ln in matching[0].splitlines() if ln.strip().startswith("./init.sh")]
+    assert len(lines) == 1, f"expected one ./init.sh invocation, found {lines!r}"
+    argv = shlex.split(lines[0].split("#")[0])
+    assert argv[0] == "./init.sh"
+    return argv[1:]
+
+
+@pytest.mark.kit_repo_only("docs/templates", "docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_workflows_init_invocation_does_not_destroy_a_marked_but_edited_file(
+    tmp_path: Path,
+) -> None:
+    """Kills: dropping `--no-clobber` from upgrade.md Step 2.
+
+    The exposed party is a long-running adopter, not a new one: `README.md`
+    documents re-running `init.sh` as the supported upgrade path, and a repo
+    that took the pre-#288 `cp -r` quickstart carries marked skeletons whose
+    line 1 nobody removed while filling the body with their own doctrine.
+
+    Bare, this run reports `seeded AGENTS.md` and the content is gone with no
+    backup — which is the whole of #330."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    mine = f"<!-- {template_marker()} -->\n\n# my own doctrine, months of it\n"
+    (repo / "AGENTS.md").write_text(mine, encoding="utf-8")
+
+    result = _run_init(repo, *_upgrade_init_argv())
+
+    assert (repo / "AGENTS.md").read_text(encoding="utf-8") == mine
+    # and the decline is reported rather than silent — the property that makes
+    # the pristine-skeleton regression acceptable (see the workflow's table).
+    assert "left untouched" in result.stdout
+
+
+@pytest.mark.kit_repo_only("docs/templates", "docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_workflows_init_invocation_still_seeds_a_genuinely_absent_file(
+    tmp_path: Path,
+) -> None:
+    """Kills: narrowing Step 2's invocation until it stops seeding at all.
+
+    #330 argues against `--no-clobber` here on the grounds that it would stop a
+    partially-adopted repo receiving `AGENTS.md`. It does not — the flag narrows
+    seeding to ABSENT targets, and absent is this case — but nothing pinned that,
+    and upgrade.md depends on it in the paragraph beginning "The templates have to
+    land **before** `init.sh` runs": that is the path by which an existing adopter
+    first receives either root entry point at all.
+
+    Cited by its opening words rather than by line number, which is the review
+    finding that produced this wording: the first draft said `upgrade.md:152-158`
+    and was already two lines stale in the same commit that wrote it."""
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    assert not (repo / "AGENTS.md").exists()  # positive control on the fixture
+
+    _run_init(repo, *_upgrade_init_argv())
+
+    assert (repo / "AGENTS.md").exists()
+    assert template_marker() not in (repo / "AGENTS.md").read_text(encoding="utf-8")

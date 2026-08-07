@@ -176,9 +176,9 @@ It also checks four things nothing else validates:
 `kit-manifest.json` is the hash set it compares against, regenerated at release
 (`--generate-manifest`) and gated in CI so it can't go stale.
 
-**[`/upgrade`](.claude/commands/upgrade.md)** drives the whole sequence — shape detection,
+**[`/upgrade`](docs/agentic-dev-kit/workflows/upgrade.md)** drives the whole sequence — shape detection,
 config migration, then per-file refresh keyed on those states — non-destructively, on a
-branch. It's the counterpart to [`/adopt`](.claude/commands/adopt.md) (first install). A
+branch. It's the counterpart to [`/adopt`](docs/agentic-dev-kit/workflows/adopt.md) (first install). A
 repo with no `config/dev-model.yaml` at all predates the config surface and routes to
 `/adopt` instead.
 
@@ -189,8 +189,8 @@ runtime adapters are intentionally thin:
 
 | Runtime | Repository adapter | Invocation |
 |---|---|---|
-| Claude Code | `.claude/commands/<name>.md` | `/session-start`, `/wrap-up`, `/pr-watch`, `/parallel` |
-| Codex | `.agents/skills/<name>/SKILL.md` | `$session-start`, `$wrap-up`, `$pr-watch`, `$parallel` |
+| Claude Code | `.claude/commands/<name>.md` | `/session-start`, `/wrap-up`, `/pr-watch`, `/parallel`, `/adopt`, `/upgrade` |
+| Codex | `.agents/skills/<name>/SKILL.md` | `$session-start`, `$wrap-up`, `$pr-watch`, `$parallel`, `$adopt`, `$upgrade` |
 
 Set `runtime.default` in `config/dev-model.yaml`. The lane launcher reads its command
 from `runtime.launchers`; shared workflows use the runtime-neutral
@@ -204,8 +204,8 @@ The quickstart above assumes a fresh or near-empty repo. Dropping the kit into a
 plan doc, and CI — needs a lighter touch: a blind `cp -r` would clobber files. Adopt
 selectively instead.
 
-**The [`/adopt`](.claude/commands/adopt.md) skill automates this.** Copy
-`.claude/commands/adopt.md` into your repo, run `/adopt`, and it inspects the repo,
+**The [`/adopt`](docs/agentic-dev-kit/workflows/adopt.md) workflow automates this.** Copy
+`docs/agentic-dev-kit/workflows/adopt.md` and your runtime's adapter for it into your repo, run `/adopt`, and it inspects the repo,
 proposes a selective plan (what to install vs. skip vs. point the config at), and
 executes it non-destructively on a branch — then seeds the friction log with whatever
 the adoption surfaced. The principles it applies:

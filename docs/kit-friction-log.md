@@ -11,6 +11,94 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-06 — the panel found the cockpit's own mutation harness, and it was the unsafe shape
+
+Severity **M**. Not filed: `#326` already owns the class and now carries this as an occurrence
+comment. Recorded here because of what it says about *how* it was found.
+
+The cockpit needed to mutation-test two new tests whose subject was a workflow document. It
+deliberately avoided `git checkout --` to revert, **because `#254`/`#326` say that is
+destructive against a file holding uncommitted work** — which this one was. It used a
+backup-by-copy and a `trap restore EXIT INT TERM` instead, and mutated the file **in the live
+checkout**.
+
+An adversarial review lens, reviewing the *PR*, found the harness lying in the shared scratch
+root and flagged it unprompted:
+
+> That writes into the tree I was handed, guarded only by a trap — not an isolated copy — and
+> a trap doesn't survive `SIGKILL`/sandbox crash.
+
+**The interesting part is that the cockpit was actively thinking about the adjacent hazard and
+still reached for the wrong shape.** It avoided the route the tickets name and invented a
+different unsafe one. That suggests the rule wants to be *"do not mutate the live tree"* rather
+than *"revert safely"* — a rule about reverting invites better reverting. Both lenses mutate
+clones, so the doctrine already says this for lenses; nothing says it for the cockpit, which is
+`#325`'s gap.
+
+No harm this time, and the reason is luck rather than process: the tree ended clean, and both
+lenses independently reproduced every mutation kill in their own clones, so no claim depended
+on the unsafe run.
+
+## 2026-08-06 — a third session in a row where the review bot's quota shaped the work
+
+Severity **M**. The entry below says this should graduate at the next triage sweep rather than
+wait for a further occurrence, and this is that further occurrence — so the graduation is now
+overdue rather than pending.
+
+New information, and it is the useful kind: **the quota refilled mid-PR and the bot reviewed
+after all.** It was quota-blocked when PR `#337` opened, so the fallback panel carried round 1;
+by round 2 it had recovered and reviewed that head, raising six findings the panel had not.
+Four were pre-existing defects in a document neither the panel nor any check had reason to look
+at.
+
+That changes the shape of the decision the entry below frames. The options were stated as
+accept the quota / reconfigure the trigger / pay, with the panel carrying the overflow. What
+this session shows is that the bot and the panel **found disjoint things** — the panel found
+two regressions the bot did not, and the bot found four pre-existing gaps the panel did not —
+so treating the panel as a *substitute* undersells both. Worth weighing at triage: the question
+may not be "how do we always have the bot" but "what does each actually cover", which affects
+whether paying is the right answer at all.
+
+Still an operator decision and still not a kit change.
+
+## 2026-08-06 — second occurrence of the entry below
+
+**The bot was rate limited again, on a second consecutive session, and this time it went
+down *mid-PR*.** Severity **M**. Recorded here rather than filed because it sharpens the
+entry below rather than adding a new claim; the graduating shape has not changed.
+
+CodeRabbit reviewed PR `#328` at `4576f40` and raised three findings. The fixes for **its
+own findings** moved the head, and it was rate limited by the time that head existed — so
+the sha that merged carried only the fallback panel's review. That is the entry below's
+"one review of a superseded sha, then nothing", reproduced without a batch: one PR, one
+fix round.
+
+**The open question below is now answered, and by the bot rather than by inference.** That
+entry listed three candidates — a rate-limit tier question, a batch-concurrency effect (three
+lanes opening PRs within the hour), or a bad day — and said a second occurrence would separate
+them. On the wrap-up PR the bot stated the cause itself:
+
+> **Review limit reached.** `@topij`, you've reached your PR review limit, so we couldn't
+> start this review. **Next review available in: 52 minutes.** You've used all free OSS
+> reviews for now.
+
+So it is the **tier**: a free-OSS quota that refills on a timer, not a batch effect and not
+chance. Two independent supports — this session opened a *single* PR and still exhausted it,
+so sequencing is not the driver.
+
+That changes the graduating shape. "Record when the fallback carried review, so the rate is
+visible" was written when the rate was the unknown; the unknown now is **what the quota
+actually is and whether the work fits inside it**, which observability alone does not answer.
+The bot's own suggestions (pause incremental auto-reviews, label-based opt-in, request review
+when the PR is ready) are configuration this repo could adopt without an account change —
+worth weighing against a paid tier rather than assuming either.
+
+Still not filed, deliberately: the remedy is now clearly an **operator decision** (accept the
+quota and let the panel carry the overflow, change the bot's trigger configuration, or pay),
+and none of those is a kit change. The value of this entry is that the decision is now
+informed. It should graduate at the next triage sweep rather than wait for a third occurrence,
+since waiting can no longer teach anything new.
+
 ## 2026-08-06
 
 **The configured review bot carried none of the merged review across a batch, so every lane
