@@ -2018,6 +2018,15 @@ def test_the_codex_registration_survives_a_git_less_tree(tmp_path: Path) -> None
         f"#359 signature. stderr: {outside.stderr}"
     )
     assert not outside.stdout.strip(), f"unexpected output: {outside.stdout!r}"
+    # Pins `2>/dev/null`. Without it git prints `fatal: not a git repository` on
+    # EVERY Bash tool call in such a tree — the hook fires per tool use, so the
+    # noise is per-call, not once. Mutation-checked: dropping the redirect
+    # survived every other assertion here.
+    assert outside.stderr == "", (
+        "the registration leaked git's error to stderr in a tree with no .git; "
+        f"a PostToolUse hook fires on every Bash call, so this is per-call noise. "
+        f"stderr: {outside.stderr!r}"
+    )
 
     # Positive control: inside a real worktree the same string must REACH the
     # hook rather than bail. Asserted through a variant naming a script that does
@@ -2042,6 +2051,54 @@ def test_the_codex_registration_survives_a_git_less_tree(tmp_path: Path) -> None
         f"stderr: {inside.stderr}"
     )
     assert not inside.stderr.startswith("/no_such_hook"), "root resolved to / — #359"
+
+
+def test_the_codex_registration_guards_an_empty_root_that_git_reports_as_success(
+    tmp_path: Path,
+) -> None:
+    """Pins `[ -n "$root" ] || exit 0` specifically — the clause the sibling test
+    above does NOT cover.
+
+    Established by mutation rather than assumed: deleting that clause leaves the
+    sibling test passing, because real `git rev-parse` *exits non-zero* outside a
+    worktree and `|| exit 0` already catches that path. So the empty-string guard
+    only earns its place against a `git` that succeeds and prints nothing — and
+    nothing in this suite produced one.
+
+    This test produces one, with a stub `git` first on `PATH` that exits 0 with
+    empty stdout. That is not a contrived shape: `--show-toplevel` is documented
+    to fail in a bare repository, `GIT_DIR`/`GIT_WORK_TREE` can point somewhere
+    that resolves oddly, and a wrapper `git` on an adopter's PATH is common. If
+    the guard is ever deleted as redundant, this fails and says why.
+    """
+    stub_dir = tmp_path / "stubbin"
+    stub_dir.mkdir()
+    stub = stub_dir / "git"
+    # Succeeds, prints nothing — the one case `|| exit 0` cannot see.
+    stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    stub.chmod(0o755)
+
+    env = _env(tmp_path)
+    env["PATH"] = f"{stub_dir}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        ["sh", "-c", _codex_registration_command()],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=env,
+    )
+
+    assert result.returncode == 0, (
+        "with a git that succeeds and prints nothing, the registration ran "
+        "python3 against a path built from an empty string — #359's mechanism, "
+        f"reached without git failing. exit={result.returncode}\n{result.stderr}"
+    )
+    assert "No such file or directory" not in result.stderr, (
+        "the interpreter was reached with an empty root: the command built "
+        f"'/…' from an empty $root. stderr: {result.stderr}"
+    )
 
 
 # --------------------------------------------------------------------------- #
