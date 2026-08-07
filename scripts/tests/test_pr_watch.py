@@ -153,9 +153,13 @@ def test_workflow_routes_check_only_review_outages_to_the_fallback_panel() -> No
 
     comment_start = workflow.index("- **Reviewer unavailable**")
     comment_end = workflow.index("- **Real finding**", comment_start)
-    comment_rule = workflow[comment_start:comment_end]
-    assert "current-head `review_evidence` is invalid" in comment_rule
+    comment_rule = " ".join(workflow[comment_start:comment_end].split())
+    comment_condition = comment_rule.split(":", 1)[0]
+    assert "current-head `review_evidence` is invalid" in comment_condition
+    assert "`review_bots.blockers` is empty" in comment_condition
     assert "do not rerun the panel" in comment_rule
+    assert "another reviewer is pending" in comment_rule
+    assert "blocker must clear before the panel runs" in comment_rule
 
 
 def test_done_keeps_its_original_merge_authorization_semantics() -> None:

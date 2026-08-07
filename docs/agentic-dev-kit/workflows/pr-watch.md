@@ -83,8 +83,8 @@ Repeat until the report says **converged**:
 1. **If there are `new_comments`:** handle each with judgment —
 
    - **Reviewer unavailable** (`review_unavailable_reason` is set — rate limit,
-     skipped review, no credits) and current-head `review_evidence` is invalid:
-     run the **fallback review panel** —
+     skipped review, no credits), current-head `review_evidence` is invalid, and
+     `review_bots.blockers` is empty: run the **fallback review panel** —
      `review.fallback_panel`, one isolated fresh-context reviewer per lens. Read
      [`../fallback-review-panel.md`](../fallback-review-panel.md) for the contract
      each lens gets; it is what makes the pass independent of you. A blocked bot
@@ -111,6 +111,8 @@ Repeat until the report says **converged**:
      lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same flags.
      If current-head evidence is already valid, do not rerun the panel; keep the
      outage visible and acknowledge the notice as an already-covered round.
+     If another reviewer is pending, leave the notice unacknowledged and re-poll;
+     the blocker must clear before the panel runs or its receipt will be refused.
 
    - **Real finding** (a bug, a missing guard, a correctness/clarity issue): fix it in
      the code, commit, push. Re-running the local gate first.
