@@ -137,11 +137,11 @@ def test_workflow_routes_check_only_review_outages_to_the_fallback_panel() -> No
     start = workflow.index("If `review_bots.unavailable` contains an entry")
     end = workflow.index("\n1. **If `converged`", start)
     fallback_rule = " ".join(workflow[start:end].split())
+    condition = fallback_rule.split(":**", 1)[0]
 
-    assert "current head has no valid" in fallback_rule
-    assert "`review_evidence`" in fallback_rule
-    assert "`surface` is `check`" in fallback_rule
-    assert "`review_bots.blockers` is empty" in fallback_rule
+    assert "`surface` is `check`" in condition
+    assert "`review_bots.blockers` is empty" in condition
+    assert "current head has no valid `review_evidence`" in condition
     assert "`new_comments[]` contains no outage notice" in fallback_rule
     assert "run `review.fallback_panel`" in fallback_rule
     assert "report's exact `head`" in fallback_rule
