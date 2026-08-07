@@ -49,9 +49,12 @@ def _workflow() -> dict:
     PyYAML implements YAML 1.1, where the bare key `on` is a BOOLEAN — so the
     trigger block arrives under the key `True`, not `"on"`. A test reading
     `doc["on"]` raises KeyError against a perfectly valid workflow, and one using
-    `doc.get("on", {})` silently sees an EMPTY trigger block and passes every
-    assertion below vacuously. The second is why this is a helper with a comment
-    rather than an inline `.get`.
+    `doc.get("on", {})` silently sees an EMPTY trigger block. The assertions in
+    this module as written would still fail against that empty dict rather than
+    pass vacuously — an earlier version of this docstring claimed otherwise, and
+    a review lens checked it. The hazard is real but latent: it is the NEXT
+    membership-style assertion added here that would pass over nothing, which is
+    why the resolution lives in this helper rather than in each caller.
     """
     doc = yaml.safe_load((REPO_ROOT / WORKFLOW).read_text(encoding="utf-8"))
     triggers = doc.get("on", doc.get(True))
@@ -110,68 +113,89 @@ def _concurrency() -> dict:
     return block
 
 
-def test_ci_concurrency_group_isolates_each_protected_branch_run() -> None:
-    """Kills: keying the concurrency group on the branch name.
+EXPECTED_GROUP = (
+    "${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}"
+)
+EXPECTED_CANCEL = "${{ github.event_name == 'pull_request' }}"
 
-    `cancel-in-progress: false` protects a run that is already EXECUTING. It does
-    NOT protect a QUEUED one — GitHub cancels any pending run in the same group
-    when a newer one arrives, whatever `cancel-in-progress` says. So a
-    branch-keyed group put every push to the protected branch in one group, and
-    two pushes landing while the first was still waiting for a runner cancelled
-    the first. `CANCELLED` is in `pr_watch.summarize_checks`'s `bad` set, so that
-    renders as a failing check on the protected branch — the exact
-    cancelled-reads-as-failed confusion this workflow exists to remove.
 
-    Established by a review lens live-firing the original stanza against a
-    throwaway repo, not by reading the docs. The fix is at the KEY: `push` falls
-    back to `github.run_id`, unique per run, so a protected-branch run is alone
-    in its group and nothing can cancel it in either state.
+def _norm(expr: str) -> str:
+    """Collapse whitespace runs so a reflow is not a failure but a token change is."""
+    return " ".join(str(expr).split())
 
-    Both mutations this kills survived the entire suite before it existed."""
-    group = _concurrency()["group"]
 
-    assert "github.run_id" in group, (
-        f"the concurrency group must fall back to `github.run_id` so a push run is "
-        f"alone in its group and cannot be cancelled while queued — got {group!r}"
+def test_ci_concurrency_group_is_exactly_the_expression_that_isolates_push_runs() -> None:
+    """Kills: any change to the group key's meaning, including operand ORDER.
+
+    Asserted as an exact string rather than by membership, because membership is
+    what let two meaning-inverting mutations through the first version of this
+    test. Both lenses of the review panel and the review bot found that
+    independently, which is why this is exact now:
+
+      - `github.run_id || github.event.pull_request.number` — operands swapped.
+        `run_id` is present and truthy on EVERY run, so the PR-number arm becomes
+        dead code and each push to a PR gets its own group. That silently removes
+        the superseding this block exists to provide, reopening the runner
+        contention of #329. The old assertion passed, because the PR-number
+        substring was still present.
+      - reverting to `github.head_ref || github.ref` — the original defect.
+
+    WHY EACH HALF IS WHAT IT IS, so a future editor updating this constant to
+    match a change knows what they are giving up:
+
+      pull_request → the PR NUMBER. Runs for one PR share a group and supersede
+                     each other; two PRs sharing a head branch name (`patch-1`
+                     from two forks, and this repo is public) do not collide.
+      push         → `github.run_id`, unique per run, so a protected-branch run
+                     is ALONE in its group. That is what makes it uncancellable
+                     while QUEUED — `cancel-in-progress` only governs a run that
+                     is already executing, and a queued run in a shared group is
+                     cancelled unconditionally."""
+    group = _norm(_concurrency()["group"])
+
+    assert group == EXPECTED_GROUP, (
+        f"the concurrency group expression must be exactly\n  {EXPECTED_GROUP}\ngot\n  "
+        f"{group}\nRead this test's docstring before updating the constant — operand "
+        f"order is load-bearing, not style."
     )
-    assert "github.head_ref" not in group, (
-        f"`head_ref` keys the group on a BRANCH NAME, which shares a group across "
-        f"every push to the protected branch (queued-run cancellation) and across "
-        f"two PRs with the same branch name on a public repo — got {group!r}"
+
+
+def test_ci_concurrency_group_puts_the_pull_request_arm_first() -> None:
+    """Kills: the operand swap, by a different shape than the exact match above.
+
+    Deliberately redundant with the equality assertion. An exact-match test has
+    one failure mode — an editor who repairs it by pasting in whatever the file
+    now says — and this one states the property in a form that cannot be
+    satisfied that way without noticing it."""
+    group = _norm(_concurrency()["group"])
+
+    assert "github.event.pull_request.number" in group and "github.run_id" in group, (
+        f"both arms must be present — got {group!r}"
+    )
+    assert group.index("github.event.pull_request.number") < group.index("github.run_id"), (
+        f"`github.run_id` is truthy on every run, so it must be the FALLBACK arm, not "
+        f"the first — leading with it makes the pull_request arm dead code and silently "
+        f"stops PR runs superseding each other. Got {group!r}"
     )
 
 
-def test_ci_concurrency_groups_a_pull_request_by_number_not_branch_name() -> None:
-    """Kills: grouping PR runs by branch name.
+def test_ci_concurrency_cancel_is_exactly_the_pull_request_only_condition() -> None:
+    """Kills: `cancel-in-progress: true`, and the polarity inversion.
 
-    Superseding a PR's own older run is the point of the block, so PR runs must
-    still share a group. Keying that on `head_ref` rather than the PR number
-    means two PRs whose head branches happen to share a name — `patch-1` from two
-    different forks, and this repo is public — land in one group and cancel each
-    other. Nothing before this block could do that, so it is exposure the block
-    introduced."""
-    group = _concurrency()["group"]
-
-    assert "github.event.pull_request.number" in group, (
-        f"a pull_request run must be grouped by PR number, not by branch name — "
-        f"got {group!r}"
-    )
-
-
-def test_ci_concurrency_never_cancels_in_progress_on_a_push() -> None:
-    """Kills: `cancel-in-progress: true`.
-
-    Redundant now that a push run is alone in its group, and kept because it is
-    the one property that must not regress: a hardcoded `true` would cancel
-    running protected-branch jobs if the group key ever widened again. A literal
-    `True` and an expression are different YAML types, which is what this
-    distinguishes."""
+    `github.event_name != 'pull_request'` still contains the substring
+    `pull_request` and is still not a literal `True`, so the first version of
+    this test passed it — while it cancels EXECUTING runs on the protected
+    branch (the failure this whole file exists to prevent) and simultaneously
+    disables PR superseding. Exact match is the only form that catches a
+    polarity flip."""
     cancel = _concurrency()["cancel-in-progress"]
 
     assert cancel is not True, (
-        "cancel-in-progress must not be unconditionally true — that cancels runs "
-        "on the protected branch, which this workflow exists to prevent"
+        "cancel-in-progress must not be unconditionally true — that cancels runs on "
+        "the protected branch, which this workflow exists to prevent"
     )
-    assert isinstance(cancel, str) and "pull_request" in cancel, (
-        f"cancel-in-progress must be conditioned on the pull_request event — got {cancel!r}"
+    assert _norm(cancel) == EXPECTED_CANCEL, (
+        f"cancel-in-progress must be exactly\n  {EXPECTED_CANCEL}\ngot\n  "
+        f"{_norm(cancel)}\nA `!=` here inverts the meaning while still mentioning "
+        f"pull_request."
     )
