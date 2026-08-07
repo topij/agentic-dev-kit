@@ -185,6 +185,13 @@ def test_the_completeness_guard_rejects_a_tree_missing_an_untracked_kit_file(tmp
     still passes, because the synthetic manifest below lists neither — which is
     the point: the guard must not depend on a given file being in the manifest.
     Do not "simplify" it back to a manifest-only check on the strength of #360.
+
+    **Both required files are now proven separately.** This test used to create
+    `Makefile` before its first assertion, so only the missing-`init.sh` half was
+    ever exercised: dropping `"Makefile"` from the guard's tuple left the test
+    green. Found by the review bot on `#362`. The sequence below adds one file at
+    a time, so each name in that tuple is load-bearing for an assertion of its
+    own.
     """
     root = tmp_path / "kitish"
     (root / "scripts").mkdir(parents=True)
@@ -192,9 +199,12 @@ def test_the_completeness_guard_rejects_a_tree_missing_an_untracked_kit_file(tmp
     (root / "kit-manifest.json").write_text(
         json.dumps({"files": {"scripts/engine.py": {"sha256": "0" * 64}}}), encoding="utf-8"
     )
-    (root / "Makefile").write_text("test:\n", encoding="utf-8")
-    assert _is_complete_kit_tree(root) is False, "manifest-complete but no init.sh"
+    # Manifest-complete (every path it lists exists) and still not a kit tree,
+    # because neither untracked required file is present yet.
+    assert _is_complete_kit_tree(root) is False, "manifest-complete but no init.sh/Makefile"
     (root / "init.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    assert _is_complete_kit_tree(root) is False, "init.sh present but Makefile still absent"
+    (root / "Makefile").write_text("test:\n", encoding="utf-8")
     assert _is_complete_kit_tree(root) is True
 
 

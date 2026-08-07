@@ -2039,7 +2039,11 @@ def test_upgrade_workflows_init_invocation_still_seeds_a_genuinely_absent_file(
     ("label", "config", "argv", "proof"),
     [
         ("current schema", None, (), "seeded "),
-        ("v1 migration", V1_CONFIG, (), "seeded "),
+        # NOT "seeded ": that is what the current-schema case above proves, so it
+        # would pass on a run that skipped migration entirely and merely seeded
+        # files. This string is emitted only when the schema is actually migrated
+        # forward — the shipped config is already v2, so it never appears there.
+        ("v1 migration", V1_CONFIG, (), "stamped kit.version=2"),
         # `proof` is what makes this case non-vacuous, and it was added because it
         # was vacuous. See the docstring's "reaching the branch" paragraph.
         ("no-clobber", None, ("--no-clobber",), "left untouched (--no-clobber): "),
@@ -2095,6 +2099,14 @@ def test_running_the_installer_does_not_modify_the_installer(
     a `proof` string in stdout showing the path it claims to cover actually ran.
     A guard that cannot go vacuous silently is worth more than one that happens to
     be non-vacuous today.
+
+    **Each `proof` must also DISCRIMINATE its own path, which is a second mistake
+    made here and caught by the review bot.** The v1 case first shipped with
+    `"seeded "` — the same string the current-schema case uses — so a run that
+    skipped migration entirely and merely seeded files would have satisfied it.
+    Its proof is now `stamped kit.version=2`, emitted only when the schema is
+    really migrated forward. A positive control shared with another case proves
+    the union of the two paths, not the one it is attached to.
     """
     repo = _fixture(
         tmp_path,

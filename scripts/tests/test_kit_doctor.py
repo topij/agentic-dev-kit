@@ -393,8 +393,14 @@ def test_the_installer_is_tracked():
 # problems and needs no list of verbs.
 
 
-def test_the_installer_is_tracked_and_its_premise_is_pinned_elsewhere():
+def test_the_installers_premise_is_pinned_in_test_init_sh():
     """A pointer test, so the cross-file dependency is not only a comment.
+
+    Named for the one thing it checks. It was
+    `test_the_installer_is_tracked_and_its_premise_is_pinned_elsewhere`, a
+    compound name whose first clause this body never checked — that is
+    `test_the_installer_is_tracked` above. A correctness lens flagged it; the
+    cheaper fix is the honest name, not a second assertion duplicating a sibling.
 
     If the behavioural guard named below is renamed or deleted, this fails and
     says why it mattered — otherwise the #360 decision would keep its rationale
