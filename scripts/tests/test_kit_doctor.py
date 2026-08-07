@@ -371,68 +371,88 @@ def test_the_installer_is_tracked():
     )
 
 
-def test_the_installer_is_not_self_modifying():
-    """The premise that makes a plain KIT_OWNED entry for `init.sh` correct.
+# The premise that makes a plain KIT_OWNED entry for init.sh correct — that an
+# adopter's copy is NOT expected to diverge — is pinned BEHAVIOURALLY, by running
+# the installer and comparing its own bytes, in
+# test_init_sh.py::test_running_the_installer_does_not_modify_the_installer.
+#
+# It lived here first as a regex over init.sh's source, looking for `> $0`,
+# `sed -i … init.sh` and similar. An adversarial lens killed that version by
+# inserting a self-overwrite the pattern could not see:
+#
+#     SELF_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+#     cp "/tmp/newer-init.sh" "$SELF_PATH"
+#
+# `sh -n` accepted it, the guard passed, and that indirect shape is the one a
+# real "self-updating installer" change would take — nobody truncates a
+# 1500-line script in place. Two further reasons a textual guard was the wrong
+# instrument, both found while repairing it: the write verb is open-ended
+# (`cp`/`mv`/`install`/`dd`/a downloader), and init.sh contains 14 `$0`
+# occurrences that are all AWK's current-record variable, so anchoring on `$0`
+# at all starts from 14 false positives. Observing the outcome has none of these
+# problems and needs no list of verbs.
 
-    `#360` argued the tracking model was a three-way design choice, because an
-    adopter's copy is "arguably expected to diverge, since it encodes answers to
-    the adoption prompts" — which would report every adopter permanently
-    `locally-edited`. It does not: `init.sh` writes `config/dev-model.yaml` and
-    renders `docs/templates/`, and never rewrites itself. cs-toolkit's copy is
-    byte-identical to kit commit 7485512b, so its 852-line delta is version drift
-    with no local rendering in it.
 
-    This test exists because that premise is LOAD-BEARING and invisible: if a
-    later change made the installer self-rendering, tracking it would start
-    reporting `locally-edited` for every adopter — the permanently-red failure
-    #286 was closed to fix — and nothing else in the suite would notice. Pinning
-    the property here means the design decision fails loudly rather than the
-    adopter reports going quietly wrong.
+def test_the_installer_is_tracked_and_its_premise_is_pinned_elsewhere():
+    """A pointer test, so the cross-file dependency is not only a comment.
+
+    If the behavioural guard named below is renamed or deleted, this fails and
+    says why it mattered — otherwise the #360 decision would keep its rationale
+    and quietly lose its evidence.
     """
-    src = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
-    # Redirections and in-place edits that would target the script itself. `$0`
-    # is the direct form; the literal name covers a hardcoded path.
-    self_writes = re.findall(
-        r"""(?:>|>>)\s*["']?\$(?:0|\{0\})|(?:sed|perl)\s+-i[^\n]*init\.sh|"""
-        r"""(?:>|>>|tee)\s+["']?(?:\./)?init\.sh\b""",
-        src,
-    )
-    assert not self_writes, (
-        f"init.sh appears to write to itself ({self_writes}). If that is "
-        "deliberate, the KIT_OWNED entry for init.sh needs revisiting — an "
-        "adopter's copy would then be expected to diverge and `stale` would "
-        "become `locally-edited`. See #360."
+    guard = "test_running_the_installer_does_not_modify_the_installer"
+    text = (Path(__file__).parent / "test_init_sh.py").read_text(encoding="utf-8")
+    assert f"def {guard}" in text, (
+        f"{guard} is gone from test_init_sh.py. It is the only thing pinning "
+        "the premise behind init.sh's KIT_OWNED entry: that an adopter's copy is "
+        "not expected to diverge, so `stale` rather than `locally-edited` is the "
+        "state they land in. Restore it or re-open the #360 design question."
     )
 
 
-def test_an_unedited_installer_behind_the_kit_reports_stale_not_locally_edited():
-    """The behaviour the #360 decision turns on, asserted through `_drift_state`.
+def test_an_unedited_installer_behind_the_kit_reports_stale_not_locally_edited(tmp_path):
+    """The behaviour the #360 decision turns on, driven through `inspect`.
 
     An adopter that has never touched `init.sh` but is behind the kit must land in
     `stale` — true, actionable, and it clears when they update — and must NOT land
-    in `locally-edited`, which would be a permanent red on a file the adopter
-    never edited.
+    in `locally-edited`, which would be a permanent red on a file the adopter never
+    edited and the objection that made #360 look like a design choice.
 
-    The third case is the migration one and is deliberately included: a copy
-    PRESENT locally but absent from a baseline recorded before init.sh was tracked
-    reports `differs` ("not in baseline"), because `new-upstream` only covers
-    files that are absent. Verified against the real adopter on 2026-08-08 —
-    cs-toolkit reported `differs … not in baseline`, then `stale … installed
-    01f7ea7ea604, kit ships 2b3372375106` against a re-recorded baseline.
+    Driven through `inspect` with `rel="init.sh"` rather than by calling
+    `_drift_state` with synthetic hashes. An earlier version of this test did the
+    latter and an adversarial lens killed it: it passed with `init.sh` removed
+    from `KIT_OWNED` entirely, because nothing in it referred to the installer at
+    all. `_drift_state`'s own table is covered by the sibling `_split_case` tests;
+    what needs pinning here is that *this path*, with *this role*, reaches those
+    states — which is why the `role` assertion is not decoration.
+
+    Verified against the real adopter 2026-08-08: cs-toolkit reported `differs …
+    not in baseline`, then `stale … installed 01f7ea7ea604, kit ships
+    2b3372375106` against a re-recorded baseline.
     """
-    installed, ships = "a" * 64, "b" * 64
+    older, current = "an older installer", "the installer the kit ships now"
 
-    state, detail = kit_doctor._drift_state(installed, ships, installed)
-    assert state == "stale", f"unedited-but-behind must be stale, got {state}"
-    assert "installed" in detail and "kit ships" in detail
+    status, _ = _split_case(
+        tmp_path, rel="init.sh", installed=older, ships=current, recorded=older
+    )
+    assert status.state == "stale", f"unedited-but-behind must be stale, got {status.state}"
+    assert status.role == "installer", f"role regressed to {status.role}"
+    assert "installed" in status.detail and "kit ships" in status.detail
 
-    state, _ = kit_doctor._drift_state(installed, ships, None)
-    assert state == "differs", f"absent from baseline must be differs, got {state}"
+    # The migration case: present locally, absent from a baseline recorded before
+    # init.sh was tracked. `new-upstream` covers only files that are ABSENT, so
+    # this is `differs` and exits 1 until the adopter re-records.
+    status, _ = _split_case(
+        tmp_path, rel="init.sh", installed=older, ships=current, recorded=None
+    )
+    assert status.state == "differs", f"absent from baseline must be differs, got {status.state}"
 
     # Control: the state that WOULD have been the objection to tracking, reached
-    # only by a copy the adopter really did edit.
-    state, _ = kit_doctor._drift_state("c" * 64, ships, ships)
-    assert state == "locally-edited"
+    # only by an adopter who really did edit their installer.
+    status, _ = _split_case(
+        tmp_path, rel="init.sh", installed="edited by the adopter", ships=current, recorded=current
+    )
+    assert status.state == "locally-edited"
 
 
 @pytest.mark.driftcheck
@@ -1133,13 +1153,25 @@ def _baseline(entries: dict[str, str], kit_commit: str | None = None) -> dict:
     }
 
 
-def _split_case(tmp_path, *, installed: str, ships: str, recorded: str | None):
+def _split_case(
+    tmp_path,
+    *,
+    installed: str,
+    ships: str,
+    recorded: str | None,
+    rel: str = "scripts/check_doc_budget.py",
+):
     """Drive one row of the table: what the file says, what the kit ships, what
     the baseline recorded. Returns `(that file's FileStatus, the whole Report)` —
-    the report so a caller can also assert on `baseline_trusted` or the counts."""
+    the report so a caller can also assert on `baseline_trusted` or the counts.
+
+    `rel` defaults to the engine every row of the original table used. It is a
+    parameter so a caller can drive the SAME table for another kit-owned path
+    without restating the machinery — `init.sh` does, since #360's decision is a
+    claim about which of these states its adopters land in.
+    """
     root = _fake_repo(tmp_path)
-    _write(root / "scripts" / "check_doc_budget.py", installed)
-    rel = "scripts/check_doc_budget.py"
+    _write(root / rel, installed)
     baseline = _baseline({rel: _sha(recorded)}) if recorded is not None else _baseline({})
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
     report = kit_doctor.inspect(root, _manifest({rel: _sha(ships)}), config, baseline)

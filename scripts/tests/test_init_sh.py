@@ -2029,3 +2029,71 @@ def test_upgrade_workflows_init_invocation_still_seeds_a_genuinely_absent_file(
 
     assert (repo / "AGENTS.md").exists()
     assert template_marker() not in (repo / "AGENTS.md").read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- #
+# The installer does not rewrite itself (#360)
+
+
+@pytest.mark.parametrize(
+    ("label", "config", "argv"),
+    [
+        ("current schema", None, ()),
+        ("v1 migration", V1_CONFIG, ()),
+        ("no-clobber", None, ("--no-clobber",)),
+    ],
+    # Explicit ids: without them pytest builds each id from the parameter VALUES,
+    # so the v1 case's whole YAML document lands in the test name and a failure
+    # line runs to ~2000 characters of embedded config. Seen in a real mutation
+    # run before this was added.
+    ids=["current-schema", "v1-migration", "no-clobber"],
+)
+def test_running_the_installer_does_not_modify_the_installer(
+    tmp_path: Path, label: str, config: str | None, argv: tuple[str, ...]
+) -> None:
+    """`init.sh` must leave its own bytes untouched — the premise #360's tracking
+    model rests on.
+
+    Tracking `init.sh` in `KIT_OWNED` is only correct if an adopter's copy is NOT
+    expected to diverge, because that is what puts a behind-the-kit copy in
+    `stale` (clears when updated) rather than `locally-edited` (permanently red on
+    a file nobody edited — the failure #286 was closed to fix). Established for
+    the real adopter by hashing: cs-toolkit's copy is byte-identical to kit commit
+    7485512b, so its 852-line delta is version drift with no local rendering.
+
+    **This replaces a regex over init.sh's source, and the replacement is the
+    point.** That version looked for `> $0`, `sed -i … init.sh` and similar; an
+    adversarial lens defeated it with a self-overwrite it structurally could not
+    see — `SELF_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"` followed
+    by a plain `cp`. `sh -n` accepted it and the guard passed. Two more reasons
+    the textual instrument was wrong: the write verb is open-ended
+    (`cp`/`mv`/`install`/`dd`/a downloader), and init.sh contains 14 `$0`
+    occurrences that are all AWK's current-record variable, so anchoring on `$0`
+    begins with 14 false positives.
+
+    Comparing the file's own bytes across a real run needs no list of verbs and
+    catches every mechanism, including ones nobody has thought of.
+
+    Parametrized over three code paths rather than one, because a self-write
+    could live on any of them: a fresh run on the current schema, a v1 config
+    migration (the branch that rewrites config in place, the most plausible place
+    for a self-rewrite to be added), and `--no-clobber`.
+    """
+    repo = _fixture(
+        tmp_path,
+        config=shipped_config() if config is None else config,
+        templates=True,
+        git=True,
+    )
+    before = (repo / "init.sh").read_bytes()
+
+    _run_init(repo, *argv)
+
+    after = (repo / "init.sh").read_bytes()
+    assert after == before, (
+        f"init.sh rewrote itself during a `{label}` run "
+        f"({len(before)} bytes -> {len(after)}). If that is deliberate, the "
+        "KIT_OWNED entry for init.sh needs revisiting: an adopter's copy would "
+        "then be expected to diverge, and `stale` would become `locally-edited` "
+        "for every adopter. Re-open the #360 design question before shipping it."
+    )

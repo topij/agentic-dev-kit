@@ -316,13 +316,24 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # engine + rendered part; both were candidates in the issue and both are
     # answers to a problem that does not exist.
     #
-    # Role `installer` rather than `engine`, for two mechanical reasons, not
-    # taxonomy: `engine` + the `scripts/` prefix is what feeds `_ENGINE_NAMES`
-    # (init.sh is not an engine and does not move with `paths.engines` — it sits
-    # at the repo root by definition, since it is what an adopter runs before a
-    # configured path exists), and the `_TEXT_IMPORT_RE` dependency scan applies
-    # to `engine` and `hook` only. init.sh declares no non-stdlib dependency, so
-    # scanning it would manufacture edges out of a shell script's own prose.
+    # Role `installer` rather than `engine`, for mechanical reasons, not taxonomy.
+    # Stated precisely, because an earlier version of this comment overstated the
+    # first one and an adversarial lens measured it:
+    #
+    #   - `_derive_engine_names` requires role `engine` AND the `scripts/` prefix.
+    #     init.sh's path has no such prefix, so role alone would NOT put it in
+    #     `_ENGINE_NAMES`. What role `engine` actually does here is make
+    #     `rel[len("scripts")+1:]` evaluate to the EMPTY STRING, which
+    #     `test_engine_probe_names_cover_the_real_kit_owned_engines` already
+    #     catches — verified by mutating the role and reading which test failed.
+    #     So the guard against this mistake is pre-existing, not new.
+    #   - The `_TEXT_IMPORT_RE` dependency scan applies to `engine` and `hook`
+    #     only. init.sh declares no non-stdlib dependency, so scanning it would
+    #     manufacture edges out of a shell script's own prose.
+    #
+    # And the reason it is not an engine at all: it does not move with
+    # `paths.engines`. It sits at the repo root by definition, being what an
+    # adopter runs *before* a configured path exists.
     #
     # MIGRATION, and it is not a defect: an adopter whose recorded baseline
     # predates this entry has init.sh PRESENT locally and ABSENT from that
@@ -427,9 +438,17 @@ def _derive_engine_names(kit_owned: tuple[tuple[str, str], ...]) -> tuple[str, .
 
     Entries outside ``KIT_ENGINE_PREFIX`` are skipped: their location under an
     adopter's engines dir is not derivable by a prefix swap, so including one
-    would make the probe stat a path no layout produces. Nothing in KIT_OWNED
-    is outside the prefix today; the rule is here so that adding such an entry
-    cannot silently produce a garbage probe path.
+    would make the probe stat a path no layout produces. This paragraph used to
+    end "Nothing in KIT_OWNED is outside the prefix today", which was already
+    false when written — the workflow, doctrine and template entries are all
+    outside it, and ``init.sh`` (#360) is one more. The skip is therefore load
+    bearing right now rather than prophylactic, which is the opposite of what
+    that sentence implied. What keeps it safe is the ``role == "engine"``
+    conjunct: every path outside the prefix also carries a non-engine role, so
+    the two filters agree today. Adding an ``engine``-role entry outside the
+    prefix is the case that would produce a garbage probe path, and nothing
+    stops it — see ``test_engine_probe_names_cover_the_real_kit_owned_engines``,
+    which is what caught an attempt to give ``init.sh`` role ``engine``.
 
     ``init.sh``'s ``detect_engines_dir()`` used to carry the identical triple —
     the write-side half of the same bug (issue #67); it now derives its probe

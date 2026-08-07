@@ -292,10 +292,18 @@ def _is_complete_kit_tree(root: Path = None) -> bool:
         return False
     if not files or not all((root / rel).exists() for rel in files):
         return False
-    # The manifest tracks neither of these, so a manifest-complete tree could
-    # still be missing one — and then the control below would run and FAIL over
-    # a legitimately absent file, which is the round-1 defect narrowed rather
-    # than closed. Adversarial lens, PR #232 round 2.
+    # `Makefile` is tracked by the manifest in no version, so a manifest-complete
+    # tree could still be missing it — and then the control below would run and
+    # FAIL over a legitimately absent file, which is the round-1 defect narrowed
+    # rather than closed. Adversarial lens, PR #232 round 2.
+    #
+    # `init.sh` was the other such file and is kept in this tuple deliberately
+    # even though #360 made it manifest-tracked. Two reasons, and the second is
+    # the one that matters: the `files` loop above ranges over whatever manifest
+    # it was HANDED, which for a synthetic or older manifest need not list
+    # `init.sh` at all; and this predicate answers "is this a complete kit tree",
+    # which must not become contingent on one file's tracking status. Removing it
+    # here on the strength of #360 would re-open exactly the round-1 defect.
     return all((root / rel).exists() for rel in ("init.sh", "Makefile"))
 
 
