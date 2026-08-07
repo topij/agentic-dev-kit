@@ -321,9 +321,10 @@ author re-reading their own diff. **Cite them by name, never by number.**
    rounds.
 5. Fix real findings, reply-with-reason to the rest.
 6. **Re-run after the fix round.** Not optional — whether it is the full panel
-   or one lens over the delta is decided below: first by whether the change
-   sits under `safety-critical-changes.md`, which never takes the delta pass,
-   then by what the fix round's delta contains.
+   or a delta pass is decided below: first by what the fix round's delta
+   contains, then — for how many lenses the delta pass takes — by whether the
+   change sits under `safety-critical-changes.md`, which never takes the
+   single-lens form.
 7. Record the receipt with the lenses that actually ran:
 
    ```sh
@@ -478,57 +479,115 @@ Sink 2 asked for — the companion records that gap.)
 
 **Step 6's full panel is for a delta that contains behaviour.** A fix round
 that touched executable code or executed prose gets the full re-run,
-unchanged — and a change under `safety-critical-changes.md` never takes this
-exit at all: rule 2 requires both lenses **before merge**, and under
-head-bound receipts that means the pass standing at the merging head is the
-panel, whatever the last delta contained. Whether a change sits under that
-file at all is itself an author-drawn boundary — state that draw in the PR
-alongside the prose class. Elsewhere, a fix round whose delta is record
-prose only — deletions, trims, messages that act on nothing — contains
-nothing that acts, and the proportionate re-check is **one lens over that
-delta**: isolated, fresh-context, drawn from the panel's configured lenses
-(`review.fallback_panel.lenses`), not minted for the occasion, and recorded
-honestly as a single-lens receipt — source the literal `fallback:delta`,
-never Degraded mode's `fallback:<runtime>` (an author-context run the audit
-trail must stay able to tell apart) and never
-`review.fallback_panel.receipt_source` — with `--lenses` naming the one that
-ran and `--head` the polled sha. Expect the poll render to flag any one-lens
-receipt; for a sanctioned delta pass that flag is the audit trail speaking,
-not an instruction to run the panel the pass replaced. **The delta is the
-diff plus the commit messages that land it** (`git log
+unchanged — including a fix a lens prescribed verbatim: measured across the
+loop, a remediation is its most defect-dense surface, not its safest, so a
+lens-specified acceptance criterion is not self-validating (the companion
+holds that refutation). Whether a change sits under
+`safety-critical-changes.md` is itself an author-drawn boundary — state that
+draw in the PR alongside the prose class. A fix round whose delta is record
+prose only — deletions of record prose, trims, messages that act on
+nothing — contains nothing that acts, and the proportionate re-check is **a
+delta pass: one
+lens over that delta, or both configured lenses when the change sits under
+`safety-critical-changes.md`**. A deletion's class is the class of what the
+deleted text was doing where it stood: text that bounded or qualified
+executed prose — a caveat on an instruction, a precondition, a scope limit —
+was executed prose however narrative it reads, and deleting it is a
+behaviour-containing delta (the companion has the dropped-caveat
+measurement).
+
+Either form is isolated, fresh-context, drawn from the panel's configured
+lenses (`review.fallback_panel.lenses`), not minted for the occasion, and
+recorded honestly as what ran — source the literal `fallback:delta`, never
+Degraded mode's `fallback:<runtime>` (an author-context run the audit trail
+must stay able to tell apart) and never
+`review.fallback_panel.receipt_source` — with `--lenses` naming exactly the
+lenses that ran, which is also what tells the two forms apart on the audit
+trail, and `--head` the polled sha. Expect the poll render to flag a
+one-lens receipt; for a sanctioned single-lens delta pass that flag is the
+audit trail speaking, not an instruction to run the panel the pass replaced.
+
+**The dual form is how a safety-critical change keeps rule 2's floor.**
+Rule 2 wants two disjoint lenses before merge, and this file used to read
+that, under head-bound receipts, as "the pass standing at the merging head
+is the panel, whatever the last delta contained" — which priced a
+three-line record-prose repair at a full two-lens panel, and bought
+ship-the-known-defect twice in two days instead (the companion records the
+pricing and the narrowing). What the dual form asserts is composition: both
+lenses stood on the change at the reviewed head, both lenses stand on
+everything after it, so every byte at the merging head has two-lens
+coverage — across two passes rather than in one. The assumption composition
+rests on — that a record-prose delta interacts with nothing — is exactly
+the draw both delta lenses exist to dispute, independently. And composition
+needs something to compose with: the dual form presupposes a full-panel
+review standing at the last-reviewed head. After a Degraded-mode initial
+review there is no two-lens pass to extend — rule 2 was already unmet, the
+PR must already say so plainly, and no delta pass in either form repairs
+that. The single-lens exit stays closed for this class, any disputed
+verdict still owes the full panel, and nothing here touches the class's
+operator-merge rule.
+
+**The delta is the diff plus the commit messages that land it** (`git log
 <last-reviewed-sha>..<head>` — a message appears in no diff). A message is
 executed prose by class, so the test on it is what executing it does: the
 pass requires messages that act on nothing — no closing keyword near a
 reference, no instruction to a future reader, no claim a process consumes.
-The delta lens reads both surfaces, and its first duty is to dispute both
+Each delta lens reads both surfaces, and its first duty is to dispute both
 stated draws — the prose class and the safety-critical boundary; "confirmed"
-means both are confirmed, and either dispute forbids the receipt. The launch
-prompt requires the lens to end its report with **one verdict line per
-draw**. **Both lines are posted on the PR by the cockpit, verbatim, before
-any `fallback:delta` receipt is recorded** — quoting both is what closes
-selective quotation, and the posting is self-reported, like the receipt:
-the verdict lines appear nowhere in git history, and the posted lines are
-what make "no verdict yet" distinguishable from "confirmed" — so they get the same
-outside-the-tree artifact rule the logged disposition carries. **A disputed
-prose class is a behaviour-containing delta** — the full panel is owed. **A
-disputed safety-critical boundary is stronger**: treat the change as sitting
-under `safety-critical-changes.md` until the dispute is resolved — and the
-resolution is an artifact the operator authors on the PR, existing before
-any receipt or merge, never a relayed account by the party that drew the
-boundary — with the
-panel at the merging head, and operator-merge, never a self-merge over it. Know
-also what the engine retains: it keeps one receipt per PR, so recording
-`fallback:delta` replaces the panel receipt that evidenced the initial full
-panel — the posted verdict and the PR record become the surviving evidence
-that the floor was met. A logged disposition that produced no commit
-needs less still: there is no new head, so there is nothing to re-review.
-This is the second sanctioned single-lens pass, beside Degraded mode —
-conditioned on what the delta contains, not on what the author considers
-low-stakes. The delta pass moves no floor: a PR's initial review takes the
+means both are confirmed. The launch prompt requires each lens to end its
+report with **one verdict line per draw**. **Every verdict line is posted on
+the PR by the cockpit, verbatim — both lenses' pairs, in the dual form —
+before any `fallback:delta` receipt is recorded** — quoting them all is what
+closes selective quotation, and the posting is self-reported, like the
+receipt: the verdict lines appear nowhere in git history, and the posted
+lines are what make "no verdict yet" distinguishable from "confirmed" — so
+they get the same outside-the-tree artifact rule the logged disposition
+carries. A dispute from either lens moves the round toward more review,
+never less. **A disputed prose class is a behaviour-containing delta** — the
+full panel is owed. **A disputed safety-critical boundary is stronger**:
+treat the change as sitting under `safety-critical-changes.md` until the
+dispute is resolved — and the resolution is an artifact the operator authors
+on the PR, existing before any receipt or merge, never a relayed account by
+the party that drew the boundary — with the panel at the merging head, and
+operator-merge, never a self-merge over it. (A lens disputing that boundary
+*downward* — the author drew safety-critical, the lens says not — changes no
+pass: the round already ran at the stricter form, and a receipt carrying
+more coverage than the class needed overclaims nothing. Post the verdict,
+note the disagreement, leave the draw to the operator.) Know also what the
+engine retains: it keeps one receipt per PR, so recording `fallback:delta`
+replaces the panel receipt that evidenced the initial full panel — the
+posted verdicts and the PR record become the surviving evidence that the
+floor was met. A logged disposition that produced no commit needs less
+still: there is no new head, so there is nothing to re-review. The
+single-lens form is the second sanctioned single-lens pass, beside Degraded
+mode — conditioned on what the delta contains, not on what the author
+considers low-stakes; the dual form joins neither list, being two-lens. The
+delta pass moves no floor in either form: a PR's initial review takes the
 full panel — or Degraded mode, only where isolation is impossible — never a
 delta pass. The author still draws the class, states it in the PR, and can
 draw it wrong — the same design-against weakness the live two-class gate
 above carries.
+
+**A loop therefore ends in exactly one of three states**, each leaving a
+review artifact standing at the merging head — `#305` is the record of
+running this loop before they were named:
+
+- **A full pass at head finds nothing new.** The receipt is that pass's.
+- **A round's findings are all disposed without a commit** — logged, filed,
+  or replied-with-reason, per the gates above. No commit means no new head,
+  so the standing receipt survives and step 6 has nothing to re-review.
+- **A fix round lands, its proportionate re-check runs at the new head, and
+  that re-check yields no further commit** — the full panel for a delta
+  containing behaviour; the delta pass for record prose, single- or
+  dual-lens by the class rule above. A re-check that finds something
+  re-enters the loop: its findings are fixed (a new fix round) or disposed
+  without a commit (the second state, at the new head).
+
+"The findings were minor" is not on the list: it is the second state only if
+every finding actually took a sanctioned no-commit disposition, stated on
+the PR. And a state being reachable is not a licence to reach it — the
+blast-radius criterion above still says how hard to keep going while
+severity is rising.
 
 ## Keep the record small
 
@@ -569,9 +628,10 @@ rule 2 wants two disjoint lenses **before merge**, and the two sanctioned
 single-lens passes are this file's own refinements, not readings of that rule:
 **Degraded mode** below, conditioned on the runtime being unable to isolate
 reviewers, and the **record-prose delta pass** in the stopping section,
-conditioned on what a fix round's delta contains — and excluded outright for a
-change under `safety-critical-changes.md`, whose merging head needs both
-lenses whatever the last delta contained. Each condition is a fact about the
+conditioned on what a fix round's delta contains — and never single-lens for a
+change under `safety-critical-changes.md`, whose record-prose deltas take the
+dual form, both configured lenses, so the merging head keeps two-lens coverage
+whatever the last delta contained. Each condition is a fact about the
 environment or the repo, not about what the change is worth. A proposal to run
 fewer lenses for a "smaller" change is still an argument against that rule,
 not against these three.

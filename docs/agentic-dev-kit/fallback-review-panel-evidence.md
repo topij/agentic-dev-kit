@@ -128,6 +128,71 @@ looking for it on the tracker and could not source it.)
 became doctrine. None exists. It was promoted anyway, deliberately, with the
 full-diff-in-scope clause carrying that risk. Trialed on `#160` from round 4.
 
+### Why a lens-prescribed fix still takes the full panel
+
+The direction "a fix the lens itself specified is self-validating and needs no
+fresh adversarial pass" was declined with the `#209` decision (2026-08-03): on
+`#202`, rounds 3 through 6 each found a defect **in the previous round's
+remediation** — on that evidence the remediation is the loop's most
+defect-dense surface, precisely because it is small, written to a
+lens-supplied specification, and usually a new check that nothing else checks
+(`#211` has the mechanism). Exempting that class is exempting the surface
+where the defects are.
+
+### The categorical no-delta-exit for safety-critical changes — narrowed 2026-08-07
+
+Until 2026-08-07 the stopping section closed the delta pass entirely for a
+change under `safety-critical-changes.md`: rule 2 wants both lenses before
+merge, and under head-bound receipts that was read as "the pass standing at
+the merging head is the panel, whatever the last delta contained".
+
+What that priced, measured on PR `#328` (the occurrence is on `#305`): a full
+two-lens panel found exactly one finding — Low severity, lens-marked
+*regression*, a comment paragraph duplicated verbatim in `init.sh`. A
+lens-marked regression is never logged, so the rule said fix; the categorical
+rule said the fix's new head owed a full panel — ~250k output tokens, ~20
+minutes on that PR's measurement — to review a three-line deletion. The
+operator chose record-rather-than-repair, shipping the known defect, for the
+second time in two days (2026-08-05 was the same call on the same defect
+class). A rule that prices a trivial repair above shipping a defect does not
+hold: it gets overridden ad hoc, the defect stays in, and the override is
+legible only as prose (`#194`).
+
+The narrowing keeps the class's floor and moves the price. A record-prose-only
+delta on a safety-critical change now takes **both** configured lenses over
+the delta instead of a full panel at the new head; two-lens coverage of the
+merging head is composed — panel at the reviewed head, dual delta pass over
+everything after it — rather than delivered by one pass. The dual form
+presupposes a full-panel review standing at the reviewed head: after a
+Degraded-mode initial review there is nothing to compose with, and rule 2
+stays unmet, said plainly in the PR. The single-lens exit stays closed for
+the class, any disputed verdict still owes the full panel, and
+operator-merge is untouched.
+
+Composition's assumption — a record-prose delta interacts with nothing — is an
+author-drawn draw, the property every buried design above died on. Two things
+answer it, short of a guarantee: both delta lenses dispute the draw
+independently, first-duty, verdicts posted verbatim before any receipt; and
+the executing file's deletion rule makes text that bounded executed prose
+executed prose itself. That rule's measurement is PR `#218` (recorded in
+`#209`'s 2026-08-01 comment): a caveat bounding the wrong-ref rule was dropped
+at two of the three sites it appeared, leaving an instruction resting on
+figures a reader would take as firm — and the round whose diff already
+contained the loss walked past it once before the next round caught it. Two
+lenses are rule 2's floor, not a proof.
+
+Rejected on the way here, so it is not re-proposed: pricing the *duty*
+instead — a severity floor under which a lens-marked regression may be logged
+rather than fixed on a safety-critical PR. That legitimises shipping known
+defects and weakens the one rule that forces repairing real damage, to solve
+what the occurrences show is a pricing problem.
+
+Deferred, recorded on `#305`: whether the ordinary class's single-lens delta
+pass should also take two lenses — `#268` round 2 measured overlap-0
+disjointness between lenses on a delta small enough that a single lens looks
+sufficient, which argues the second lens is load-bearing even there; against
+it, the cost roughly doubles on every PR with a fix round. Not decided here.
+
 ## Keep the record small
 
 ### The measurement
