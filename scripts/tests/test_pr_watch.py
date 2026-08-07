@@ -129,6 +129,39 @@ def _green_view(**overrides):
     return view
 
 
+def test_workflow_routes_check_only_review_outages_to_the_fallback_panel() -> None:
+    workflow = (
+        ENGINE_DIR.parent / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
+    ).read_text(encoding="utf-8")
+
+    start = workflow.index("If `review_bots.unavailable` contains an entry")
+    end = workflow.index("\n1. **If `converged`", start)
+    fallback_rule = " ".join(workflow[start:end].split())
+    condition = fallback_rule.split(":**", 1)[0]
+
+    assert "`surface` is `check`" in condition
+    assert "`review_bots.blockers` is empty" in condition
+    assert "current head has no valid `review_evidence`" in condition
+    assert "`new_comments[]` contains no outage notice" in fallback_rule
+    assert "run `review.fallback_panel`" in fallback_rule
+    assert "report's exact `head`" in fallback_rule
+    assert "historical comment-only" in fallback_rule
+    assert "must not preempt a live pending" in fallback_rule
+    assert "another configured reviewer is still pending" in fallback_rule
+    assert "`--record-review` would refuse" in fallback_rule
+    assert "do not rerun the panel" in fallback_rule
+
+    comment_start = workflow.index("- **Reviewer unavailable**")
+    comment_end = workflow.index("- **Real finding**", comment_start)
+    comment_rule = " ".join(workflow[comment_start:comment_end].split())
+    comment_condition = comment_rule.split(":", 1)[0]
+    assert "current-head `review_evidence` is invalid" in comment_condition
+    assert "`review_bots.blockers` is empty" in comment_condition
+    assert "do not rerun the panel" in comment_rule
+    assert "another reviewer is pending" in comment_rule
+    assert "blocker must clear before the panel runs" in comment_rule
+
+
 def test_done_keeps_its_original_merge_authorization_semantics() -> None:
     """`done` must still mean exactly what it meant before `converged` existed.
 

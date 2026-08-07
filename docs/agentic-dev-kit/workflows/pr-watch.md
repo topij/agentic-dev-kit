@@ -34,7 +34,7 @@ Repeat until the report says **converged**:
 
 1. **Poll.** `uv run <engine-dir>/pr_watch.py <PR#> --json` (omit `<PR#>` for the current
    branch). Read `converged`, `mergeable`, `checks` (`all_green`, `failing[]`, `pending`),
-   `merge_blockers[]`, `review_evidence`, and `new_comments[]`.
+   `merge_blockers[]`, `review_evidence`, `review_bots`, and `new_comments[]`.
 
    The two predicates answer different questions and you need both:
 
@@ -52,6 +52,21 @@ Repeat until the report says **converged**:
    so that an older `dev_session.sh` still gates on merge authorization. Prefer
    `converged` / `mergeable`; never assume `done` means "the loop finished."
 
+1. **If `review_bots.unavailable` contains an entry whose `surface` is `check` and
+   `review_bots.blockers` is empty and the current head has no valid
+   `review_evidence`:** run `review.fallback_panel` and record its receipt against
+   the report's exact `head`, even when `new_comments[]` contains no outage notice.
+   A check description can be the only trusted current outage surface; waiting for
+   a comment in that case leaves `converged` true but `mergeable` permanently
+   blocked. A historical comment-only outage is not sufficient for this branch —
+   unseen comments follow the existing path below, while an acknowledged old
+   comment must not preempt a live pending bot on a later head. When another
+   configured reviewer is still pending, its blocker also defers the panel:
+   `--record-review` would refuse, so running the panel early only repeats work.
+   Re-poll until `review_bots.blockers` is empty. After recording, re-poll. If valid
+   current-head evidence already exists, keep the outage visible but do not rerun
+   the panel.
+
 1. **If `converged`:** stop the loop and report — PR #, the green check count, and
    "no outstanding review findings." Then record the independent review (see below)
    so the PR becomes `mergeable`; if `mergeable` is already true, say so.
@@ -68,7 +83,8 @@ Repeat until the report says **converged**:
 1. **If there are `new_comments`:** handle each with judgment —
 
    - **Reviewer unavailable** (`review_unavailable_reason` is set — rate limit,
-     skipped review, no credits): run the **fallback review panel** —
+     skipped review, no credits), current-head `review_evidence` is invalid, and
+     `review_bots.blockers` is empty: run the **fallback review panel** —
      `review.fallback_panel`, one isolated fresh-context reviewer per lens. Read
      [`../fallback-review-panel.md`](../fallback-review-panel.md) for the contract
      each lens gets; it is what makes the pass independent of you. A blocked bot
@@ -93,6 +109,10 @@ Repeat until the report says **converged**:
      `fallback:<runtime>`, which is reserved for the author-context degraded
      run. For a
      lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same flags.
+     If current-head evidence is already valid, do not rerun the panel; keep the
+     outage visible and acknowledge the notice as an already-covered round.
+     If another reviewer is pending, leave the notice unacknowledged and re-poll;
+     the blocker must clear before the panel runs or its receipt will be refused.
 
    - **Real finding** (a bug, a missing guard, a correctness/clarity issue): fix it in
      the code, commit, push. Re-running the local gate first.
