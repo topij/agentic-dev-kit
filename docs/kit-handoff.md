@@ -14,9 +14,12 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-07 — **the kit-side critical path is clear, and the plan Phase 0
-runs from is now accurate.** Phase 3 of `docs/kit-convergence-plan.md` still waits on
-cs-toolkit's Phase 0 and its fixer predicate, both that repo's PRs.
+Last updated: 2026-08-08 — **cs-toolkit's Phase 0 landed, and the work it found is now
+the thing in front of Phase 3.** Every gate `docs/kit-convergence-plan.md` named for
+Phase 3 has cleared (Phase 0 `2ab63d255`, the fixer predicate `bfafe13b7`, kit `#285` /
+`#286` / `#297` closed). Phase 3 is unblocked on paper and should still not start first:
+the Phase 0 run surfaced `#360`, and Phase 3 *is* the upgrade while `init.sh` is what
+performs it. Order is `#360`+`#304` → `#359` → `#358` → Phase 3.
 
 ## Latest session — 2026-08-07 (`#353`, and a boundary its author could not settle)
 
@@ -79,12 +82,11 @@ disqualified from deciding.
   `#283`, `#287`, `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`,
   `#120`, `#216`, `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
 
-▶ Next: **cs-toolkit's Phase 0** — run it from a session rooted in
-`/Users/topi/Coding/in-parallel/cs-toolkit`, not from this repo: its done-when is the
-hook FIRING on both runtimes, which a session rooted here cannot establish.
-`docs/kit-convergence-plan.md` is now accurate for it; read its "The move is not a file
-move" paragraph before starting. Kit-side in parallel: the overdue `triage-friction-log`
-sweep, then `#211`.
+▶ Next: ~~**cs-toolkit's Phase 0**~~ — **done 2026-08-07**, merged there as `2ab63d255`.
+The block above is left as written: it is an accurate record of what was true that day,
+and its "still leaves this repo" reading was correct until Phase 0 merged that evening.
+The live next step is in the 2026-08-08 trail at the top of this file — the three kit
+items Phase 0 surfaced (`#360`+`#304`, `#359`, `#358`), then Phase 3.
 
 ______________________________________________________________________
 
