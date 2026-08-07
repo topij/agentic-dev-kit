@@ -1769,19 +1769,33 @@ def test_review_knowledge_is_read_from_config_not_engine_literals(
     assert "<!-- walkthrough_start -->" not in resolved.noise_markers
 
 
+@pytest.mark.parametrize(
+    "alias_block",
+    [
+        "coderabbit: 42",
+        "coderabbit: []",
+    ],
+    ids=["wrong-value-type", "empty-alias-list"],
+)
 def test_malformed_bot_author_aliases_warn_and_fall_back(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], alias_block: str
 ) -> None:
     pr_watch = _load_pr_watch()
     path = _write_config(
         tmp_path,
-        "review:\n  bot_author_aliases:\n    coderabbit: 42\n",
+        f"review:\n  bot_author_aliases:\n    {alias_block}\n",
     )
 
     resolved = pr_watch._load_review_config(path)
 
     assert resolved.bot_author_aliases == pr_watch._DEFAULT_REVIEW_BOT_AUTHOR_ALIASES
     assert "bot_author_aliases must map bot names" in capsys.readouterr().err
+
+
+def test_non_string_bot_key_is_rejected() -> None:
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch._normalize_bot_author_aliases({42: ["coderabbitai"]}) is None
 
 
 def test_omitted_bot_author_aliases_use_defaults_without_warning(

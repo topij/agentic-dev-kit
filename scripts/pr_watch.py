@@ -337,11 +337,13 @@ def _normalize_bot_author_aliases(value: Any) -> dict[str, frozenset[str]] | Non
         return None
     normalized: dict[str, frozenset[str]] = {}
     for raw_bot, raw_aliases in value.items():
-        bot = str(raw_bot or "").strip().lower()
+        if not isinstance(raw_bot, str):
+            return None
+        bot = raw_bot.strip().lower()
         aliases = [raw_aliases] if isinstance(raw_aliases, str) else raw_aliases
         if isinstance(aliases, (tuple, set, frozenset)):
             aliases = list(aliases)
-        if not bot or not isinstance(aliases, list) or not all(
+        if not bot or not isinstance(aliases, list) or not aliases or not all(
             isinstance(alias, str) and alias.strip() for alias in aliases
         ):
             return None
