@@ -162,9 +162,12 @@ The narrowing keeps the class's floor and moves the price. A record-prose-only
 delta on a safety-critical change now takes **both** configured lenses over
 the delta instead of a full panel at the new head; two-lens coverage of the
 merging head is composed — panel at the reviewed head, dual delta pass over
-everything after it — rather than delivered by one pass. The single-lens exit
-stays closed for the class, any disputed verdict still owes the full panel,
-and operator-merge is untouched.
+everything after it — rather than delivered by one pass. The dual form
+presupposes a full-panel review standing at the reviewed head: after a
+Degraded-mode initial review there is nothing to compose with, and rule 2
+stays unmet, said plainly in the PR. The single-lens exit stays closed for
+the class, any disputed verdict still owes the full panel, and
+operator-merge is untouched.
 
 Composition's assumption — a record-prose delta interacts with nothing — is an
 author-drawn draw, the property every buried design above died on. Two things
@@ -176,7 +179,7 @@ executed prose itself. That rule's measurement is PR `#218` (recorded in
 at two of the three sites it appeared, leaving an instruction resting on
 figures a reader would take as firm — and the round whose diff already
 contained the loss walked past it once before the next round caught it. Two
-lenses are the floor this doctrine accepts everywhere, not a proof.
+lenses are rule 2's floor, not a proof.
 
 Rejected on the way here, so it is not re-proposed: pricing the *duty*
 instead — a severity floor under which a lens-marked regression may be logged

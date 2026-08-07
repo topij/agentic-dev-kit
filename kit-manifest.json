@@ -21,11 +21,11 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel-evidence.md": {
       "role": "doctrine",
-      "sha256": "1da25e08c321bc7e8825955fbe0cad3c8c1464e6d07bc46dc7c5d62b31c44af0"
+      "sha256": "645fcd50771351823ba1f3512bc483e404fd1a8337cc14bf9dd0333689640d3b"
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "5e0e71693071ee9fc76480ee567cd50a275652ad75b3192b126333c1479ee190"
+      "sha256": "6cb93952d3b74045ca197b1e1bfab4851e81524b92471f36dc3565861386bd49"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",

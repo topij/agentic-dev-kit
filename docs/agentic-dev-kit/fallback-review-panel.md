@@ -485,8 +485,9 @@ lens-specified acceptance criterion is not self-validating (the companion
 holds that refutation). Whether a change sits under
 `safety-critical-changes.md` is itself an author-drawn boundary — state that
 draw in the PR alongside the prose class. A fix round whose delta is record
-prose only — deletions, trims, messages that act on nothing — contains
-nothing that acts, and the proportionate re-check is **a delta pass: one
+prose only — deletions of record prose, trims, messages that act on
+nothing — contains nothing that acts, and the proportionate re-check is **a
+delta pass: one
 lens over that delta, or both configured lenses when the change sits under
 `safety-critical-changes.md`**. A deletion's class is the class of what the
 deleted text was doing where it stood: text that bounded or qualified
@@ -517,9 +518,14 @@ lenses stood on the change at the reviewed head, both lenses stand on
 everything after it, so every byte at the merging head has two-lens
 coverage — across two passes rather than in one. The assumption composition
 rests on — that a record-prose delta interacts with nothing — is exactly
-the draw both delta lenses exist to dispute, independently. The single-lens
-exit stays closed for this class, any disputed verdict still owes the full
-panel, and nothing here touches the class's operator-merge rule.
+the draw both delta lenses exist to dispute, independently. And composition
+needs something to compose with: the dual form presupposes a full-panel
+review standing at the last-reviewed head. After a Degraded-mode initial
+review there is no two-lens pass to extend — rule 2 was already unmet, the
+PR must already say so plainly, and no delta pass in either form repairs
+that. The single-lens exit stays closed for this class, any disputed
+verdict still owes the full panel, and nothing here touches the class's
+operator-merge rule.
 
 **The delta is the diff plus the commit messages that land it** (`git log
 <last-reviewed-sha>..<head>` — a message appears in no diff). A message is
@@ -570,9 +576,12 @@ running this loop before they were named:
 - **A round's findings are all disposed without a commit** — logged, filed,
   or replied-with-reason, per the gates above. No commit means no new head,
   so the standing receipt survives and step 6 has nothing to re-review.
-- **A fix round lands and its proportionate re-check stands at its head** —
-  the full panel for a delta containing behaviour; the delta pass for record
-  prose, single- or dual-lens by the class rule above.
+- **A fix round lands, its proportionate re-check runs at the new head, and
+  that re-check yields no further commit** — the full panel for a delta
+  containing behaviour; the delta pass for record prose, single- or
+  dual-lens by the class rule above. A re-check that finds something
+  re-enters the loop: its findings are fixed (a new fix round) or disposed
+  without a commit (the second state, at the new head).
 
 "The findings were minor" is not on the list: it is the second state only if
 every finding actually took a sanctioned no-commit disposition, stated on
