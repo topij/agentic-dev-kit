@@ -70,7 +70,20 @@ un-fork.** It is also the only divergence currently invisible to tooling.
 Measured 2026-08-06 (`wc -l` and `diff` against this repo's
 `scripts/hooks/pr_followup_hook.py`, run in cs-toolkit): the fork is a 66-line
 ancestor dated 2026-06-04; the kit's current hook is 454 lines. Un-forking is a
-replacement plus the hook's import closure, not a reconciliation of variants.
+replacement, not a reconciliation of variants.
+
+**Its import closure is already satisfied at the destination, so it costs
+nothing to carry.** Re-measured 2026-08-07: the hook's only non-stdlib import is
+`kitconfig`, and it resolves that module itself —
+`Path(__file__).resolve().parent.parent / "lib"`, at
+`scripts/hooks/pr_followup_hook.py:163-166`. From the target path
+`scripts/devkit/hooks/` that resolves to `scripts/devkit/lib/kitconfig.py`,
+which cs-toolkit already vendors and which `diff` reports byte-identical to this
+repo's `scripts/lib/kitconfig.py`. So the phase carries one file rather than a
+file and its dependencies — but note the resolution is relative to *the hook*,
+which is a second reason the destination directory is not free to vary: a `lib/`
+sitting beside the hook's own directory is part of the contract, not an accident
+of layout.
 
 ### Runtime parity, in the kit itself
 
@@ -124,9 +137,13 @@ session in cs-toolkit); replace the two stale files; re-record the install
 baseline.
 
 **The move is not a file move.** cs-toolkit's `.claude/settings.json` invokes
-`scripts/hooks/pr_followup_hook.py` by absolute path, and any `.codex/hooks.json`
-it gains will too. Relocating the file without editing both registrations leaves
-each runtime invoking a path that no longer exists. The interpreter does fail —
+the hook as `python3 "$CLAUDE_PROJECT_DIR/scripts/hooks/pr_followup_hook.py"`
+(read 2026-08-07; an earlier revision of this paragraph said "by absolute path",
+which was wrong — the registration is project-dir-relative), and any
+`.codex/hooks.json` it gains will carry a path of its own. **Neither form
+survives the file moving**, which is what this paragraph is actually about:
+relocating it without editing both registrations leaves each runtime invoking a
+path that no longer exists. The interpreter does fail —
 `python3` on a missing script writes to stderr and exits 2, checked — but a
 `PostToolUse` hook failure does not halt the session, so what the operator
 actually observes is a hook that stopped firing. Exactly HOW each runtime
