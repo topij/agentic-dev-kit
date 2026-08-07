@@ -108,11 +108,12 @@ review:
   # Also read by pr_watch.py to identify which status checks and comment authors
   # belong to a reviewer, so its outage/pending state can reach the merge gate.
   # Matched case-insensitively: as a SUBSTRING of a check name (your own CI and
-  # bot config, so `Review / CodeRabbit` still matches), and as a PREFIX of a
-  # comment author (anyone may comment on a public PR, and `xcoderabbit` must
-  # not be able to speak for the reviewer). `coderabbit` covers the check
-  # `CodeRabbit` and the author `coderabbitai` either way. Keep entries specific
-  # enough not to collide with a CI job name.
+  # bot config, so `Review / CodeRabbit` still matches), and as the exact
+  # normalized login of a comment author plus explicitly trusted service aliases
+  # (`coderabbit` covers `coderabbitai` and `coderabbitai[bot]`). Anyone may
+  # comment on a public PR, so prefix matching would let a lookalike login speak
+  # for the reviewer. Keep entries specific enough not to collide with a CI job
+  # name.
   bots: [coderabbit]
   # The independent pass to run when a configured bot can't review. TWO shapes,
   # and the difference is whether the reviewer is independent of the author:
