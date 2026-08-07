@@ -1153,8 +1153,23 @@ register_pr_hook() {
   # (checked against a shipping third-party integration's own `~/.codex/hooks.json`,
   # which uses absolute paths and `$PPID`), so there is nothing to substitute for
   # the `rev-parse` — the fix is to bail out cleanly instead of running python3
-  # against a path built from an empty string. `exec` keeps the hook's own exit
-  # status, so only the unresolvable-root case becomes exit 0.
+  # against a path built from an empty string.
+  #
+  # `exec` is NOT about the exit status. An earlier version of this comment said
+  # it "keeps the hook's own exit status, so only the unresolvable-root case
+  # becomes exit 0", and a correctness lens falsified that: in `a; b; c` the
+  # status is `c`'s with or without `exec` — `sh -c 'true; false'` and
+  # `sh -c 'true; exec false'` both exit 1. The status behaviour is correct here;
+  # `exec` simply had nothing to do with it.
+  #
+  # What `exec` actually does is REPLACE the shell with python3, so the hook runs
+  # as the process the runtime spawned rather than as its child. That matters
+  # because this registration carries `"timeout": 10`: a timeout enforced by
+  # signalling the spawned PID reaches the interpreter directly instead of a
+  # wrapper shell that may not forward the signal, which is the difference
+  # between a timed-out hook dying and leaking an orphan. Observable, and pinned:
+  # `test_the_codex_registration_execs_rather_than_forking_the_interpreter`
+  # asserts the interpreter reports the shell's own PID.
   echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; exec python3 \"\$root/${_hook_src}\" --runtime codex"
   echo "        Codex also needs you to trust the hook via /hooks before it runs."
   echo "      Claude — .claude/settings.json, under hooks.PostToolUse, matcher \"Bash\"."
