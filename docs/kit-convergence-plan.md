@@ -288,16 +288,46 @@ repo-wide grep confirming no consumer still reads the `done` key.
 2026-08-08 and sits *between* the cleared gates and Phase 3, because Phase 3 is
 the upgrade and `init.sh` is what performs it:
 
-1. **`#360` + `#304` together** — decide the `init.sh` tracking model, then fix.
-   The model is a design call, not a fix: an adopter's copy is arguably *expected*
-   to diverge since it encodes answers to the adoption prompts, so a plain
-   `KIT_OWNED` entry would report every adopter permanently `locally-edited` —
-   trading an invisible problem for a permanently-red one, which is the failure
-   `#286` was just closed to fix. **Acceptance:** `kit_doctor` in cs-toolkit can
-   say something true about its installer, and the `_still_a_skeleton`-vs-seed-guard
-   question a review bot raised on the Phase 0 PR becomes *answerable* — with the
-   installer untracked there is currently no way to tell a doctor defect from
-   installer drift.
+1. **`#360`** — track `init.sh`. Its issue frames the tracking model as a design
+   call between three options, on the premise that an adopter's copy is
+   *expected* to diverge because it "encodes answers to the adoption prompts" —
+   so a plain `KIT_OWNED` entry would report every adopter permanently
+   `locally-edited`, trading an invisible problem for a permanently-red one and
+   re-creating the failure `#286` was just closed to fix.
+
+   **That premise is false, checked 2026-08-08, and the design question dissolves
+   with it.** cs-toolkit's `init.sh` is **byte-identical to kit commit
+   `7485512b`** (2026-07-26) — found by hashing its copy and scanning every
+   `init.sh` blob in this repo's history for a match. So all 852 differing lines
+   are version drift and **none** are local rendering. Two supports: `init.sh`
+   never writes to itself (it writes `config/dev-model.yaml` and renders
+   `docs/templates/`), and nothing in the kit tells an adopter to edit it.
+
+   Consequences for the fix, read off `_drift_state`: a tracked, unedited,
+   behind-the-kit copy reports **`stale`** ("installed X, kit ships Y"), which is
+   both true and actionable, and it clears to `unchanged` when the adopter
+   updates the file. Not permanent, and not `locally-edited`. So **no new role and
+   no file split** — a plain `KIT_OWNED` + manifest entry is correct. One
+   migration note that is not a defect: a copy present locally but absent from an
+   older recorded baseline reports `differs` ("not in baseline") until the adopter
+   re-records, because `new-upstream` only covers files that are *absent*.
+
+   **Acceptance:** `kit_doctor` in cs-toolkit can say something true about its
+   installer, and the `_still_a_skeleton`-vs-seed-guard question a review bot
+   raised on the Phase 0 PR becomes *answerable* — with the installer untracked
+   there is currently no way to tell a doctor defect from installer drift.
+
+   **`#304` is deliberately NOT bundled here**, against the memo's
+   recommendation. It shares the file, but it fires only when `init.sh` runs in
+   **the kit's own repo**: it needs a line-1 `devkit-source: kit-own` marker to
+   act on, and cs-toolkit's `AGENTS.md`/`CLAUDE.md` open with `# CS-Toolkit` and
+   carry no marker (checked 2026-08-08), so `_seedable` leaves both untouched
+   there. It therefore blocks nothing in Phase 3. Its own issue's smaller repair
+   — `seed_doc` re-emitting the marker — makes the damage *recoverable* without
+   preventing it, since the kit's contract is still replaced by the adopter
+   template on the first run; the repair that actually prevents it needs the
+   kit-repo detector `#291` also wants and `#289` declined to add inside a fix
+   round. That is an operator design call, not an overnight one.
 2. **`#359`** — before Phase 3 re-prints the registrations.
 3. **`#358`** — two prose paths, plus the coverage question its issue raises.
 

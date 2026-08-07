@@ -9,6 +9,36 @@
 > list. Items that would improve the kit but do not block the adopter are named
 > as such and ordered last.
 
+> ## Editorial note added 2026-08-08, on committing this to the kit
+>
+> **This memo is preserved as the adopter's account, not corrected into
+> agreement with what the kit later found.** One of its recommendations is
+> superseded, and it is left standing with this pointer because *why* it was
+> made is the more useful record:
+>
+> - **§"What Phase 3 needs from the kit beyond bug fixes" and step 4 of
+>   §"Suggested order" are SUPERSEDED.** They ask for `adopt` + `upgrade` shared
+>   definitions to be promoted to a hard Phase 3 gate. That work was already
+>   finished by `#330`: both shared definitions exist and both runtimes have
+>   bindings. The memo's own §Receipts shows how the error entered — the claim
+>   was taken from `kit-convergence-plan.md`'s Runtime-parity section, which had
+>   been stale since `#330`, rather than from the filesystem. **The residue is
+>   real but adopter-side:** cs-toolkit lists both docs in `not_installed`, so
+>   Phase 3 installs them. Nothing is owed by the kit.
+> - **§"First: settle `init.sh`" — its design question is settled, and by
+>   dissolving rather than deciding.** The memo declines to pick between three
+>   tracking models because an adopter's `init.sh` is "arguably *expected* to
+>   diverge, since it encodes answers to the adoption prompts." That premise is
+>   false: cs-toolkit's copy is **byte-identical to kit commit `7485512b`**
+>   (2026-07-26), so all 852 differing lines are version drift and none are local
+>   rendering. `init.sh` never writes to itself and nothing in the kit tells an
+>   adopter to edit it. A tracked copy therefore reports `stale`, not
+>   `locally-edited`, and clears when updated — so the permanently-red failure the
+>   memo feared, and with it the case for a new role or a file split, does not
+>   arise.
+>
+> Everything else in the memo stands and was independently re-verified kit-side.
+
 ## The headline: the kit is no longer waiting on cs-toolkit
 
 `docs/kit-handoff.md` (last updated 2026-08-07) says Phase 3 "still waits on
@@ -68,8 +98,8 @@ adopter cannot tell whether its local copy has that bug or not.
 
 ### The design call this memo cannot make for you
 
-#360 has a complication I deliberately did not resolve, because it looks like a
-design decision rather than a fix. `init.sh` is unlike the other kit-owned
+Issue `#360` has a complication I deliberately did not resolve, because it looks
+like a design decision rather than a fix. `init.sh` is unlike the other kit-owned
 files: an adopter's copy is arguably *expected* to diverge, since it encodes
 answers to the adoption prompts. So a plain `KIT_OWNED` entry would report every
 adopter permanently `locally-edited` — trading an invisible problem for a
@@ -128,6 +158,11 @@ widening the regex.
 
 ## What Phase 3 needs from the kit beyond bug fixes
 
+> **SUPERSEDED — see the editorial note at the top.** `#330` had already
+> extracted `adopt` and `upgrade` and bound both runtimes; this section's
+> recommendation asks for finished work. The install step it implies is
+> adopter-side and is now recorded under Phase 3 in `kit-convergence-plan.md`.
+
 **cs-toolkit declines `adopt.md` and `upgrade.md` today.** Verified in its
 manifest's `not_installed` set. So a Phase 3 upgrade session working in
 cs-toolkit has *no installed workflow document to follow* — it would be
@@ -183,7 +218,7 @@ already names, and let it reach cs-toolkit through the install.
 1. **#360 + #304 together** — decide the `init.sh` tracking model, then fix. Acceptance: the `_still_a_skeleton` question above becomes answerable, and `kit_doctor` in cs-toolkit can say something true about its installer.
 2. **#359** — before Phase 3 re-prints registrations.
 3. **#358** — same pass, two lines plus the coverage question.
-4. **`adopt` + `upgrade` shared definitions** (`#243` slice) — promote to a hard gate for Phase 3.
+4. ~~**`adopt` + `upgrade` shared definitions** (`#243` slice) — promote to a hard gate for Phase 3.~~ **SUPERSEDED — done under `#330`; see the editorial note at the top.** What remains is an adopter-side install, inside Phase 3 itself.
 5. **Then Phase 3**, in cs-toolkit, as a normal PR through its review.
 
 Items 1–3 are all "the forcing function found this"; item 4 is the plan's own
