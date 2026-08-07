@@ -392,6 +392,32 @@ Review limit reached. We couldn't start this review.
     )
 
 
+def test_non_reviewer_quoting_an_outage_message_remains_noise() -> None:
+    """Tracker mirrors can quote the ticket's outage evidence verbatim.
+
+    The marker only proves unavailability when a configured reviewer says it;
+    otherwise a known-noise mirror becomes a false fallback-review signal.
+    """
+    pr_watch = _load_pr_watch()
+    body = """<!-- linear-linkback -->
+The incident report says: Review limit reached. We couldn't start this review.
+"""
+    view = _green_view(
+        comments=[{"id": "mirror-1", "author": {"login": "linear-code"}, "body": body}]
+    )
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:panel"},
+    )
+
+    assert report["new_comments"] == []
+    assert report["review_bots"]["unavailable"] == []
+    assert report["mergeable"] is True
+
+
 def test_acknowledged_unavailable_notice_still_needs_review_evidence() -> None:
     pr_watch = _load_pr_watch()
     body = "Review limit reached. We couldn't start this review."
@@ -922,7 +948,7 @@ def test_only_a_check_surface_outage_cancels_the_pending_block() -> None:
     assert two_checks["pending"][0]["cancelled_by"] == "outage"
 
 
-def test_a_lookalike_commenter_cannot_speak_for_the_bot() -> None:
+def test_a_non_reviewer_commenter_cannot_speak_for_the_bot() -> None:
     """Comment authors are attacker-controlled on a public repo; check names are
     the repo's own. Matching them by the same loose rule is what would let
     `xcoderabbit` posting "review skipped" impersonate the reviewer.
@@ -937,14 +963,26 @@ def test_a_lookalike_commenter_cannot_speak_for_the_bot() -> None:
     assert pr_watch._match_bot("coderabbitai[bot]", bots, anchored=True) == "coderabbit"
     assert pr_watch._match_bot("xcoderabbit", bots, anchored=True) is None
 
-    # …and an unattributed outage comment is reported with bot None, so it can
-    # never suppress anything even if the wording matches.
+    # …and quoted outage text from a non-reviewer never becomes an outage signal.
+    comments = pr_watch.collect_comments(
+        {
+            "comments": [
+                {
+                    "id": "lookalike-1",
+                    "author": {"login": "xcoderabbit"},
+                    "body": "Review skipped — Draft detected.",
+                }
+            ]
+        },
+        [],
+    )
+    assert comments[0]["review_unavailable_reason"] is None
     status = pr_watch.summarize_review_bots(
         [_bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))],
-        [{"author": "xcoderabbit", "review_unavailable_reason": "review skipped"}],
+        comments,
         now=NOW,
     )
-    assert status["unavailable"][0]["bot"] is None
+    assert status["unavailable"] == []
     assert status["blockers"] != []
 
 

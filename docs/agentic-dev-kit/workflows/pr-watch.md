@@ -201,12 +201,14 @@ Self-pace on a bounded cadence — don't busy-wait:
   acknowledging one clears `converged` but still leaves the current-head
   review-evidence blocker on `mergeable` until the panel runs and records its
   receipt.
-- **A bot's outage is detected on both surfaces, and a queued bot is not a finished
-  one.** `review.unavailable_markers` are matched against comment bodies *and*
-  against the status-check description of any check belonging to a configured
-  `review.bots` entry — the same rate limit is worded differently on the two
+- **A bot's outage is detected on both trusted surfaces, and a queued bot is not a
+  finished one.** `review.unavailable_markers` are matched against comments
+  authored by a configured `review.bots` entry *and* against that bot's
+  status-check description — the same rate limit is worded differently on the two
   surfaces, and matching only comments made detection depend on which one the bot
-  happened to use. The report's `review_bots` block resolves each bot to:
+  happened to use. Author scoping matters because tracker mirrors and humans can
+  quote outage text without the reviewer being unavailable. The report's
+  `review_bots` block resolves each bot to:
   - **unavailable** — an outage announced on either surface. Rendered as
     `⚠ review unavailable …`, and it never blocks anything: it's the action signal
     to run the `review.fallback_panel` pass. It stays visible after you `--mark-seen` the

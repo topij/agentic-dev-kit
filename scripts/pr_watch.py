@@ -1559,16 +1559,26 @@ def _author(raw: dict) -> str:
     return str(a)
 
 
-def review_unavailable_reason(body: str) -> str | None:
+def review_unavailable_reason(body: str, *, author: str | None = None) -> str | None:
     low = (body or "").lower()
-    return next(
+    reason = next(
         (marker for marker in _REVIEW_UNAVAILABLE_MARKERS if marker in low), None
     )
+    if reason is None:
+        return None
+    # Comment bodies are untrusted prose: tracker mirrors and humans can quote
+    # an outage message without being the reviewer that emitted it. Only a
+    # configured review-bot author may turn such text into an action signal.
+    # ``author=None`` is reserved for trusted check descriptions and direct
+    # marker classification, whose identity is scoped by the caller.
+    if author is not None and _match_bot(author, _REVIEW_BOTS, anchored=True) is None:
+        return None
+    return reason
 
 
-def is_noise(body: str) -> bool:
+def is_noise(body: str, *, author: str | None = None) -> bool:
     low = (body or "").lower()
-    if review_unavailable_reason(body) is not None:
+    if review_unavailable_reason(body, author=author) is not None:
         return False
     return any(marker in low for marker in _NOISE_MARKERS)
 
@@ -1590,13 +1600,14 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
         if not isinstance(raw, dict):
             continue
         body = raw.get("body") or ""
-        unavailable = review_unavailable_reason(body)
+        author = _author(raw)
+        unavailable = review_unavailable_reason(body, author=author)
         out.append(
             {
                 "key": _comment_key("issue", raw),
-                "content_key": _content_key("issue", _author(raw), body),
+                "content_key": _content_key("issue", author, body),
                 "kind": "issue",
-                "author": _author(raw),
+                "author": author,
                 "path": None,
                 "line": None,
                 "body": body,
@@ -1609,32 +1620,34 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
         body = raw.get("body") or ""
         if not body.strip():  # an approve/comment with no text carries no finding
             continue
+        author = _author(raw)
         out.append(
             {
                 "key": _comment_key("review", raw),
-                "content_key": _content_key("review", _author(raw), body),
+                "content_key": _content_key("review", author, body),
                 "kind": "review",
-                "author": _author(raw),
+                "author": author,
                 "path": None,
                 "line": None,
                 "body": body,
-                "review_unavailable_reason": review_unavailable_reason(body),
+                "review_unavailable_reason": review_unavailable_reason(body, author=author),
             }
         )
     for raw in inline or []:
         if not isinstance(raw, dict):
             continue
         body = raw.get("body") or ""
+        author = _author(raw)
         out.append(
             {
                 "key": _comment_key("inline", raw),
-                "content_key": _content_key("inline", _author(raw), body),
+                "content_key": _content_key("inline", author, body),
                 "kind": "inline",
-                "author": _author(raw),
+                "author": author,
                 "path": raw.get("path"),
                 "line": raw.get("line") or raw.get("original_line"),
                 "body": body,
-                "review_unavailable_reason": review_unavailable_reason(body),
+                "review_unavailable_reason": review_unavailable_reason(body, author=author),
             }
         )
     return out
@@ -1653,7 +1666,7 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
         for c in comments
         if c["key"] not in seen
         and c["content_key"] not in seen
-        and not is_noise(c["body"])
+        and not is_noise(c["body"], author=c["author"])
     ]
 
 
@@ -1856,10 +1869,10 @@ def summarize_review_bots(
 
     The three outcomes:
 
-    - **unavailable** — an ``unavailable_markers`` hit on either surface: a
-      comment body (already detected today) *or* a bot check's description (#23,
-      the surface that was invisible). Never blocks anything. It is an action
-      signal: run the fallback review panel
+    - **unavailable** — an ``unavailable_markers`` hit on either trusted surface:
+      a comment authored by a configured review bot *or* that bot's check
+      description (#23, the surface that was invisible). Never blocks anything.
+      It is an action signal: run the fallback review panel
       (docs/agentic-dev-kit/fallback-review-panel.md).
 
       Only a **check**-surface hit suppresses the pending block below. A check
@@ -1900,11 +1913,6 @@ def summarize_review_bots(
     ``blockers`` are ready-made ``merge_blockers`` strings; ``pending_since`` is
     the updated map for the caller to persist.
 
-    ``unavailable[].bot`` is ``None`` when a comment matched a marker but its
-    author matches no configured bot — a human writing "review skipped" in a PR
-    comment. Reported (the operator should see it) and attributed to nobody, so
-    it can never suppress anything.
-
     ``signal`` distinguishes three states a bare empty result cannot: ``"ok"``
     (checks were read), ``"skipped"`` (no bots configured — nothing to read),
     and ``"unavailable"`` (the read failed, so both guards are off). Without it
@@ -1926,8 +1934,9 @@ def summarize_review_bots(
     # that the primary reviewer never ran. Aggregating it here keeps the gap
     # visible at merge time.
     #
-    # Reported, NOT counted toward `unavailable_bots`. `collect_comments` returns
-    # the whole PR history, unscoped by head or age, so an outage comment from
+    # Bot-attributed comments are reported, but NOT counted toward
+    # `unavailable_bots`. `collect_comments` returns the whole PR history,
+    # unscoped by head or age, so an outage comment from
     # commit 1 would otherwise cancel the pending block on commit 5 — and rate
     # limits are transient by construction, which makes "this bot was
     # rate-limited earlier on this PR" the *normal* state of a later poll. That
