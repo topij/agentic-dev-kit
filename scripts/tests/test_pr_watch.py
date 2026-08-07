@@ -129,6 +129,17 @@ def _green_view(**overrides):
     return view
 
 
+def test_workflow_routes_check_only_review_outages_to_the_fallback_panel() -> None:
+    workflow = (
+        ENGINE_DIR.parent / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
+    ).read_text(encoding="utf-8")
+
+    assert "If `review_bots.unavailable` is non-empty" in workflow
+    assert "even when `new_comments[]` contains no outage notice" in workflow
+    assert "run `review.fallback_panel`" in workflow
+    assert "report's exact `head`" in workflow
+
+
 def test_done_keeps_its_original_merge_authorization_semantics() -> None:
     """`done` must still mean exactly what it meant before `converged` existed.
 

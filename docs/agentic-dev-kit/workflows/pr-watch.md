@@ -34,7 +34,7 @@ Repeat until the report says **converged**:
 
 1. **Poll.** `uv run <engine-dir>/pr_watch.py <PR#> --json` (omit `<PR#>` for the current
    branch). Read `converged`, `mergeable`, `checks` (`all_green`, `failing[]`, `pending`),
-   `merge_blockers[]`, `review_evidence`, and `new_comments[]`.
+   `merge_blockers[]`, `review_evidence`, `review_bots`, and `new_comments[]`.
 
    The two predicates answer different questions and you need both:
 
@@ -51,6 +51,14 @@ Repeat until the report says **converged**:
    `done` also appears in the report. It is a **legacy alias for `mergeable`**, kept
    so that an older `dev_session.sh` still gates on merge authorization. Prefer
    `converged` / `mergeable`; never assume `done` means "the loop finished."
+
+1. **If `review_bots.unavailable` is non-empty and the current head has no valid
+   `review_evidence`:** run `review.fallback_panel` and record its receipt against
+   the report's exact `head`, even when `new_comments[]` contains no outage notice.
+   A check description can be the only trusted outage surface; waiting for a
+   comment in that case leaves `converged` true but `mergeable` permanently
+   blocked. Re-poll after recording. If valid current-head evidence already exists,
+   keep the outage visible but do not rerun the panel.
 
 1. **If `converged`:** stop the loop and report — PR #, the green check count, and
    "no outstanding review findings." Then record the independent review (see below)
