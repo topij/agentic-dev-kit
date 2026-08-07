@@ -402,7 +402,11 @@ def test_the_installer_is_tracked_and_its_premise_is_pinned_elsewhere():
     """
     guard = "test_running_the_installer_does_not_modify_the_installer"
     text = (Path(__file__).parent / "test_init_sh.py").read_text(encoding="utf-8")
-    assert f"def {guard}" in text, (
+    # `def <guard>(` — the trailing paren is load-bearing. Matching `def <guard>`
+    # alone is a SUBSTRING check, so renaming the guard to
+    # `<guard>_RENAMED` left the old name as a prefix and this test kept passing.
+    # An adversarial lens found that by doing exactly that rename.
+    assert f"def {guard}(" in text, (
         f"{guard} is gone from test_init_sh.py. It is the only thing pinning "
         "the premise behind init.sh's KIT_OWNED entry: that an adopter's copy is "
         "not expected to diverge, so `stale` rather than `locally-edited` is the "

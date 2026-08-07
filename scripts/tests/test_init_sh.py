@@ -2036,11 +2036,13 @@ def test_upgrade_workflows_init_invocation_still_seeds_a_genuinely_absent_file(
 
 
 @pytest.mark.parametrize(
-    ("label", "config", "argv"),
+    ("label", "config", "argv", "proof"),
     [
-        ("current schema", None, ()),
-        ("v1 migration", V1_CONFIG, ()),
-        ("no-clobber", None, ("--no-clobber",)),
+        ("current schema", None, (), "seeded "),
+        ("v1 migration", V1_CONFIG, (), "seeded "),
+        # `proof` is what makes this case non-vacuous, and it was added because it
+        # was vacuous. See the docstring's "reaching the branch" paragraph.
+        ("no-clobber", None, ("--no-clobber",), "left untouched (--no-clobber): "),
     ],
     # Explicit ids: without them pytest builds each id from the parameter VALUES,
     # so the v1 case's whole YAML document lands in the test name and a failure
@@ -2049,7 +2051,7 @@ def test_upgrade_workflows_init_invocation_still_seeds_a_genuinely_absent_file(
     ids=["current-schema", "v1-migration", "no-clobber"],
 )
 def test_running_the_installer_does_not_modify_the_installer(
-    tmp_path: Path, label: str, config: str | None, argv: tuple[str, ...]
+    tmp_path: Path, label: str, config: str | None, argv: tuple[str, ...], proof: str
 ) -> None:
     """`init.sh` must leave its own bytes untouched — the premise #360's tracking
     model rests on.
@@ -2078,6 +2080,21 @@ def test_running_the_installer_does_not_modify_the_installer(
     could live on any of them: a fresh run on the current schema, a v1 config
     migration (the branch that rewrites config in place, the most plausible place
     for a self-rewrite to be added), and `--no-clobber`.
+
+    **Reaching the branch is not the same as passing the flag, and round 2 caught
+    this test failing that distinction.** `--no-clobber` only *does* anything on a
+    target `_seedable` returns MARKED (2) for — an existing file whose line 1
+    carries a kit marker. `_fixture(templates=True)` copies template SOURCES and
+    never the rendered TARGETS, so every target was ABSENT (0) and the
+    no-clobber-specific arm at `init.sh:1076-1080` never executed. An adversarial
+    lens proved it by planting a self-write *inside* that arm: all three
+    parametrizations passed. So this case exercised the flag and not its branch.
+
+    Fixed two ways, and the second is what stops it regressing: the fixture now
+    pre-seeds a marker-carrying target so MARKED is reached, and each case asserts
+    a `proof` string in stdout showing the path it claims to cover actually ran.
+    A guard that cannot go vacuous silently is worth more than one that happens to
+    be non-vacuous today.
     """
     repo = _fixture(
         tmp_path,
@@ -2085,9 +2102,19 @@ def test_running_the_installer_does_not_modify_the_installer(
         templates=True,
         git=True,
     )
+    if argv == ("--no-clobber",):
+        # An existing target carrying the shipped skeleton's marker on line 1 —
+        # the ONLY shape that makes _seedable return MARKED, and so the only way
+        # the --no-clobber decline arm is reachable at all.
+        marked = repo / "AGENTS.md"
+        marked.write_text(
+            f"<!-- {template_marker()} — pre-seeded so MARKED is reachable -->\n"
+            "\n# placeholder\n",
+            encoding="utf-8",
+        )
     before = (repo / "init.sh").read_bytes()
 
-    _run_init(repo, *argv)
+    result = _run_init(repo, *argv)
 
     after = (repo / "init.sh").read_bytes()
     assert after == before, (
@@ -2096,4 +2123,12 @@ def test_running_the_installer_does_not_modify_the_installer(
         "KIT_OWNED entry for init.sh needs revisiting: an adopter's copy would "
         "then be expected to diverge, and `stale` would become `locally-edited` "
         "for every adopter. Re-open the #360 design question before shipping it."
+    )
+    # Positive control. Without it a run that did nothing at all — an early exit,
+    # a fixture that made every branch a no-op — proves the bytes unchanged for
+    # the wrong reason and reports it as coverage.
+    assert proof in result.stdout, (
+        f"the `{label}` run never reached the path this case exists to cover: "
+        f"{proof!r} absent from stdout, so the unchanged-bytes assertion above "
+        f"passed vacuously.\nstdout:\n{result.stdout}"
     )

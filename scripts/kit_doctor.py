@@ -289,9 +289,21 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # The installer itself (#360). Untracked until now, which made it the one
     # file this report structurally could not range over — while being the file
     # that PERFORMS every install and upgrade. cs-toolkit's copy measured 852
-    # differing lines against kit `3761bec` while its doctor said `13 unchanged,
-    # 0 differ, 0 missing` and exited 0. Every statement in that report was
-    # true; the drift was entirely outside it.
+    # differing lines against kit `3761bec` — and the COMMAND matters, because the
+    # count is argument-order dependent and two review lenses reached opposite
+    # verdicts on this number without it:
+    #
+    #     diff <adopter>/init.sh <kit>/init.sh | grep -c '^[<>]'   # 852
+    #     diff <kit>/init.sh <adopter>/init.sh | grep -c '^[<>]'   # 848
+    #
+    # Adopter first, as `#360` wrote it. Neither figure is wrong; `diff` simply
+    # picks a different edit script per direction on a file with many similar
+    # lines. Both re-measured here 2026-08-08. Below, "852" always means the
+    # first form.
+    #
+    # While that drift stood, cs-toolkit's doctor said `13 unchanged, 0 differ,
+    # 0 missing` and exited 0. Every statement in that report was true; the drift
+    # was entirely outside what it ranged over.
     #
     # `#360` framed the tracking model as a three-way design choice, on the
     # premise that an adopter's copy is EXPECTED to diverge because it "encodes
@@ -305,8 +317,13 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     #     init.sh blob in this repo's history for a match. So all 852 lines are
     #     version drift and NONE are local rendering.
     #   - init.sh never writes to itself. It writes config/dev-model.yaml and
-    #     renders docs/templates/; `test_the_installer_is_not_self_modifying`
-    #     pins that.
+    #     renders docs/templates/. Pinned BEHAVIOURALLY by
+    #     `test_init_sh.py::test_running_the_installer_does_not_modify_the_installer`,
+    #     which runs the installer and compares its own bytes. (This line used to
+    #     name `test_the_installer_is_not_self_modifying`, a regex over init.sh's
+    #     source that the commit adding this entry deleted — two review lenses
+    #     defeated it with an indirect self-write. A correctness lens then caught
+    #     the reference still pointing at the deleted name.)
     #   - Nothing in the kit tells an adopter to edit it.
     #
     # So `_drift_state` puts an unedited, behind-the-kit copy in `stale`
