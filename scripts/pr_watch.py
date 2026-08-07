@@ -339,6 +339,8 @@ def _normalize_bot_author_aliases(value: Any) -> dict[str, frozenset[str]] | Non
     for raw_bot, raw_aliases in value.items():
         bot = str(raw_bot or "").strip().lower()
         aliases = [raw_aliases] if isinstance(raw_aliases, str) else raw_aliases
+        if isinstance(aliases, (tuple, set, frozenset)):
+            aliases = list(aliases)
         if not bot or not isinstance(aliases, list) or not all(
             isinstance(alias, str) and alias.strip() for alias in aliases
         ):
@@ -1744,10 +1746,9 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
 def _match_bot(text: str, bots: tuple[str, ...], *, anchored: bool = False) -> str | None:
     """The configured review bot named in ``text``, if any. Case-insensitive.
 
-    Substring by default: one bot key (``coderabbit``) has to cover the check
-    name GitHub shows (``CodeRabbit``), a namespaced variant (``Review /
-    CodeRabbit``), and the comment author (``coderabbitai``), which no exact
-    match spans.
+    Substring matching is only for check names: one bot key (``coderabbit``)
+    has to cover both ``CodeRabbit`` and a namespaced variant such as ``Review /
+    CodeRabbit``.
 
     ``anchored`` selects exact normalized author matching and is used for
     comment authors because that input is not the repo's to control: on a public

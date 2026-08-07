@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+import sys
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -475,26 +476,42 @@ def test_custom_reviewer_aliases_cover_every_comment_surface(
 def test_legacy_prefix_outage_is_visible_but_not_authenticated() -> None:
     pr_watch = _load_pr_watch()
     body = "<!-- walkthrough_start --> Review skipped — Draft detected."
+    raw = {"author": {"login": "coderabbit-impersonator"}, "body": body}
     view = _green_view(
-        comments=[
-            {
-                "id": "candidate-1",
-                "author": {"login": "coderabbit-impersonator"},
-                "body": body,
-            }
-        ]
+        comments=[{"id": "candidate-1", **raw}],
+        reviews=[{"id": "candidate-2", **raw}],
     )
+    inline = [{"id": "candidate-3", **raw}]
 
-    report = pr_watch.build_report(view, [], set())
+    report = pr_watch.build_report(view, inline, set())
 
     assert report["review_bots"]["unavailable"] == []
-    assert report["new_comments"][0]["review_unavailable_reason"] is None
-    assert (
-        report["new_comments"][0]["untrusted_review_unavailable_candidate"]
-        == "review skipped"
+    assert {comment["kind"] for comment in report["new_comments"]} == {
+        "issue",
+        "review",
+        "inline",
+    }
+    assert all(
+        comment["review_unavailable_reason"] is None
+        and comment["untrusted_review_unavailable_candidate"] == "review skipped"
+        for comment in report["new_comments"]
     )
     assert "untrusted reviewer-outage candidate" in pr_watch.render(report)
     assert "review.bot_author_aliases" in pr_watch.render(report)
+
+    seen = {
+        key
+        for comment in pr_watch.collect_comments(view, inline)
+        for key in (comment["key"], comment["content_key"])
+    }
+    acknowledged = pr_watch.build_report(
+        view,
+        inline,
+        seen,
+        review_receipt={"head": "abc123", "source": "fallback:panel"},
+    )
+    assert acknowledged["new_comments"] == []
+    assert acknowledged["mergeable"] is True
 
 
 def test_acknowledged_unavailable_notice_still_needs_review_evidence() -> None:
@@ -1765,6 +1782,47 @@ def test_malformed_bot_author_aliases_warn_and_fall_back(
 
     assert resolved.bot_author_aliases == pr_watch._DEFAULT_REVIEW_BOT_AUTHOR_ALIASES
     assert "bot_author_aliases must map bot names" in capsys.readouterr().err
+
+
+def test_omitted_bot_author_aliases_use_defaults_without_warning(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pr_watch = _load_pr_watch()
+    resolved = pr_watch._load_review_config(
+        _write_config(tmp_path, "review:\n  bots: [otherbot]\n")
+    )
+
+    assert resolved.bot_author_aliases == pr_watch._DEFAULT_REVIEW_BOT_AUTHOR_ALIASES
+    assert capsys.readouterr().err == ""
+
+
+def test_configured_aliases_reach_runtime_matching(monkeypatch: pytest.MonkeyPatch) -> None:
+    _load_pr_watch()  # ensure the shared top-level kitconfig module is imported
+    kitconfig = sys.modules["kitconfig"]
+    monkeypatch.setattr(
+        kitconfig,
+        "load_config",
+        lambda *args, **kwargs: {
+            "review": {
+                "bots": ["otherbot"],
+                "bot_author_aliases": {"otherbot": ["otherbotai[bot]"]},
+                "noise_markers": ["generated summary"],
+                "unavailable_markers": ["review offline"],
+            }
+        },
+    )
+
+    runtime = _load_pr_watch(pin_defaults=False)
+
+    assert {
+        "otherbot": frozenset({"otherbotai[bot]"})
+    } == runtime._REVIEW_BOT_AUTHOR_ALIASES
+    assert (
+        runtime.review_unavailable_reason(
+            "generated summary — review offline", author="OtherBotAI[bot]"
+        )
+        == "review offline"
+    )
 
 
 def test_missing_config_falls_back_to_defaults_silently(

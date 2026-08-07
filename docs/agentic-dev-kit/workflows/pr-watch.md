@@ -209,9 +209,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   surfaces, and matching only comments made detection depend on which one the bot
   happened to use. Author scoping matters because tracker mirrors and humans can
   quote outage text without the reviewer being unavailable. A legacy prefix-like
-  author carrying an outage marker is surfaced as an **untrusted candidate**—it
-  blocks convergence until handled, but never counts as reviewer evidence. Add
-  the exact login to `bot_author_aliases` only after verifying it. The report's
+  author carrying an outage marker is surfaced as an **untrusted candidate** on
+  its first unseen poll—it blocks convergence until handled, but never counts as
+  reviewer evidence. Like every handled comment, it no longer reappears after
+  `--mark-seen`; add the exact login to `bot_author_aliases` only after verifying
+  it so future notices are authenticated. The report's
   `review_bots` block resolves each bot to:
   - **unavailable** — an outage announced on either surface. Rendered as
     `⚠ review unavailable …`, and it never blocks anything: it's the action signal
@@ -345,8 +347,8 @@ Self-pace on a bounded cadence — don't busy-wait:
   login configured under `review.bot_author_aliases` is trusted. The shipped
   CodeRabbit aliases cover `coderabbitai` and `coderabbitai[bot]`; custom bots
   must list differing author logins explicitly. This replaces the legacy prefix
-  rule—after upgrading, an old prefix-like outage comment becomes an actionable
-  untrusted-candidate warning until its exact login is configured. Editing the literals inside
+  rule—after upgrading, an unseen prefix-like outage comment gets one actionable
+  untrusted-candidate warning instead of disappearing as noise. Editing the literals inside
   `<engine-dir>/pr_watch.py` forks the engine and turns every later kit update into
   a merge conflict. A key you omit keeps the kit default; an explicit empty list
   (`noise_markers: []`) means "filter nothing".
