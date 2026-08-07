@@ -277,11 +277,15 @@ _DEFAULT_INFORMATIONAL_CHECK_NAMES = ("coderabbit",)
 # about"). Keeping them separate is what lets a bot's check stay non-blocking
 # for `converged` while its state still informs the merge gate — the exact
 # split issues #19 and #23 need. Matched as a case-insensitive SUBSTRING of a
-# check name, and as a case-insensitive PREFIX of a comment author (that input
-# is not the repo's to control) — so `coderabbit` covers the check `CodeRabbit`
-# and the author `coderabbitai`. Keep entries specific enough not to collide
-# with a CI job name.
+# check name, and by exact normalized identity for a comment author (that input
+# is not the repo's to control). Known service aliases are enumerated below;
+# accepting prefixes would let `coderabbit-impersonator` speak for CodeRabbit.
+# Keep entries specific enough not to collide with a CI job name.
 _DEFAULT_REVIEW_BOTS = ("coderabbit",)
+
+_DEFAULT_REVIEW_BOT_AUTHOR_ALIASES = {
+    "coderabbit": frozenset({"coderabbitai", "coderabbitai[bot]"}),
+}
 
 # How long a configured review bot's own check may sit non-terminal before the
 # merge gate stops waiting for it. Below the bound, a pending bot is "a review
@@ -317,7 +321,34 @@ class ReviewConfig(NamedTuple):
     informational_checks: frozenset[str]
     require_ci: bool
     bots: tuple[str, ...]
+    bot_author_aliases: dict[str, frozenset[str]]
     bot_pending_grace_minutes: float
+
+
+def _normalize_bot_author_aliases(value: Any) -> dict[str, frozenset[str]] | None:
+    """Normalize ``review.bot_author_aliases`` or reject the whole mapping.
+
+    Partial acceptance is unsafe: one malformed entry among several would make
+    that reviewer silently lose outage detection while the rest appeared to
+    work. ``None`` tells the caller to warn and use the complete built-in
+    default instead.
+    """
+    if not isinstance(value, dict):
+        return None
+    normalized: dict[str, frozenset[str]] = {}
+    for raw_bot, raw_aliases in value.items():
+        if not isinstance(raw_bot, str):
+            return None
+        bot = raw_bot.strip().lower()
+        aliases = [raw_aliases] if isinstance(raw_aliases, str) else raw_aliases
+        if isinstance(aliases, (tuple, set, frozenset)):
+            aliases = list(aliases)
+        if not bot or not isinstance(aliases, list) or not aliases or not all(
+            isinstance(alias, str) and alias.strip() for alias in aliases
+        ):
+            return None
+        normalized[bot] = frozenset(alias.strip().lower() for alias in aliases)
+    return normalized
 
 
 def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
@@ -362,6 +393,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         informational_checks=frozenset(_DEFAULT_INFORMATIONAL_CHECK_NAMES),
         require_ci=_DEFAULT_REQUIRE_CI,
         bots=_DEFAULT_REVIEW_BOTS,
+        bot_author_aliases=dict(_DEFAULT_REVIEW_BOT_AUTHOR_ALIASES),
         bot_pending_grace_minutes=_DEFAULT_BOT_PENDING_GRACE_MINUTES,
     )
     try:
@@ -380,6 +412,19 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
             list(_DEFAULT_INFORMATIONAL_CHECK_NAMES),
         )
         bots = get_str_list(config, "review.bots", list(_DEFAULT_REVIEW_BOTS))
+        raw_aliases = get(
+            config,
+            "review.bot_author_aliases",
+            _DEFAULT_REVIEW_BOT_AUTHOR_ALIASES,
+        )
+        aliases = _normalize_bot_author_aliases(raw_aliases)
+        if aliases is None:
+            print(
+                "warning: review.bot_author_aliases must map bot names to non-empty string lists; "
+                "using pr_watch's built-in aliases",
+                file=sys.stderr,
+            )
+            aliases = dict(_DEFAULT_REVIEW_BOT_AUTHOR_ALIASES)
         require_ci = get(config, "review.require_ci", _DEFAULT_REQUIRE_CI)
         if not isinstance(require_ci, bool):
             require_ci = _DEFAULT_REQUIRE_CI
@@ -424,6 +469,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         ),
         require_ci=require_ci,
         bots=tuple(bot.strip().lower() for bot in bots if bot.strip()),
+        bot_author_aliases=aliases,
         bot_pending_grace_minutes=float(grace),
     )
 
@@ -434,6 +480,7 @@ _REVIEW_UNAVAILABLE_MARKERS = _REVIEW_CONFIG.unavailable_markers
 _INFORMATIONAL_CHECK_NAMES = _REVIEW_CONFIG.informational_checks
 _REQUIRE_CI = _REVIEW_CONFIG.require_ci
 _REVIEW_BOTS = _REVIEW_CONFIG.bots
+_REVIEW_BOT_AUTHOR_ALIASES = _REVIEW_CONFIG.bot_author_aliases
 _BOT_PENDING_GRACE_MINUTES = _REVIEW_CONFIG.bot_pending_grace_minutes
 
 
@@ -1559,16 +1606,46 @@ def _author(raw: dict) -> str:
     return str(a)
 
 
-def review_unavailable_reason(body: str) -> str | None:
+def review_unavailable_reason(body: str, *, author: str | None = None) -> str | None:
     low = (body or "").lower()
-    return next(
+    reason = next(
         (marker for marker in _REVIEW_UNAVAILABLE_MARKERS if marker in low), None
     )
+    if reason is None:
+        return None
+    # Comment bodies are untrusted prose: tracker mirrors and humans can quote
+    # an outage message without being the reviewer that emitted it. Only a
+    # configured review-bot author may turn such text into an action signal.
+    # ``author=None`` is reserved for trusted check descriptions and direct
+    # marker classification, whose identity is scoped by the caller.
+    if author is not None and _match_bot(author, _REVIEW_BOTS, anchored=True) is None:
+        return None
+    return reason
 
 
-def is_noise(body: str) -> bool:
+def untrusted_review_unavailable_candidate(
+    body: str, *, author: str | None = None
+) -> str | None:
+    """Legacy-prefix outage text that needs explicit alias configuration.
+
+    This is deliberately not reviewer evidence. It only keeps a formerly
+    accepted custom-bot notice visible instead of letting an overlapping noise
+    marker hide the migration gap.
+    """
+    if author is None:
+        return None
+    reason = review_unavailable_reason(body)
+    if reason is None or review_unavailable_reason(body, author=author) is not None:
+        return None
+    low_author = str(author).strip().lower()
+    return next((reason for bot in _REVIEW_BOTS if low_author.startswith(bot)), None)
+
+
+def is_noise(body: str, *, author: str | None = None) -> bool:
     low = (body or "").lower()
-    if review_unavailable_reason(body) is not None:
+    if review_unavailable_reason(body, author=author) is not None:
+        return False
+    if untrusted_review_unavailable_candidate(body, author=author) is not None:
         return False
     return any(marker in low for marker in _NOISE_MARKERS)
 
@@ -1590,17 +1667,20 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
         if not isinstance(raw, dict):
             continue
         body = raw.get("body") or ""
-        unavailable = review_unavailable_reason(body)
+        author = _author(raw)
+        unavailable = review_unavailable_reason(body, author=author)
+        untrusted = untrusted_review_unavailable_candidate(body, author=author)
         out.append(
             {
                 "key": _comment_key("issue", raw),
-                "content_key": _content_key("issue", _author(raw), body),
+                "content_key": _content_key("issue", author, body),
                 "kind": "issue",
-                "author": _author(raw),
+                "author": author,
                 "path": None,
                 "line": None,
                 "body": body,
                 "review_unavailable_reason": unavailable,
+                "untrusted_review_unavailable_candidate": untrusted,
             }
         )
     for raw in view.get("reviews") or []:
@@ -1609,32 +1689,40 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
         body = raw.get("body") or ""
         if not body.strip():  # an approve/comment with no text carries no finding
             continue
+        author = _author(raw)
         out.append(
             {
                 "key": _comment_key("review", raw),
-                "content_key": _content_key("review", _author(raw), body),
+                "content_key": _content_key("review", author, body),
                 "kind": "review",
-                "author": _author(raw),
+                "author": author,
                 "path": None,
                 "line": None,
                 "body": body,
-                "review_unavailable_reason": review_unavailable_reason(body),
+                "review_unavailable_reason": review_unavailable_reason(body, author=author),
+                "untrusted_review_unavailable_candidate": untrusted_review_unavailable_candidate(
+                    body, author=author
+                ),
             }
         )
     for raw in inline or []:
         if not isinstance(raw, dict):
             continue
         body = raw.get("body") or ""
+        author = _author(raw)
         out.append(
             {
                 "key": _comment_key("inline", raw),
-                "content_key": _content_key("inline", _author(raw), body),
+                "content_key": _content_key("inline", author, body),
                 "kind": "inline",
-                "author": _author(raw),
+                "author": author,
                 "path": raw.get("path"),
                 "line": raw.get("line") or raw.get("original_line"),
                 "body": body,
-                "review_unavailable_reason": review_unavailable_reason(body),
+                "review_unavailable_reason": review_unavailable_reason(body, author=author),
+                "untrusted_review_unavailable_candidate": untrusted_review_unavailable_candidate(
+                    body, author=author
+                ),
             }
         )
     return out
@@ -1653,31 +1741,34 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
         for c in comments
         if c["key"] not in seen
         and c["content_key"] not in seen
-        and not is_noise(c["body"])
+        and not is_noise(c["body"], author=c["author"])
     ]
 
 
 def _match_bot(text: str, bots: tuple[str, ...], *, anchored: bool = False) -> str | None:
     """The configured review bot named in ``text``, if any. Case-insensitive.
 
-    Substring by default: one bot key (``coderabbit``) has to cover the check
-    name GitHub shows (``CodeRabbit``), a namespaced variant (``Review /
-    CodeRabbit``), and the comment author (``coderabbitai``), which no exact
-    match spans.
+    Substring matching is only for check names: one bot key (``coderabbit``)
+    has to cover both ``CodeRabbit`` and a namespaced variant such as ``Review /
+    CodeRabbit``.
 
-    ``anchored`` requires the text to START with the bot key, and is used for
+    ``anchored`` selects exact normalized author matching and is used for
     comment authors because that input is not the repo's to control: on a public
-    repo any account may comment, and an unrelated login merely *containing*
-    ``coderabbit`` (``xcoderabbit``) should not be read as the reviewer. Check
-    names come from the repo's own CI and bot configuration, so the looser match
-    is appropriate there. Different rules because the inputs have different
-    trust, not by oversight.
+    repo any account may comment. Each configured bot trusts its exact key, its
+    conventional ``[bot]`` form, and explicitly enumerated service aliases.
+    Check names come from the repo's own CI and bot configuration, so substring
+    matching remains appropriate there. Different rules because the inputs have
+    different trust, not by oversight.
     """
     low = str(text or "").strip().lower()
     if not low:
         return None
     if anchored:
-        return next((bot for bot in bots if low.startswith(bot)), None)
+        for bot in bots:
+            trusted = {bot, f"{bot}[bot]", *_REVIEW_BOT_AUTHOR_ALIASES.get(bot, ())}
+            if low in trusted:
+                return bot
+        return None
     return next((bot for bot in bots if bot in low), None)
 
 
@@ -1856,10 +1947,10 @@ def summarize_review_bots(
 
     The three outcomes:
 
-    - **unavailable** — an ``unavailable_markers`` hit on either surface: a
-      comment body (already detected today) *or* a bot check's description (#23,
-      the surface that was invisible). Never blocks anything. It is an action
-      signal: run the fallback review panel
+    - **unavailable** — an ``unavailable_markers`` hit on either trusted surface:
+      a comment authored by a configured review bot *or* that bot's check
+      description (#23, the surface that was invisible). Never blocks anything.
+      It is an action signal: run the fallback review panel
       (docs/agentic-dev-kit/fallback-review-panel.md).
 
       Only a **check**-surface hit suppresses the pending block below. A check
@@ -1900,11 +1991,6 @@ def summarize_review_bots(
     ``blockers`` are ready-made ``merge_blockers`` strings; ``pending_since`` is
     the updated map for the caller to persist.
 
-    ``unavailable[].bot`` is ``None`` when a comment matched a marker but its
-    author matches no configured bot — a human writing "review skipped" in a PR
-    comment. Reported (the operator should see it) and attributed to nobody, so
-    it can never suppress anything.
-
     ``signal`` distinguishes three states a bare empty result cannot: ``"ok"``
     (checks were read), ``"skipped"`` (no bots configured — nothing to read),
     and ``"unavailable"`` (the read failed, so both guards are off). Without it
@@ -1926,8 +2012,9 @@ def summarize_review_bots(
     # that the primary reviewer never ran. Aggregating it here keeps the gap
     # visible at merge time.
     #
-    # Reported, NOT counted toward `unavailable_bots`. `collect_comments` returns
-    # the whole PR history, unscoped by head or age, so an outage comment from
+    # Bot-attributed comments are reported, but NOT counted toward
+    # `unavailable_bots`. `collect_comments` returns the whole PR history,
+    # unscoped by head or age, so an outage comment from
     # commit 1 would otherwise cancel the pending block on commit 5 — and rate
     # limits are transient by construction, which makes "this bot was
     # rate-limited earlier on this PR" the *normal* state of a later poll. That
@@ -2681,6 +2768,9 @@ def build_report(
                 "line": c["line"],
                 "excerpt": _excerpt(c["body"]),
                 "review_unavailable_reason": c.get("review_unavailable_reason"),
+                "untrusted_review_unavailable_candidate": c.get(
+                    "untrusted_review_unavailable_candidate"
+                ),
                 # Full body too: handling a finding no longer needs a second
                 # `gh api .../pulls/N/comments` fetch for the suggested diff.
                 "body": c["body"],
@@ -2843,6 +2933,12 @@ def render(report: dict) -> str:
                 lines.append(
                     f"  • [review unavailable] @{c['author']}{loc}: "
                     f"{c['review_unavailable_reason']} — run the fallback review panel (docs/agentic-dev-kit/fallback-review-panel.md)"
+                )
+            elif c.get("untrusted_review_unavailable_candidate"):
+                lines.append(
+                    f"  • [untrusted reviewer-outage candidate] @{c['author']}{loc}: "
+                    f"{c['untrusted_review_unavailable_candidate']} — add the exact login under "
+                    "review.bot_author_aliases before treating it as reviewer evidence"
                 )
             else:
                 lines.append(f"  • [{c['kind']}] @{c['author']}{loc}: {c['excerpt']}")

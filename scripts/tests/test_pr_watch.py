@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+import sys
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -48,6 +49,7 @@ def _pin_engine_defaults(module: ModuleType) -> None:
     module._INFORMATIONAL_CHECK_NAMES = defaults.informational_checks
     module._REQUIRE_CI = defaults.require_ci
     module._REVIEW_BOTS = defaults.bots
+    module._REVIEW_BOT_AUTHOR_ALIASES = defaults.bot_author_aliases
     module._BOT_PENDING_GRACE_MINUTES = defaults.bot_pending_grace_minutes
 
 
@@ -375,21 +377,141 @@ def test_review_unavailable_overrides_coderabbit_summary_noise() -> None:
 Review limit reached. We couldn't start this review.
 """
     view = _green_view(
-        comments=[{"id": "notice-1", "author": {"login": "coderabbitai"}, "body": body}]
+        comments=[{"id": "notice-1", "author": {"login": "coderabbitai"}, "body": body}],
+        reviews=[
+            {"id": "notice-2", "author": {"login": "coderabbitai[bot]"}, "body": body}
+        ],
     )
+    inline = [
+        {"id": "notice-3", "author": {"login": "coderabbitai[bot]"}, "body": body}
+    ]
 
     report = pr_watch.build_report(
         view,
-        [],
+        inline,
         set(),
         review_receipt={"head": "abc123", "source": "coderabbit"},
     )
 
     assert report["done"] is False
-    assert len(report["new_comments"]) == 1
-    assert (
-        report["new_comments"][0]["review_unavailable_reason"] == "review limit reached"
+    assert len(report["new_comments"]) == 3
+    assert {
+        comment["kind"]: comment["review_unavailable_reason"]
+        for comment in report["new_comments"]
+    } == {
+        "issue": "review limit reached",
+        "review": "review limit reached",
+        "inline": "review limit reached",
+    }
+
+
+def test_non_reviewer_quoting_an_outage_message_remains_noise() -> None:
+    """Tracker mirrors can quote the ticket's outage evidence verbatim.
+
+    The marker only proves unavailability when a configured reviewer says it;
+    otherwise a known-noise mirror becomes a false fallback-review signal.
+    """
+    pr_watch = _load_pr_watch()
+    body = """<!-- linear-linkback -->
+The incident report says: Review limit reached. We couldn't start this review.
+"""
+    view = _green_view(
+        comments=[{"id": "mirror-1", "author": {"login": "linear-code"}, "body": body}],
+        reviews=[
+            {"id": "mirror-2", "author": {"login": "review-reporter"}, "body": body}
+        ],
     )
+    inline = [
+        {"id": "mirror-3", "author": {"login": "review-reporter"}, "body": body}
+    ]
+
+    report = pr_watch.build_report(
+        view,
+        inline,
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:panel"},
+    )
+
+    assert report["new_comments"] == []
+    assert report["review_bots"]["unavailable"] == []
+    assert report["mergeable"] is True
+
+
+def test_custom_reviewer_aliases_cover_every_comment_surface(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_REVIEW_BOTS", ("otherbot",))
+    monkeypatch.setattr(
+        pr_watch,
+        "_REVIEW_BOT_AUTHOR_ALIASES",
+        {"otherbot": frozenset({"otherbotai[bot]"})},
+    )
+    monkeypatch.setattr(pr_watch, "_REVIEW_UNAVAILABLE_MARKERS", ("review offline",))
+    monkeypatch.setattr(pr_watch, "_NOISE_MARKERS", ("generated summary",))
+    body = "generated summary — review offline"
+    raw = {"author": {"login": "OtherBotAI[bot]"}, "body": body}
+    view = _green_view(
+        comments=[{"id": "custom-1", **raw}],
+        reviews=[{"id": "custom-2", **raw}],
+    )
+    inline = [{"id": "custom-3", **raw}]
+
+    report = pr_watch.build_report(view, inline, set())
+
+    assert {comment["kind"] for comment in report["new_comments"]} == {
+        "issue",
+        "review",
+        "inline",
+    }
+    assert all(
+        comment["review_unavailable_reason"] == "review offline"
+        for comment in report["new_comments"]
+    )
+    assert {entry["bot"] for entry in report["review_bots"]["unavailable"]} == {
+        "otherbot"
+    }
+
+
+def test_legacy_prefix_outage_is_visible_but_not_authenticated() -> None:
+    pr_watch = _load_pr_watch()
+    body = "<!-- walkthrough_start --> Review skipped — Draft detected."
+    raw = {"author": {"login": "coderabbit-impersonator"}, "body": body}
+    view = _green_view(
+        comments=[{"id": "candidate-1", **raw}],
+        reviews=[{"id": "candidate-2", **raw}],
+    )
+    inline = [{"id": "candidate-3", **raw}]
+
+    report = pr_watch.build_report(view, inline, set())
+
+    assert report["review_bots"]["unavailable"] == []
+    assert {comment["kind"] for comment in report["new_comments"]} == {
+        "issue",
+        "review",
+        "inline",
+    }
+    assert all(
+        comment["review_unavailable_reason"] is None
+        and comment["untrusted_review_unavailable_candidate"] == "review skipped"
+        for comment in report["new_comments"]
+    )
+    assert "untrusted reviewer-outage candidate" in pr_watch.render(report)
+    assert "review.bot_author_aliases" in pr_watch.render(report)
+
+    seen = {
+        key
+        for comment in pr_watch.collect_comments(view, inline)
+        for key in (comment["key"], comment["content_key"])
+    }
+    acknowledged = pr_watch.build_report(
+        view,
+        inline,
+        seen,
+        review_receipt={"head": "abc123", "source": "fallback:panel"},
+    )
+    assert acknowledged["new_comments"] == []
+    assert acknowledged["mergeable"] is True
 
 
 def test_acknowledged_unavailable_notice_still_needs_review_evidence() -> None:
@@ -922,7 +1044,7 @@ def test_only_a_check_surface_outage_cancels_the_pending_block() -> None:
     assert two_checks["pending"][0]["cancelled_by"] == "outage"
 
 
-def test_a_lookalike_commenter_cannot_speak_for_the_bot() -> None:
+def test_a_non_reviewer_commenter_cannot_speak_for_the_bot() -> None:
     """Comment authors are attacker-controlled on a public repo; check names are
     the repo's own. Matching them by the same loose rule is what would let
     `xcoderabbit` posting "review skipped" impersonate the reviewer.
@@ -936,15 +1058,28 @@ def test_a_lookalike_commenter_cannot_speak_for_the_bot() -> None:
     assert pr_watch._match_bot("coderabbitai", bots, anchored=True) == "coderabbit"
     assert pr_watch._match_bot("coderabbitai[bot]", bots, anchored=True) == "coderabbit"
     assert pr_watch._match_bot("xcoderabbit", bots, anchored=True) is None
+    assert pr_watch._match_bot("coderabbit-impersonator", bots, anchored=True) is None
 
-    # …and an unattributed outage comment is reported with bot None, so it can
-    # never suppress anything even if the wording matches.
+    # …and quoted outage text from a non-reviewer never becomes an outage signal.
+    comments = pr_watch.collect_comments(
+        {
+            "comments": [
+                {
+                    "id": "lookalike-1",
+                    "author": {"login": "xcoderabbit"},
+                    "body": "Review skipped — Draft detected.",
+                }
+            ]
+        },
+        [],
+    )
+    assert comments[0]["review_unavailable_reason"] is None
     status = pr_watch.summarize_review_bots(
         [_bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))],
-        [{"author": "xcoderabbit", "review_unavailable_reason": "review skipped"}],
+        comments,
         now=NOW,
     )
-    assert status["unavailable"][0]["bot"] is None
+    assert status["unavailable"] == []
     assert status["blockers"] != []
 
 
@@ -1589,6 +1724,8 @@ def test_bot_blockers_only_ever_tighten_the_merge_gate() -> None:
 
 ADOPTER_CONFIG = """review:
   bots: [OtherBot]
+  bot_author_aliases:
+    OtherBot: [OtherBotAI, "OtherBotAI[bot]"]
   noise_markers:
     - "<!-- Generated by OtherBot -->"
     - "NOTHING TO REPORT"
@@ -1624,9 +1761,82 @@ def test_review_knowledge_is_read_from_config_not_engine_literals(
     assert resolved.informational_checks == frozenset({"otherbot", "advisory"})
     assert resolved.require_ci is False
     assert resolved.bots == ("otherbot",)
+    assert resolved.bot_author_aliases == {
+        "otherbot": frozenset({"otherbotai", "otherbotai[bot]"})
+    }
     assert resolved.bot_pending_grace_minutes == 30
     # None of the kit's own default markers leak in — config replaces, not extends.
     assert "<!-- walkthrough_start -->" not in resolved.noise_markers
+
+
+@pytest.mark.parametrize(
+    "alias_block",
+    [
+        "coderabbit: 42",
+        "coderabbit: []",
+    ],
+    ids=["wrong-value-type", "empty-alias-list"],
+)
+def test_malformed_bot_author_aliases_warn_and_fall_back(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], alias_block: str
+) -> None:
+    pr_watch = _load_pr_watch()
+    path = _write_config(
+        tmp_path,
+        f"review:\n  bot_author_aliases:\n    {alias_block}\n",
+    )
+
+    resolved = pr_watch._load_review_config(path)
+
+    assert resolved.bot_author_aliases == pr_watch._DEFAULT_REVIEW_BOT_AUTHOR_ALIASES
+    assert "bot_author_aliases must map bot names" in capsys.readouterr().err
+
+
+def test_non_string_bot_key_is_rejected() -> None:
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch._normalize_bot_author_aliases({42: ["coderabbitai"]}) is None
+
+
+def test_omitted_bot_author_aliases_use_defaults_without_warning(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pr_watch = _load_pr_watch()
+    resolved = pr_watch._load_review_config(
+        _write_config(tmp_path, "review:\n  bots: [otherbot]\n")
+    )
+
+    assert resolved.bot_author_aliases == pr_watch._DEFAULT_REVIEW_BOT_AUTHOR_ALIASES
+    assert capsys.readouterr().err == ""
+
+
+def test_configured_aliases_reach_runtime_matching(monkeypatch: pytest.MonkeyPatch) -> None:
+    _load_pr_watch()  # ensure the shared top-level kitconfig module is imported
+    kitconfig = sys.modules["kitconfig"]
+    monkeypatch.setattr(
+        kitconfig,
+        "load_config",
+        lambda *args, **kwargs: {
+            "review": {
+                "bots": ["otherbot"],
+                "bot_author_aliases": {"otherbot": ["otherbotai[bot]"]},
+                "noise_markers": ["generated summary"],
+                "unavailable_markers": ["review offline"],
+            }
+        },
+    )
+
+    runtime = _load_pr_watch(pin_defaults=False)
+
+    assert {
+        "otherbot": frozenset({"otherbotai[bot]"})
+    } == runtime._REVIEW_BOT_AUTHOR_ALIASES
+    assert (
+        runtime.review_unavailable_reason(
+            "generated summary — review offline", author="OtherBotAI[bot]"
+        )
+        == "review offline"
+    )
 
 
 def test_missing_config_falls_back_to_defaults_silently(
@@ -1643,6 +1853,7 @@ def test_missing_config_falls_back_to_defaults_silently(
         frozenset(pr_watch._DEFAULT_INFORMATIONAL_CHECK_NAMES),
         True,
         pr_watch._DEFAULT_REVIEW_BOTS,
+        pr_watch._DEFAULT_REVIEW_BOT_AUTHOR_ALIASES,
         pr_watch._DEFAULT_BOT_PENDING_GRACE_MINUTES,
     )
     assert capsys.readouterr().err == ""
@@ -1783,6 +1994,10 @@ def test_every_config_derived_global_is_pinned() -> None:
         "_INFORMATIONAL_CHECK_NAMES": (frozenset({"zzz-sentinel-check"}), "informational_checks"),
         "_REQUIRE_CI": ("zzz-sentinel-require-ci", "require_ci"),
         "_REVIEW_BOTS": (("zzz-sentinel-bot",), "bots"),
+        "_REVIEW_BOT_AUTHOR_ALIASES": (
+            {"zzz-sentinel-bot": frozenset({"zzz-sentinel-alias"})},
+            "bot_author_aliases",
+        ),
         "_BOT_PENDING_GRACE_MINUTES": (-99999.0, "bot_pending_grace_minutes"),
     }
 
