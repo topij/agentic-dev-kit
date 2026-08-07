@@ -4,6 +4,75 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-06 (the first parallel batch, and a fix that should not be built)
+
+**Theme —** Three isolated lanes off one cockpit. Two landed. The third produced a finding
+instead of a commit, which is the outcome worth recording: the repair `#304` names for
+itself would have made an adopter's `AGENTS.md` permanently re-seedable.
+
+- **`#292` shipped in PR `#315`.** `make test` and `mutation-test` now run CI's lint and
+  shell-syntax gates before pytest. `#292` stays open — nothing pins that the targets
+  actually depend on the new gates, so a symmetric revert still passes; the residual is on
+  the issue and in the Makefile.
+- **`#285` shipped in PR `#317`.** `kit_doctor`'s Usage block writes `<engine-dir>`, with a
+  test pinning the invariant across `KIT_OWNED`.
+- **`#304` did not ship, deliberately.** Its "smallest fix" — `seed_doc` re-emitting
+  `KIT_OWN_MARKER` — is unconditional, so in the adopter tree `#297`'s body describes it
+  leaves the seeded file permanently seedable instead of protected after one overwrite. The
+  trace is on `#304`; a pointer is on `#297`. Both safe variants need a kit-repo detector
+  that does not exist.
+- **Filed this session:** `#316`, `#318` (from the `#285` lane), `#319`, `#320`. Occurrence
+  comments on `#305`, `#304`, `#297`.
+- **Batch reconciled** with `scripts/reconcile_sessions.sh fix-292-make-test-parity
+  fix-285-kit-doctor-paths fix-304-seed-marker`, run in
+  `/Users/topi/Coding/agentic-dev-kit`: `launched 3, merged 2, parked 1`. The parked lane is
+  `fix-304-seed-marker` (`EMPTY — 0 commits, never started`).
+
+**Learned**
+
+- **A ticket's own proposed repair can carry the defect class the ticket cites.** `#304` was
+  written after `#294`, names `#294`'s lessons, and its named repair has `#294`'s shape. What
+  caught it was tracing the repair into an adopter tree before writing code — not review, and
+  not the ticket's own reasoning.
+- **Building the mechanical guard is what finds the bug elsewhere.** The `#285` lane's
+  regression test surfaced the same hardcoded-path shape in seven further kit-owned engines,
+  filed as `#316`. The prediction being borne out is **`#285`'s own** — its body argues for a
+  mechanical fix over a careful edit because "the pattern reproduces itself on contact" — and
+  the test established that rather than the argument. (`#316` records the seven; it does not
+  contain that phrase, and an earlier draft of this line implied it did.)
+- **A contract in the prompt is still prose.** A lane given the `prompt_preamble` verbatim
+  idle-stalled against its first two clauses; its sibling, given the identical bytes, did
+  not. `#320`, with the direction: the cockpit already owns a check that classifies this.
+- **A panel that finds something cannot leave two-lens coverage at head.** Both merged PRs
+  carry a single-lens `fallback:delta` receipt, because fixing a finding moves the head off
+  the reviewed sha. `#305`, reframed there from a stopping rule to a coverage question.
+
+**Decided this session (operator)**
+
+- **Hybrid lane launch.** `parallel-headless.md` forbids an env-incapable launcher for a
+  state-writing lane, and no in-session mechanism here can replace a spawned process's
+  environment. So the two standard lanes ran as sub-agents with the sandbox carried by the
+  on-disk marker and the refuse-flag reduced to a prompt instruction; the high-stakes lane
+  stayed attended, where `activate` sets it mechanically.
+- **Fold `#304` into `#297` rather than ship the smaller repair.** The lane produces a
+  finding, not a commit.
+
+**Open, and owned by nothing yet**
+
+- **`#297` now carries `#304`'s work** as well as its own, and is Phase 2 of the convergence
+  plan's critical path.
+- **Phase 1 is half done** — `#285` landed, `#286` remains, and its body leaves three
+  questions open that want an operator rather than a spec.
+- **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#283`, `#287`, `#286`, `#292`,
+  `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`,
+  `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`#286` — the remaining half of Phase 1.** Read its body first: it leaves three
+things undecided (what happens when the kit adds a file, whether declaring is opt-in, and
+where the declared set lives), so this wants live steering rather than a delegated spec.
+`#297` — now carrying `#304` — is the Phase 2 follow-on, and the Codex `SessionStart` budget
+hooks plus cs-toolkit's Phase 0 still run in parallel per `docs/kit-convergence-plan.md`.
+
 ## Session — 2026-08-06 (the planning session the convergence doc asked for)
 
 **Theme —** Planning only; no engine, hook or workflow changed. The convergence plan's

@@ -11,6 +11,37 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-07 — a fourth consecutive session without the bot, and what the panel cost alone
+
+Severity **M**. Fourth occurrence in the cluster below. Still an operator decision and
+still not a kit change — recorded because it adds the one thing the earlier entries could
+not: a cost measurement taken on the cheapest change available.
+
+PR `#353` corrected two paragraphs of a planning document. No executable content, no test
+surface, one file. CodeRabbit was rate-limited on **both** surfaces from the moment it
+opened and its `coverage` stayed empty for every head, so it reviewed nothing here. The
+fallback panel carried the review end to end: two full-panel rounds, a single-lens
+record-prose delta pass, then the dual form's second lens after a lens disputed the
+author's safety-critical draw and the operator upheld it.
+
+**The panel earned its keep, and that is not the complaint.** It found two regressions the
+branch had introduced — a corrected measurement left contradicting the action bullet that
+consumes it, then a section header whose date range no longer covered a paragraph the
+branch had inserted under it. Both were real, both were the author's, and neither would
+have been caught by anything else: `make test` passes on all of it, and the document has
+no test or code consumer at all.
+
+What the entry is for is the **ratio**, which the earlier occurrences could not show
+because they ran on changes with real diffs. Here the review of two paragraphs cost more
+than the two paragraphs did, by a wide margin, and each fix round bought another required
+round because every push invalidates the receipt.
+
+**The decision below is now as informed as waiting can make it.** The earlier entries
+established that the quota is a free-OSS tier on a timer, and that bot and panel find
+disjoint things. This one adds what the panel costs when it runs alone on a change with
+nothing executable in it. A fifth occurrence has nothing left to teach, so this should
+graduate at the next sweep rather than accumulate further.
+
 ## 2026-08-06 — the panel found the cockpit's own mutation harness, and it was the unsafe shape
 
 Severity **M**. Not filed: `#326` already owns the class and now carries this as an occurrence
