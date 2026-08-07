@@ -1,8 +1,86 @@
 name: Test
 
+# `push:` is scoped to the protected branch on purpose (#329). Unscoped, it
+# fires alongside `pull_request:` for every push to a PR branch, so ONE push
+# started TWO identical runs of this workflow at the same sha. They competed for
+# a runner and one lost: measured on PR #328, four run-attempts were cancelled
+# at exactly 15m01s with `runner_name: ""` and zero steps executed. For commit
+# `9200038` the starved push run's `pull_request` sibling passed in 1m17s; for
+# `4576f40` BOTH runs were starved and neither resolved — the author moved on by
+# pushing a new commit. An earlier version of this comment said "their siblings
+# passed", which held for one of the two pairs.
+#
+# That is worse than wasted minutes, because a starved job is not distinguishable
+# from a real one at the surface anyone reads: `gh pr checks` renders it
+# `toolkit fail 15m1s`, and `pr_watch.py` puts it in `checks.failing[]`, so a
+# green PR reads as red and a watch loop cannot converge. Re-running it made its
+# check row vanish from the rollup instead of turning green, which wedged
+# `pr_watch`'s false-settle guard permanently (#333).
+#
+# `main` is a literal here because a workflow file cannot read
+# `config/dev-model.yaml`, where `vcs.protected_branch` lives — and GitHub
+# forbids `${{ }}` expressions in `on:` triggers, so there is no in-file way to
+# resolve it either. This file is NOT kit-owned (no `.github/` entry in
+# kit-manifest.json) and never ships to an adopter, so the literal binds only
+# this repo. `test_ci_push_trigger_matches_the_configured_protected_branch`
+# pins it against the config so the two cannot drift silently.
+#
+# KNOWN CONSEQUENCES, stated rather than discovered. There are TWO, and an
+# earlier version of this comment named only the first while calling the trade
+# bounded:
+#
+#   1. A branch with no open PR gets no CI. The repo's contract is
+#      branch-and-open-a-PR and `make test` covers the local side, so this is a
+#      deliberate trade.
+#   2. A TAG push gets no CI either. Defining `branches:` without `tags:` drops
+#      every ref that is not a branch, and the unscoped `push:` used to catch
+#      tags. Dormant rather than harmless: `git tag -l` is empty here and no
+#      workflow is tag- or release-triggered, so nothing regresses today — but a
+#      future release process built on tags would silently get no CI, and would
+#      have no reason to look here. Add `tags:` at that point rather than
+#      rediscovering this.
 on:
   push:
+    branches: [main]
   pull_request:
+
+# Supersede a PR's own older run when it is pushed again, rather than letting
+# both queue for the same scarce runner — the starvation above is what makes
+# this worth having and not merely tidy.
+#
+# THE GROUP KEY IS WHAT MAKES THIS SAFE, and `cancel-in-progress` alone is not
+# enough — that was this block's first form and a review lens disproved it by
+# live-firing the exact stanza against a throwaway repo.
+#
+# `cancel-in-progress: false` protects a run that is already EXECUTING. It does
+# not protect a run that is merely QUEUED: GitHub cancels any pending run in the
+# same concurrency group when a newer one arrives, unconditionally, whatever
+# `cancel-in-progress` says. So keying the group on the branch name put every
+# push to the protected branch in one group, and two pushes landing while the
+# first was still waiting for a runner would cancel the first — producing a
+# `CANCELLED` run on `main`, which `pr_watch.py` counts in its `bad` set and
+# renders as failing. That is precisely the cancelled-reads-as-failed confusion
+# this file exists to remove, reintroduced by the mechanism meant to remove it.
+#
+# `github.event.pull_request.number || github.run_id` closes it at the key:
+#
+#   pull_request  → the PR number. Every push to one PR shares a group and
+#                   supersedes its own older run, which is the whole point.
+#                   Keying on the PR rather than on `head_ref` also stops two
+#                   PRs that happen to share a branch name — `patch-1` from two
+#                   forks, on a public repo — from cancelling each other.
+#   push (main)   → `github.run_id`, unique per run, so a main run is ALONE in
+#                   its group and can never be cancelled by another: not while
+#                   executing, and not while queued. Every commit keeps its own
+#                   verdict, which is the property the old comment asserted and
+#                   the old key did not deliver.
+#
+# `cancel-in-progress` stays conditional anyway. It is now redundant for `push`
+# (a group of one has nothing to cancel), and belt-and-braces on the one
+# property that must not regress is worth a line.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege for GITHUB_TOKEN. Without this the job inherits the
 # repository/organisation default, which is commonly write-capable — and this
