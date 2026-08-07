@@ -348,6 +348,93 @@ def test_shipped_manifest_covers_every_kit_owned_file():
     assert not holes, f"manifest has null hashes (files absent at generation): {holes}"
 
 
+def test_the_installer_is_tracked():
+    """`init.sh` must stay in KIT_OWNED (#360).
+
+    It was absent from both KIT_OWNED and the manifest, which made the file that
+    PERFORMS every install the one file this report structurally could not range
+    over. cs-toolkit's copy stood 852 differing lines out while its doctor
+    reported `13 unchanged, 0 differ, 0 missing` and exited 0.
+
+    Asserted against KIT_OWNED rather than only the manifest because the manifest
+    is GENERATED from it: a check that read the manifest alone would pass on a
+    stale artifact and miss the removal it exists to catch. Manifest sync itself
+    is `test_shipped_manifest_covers_every_kit_owned_file`.
+    """
+    owned = dict(kit_doctor.KIT_OWNED)
+    assert "init.sh" in owned, "init.sh dropped out of KIT_OWNED — see #360"
+    assert owned["init.sh"] == "installer", (
+        "init.sh's role drives two mechanisms, so changing it is not cosmetic: "
+        "`engine` would feed it to _ENGINE_NAMES and to the _TEXT_IMPORT_RE "
+        "dependency scan, neither of which applies to a root-level shell script "
+        "that declares no non-stdlib dependency."
+    )
+
+
+def test_the_installer_is_not_self_modifying():
+    """The premise that makes a plain KIT_OWNED entry for `init.sh` correct.
+
+    `#360` argued the tracking model was a three-way design choice, because an
+    adopter's copy is "arguably expected to diverge, since it encodes answers to
+    the adoption prompts" — which would report every adopter permanently
+    `locally-edited`. It does not: `init.sh` writes `config/dev-model.yaml` and
+    renders `docs/templates/`, and never rewrites itself. cs-toolkit's copy is
+    byte-identical to kit commit 7485512b, so its 852-line delta is version drift
+    with no local rendering in it.
+
+    This test exists because that premise is LOAD-BEARING and invisible: if a
+    later change made the installer self-rendering, tracking it would start
+    reporting `locally-edited` for every adopter — the permanently-red failure
+    #286 was closed to fix — and nothing else in the suite would notice. Pinning
+    the property here means the design decision fails loudly rather than the
+    adopter reports going quietly wrong.
+    """
+    src = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
+    # Redirections and in-place edits that would target the script itself. `$0`
+    # is the direct form; the literal name covers a hardcoded path.
+    self_writes = re.findall(
+        r"""(?:>|>>)\s*["']?\$(?:0|\{0\})|(?:sed|perl)\s+-i[^\n]*init\.sh|"""
+        r"""(?:>|>>|tee)\s+["']?(?:\./)?init\.sh\b""",
+        src,
+    )
+    assert not self_writes, (
+        f"init.sh appears to write to itself ({self_writes}). If that is "
+        "deliberate, the KIT_OWNED entry for init.sh needs revisiting — an "
+        "adopter's copy would then be expected to diverge and `stale` would "
+        "become `locally-edited`. See #360."
+    )
+
+
+def test_an_unedited_installer_behind_the_kit_reports_stale_not_locally_edited():
+    """The behaviour the #360 decision turns on, asserted through `_drift_state`.
+
+    An adopter that has never touched `init.sh` but is behind the kit must land in
+    `stale` — true, actionable, and it clears when they update — and must NOT land
+    in `locally-edited`, which would be a permanent red on a file the adopter
+    never edited.
+
+    The third case is the migration one and is deliberately included: a copy
+    PRESENT locally but absent from a baseline recorded before init.sh was tracked
+    reports `differs` ("not in baseline"), because `new-upstream` only covers
+    files that are absent. Verified against the real adopter on 2026-08-08 —
+    cs-toolkit reported `differs … not in baseline`, then `stale … installed
+    01f7ea7ea604, kit ships 2b3372375106` against a re-recorded baseline.
+    """
+    installed, ships = "a" * 64, "b" * 64
+
+    state, detail = kit_doctor._drift_state(installed, ships, installed)
+    assert state == "stale", f"unedited-but-behind must be stale, got {state}"
+    assert "installed" in detail and "kit ships" in detail
+
+    state, _ = kit_doctor._drift_state(installed, ships, None)
+    assert state == "differs", f"absent from baseline must be differs, got {state}"
+
+    # Control: the state that WOULD have been the objection to tracking, reached
+    # only by a copy the adopter really did edit.
+    state, _ = kit_doctor._drift_state("c" * 64, ships, ships)
+    assert state == "locally-edited"
+
+
 @pytest.mark.driftcheck
 def test_kit_repo_self_check_is_clean():
     """The kit's own checkout must report zero drift against its own manifest —

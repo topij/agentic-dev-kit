@@ -83,6 +83,10 @@
       "role": "template",
       "sha256": "1654465836a9e70a6e81d76208783e9a12d65343d1e9c3091f1d30c25a437ce7"
     },
+    "init.sh": {
+      "role": "installer",
+      "sha256": "2b3372375106c6bc0b5f938a427fdd46f1384764476f479aa36cf5d33d944488"
+    },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
       "sha256": "7d27ff31f4eaa7edef57e35a15f8745318cec41ca1228812207a9812f3b4e37b"
@@ -109,7 +113,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "df9b8a6e030de5d30456ebd7d712cbed164c1824dac91a962c0706bb7bb95432"
+      "sha256": "5d1feb8f3b35fed5067bcd504ca0c3aadd2f060cd7dd18348dd9938185822284"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [

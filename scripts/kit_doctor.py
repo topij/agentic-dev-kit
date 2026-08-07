@@ -286,6 +286,51 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # to extend, so both are listed in ADOPTER_OWNED below instead.
     ("docs/templates/AGENTS.md.tmpl", "template"),
     ("docs/templates/CLAUDE.md.tmpl", "template"),
+    # The installer itself (#360). Untracked until now, which made it the one
+    # file this report structurally could not range over — while being the file
+    # that PERFORMS every install and upgrade. cs-toolkit's copy measured 852
+    # differing lines against kit `3761bec` while its doctor said `13 unchanged,
+    # 0 differ, 0 missing` and exited 0. Every statement in that report was
+    # true; the drift was entirely outside it.
+    #
+    # `#360` framed the tracking model as a three-way design choice, on the
+    # premise that an adopter's copy is EXPECTED to diverge because it "encodes
+    # answers to the adoption prompts" — which would make a plain entry here
+    # report every adopter permanently `locally-edited`, re-creating the
+    # permanently-red failure `#286` was closed to fix. THAT PREMISE IS FALSE,
+    # and the choice dissolves with it:
+    #
+    #   - cs-toolkit's init.sh is BYTE-IDENTICAL to kit commit `7485512b`
+    #     (2026-07-26) — established by hashing its copy and scanning every
+    #     init.sh blob in this repo's history for a match. So all 852 lines are
+    #     version drift and NONE are local rendering.
+    #   - init.sh never writes to itself. It writes config/dev-model.yaml and
+    #     renders docs/templates/; `test_the_installer_is_not_self_modifying`
+    #     pins that.
+    #   - Nothing in the kit tells an adopter to edit it.
+    #
+    # So `_drift_state` puts an unedited, behind-the-kit copy in `stale`
+    # ("installed X, kit ships Y") — true, actionable, and it clears to
+    # `unchanged` when the adopter updates the file. Not permanent, and not
+    # `locally-edited`. No new role that exempts it, and no split into tracked
+    # engine + rendered part; both were candidates in the issue and both are
+    # answers to a problem that does not exist.
+    #
+    # Role `installer` rather than `engine`, for two mechanical reasons, not
+    # taxonomy: `engine` + the `scripts/` prefix is what feeds `_ENGINE_NAMES`
+    # (init.sh is not an engine and does not move with `paths.engines` — it sits
+    # at the repo root by definition, since it is what an adopter runs before a
+    # configured path exists), and the `_TEXT_IMPORT_RE` dependency scan applies
+    # to `engine` and `hook` only. init.sh declares no non-stdlib dependency, so
+    # scanning it would manufacture edges out of a shell script's own prose.
+    #
+    # MIGRATION, and it is not a defect: an adopter whose recorded baseline
+    # predates this entry has init.sh PRESENT locally and ABSENT from that
+    # baseline, which `_drift_state` reports as `differs` ("not in baseline")
+    # rather than `new-upstream` — the latter only covers files that are absent.
+    # That exits 1 until they re-record with `--record-install`. Correct: their
+    # installer really is unmeasured, and that is the whole finding.
+    ("init.sh", "installer"),
 )
 
 # Paths that are the ADOPTER's — expected to differ, never reported as drift.

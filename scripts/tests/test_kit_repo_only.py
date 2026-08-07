@@ -174,10 +174,18 @@ def test_a_resolved_root_does_not_carry_the_unresolved_note(tmp_path):
 
 
 def test_the_completeness_guard_rejects_a_tree_missing_an_untracked_kit_file(tmp_path):
-    """`kit-manifest.json` tracks neither `init.sh` nor the root `Makefile`, so
+    """`kit-manifest.json` tracks the root `Makefile` in no version, so
     manifest-completeness alone said True for a tree missing one — and the
     positive control then ran and FAILED over a legitimately absent file, which
-    is round 1's HIGH narrowed rather than closed. Adversarial lens, round 2."""
+    is round 1's HIGH narrowed rather than closed. Adversarial lens, round 2.
+
+    `init.sh` USED to be the second such file and is named that way in this
+    test's history; it has been manifest-tracked since #360, so completeness
+    alone would now catch it. The guard still checks it explicitly and this test
+    still passes, because the synthetic manifest below lists neither — which is
+    the point: the guard must not depend on a given file being in the manifest.
+    Do not "simplify" it back to a manifest-only check on the strength of #360.
+    """
     root = tmp_path / "kitish"
     (root / "scripts").mkdir(parents=True)
     (root / "scripts" / "engine.py").write_text("x = 1\n", encoding="utf-8")
