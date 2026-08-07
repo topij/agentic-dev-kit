@@ -2029,3 +2029,118 @@ def test_upgrade_workflows_init_invocation_still_seeds_a_genuinely_absent_file(
 
     assert (repo / "AGENTS.md").exists()
     assert template_marker() not in (repo / "AGENTS.md").read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- #
+# The installer does not rewrite itself (#360)
+
+
+@pytest.mark.parametrize(
+    ("label", "config", "argv", "proof"),
+    [
+        ("current schema", None, (), "seeded "),
+        # NOT "seeded ": that is what the current-schema case above proves, so it
+        # would pass on a run that skipped migration entirely and merely seeded
+        # files. This string is emitted only when the schema is actually migrated
+        # forward — the shipped config is already v2, so it never appears there.
+        ("v1 migration", V1_CONFIG, (), "stamped kit.version=2"),
+        # `proof` is what makes this case non-vacuous, and it was added because it
+        # was vacuous. See the docstring's "reaching the branch" paragraph.
+        ("no-clobber", None, ("--no-clobber",), "left untouched (--no-clobber): "),
+    ],
+    # Explicit ids: without them pytest builds each id from the parameter VALUES,
+    # so the v1 case's whole YAML document lands in the test name and a failure
+    # line runs to ~2000 characters of embedded config. Seen in a real mutation
+    # run before this was added.
+    ids=["current-schema", "v1-migration", "no-clobber"],
+)
+def test_running_the_installer_does_not_modify_the_installer(
+    tmp_path: Path, label: str, config: str | None, argv: tuple[str, ...], proof: str
+) -> None:
+    """`init.sh` must leave its own bytes untouched — the premise #360's tracking
+    model rests on.
+
+    Tracking `init.sh` in `KIT_OWNED` is only correct if an adopter's copy is NOT
+    expected to diverge, because that is what puts a behind-the-kit copy in
+    `stale` (clears when updated) rather than `locally-edited` (permanently red on
+    a file nobody edited — the failure #286 was closed to fix). Established for
+    the real adopter by hashing: cs-toolkit's copy is byte-identical to kit commit
+    7485512b, so its 852-line delta is version drift with no local rendering.
+
+    **This replaces a regex over init.sh's source, and the replacement is the
+    point.** That version looked for `> $0`, `sed -i … init.sh` and similar; an
+    adversarial lens defeated it with a self-overwrite it structurally could not
+    see — `SELF_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"` followed
+    by a plain `cp`. `sh -n` accepted it and the guard passed. Two more reasons
+    the textual instrument was wrong: the write verb is open-ended
+    (`cp`/`mv`/`install`/`dd`/a downloader), and init.sh contains 14 `$0`
+    occurrences that are all AWK's current-record variable, so anchoring on `$0`
+    begins with 14 false positives.
+
+    Comparing the file's own bytes across a real run needs no list of verbs and
+    catches every mechanism, including ones nobody has thought of.
+
+    Parametrized over three code paths rather than one, because a self-write
+    could live on any of them: a fresh run on the current schema, a v1 config
+    migration (the branch that rewrites config in place, the most plausible place
+    for a self-rewrite to be added), and `--no-clobber`.
+
+    **Reaching the branch is not the same as passing the flag, and round 2 caught
+    this test failing that distinction.** `--no-clobber` only *does* anything on a
+    target `_seedable` returns MARKED (2) for — an existing file whose line 1
+    carries a kit marker. `_fixture(templates=True)` copies template SOURCES and
+    never the rendered TARGETS, so every target was ABSENT (0) and the
+    no-clobber-specific arm at `init.sh:1076-1080` never executed. An adversarial
+    lens proved it by planting a self-write *inside* that arm: all three
+    parametrizations passed. So this case exercised the flag and not its branch.
+
+    Fixed two ways, and the second is what stops it regressing: the fixture now
+    pre-seeds a marker-carrying target so MARKED is reached, and each case asserts
+    a `proof` string in stdout showing the path it claims to cover actually ran.
+    A guard that cannot go vacuous silently is worth more than one that happens to
+    be non-vacuous today.
+
+    **Each `proof` must also DISCRIMINATE its own path, which is a second mistake
+    made here and caught by the review bot.** The v1 case first shipped with
+    `"seeded "` — the same string the current-schema case uses — so a run that
+    skipped migration entirely and merely seeded files would have satisfied it.
+    Its proof is now `stamped kit.version=2`, emitted only when the schema is
+    really migrated forward. A positive control shared with another case proves
+    the union of the two paths, not the one it is attached to.
+    """
+    repo = _fixture(
+        tmp_path,
+        config=shipped_config() if config is None else config,
+        templates=True,
+        git=True,
+    )
+    if argv == ("--no-clobber",):
+        # An existing target carrying the shipped skeleton's marker on line 1 —
+        # the ONLY shape that makes _seedable return MARKED, and so the only way
+        # the --no-clobber decline arm is reachable at all.
+        marked = repo / "AGENTS.md"
+        marked.write_text(
+            f"<!-- {template_marker()} — pre-seeded so MARKED is reachable -->\n"
+            "\n# placeholder\n",
+            encoding="utf-8",
+        )
+    before = (repo / "init.sh").read_bytes()
+
+    result = _run_init(repo, *argv)
+
+    after = (repo / "init.sh").read_bytes()
+    assert after == before, (
+        f"init.sh rewrote itself during a `{label}` run "
+        f"({len(before)} bytes -> {len(after)}). If that is deliberate, the "
+        "KIT_OWNED entry for init.sh needs revisiting: an adopter's copy would "
+        "then be expected to diverge, and `stale` would become `locally-edited` "
+        "for every adopter. Re-open the #360 design question before shipping it."
+    )
+    # Positive control. Without it a run that did nothing at all — an early exit,
+    # a fixture that made every branch a no-op — proves the bytes unchanged for
+    # the wrong reason and reports it as coverage.
+    assert proof in result.stdout, (
+        f"the `{label}` run never reached the path this case exists to cover: "
+        f"{proof!r} absent from stdout, so the unchanged-bytes assertion above "
+        f"passed vacuously.\nstdout:\n{result.stdout}"
+    )

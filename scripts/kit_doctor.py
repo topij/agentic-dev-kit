@@ -286,6 +286,79 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # to extend, so both are listed in ADOPTER_OWNED below instead.
     ("docs/templates/AGENTS.md.tmpl", "template"),
     ("docs/templates/CLAUDE.md.tmpl", "template"),
+    # The installer itself (#360). Untracked until now, which made it the one
+    # file this report structurally could not range over — while being the file
+    # that PERFORMS every install and upgrade. cs-toolkit's copy measured 852
+    # differing lines against kit `3761bec` — and the COMMAND matters, because the
+    # count is argument-order dependent and two review lenses reached opposite
+    # verdicts on this number without it:
+    #
+    #     diff <adopter>/init.sh <kit>/init.sh | grep -c '^[<>]'   # 852
+    #     diff <kit>/init.sh <adopter>/init.sh | grep -c '^[<>]'   # 848
+    #
+    # Adopter first, as `#360` wrote it. Neither figure is wrong; `diff` simply
+    # picks a different edit script per direction on a file with many similar
+    # lines. Both re-measured here 2026-08-08. Below, "852" always means the
+    # first form.
+    #
+    # While that drift stood, cs-toolkit's doctor said `13 unchanged, 0 differ,
+    # 0 missing` and exited 0. Every statement in that report was true; the drift
+    # was entirely outside what it ranged over.
+    #
+    # `#360` framed the tracking model as a three-way design choice, on the
+    # premise that an adopter's copy is EXPECTED to diverge because it "encodes
+    # answers to the adoption prompts" — which would make a plain entry here
+    # report every adopter permanently `locally-edited`, re-creating the
+    # permanently-red failure `#286` was closed to fix. THAT PREMISE IS FALSE,
+    # and the choice dissolves with it:
+    #
+    #   - cs-toolkit's init.sh is BYTE-IDENTICAL to kit commit `7485512b`
+    #     (2026-07-26) — established by hashing its copy and scanning every
+    #     init.sh blob in this repo's history for a match. So all 852 lines are
+    #     version drift and NONE are local rendering.
+    #   - init.sh never writes to itself. It writes config/dev-model.yaml and
+    #     renders docs/templates/. Pinned BEHAVIOURALLY by
+    #     `test_init_sh.py::test_running_the_installer_does_not_modify_the_installer`,
+    #     which runs the installer and compares its own bytes. (This line used to
+    #     name `test_the_installer_is_not_self_modifying`, a regex over init.sh's
+    #     source that the commit adding this entry deleted — two review lenses
+    #     defeated it with an indirect self-write. A correctness lens then caught
+    #     the reference still pointing at the deleted name.)
+    #   - Nothing in the kit tells an adopter to edit it.
+    #
+    # So `_drift_state` puts an unedited, behind-the-kit copy in `stale`
+    # ("installed X, kit ships Y") — true, actionable, and it clears to
+    # `unchanged` when the adopter updates the file. Not permanent, and not
+    # `locally-edited`. No new role that exempts it, and no split into tracked
+    # engine + rendered part; both were candidates in the issue and both are
+    # answers to a problem that does not exist.
+    #
+    # Role `installer` rather than `engine`, for mechanical reasons, not taxonomy.
+    # Stated precisely, because an earlier version of this comment overstated the
+    # first one and an adversarial lens measured it:
+    #
+    #   - `_derive_engine_names` requires role `engine` AND the `scripts/` prefix.
+    #     init.sh's path has no such prefix, so role alone would NOT put it in
+    #     `_ENGINE_NAMES`. What role `engine` actually does here is make
+    #     `rel[len("scripts")+1:]` evaluate to the EMPTY STRING, which
+    #     `test_engine_probe_names_cover_the_real_kit_owned_engines` already
+    #     catches — verified by mutating the role and reading which test failed.
+    #     So the guard against this mistake is pre-existing, not new.
+    #   - The `_TEXT_IMPORT_RE` dependency scan applies to `engine` and `hook`
+    #     only. init.sh declares no non-stdlib dependency, so scanning it would
+    #     manufacture edges out of a shell script's own prose.
+    #
+    # And the reason it is not an engine at all: it does not move with
+    # `paths.engines`. It sits at the repo root by definition, being what an
+    # adopter runs *before* a configured path exists.
+    #
+    # MIGRATION, and it is not a defect: an adopter whose recorded baseline
+    # predates this entry has init.sh PRESENT locally and ABSENT from that
+    # baseline, which `_drift_state` reports as `differs` ("not in baseline")
+    # rather than `new-upstream` — the latter only covers files that are absent.
+    # That exits 1 until they re-record with `--record-install`. Correct: their
+    # installer really is unmeasured, and that is the whole finding.
+    ("init.sh", "installer"),
 )
 
 # Paths that are the ADOPTER's — expected to differ, never reported as drift.
@@ -382,9 +455,17 @@ def _derive_engine_names(kit_owned: tuple[tuple[str, str], ...]) -> tuple[str, .
 
     Entries outside ``KIT_ENGINE_PREFIX`` are skipped: their location under an
     adopter's engines dir is not derivable by a prefix swap, so including one
-    would make the probe stat a path no layout produces. Nothing in KIT_OWNED
-    is outside the prefix today; the rule is here so that adding such an entry
-    cannot silently produce a garbage probe path.
+    would make the probe stat a path no layout produces. This paragraph used to
+    end "Nothing in KIT_OWNED is outside the prefix today", which was already
+    false when written — the workflow, doctrine and template entries are all
+    outside it, and ``init.sh`` (#360) is one more. The skip is therefore load
+    bearing right now rather than prophylactic, which is the opposite of what
+    that sentence implied. What keeps it safe is the ``role == "engine"``
+    conjunct: every path outside the prefix also carries a non-engine role, so
+    the two filters agree today. Adding an ``engine``-role entry outside the
+    prefix is the case that would produce a garbage probe path, and nothing
+    stops it — see ``test_engine_probe_names_cover_the_real_kit_owned_engines``,
+    which is what caught an attempt to give ``init.sh`` role ``engine``.
 
     ``init.sh``'s ``detect_engines_dir()`` used to carry the identical triple —
     the write-side half of the same bug (issue #67); it now derives its probe

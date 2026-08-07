@@ -174,19 +174,37 @@ def test_a_resolved_root_does_not_carry_the_unresolved_note(tmp_path):
 
 
 def test_the_completeness_guard_rejects_a_tree_missing_an_untracked_kit_file(tmp_path):
-    """`kit-manifest.json` tracks neither `init.sh` nor the root `Makefile`, so
+    """`kit-manifest.json` tracks the root `Makefile` in no version, so
     manifest-completeness alone said True for a tree missing one — and the
     positive control then ran and FAILED over a legitimately absent file, which
-    is round 1's HIGH narrowed rather than closed. Adversarial lens, round 2."""
+    is round 1's HIGH narrowed rather than closed. Adversarial lens, round 2.
+
+    `init.sh` USED to be the second such file and is named that way in this
+    test's history; it has been manifest-tracked since #360, so completeness
+    alone would now catch it. The guard still checks it explicitly and this test
+    still passes, because the synthetic manifest below lists neither — which is
+    the point: the guard must not depend on a given file being in the manifest.
+    Do not "simplify" it back to a manifest-only check on the strength of #360.
+
+    **Both required files are now proven separately.** This test used to create
+    `Makefile` before its first assertion, so only the missing-`init.sh` half was
+    ever exercised: dropping `"Makefile"` from the guard's tuple left the test
+    green. Found by the review bot on `#362`. The sequence below adds one file at
+    a time, so each name in that tuple is load-bearing for an assertion of its
+    own.
+    """
     root = tmp_path / "kitish"
     (root / "scripts").mkdir(parents=True)
     (root / "scripts" / "engine.py").write_text("x = 1\n", encoding="utf-8")
     (root / "kit-manifest.json").write_text(
         json.dumps({"files": {"scripts/engine.py": {"sha256": "0" * 64}}}), encoding="utf-8"
     )
-    (root / "Makefile").write_text("test:\n", encoding="utf-8")
-    assert _is_complete_kit_tree(root) is False, "manifest-complete but no init.sh"
+    # Manifest-complete (every path it lists exists) and still not a kit tree,
+    # because neither untracked required file is present yet.
+    assert _is_complete_kit_tree(root) is False, "manifest-complete but no init.sh/Makefile"
     (root / "init.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    assert _is_complete_kit_tree(root) is False, "init.sh present but Makefile still absent"
+    (root / "Makefile").write_text("test:\n", encoding="utf-8")
     assert _is_complete_kit_tree(root) is True
 
 
@@ -284,10 +302,18 @@ def _is_complete_kit_tree(root: Path = None) -> bool:
         return False
     if not files or not all((root / rel).exists() for rel in files):
         return False
-    # The manifest tracks neither of these, so a manifest-complete tree could
-    # still be missing one — and then the control below would run and FAIL over
-    # a legitimately absent file, which is the round-1 defect narrowed rather
-    # than closed. Adversarial lens, PR #232 round 2.
+    # `Makefile` is tracked by the manifest in no version, so a manifest-complete
+    # tree could still be missing it — and then the control below would run and
+    # FAIL over a legitimately absent file, which is the round-1 defect narrowed
+    # rather than closed. Adversarial lens, PR #232 round 2.
+    #
+    # `init.sh` was the other such file and is kept in this tuple deliberately
+    # even though #360 made it manifest-tracked. Two reasons, and the second is
+    # the one that matters: the `files` loop above ranges over whatever manifest
+    # it was HANDED, which for a synthetic or older manifest need not list
+    # `init.sh` at all; and this predicate answers "is this a complete kit tree",
+    # which must not become contingent on one file's tracking status. Removing it
+    # here on the strength of #360 would re-open exactly the round-1 defect.
     return all((root / rel).exists() for rel in ("init.sh", "Makefile"))
 
 
