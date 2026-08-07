@@ -4575,6 +4575,63 @@ def test_main_resolves_the_backend_before_it_reads(
     assert order[:2] == ["resolve", "read"], f"resolved after reading: {order}"
     assert seen_backend == ["rest"], "main did not thread the backend it resolved"
 
+
+def test_no_persist_builds_the_report_without_rewriting_watch_state(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The final authorization probe must not acknowledge an unread comment.
+
+    Patching ``persist_poll`` itself pins the production call site: an
+    implementation that merely avoids ``save_state`` through another path would
+    still fail this test if ``main`` accidentally invokes the state transition.
+    """
+    pr_watch = _load_pr_watch()
+    original_state = {
+        "head": "abc123",
+        "max_total": 1,
+        "seen": ["issue:already-read"],
+        "pending_seen": ["issue:operator-has-not-read"],
+    }
+
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_pr_view",
+        lambda pr: (_green_view(headRefOid="abc123"), []),
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_check_details",
+        lambda pr, **kw: pr_watch.CheckDetails([], "skipped"),
+    )
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: original_state.copy())
+
+    def _must_not_persist(*_args, **_kwargs):
+        pytest.fail("--no-persist invoked persist_poll")
+
+    monkeypatch.setattr(pr_watch, "persist_poll", _must_not_persist)
+
+    assert pr_watch.main(["9", "--json", "--no-persist"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["head"] == "abc123"
+
+
+@pytest.mark.parametrize(
+    "mode",
+    ["--mark-seen", "--record-review", "--assert-draft", "--assert-ready"],
+)
+def test_no_persist_refuses_state_changing_modes(
+    mode: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pr_watch = _load_pr_watch()
+    argv = ["9", "--no-persist", mode]
+    if mode == "--record-review":
+        argv.extend(["fallback:panel", "--head", "abc123"])
+
+    with pytest.raises(SystemExit, match="2"):
+        pr_watch.main(argv)
+    assert "--no-persist is only valid with a plain poll" in capsys.readouterr().err
+
 def test_the_report_names_which_backend_produced_it() -> None:
     """`persist_poll` needs it to scope the settle baseline, so it has to be in
     the report rather than recomputed at persist time."""
