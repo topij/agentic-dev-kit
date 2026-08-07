@@ -98,3 +98,80 @@ def test_pull_request_remains_a_trigger() -> None:
         "`pull_request:` is gone — with `push:` scoped to the protected branch, no "
         "PR would run CI at all"
     )
+
+
+def _concurrency() -> dict:
+    """The `concurrency:` block, which is a top-level key rather than a trigger."""
+    doc = yaml.safe_load((REPO_ROOT / WORKFLOW).read_text(encoding="utf-8"))
+    block = doc.get("concurrency")
+    assert isinstance(block, dict), (
+        f"{WORKFLOW} has no parseable `concurrency:` block — got {block!r}"
+    )
+    return block
+
+
+def test_ci_concurrency_group_isolates_each_protected_branch_run() -> None:
+    """Kills: keying the concurrency group on the branch name.
+
+    `cancel-in-progress: false` protects a run that is already EXECUTING. It does
+    NOT protect a QUEUED one — GitHub cancels any pending run in the same group
+    when a newer one arrives, whatever `cancel-in-progress` says. So a
+    branch-keyed group put every push to the protected branch in one group, and
+    two pushes landing while the first was still waiting for a runner cancelled
+    the first. `CANCELLED` is in `pr_watch.summarize_checks`'s `bad` set, so that
+    renders as a failing check on the protected branch — the exact
+    cancelled-reads-as-failed confusion this workflow exists to remove.
+
+    Established by a review lens live-firing the original stanza against a
+    throwaway repo, not by reading the docs. The fix is at the KEY: `push` falls
+    back to `github.run_id`, unique per run, so a protected-branch run is alone
+    in its group and nothing can cancel it in either state.
+
+    Both mutations this kills survived the entire suite before it existed."""
+    group = _concurrency()["group"]
+
+    assert "github.run_id" in group, (
+        f"the concurrency group must fall back to `github.run_id` so a push run is "
+        f"alone in its group and cannot be cancelled while queued — got {group!r}"
+    )
+    assert "github.head_ref" not in group, (
+        f"`head_ref` keys the group on a BRANCH NAME, which shares a group across "
+        f"every push to the protected branch (queued-run cancellation) and across "
+        f"two PRs with the same branch name on a public repo — got {group!r}"
+    )
+
+
+def test_ci_concurrency_groups_a_pull_request_by_number_not_branch_name() -> None:
+    """Kills: grouping PR runs by branch name.
+
+    Superseding a PR's own older run is the point of the block, so PR runs must
+    still share a group. Keying that on `head_ref` rather than the PR number
+    means two PRs whose head branches happen to share a name — `patch-1` from two
+    different forks, and this repo is public — land in one group and cancel each
+    other. Nothing before this block could do that, so it is exposure the block
+    introduced."""
+    group = _concurrency()["group"]
+
+    assert "github.event.pull_request.number" in group, (
+        f"a pull_request run must be grouped by PR number, not by branch name — "
+        f"got {group!r}"
+    )
+
+
+def test_ci_concurrency_never_cancels_in_progress_on_a_push() -> None:
+    """Kills: `cancel-in-progress: true`.
+
+    Redundant now that a push run is alone in its group, and kept because it is
+    the one property that must not regress: a hardcoded `true` would cancel
+    running protected-branch jobs if the group key ever widened again. A literal
+    `True` and an expression are different YAML types, which is what this
+    distinguishes."""
+    cancel = _concurrency()["cancel-in-progress"]
+
+    assert cancel is not True, (
+        "cancel-in-progress must not be unconditionally true — that cancels runs "
+        "on the protected branch, which this workflow exists to prevent"
+    )
+    assert isinstance(cancel, str) and "pull_request" in cancel, (
+        f"cancel-in-progress must be conditioned on the pull_request event — got {cancel!r}"
+    )
