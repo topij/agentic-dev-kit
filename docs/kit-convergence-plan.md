@@ -20,7 +20,7 @@ cs-toolkit's shape.
 
 ## Verified state
 
-Established by running the named commands on 2026-08-05/06, not from memory.
+Established by running the named commands on 2026-08-05/07, not from memory.
 Re-derive anything load-bearing before acting on it — some of it will have moved.
 
 ### cs-toolkit's install
@@ -133,9 +133,9 @@ review). Independent of everything else. Move the hook into the tracked engines
 path so drift is reportable at all; take the current engine version with it —
 its import closure is already satisfied at that destination, measured under
 *The fork that matters* above, so there is nothing further to carry; **create
-`.codex/hooks.json` there with `--runtime codex`** (question 2's decision — today no hook of any kind fires for a Codex
-session in cs-toolkit); replace the two stale files; re-record the install
-baseline.
+`.codex/hooks.json` there with `--runtime codex`** (question 2's decision —
+today no hook of any kind fires for a Codex session in cs-toolkit); replace the
+two stale files; re-record the install baseline.
 
 **The move is not a file move.** cs-toolkit's `.claude/settings.json` invokes
 the hook as `python3 "$CLAUDE_PROJECT_DIR/scripts/hooks/pr_followup_hook.py"`
