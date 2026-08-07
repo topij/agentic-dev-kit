@@ -216,8 +216,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   it so future notices are authenticated. The report's
   `review_bots` block resolves each bot to:
   - **unavailable** — an outage announced on either surface. Rendered as
-    `⚠ review unavailable …`, and it never blocks anything: it's the action signal
-    to run the `review.fallback_panel` pass. It stays visible after you `--mark-seen` the
+    `⚠ review unavailable …`. The status entry itself adds no
+    `review_bots.blockers` item, but an unseen notice comment still blocks
+    `converged`, and unavailability never satisfies the current-head review gate:
+    `mergeable` stays blocked until the configured `review.fallback_panel` runs
+    and records a receipt. The outage stays visible after you `--mark-seen` the
     notice comment, so the gap is still readable at merge time. Only a
     **check**-surface outage cancels the pending block below: a check describes
     the bot's state now, while comments are the whole PR history unscoped by
