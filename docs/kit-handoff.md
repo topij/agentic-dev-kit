@@ -14,11 +14,79 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-06 — **`#330` is built and reviewed but not merged.** PR `#337` carries
-it plus the `adopt`/`upgrade` shared-definition slice. It is held for the operator by
-doctrine, and separately blocked by a GitHub Actions outage.
+Last updated: 2026-08-07 — **the kit-side critical path is clear.** `#337`, `#334` and
+`#349` are merged; Phase 3 of `docs/kit-convergence-plan.md` now waits on cs-toolkit's
+Phase 0 and its fixer predicate, both that repo's PRs.
 
-## Latest session — 2026-08-06 (`#330`, and a ticket's own objection that did not survive being run)
+## Latest session — 2026-08-07 (`#305`, and a vice removed at the pricing side)
+
+**Theme —** The review sprint resumed where `#209`'s decision left it. The panel's
+stopping rule was the picked hard item; the operator steered the design live and chose
+its shape; the change merged the same session.
+
+- **PR `#349` merged (`0e343c9`).** A record-prose-only fix-round delta on a change under
+  `safety-critical-changes.md` now takes **both** configured lenses over the delta — the
+  dual form — instead of a full panel at the new head, with rule 2 kept by composition
+  and a stated precondition: a full-panel review must be standing, so a Degraded-mode
+  initial review leaves nothing to compose with. The loop's three terminal states are
+  named, and a deletion's prose class is set by what the deleted text was doing where it
+  stood. The evidence companion buries the old categorical rule with the `#328` pricing,
+  the rejected severity-floor alternative, and the deferred dual-everywhere question.
+  Verified with `make test` in `/Users/topi/Coding/agentic-dev-kit`: 1006 passed, at both
+  heads.
+- **`#337` and `#334` merged before this session opened** (`fddbd31`, `b28df6b`), with no
+  session block of their own; recorded here so the trail has it. On `#349` the scoped
+  trigger produced one PR run and one `main` run, both green.
+- **CodeRabbit reviewed both heads of `#349`** and went rate-limited only after coverage
+  stood, so no panel was owed. Every finding is disposed on the PR's threads; the one not
+  fixed is deferred to `#194` with the bot's agreement. Another data point for the
+  friction inbox's bot-quota decision, still waiting on `triage-friction-log`.
+- **Filed this session: `#350`.** Comments on `#305` (the disposition) and `#194` (the
+  dual form sharpens its receipt-field ask).
+
+**Learned**
+
+- **The bot found the design's own missing precondition.** The dual form's composition
+  argument silently assumed a full-panel initial review; the author had reviewed the
+  argument and missed it. Principle #5 earning its keep on the doctrine that implements
+  it.
+- **Fix the price, not the duty.** The durable resolution of `#305`'s vice left
+  never-log-regressions untouched and moved what acting on it costs. The rejected
+  alternative — a severity floor on the duty — is in the companion so it is not
+  re-proposed.
+- **`mergeable` has no honest receipt for a bot-reviewed head** — all three literals
+  describe fallback passes, so the loop's best case (bot quota present, full coverage)
+  wedges the autonomous merge path. `#350`.
+
+**Decided this session (operator, live)**
+
+- **The dual-lens form**, over a severity floor and over record-only; **the ordinary
+  class stays single-lens**, with `#268`'s disjointness evidence recorded on `#305` as
+  the open question.
+- **Merge `#349`** — operator-merge per the doctrine's own closing rule applied to
+  itself.
+
+**Open, and owned by nothing yet**
+
+- **The critical path leaves this repo**: Phase 3 needs cs-toolkit's Phase 0 and its
+  fixer predicate (`done` → `converged`), both that repo's PRs, per
+  `docs/kit-convergence-plan.md`. Every kit-side gate is merged.
+- **The friction inbox is over budget and its triage is overdue** by its own entries;
+  graduating it needs tracker writes and operator approval (`triage-friction-log`).
+- **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
+- **Carried forward:** `#350`, `#304`, `#291`, `#243`, `#273`, `#290`, `#283`, `#287`,
+  `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
+  `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **cs-toolkit's Phase 0 + fixer predicate** — that repo's PRs, per
+`docs/kit-convergence-plan.md`'s agreed sequence; read its "The move is not a file move"
+paragraph before starting. Kit-side in parallel: `#211` (populate `--carry-forward` for
+fix rounds — the review sprint's named next move), and the overdue `triage-friction-log`
+sweep.
+
+______________________________________________________________________
+
+## Session — 2026-08-06 (`#330`, and a ticket's own objection that did not survive being run)
 
 **Theme —** The fix was one flag. The work was establishing that the flag was the right one,
 against a ticket that argued it was not — and then discovering that moving a file with no
@@ -298,39 +366,6 @@ things undecided (what happens when the kit adds a file, whether declaring is op
 where the declared set lives), so this wants live steering rather than a delegated spec.
 `#297` — now carrying `#304` — is the Phase 2 follow-on, and the Codex `SessionStart` budget
 hooks plus cs-toolkit's Phase 0 still run in parallel per `docs/kit-convergence-plan.md`.
-
-______________________________________________________________________
-
-## Session — 2026-08-06 (the planning session the convergence doc asked for)
-
-**Theme —** Planning only; no engine, hook or workflow changed. The convergence plan's
-questions are settled — 1, 2, 4 and 5 by operator decision, 3 by verification — and its
-phase shape is now an agreed sequence. `docs/kit-convergence-plan.md` is the record:
-the decisions with their evidence, the sequence with its done-whens, and the
-re-verification notes all live there, not here.
-
-- **Question 3 verified: Codex exposes `SessionStart`.** The sources and the remaining
-  fire-it-and-see obligation are in the convergence doc's settled-questions list.
-- **Re-derived live before deciding**, per the doc's own instruction: `kit_doctor
-  --manifest` run in cs-toolkit, the forked hook measured against the kit's current one,
-  `#285` / `#286` / `#297` re-read against the plan's claims. The claims held; the
-  deltas are recorded in the doc's verified-state section.
-- **One dependency the doc had missed is now in the sequence:** cs-toolkit's nightly
-  fixer still reads `done`, which gates the engine swap — cs-toolkit's own config phased
-  its adoption around exactly this, and the constraint had not reached the kit's plan.
-
-**Open, and owned by nothing yet**
-
-- **`#297` and `#304`** are now placed in the agreed sequence rather than free-floating;
-  `#304` is the chosen kit-side starter.
-- **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#285`, `#283`, `#287`, `#286`,
-  `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
-  `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
-
-▶ Next: **`#304`** — its body names the smaller repair (`seed_doc` re-emitting the
-kit-own marker). The sequence's other immediate items — the Codex SessionStart budget
-hooks (kit-side) and Phase 0, un-forking cs-toolkit's hook (a cs-toolkit session) —
-run in parallel with it, per `docs/kit-convergence-plan.md`.
 
 ______________________________________________________________________
 
