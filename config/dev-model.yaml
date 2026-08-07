@@ -134,10 +134,11 @@ review:
   # Three receipt literals exist, one per pass: `fallback:panel` (the
   # receipt_source below), `fallback:<runtime>` (the Degraded-mode
   # author-context run of fallback_commands — e.g. `fallback:claude`), and
-  # `fallback:delta` (the single-lens record-prose delta pass defined in that
-  # doctrine file's stopping section). The last two are literals the
-  # recording agent writes on the receipt, not config keys — never set
-  # receipt_source to either.
+  # `fallback:delta` (the record-prose delta pass defined in that doctrine
+  # file's stopping section — one lens ordinarily, both lenses for a change
+  # under safety-critical-changes.md; `--lenses` records which form ran).
+  # The last two are literals the recording agent writes on the receipt, not
+  # config keys — never set receipt_source to either.
   fallback_panel:
     receipt_source: "fallback:panel"   # never the same as a single-lens receipt
     # Compute for each panel lens, keyed by runtime — the same per-runtime shape
