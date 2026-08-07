@@ -53,15 +53,19 @@ Repeat until the report says **converged**:
    `converged` / `mergeable`; never assume `done` means "the loop finished."
 
 1. **If `review_bots.unavailable` contains an entry whose `surface` is `check` and
-   the current head has no valid `review_evidence`:** run `review.fallback_panel`
-   and record its receipt against the report's exact `head`, even when
-   `new_comments[]` contains no outage notice. A check description can be the only
-   trusted current outage surface; waiting for a comment in that case leaves
-   `converged` true but `mergeable` permanently blocked. A historical comment-only
-   outage is not sufficient for this branch — unseen comments follow the existing
-   path below, while an acknowledged old comment must not preempt a live pending
-   bot on a later head. Re-poll after recording. If valid current-head evidence
-   already exists, keep the outage visible but do not rerun the panel.
+   `review_bots.blockers` is empty and the current head has no valid
+   `review_evidence`:** run `review.fallback_panel` and record its receipt against
+   the report's exact `head`, even when `new_comments[]` contains no outage notice.
+   A check description can be the only trusted current outage surface; waiting for
+   a comment in that case leaves `converged` true but `mergeable` permanently
+   blocked. A historical comment-only outage is not sufficient for this branch —
+   unseen comments follow the existing path below, while an acknowledged old
+   comment must not preempt a live pending bot on a later head. When another
+   configured reviewer is still pending, its blocker also defers the panel:
+   `--record-review` would refuse, so running the panel early only repeats work.
+   Re-poll until `review_bots.blockers` is empty. After recording, re-poll. If valid
+   current-head evidence already exists, keep the outage visible but do not rerun
+   the panel.
 
 1. **If `converged`:** stop the loop and report — PR #, the green check count, and
    "no outstanding review findings." Then record the independent review (see below)
