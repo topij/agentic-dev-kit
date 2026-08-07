@@ -127,11 +127,36 @@ _OPERATORS = ("||", "&&", "==", "!=", "<=", ">=")
 _EXPR = re.compile(r"\$\{\{(.*?)\}\}", re.DOTALL)
 
 
-def _norm_expression(inner: str) -> str:
-    """Canonicalise ONE `${{ … }}` body: one space around each operator token."""
+# A GitHub expression string literal is single-quoted, with `''` escaping an
+# embedded quote. Its CONTENT is opaque: `||` and `==` inside it are characters,
+# not operators, and its whitespace is part of the value.
+_QUOTED = re.compile(r"'(?:[^']|'')*'")
+
+
+def _code_tokens(text: str) -> list[str]:
+    """Tokens of an UNQUOTED span: operators separated, whitespace discarded."""
     for op in _OPERATORS:
-        inner = inner.replace(op, f" {op} ")
-    return " ".join(inner.split())
+        text = text.replace(op, f" {op} ")
+    return text.split()
+
+
+def _norm_expression(inner: str) -> str:
+    """Canonicalise ONE `${{ … }}` body, leaving quoted literals byte-exact.
+
+    Splitting on quotes is the part two review rounds asked for. Padding operator
+    substrings across the whole body — the previous form — reached inside string
+    literals as readily as into code, so `'a||b'` and `'a || b'` canonicalised to
+    the same text while being different runtime values, and `'pull  request'` and
+    `'pull request'` did too. Both lenses rated that High and both named the same
+    cause: the helper knew where `${{ }}` began and not where a quote did."""
+    tokens: list[str] = []
+    pos = 0
+    for m in _QUOTED.finditer(inner):
+        tokens.extend(_code_tokens(inner[pos : m.start()]))
+        tokens.append(m.group(0))
+        pos = m.end()
+    tokens.extend(_code_tokens(inner[pos:]))
+    return " ".join(tokens)
 
 
 def _norm(value: object) -> str:
@@ -256,3 +281,57 @@ def test_ci_concurrency_cancel_is_exactly_the_pull_request_only_condition() -> N
         f"A polarity flip (`==` to `!=`) is one way to reach this and not the only one — "
         f"compare the two above rather than assuming which."
     )
+
+
+# `_norm` is the guard's guard, and it has been wrong in four distinct ways
+# across as many review rounds — substring membership, collapse-runs,
+# strip-everything, and pad-across-quotes. Every one of those was found by a
+# review lens rather than by a test, because nothing pinned the helper itself:
+# the assertions above only exercise it against the two constants that happen to
+# be checked in, and none of the four defects was reachable that way. These
+# cases are the ones that were not.
+_NORM_MUST_DIFFER = [
+    ("${{ x == 'a||b' }}", "${{ x == 'a || b' }}", "operator characters inside a literal"),
+    ("${{ x == 'pull  request' }}", "${{ x == 'pull request' }}", "whitespace inside a literal"),
+    ("${{ a | | b }}", "${{ a || b }}", "a split `||` is two tokens, not one"),
+    ("${{ a = = b }}", "${{ a == b }}", "a split `==` is two tokens, not one"),
+    ("${{ a }} - ${{ b }}", "${{ a }}-${{ b }}", "text outside the braces is content"),
+]
+_NORM_MUST_MATCH = [
+    ("${{ a||b }}", "${{ a || b }}", "spacing around an operator is not meaning"),
+    ("${{ a=='x' }}", "${{ a == 'x' }}", "…including next to a literal"),
+    ("${{  a   ||   b  }}", "${{ a || b }}", "runs of whitespace are not meaning"),
+]
+
+
+@pytest.mark.parametrize(("left", "right", "why"), _NORM_MUST_DIFFER)
+def test_norm_keeps_meaning_changing_edits_distinct(left: str, right: str, why: str) -> None:
+    """Kills: any normalisation loose enough to call these the same expression."""
+    assert _norm(left) != _norm(right), (
+        f"_norm collapsed a MEANING change into a match ({why}):\n  {left}\n  {right}\n"
+        f"both normalised to {_norm(left)!r} — the guard would stop firing on this edit"
+    )
+
+
+@pytest.mark.parametrize(("left", "right", "why"), _NORM_MUST_MATCH)
+def test_norm_ignores_edits_that_are_only_formatting(left: str, right: str, why: str) -> None:
+    """Kills: any normalisation strict enough to fail on a pure reformat.
+
+    The other direction matters as much: a false failure here fails this repo's
+    own merge gate on correct configuration."""
+    assert _norm(left) == _norm(right), (
+        f"_norm treated a pure reformat as a change ({why}):\n  {left}\n  {right}\n"
+        f"normalised to {_norm(left)!r} and {_norm(right)!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [v for pair in _NORM_MUST_DIFFER + _NORM_MUST_MATCH for v in pair[:2]],
+)
+def test_norm_is_idempotent(value: str) -> None:
+    """Normalising a normalised value is a fixed point.
+
+    A property rather than a case, and cheap: a normaliser that is not idempotent
+    is one whose output depends on how many times it ran."""
+    assert _norm(_norm(value)) == _norm(value), f"not a fixed point: {value!r}"
