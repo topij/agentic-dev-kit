@@ -20,8 +20,17 @@ cs-toolkit's shape.
 
 ## Verified state
 
-Established by running the named commands on 2026-08-05/07, not from memory.
+Established by running the named commands on 2026-08-05/08, not from memory.
 Re-derive anything load-bearing before acting on it — some of it will have moved.
+
+> **2026-08-08 — the critical path has cleared and this section is now partly
+> historical.** cs-toolkit's Phase 0 merged as `2ab63d255`
+> (`in-parallel-oy/cs-toolkit#1869`) and its fixer predicate as `bfafe13b7`
+> (`#1866`); kit `#285`, `#286` and `#297` are closed. What each subsection below
+> still gets right and wrong is marked inline — read the markers, because two
+> paragraphs here were load-bearing arguments that the Phase 0 run falsified.
+> The adopter's own account is
+> [`adopter-forcing-function-memo_2026-08-07.md`](adopter-forcing-function-memo_2026-08-07.md).
 
 ### cs-toolkit's install
 
@@ -65,7 +74,24 @@ established by reading the file and grepping the manifest:
   a watch loop for PRs that do not exist.
 
 **This is the clearest case of the fork the goal is about, and the cheapest to
-un-fork.** It is also the only divergence currently invisible to tooling.
+un-fork.**
+
+> **2026-08-08 — this paragraph used to end "It is also the only divergence
+> currently invisible to tooling," and that was false.** `init.sh` is the
+> counterexample: it is in neither `kit_doctor.KIT_OWNED` nor
+> `kit-manifest.json`, so the file that *performs* the install is the one file
+> the doctor structurally cannot report drift on. cs-toolkit's copy measures 852
+> differing lines against kit `3761bec` while its doctor reports `13 unchanged,
+> 0 differ, 0 missing` and exit 0 — every statement in that report true, and the
+> drift entirely outside what it ranges over. Verified in this repo 2026-08-08 by
+> parsing the `KIT_OWNED` tuple (35 entries, no `init.sh`) and searching the
+> manifest. That is [`#360`](https://github.com/topij/agentic-dev-kit/issues/360).
+>
+> The correction is kept rather than quietly deleted because the sentence was
+> **load-bearing twice**: it was the argument for why Phase 0 was the cheapest
+> un-fork, and it implied the invisible surface had been enumerated. Only the
+> first half survives. Phase 0 was still the cheapest un-fork; the enumeration
+> was never done, and one adopter upgrade found the file that most needed it.
 
 Measured 2026-08-06 (`wc -l` and `diff` against this repo's
 `scripts/hooks/pr_followup_hook.py`, run in cs-toolkit): the fork is a 66-line
@@ -88,12 +114,29 @@ of layout.
 ### Runtime parity, in the kit itself
 
 Read off the filesystem, `docs/agentic-dev-kit/workflows/` against
-`.claude/commands/` and `.agents/skills/`:
+`.claude/commands/` and `.agents/skills/`. **Re-read 2026-08-08 — the first two
+bullets had moved, and in the direction that removes work from this plan.**
 
-- **Both runtimes:** `session-start`, `pr-watch`, `parallel`, `wrap-up`.
-- **Claude only, and with no shared definition to bind:** `adopt`, `upgrade`,
-  `post-merge-systemize`, `triage-friction-log`. These are the *lifecycle*
-  workflows — Codex can use the kit but cannot adopt, upgrade or maintain it.
+- **Both runtimes:** `session-start`, `pr-watch`, `parallel`, `wrap-up`, and — as
+  of `#330` — **`adopt` and `upgrade`**.
+- **Claude only, and with no shared definition to bind:** `post-merge-systemize`,
+  `triage-friction-log`. Codex can now adopt and upgrade the kit; what it still
+  cannot do is run the two retro workflows.
+
+  > **2026-08-08 correction.** This bullet used to name `adopt` and `upgrade`
+  > here too, and Phase 4 below still asks for their shared definitions as
+  > though unbuilt. They exist: `docs/agentic-dev-kit/workflows/adopt.md` (409
+  > lines) and `upgrade.md` (386), with thin bindings on both runtimes — a
+  > 9-line `.claude/commands/adopt.md` and an `.agents/skills/adopt/SKILL.md`.
+  > `#330` did this, and `KIT_OWNED` has tracked both since.
+  >
+  > This matters beyond bookkeeping: the adopter memo read this section, took
+  > the gap at face value, and recommended promoting the extraction to a **hard
+  > Phase 3 gate** — an `L`-sized kit build that is already done. A stale plan
+  > did not merely misinform a reader; it nearly bought a sprint. The real
+  > residue is much smaller and belongs to the adopter: cs-toolkit's manifest
+  > lists both workflow docs in `not_installed`, so **Phase 3 installs them**
+  > (see that phase below).
 - **`parallel-headless`** has a shared definition and no binding on either side.
 - **SessionStart hooks** (`check_doc_budget.py`, `check_memory_budget.py`) fire on
   Claude only. Principle #1's budget mechanism reaches one runtime.
@@ -107,18 +150,29 @@ Read off the filesystem, `docs/agentic-dev-kit/workflows/` against
 
 ### What blocks measurement
 
-Open issues that bite **cs-toolkit's exact configuration**, not hypothetical ones:
+Open issues that bite **cs-toolkit's exact configuration**, not hypothetical ones.
+**States re-checked 2026-08-08 with `gh issue view` per number:**
 
-- `#286` — a sized-down adoption reports N missing forever, so an intact install
-  and a broken one are indistinguishable. cs-toolkit reports missing engines today
-  *by design*, and nothing separates that from damage.
-- `#285` — `kit_doctor`'s Usage block hardcodes `scripts/`, so every command it
-  prints is wrong in a vendored adopter. cs-toolkit vendors to `scripts/devkit`.
-- `#290` — no state for "exists but is not usable".
+- ~~`#286`~~ — **closed.** A sized-down adoption used to report N missing forever;
+  `not_installed` now separates deliberately-sized-down from broken.
+- ~~`#285`~~ — **closed.** `kit_doctor`'s Usage block no longer hardcodes
+  `scripts/`, so its printed commands work in a vendored adopter.
+- ~~`#297`~~ — **closed.** `init.sh` has a no-clobber mode.
+- `#290` — no state for "exists but is not usable". **Still open.**
 - `#287` — the shared workflows assume engine *capabilities*, not just paths.
-- `#283` — `/upgrade` step 4 and the copied release manifest.
-- `#297` — `init.sh` has no no-clobber mode, which is why `/adopt` stages and
-  stops rather than running it.
+  **Still open.**
+- `#283` — `/upgrade` step 4 and the copied release manifest. **Still open.**
+- **`#360` — new, and the one this section was missing entirely:** `init.sh` is in
+  neither `KIT_OWNED` nor the manifest, so the installer is outside the
+  measurement. See the correction under *The fork that matters*. This is now the
+  blocker in front of Phase 3 — the reasoning is under that phase below.
+
+**The prediction at the foot of this document was checked, and it held.** That
+section says most of the issues in this list "read as though they were found by
+*reasoning* about adopters rather than by upgrading one," and asked for the
+forcing function to validate or refute them. One Phase-0-sized change in one
+adopter produced `#358`, `#359` and `#360` — and `#360` contradicts a stated
+premise of this plan rather than adding to a list.
 
 ## Agreed sequence — settled 2026-08-06
 
@@ -126,16 +180,32 @@ Dependencies are the point; the ordering follows from them. Three items start
 immediately and in parallel; the critical path runs through the kit's
 instrument work to the upgrade session; one kit track runs beside it.
 
+> **Progress, 2026-08-08.** Phases 0, 1 and 2 and the fixer predicate are **done**
+> — so every gate this sequence named for Phase 3 has cleared, and Phase 3 is
+> unblocked *as written*. It should still not start first: the Phase 0 run
+> surfaced `#360`, and Phase 3 **is** the upgrade while `init.sh` is what performs
+> it. Running a converge-the-install session against an installer that no
+> instrument can measure is the wrong order. The revised order is under *The
+> critical path*.
+
 ### Immediately, in parallel
 
-**Phase 0 — make divergence visible** (a cs-toolkit PR, through its own
-review). Independent of everything else. Move the hook into the tracked engines
+**Phase 0 — make divergence visible** — **DONE**, merged in cs-toolkit as
+`2ab63d255` (`in-parallel-oy/cs-toolkit#1869`), 2026-08-07T21:06Z. Its done-when
+was met on the terms below: the hook fires on both runtimes from the new path,
+established by running it rather than by reading the config. The description that
+follows is kept as the record of what the phase was, and because its two
+**Nothing will repair that automatically** and **The move is not a file move**
+paragraphs generalise past it — both are live constraints on Phase 3.
+
+*What it was:* a cs-toolkit PR, through its own review, independent of everything
+else. Move the hook into the tracked engines
 path so drift is reportable at all; take the current engine version with it —
 its import closure is already satisfied at that destination, measured under
 *The fork that matters* above, so there is nothing further to carry; **create
 `.codex/hooks.json` there with `--runtime codex`** (question 2's decision —
-today no hook of any kind fires for a Codex session in cs-toolkit); replace the
-two stale files; re-record the install baseline.
+before this phase no hook of any kind fired for a Codex session in cs-toolkit);
+replace the two stale files; re-record the install baseline.
 
 **The move is not a file move.** cs-toolkit's `.claude/settings.json` invokes
 the hook as `python3 "$CLAUDE_PROJECT_DIR/scripts/hooks/pr_followup_hook.py"`
@@ -165,9 +235,29 @@ asserts the file is tracked would pass on a dead hook.
 *(This paragraph exists because a review bot caught the original Phase 0 calling
 the move "safe" while omitting the registrations. It was neither safe nor a move.)*
 
+> **What the phase produced beyond its own done-when**, and the reason the
+> *Nothing will repair that automatically* paragraph above is now doubly load
+> bearing: the registration cs-toolkit copied from the kit carries
+> `$(git rev-parse --show-toplevel)`, which yields the **empty string** in a
+> `.git`-less tree — so the command becomes an absolute path rooted at `/` and
+> `python3` exits 2, and because a `PostToolUse` failure does not halt a session,
+> the hook silently stops firing. That is the *exact* failure mode this phase's
+> own paragraph describes for a moved hook, arriving by a different route.
+> [`#359`](https://github.com/topij/agentic-dev-kit/issues/359).
+>
+> **The adopter deliberately carried the defect rather than fix it downstream**,
+> because hardening its copy would have re-forked the registration Phase 0 had
+> just un-forked. That is the right call under this plan's goal, and it makes
+> `#359` a kit debt with an adopter waiting on it — fix it here before Phase 3
+> re-prints the registrations, so the operator is told the right thing once
+> instead of the current thing and corrected later.
+
 **`#304`, in the kit** — the ready starter, small and adjacent to the `init.sh`
 work below; its body names the smaller of two repairs (`seed_doc` re-emitting
-the kit-own marker).
+the kit-own marker). **2026-08-08: now coupled to `#360`** — same file, and
+`#304` is the concrete instance of why tracking it matters, since with `init.sh`
+untracked an adopter cannot tell whether its copy carries that bug. Treat the two
+as one piece of work.
 
 **The SessionStart budget hooks on Codex, in the kit.** Question 3 is settled:
 the event exists (see below), so this is the cheapest parity win available.
@@ -177,26 +267,42 @@ as Phase 0.
 
 ### The critical path
 
-**Phase 1 — make the instrument honest.** `#285` and `#286` at minimum. `#286`
-is needed on every branch of question 1 — even at the staged destination,
-templates stay out of cs-toolkit (its narrative docs already exist and are in
-use), so a declared install set is what lets `kit_doctor` ever say "intact".
-**Done when** `kit_doctor` in cs-toolkit distinguishes *deliberately sized
-down* from *broken*, and prints commands that work there.
+**Phase 1 — make the instrument honest** — **DONE.** `#285` and `#286` both
+closed. `kit_doctor` in cs-toolkit now distinguishes *deliberately sized down*
+from *broken* (`✓ intact for this adoption — 22 file(s) declined`) and prints
+commands that work at a vendored engines path.
 
-**Phase 2 — make re-rendering safe.** `#297`. **Done when** something can run
-`init.sh` in an adopter without the operator having to reason about which files
-it will overwrite. `#304` is adjacent and may share parts of the change.
+**Phase 2 — make re-rendering safe** — **DONE.** `#297` closed; `init.sh` has a
+no-clobber mode. `#304` is still open and is now grouped with `#360` above.
 
-**The fixer predicate, in cs-toolkit.** Its nightly fixer reads `done` from its
-own `pr_watch.py`; the kit's `done` means MERGEABLE, so swapping engines
-without swapping the predicate to `converged` is a silent infinite poll —
-cs-toolkit's config says exactly this and phased its adoption around it. A
-small cs-toolkit PR; it gates only the engine swap. This dependency was missing
-from the first draft of this plan.
+**The fixer predicate, in cs-toolkit** — **DONE**, merged as `bfafe13b7`
+(`in-parallel-oy/cs-toolkit#1866`). It landed *after* this plan's 2026-08-06
+snapshot, which is why earlier revisions listed it as outstanding. Its nightly
+fixer read `done` from its own `pr_watch.py` while the kit's `done` means
+MERGEABLE, so swapping engines without swapping the predicate to `converged`
+would have been a silent infinite poll. Verified 2026-08-07 by `git log -S` on
+that repo's `.claude/commands/nightly-fixer.md` and `pr-watch.md`, plus a
+repo-wide grep confirming no consumer still reads the `done` key.
 
-**Phase 3 — converge the install.** After Phases 1 and 2 and the fixer
-predicate: an agent session working **in cs-toolkit** (question 5's decision)
+**Before Phase 3 — the kit work the forcing function found.** This is new as of
+2026-08-08 and sits *between* the cleared gates and Phase 3, because Phase 3 is
+the upgrade and `init.sh` is what performs it:
+
+1. **`#360` + `#304` together** — decide the `init.sh` tracking model, then fix.
+   The model is a design call, not a fix: an adopter's copy is arguably *expected*
+   to diverge since it encodes answers to the adoption prompts, so a plain
+   `KIT_OWNED` entry would report every adopter permanently `locally-edited` —
+   trading an invisible problem for a permanently-red one, which is the failure
+   `#286` was just closed to fix. **Acceptance:** `kit_doctor` in cs-toolkit can
+   say something true about its installer, and the `_still_a_skeleton`-vs-seed-guard
+   question a review bot raised on the Phase 0 PR becomes *answerable* — with the
+   installer untracked there is currently no way to tell a doctor defect from
+   installer drift.
+2. **`#359`** — before Phase 3 re-prints the registrations.
+3. **`#358`** — two prose paths, plus the coverage question its issue raises.
+
+**Phase 3 — converge the install.** After the three items above: an agent session
+working **in cs-toolkit** (question 5's decision)
 performs the upgrade and lands it as a normal PR through cs-toolkit's own
 review; kit defects it surfaces route upstream as kit issues, not into the
 adopter's PR. Engines per cs-toolkit's declared Phase 2, the declared install
@@ -204,13 +310,23 @@ set recorded, SessionStart wiring on both runtimes there. **Done when**
 `kit_doctor --manifest <kit>/kit-manifest.json` reports no unexplained
 divergence.
 
+**Phase 3 also installs `adopt.md` and `upgrade.md` there**, which is the residue
+of the correction under *Runtime parity* above. cs-toolkit's manifest lists both
+in `not_installed`, so a Phase 3 session in that repo has **no installed workflow
+document to follow** — it would improvise the very procedure the kit exists to
+standardise. The shared definitions and both runtime bindings already exist
+kit-side, so this is an install step in the adopter's own PR, not kit work.
+
 ### The kit track beside it
 
 **Phase 4 — runtime parity in the kit, sliced** (questions 2 and 4). `#273`
-first — its failure mode is the silent one. Then shared definitions for `adopt`
+first — its failure mode is the silent one. ~~Then shared definitions for `adopt`
 and `upgrade`, the slice the standing `#243` decision named — ideally before
 Phase 3 so the upgrade session can follow the shared definition, though not a
-hard gate.
+hard gate.~~ **That half is done** (`#330`); see the correction under *Runtime
+parity, in the kit itself*. What remains of the `#243` slice is
+`post-merge-systemize` and `triage-friction-log`, already in the deferred tail
+below. So Phase 4 is now `#273` alone.
 
 ### Deferred tail, deliberately
 
@@ -245,6 +361,8 @@ question 3 was verified. The original phrasings are in this file's git history.
 4. **The lifecycle workflows are extracted sliced: `adopt` + `upgrade` first.**
    The daily loop already works on Codex; the two retro workflows follow later.
    This re-affirms the `#243` slice rather than inventing a new scope.
+   **2026-08-08: this decision has been carried out** for its named slice —
+   `#330` extracted both and bound them on both runtimes.
 5. **The upgrade is an agent session in cs-toolkit, reviewed as a normal PR
    there.** Kit findings route upstream as issues — the decision the `#278`
    upgrade already operated under, now stated for this one.
@@ -258,3 +376,34 @@ Most of the issues in "What blocks measurement" read as though they were found b
 real adopter, so using it as the forcing function should validate or refute them
 — and is likely to surface more. **Budget for that.** Treating the first upgrade
 as a routine sync is the assumption most likely to be wrong.
+
+### Checked, 2026-08-08 — validated
+
+**Phase 0 alone, one adopter, one file moved: three kit issues.** `#358`, `#359`,
+`#360`. The prediction asked to be checked and this is the check, so the score is
+worth stating precisely rather than favourably:
+
+- **`#360` did more than add to the list — it falsified a stated premise** of this
+  document (*The fork that matters*). A prediction that new issues would appear is
+  weaker than what happened, which is that an argument the plan relied on was
+  wrong.
+- **The count is a floor, not a total.** Phase 0 was scoped to one file's
+  relocation and two stale replacements. Phases 1–3 touch the engines, the
+  manifest and both runtimes' wiring.
+- **One item the adopter deliberately did not file**, and it is the most
+  interesting: during the Phase 0 session a live Claude session kept invoking the
+  *pre-move* hook path at a moment when that string existed in no file on disk.
+  The observable is certain; the mechanism (stale snapshot vs. both registrations
+  active) is not established. Plausibly runtime behaviour rather than a kit
+  defect — but it bears directly on how `#303`'s hand-maintained registrations
+  behave in practice, so it is filed now for a kit session to settle rather than
+  left in a memo.
+
+**A second, unpredicted finding: the forcing function also audits this document.**
+Two of the corrections above (`init.sh` invisible to tooling; `adopt`/`upgrade`
+unextracted) were plan text that a reader acted on. The second one nearly cost a
+sprint — the adopter memo recommended promoting already-finished work to a hard
+gate. So the cost of a stale plan is not only a misinformed reader; it is
+*confidently scoped work that does not need doing.* Re-derive load-bearing facts
+before acting on them, which is what the header of *Verified state* asks for and
+what neither of those two readings did.
