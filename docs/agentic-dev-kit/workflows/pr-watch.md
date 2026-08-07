@@ -204,11 +204,14 @@ Self-pace on a bounded cadence — don't busy-wait:
 - **A bot's outage is detected on both trusted surfaces, and a queued bot is not a
   finished one.** `review.unavailable_markers` are matched against comments
   authored by the exact normalized login of a configured `review.bots` entry
-  (or an explicitly trusted service alias) *and* against that bot's
+  (or an alias under `review.bot_author_aliases`) *and* against that bot's
   status-check description — the same rate limit is worded differently on the two
   surfaces, and matching only comments made detection depend on which one the bot
   happened to use. Author scoping matters because tracker mirrors and humans can
-  quote outage text without the reviewer being unavailable. The report's
+  quote outage text without the reviewer being unavailable. A legacy prefix-like
+  author carrying an outage marker is surfaced as an **untrusted candidate**—it
+  blocks convergence until handled, but never counts as reviewer evidence. Add
+  the exact login to `bot_author_aliases` only after verifying it. The report's
   `review_bots` block resolves each bot to:
   - **unavailable** — an outage announced on either surface. Rendered as
     `⚠ review unavailable …`, and it never blocks anything: it's the action signal
@@ -329,18 +332,21 @@ Self-pace on a bounded cadence — don't busy-wait:
   nothing (blocking `converged` would wedge the loop) and is printed by the human
   render as well as carried in the JSON. Empty on the `gh` backend.
 - **Tune this for your own bot mix in `config/dev-model.yaml`, never in the engine.**
-  `review.bots`, `review.noise_markers`, `review.unavailable_markers`,
-  `review.informational_checks` and `review.bot_pending_grace_minutes` are read from
-  config; the engine only carries them as fallbacks for a missing config.
+  `review.bots`, `review.bot_author_aliases`, `review.noise_markers`,
+  `review.unavailable_markers`, `review.informational_checks` and
+  `review.bot_pending_grace_minutes` are read from config; the engine only carries
+  them as fallbacks for a missing config.
   `review.bots` and `review.informational_checks` ship with the *same* value and
   different jobs: the latter is a blocking policy ("this check never blocks the
   watch loop"), the former an identity ("this check belongs to a reviewer whose
-  state the merge gate cares about"). Bot names match case-insensitively: as a
-  **substring** of a check name (your own CI and bot config) and as a **prefix**
-  of a comment author (anyone may comment on a public PR, so `xcoderabbit` must
-  not be able to speak for the reviewer). `coderabbit` covers the check
-  `CodeRabbit` and the author `coderabbitai` either way — keep entries specific
-  enough not to collide with a CI job name. Editing the literals inside
+  state the merge gate cares about"). Bot names match case-insensitively as a
+  **substring** of a check name (your own CI and bot config). Comment authors are
+  stricter: only the exact bot key, its conventional `[bot]` form, or an exact
+  login configured under `review.bot_author_aliases` is trusted. The shipped
+  CodeRabbit aliases cover `coderabbitai` and `coderabbitai[bot]`; custom bots
+  must list differing author logins explicitly. This replaces the legacy prefix
+  rule—after upgrading, an old prefix-like outage comment becomes an actionable
+  untrusted-candidate warning until its exact login is configured. Editing the literals inside
   `<engine-dir>/pr_watch.py` forks the engine and turns every later kit update into
   a merge conflict. A key you omit keeps the kit default; an explicit empty list
   (`noise_markers: []`) means "filter nothing".

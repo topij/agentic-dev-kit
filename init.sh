@@ -588,6 +588,12 @@ migrate_kit_schema() {
   # whose reviewer is not CodeRabbit.
   ensure_review_key bots '  bots: [coderabbit]' || true
 
+  ensure_review_key bot_author_aliases '  # Exact GitHub logins trusted to speak for each configured reviewer.
+  # Custom bots whose check name and author login differ belong here; never use
+  # prefix matching for public comment authors.
+  bot_author_aliases:
+    coderabbit: [coderabbitai, "coderabbitai[bot]"]' || true
+
   # The status-check wording of the same rate-limit outage (issue #23).
   #
   # DETECT AND INSTRUCT — deliberately not an in-place edit. Three review rounds

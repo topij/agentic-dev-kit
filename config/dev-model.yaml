@@ -115,6 +115,11 @@ review:
   # for the reviewer. Keep entries specific enough not to collide with a CI job
   # name.
   bots: [coderabbit]
+  # Exact GitHub logins trusted to speak for each configured reviewer. Keep
+  # aliases explicit: prefix inference lets a lookalike account impersonate a
+  # reviewer. Custom bots whose check name and author login differ belong here.
+  bot_author_aliases:
+    coderabbit: [coderabbitai, "coderabbitai[bot]"]
   # The independent pass to run when a configured bot can't review. TWO shapes,
   # and the difference is whether the reviewer is independent of the author:
   #

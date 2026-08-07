@@ -283,7 +283,7 @@ _DEFAULT_INFORMATIONAL_CHECK_NAMES = ("coderabbit",)
 # Keep entries specific enough not to collide with a CI job name.
 _DEFAULT_REVIEW_BOTS = ("coderabbit",)
 
-_REVIEW_BOT_AUTHOR_ALIASES = {
+_DEFAULT_REVIEW_BOT_AUTHOR_ALIASES = {
     "coderabbit": frozenset({"coderabbitai", "coderabbitai[bot]"}),
 }
 
@@ -321,7 +321,30 @@ class ReviewConfig(NamedTuple):
     informational_checks: frozenset[str]
     require_ci: bool
     bots: tuple[str, ...]
+    bot_author_aliases: dict[str, frozenset[str]]
     bot_pending_grace_minutes: float
+
+
+def _normalize_bot_author_aliases(value: Any) -> dict[str, frozenset[str]] | None:
+    """Normalize ``review.bot_author_aliases`` or reject the whole mapping.
+
+    Partial acceptance is unsafe: one malformed entry among several would make
+    that reviewer silently lose outage detection while the rest appeared to
+    work. ``None`` tells the caller to warn and use the complete built-in
+    default instead.
+    """
+    if not isinstance(value, dict):
+        return None
+    normalized: dict[str, frozenset[str]] = {}
+    for raw_bot, raw_aliases in value.items():
+        bot = str(raw_bot or "").strip().lower()
+        aliases = [raw_aliases] if isinstance(raw_aliases, str) else raw_aliases
+        if not bot or not isinstance(aliases, list) or not all(
+            isinstance(alias, str) and alias.strip() for alias in aliases
+        ):
+            return None
+        normalized[bot] = frozenset(alias.strip().lower() for alias in aliases)
+    return normalized
 
 
 def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
@@ -366,6 +389,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         informational_checks=frozenset(_DEFAULT_INFORMATIONAL_CHECK_NAMES),
         require_ci=_DEFAULT_REQUIRE_CI,
         bots=_DEFAULT_REVIEW_BOTS,
+        bot_author_aliases=dict(_DEFAULT_REVIEW_BOT_AUTHOR_ALIASES),
         bot_pending_grace_minutes=_DEFAULT_BOT_PENDING_GRACE_MINUTES,
     )
     try:
@@ -384,6 +408,19 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
             list(_DEFAULT_INFORMATIONAL_CHECK_NAMES),
         )
         bots = get_str_list(config, "review.bots", list(_DEFAULT_REVIEW_BOTS))
+        raw_aliases = get(
+            config,
+            "review.bot_author_aliases",
+            _DEFAULT_REVIEW_BOT_AUTHOR_ALIASES,
+        )
+        aliases = _normalize_bot_author_aliases(raw_aliases)
+        if aliases is None:
+            print(
+                "warning: review.bot_author_aliases must map bot names to non-empty string lists; "
+                "using pr_watch's built-in aliases",
+                file=sys.stderr,
+            )
+            aliases = dict(_DEFAULT_REVIEW_BOT_AUTHOR_ALIASES)
         require_ci = get(config, "review.require_ci", _DEFAULT_REQUIRE_CI)
         if not isinstance(require_ci, bool):
             require_ci = _DEFAULT_REQUIRE_CI
@@ -428,6 +465,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         ),
         require_ci=require_ci,
         bots=tuple(bot.strip().lower() for bot in bots if bot.strip()),
+        bot_author_aliases=aliases,
         bot_pending_grace_minutes=float(grace),
     )
 
@@ -438,6 +476,7 @@ _REVIEW_UNAVAILABLE_MARKERS = _REVIEW_CONFIG.unavailable_markers
 _INFORMATIONAL_CHECK_NAMES = _REVIEW_CONFIG.informational_checks
 _REQUIRE_CI = _REVIEW_CONFIG.require_ci
 _REVIEW_BOTS = _REVIEW_CONFIG.bots
+_REVIEW_BOT_AUTHOR_ALIASES = _REVIEW_CONFIG.bot_author_aliases
 _BOT_PENDING_GRACE_MINUTES = _REVIEW_CONFIG.bot_pending_grace_minutes
 
 
@@ -1580,9 +1619,29 @@ def review_unavailable_reason(body: str, *, author: str | None = None) -> str | 
     return reason
 
 
+def untrusted_review_unavailable_candidate(
+    body: str, *, author: str | None = None
+) -> str | None:
+    """Legacy-prefix outage text that needs explicit alias configuration.
+
+    This is deliberately not reviewer evidence. It only keeps a formerly
+    accepted custom-bot notice visible instead of letting an overlapping noise
+    marker hide the migration gap.
+    """
+    if author is None:
+        return None
+    reason = review_unavailable_reason(body)
+    if reason is None or review_unavailable_reason(body, author=author) is not None:
+        return None
+    low_author = str(author).strip().lower()
+    return next((reason for bot in _REVIEW_BOTS if low_author.startswith(bot)), None)
+
+
 def is_noise(body: str, *, author: str | None = None) -> bool:
     low = (body or "").lower()
     if review_unavailable_reason(body, author=author) is not None:
+        return False
+    if untrusted_review_unavailable_candidate(body, author=author) is not None:
         return False
     return any(marker in low for marker in _NOISE_MARKERS)
 
@@ -1606,6 +1665,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
         body = raw.get("body") or ""
         author = _author(raw)
         unavailable = review_unavailable_reason(body, author=author)
+        untrusted = untrusted_review_unavailable_candidate(body, author=author)
         out.append(
             {
                 "key": _comment_key("issue", raw),
@@ -1616,6 +1676,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
                 "line": None,
                 "body": body,
                 "review_unavailable_reason": unavailable,
+                "untrusted_review_unavailable_candidate": untrusted,
             }
         )
     for raw in view.get("reviews") or []:
@@ -1635,6 +1696,9 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
                 "line": None,
                 "body": body,
                 "review_unavailable_reason": review_unavailable_reason(body, author=author),
+                "untrusted_review_unavailable_candidate": untrusted_review_unavailable_candidate(
+                    body, author=author
+                ),
             }
         )
     for raw in inline or []:
@@ -1652,6 +1716,9 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
                 "line": raw.get("line") or raw.get("original_line"),
                 "body": body,
                 "review_unavailable_reason": review_unavailable_reason(body, author=author),
+                "untrusted_review_unavailable_candidate": untrusted_review_unavailable_candidate(
+                    body, author=author
+                ),
             }
         )
     return out
@@ -2698,6 +2765,9 @@ def build_report(
                 "line": c["line"],
                 "excerpt": _excerpt(c["body"]),
                 "review_unavailable_reason": c.get("review_unavailable_reason"),
+                "untrusted_review_unavailable_candidate": c.get(
+                    "untrusted_review_unavailable_candidate"
+                ),
                 # Full body too: handling a finding no longer needs a second
                 # `gh api .../pulls/N/comments` fetch for the suggested diff.
                 "body": c["body"],
@@ -2860,6 +2930,12 @@ def render(report: dict) -> str:
                 lines.append(
                     f"  • [review unavailable] @{c['author']}{loc}: "
                     f"{c['review_unavailable_reason']} — run the fallback review panel (docs/agentic-dev-kit/fallback-review-panel.md)"
+                )
+            elif c.get("untrusted_review_unavailable_candidate"):
+                lines.append(
+                    f"  • [untrusted reviewer-outage candidate] @{c['author']}{loc}: "
+                    f"{c['untrusted_review_unavailable_candidate']} — add the exact login under "
+                    "review.bot_author_aliases before treating it as reviewer evidence"
                 )
             else:
                 lines.append(f"  • [{c['kind']}] @{c['author']}{loc}: {c['excerpt']}")
