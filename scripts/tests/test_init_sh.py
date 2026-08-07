@@ -1769,13 +1769,22 @@ def test_the_printed_commands_are_pasteable_verbatim(tmp_path: Path) -> None:
     A round-5 lens made exactly that edit and the whole suite stayed green,
     because every other assertion here matches loose substrings. These two
     are exact, which is the point: substring assertions cannot see expansion.
+
+    **The Codex line now carries three `$` idioms rather than one** (`#359`): the
+    substitution plus two `$root` reads. All three must survive unexpanded — and
+    `$root` is the more fragile of the two kinds, because a missing backslash
+    there expands to the EMPTY string at print time rather than to a visible
+    absolute path, so the pasted snippet silently loses its own guard and
+    reproduces `#359` in the adopter's config. That failure is invisible to any
+    substring assertion, which is why this one stays exact.
     """
     repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
 
     result = _run_init(repo)
 
     assert (
-        '        python3 "$(git rev-parse --show-toplevel)/scripts/hooks/'
+        '        root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+        '[ -n "$root" ] || exit 0; exec python3 "$root/scripts/hooks/'
         'pr_followup_hook.py" --runtime codex' in result.stdout
     )
     assert (
@@ -1945,6 +1954,94 @@ def test_both_shipped_registrations_name_their_own_runtime() -> None:
         if any("pr_followup_hook" in h.get("command", "") for h in e["hooks"])
     )
     assert codex_pr_entry["matcher"] == "^Bash$"
+
+
+def _codex_registration_command() -> str:
+    """The Codex registration's command string, read OUT OF the shipped file.
+
+    Never a literal copied into this module: the defect below shipped because
+    every existing assertion compared the registration's text against another
+    copy of the same text, and a shared defect is invisible to a consistency
+    check.
+    """
+    parsed = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    entry = next(
+        e
+        for e in parsed["hooks"]["PostToolUse"]
+        if any("pr_followup_hook" in h.get("command", "") for h in e["hooks"])
+    )
+    hook = next(h for h in entry["hooks"] if "pr_followup_hook" in h.get("command", ""))
+    return hook["command"]
+
+
+def test_the_codex_registration_survives_a_git_less_tree(tmp_path: Path) -> None:
+    """`#359`: the registration must not run `python3` against a path built from
+    an empty string.
+
+    `$(git rev-parse --show-toplevel)` yields the EMPTY STRING outside a
+    worktree, so the bare form collapsed to `/…/pr_followup_hook.py` — an
+    absolute path rooted at `/` — and `python3` exited 2. Because a `PostToolUse`
+    failure does not halt a session, what an operator observes is a hook that
+    silently stopped firing: the exact outcome the hook exists to prevent,
+    reached by a different route than a moved file.
+
+    **This is a LEVEL-2 test and that is the whole point (`#363`).** The kit
+    already had level-1 coverage — `test_the_advisory_matches_the_registrations_it_describes`
+    reads both shipped files and asserts `init.sh`'s printed advisory matches them
+    verbatim, and the sibling above checks `--runtime`. Neither could catch this,
+    because both compare *text*: when the command string itself is wrong, the
+    advisory and the shipped file are wrong identically and every equality holds.
+    So the command is EXECUTED here, through `sh -c`, exercising the shell
+    expansion rather than a Python-side substitution of the placeholder.
+
+    Two cwds, because one alone proves the wrong thing. A no-op that never
+    resolved anything would pass the git-less case on its own.
+    """
+    command = _codex_registration_command()
+
+    # Outside any worktree: must exit 0 and stay silent, having bailed BEFORE
+    # invoking the interpreter.
+    outside = subprocess.run(
+        ["sh", "-c", command],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=_env(tmp_path),
+    )
+    assert outside.returncode == 0, (
+        "the Codex registration failed in a tree with no .git — #359. "
+        f"exit={outside.returncode}\nstderr: {outside.stderr}"
+    )
+    assert "No such file or directory" not in outside.stderr, (
+        "the registration reached the interpreter with an unresolved root — the "
+        f"#359 signature. stderr: {outside.stderr}"
+    )
+    assert not outside.stdout.strip(), f"unexpected output: {outside.stdout!r}"
+
+    # Positive control: inside a real worktree the same string must REACH the
+    # hook rather than bail. Asserted through a variant naming a script that does
+    # not exist, so a non-zero exit proves `exec` ran — the shipped hook exits 0
+    # on an irrelevant tool call, which is indistinguishable from bailing out.
+    probe = command.replace("pr_followup_hook.py", "no_such_hook_9f2a.py")
+    assert probe != command, "probe substitution failed — did the script name change?"
+    inside = subprocess.run(
+        ["sh", "-c", probe],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+    )
+    assert inside.returncode != 0, (
+        "inside a worktree the registration bailed out instead of running the "
+        "hook, so the guard added for #359 is too aggressive and the hook would "
+        "never fire anywhere."
+    )
+    assert "no_such_hook_9f2a.py" in inside.stderr, (
+        "expected the interpreter to be reached with a resolved root; "
+        f"stderr: {inside.stderr}"
+    )
+    assert not inside.stderr.startswith("/no_such_hook"), "root resolved to / — #359"
 
 
 # --------------------------------------------------------------------------- #

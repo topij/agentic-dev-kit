@@ -1144,7 +1144,18 @@ register_pr_hook() {
   echo "      Skip whichever you have already done — \`/hooks\` in a session lists"
   echo "      what that runtime actually loaded, which is the authority here."
   echo "      Codex — .codex/hooks.json, under hooks.PostToolUse, matcher \"^Bash\$\":"
-  echo "        python3 \"\$(git rev-parse --show-toplevel)/${_hook_src}\" --runtime codex"
+  # The guard clauses are not decoration (#359). A bare
+  # `python3 "$(git rev-parse --show-toplevel)/…"` collapses to an absolute path
+  # rooted at `/` in a tree with no `.git`, because the substitution yields the
+  # empty string — python3 then exits 2, and since a PostToolUse failure does not
+  # halt a session, the operator observes a hook that silently stopped firing.
+  # Reproduced from outside a worktree. Codex exposes no project-dir variable
+  # (checked against a shipping third-party integration's own `~/.codex/hooks.json`,
+  # which uses absolute paths and `$PPID`), so there is nothing to substitute for
+  # the `rev-parse` — the fix is to bail out cleanly instead of running python3
+  # against a path built from an empty string. `exec` keeps the hook's own exit
+  # status, so only the unresolvable-root case becomes exit 0.
+  echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; exec python3 \"\$root/${_hook_src}\" --runtime codex"
   echo "        Codex also needs you to trust the hook via /hooks before it runs."
   echo "      Claude — .claude/settings.json, under hooks.PostToolUse, matcher \"Bash\"."
   echo "      \`if\` goes on the hook entry beside \`command\`, not next to \`matcher\`:"
