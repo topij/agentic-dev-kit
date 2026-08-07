@@ -134,10 +134,22 @@ def test_workflow_routes_check_only_review_outages_to_the_fallback_panel() -> No
         ENGINE_DIR.parent / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
     ).read_text(encoding="utf-8")
 
-    assert "If `review_bots.unavailable` is non-empty" in workflow
-    assert "even when `new_comments[]` contains no outage notice" in workflow
-    assert "run `review.fallback_panel`" in workflow
-    assert "report's exact `head`" in workflow
+    start = workflow.index("If `review_bots.unavailable` is non-empty")
+    end = workflow.index("\n1. **If `converged`", start)
+    fallback_rule = workflow[start:end]
+
+    assert "current head has no valid" in fallback_rule
+    assert "`review_evidence`" in fallback_rule
+    assert "even when `new_comments[]` contains no outage notice" in fallback_rule
+    assert "run `review.fallback_panel`" in fallback_rule
+    assert "report's exact `head`" in fallback_rule
+    assert "do not rerun the panel" in fallback_rule
+
+    comment_start = workflow.index("- **Reviewer unavailable**")
+    comment_end = workflow.index("- **Real finding**", comment_start)
+    comment_rule = workflow[comment_start:comment_end]
+    assert "current-head `review_evidence` is invalid" in comment_rule
+    assert "do not rerun the panel" in comment_rule
 
 
 def test_done_keeps_its_original_merge_authorization_semantics() -> None:
