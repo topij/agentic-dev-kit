@@ -120,8 +120,26 @@ EXPECTED_CANCEL = "${{ github.event_name == 'pull_request' }}"
 
 
 def _norm(expr: str) -> str:
-    """Collapse whitespace runs so a reflow is not a failure but a token change is."""
-    return " ".join(str(expr).split())
+    """Strip ALL whitespace, so only a token change can fail the comparison.
+
+    Collapsing whitespace RUNS was the first form and it was asymmetric: it
+    tolerated extra spacing but could not manufacture a separator where an author
+    had removed one, so `github.event.pull_request.number||github.run_id` —
+    behaviourally identical, since GitHub's expression grammar is
+    whitespace-insensitive inside `${{ }}` — failed the exact-match assertion, and
+    failed it with a message diagnosing an operand-order change that had not
+    happened. Both review lenses found that; the correctness one rated it the
+    round's only Medium precisely because a false failure on this repo's own merge
+    gate ships with a misleading cause.
+
+    Removing all whitespace cannot create a FALSE EQUALITY here: two expressions
+    that differ only in whitespace are the same expression to GitHub, and any
+    token difference — an operand swap, `==` to `!=`, a different context field —
+    survives the strip. The one thing it would hide is whitespace INSIDE a quoted
+    literal, which would change meaning; `'pull_request'` has none, and a variant
+    that did (`'pull request'`) still differs by the `_`/space token after
+    stripping, so it still fails."""
+    return "".join(str(expr).split())
 
 
 def test_ci_concurrency_group_is_exactly_the_expression_that_isolates_push_runs() -> None:
@@ -153,20 +171,32 @@ def test_ci_concurrency_group_is_exactly_the_expression_that_isolates_push_runs(
                      cancelled unconditionally."""
     group = _norm(_concurrency()["group"])
 
-    assert group == EXPECTED_GROUP, (
-        f"the concurrency group expression must be exactly\n  {EXPECTED_GROUP}\ngot\n  "
-        f"{group}\nRead this test's docstring before updating the constant — operand "
-        f"order is load-bearing, not style."
+    assert group == _norm(EXPECTED_GROUP), (
+        f"the concurrency group expression does not match, ignoring whitespace.\n"
+        f"  expected: {EXPECTED_GROUP}\n"
+        f"  found:    {_concurrency()['group']}\n"
+        f"This says the two differ, not HOW — read this test's docstring for what each "
+        f"half does before changing either side. Spacing is not the cause: it is stripped."
     )
 
 
 def test_ci_concurrency_group_puts_the_pull_request_arm_first() -> None:
     """Kills: the operand swap, by a different shape than the exact match above.
 
-    Deliberately redundant with the equality assertion. An exact-match test has
-    one failure mode — an editor who repairs it by pasting in whatever the file
-    now says — and this one states the property in a form that cannot be
-    satisfied that way without noticing it."""
+    Deliberately redundant with the equality assertion, and the redundancy was
+    DISPUTED and then measured rather than argued. A review lens held that this
+    test can never fail while its neighbour passes — true, and provable, while
+    `EXPECTED_GROUP` is a fixed literal in which the arms are already in order.
+
+    That is not the case this test is for. It is for the editor who makes the
+    exact-match test pass by updating the CONSTANT to whatever the workflow now
+    says. Measured both ways, with `__pycache__` cleared between runs:
+
+      swap the operands in the workflow only    → both tests fail
+      swap them AND update the constant to match → ONLY this test fails
+
+    So the independent kill is real; it just does not appear in a mutation that
+    leaves the constant alone, which is the mutation the dispute used."""
     group = _norm(_concurrency()["group"])
 
     assert "github.event.pull_request.number" in group and "github.run_id" in group, (
@@ -194,8 +224,10 @@ def test_ci_concurrency_cancel_is_exactly_the_pull_request_only_condition() -> N
         "cancel-in-progress must not be unconditionally true — that cancels runs on "
         "the protected branch, which this workflow exists to prevent"
     )
-    assert _norm(cancel) == EXPECTED_CANCEL, (
-        f"cancel-in-progress must be exactly\n  {EXPECTED_CANCEL}\ngot\n  "
-        f"{_norm(cancel)}\nA `!=` here inverts the meaning while still mentioning "
-        f"pull_request."
+    assert _norm(cancel) == _norm(EXPECTED_CANCEL), (
+        f"cancel-in-progress does not match, ignoring whitespace.\n"
+        f"  expected: {EXPECTED_CANCEL}\n"
+        f"  found:    {cancel}\n"
+        f"A polarity flip (`==` to `!=`) is one way to reach this and not the only one — "
+        f"compare the two above rather than assuming which."
     )
