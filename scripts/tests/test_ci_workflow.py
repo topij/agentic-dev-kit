@@ -27,6 +27,7 @@ Two invariants, and the second is the one that fails open:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -119,27 +120,51 @@ EXPECTED_GROUP = (
 EXPECTED_CANCEL = "${{ github.event_name == 'pull_request' }}"
 
 
-def _norm(expr: str) -> str:
-    """Strip ALL whitespace, so only a token change can fail the comparison.
+# GitHub expression operators are FIXED multi-character tokens. There is no
+# standalone `=` or `|` operator, so `= =` and `| |` are not spaced spellings of
+# `==` and `||` — they are a different token stream.
+_OPERATORS = ("||", "&&", "==", "!=", "<=", ">=")
+_EXPR = re.compile(r"\$\{\{(.*?)\}\}", re.DOTALL)
 
-    Collapsing whitespace RUNS was the first form and it was asymmetric: it
-    tolerated extra spacing but could not manufacture a separator where an author
-    had removed one, so `github.event.pull_request.number||github.run_id` —
-    behaviourally identical, since GitHub's expression grammar is
-    whitespace-insensitive inside `${{ }}` — failed the exact-match assertion, and
-    failed it with a message diagnosing an operand-order change that had not
-    happened. Both review lenses found that; the correctness one rated it the
-    round's only Medium precisely because a false failure on this repo's own merge
-    gate ships with a misleading cause.
 
-    Removing all whitespace cannot create a FALSE EQUALITY here: two expressions
-    that differ only in whitespace are the same expression to GitHub, and any
-    token difference — an operand swap, `==` to `!=`, a different context field —
-    survives the strip. The one thing it would hide is whitespace INSIDE a quoted
-    literal, which would change meaning; `'pull_request'` has none, and a variant
-    that did (`'pull request'`) still differs by the `_`/space token after
-    stripping, so it still fails."""
-    return "".join(str(expr).split())
+def _norm_expression(inner: str) -> str:
+    """Canonicalise ONE `${{ … }}` body: one space around each operator token."""
+    for op in _OPERATORS:
+        inner = inner.replace(op, f" {op} ")
+    return " ".join(inner.split())
+
+
+def _norm(value: object) -> str:
+    """Canonicalise a workflow value so only a MEANING change can fail a compare.
+
+    Two earlier forms of this helper were each wrong in an opposite direction,
+    and both were found by a review lens rather than by reasoning:
+
+    1. Collapsing whitespace RUNS was asymmetric — it tolerated extra spacing but
+       could not manufacture a separator, so `a||b` failed against `a || b`
+       despite being the same expression to GitHub. A false failure on this
+       repo's own merge gate.
+    2. Stripping ALL whitespace fixed that and opened a HIGH hole: it made
+       `a | | b` and `a = = b` compare EQUAL to `a || b` and `a == b`, so the
+       guard stopped firing on a changed token stream. It also flattened
+       whitespace OUTSIDE `${{ }}`, which is literal YAML content — `}} - ${{`
+       and `}}-${{` produce different concurrency-group strings at runtime, and
+       the stripping form called them identical.
+
+    So this does neither. Text outside `${{ }}` is compared EXACTLY, because
+    there it is content. Inside, each operator token is given one space on each
+    side and whitespace runs are then collapsed — which makes spacing around an
+    operator irrelevant while leaving a SPLIT operator (`| |`) as two tokens that
+    cannot canonicalise to one."""
+    s = str(value)
+    out: list[str] = []
+    pos = 0
+    for m in _EXPR.finditer(s):
+        out.append(s[pos : m.start()])
+        out.append("${{ " + _norm_expression(m.group(1)) + " }}")
+        pos = m.end()
+    out.append(s[pos:])
+    return "".join(out)
 
 
 def test_ci_concurrency_group_is_exactly_the_expression_that_isolates_push_runs() -> None:
