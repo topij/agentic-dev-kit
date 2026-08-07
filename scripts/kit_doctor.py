@@ -240,6 +240,15 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # was built here and reverted — see #216 for why and for the design. Do not
     # read this entry as the class being handled.
     ("docs/agentic-dev-kit/workflows/parallel-headless.md", "workflow"),
+    # `/adopt` and `/upgrade`. These were `.claude/commands/` adapters until #330, and
+    # tracking them is the POINT of that move rather than a consequence of it: Step 4 of
+    # upgrade.md tells an upgrading adopter to "keep the adopter's version where one
+    # already exists" for runtime adapters, so for as long as these two lived only there,
+    # every kit fix to the adopt and upgrade procedures was unreachable by the adopters
+    # running them — including the #297 hazard fix that #330 is about. A workflow whose
+    # own upgrade path cannot upgrade it is the closed loop being broken here.
+    ("docs/agentic-dev-kit/workflows/adopt.md", "workflow"),
+    ("docs/agentic-dev-kit/workflows/upgrade.md", "workflow"),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
     # /upgrade — links to it from rules 2 and 3. An untracked target means an

@@ -31,6 +31,10 @@
       "role": "doctrine",
       "sha256": "6dc6815ffb7fd89f00409dbd9ae620522214d0b97117ea8a0d09bf0d2344b365"
     },
+    "docs/agentic-dev-kit/workflows/adopt.md": {
+      "role": "workflow",
+      "sha256": "0e5aa91b57801db115a59ba115d92d380d8b4a0305942e6df25125970efa6036"
+    },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
       "sha256": "4c4aa6fa0564fd4d4433dc9c6f05f3a23742706ba00fee285fa44673c72cee08"
@@ -46,6 +50,10 @@
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
       "sha256": "938716ea226cbcdab03f4ee64deb59f1e667f7d3c961368fd6d5321831e0a3fe"
+    },
+    "docs/agentic-dev-kit/workflows/upgrade.md": {
+      "role": "workflow",
+      "sha256": "9a04c294d614cb6f4e43d91abafade3d70ab040b1a5121f77df193f0ecfa2246"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -101,7 +109,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "a3a19fb3962a575ec3fb530680daa3634a46f5e6b95cec329f0a278ca85ed029"
+      "sha256": "df9b8a6e030de5d30456ebd7d712cbed164c1824dac91a962c0706bb7bb95432"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
