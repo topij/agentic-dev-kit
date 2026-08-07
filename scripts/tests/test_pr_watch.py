@@ -134,15 +134,18 @@ def test_workflow_routes_check_only_review_outages_to_the_fallback_panel() -> No
         ENGINE_DIR.parent / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
     ).read_text(encoding="utf-8")
 
-    start = workflow.index("If `review_bots.unavailable` is non-empty")
+    start = workflow.index("If `review_bots.unavailable` contains an entry")
     end = workflow.index("\n1. **If `converged`", start)
     fallback_rule = workflow[start:end]
 
     assert "current head has no valid" in fallback_rule
     assert "`review_evidence`" in fallback_rule
-    assert "even when `new_comments[]` contains no outage notice" in fallback_rule
+    assert "`surface` is `check`" in fallback_rule
+    assert "`new_comments[]` contains no outage notice" in fallback_rule
     assert "run `review.fallback_panel`" in fallback_rule
     assert "report's exact `head`" in fallback_rule
+    assert "historical comment-only" in fallback_rule
+    assert "must not preempt a live pending" in fallback_rule
     assert "do not rerun the panel" in fallback_rule
 
     comment_start = workflow.index("- **Reviewer unavailable**")
