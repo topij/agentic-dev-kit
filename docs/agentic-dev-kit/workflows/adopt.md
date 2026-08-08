@@ -144,7 +144,7 @@ For each piece, **copy only if the target doesn't already exist**:
 - **Lint-containment doctrine** → `docs/agentic-dev-kit/adopting-into-a-linted-repo.md`. Install it whenever Step 1 found repo-wide lint or format, and apply its exclusions **in the same commit as the engines** — an engine that gets autoformatted before the exclusion lands is already drifted. `kit_doctor` tracks this file, so skipping it shows up as a permanent `missing`.
 - **`config/dev-model.yaml`** — stamp the Step-1 values: `paths.handoff` → the existing plan (and `paths.handoff_history` / the `doc_budgets` entry to match), `paths.engines`, `runtime`, `tracker`, `review`, and `models`. **`review:` must exist as a key before the operator runs `init.sh`**, even if you only know `review.bots` — `init.sh` fills a *partial* `review:` section in completely, but cannot create one from nothing and emits seven `could not add review.*` warnings instead (measured; the `runtime:` section has no such limitation, which is why this is easy to miss).
 - **`docs/templates/`** — all six `.md.tmpl` files. They are **manifest-tracked**, so omitting them is not merely a missed convenience: `kit_doctor` then reports six extra `missing` entries tagged `[template]` (measured), and Step 4 tells you to expect `missing` only for pieces Step 2 deliberately dropped. They are also what `init.sh` renders from when the operator runs it.
-- **`init.sh`** — copy it to the adopter root. It is manifest-*untracked*, so it does not affect the baseline. **If the adopter already has a root `init.sh`, STOP.** The copy-only-if-absent rule would silently skip it, and Step 3c would then tell the operator to run *their* script — `init.sh` is a common name for an unrelated bootstrap. Diff the two, and let the operator choose: keep the kit's under another name and hand off that path explicitly, or confirm theirs is a stale kit copy safe to replace. Never hand off a bare `./init.sh` you did not put there.
+- **`init.sh`** — copy it to the adopter root. It is manifest-**tracked** (`#362`), so it must be in place *before* Step 3b's `--record-install`, and `kit_doctor` reports drift on it afterwards — `STALE` once the kit moves on, `LOCALLY EDITED` if someone changes it. (This line used to say the opposite, and the instruction it produced was "don't check the installer" — the exact check `#360` was closed to make possible; `#382`.) **If the adopter already has a root `init.sh`, STOP.** The copy-only-if-absent rule would silently skip it, and Step 3c would then tell the operator to run *their* script — `init.sh` is a common name for an unrelated bootstrap. Diff the two, and let the operator choose: keep the kit's under another name and hand off that path explicitly, or confirm theirs is a stale kit copy safe to replace. Never hand off a bare `./init.sh` you did not put there.
 - **The friction log (`paths.friction_log`)** — do not hand-copy it. `init.sh` seeds it from the template, at the configured path, when the operator runs it.
 - **`config/*.local.yaml` → `.gitignore`**, now, by hand — the one `.gitignore` entry that cannot wait for `init.sh`. `kitconfig.load_config()` merges a gitignored `config/dev-model.local.yaml` over the tracked config, and `docs/getting-started.md` tells the operator to put their Slack DM id there. Step 6 opens the PR *before* the operator runs `init.sh` (Step 3c), so anyone who creates that file in the gap — routine for someone who already knows the kit's local-override pattern — has an identity sitting untracked-but-not-ignored in an open PR. `init.sh` appends the full set later; this one entry is proactive because its window is the hazard.
 - Copy `PRINCIPLES.md`, `docs/parallel-dev.md`, and the shared workflow/safety docs under `docs/agentic-dev-kit/` for reference.
@@ -160,11 +160,20 @@ and ask the operator.
 uv run <engines-dir>/kit_doctor.py --record-install --from-kit <kit checkout>
 ```
 
-Order matters in one direction only: `docs/templates/` is manifest-tracked and must be
-copied *before* this runs. The operator's later `init.sh` run does not disturb the
-baseline — `AGENTS.md`, `CLAUDE.md`, `init.sh` and `config/dev-model.yaml` are all
-manifest-untracked, the rendered entry points because they are adopter-owned and meant to
-be edited. So recording here, before they run it, is correct and not a race.
+Order matters for every manifest-tracked path: `docs/templates/` **and `init.sh`** (tracked
+since `#362`) must be copied *before* this runs, or the baseline records them as not
+installed. The operator's later `init.sh` run still does not disturb the baseline, but the
+reason is no longer "`init.sh` is untracked" — it is that **`init.sh` never writes to
+itself**, and what it does write (`AGENTS.md`, `CLAUDE.md`, `config/dev-model.yaml`, the
+rendered narrative docs) is adopter-owned and manifest-untracked. So recording here, before
+they run it, is correct and not a race.
+
+> **If you kept the adopter's own root `init.sh`** (the STOP case above), expect this step
+> to refuse it — a present kit-owned path that does not match the source kit is left out of
+> the baseline by design. It currently takes the whole `not_installed` declaration with it,
+> so every deliberately-declined file starts reporting as `missing` and the run exits 1.
+> That is `#388`; until it is closed, re-add the declaration by hand rather than accepting
+> a baseline that declares no scope.
 
 This writes `kit-manifest.json` here, recording which kit-owned files this adoption
 actually installed — and, as `not_installed`, the ones it deliberately did not — plus the

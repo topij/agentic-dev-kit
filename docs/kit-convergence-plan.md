@@ -276,7 +276,19 @@ the kit-own marker).
 the event exists (see below), so this is the cheapest parity win available.
 Registration printed, never written, per the `#303` doctrine. **Done when** the
 hooks fire in a real Codex session — verified by running one, the same standard
-as Phase 0.
+as Phase 0. Now tracked as **`#380`**, and **this is kit work**: the Phase 3
+paragraph below contradicted it by listing the same wiring as the adopter's, and
+that contradiction is corrected there.
+
+> Question 3's *shape* is less settled than it reads. It assumed Claude's
+> `startup`/`resume`/`clear` matcher transfers, from documentation. The
+> `SessionStart` entry in a shipping third-party integration's own
+> `~/.codex/hooks.json` carries **no `matcher` key at all** — establish which is
+> honoured before writing the registration, not after. And Phase 3's attempt to
+> settle it by running a probe could not: `codex-cli 0.42.0` on that host cannot
+> start a session (`400`, "requires a newer version of Codex"), so an absent
+> sentinel did not distinguish "project-level hooks are not read" from "the
+> session never started".
 
 ### The critical path
 
@@ -382,14 +394,35 @@ the upgrade and `init.sh` is what performs it.
    regex already uses. Doctrine-scoped it is clean. The wider form needs a
    judgment call about `adopt.md:142` first.
 
-**Phase 3 — converge the install.** After the three items above: an agent session
-working **in cs-toolkit** (question 5's decision)
-performs the upgrade and lands it as a normal PR through cs-toolkit's own
-review; kit defects it surfaces route upstream as kit issues, not into the
-adopter's PR. Engines per cs-toolkit's declared Phase 2, the declared install
-set recorded, SessionStart wiring on both runtimes there. **Done when**
-`kit_doctor --manifest <kit>/kit-manifest.json` reports no unexplained
-divergence.
+**Phase 3 — converge the install** — **DONE**, merged 2026-08-08 as
+`in-parallel-oy/cs-toolkit#1883`. An agent session working **in cs-toolkit**
+(question 5's decision) performed the upgrade and landed it as a normal PR
+through cs-toolkit's own review; kit defects it surfaced routed upstream as kit
+issues, not into the adopter's PR — seven of them (`#379`–`#383`, `#385`, `#386`),
+plus comments on `#363` and `#343`. Its doctor reports `15 unchanged, 1 differ,
+0 missing, 20 declined`; the one differ is `init.sh`, deliberately **held** at
+the older version because of `#385`.
+
+> **Two defects in this paragraph, found by following it.** Both are corrected in
+> place rather than rewritten away, because *why* a plan sentence was wrong is the
+> more useful record — the same editorial rule the Phase 0 memo set.
+>
+> 1. It said **"Engines per cs-toolkit's declared Phase 2."** That repo declares no
+>    "Phase 2": `config/dev-model.yaml` declares **2A** (done — the review engine
+>    and adapters) and **2B**, deferred with a reason. A session reading this
+>    literally installs the kit's `dev_session.sh`, which carries none of the
+>    `CS_TOOLKIT_STATE_ROOT` contract or the destructive-path guards the adopter's
+>    copy does — `grep -n "CS_TOOLKIT_STATE_ROOT"` finds six matches in theirs
+>    (including `export …` at line 241) and **zero** in the kit's. Read it as
+>    *"engines per whatever that repo's config declares, which is 2A"*.
+> 2. It assigned **"SessionStart wiring on both runtimes there"** to the adopter,
+>    while *Immediately, in parallel* assigns the Codex SessionStart hooks to **the
+>    kit**. Those cannot both be right. The kit owns the shape (`#380`); an adopter
+>    cannot wire what the kit ships no registration for, and Phase 3 correctly
+>    declined to invent one.
+
+**Done when** `kit_doctor --manifest <kit>/kit-manifest.json` reports no
+unexplained divergence — met, with `init.sh`'s hold as the one explained one.
 
 **Phase 3 also installs `adopt.md` and `upgrade.md` there**, which is the residue
 of the correction under *Runtime parity* above. cs-toolkit's manifest lists both
