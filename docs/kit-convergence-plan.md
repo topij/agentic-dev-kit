@@ -276,7 +276,19 @@ the kit-own marker).
 the event exists (see below), so this is the cheapest parity win available.
 Registration printed, never written, per the `#303` doctrine. **Done when** the
 hooks fire in a real Codex session — verified by running one, the same standard
-as Phase 0.
+as Phase 0. Now tracked as **`#380`**, and **this is kit work**: the Phase 3
+paragraph below contradicted it by listing the same wiring as the adopter's, and
+that contradiction is corrected there.
+
+> Question 3's *shape* is less settled than it reads. It assumed Claude's
+> `startup`/`resume`/`clear` matcher transfers, from documentation. The
+> `SessionStart` entry in a shipping third-party integration's own
+> `~/.codex/hooks.json` carries **no `matcher` key at all** — establish which is
+> honoured before writing the registration, not after. And Phase 3's attempt to
+> settle it by running a probe could not: `codex-cli 0.42.0` on that host cannot
+> start a session (`400`, "requires a newer version of Codex"), so an absent
+> sentinel did not distinguish "project-level hooks are not read" from "the
+> session never started".
 
 ### The critical path
 
@@ -382,21 +394,65 @@ the upgrade and `init.sh` is what performs it.
    regex already uses. Doctrine-scoped it is clean. The wider form needs a
    judgment call about `adopt.md:142` first.
 
-**Phase 3 — converge the install.** After the three items above: an agent session
-working **in cs-toolkit** (question 5's decision)
-performs the upgrade and lands it as a normal PR through cs-toolkit's own
-review; kit defects it surfaces route upstream as kit issues, not into the
-adopter's PR. Engines per cs-toolkit's declared Phase 2, the declared install
-set recorded, SessionStart wiring on both runtimes there. **Done when**
-`kit_doctor --manifest <kit>/kit-manifest.json` reports no unexplained
-divergence.
+**Phase 3 — converge the install** — **DONE**, merged 2026-08-08 as
+`in-parallel-oy/cs-toolkit#1883`. An agent session working **in cs-toolkit**
+(question 5's decision) performed the upgrade and landed it as a normal PR
+through cs-toolkit's own review; kit defects it surfaced routed upstream as kit
+issues, not into the adopter's PR — seven of them (`#379`–`#383`, `#385`, `#386`),
+plus comments on `#363` and `#343`. Its one deliberate divergence is `init.sh`,
+**held** at the older version because of `#385`.
 
-**Phase 3 also installs `adopt.md` and `upgrade.md` there**, which is the residue
-of the correction under *Runtime parity* above. cs-toolkit's manifest lists both
-in `not_installed`, so a Phase 3 session in that repo has **no installed workflow
-document to follow** — it would improvise the very procedure the kit exists to
-standardise. The shared definitions and both runtime bindings already exist
-kit-side, so this is an install step in the adopter's own PR, not kit work.
+> **No doctor counts are quoted here, and that is the lesson rather than a
+> style choice.** A draft of this paragraph carried the exact report from the
+> merge day. A correctness lens re-ran the named command and showed the figure
+> was falsified *by the same commit that stated it*: bumping any kit-owned
+> file's hash in `kit-manifest.json` — which that commit did, for `adopt.md`
+> and `upgrade.md` — turns an installed adopter's copies `STALE` the instant it
+> lands. That is `kit_doctor` working, not breaking, and it is exactly why a
+> count of `differ` here goes stale on a schedule the kit itself sets. The
+> document already learned this once, on a "852 differing lines" figure. Run
+> the command if you need the number.
+
+> **Two defects in this paragraph, found by following it.** Both are corrected in
+> place rather than rewritten away, because *why* a plan sentence was wrong is the
+> more useful record — the same editorial rule the Phase 0 memo set.
+>
+> 1. It said **"Engines per cs-toolkit's declared Phase 2."** That repo declares no
+>    "Phase 2": `config/dev-model.yaml` declares **2A** (done — the review engine
+>    and adapters) and **2B**, deferred with a reason. A session reading this
+>    literally installs the kit's `dev_session.sh`, which carries none of the
+>    `CS_TOOLKIT_STATE_ROOT` contract or the destructive-path guards the adopter's
+>    copy does — `grep -n "CS_TOOLKIT_STATE_ROOT" scripts/dev_session.sh` matches
+>    in theirs (including `export …`) and **zero times** in the kit's; run it
+>    rather than trusting a count, since a first draft of this line said "six"
+>    and a lens re-ran it at the adopter's merge commit and got seven. Read it as
+>    *"engines per whatever that repo's config declares, which is 2A"*.
+> 2. It assigned **"SessionStart wiring on both runtimes there"** to the adopter,
+>    while *Immediately, in parallel* assigns the Codex SessionStart hooks to **the
+>    kit**. Those cannot both be right. The kit owns the shape (`#380`); an adopter
+>    cannot wire what the kit ships no registration for, and Phase 3 correctly
+>    declined to invent one.
+
+**Done when** `kit_doctor --manifest <kit>/kit-manifest.json` reports no
+unexplained divergence — met at the merge, with `init.sh`'s hold as the one
+explained one. Read "unexplained" strictly: every later kit change to a
+kit-owned file re-opens that report as `STALE` until the adopter refreshes, and
+`STALE` is explained by definition.
+
+**Phase 3 also installed `adopt.md` and `upgrade.md` there**, which was the
+residue of the correction under *Runtime parity* above. Before it,
+cs-toolkit's manifest listed both in `not_installed`, so a Phase 3 session in
+that repo had **no installed workflow document to follow** — it would improvise
+the very procedure the kit exists to standardise. The shared definitions and
+both runtime bindings already existed kit-side, so this was an install step in
+the adopter's own PR, not kit work, and it is done: both are now in that
+repo's `files` map, not its `not_installed` list.
+
+> **This paragraph was in the present tense and false**, in the same file whose
+> neighbouring paragraph this change was rewriting to say Phase 3 is done — two
+> adjacent claims about one fact, disagreeing. Caught by a correctness lens
+> reading the *unedited* text beside the edited text, which is the half of a
+> docs change that has no diff to draw the eye.
 
 ### The kit track beside it
 

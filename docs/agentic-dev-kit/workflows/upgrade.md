@@ -10,9 +10,18 @@ the seeded docs, and your per-file decision in Step 3 for the engines.
 without knowing it is safe to replace" for as long as Step 2 ran `init.sh` bare, which
 destroyed exactly the file it promised to protect (`#330`). A reassurance at the top of a
 workflow is executed prose — it suppresses the check further down. The carve-out above is
-deliberate for the same reason: an adopter who edited `init.sh` loses that edit here, and
-`kit-manifest.json` does not track the file, so `kit_doctor` cannot report the drift either
-(`#339`).
+deliberate for the same reason: an adopter who edited `init.sh` loses that edit here.
+
+**What that costs changed with `#362`, and this sentence used to say otherwise.** It read
+"`kit-manifest.json` does not track the file, so `kit_doctor` cannot report the drift
+either" — true when written, false since `#362` added `init.sh` to `KIT_OWNED` and to the
+manifest. The correction is kept visible rather than swapped in silently, because the
+instruction it produced was *don't bother looking*, which is the opposite of what `#360`
+was closed to make possible. So: **run Step 1's `kit_doctor` before Step 2 overwrites
+anything** — a locally-edited installer shows up there as `LOCALLY EDITED` and an
+out-of-date one as `STALE`, which is the difference between an edit you are about to lose
+and a version you are meant to take. The unconditional `cp` itself is unchanged and
+`#339` stays open for it.
 
 > **The invariant this rests on.** Engines are **kit-owned**; config is **adopter-owned**.
 > Everything project-specific — paths, tracker, review-bot markers, CI policy, model
