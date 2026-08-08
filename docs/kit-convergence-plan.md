@@ -333,13 +333,16 @@ the upgrade and `init.sh` is what performs it.
    > **The line count is deliberately not stated here, and that is a correction.**
    > Earlier revisions of this document said "all **852** differing lines", the
    > figure `#360` measured. A correctness lens found it stale within the same
-   > session: `#366` changed `init.sh`, so a live recount gives 883/887 depending
-   > on `diff` argument order. Restating it just resets a treadmill — the number
-   > moves every time either copy changes, while **the claim that matters cannot
-   > move at all.** Byte-identity with a known kit commit is what establishes that
-   > the delta is *entirely* drift, at any size. To recompute the size:
-   > `diff <adopter>/init.sh <kit>/init.sh | grep -c '^[<>]'` (adopter first;
-   > the count is argument-order dependent).
+   > session: `#366` changed `init.sh`, so it was already wrong when written.
+   > Restating it just resets a treadmill — the number moves every time either
+   > copy changes, while **the claim that matters cannot move at all.**
+   > Byte-identity with a known kit commit is what establishes that the delta is
+   > *entirely* drift, at any size. To recompute the size:
+   > `diff <adopter>/init.sh <kit>/init.sh | grep -c '^[<>]'` (adopter first; the
+   > count is argument-order dependent — **as measured 2026-08-08**, 887 that way
+   > and 883 reversed, which is recorded as a dated observation rather than a live
+   > figure precisely because a second lens caught this note committing the error
+   > it was written to retire).
 
    Consequences for the fix, read off `_drift_state`: a tracked, unedited,
    behind-the-kit copy reports **`stale`** ("installed X, kit ships Y"), which is
