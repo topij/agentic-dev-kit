@@ -318,7 +318,10 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     #     version drift and NONE are local rendering.
     #   - init.sh never writes to itself. It writes config/dev-model.yaml and
     #     renders docs/templates/. Pinned BEHAVIOURALLY by
-    #     `test_init_sh.py::test_running_the_installer_does_not_modify_the_installer`,
+    #     `test_init_sh.py::test_running_the_installer_does_not_modify_the_installer`
+    #     IN THE KIT REPO — `KIT_OWNED` tracks no tests, so that suite does not
+    #     travel to an adopter and this is not a guarantee where you are reading
+    #     it if you are reading it downstream (#386) —
     #     which runs the installer and compares its own bytes. (This line used to
     #     name `test_the_installer_is_not_self_modifying`, a regex over init.sh's
     #     source that the commit adding this entry deleted — two review lenses
@@ -339,11 +342,23 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     #
     #   - `_derive_engine_names` requires role `engine` AND the `scripts/` prefix.
     #     init.sh's path has no such prefix, so role alone would NOT put it in
-    #     `_ENGINE_NAMES`. What role `engine` actually does here is make
-    #     `rel[len("scripts")+1:]` evaluate to the EMPTY STRING, which
-    #     `test_engine_probe_names_cover_the_real_kit_owned_engines` already
-    #     catches — verified by mutating the role and reading which test failed.
-    #     So the guard against this mistake is pre-existing, not new.
+    #     `_ENGINE_NAMES` — the function applies both filters BEFORE slicing, so
+    #     it simply skips the entry and no empty probe name is ever produced.
+    #     (This bullet used to say the empty string is what role `engine` makes
+    #     the FUNCTION produce. It is not; CodeRabbit caught that, reviewing an
+    #     adopter's PR where this file appeared in the diff — #383 item 2.)
+    #
+    #     Where the empty string actually arises is
+    #     `test_engine_probe_names_cover_the_real_kit_owned_engines` IN THE KIT
+    #     REPO, which slices every `engine`-role entry unconditionally and
+    #     asserts the result is in `_ENGINE_NAMES` — so `""` fails it. The guard
+    #     is therefore real and pre-existing, and it is a TEST rather than an
+    #     invariant in this module. Re-measured 2026-08-09 rather than restated:
+    #     with `("init.sh", "engine")` substituted in a scratch copy, three tests
+    #     fail — `test_the_installer_is_tracked`,
+    #     `test_an_unedited_installer_behind_the_kit_reports_stale_not_locally_edited`,
+    #     and that one, at its slice assertion. `KIT_OWNED` ships no tests, so an
+    #     adopter reading this comment has none of them (#386).
     #   - The `_TEXT_IMPORT_RE` dependency scan applies to `engine` and `hook`
     #     only. init.sh declares no non-stdlib dependency, so scanning it would
     #     manufacture edges out of a shell script's own prose.
@@ -359,6 +374,17 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # That exits 1 until they re-record with `--record-install`. Correct: their
     # installer really is unmeasured, and that is the whole finding.
     ("init.sh", "installer"),
+)
+
+# The kit-layout key for the pre-push hook, derived from KIT_OWNED rather than
+# spelled again: `not_installed` records these keys, so a declined-hook check
+# comparing against a hand-written literal would silently stop matching the day
+# the path moves — and the failure would be a decline reported as a defect,
+# which is the very thing #381 is about. Empty when no such entry exists, which
+# simply means no decline can be recognised.
+PRE_PUSH_REL = next(
+    (rel for rel, role in KIT_OWNED if role == "hook" and PurePosixPath(rel).name == "pre-push"),
+    "",
 )
 
 # Paths that are the ADOPTER's — expected to differ, never reported as drift.
@@ -464,8 +490,10 @@ def _derive_engine_names(kit_owned: tuple[tuple[str, str], ...]) -> tuple[str, .
     conjunct: every path outside the prefix also carries a non-engine role, so
     the two filters agree today. Adding an ``engine``-role entry outside the
     prefix is the case that would produce a garbage probe path, and nothing
-    stops it — see ``test_engine_probe_names_cover_the_real_kit_owned_engines``,
-    which is what caught an attempt to give ``init.sh`` role ``engine``.
+    stops it — see ``test_engine_probe_names_cover_the_real_kit_owned_engines``
+    (in the KIT repo: ``KIT_OWNED`` tracks no tests, so an adopter has neither
+    that test nor any other behavioural cover for this module — #386), which is
+    what caught an attempt to give ``init.sh`` role ``engine``.
 
     ``init.sh``'s ``detect_engines_dir()`` used to carry the identical triple —
     the write-side half of the same bug (issue #67); it now derives its probe
@@ -644,6 +672,30 @@ class FileStatus:
 
 
 @dataclass
+class RegistrationStatus:
+    """One hook registration, judged by whether the path it names RESOLVES.
+
+    Not by hash, and the distinction is the whole design (#379). `.claude/
+    settings.json` and `.codex/hooks.json` are the adopter's files — `init.sh`
+    prints both blocks and writes neither, precisely because their content is
+    theirs (#303) — so hashing them would report every adopter permanently
+    `locally-edited`, which is #286's failure. What the kit may legitimately
+    assert is narrower and mechanical: a registration that names a path is
+    claiming that path runs, and whether the file is there is checkable without
+    any opinion about the rest of the file.
+
+    That is the check that would have caught #359 and #368, both of which an
+    operator experienced as *a hook that silently stopped firing* — a
+    `PostToolUse` failure does not halt a session, so nothing else reports it.
+    """
+
+    runtime: str
+    surface: str
+    state: str
+    detail: str = ""
+
+
+@dataclass
 class Report:
     kit_version_config: int | None
     kit_version_manifest: int | None
@@ -688,6 +740,12 @@ class Report:
     # before `not_installed` existed still gets — see `_declared_scope` for why
     # that is not inferred.
     declared_scope_known: bool = False
+    # Whether the kit's `pre-push` is installed, DECLINED, or simply absent
+    # (#381). `hooks_installed` above stays a plain bool and keeps its meaning —
+    # a `--json` consumer reading it must not have the answer change shape under
+    # it — so the third state arrives beside it rather than inside it.
+    hooks_state: str = "not-installed"
+    registrations: list[RegistrationStatus] = field(default_factory=list)
     files: list[FileStatus] = field(default_factory=list)
 
     @property
@@ -737,6 +795,20 @@ class Report:
         """
         return [f for f in self.files if f.state in ("missing-required", "removed")]
 
+    @property
+    def dead_registrations(self) -> list[RegistrationStatus]:
+        """Registrations that name a path which is not there.
+
+        Only `broken` reaches the exit code, and the omissions are the point:
+        `unregistered` and `absent` describe an adopter who has not wired the
+        hook, which is a supported state — `init.sh` only ever PRINTS the block
+        (#303) — and failing them would be #286's bug in a third place, a
+        healthy adoption failing its own gate forever. `unresolvable` is a
+        registration this check could not evaluate; reporting that as broken
+        would be claiming a measurement it did not make.
+        """
+        return [r for r in self.registrations if r.state == "broken"]
+
 
 def sha256_of(path: Path) -> str:
     digest = hashlib.sha256()
@@ -744,6 +816,154 @@ def sha256_of(path: Path) -> str:
         for chunk in iter(lambda: handle.read(65536), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+# The two files a runtime reads to learn that the kit's hook exists, plus the
+# overlay Claude Code merges over the first. Literals, for the same reason
+# `AGENTS.md` and `CLAUDE.md` are literals in `inspect`: they are the runtime's
+# names, not the adopter's, and there is no config key that could hold them —
+# a repo that renamed `.claude/settings.json` has no hook either way.
+#
+# The third element is whether an ABSENT file is worth a line. The overlay is
+# optional by design, so its absence says nothing; the other two absences are
+# worth stating once, because "no registration here" and "a registration that
+# does not work" look identical to an operator who never sees the hook fire.
+REGISTRATION_SURFACES: tuple[tuple[str, str, bool], ...] = (
+    ("claude", ".claude/settings.json", True),
+    ("codex", ".codex/hooks.json", True),
+    ("claude", ".claude/settings.local.json", False),
+)
+
+# Expansions for the repo-root stand-in each runtime's registration uses. Claude
+# Code exports `CLAUDE_PROJECT_DIR`; Codex exposes no project-dir variable at
+# all, so the block `init.sh` prints assigns `root=$(git rev-parse
+# --show-toplevel)` and interpolates that — the inline form is here too, because
+# an adopter who wrote the registration by hand may not have used the variable.
+_ROOT_PLACEHOLDERS: tuple[str, ...] = (
+    "$CLAUDE_PROJECT_DIR",
+    "${CLAUDE_PROJECT_DIR}",
+    "$(git rev-parse --show-toplevel 2>/dev/null)",
+    "$(git rev-parse --show-toplevel)",
+    "$root",
+    "${root}",
+)
+
+
+def _hook_commands(node: object) -> list[str]:
+    """Every ``command`` string anywhere in a registration document.
+
+    A recursive walk rather than a path lookup into `hooks.PostToolUse[…]`:
+    the event names differ per runtime and grow over time (`SessionStart` is
+    already a second one), and a lookup that knows only the events the kit ships
+    today would silently stop seeing a registration the day one is added — which
+    is precisely the class of blindness this check exists to remove.
+    """
+    found: list[str] = []
+    if isinstance(node, dict):
+        command = node.get("command")
+        if isinstance(command, str):
+            found.append(command)
+        for value in node.values():
+            found.extend(_hook_commands(value))
+    elif isinstance(node, list):
+        for value in node:
+            found.extend(_hook_commands(value))
+    return found
+
+
+def _script_token(command: str, name: str) -> str | None:
+    """The path token ending in `name` inside a shell command, or None.
+
+    Delimited by whitespace and shell quoting rather than parsed: the value is
+    one argument of a command line the kit does not own the shape of, and the
+    only thing being extracted is the path.
+    """
+    index = command.find(name)
+    if index < 0:
+        return None
+    start = index
+    while start > 0 and command[start - 1] not in " \t\"'=":
+        start -= 1
+    return command[start : index + len(name)]
+
+
+def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStatus]:
+    """Whether each runtime's hook registration names a path that exists.
+
+    Derived from `KIT_OWNED` rather than from a list of hook names: an adopter
+    registering `check_doc_budget.py` on `SessionStart` gets the same check as
+    one registering `pr_followup_hook.py` on `PostToolUse`, and adding a kit
+    script does not require remembering to add it here too.
+    """
+    kit_scripts = {
+        PurePosixPath(rel).name for rel, _ in KIT_OWNED if rel.endswith((".py", ".sh"))
+    }
+    statuses: list[RegistrationStatus] = []
+    for runtime, surface, report_absent in REGISTRATION_SURFACES:
+        path = root / surface
+        if not path.is_file():
+            if report_absent:
+                statuses.append(RegistrationStatus(runtime, surface, "absent"))
+            continue
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+            # Same degrade-don't-abort rule the baseline read follows: a
+            # registration file this run could not parse is reported, never
+            # raised. A diagnostic that dies on one malformed file tells the
+            # adopter nothing about the other thirty-six.
+            statuses.append(RegistrationStatus(runtime, surface, "unreadable", str(exc)))
+            continue
+        found: list[RegistrationStatus] = []
+        seen: set[str] = set()
+        for command in _hook_commands(document):
+            expanded = command
+            for placeholder in _ROOT_PLACEHOLDERS:
+                expanded = expanded.replace(placeholder, str(root))
+            for name in sorted(kit_scripts):
+                token = _script_token(expanded, name)
+                if token is None or token in seen:
+                    continue
+                seen.add(token)
+                if "$" in token:
+                    # An expansion this check does not know. Saying so is the
+                    # honest answer: `broken` would assert a file is missing
+                    # from a path that was never resolved.
+                    found.append(
+                        RegistrationStatus(
+                            runtime, surface, "unresolvable", _script_token(command, name) or name
+                        )
+                    )
+                    continue
+                target = Path(token)
+                if not target.is_absolute():
+                    # A relative token is relative to the repo root: every shape
+                    # the kit prints either interpolates the root or `cd`s to it
+                    # first.
+                    target = root / target
+                try:
+                    shown = str(target.relative_to(root))
+                except ValueError:
+                    shown = str(target)
+                found.append(
+                    RegistrationStatus(
+                        runtime,
+                        surface,
+                        "resolves" if target.is_file() else "broken",
+                        shown,
+                    )
+                )
+        if not found and report_absent:
+            # A registration file with no kit script in it. Not an error: the
+            # adopter may have declined the hook, and `/hooks` in a live session
+            # is the only authority on what a runtime actually loaded. Silent for
+            # the optional overlay, which carries a registration only if the
+            # adopter chose to put one there.
+            found.append(
+                RegistrationStatus(runtime, surface, "unregistered", f"engines: {engines_dir}")
+            )
+        statuses.extend(found)
+    return statuses
 
 
 def _as_version(value: object) -> int | None:
@@ -1278,6 +1498,23 @@ def inspect(
     hooks_installed = hook_target.is_file() and any(
         candidate.is_file() for candidate in _hook_dirs(root)
     )
+    # #381: the narrative check was never taught about `not_installed`, so an
+    # adopter who deliberately declined the kit's `pre-push` was told to install
+    # it on every run — three lines below the same report calling the adoption
+    # intact with N files declined. That is #286's failure surviving in a second
+    # code path, and its cost is not cosmetic: the decline can be permanent (the
+    # kit's hook is all-or-nothing, #46), so the warning can never be cleared,
+    # and a permanent warning is how the next real one gets skimmed past.
+    #
+    # Evidence order, not declaration order: an installed hook reports installed
+    # even if the baseline declares otherwise, because the file on disk is the
+    # stronger fact and a stale declaration must not hide a working install.
+    if hooks_installed:
+        hooks_state = "installed"
+    elif declared_scope is not None and PRE_PUSH_REL in declared_scope:
+        hooks_state = "declined"
+    else:
+        hooks_state = "not-installed"
 
     narrative: dict[str, bool] = {}
     targets = [get(config, key, None) for key in ("paths.handoff", "paths.friction_log")]
@@ -1358,6 +1595,8 @@ def inspect(
         engines_dir=engines_dir,
         engines_dir_ok=engines_probe,
         hooks_installed=hooks_installed,
+        hooks_state=hooks_state,
+        registrations=inspect_registrations(root, engines_dir),
         narrative_rendered=narrative,
         baseline_trusted=trusted,
         declared_scope_known=declared_scope is not None,
@@ -1443,10 +1682,39 @@ def render(report: Report) -> str:
             "Every workflow's <engine-dir>/… reference resolves to nothing."
         )
 
-    lines.append(
-        f"  {'✓' if report.hooks_installed else '⚠'} pre-push hook: "
-        + ("installed" if report.hooks_installed else "NOT installed — run ./init.sh")
-    )
+    # Three states, three marks. `·` is deliberately not `⚠`: a decline this repo
+    # RECORDED is a fact about a healthy adoption, and the old warning told the
+    # operator to run `./init.sh` — which would install a hook they have a
+    # standing reason to refuse (#381).
+    hook_line = {
+        "installed": "  ✓ pre-push hook: installed",
+        "declined": "  · pre-push hook: declined (recorded in not_installed)",
+        "not-installed": "  ⚠ pre-push hook: NOT installed — run ./init.sh",
+    }
+    lines.append(hook_line.get(report.hooks_state, hook_line["not-installed"]))
+
+    # The registrations (#379). Reported per surface, and marked by what each
+    # state means for the operator: a dead path is a defect, an absent
+    # registration is a choice, and an unresolvable one is a limit of this check.
+    for reg in report.registrations:
+        mark, text = {
+            "resolves": ("✓", f"{reg.detail} resolves"),
+            "broken": ("✗", f"{reg.detail} — NO SUCH FILE, so this hook cannot fire"),
+            "unresolvable": ("⚠", f"{reg.detail} — path not resolvable from here"),
+            "unregistered": ("·", "no kit hook registered"),
+            "absent": ("·", "not present — no registration on this runtime"),
+            "unreadable": ("⚠", f"unreadable — {reg.detail}"),
+        }.get(reg.state, ("⚠", reg.state))
+        lines.append(f"  {mark} {reg.surface} [{reg.runtime}]: {text}")
+    if any(reg.state in ("unregistered", "absent") for reg in report.registrations):
+        # Said once, not per line: `init.sh` prints both blocks and writes
+        # neither (#303), and only a live session can report what a runtime
+        # actually loaded — so this check can say the path is there, never that
+        # the runtime read it.
+        lines.append(
+            "    (registrations are hand-written — ./init.sh prints both blocks; "
+            "`/hooks` in a session is the authority on what loaded)"
+        )
     for doc, rendered in report.narrative_rendered.items():
         # An entry point that is still the KIT's own is a different fact from a
         # narrative skeleton that was never rendered, and the remedy reads
@@ -2079,6 +2347,23 @@ def main(argv: list[str] | None = None) -> int:
                     "engines_dir": report.engines_dir,
                     "engines_dir_ok": report.engines_dir_ok,
                     "hooks_installed": report.hooks_installed,
+                    # Beside `hooks_installed`, never instead of it: an existing
+                    # consumer reading a bool must keep reading a bool, and the
+                    # third state (#381) is what it could not previously see.
+                    "hooks_state": report.hooks_state,
+                    # #379. A consumer cannot derive this from `files`: the two
+                    # registration surfaces are adopter-owned and are in neither
+                    # `KIT_OWNED` nor any manifest, which is exactly why a
+                    # byte-perfect install could report clean with a dead hook.
+                    "registrations": [
+                        {
+                            "runtime": r.runtime,
+                            "surface": r.surface,
+                            "state": r.state,
+                            "detail": r.detail,
+                        }
+                        for r in report.registrations
+                    ],
                     "narrative_rendered": report.narrative_rendered,
                     # Both emitted, because a consumer cannot derive either from
                     # `files` alone: an all-`unchanged` report looks identical
@@ -2108,7 +2393,12 @@ def main(argv: list[str] | None = None) -> int:
         # the adopter sees the ⚠ line, then a non-zero status so CI cannot go
         # green on a config this very run called UNREADABLE.
         return 2
-    return 1 if report.drifted or report.broken else 0
+    # `dead_registrations` joins the exit code for the reason #379 was filed:
+    # the observable for a registration naming a path that is not there is a
+    # hook that silently stopped firing, and until now nothing in the kit's own
+    # instrument reported it. Only the `broken` state reaches here — see
+    # `Report.dead_registrations` for why an unwired runtime must not.
+    return 1 if report.drifted or report.broken or report.dead_registrations else 0
 
 
 if __name__ == "__main__":

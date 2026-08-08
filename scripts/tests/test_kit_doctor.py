@@ -2955,3 +2955,202 @@ def test_a_malformed_baseline_reaches_the_same_note_and_it_does_not_claim_two_ca
     assert "declares no install set" in out
     assert "Either it predates" not in out, "two causes were presented as exhaustive"
     assert "malformed" in out, "the malformed route is not named at all"
+
+
+# --- the registrations the hook depends on (#379), and a declined hook (#381) --
+#
+# Both are the same shape as #360: a fact the doctor's verdict depends on, that
+# the doctor could not see. #360 was the file that PERFORMS the install; #379 is
+# the pair of files that decide whether the kit's one mandatory mechanism fires.
+# The measured occasion: an adopter reporting `16 unchanged, 0 differ, 0 missing`
+# and exit 0, over zero registration state.
+
+
+def _registration(root: Path, surface: str, command: str) -> None:
+    _write(
+        root / surface,
+        json.dumps({"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
+            {"type": "command", "command": command, "timeout": 10}
+        ]}]}}),
+    )
+
+
+HOOK_REL = "scripts/hooks/pr_followup_hook.py"
+
+
+def test_a_registration_naming_a_path_that_exists_resolves(tmp_path):
+    """The Claude shape as `init.sh` prints it, placeholder and all."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude',
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    claude = [s for s in statuses if s.surface == ".claude/settings.json"]
+
+    assert [(s.state, s.detail) for s in claude] == [("resolves", HOOK_REL)]
+
+
+def test_a_registration_naming_a_path_that_moved_is_reported_dead(tmp_path):
+    """#368's shape: the engines were vendored to `scripts/devkit/`, the
+    registration still names the old `scripts/hooks/` path. The operator's
+    observable is a hook that silently stopped firing — a PostToolUse failure
+    does not halt a session — so nothing else in the kit reports it."""
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    _write(root / "scripts" / "devkit" / "hooks" / "pr_followup_hook.py", "print('hook')\n")
+    _registration(
+        root, ".codex/hooks.json",
+        'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+        f'[ -n "$root" ] || exit 0; exec python3 "$root/{HOOK_REL}" --runtime codex',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    dead = report.dead_registrations
+
+    assert [(s.runtime, s.detail) for s in dead] == [("codex", HOOK_REL)]
+    assert "NO SUCH FILE" in kit_doctor.render(report)
+
+
+def test_a_dead_registration_makes_the_run_non_green(tmp_path, capsys, monkeypatch):
+    """The property the issue was filed for. Without it the adopter's report
+    was `0 differ, 0 missing`, exit 0, with a dead hook — which is the same
+    clean bill of health a working install gets."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    _write(root / "kit-manifest.json", json.dumps(_manifest({ENGINE: kit_doctor.sha256_of(target)})))
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude',
+    )
+    monkeypatch.chdir(root)
+
+    # Nothing on the FILE axis reaches the exit code here — no drift, nothing
+    # broken — so a 1 can only have come from the registration. Asserted on the
+    # report rather than on the rendered counts, which also carry the plain
+    # `missing` entries a minimal fixture always has and which are not findings.
+    quiet = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, None)
+    assert (quiet.drifted, quiet.broken) == ([], [])
+
+    assert kit_doctor.main(["--root", str(root)]) == 1
+    assert "NO SUCH FILE" in capsys.readouterr().out
+
+
+def test_an_unwired_runtime_is_not_an_error(tmp_path):
+    """`init.sh` PRINTS both registration blocks and writes neither (#303), so
+    an adopter who has not wired one is in a supported state. Failing it would
+    be #286's bug in a third place: a healthy adoption failing its own gate
+    forever, which is exactly what #381 is about on the sibling check."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+
+    assert report.dead_registrations == []
+    assert {s.state for s in report.registrations} == {"absent"}
+    assert "`/hooks` in a session is the authority" in kit_doctor.render(report)
+
+
+def test_a_registration_this_check_cannot_resolve_is_not_called_broken(tmp_path):
+    """An expansion the kit does not know is a limit of the CHECK, not a
+    finding about the repo. Reporting it as broken would assert a file is
+    missing from a path that was never resolved."""
+    root = _fake_repo(tmp_path)
+    _registration(
+        root, ".claude/settings.json", f'python3 "$MY_OWN_ROOT/{HOOK_REL}" --runtime claude'
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    claude = [s for s in statuses if s.surface == ".claude/settings.json"]
+
+    assert [s.state for s in claude] == ["unresolvable"]
+
+
+def test_a_malformed_registration_degrades_instead_of_aborting_the_report(tmp_path):
+    """Same rule the baseline read follows: a diagnostic that dies on one
+    unparseable file tells the adopter nothing about the other thirty-six."""
+    root = _fake_repo(tmp_path)
+    _write(root / ".codex" / "hooks.json", "{not json at all")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert [s.state for s in statuses if s.surface == ".codex/hooks.json"] == ["unreadable"]
+
+
+def test_a_session_start_registration_is_checked_too(tmp_path):
+    """The walk is over every `command` in the document, not a lookup into the
+    events the kit ships today — `SessionStart` is already a second one, and a
+    lookup would go blind the day a third arrives."""
+    root = _fake_repo(tmp_path)
+    _write(
+        root / ".claude" / "settings.json",
+        json.dumps({"hooks": {"SessionStart": [{"matcher": "startup", "hooks": [
+            {"type": "command",
+             "command": '[ -z "$JOB_NAME" ] && cd "$CLAUDE_PROJECT_DIR" '
+                        "&& uv run --script scripts/check_memory_budget.py --quiet || true"}
+        ]}]}}),
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    claude = [s for s in statuses if s.surface == ".claude/settings.json"]
+
+    # check_memory_budget.py is not in this fixture — only check_doc_budget.py is.
+    assert [(s.state, s.detail) for s in claude] == [
+        ("broken", "scripts/check_memory_budget.py")
+    ]
+
+
+def test_a_declined_pre_push_is_reported_as_declined_not_as_missing(tmp_path, capsys):
+    """#381. cs-toolkit declines the kit's `pre-push` on principle (#46, still
+    open — its own hook carries two guards no config key expresses), so the
+    `run ./init.sh` advice could never be taken and never be cleared. A
+    permanent warning is how the next real one gets skimmed past."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    assert kit_doctor.PRE_PUSH_REL in baseline["not_installed"], "fixture no longer declines it"
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert report.hooks_state == "declined"
+    assert "pre-push hook: declined" in out
+    assert "run ./init.sh" not in out.split("declined")[0].split("pre-push")[-1]
+
+
+def test_an_undeclared_absent_pre_push_still_says_run_init(tmp_path, capsys):
+    """The other direction, so the test above cannot pass by the warning simply
+    being deleted: an adopter who never declared a decline gets the original
+    advice, because for them it is still correct."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    report = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, None)
+    print(kit_doctor.render(report))
+
+    assert report.hooks_state == "not-installed"
+    assert "NOT installed — run ./init.sh" in capsys.readouterr().out
+
+
+def test_json_carries_the_hook_state_and_the_registrations(tmp_path, capsys, monkeypatch):
+    """Both are invisible to a `--json` consumer otherwise: `hooks_installed`
+    is a bool with no room for "declined", and the two registration surfaces
+    are in neither KIT_OWNED nor any manifest."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    _write(root / "kit-manifest.json", json.dumps(_manifest({ENGINE: kit_doctor.sha256_of(target)})))
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".codex/hooks.json", f'exec python3 "$root/{HOOK_REL}" --runtime codex'
+    )
+    monkeypatch.chdir(root)
+
+    kit_doctor.main(["--root", str(root), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["hooks_installed"] is False
+    assert payload["hooks_state"] == "not-installed"
+    assert {"runtime": "codex", "surface": ".codex/hooks.json", "state": "resolves",
+            "detail": HOOK_REL} in payload["registrations"]
