@@ -15,17 +15,20 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
 Last updated: 2026-08-09 — **cs-toolkit's Phase 3 is merged and its findings are worked
-back into the kit.** `#385` (the one with an adopter blocked behind it), `#382`, `#383`,
-`#379`, `#381` and both halves of `#386` are closed; `#380` is blocked on a Codex CLI this
-host cannot start, and `#388` and `#392` are new. The adopter can take `init.sh` again —
-`#385` carries the measured before/after and the refresh steps. The convergence plan now
-records Phase 3 as done and carries the two defects a session following it found.
+back into the kit.** `#385` (the one with an adopter blocked behind it), `#382` and `#383`
+are closed. `#379`, `#381` and the `kit_doctor` half of `#386` ride on `#389`, which was
+still open at wrap-up time — **check their state rather than trusting this line.** `#380`
+is blocked on a Codex CLI this host cannot start; `#388`, `#392` and `#393` are new. The
+adopter can take `init.sh` again — `#385` carries the measured before/after and the refresh
+steps. The convergence plan now records Phase 3 as done and carries the two defects a
+session following it found.
 
 ## Latest session — 2026-08-09 (the adopter's Phase 3 findings, worked back into the kit)
 
 **Theme —** cs-toolkit's Phase 3 filed seven kit issues and left an adopter holding
-`init.sh`. Six were worked and four PRs merged; the seventh needs a runtime this host
-cannot start. The panel found more than the issues did.
+`init.sh`. Six were worked across four PRs — three merged, `#389` still open at wrap-up —
+and the seventh needs a runtime this host cannot start. The panel found more than the
+issues did.
 
 - **`#387` merged (`ccbed71`) — `#385`, the blocking one.** `init.sh` no longer imposes a
   `reports/` ignore. The seeding splits into *hygiene* (unconditional, always-wins — a
@@ -78,9 +81,12 @@ cannot start. The panel found more than the issues did.
   tracked-file count, a grep count, and a doctor report that this session's own manifest
   bump falsified. Every one is now the command that produces it.
 - **The adopter's review bot is not the only free audit.** CodeRabbit was rate-limited on
-  all four PRs, so the panel was the gate throughout — 15 lens runs across 4 PRs and 8
-  rounds. It found one HIGH, five MEDIUMs and the masked-fixture class the bot has never
-  reported.
+  every PR, so the panel was the gate throughout — more than a dozen rounds across the
+  four. Count them from the `## Fallback panel — round N` headers on each PR rather than
+  from a figure here; two figures in this very block were wrong when a lens counted them.
+  The severity did not decay the way a fix-round sequence is supposed to: `#389` alone
+  produced five HIGHs, the last two in its final rounds, and every one came from a lens
+  executing the changed path rather than reading it.
 
 **Open, and owned by nothing yet**
 

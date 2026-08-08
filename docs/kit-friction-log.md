@@ -40,7 +40,7 @@ entries are verbatim in the archive under `Graduated 2026-08-08`.
 
 ## 2026-08-09 — un-graduated
 
-### A test that names a property and pins nothing — four instances, one session
+### A test that names a property and pins nothing — five instances, one session
 
 Every PR this session had at least one property stated in a comment or docstring and held by
 no test, and each was found by a review lens **mutating the line and watching the suite stay
@@ -59,7 +59,11 @@ green** — never by reading:
   direct response to a finding about the cap, and still measured something else.
 
 A fifth, later: the same PR's own comment about which states reach the exit code went stale
-one round after it was written, inside the same PR.
+one round after it was written, inside the same PR. And a sixth, in this very entry — its
+heading said "four instances" over a body listing five, and the session's handoff block
+carried two wrong counts and two claims that a PR had merged when it had not. A lens caught
+all four. **The pattern is not about tests; it is about any claim nobody re-derives**, and
+the session that wrote an entry about it produced four more instances while doing so.
 
 One shape, not five: **a fixture that satisfies an earlier guard hides the later property**,
 and the property then lives only in prose. Worth asking whether the mutation step belongs in
@@ -69,8 +73,10 @@ is the same blindness one layer up.
 
 ### The panel is per-PR, and a batch of related PRs pays for it N times
 
-Four PRs from one session's findings needed 15 lens runs across 8 rounds — each rebuilding
-context on the same repo, several finding the same class of defect independently. There is no
+Four PRs from one session's findings needed more than a dozen rounds and closer to twenty
+lens runs — count the `## Fallback panel — round N` headers per PR for the exact figures,
+which is the point of the neighbouring entry — each rebuilding context on the same repo,
+several finding the same class of defect independently. There is no
 shape in `fallback-review-panel.md` for "these four PRs are one change split by risk class",
 which is exactly what Principle #4 asks an author to do. The cost argues against splitting,
 which is the wrong pressure to put on that principle.
