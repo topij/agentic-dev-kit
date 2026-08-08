@@ -254,10 +254,23 @@ the move "safe" while omitting the registrations. It was neither safe nor a move
 
 **`#304`, in the kit** — the ready starter, small and adjacent to the `init.sh`
 work below; its body names the smaller of two repairs (`seed_doc` re-emitting
-the kit-own marker). **2026-08-08: now coupled to `#360`** — same file, and
-`#304` is the concrete instance of why tracking it matters, since with `init.sh`
-untracked an adopter cannot tell whether its copy carries that bug. Treat the two
-as one piece of work.
+the kit-own marker).
+
+> **2026-08-08, settled: `#304` is NOT coupled to `#360` and stays open.** An
+> earlier revision of this paragraph — written before `#360` was worked — said
+> "now coupled to `#360` … treat the two as one piece of work", following the
+> adopter memo's recommendation. That was reversed on evidence a few hours later
+> and the reversal is under *Before Phase 3* item 1: `#304` needs a line-1
+> `devkit-source: kit-own` marker to act on, and cs-toolkit's `AGENTS.md` and
+> `CLAUDE.md` open with `# CS-Toolkit` and carry none, so `_seedable` leaves both
+> untouched there and **`#304` blocks nothing in Phase 3.**
+>
+> The old wording is corrected here rather than only in the newer section because
+> an adversarial review lens found the two passages contradicting each other and
+> named the consequence precisely: a session following this document's own
+> `▶ Next:` pointer reaches "coupled to `#360`" *before* it reaches "deliberately
+> not bundled", and could reasonably conclude `#304` was resolved when `#360`
+> closed. It was not.
 
 **The SessionStart budget hooks on Codex, in the kit.** Question 3 is settled:
 the event exists (see below), so this is the cheapest parity win available.
@@ -273,7 +286,8 @@ from *broken* (`✓ intact for this adoption — 22 file(s) declined`) and print
 commands that work at a vendored engines path.
 
 **Phase 2 — make re-rendering safe** — **DONE.** `#297` closed; `init.sh` has a
-no-clobber mode. `#304` is still open and is now grouped with `#360` above.
+no-clobber mode. `#304` is still open and is **not** part of `#360`'s work — see
+the note under *`#304`, in the kit* above for why that grouping was reversed.
 
 **The fixer predicate, in cs-toolkit** — **DONE**, merged as `bfafe13b7`
 (`in-parallel-oy/cs-toolkit#1866`). It landed *after* this plan's 2026-08-06
