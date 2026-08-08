@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/scripts/hooks/pr_followup_hook.py\" --runtime codex",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"$root\" ] || exit 0; exec python3 \"$root/scripts/hooks/pr_followup_hook.py\" --runtime codex",
             "timeout": 10
           }
         ]

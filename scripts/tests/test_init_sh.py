@@ -1769,13 +1769,22 @@ def test_the_printed_commands_are_pasteable_verbatim(tmp_path: Path) -> None:
     A round-5 lens made exactly that edit and the whole suite stayed green,
     because every other assertion here matches loose substrings. These two
     are exact, which is the point: substring assertions cannot see expansion.
+
+    **The Codex line now carries three `$` idioms rather than one** (`#359`): the
+    substitution plus two `$root` reads. All three must survive unexpanded — and
+    `$root` is the more fragile of the two kinds, because a missing backslash
+    there expands to the EMPTY string at print time rather than to a visible
+    absolute path, so the pasted snippet silently loses its own guard and
+    reproduces `#359` in the adopter's config. That failure is invisible to any
+    substring assertion, which is why this one stays exact.
     """
     repo = _with_pr_hook(_fixture(tmp_path, config=V1_CONFIG, git=True))
 
     result = _run_init(repo)
 
     assert (
-        '        python3 "$(git rev-parse --show-toplevel)/scripts/hooks/'
+        '        root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+        '[ -n "$root" ] || exit 0; exec python3 "$root/scripts/hooks/'
         'pr_followup_hook.py" --runtime codex' in result.stdout
     )
     assert (
@@ -1945,6 +1954,323 @@ def test_both_shipped_registrations_name_their_own_runtime() -> None:
         if any("pr_followup_hook" in h.get("command", "") for h in e["hooks"])
     )
     assert codex_pr_entry["matcher"] == "^Bash$"
+
+
+def _codex_registration_command() -> str:
+    """The Codex registration's command string, read OUT OF the shipped file.
+
+    Never a literal copied into this module: the defect below shipped because
+    every existing assertion compared the registration's text against another
+    copy of the same text, and a shared defect is invisible to a consistency
+    check.
+    """
+    parsed = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    entry = next(
+        e
+        for e in parsed["hooks"]["PostToolUse"]
+        if any("pr_followup_hook" in h.get("command", "") for h in e["hooks"])
+    )
+    hook = next(h for h in entry["hooks"] if "pr_followup_hook" in h.get("command", ""))
+    return hook["command"]
+
+
+def test_the_codex_registration_survives_a_git_less_tree(tmp_path: Path) -> None:
+    """`#359`: the registration must not run `python3` against a path built from
+    an empty string.
+
+    `$(git rev-parse --show-toplevel)` yields the EMPTY STRING outside a
+    worktree, so the bare form collapsed to `/…/pr_followup_hook.py` — an
+    absolute path rooted at `/` — and `python3` exited 2. Because a `PostToolUse`
+    failure does not halt a session, what an operator observes is a hook that
+    silently stopped firing: the exact outcome the hook exists to prevent,
+    reached by a different route than a moved file.
+
+    **This is a LEVEL-2 test and that is the whole point (`#363`).** The kit
+    already had level-1 coverage — `test_the_advisory_matches_the_registrations_it_describes`
+    reads both shipped files and asserts `init.sh`'s printed advisory matches them
+    verbatim, and the sibling above checks `--runtime`. Neither could catch this,
+    because both compare *text*: when the command string itself is wrong, the
+    advisory and the shipped file are wrong identically and every equality holds.
+    So the command is EXECUTED here, through `sh -c`, exercising the shell
+    expansion rather than a Python-side substitution of the placeholder.
+
+    Two cwds, because one alone proves the wrong thing. A no-op that never
+    resolved anything would pass the git-less case on its own.
+    """
+    command = _codex_registration_command()
+
+    # Outside any worktree: must exit 0 and stay silent, having bailed BEFORE
+    # invoking the interpreter.
+    outside = subprocess.run(
+        ["sh", "-c", command],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=_env(tmp_path),
+    )
+    assert outside.returncode == 0, (
+        "the Codex registration failed in a tree with no .git — #359. "
+        f"exit={outside.returncode}\nstderr: {outside.stderr}"
+    )
+    assert "No such file or directory" not in outside.stderr, (
+        "the registration reached the interpreter with an unresolved root — the "
+        f"#359 signature. stderr: {outside.stderr}"
+    )
+    assert not outside.stdout.strip(), f"unexpected output: {outside.stdout!r}"
+    # Pins `2>/dev/null`. Without it git prints `fatal: not a git repository` on
+    # EVERY Bash tool call in such a tree — the hook fires per tool use, so the
+    # noise is per-call, not once. Mutation-checked: dropping the redirect
+    # survived every other assertion here.
+    assert outside.stderr == "", (
+        "the registration leaked git's error to stderr in a tree with no .git; "
+        f"a PostToolUse hook fires on every Bash call, so this is per-call noise. "
+        f"stderr: {outside.stderr!r}"
+    )
+
+    # Positive control: inside a real worktree the same string must REACH the
+    # hook rather than bail. Asserted through a variant naming a script that does
+    # not exist, so a non-zero exit proves `exec` ran — the shipped hook exits 0
+    # on an irrelevant tool call, which is indistinguishable from bailing out.
+    probe = command.replace("pr_followup_hook.py", "no_such_hook_9f2a.py")
+    assert probe != command, "probe substitution failed — did the script name change?"
+    inside = subprocess.run(
+        ["sh", "-c", probe],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+    )
+    assert inside.returncode != 0, (
+        "inside a worktree the registration bailed out instead of running the "
+        "hook, so the guard added for #359 is too aggressive and the hook would "
+        "never fire anywhere."
+    )
+    # The #359 check proper: the interpreter must be reached with the root
+    # RESOLVED, not with a path rooted at `/`. Asserting the full expected path
+    # rather than the basename is what makes this the actual check — an earlier
+    # version tried `not inside.stderr.startswith("/no_such_hook")`, which can
+    # never fail, because python3 prefixes its own program name
+    # (`python3: can't open file '/no_such_hook…'`). The review bot caught that
+    # vacuity; the basename-only assertion it replaced was true either way.
+    assert f"{REPO_ROOT}/scripts/hooks/no_such_hook_9f2a.py" in inside.stderr, (
+        "the interpreter was reached with a path rooted at `/` rather than at the "
+        f"resolved worktree root — #359. stderr: {inside.stderr}"
+    )
+
+
+def test_the_codex_registration_execs_rather_than_forking_the_interpreter(
+    tmp_path: Path,
+) -> None:
+    """`exec` must replace the shell, not spawn a child.
+
+    Added because a correctness lens falsified the reason originally given for
+    `exec` — that it "keeps the hook's own exit status". It does not: in `a; b; c`
+    the status is `c`'s either way (`sh -c 'true; false'` and
+    `sh -c 'true; exec false'` both exit 1, checked). The status behaviour was
+    correct; the stated mechanism was fiction, and **nothing behavioural pinned
+    `exec` at all** — only an incidental literal match in
+    `test_the_printed_commands_are_pasteable_verbatim`, whose actual subject is
+    backslash-escaping. So a future edit "cleaning up" the false rationale could
+    drop `exec`, keep that text assertion in sync, and pass the whole suite.
+
+    What `exec` really buys is process replacement, and this registration carries
+    `"timeout": 10`. A timeout enforced by signalling the PID the runtime spawned
+    reaches the interpreter directly rather than a wrapper shell that may not
+    forward it — the difference between a timed-out hook dying and leaking an
+    orphan.
+
+    That is observable without Codex: with `exec`, the interpreter reports the
+    shell's own PID; without it, a different one. Both directions are asserted, so
+    the test cannot pass by being unable to tell them apart.
+    """
+    probe = tmp_path / "pid_probe.py"
+    probe.write_text("import os\nprint(f'py_pid={os.getpid()}')\n", encoding="utf-8")
+
+    command = _codex_registration_command()
+    target = '"$root/scripts/hooks/pr_followup_hook.py"'
+    assert target in command, f"registration shape changed; cannot build probe from {command!r}"
+    probed = command.replace(target, f'"{probe}"')
+
+    def pids(cmd: str) -> tuple[int, int]:
+        out = subprocess.run(
+            ["sh", "-c", f'echo "shell_pid=$$"; {cmd}'],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+        ).stdout
+        found = dict(
+            line.split("=", 1) for line in out.splitlines() if "=" in line and "_pid" in line
+        )
+        assert {"shell_pid", "py_pid"} <= found.keys(), f"probe produced no pids: {out!r}"
+        return int(found["shell_pid"]), int(found["py_pid"])
+
+    shell_pid, py_pid = pids(probed)
+    assert shell_pid == py_pid, (
+        "the registration forked the interpreter instead of exec'ing it, so the "
+        "hook runs as a CHILD of the process the runtime spawned. Its "
+        '`"timeout": 10` then signals a wrapper shell, which may not forward it. '
+        f"shell={shell_pid} python={py_pid}"
+    )
+
+    # Control: the test must be able to see the difference it claims to check.
+    #
+    # `; :` is not decoration. Many shells replace themselves with the LAST
+    # command of a `-c` list as an implicit tail-call, so a control that merely
+    # drops `exec` can still report identical PIDs on such a shell — and this
+    # test would then fail for a reason that has nothing to do with the
+    # registration. A trailing no-op keeps the interpreter off the final position,
+    # so a fork is guaranteed on every shell. Raised by the review bot, which
+    # measured it across several `sh`/`bash` builds; the local shell happens to
+    # fork either way, which is exactly why this needed catching by someone else.
+    forked_shell, forked_py = pids(probed.replace("exec python3", "python3") + "; :")
+    assert forked_shell != forked_py, (
+        "the control did not fork, so this test cannot distinguish exec from "
+        "no-exec and its assertion above proves nothing"
+    )
+
+
+def _with_stub_git(tmp_path: Path, body: str) -> tuple[dict[str, str], Path]:
+    """`_env` with a stub `git` first on PATH. `body` is its script body.
+
+    The guard chain in the Codex registration has three clauses and real `git`
+    exercises only one of them, so the other two are only reachable with a `git`
+    that behaves in a way the installed one never does. That is the point rather
+    than a contrivance: each stub below corresponds to a documented git behaviour
+    (a bare repo, a wrapper on an adopter's PATH) that the shipped command must
+    survive.
+
+    **The witness file is what makes the stub tests non-vacuous, and it exists
+    because they were vacuous.** An adversarial lens disabled the `PATH` prepend
+    below — leaving the shipped guards intact — and both callers still passed.
+    Outside a repo, real `git rev-parse --show-toplevel` exits 128 with EMPTY
+    stdout, which at the shell level is indistinguishable from both stub
+    behaviours: "succeeds printing nothing" is what real git's failure already
+    looks like on stdout, and "fails printing a path" stops printing a path when
+    the stub never runs. So each caller's assertions held for the wrong reason and
+    nothing noticed the stub was never invoked.
+
+    The stub now creates `witness` on every call and each caller asserts it
+    exists, so a harness edit that breaks the `PATH` override — a typo, a wrong
+    dict key, an ordering change — fails loudly instead of silently testing
+    nothing.
+
+    Returns `(env, witness)`. `tmp_path` is per-test, so no name needs to be
+    unique beyond it; an earlier version derived the directory name from
+    `hash(body)`, which added a collision surface for no isolation gain.
+    """
+    stub_dir = tmp_path / "stubbin"
+    stub_dir.mkdir()
+    witness = tmp_path / "stub-git-was-invoked"
+    stub = stub_dir / "git"
+    # `: >` rather than `touch`: one less external binary than the code under
+    # test already depends on.
+    stub.write_text(f'#!/bin/sh\n: > "{witness}"\n{body}\n', encoding="utf-8")
+    stub.chmod(0o755)
+    env = _env(tmp_path)
+    env["PATH"] = f"{stub_dir}{os.pathsep}{env['PATH']}"
+    return env, witness
+
+
+def test_the_codex_registration_guards_a_git_that_fails_while_printing_a_path(
+    tmp_path: Path,
+) -> None:
+    """Pins the FIRST `|| exit 0` — the clause an adversarial lens showed nothing
+    covered.
+
+    Its finding was that this clause is behaviourally redundant with
+    `[ -n "$root" ]`, because real `git rev-parse --show-toplevel` prints nothing
+    to stdout when it fails (`exit=128, stdout=[]`, checked), so the empty-string
+    guard already catches that path. Removing the first clause was caught only by
+    an unrelated hardcoded-literal test.
+
+    Redundant against the *installed* git is not redundant against every git. The
+    one case where this clause alone acts is a `git` that **exits non-zero while
+    writing a path to stdout** — a wrapper on an adopter's PATH, a shim, a
+    misconfigured alias. Then `$root` is non-empty and plausible, `[ -n "$root" ]`
+    passes, and without the first clause the hook would run against a path git
+    itself reported as an error.
+
+    Deleting the clause was considered and rejected: it fails CLOSED, and
+    `safety-critical-changes.md` rule 3 warns specifically against trading a
+    fail-closed limitation for a fail-open one. Pinning it costs one test.
+    """
+    env, witness = _with_stub_git(tmp_path, "echo /nonexistent/wrong/root\nexit 1")
+
+    result = subprocess.run(
+        ["sh", "-c", _codex_registration_command()],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=env,
+    )
+
+    # Before any conclusion: the stub must actually have been the `git` that ran.
+    # Real git's failure outside a repo is indistinguishable from this stub's
+    # behaviour at the shell level, so without this the assertions below hold
+    # whether or not the PATH override worked. See `_with_stub_git`.
+    assert witness.exists(), (
+        "the stub git was never invoked, so this test proves nothing about the "
+        "clause it names — the PATH override in `_with_stub_git` is broken."
+    )
+    assert result.returncode == 0, (
+        "git failed but printed a path, and the registration used it anyway — "
+        "the first `|| exit 0` is what refuses a root git itself reported as an "
+        f"error. exit={result.returncode}\nstderr: {result.stderr}"
+    )
+    assert "No such file or directory" not in result.stderr, (
+        "the interpreter was reached with a root git reported as failed; "
+        f"stderr: {result.stderr}"
+    )
+
+
+def test_the_codex_registration_guards_an_empty_root_that_git_reports_as_success(
+    tmp_path: Path,
+) -> None:
+    """Pins `[ -n "$root" ] || exit 0` specifically — the clause the sibling test
+    above does NOT cover.
+
+    Established by mutation rather than assumed: deleting that clause leaves the
+    sibling test passing, because real `git rev-parse` *exits non-zero* outside a
+    worktree and `|| exit 0` already catches that path. So the empty-string guard
+    only earns its place against a `git` that succeeds and prints nothing — and
+    nothing in this suite produced one.
+
+    This test produces one, with a stub `git` first on `PATH` that exits 0 with
+    empty stdout. That is not a contrived shape: `--show-toplevel` is documented
+    to fail in a bare repository, `GIT_DIR`/`GIT_WORK_TREE` can point somewhere
+    that resolves oddly, and a wrapper `git` on an adopter's PATH is common. If
+    the guard is ever deleted as redundant, this fails and says why.
+    """
+    # Succeeds, prints nothing — the one case `|| exit 0` cannot see.
+    env, witness = _with_stub_git(tmp_path, "exit 0")
+
+    result = subprocess.run(
+        ["sh", "-c", _codex_registration_command()],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=env,
+    )
+
+    # See the sibling test and `_with_stub_git`: without this, real git's ordinary
+    # failure satisfies the assertions below and the stub is never needed.
+    assert witness.exists(), (
+        "the stub git was never invoked, so this test proves nothing about the "
+        "clause it names — the PATH override in `_with_stub_git` is broken."
+    )
+    assert result.returncode == 0, (
+        "with a git that succeeds and prints nothing, the registration ran "
+        "python3 against a path built from an empty string — #359's mechanism, "
+        f"reached without git failing. exit={result.returncode}\n{result.stderr}"
+    )
+    assert "No such file or directory" not in result.stderr, (
+        "the interpreter was reached with an empty root: the command built "
+        f"'/…' from an empty $root. stderr: {result.stderr}"
+    )
 
 
 # --------------------------------------------------------------------------- #

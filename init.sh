@@ -1144,7 +1144,42 @@ register_pr_hook() {
   echo "      Skip whichever you have already done — \`/hooks\` in a session lists"
   echo "      what that runtime actually loaded, which is the authority here."
   echo "      Codex — .codex/hooks.json, under hooks.PostToolUse, matcher \"^Bash\$\":"
-  echo "        python3 \"\$(git rev-parse --show-toplevel)/${_hook_src}\" --runtime codex"
+  # The guard clauses are not decoration (#359). A bare
+  # `python3 "$(git rev-parse --show-toplevel)/…"` collapses to an absolute path
+  # rooted at `/` in a tree with no `.git`, because the substitution yields the
+  # empty string — python3 then exits 2, and since a PostToolUse failure does not
+  # halt a session, the operator observes a hook that silently stopped firing.
+  # Reproduced from outside a worktree. Codex exposes no project-dir variable
+  # (checked against a shipping third-party integration's own `~/.codex/hooks.json`,
+  # which uses absolute paths and `$PPID`), so there is nothing to substitute for
+  # the `rev-parse` — the fix is to bail out cleanly instead of running python3
+  # against a path built from an empty string.
+  #
+  # `exec` is NOT about the exit status. An earlier version of this comment said
+  # it "keeps the hook's own exit status, so only the unresolvable-root case
+  # becomes exit 0", and a correctness lens falsified that: in `a; b; c` the
+  # status is `c`'s with or without `exec` — `sh -c 'true; false'` and
+  # `sh -c 'true; exec false'` both exit 1. The status behaviour is correct here;
+  # `exec` simply had nothing to do with it.
+  #
+  # What `exec` actually does is REPLACE the shell with python3, so the hook runs
+  # as the process the runtime spawned rather than as its child. That much is
+  # verified and pinned: with `exec` the interpreter reports the shell's own PID,
+  # without it a different one —
+  # `test_the_codex_registration_execs_rather_than_forking_the_interpreter`
+  # asserts both directions.
+  #
+  # WHY that is worth having here is an inference, and is marked as one because a
+  # lens caught the previous wording asserting it as fact. The registration
+  # carries `"timeout": 10`; IF Codex enforces that by signalling the single PID
+  # it spawned, `exec` puts the interpreter at that PID instead of behind a
+  # wrapper shell that may not forward the signal. If it signals the whole process
+  # group instead, a forked shell would receive it too and `exec` buys less than
+  # that argument claims. Which one Codex does is not established here and is not
+  # observable from this repo — see #364, which is about a different unverified
+  # property of the same runtime's hook handling. `exec` is the right call either
+  # way (it is strictly fewer processes), so nothing depends on settling it.
+  echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; exec python3 \"\$root/${_hook_src}\" --runtime codex"
   echo "        Codex also needs you to trust the hook via /hooks before it runs."
   echo "      Claude — .claude/settings.json, under hooks.PostToolUse, matcher \"Bash\"."
   echo "      \`if\` goes on the hook entry beside \`command\`, not next to \`matcher\`:"
