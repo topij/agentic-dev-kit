@@ -4,6 +4,130 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-06 (`#297`, and a diagnosis corrected within the hour)
+
+**Theme —** Phase 2 shipped after a two-lens panel. The rest of the session went to a CI
+failure that looked like this repo's and was not — the correction is the part worth reading.
+
+- **`#297` shipped in PR `#328`** (merged `dc38c48`). `_seedable` returns a tri-state, so
+  `seed_doc` can tell ABSENT from MARKED and the mode is read at that **one call site** —
+  never inside the predicate, which is the fork `#297` exists to prevent. An unknown
+  argument now exits 2 rather than being skipped past. `/adopt` Step 3c hands the operator
+  `./init.sh --no-clobber` instead of asking them to inspect six line-1s. Verified with
+  `make test` in `/Users/topi/Coding/agentic-dev-kit`: 952 passed.
+- **`#329` is in PR `#334`, open and deliberately unmerged.** CI's `push:` trigger is scoped
+  to the protected branch; `scripts/tests/test_ci_workflow.py` pins that literal against
+  `vcs.protected_branch`, which is the only thing that can — a workflow cannot read the
+  config and GitHub forbids expressions in `on:`. Verified with `make test` in the same
+  checkout: 955 passed. **Held** because it cannot be validated while Actions is down: its
+  own evidence is "one run, not two", and it currently produces zero, which is
+  indistinguishable from having broken PR CI entirely.
+- **Filed this session:** `#329`, `#330`, `#331`, `#332`, `#333`, `#335`. Occurrence
+  comments on `#243` and `#305`.
+
+**Learned**
+
+- **Ask whether the provider is up before diagnosing the repo.** `#329` was filed
+  attributing 15-minute job starvation to this repo's duplicate CI runs; githubstatus.com
+  read `Actions: major_outage`, against an incident opened 15:22Z that predates every
+  starved run. What disproved the local claim was a run
+  with **no sibling to compete with** — PR `#328`'s merge to `main` produced zero check runs
+  under the old unscoped trigger. Corrected on the issue rather than by editing it, and the
+  workflow gap that permitted it is `#335`.
+- **Re-running during an outage is what created the second defect.** The re-run made a check
+  row vanish from the rollup instead of turning green, wedging `pr_watch`'s monotone
+  false-settle guard permanently (`#333`, measured over eight polls at an unchanged head).
+- **A test that names a property can cover half of it.** The byte-identical `--no-clobber`
+  test exercised one of `_seedable`'s two marker arms; mutating the other left it green, and
+  the kill came from an unrelated test that happened to use the other literal. Found by
+  mutation testing, not by review.
+- **The panel reviewed what shipped; the bot reviewed the design.** CodeRabbit went rate
+  limited after reviewing `4576f40`, so the fixes for its own three findings were never
+  bot-reviewed. `#305`'s shape, hit twice in one PR.
+
+**Decided this session (operator)**
+
+- **Record rather than repair**, again on a comment defect: PR `#328` ships a duplicated
+  comment paragraph in `init.sh`. Repairing it moves the head off the sha both lenses
+  reviewed, and `safety-critical-changes.md` gives that class no delta-pass exit — so three
+  lines of comment would have cost a full panel. Stated on the PR, recorded on `#305`.
+- **Run the panel** rather than wait out the bot's rate limit.
+- **Hold `#334`** rather than merge a CI-trigger change on a green that cannot be obtained.
+
+**Open, and owned by nothing yet**
+
+- **The critical path leaves this repo.** Phase 3 needs cs-toolkit's Phase 0 and its fixer
+  predicate (`done` → `converged`); its `pr_watch.py` still carries `decide_done`, and
+  `.codex/hooks.json` is absent there. Both are cs-toolkit PRs.
+- **`#330` does not block Phase 3.** Measured this session: all six of cs-toolkit's seedable
+  paths classify IN_USE under `init.sh`'s own `_seedable`, spliced from the script rather
+  than reimplemented. Re-run that before Phase 3 executes rather than trusting the snapshot.
+- **`#331`, `#332`, `#333`, `#335` are all `pr-watch` loop defects** found by using it. They
+  tax every future PR, and Phase 3 is the largest one in the plan.
+- **Carried forward:** `#304`, `#291`, `#243`, `#273`, `#290`, `#283`, `#287`, `#292`,
+  `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`,
+  `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`pr-watch 334` once GitHub Actions recovers** — the check is one `toolkit` run on
+that PR rather than two, and a run on `main` after it merges; if zero runs still appear, the
+change broke PR CI and `test_pull_request_remains_a_trigger` is the thing to read. That is a
+gate, not the substance: the substance is **cs-toolkit's Phase 0 and its fixer predicate**,
+which gate Phase 3 and are that repo's PRs, per `docs/kit-convergence-plan.md`.
+
+## Session — 2026-08-06 (`#286`, and a review that kept finding the same shape)
+
+**Theme —** One inline lane, steered live because `#286`'s three open questions were
+operator decisions. All three were answered before code was written; none changed under
+review.
+
+- **`#286` shipped in PR `#322`.** `--record-install` records `not_installed`, so an
+  absence resolves to `declined` / `removed` / `new-upstream` instead of one permanent
+  count. Verified with `make test` in `/Users/topi/Coding/agentic-dev-kit`: 943 passed.
+- **Phase 1's done-when is still open.** It asks that `kit_doctor` distinguish sized down
+  from broken *in cs-toolkit*, which needs a `--record-install` run there — adopter-side,
+  so it belongs to Phase 3 rather than to this PR. `#286` is closed; the phase is not.
+- **Operator decisions:** the declared set lives in the baseline (derived, not
+  hand-declared); a file the kit adds later gets its own state rather than defaulting
+  either way; declaring is opt-in via the key's presence, so an older baseline keeps its
+  existing report.
+- **Filed this session:** `#323`, `#324`, `#325`, `#326`.
+
+**Learned**
+
+- **A verdict line is a claim, and it drifted three times from the same blind spot.** Three
+  separate review rounds found a headline reading as an all-clear over something actionable
+  below it — for `removed`, then `unknown-version`, then `differs`. Each fix addressed the
+  case in hand and missed its sibling one line away. What ended it was routing all four
+  branches through one shared caveat rather than a fourth careful edit.
+- **The panel found what my own mutation testing could not.** Several findings were gaps in
+  the tests I had just written: I mutated the branches I was thinking about, and those were
+  the ones already covered. A lens picks its own targets, which is the property being paid
+  for.
+- **`#324` is the limit of what this axis can assert.** A path in neither map cannot be
+  told from a damaged record, because the baseline is the trust root and carries no
+  integrity check. PR `#322` hedges the wording and does not claim more.
+
+**Decided this session (operator)**
+
+- **Run the panel to convergence rather than to a round count.** Severity rose at round 3
+  (a HIGH after two Medium-only rounds), and the stopping rule is blast radius, not rounds.
+  Round 4 converged and the receipt was recorded then.
+
+**Open, and owned by nothing yet**
+
+- **`#297` is now the whole of the critical path's next step** — Phase 2, carrying `#304`.
+- **`#325` and `#326` are about the panel itself**, and the panel is now the review path
+  whenever the bot is limited, so they cost every PR rather than only this one.
+- **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#283`, `#287`, `#292`, `#248`,
+  `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`, `#203`,
+  `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **`#297` — Phase 2 of the convergence plan**, and now the critical path's only
+open step on the kit side. Its done-when is that something can run `init.sh` in an adopter
+without the operator reasoning about which files it will overwrite; `#304` is adjacent and
+may share parts of the change. The Codex `SessionStart` budget hooks and cs-toolkit's Phase
+0 still run in parallel per `docs/kit-convergence-plan.md`.
+
 ## Session — 2026-08-06 (the first parallel batch, and a fix that should not be built)
 
 **Theme —** Three isolated lanes off one cockpit. Two landed. The third produced a finding

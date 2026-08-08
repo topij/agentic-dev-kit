@@ -286,9 +286,21 @@ repo-wide grep confirming no consumer still reads the `done` key.
 
 **Before Phase 3 — the kit work the forcing function found.** This is new as of
 2026-08-08 and sits *between* the cleared gates and Phase 3, because Phase 3 is
-the upgrade and `init.sh` is what performs it:
+the upgrade and `init.sh` is what performs it.
 
-1. **`#360`** — track `init.sh`. Its issue frames the tracking model as a design
+> **Status, end of 2026-08-08: items 1 and 2 are DONE, item 3 remains.** `#360`
+> closed (PR `#362`) and `#359` closed (PR `#366`); `#358` is the only one left,
+> and the coverage half of it is narrower than its issue proposes — the
+> measurement is a comment on that ticket. `#304` was **removed** from this list
+> rather than completed; the reasoning is under item 1.
+>
+> One consequence to carry into Phase 3, learned while doing item 1: `KIT_OWNED`
+> lives in the **engine**, not the manifest, so passing `--manifest` alone does
+> not backport a newly tracked path. cs-toolkit's vendored `kit_doctor.py` must be
+> refreshed before its own doctor can see `init.sh` at all.
+
+1. **`#360`** — **DONE** (PR `#362`). Track `init.sh`. Its issue frames the
+   tracking model as a design
    call between three options, on the premise that an adopter's copy is
    *expected* to diverge because it "encodes answers to the adoption prompts" —
    so a plain `KIT_OWNED` entry would report every adopter permanently
@@ -328,8 +340,18 @@ the upgrade and `init.sh` is what performs it:
    template on the first run; the repair that actually prevents it needs the
    kit-repo detector `#291` also wants and `#289` declined to add inside a fix
    round. That is an operator design call, not an overnight one.
-2. **`#359`** — before Phase 3 re-prints the registrations.
-3. **`#358`** — two prose paths, plus the coverage question its issue raises.
+2. **`#359`** — **DONE** (PR `#366`), before Phase 3 re-prints the registrations.
+   The registration now bails cleanly instead of running `python3` against a path
+   built from an empty string, and every clause of it is pinned by a test that
+   executes it. `#363` — no test *executed* a registration, which is why `#359`
+   shipped — stays open: this closed the gap for one registration, not the class.
+3. **`#358`** — **remaining.** Two prose paths, plus the coverage question its
+   issue raises. That question is answered on the ticket and the answer is "not as
+   proposed": a position-independent match over the closed `KIT_OWNED` set flags
+   two legitimate lines in `adopt.md` alongside the two real ones, because the
+   distinguishing feature is line position — which is what the existing anchored
+   regex already uses. Doctrine-scoped it is clean. The wider form needs a
+   judgment call about `adopt.md:142` first.
 
 **Phase 3 — converge the install.** After the three items above: an agent session
 working **in cs-toolkit** (question 5's decision)
