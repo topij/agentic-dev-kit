@@ -15,7 +15,8 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
 Last updated: 2026-08-08 — **the pre-Phase-3 work cs-toolkit's Phase 0 surfaced is nearly
-done: `#360` and `#359` are closed, `#358` is what remains.** Every gate
+done: `#360` and `#359` are done, `#358` is what remains**, and the friction inbox has
+since been graduated to the tracker (`#375`), so it holds no un-graduated entries. Every gate
 `docs/kit-convergence-plan.md` named for Phase 3 had already cleared (Phase 0 `2ab63d255`,
 the fixer predicate `bfafe13b7`, kit `#285` / `#286` / `#297`); the ordering that mattered
 was the work the Phase 0 run itself found, because Phase 3 *is* the upgrade and `init.sh`
@@ -23,7 +24,73 @@ is what performs it. `#304` was dropped from that order on evidence — it needs
 kit-own marker to act on and cs-toolkit's entry points carry none, so it blocks nothing
 there.
 
-## Latest session — 2026-08-08 (the adopter's memo, checked rather than executed)
+## Latest session — 2026-08-08 (the tenth triage sweep, and what re-derivation changed)
+
+**Theme —** The friction inbox graduated to the tracker. The sweep's value was in the
+routing rather than the volume: reading the tracker before drafting changed two of the
+seven entries' destinations, in opposite directions.
+
+- **PR `#375` merged (`453900e`).** The inbox is swept into
+  `docs/kit-friction-log-archive.md` under `Graduated 2026-08-08`; the active file keeps
+  its H1, intro and the new marker. Run in LLM-only mode — `#6`'s engine is still not
+  vendored, so the parse, draft, sweep and PR were done against the workflow prose by hand.
+- **Filed this session: `#370`, `#371`, `#372`, `#373`, `#374`, `#376`.** Occurrence
+  comments on `#305` and `#115`. The cockpit mutation-harness entry needed no write —
+  `#326` already carried both the occurrence and its "do not mutate the live tree" reframe.
+- **The approval binds to what the operator saw.** Session A stored the drafted proposals;
+  Session B replayed those against the DM reply rather than re-deriving them. Every write
+  was re-read from the tracker after landing per `#138`, compared **by body**, with both
+  commented issues confirmed still open.
+- **The archived text round-trips byte-exact against the draft-time snapshot**, and that
+  snapshot still matched the live inbox at finalize — checked in
+  `/Users/topi/Coding/agentic-dev-kit` before the commit, so no entry was swept unfiled and
+  nothing was added in the draft window.
+
+**Learned**
+
+- **An entry can read as already handled and not be, and grep is what gets it wrong.** The
+  `panel_prompt.py` entry said the panel doctrine never names the engine. `git grep
+  panel_prompt` now hits `fallback-review-panel.md`, so a grep-level check would have
+  archived it as done. That hit is inside a `lens_compute` config aside; "Running it" step 2
+  still tells you to hand-author every lens prompt. The claim's *wording* went stale while
+  its substance stood — the opposite direction from a claim that is simply false, and only
+  re-derivation separates them. `#373`.
+- **The bot was available, and reproduced two of its own tickets while being so.** After
+  four sessions of quota outages CodeRabbit reviewed this head clean, so no panel was
+  warranted — treating a successful review as an outage is the inverse of Principle #5's
+  error. Its clean verdict arrived as a comment rather than a review, leaving `coverage`
+  empty (`#44`), and `mergeable` then demanded a receipt that no configured literal honestly
+  describes (`#350`). Recorded `coderabbit`, per this repo's own receipt history, rather than
+  asserting a `fallback:` pass that never ran.
+- **Four entries were one story and did not want one ticket.** The quota cluster split by
+  what each part actually routes to: the missing observability (`#370`), a false claim in
+  `config/dev-model.yaml` about the panel being "the real substitute" (`#371`), and the
+  operator decision itself (`#372`) — which four entries had deliberately declined to file,
+  and which needed a home once its evidence moved to the archive.
+- **A workflow that DMs through the operator's own token cannot tell its own messages from
+  theirs.** Every message in the thread carried the operator's user id, including the
+  skill's "still waiting" reminder — whose text contains a bare `skip`, which the skill's
+  own grammar defines as bulk-cancel. An engine implementing that grammar literally would
+  read its own reminder as the operator aborting the batch, and say so with a success
+  message. `#376`.
+
+**Open, and owned by nothing yet**
+
+- **`#358` is the remaining pre-Phase-3 item** — untouched by this session.
+- **The friction inbox holds no un-graduated entries**; this session's own finding was
+  issue-shaped and went to the tracker as `#376` rather than to the inbox.
+- **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
+- **Carried forward:** `#376`, `#374`, `#373`, `#372`, `#371`, `#370`, `#368`, `#367`,
+  `#365`, `#364`, `#363`, `#358`, `#356`, `#350`, `#346`, `#304`, `#291`, `#290`, `#287`,
+  `#283`, `#273`, `#243`, `#248`, `#264`, `#236`, `#231`, `#213`, `#209`, `#211`, `#120`,
+  `#216`, `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`, `#46`, `#36`.
+
+▶ Next: **`#358`, then Phase 3 in cs-toolkit** — unchanged by this session; the block below
+carries the detail, including what that session must do beyond the upgrade.
+
+______________________________________________________________________
+
+## Session — 2026-08-08 (the adopter's memo, checked rather than executed)
 
 **Theme —** cs-toolkit's Phase 0 handed the kit a memo of findings. Two of its
 load-bearing claims did not survive being re-derived, and the work that followed was
@@ -84,8 +151,9 @@ smaller and better aimed than the memo proposed.
 
 - **`#358` is the remaining pre-Phase-3 item** — two prose paths plus a coverage question
   whose proposed remedy is refuted on the ticket, with the viable narrower form identified.
-- **The friction inbox still awaits `triage-friction-log`**; nothing was added to it this
-  session, because everything issue-shaped was filed to the tracker instead.
+- ~~**The friction inbox still awaits `triage-friction-log`**~~ — **swept 2026-08-08**, see
+  the block above; nothing was added to it this session, because everything issue-shaped
+  was filed to the tracker instead.
 - **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
 - **Carried forward:** `#368`, `#367`, `#365`, `#364`, `#363`, `#358`, `#356`, `#350`,
   `#346`, `#304`, `#291`, `#290`, `#287`, `#283`, `#273`, `#243`, `#248`, `#264`, `#236`,
