@@ -2046,11 +2046,17 @@ def test_the_codex_registration_survives_a_git_less_tree(tmp_path: Path) -> None
         "hook, so the guard added for #359 is too aggressive and the hook would "
         "never fire anywhere."
     )
-    assert "no_such_hook_9f2a.py" in inside.stderr, (
-        "expected the interpreter to be reached with a resolved root; "
-        f"stderr: {inside.stderr}"
+    # The #359 check proper: the interpreter must be reached with the root
+    # RESOLVED, not with a path rooted at `/`. Asserting the full expected path
+    # rather than the basename is what makes this the actual check — an earlier
+    # version tried `not inside.stderr.startswith("/no_such_hook")`, which can
+    # never fail, because python3 prefixes its own program name
+    # (`python3: can't open file '/no_such_hook…'`). The review bot caught that
+    # vacuity; the basename-only assertion it replaced was true either way.
+    assert f"{REPO_ROOT}/scripts/hooks/no_such_hook_9f2a.py" in inside.stderr, (
+        "the interpreter was reached with a path rooted at `/` rather than at the "
+        f"resolved worktree root — #359. stderr: {inside.stderr}"
     )
-    assert not inside.stderr.startswith("/no_such_hook"), "root resolved to / — #359"
 
 
 def test_the_codex_registration_execs_rather_than_forking_the_interpreter(
@@ -2109,7 +2115,16 @@ def test_the_codex_registration_execs_rather_than_forking_the_interpreter(
     )
 
     # Control: the test must be able to see the difference it claims to check.
-    forked_shell, forked_py = pids(probed.replace("exec python3", "python3"))
+    #
+    # `; :` is not decoration. Many shells replace themselves with the LAST
+    # command of a `-c` list as an implicit tail-call, so a control that merely
+    # drops `exec` can still report identical PIDs on such a shell — and this
+    # test would then fail for a reason that has nothing to do with the
+    # registration. A trailing no-op keeps the interpreter off the final position,
+    # so a fork is guaranteed on every shell. Raised by the review bot, which
+    # measured it across several `sh`/`bash` builds; the local shell happens to
+    # fork either way, which is exactly why this needed catching by someone else.
+    forked_shell, forked_py = pids(probed.replace("exec python3", "python3") + "; :")
     assert forked_shell != forked_py, (
         "the control did not fork, so this test cannot distinguish exec from "
         "no-exec and its assertion above proves nothing"
