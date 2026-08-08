@@ -85,7 +85,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "87f6915f25e687819cf08c3d93569f71b4ddfe791c239ea1d678a4c73125c4c0"
+      "sha256": "88e9e06e1ecf85d859295a9c59af1745bcf3efd750e73d93f3efcac71d7a64ae"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",

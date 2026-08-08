@@ -1525,6 +1525,17 @@ _ignore_rule_exists_for() {
   # `reports/`, `**/reports/**` and `!**/reports/*_latest.*` are all rules about
   # `reports`. Prefix-matching on a path component is what catches the last one —
   # a repo whose only reports rules are negations still has a policy.
+  #
+  # `\r` is trimmed alongside the blanks. A Windows-authored .gitignore ends its
+  # lines with one; git trims it and honours the rule, and without this the
+  # surviving `\r` defeated BOTH branches for a bare pattern (`reports\r`
+  # normalises to neither `reports` nor a `reports/` prefix). The cost was a
+  # redundant appended line rather than a lost file — the tracked-file guard
+  # asks git directly and was never affected — but a check that silently stops
+  # seeing a rule on one platform is the wrong kind of quiet (panel,
+  # adversarial lens). Kept out here because the awk program is a single-quoted
+  # shell string and an apostrophe inside it ends the string (#383's lesson,
+  # rediscovered by writing this comment in there first).
   awk -v entry="$1" '
     function norm(p) {
       sub(/^!/, "", p); sub(/^\*\*\//, "", p); sub(/^\//, "", p)
@@ -1534,7 +1545,7 @@ _ignore_rule_exists_for() {
     BEGIN { want = norm(entry); found = 0 }
     {
       line = $0
-      sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
+      sub(/^[ \t]+/, "", line); sub(/[ \t\r]+$/, "", line)
       if (line == "" || line ~ /^#/) next
       have = norm(line)
       if (have == want || index(have, want "/") == 1) found = 1
@@ -1547,6 +1558,26 @@ add_policy_ignore_line() {
   entry="$1"
   what="$2"
   grep -qxF "$entry" .gitignore 2>/dev/null && return 0
+  # An entry this run wants ANCHORED, sitting there unanchored, is the kit's own
+  # older line rather than the adopter's policy — a repo seeded before #385. Say
+  # which it is: reporting it as "your existing policy" and then, in a second
+  # note, as "our historical debris" is two answers to one question (panel,
+  # correctness lens). The guards cannot help here either way — the entry is
+  # already present, and .gitignore is adopter-owned, so the kit explains and
+  # edits nothing.
+  case "$entry" in
+    /*)
+      if grep -qxF "${entry#/}" .gitignore 2>/dev/null; then
+        echo "note: .gitignore carries an unanchored '${entry#/}' line, seeded by an older"
+        echo "      init.sh — so '$entry' was NOT added ($what). The unanchored form ignores"
+        echo "      a directory of that name at ANY depth, and git does not descend into an"
+        echo "      excluded directory, so '!**/…' negations below it are inert (#385)."
+        echo "      If only the kit's own <repo-root>${entry} was meant, change that line to"
+        echo "      '$entry' — the kit will not edit your .gitignore for you."
+        return 0
+      fi
+      ;;
+  esac
   if _ignore_rule_exists_for "$entry"; then
     echo "note: .gitignore already rules on '$entry' — NOT added ($what)."
     echo "      An existing rule is a policy, and the kit's line would go last and win."
@@ -1581,22 +1612,17 @@ add_policy_ignore_line "*.devkit-tmp" "atomic-write debris"
 #
 # ANCHORED, and conditional, because that premise is the kit's and not every
 # adopter's (#385). Unanchored, `reports/` matches a `reports` directory at any
-# depth — cs-toolkit commits 277 tracked files under `domains/*/reports/` behind
-# a scheme of `!**/reports/…` negations, every one of which goes inert once the
+# depth: cs-toolkit commits dated artifacts under `domains/*/reports/` behind a
+# scheme of `!**/reports/…` negations, and every one of them goes inert once the
 # parent directory is excluded, since git does not descend into an excluded
-# directory. The kit's own reports land at <repo-root>/reports, so `/reports/`
-# says what the kit actually means.
+# directory. Count them yourself if you need the size —
+# `git ls-files -- '*/reports/*' | wc -l` in that repo — rather than trusting a
+# figure here: an earlier draft of this comment carried one, a review lens
+# measured it against the live repo and it was already wrong.
+#
+# The kit's own reports land at <repo-root>/reports, so `/reports/` says what
+# the kit actually means.
 add_policy_ignore_line "/reports/" "the kit's derived pipeline reports"
-# A repo seeded by a pre-#385 init.sh still carries the unanchored line, and the
-# guards above cannot help: the entry is already there, and .gitignore is
-# adopter-owned so the kit must never rewrite it. Say what it does instead.
-if grep -qxF "reports/" .gitignore 2>/dev/null; then
-  echo "note: .gitignore carries an unanchored 'reports/' line, seeded by an older"
-  echo "      init.sh. It ignores a 'reports' directory at ANY depth, and git does not"
-  echo "      descend into an excluded directory, so '!**/reports/…' negations below it"
-  echo "      are inert (#385). If only the kit's <repo-root>/reports/ was meant, change"
-  echo "      that line to '/reports/' — the kit will not edit your .gitignore for you."
-fi
 # The local config overlay. kitconfig.load_config() merges it over
 # config/dev-model.yaml per leaf, so it is where a value that must not enter git
 # lives — the operator id an approval DM targets, a tracker team id. This line is

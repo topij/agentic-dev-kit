@@ -1531,6 +1531,76 @@ def test_the_adopters_nested_reports_stay_stageable(tmp_path: Path) -> None:
     )
 
 
+def test_the_seeded_reports_line_cannot_reach_a_nested_reports_directory(
+    tmp_path: Path,
+) -> None:
+    """The anchoring itself, with NOTHING pre-seeded — which is what makes this
+    the regression test the one above only looked like.
+
+    `test_the_adopters_nested_reports_stay_stageable` pre-seeds `**/reports/**`,
+    so the already-rules guard fires and `add_policy_ignore_line` returns before
+    the entry's anchoring is ever exercised: reverting `/reports/` to the pre-fix
+    `reports/` left that test GREEN (panel, adversarial lens, mutation-verified).
+    Here the kit's line is the only rule in the file, so the mutation has nowhere
+    to hide — and the assertion is still `git check-ignore`, because the defect
+    was about matching semantics."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
+    _write(repo, "domains/cv/reports/cv_latest.json", "{}\n")
+    _write(repo, "reports/kit_scratch.md", "# derived\n")
+
+    _run_init(repo)
+
+    def ignored(rel: str) -> bool:
+        return (
+            subprocess.run(
+                ["git", "check-ignore", "-q", rel],
+                cwd=repo,
+                env=_env(repo.parent),
+                capture_output=True,
+            ).returncode
+            == 0
+        )
+
+    assert ignored("reports/kit_scratch.md"), "the kit's own root reports/ is not ignored"
+    assert not ignored("domains/cv/reports/cv_latest.json"), (
+        "the seeded line reached a nested reports directory:\n"
+        + (repo / ".gitignore").read_text(encoding="utf-8")
+    )
+
+
+def test_a_negation_only_rule_still_counts_as_the_adopters_policy(
+    tmp_path: Path,
+) -> None:
+    """The prefix branch of the rule check, which the exact-match branch would
+    otherwise mask: dropping it left the whole suite green, because every other
+    fixture pairs its negations with a plain `**/reports/**` line that matches
+    exactly (panel, correctness lens, mutation-verified).
+
+    A repo whose only reports rules are negations has a policy too — it is
+    mid-migration, or it un-ignores from a rule that lives elsewhere — and the
+    kit's line would still go last and win."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
+    (repo / ".gitignore").write_text("!**/reports/*_latest.*\n", encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert "/reports/" not in (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "already rules on '/reports/'" in result.stdout
+
+
+def test_a_crlf_gitignore_line_is_still_recognised_as_a_rule(tmp_path: Path) -> None:
+    """A Windows-authored `.gitignore` ends its lines with `\\r`. Git trims it
+    and honours the rule; the scan did not, so a bare pattern normalised to
+    neither an exact match nor a prefix and the kit appended a redundant line
+    (panel, adversarial lens)."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
+    (repo / ".gitignore").write_bytes(b"reports\r\n")
+
+    _run_init(repo)
+
+    assert "/reports/" not in (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
 def test_a_policy_entry_is_skipped_when_the_repo_already_rules_on_it(
     tmp_path: Path,
 ) -> None:
