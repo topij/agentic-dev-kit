@@ -753,6 +753,16 @@ def test_set_field_does_not_reattach_part_of_the_old_value_as_a_comment(
         # The single-quote arm is unchanged: no backslash escaping there, and its
         # own doubled-apostrophe escape still holds a `#` inside the scalar.
         ("tracker:\n  url: 'O''Brien # x'\n", "'O''Brien # x'"),
+        # The SCOPING of the new rule, which the case above only asserted in
+        # prose. A single-quoted YAML scalar has no backslash escape — PyYAML
+        # reads this value as `trailing \` with the comment stripped — so a
+        # trailing backslash must NOT swallow the closing quote here. Broadening
+        # the guard to both quote kinds (the two forms differ by one condition
+        # and look almost identical) left the whole file green while making this
+        # input return `'trailing \' # comment`: a real comment absorbed into the
+        # value, which is the very bug #383 fixes on the other arm. Panel,
+        # correctness lens, mutation-verified.
+        ("tracker:\n  url: 'trailing \\' # a real comment\n", "'trailing \\'"),
     ],
 )
 def test_the_comment_scan_still_finds_the_comments_it_should(
@@ -1948,9 +1958,18 @@ def _lens_compute_block(text: str, *, unescape: bool = False) -> tuple[str, str]
 def test_init_sh_ships_the_same_lens_compute_values_as_the_reference_config():
     """A fresh install must not diverge from the shipped config's actual settings.
 
-    `init.sh` is NOT tracked in `kit-manifest.json`, so no drift check compares
-    it against anything — the two can separate silently, and a new adopter would
-    then get different panel compute than this repo runs.
+    The drift check does not cover this. `init.sh` IS tracked in
+    `kit-manifest.json` since #362 — this docstring said the opposite, which was
+    true when written and is the same stale claim #382 found in two workflow
+    documents — but that check compares the installer's BYTES against the kit's,
+    which says nothing about whether the values it stamps agree with
+    `config/dev-model.yaml`. Two files can each match their own manifest entry
+    and still disagree with each other, so this test is what holds them
+    together, and a new adopter would otherwise get different panel compute than
+    this repo runs. (Found by the panel's correctness lens, which flagged it as
+    out of scope for the change it was reviewing; corrected here because the
+    change was in this file and the claim is the class the same session was
+    sweeping.)
     """
     init_comment, init_values = _lens_compute_block(
         (REPO_ROOT / "init.sh").read_text(encoding="utf-8"), unescape=True
