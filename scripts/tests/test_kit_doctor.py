@@ -3154,3 +3154,96 @@ def test_json_carries_the_hook_state_and_the_registrations(tmp_path, capsys, mon
     assert payload["hooks_state"] == "not-installed"
     assert {"runtime": "codex", "surface": ".codex/hooks.json", "state": "resolves",
             "detail": HOOK_REL} in payload["registrations"]
+
+
+def test_a_hook_renamed_out_of_rotation_is_reported_dead_not_resolved(tmp_path):
+    """The most ordinary way anyone disables a hook is renaming the file, and
+    the first version of this check reported that as `✓ resolves`.
+
+    `_script_token` stopped at the kit's own filename, so
+    `…/pr_followup_hook.py.disabled` was truncated back to
+    `…/pr_followup_hook.py` — which exists — and the registration invoking an
+    absent file passed clean. That is #379's own failure mode manufactured by
+    #379's fix, and worse than the silence it replaced: it asserts a specific
+    falsehood confidently (panel, adversarial lens)."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")  # the real file, still present
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}.disabled" --runtime claude',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+
+    assert [(s.state, s.detail) for s in report.dead_registrations] == [
+        ("broken", f"{HOOK_REL}.disabled")
+    ]
+
+
+def test_a_degenerately_nested_registration_does_not_abort_the_report(tmp_path):
+    """Valid JSON, absurd shape. The parse is guarded and says so ("a diagnostic
+    that dies on one malformed file tells the adopter nothing about the other
+    thirty-six"); the walk after it recursed without a cap and raised
+    `RecursionError` straight out of `inspect()` (panel, adversarial lens)."""
+    root = _fake_repo(tmp_path)
+    payload = "[" * 10000 + "]" * 10000
+    _write(root / ".codex" / "hooks.json", f'{{"hooks": {{"PostToolUse": {payload}}}}}')
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    # `unreadable`, not `unregistered`: the stack ran out inside `json.loads`
+    # before the walk was reached, and reporting "no kit hook registered" for a
+    # file this run could not read would be a claim it did not establish.
+    assert [s.state for s in statuses if s.surface == ".codex/hooks.json"] == [
+        "unreadable"
+    ]
+
+
+def test_an_installed_hook_beats_a_baseline_that_declares_it_declined(tmp_path):
+    """Evidence order, not declaration order — the property the comment claims
+    and nothing checked. A baseline is a record of a past decision; the file on
+    disk is the current fact, and a stale declaration must not hide a working
+    install (panel, correctness lens)."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "hooks" / "pre-push", "#!/bin/sh\n")
+    _write(root / ".git" / "hooks" / "pre-push", "#!/bin/sh\n")
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    assert kit_doctor.PRE_PUSH_REL in baseline["not_installed"]
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+
+    assert report.hooks_installed is True
+    assert report.hooks_state == "installed"
+
+
+def test_the_optional_overlay_is_silent_when_absent_and_read_when_present(tmp_path):
+    """`.claude/settings.local.json` is optional by design, so its absence says
+    nothing and must produce no line — while a registration written there is
+    still the adopter's live registration and gets the same check. Both
+    directions, because either alone passes with the surface deleted (panel,
+    correctness lens)."""
+    root = _fake_repo(tmp_path)
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude',
+    )
+    _write(root / HOOK_REL, "print('hook')\n")
+
+    silent = kit_doctor.inspect_registrations(root, "scripts")
+    assert [s for s in silent if s.surface == ".claude/settings.local.json"] == []
+
+    _registration(
+        root, ".claude/settings.local.json",
+        'python3 "$CLAUDE_PROJECT_DIR/scripts/hooks/gone.py" --runtime claude',
+    )
+    _write(root / "scripts" / "hooks" / "gone.py", "print('x')\n")
+    _registration(
+        root, ".claude/settings.local.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}.moved" --runtime claude',
+    )
+
+    read = kit_doctor.inspect_registrations(root, "scripts")
+    overlay = [s for s in read if s.surface == ".claude/settings.local.json"]
+    assert [(s.state, s.detail) for s in overlay] == [("broken", f"{HOOK_REL}.moved")]

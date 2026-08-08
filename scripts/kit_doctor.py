@@ -849,7 +849,14 @@ _ROOT_PLACEHOLDERS: tuple[str, ...] = (
 )
 
 
-def _hook_commands(node: object) -> list[str]:
+# Deep enough for any registration a runtime documents (the deepest real shape
+# is event -> matcher entry -> hooks list -> hook object, four levels), shallow
+# enough that a degenerate document cannot exhaust the interpreter's stack. The
+# walk below is the one place this module recurses over adopter-supplied data.
+_MAX_REGISTRATION_DEPTH = 64
+
+
+def _hook_commands(node: object, depth: int = 0) -> list[str]:
     """Every ``command`` string anywhere in a registration document.
 
     A recursive walk rather than a path lookup into `hooks.PostToolUse[…]`:
@@ -857,34 +864,58 @@ def _hook_commands(node: object) -> list[str]:
     already a second one), and a lookup that knows only the events the kit ships
     today would silently stop seeing a registration the day one is added — which
     is precisely the class of blindness this check exists to remove.
+
+    Depth-capped, because the recursion is over a file the adopter owns and the
+    parse above it already promises to degrade rather than abort. A valid but
+    degenerately nested document (10,000 levels of `[[[…]]]`) raised
+    `RecursionError` straight out of `inspect()` — a traceback instead of the
+    per-file `unreadable` this module states as its own rule two functions up
+    (panel, adversarial lens, PR #389).
     """
+    if depth > _MAX_REGISTRATION_DEPTH:
+        return []
     found: list[str] = []
     if isinstance(node, dict):
         command = node.get("command")
         if isinstance(command, str):
             found.append(command)
         for value in node.values():
-            found.extend(_hook_commands(value))
+            found.extend(_hook_commands(value, depth + 1))
     elif isinstance(node, list):
         for value in node:
-            found.extend(_hook_commands(value))
+            found.extend(_hook_commands(value, depth + 1))
     return found
 
 
+_TOKEN_DELIMITERS = " \t\"'="
+
+
 def _script_token(command: str, name: str) -> str | None:
-    """The path token ending in `name` inside a shell command, or None.
+    """The WHOLE path token containing `name` inside a shell command, or None.
 
     Delimited by whitespace and shell quoting rather than parsed: the value is
     one argument of a command line the kit does not own the shape of, and the
     only thing being extracted is the path.
+
+    Both ends, and the right end is the one that was missing. Stopping at
+    `index + len(name)` truncated a *suffixed* path back to the kit's own
+    filename: `…/pr_followup_hook.py.disabled` — the most ordinary way anyone
+    takes a hook out of rotation — became `…/pr_followup_hook.py`, which exists,
+    so the check reported `✓ … resolves` for a registration invoking a file that
+    is not there. That is #379's own failure mode manufactured by #379's fix,
+    and worse than the silence it replaced, because it asserts a specific
+    falsehood confidently (panel, adversarial lens, PR #389).
     """
     index = command.find(name)
     if index < 0:
         return None
     start = index
-    while start > 0 and command[start - 1] not in " \t\"'=":
+    while start > 0 and command[start - 1] not in _TOKEN_DELIMITERS:
         start -= 1
-    return command[start : index + len(name)]
+    end = index + len(name)
+    while end < len(command) and command[end] not in _TOKEN_DELIMITERS:
+        end += 1
+    return command[start:end]
 
 
 def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStatus]:
@@ -907,11 +938,18 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
             continue
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError, RecursionError) as exc:
             # Same degrade-don't-abort rule the baseline read follows: a
             # registration file this run could not parse is reported, never
             # raised. A diagnostic that dies on one malformed file tells the
             # adopter nothing about the other thirty-six.
+            #
+            # `RecursionError` belongs in this list and was the omission: a
+            # VALID but degenerately nested document (thousands of `[[[…]]]`)
+            # exhausts the stack inside `json.loads` itself, and the walk below
+            # is capped for the same reason. Both were reachable, and both
+            # produced a traceback where this line promises a report (panel,
+            # adversarial lens, PR #389).
             statuses.append(RegistrationStatus(runtime, surface, "unreadable", str(exc)))
             continue
         found: list[RegistrationStatus] = []
