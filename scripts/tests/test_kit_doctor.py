@@ -3417,3 +3417,68 @@ def test_the_inline_rev_parse_form_is_read_as_the_root(tmp_path):
     codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
 
     assert [(s.state, s.detail) for s in codex] == [("resolves", HOOK_REL)]
+
+
+@pytest.mark.parametrize(
+    "label,command",
+    [
+        # The shape `init.sh` prints: the whole path inside one pair of quotes.
+        ("fully quoted", 'python3 "$CLAUDE_PROJECT_DIR/{rel}" --runtime claude'),
+        # Standard POSIX shell: quote only what needs it. Shell-identical to the
+        # form above, and the delimiter walk cut it at the closing quote — the
+        # remainder began with `/`, so it was read as an ABSOLUTE path, checked
+        # at the filesystem root and reported NO SUCH FILE with exit 1 on a
+        # healthy install (panel, adversarial lens, delta round 4).
+        ("variable quoted, suffix bare", 'python3 "$CLAUDE_PROJECT_DIR"/{rel} --runtime claude'),
+        # No quoting at all.
+        ("unquoted", "python3 $CLAUDE_PROJECT_DIR/{rel} --runtime claude"),
+        # Assignment form: the word is `HOOK=<path>`, and the path is what is
+        # being asked about.
+        ("assigned to a variable", 'HOOK="$CLAUDE_PROJECT_DIR/{rel}"; exec python3 "$HOOK"'),
+    ],
+)
+def test_every_shell_quoting_of_the_same_path_reads_the_same(tmp_path, label, command):
+    """Four spellings a shell treats identically. A check that disagrees with
+    the shell about which characters bound a path will report a working hook as
+    dead, and this one did — twice, at opposite ends of the token."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(root, ".claude/settings.json", command.format(rel=HOOK_REL))
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [s.state for s in claude] == ["resolves"], f"{label}: {claude}"
+
+
+def test_a_quoted_absolute_path_containing_a_space_is_one_path(tmp_path):
+    """The other half of the same lexing question, and not covered by the
+    sentinel: an adopter who hardcoded an absolute path rather than using the
+    runtime's placeholder. `shlex` keeps the quoted word whole; a walk that
+    stops at any space cuts it."""
+    root = _fake_repo(tmp_path / "My Project")
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".codex/hooks.json", f'exec python3 "{root}/{HOOK_REL}" --runtime codex'
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
+
+    assert [(s.state, s.detail) for s in codex] == [("resolves", HOOK_REL)]
+
+
+def test_an_unbalanced_quote_degrades_instead_of_aborting_the_report(tmp_path):
+    """`shlex` refuses a command it cannot lex. That is a broken registration
+    line, not a reason to abort a read-only diagnostic — the same rule the parse
+    guard and the depth cap follow."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".claude/settings.json", f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL} --runtime claude'
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    claude = [s for s in statuses if s.surface == ".claude/settings.json"]
+
+    assert [s.state for s in claude] == ["resolves"]

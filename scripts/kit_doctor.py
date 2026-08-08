@@ -173,6 +173,7 @@ import ast
 import hashlib
 import json
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -912,7 +913,6 @@ def _hook_commands(node: object, depth: int = 0) -> list[str]:
     return found
 
 
-_TOKEN_DELIMITERS = " \t\"'="
 
 
 # A stand-in for the repo root that survives tokenising. NOT the root itself:
@@ -951,36 +951,62 @@ def _mark_root(command: str) -> str:
     return command
 
 
-def _script_token(command: str, name: str) -> str | None:
-    """The WHOLE path token containing `name` inside a shell command, or None.
+def _script_words(command: str) -> list[str]:
+    """The shell WORDS of a command, quoting resolved.
 
-    Delimited by whitespace and shell quoting rather than parsed: the value is
-    one argument of a command line the kit does not own the shape of, and the
-    only thing being extracted is the path.
+    A hand-rolled delimiter walk was here, and it was not shell-aware in two
+    ways that each produced a confident falsehood about a healthy install:
 
-    Both ends, and the right end is the one that was missing. Stopping at
-    `index + len(name)` truncated a *suffixed* path back to the kit's own
-    filename: `…/pr_followup_hook.py.disabled` — the most ordinary way anyone
-    takes a hook out of rotation — became `…/pr_followup_hook.py`, which exists,
-    so the check reported `✓ … resolves` for a registration invoking a file that
-    is not there. That is #379's own failure mode manufactured by #379's fix,
-    and worse than the silence it replaced, because it asserts a specific
-    falsehood confidently (panel, adversarial lens, PR #389).
+    - It treated a quote as a word boundary, so `"$root"/scripts/hooks/x.py` —
+      standard POSIX shell, quoting only the part that needs it, and identical
+      to the fully-quoted form — was cut at the closing quote. The remainder
+      began with `/`, so it was read as an ABSOLUTE path, checked at the
+      filesystem root, and reported `NO SUCH FILE` with exit 1.
+    - It stopped at any space, so a quoted literal path containing one
+      (`"/My Project/scripts/hooks/x.py"`) was cut in the middle.
+
+    `shlex` is the shell's own lexing rules and gets both right. An unbalanced
+    quote is the one thing it refuses; that is a broken registration line rather
+    than a hostile one, and splitting on whitespace is a strictly better answer
+    than aborting a read-only diagnostic (panel, adversarial lens, delta
+    rounds 3 and 4).
+
+    A leading `NAME=` is dropped so an assignment form (`HOOK="$root/…"`) yields
+    the path rather than the assignment. A path containing `=` after its last
+    separator is mangled by that; it is not a shape any shell writes willingly,
+    and the alternative loses the assignment form entirely.
     """
-    index = command.find(name)
-    # At a PATH boundary, not anywhere: `env_paths.py` contains `paths.py`, and
-    # matching mid-token judged an adopter's own file as if it were the kit's.
-    while index >= 0 and index > 0 and command[index - 1] not in "/" + _TOKEN_DELIMITERS:
-        index = command.find(name, index + 1)
-    if index < 0:
-        return None
-    start = index
-    while start > 0 and command[start - 1] not in _TOKEN_DELIMITERS:
-        start -= 1
-    end = index + len(name)
-    while end < len(command) and command[end] not in _TOKEN_DELIMITERS:
-        end += 1
-    return command[start:end]
+    try:
+        words = shlex.split(command, posix=True)
+    except ValueError:
+        words = command.split()
+    cleaned = []
+    for word in words:
+        if "=" in word:
+            word = word.rsplit("=", 1)[-1]
+        # `shlex` splits on whitespace only, so a command separator glued to the
+        # last word of a statement (`…/hook.py; exec …`) rides along; and the
+        # whitespace fallback above leaves the quotes `shlex` would have
+        # removed. Both are stripped here rather than in two places.
+        cleaned.append(word.strip("\"'").rstrip(";&|"))
+    return cleaned
+
+
+def _script_word(command: str, name: str) -> str | None:
+    """The word naming `name`, or None.
+
+    Matched on the BASENAME rather than by substring: `env_paths.py` ends with
+    `paths.py`, and matching that claimed an adopter's own file as the kit's.
+    A trailing suffix still counts — `pr_followup_hook.py.disabled` is the most
+    ordinary way to take a hook out of rotation, and a registration pointing at
+    it names a file that is not there, which is the whole question this check
+    asks.
+    """
+    for word in _script_words(command):
+        base = PurePosixPath(word).name
+        if base == name or base.startswith(name + "."):
+            return word
+    return None
 
 
 def _invocable_kit_scripts() -> set[str]:
@@ -1057,7 +1083,7 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
         for command in commands:
             expanded = _mark_root(command)
             for name in sorted(kit_scripts):
-                token = _script_token(expanded, name)
+                token = _script_word(expanded, name)
                 if token is None or token in seen:
                     continue
                 seen.add(token)
@@ -1067,7 +1093,7 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                     # from a path that was never resolved.
                     found.append(
                         RegistrationStatus(
-                            runtime, surface, "unresolvable", _script_token(command, name) or name
+                            runtime, surface, "unresolvable", _script_word(command, name) or name
                         )
                     )
                     continue
