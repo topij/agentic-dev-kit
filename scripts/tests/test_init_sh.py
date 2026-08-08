@@ -2116,7 +2116,7 @@ def test_the_codex_registration_execs_rather_than_forking_the_interpreter(
     )
 
 
-def _with_stub_git(tmp_path: Path, body: str) -> dict[str, str]:
+def _with_stub_git(tmp_path: Path, body: str) -> tuple[dict[str, str], Path]:
     """`_env` with a stub `git` first on PATH. `body` is its script body.
 
     The guard chain in the Codex registration has three clauses and real `git`
@@ -2125,15 +2125,37 @@ def _with_stub_git(tmp_path: Path, body: str) -> dict[str, str]:
     than a contrivance: each stub below corresponds to a documented git behaviour
     (a bare repo, a wrapper on an adopter's PATH) that the shipped command must
     survive.
+
+    **The witness file is what makes the stub tests non-vacuous, and it exists
+    because they were vacuous.** An adversarial lens disabled the `PATH` prepend
+    below — leaving the shipped guards intact — and both callers still passed.
+    Outside a repo, real `git rev-parse --show-toplevel` exits 128 with EMPTY
+    stdout, which at the shell level is indistinguishable from both stub
+    behaviours: "succeeds printing nothing" is what real git's failure already
+    looks like on stdout, and "fails printing a path" stops printing a path when
+    the stub never runs. So each caller's assertions held for the wrong reason and
+    nothing noticed the stub was never invoked.
+
+    The stub now creates `witness` on every call and each caller asserts it
+    exists, so a harness edit that breaks the `PATH` override — a typo, a wrong
+    dict key, an ordering change — fails loudly instead of silently testing
+    nothing.
+
+    Returns `(env, witness)`. `tmp_path` is per-test, so no name needs to be
+    unique beyond it; an earlier version derived the directory name from
+    `hash(body)`, which added a collision surface for no isolation gain.
     """
-    stub_dir = tmp_path / f"stubbin-{abs(hash(body)) % 10**8}"
+    stub_dir = tmp_path / "stubbin"
     stub_dir.mkdir()
+    witness = tmp_path / "stub-git-was-invoked"
     stub = stub_dir / "git"
-    stub.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
+    # `: >` rather than `touch`: one less external binary than the code under
+    # test already depends on.
+    stub.write_text(f'#!/bin/sh\n: > "{witness}"\n{body}\n', encoding="utf-8")
     stub.chmod(0o755)
     env = _env(tmp_path)
     env["PATH"] = f"{stub_dir}{os.pathsep}{env['PATH']}"
-    return env
+    return env, witness
 
 
 def test_the_codex_registration_guards_a_git_that_fails_while_printing_a_path(
@@ -2159,7 +2181,7 @@ def test_the_codex_registration_guards_a_git_that_fails_while_printing_a_path(
     `safety-critical-changes.md` rule 3 warns specifically against trading a
     fail-closed limitation for a fail-open one. Pinning it costs one test.
     """
-    env = _with_stub_git(tmp_path, "echo /nonexistent/wrong/root\nexit 1")
+    env, witness = _with_stub_git(tmp_path, "echo /nonexistent/wrong/root\nexit 1")
 
     result = subprocess.run(
         ["sh", "-c", _codex_registration_command()],
@@ -2170,6 +2192,14 @@ def test_the_codex_registration_guards_a_git_that_fails_while_printing_a_path(
         env=env,
     )
 
+    # Before any conclusion: the stub must actually have been the `git` that ran.
+    # Real git's failure outside a repo is indistinguishable from this stub's
+    # behaviour at the shell level, so without this the assertions below hold
+    # whether or not the PATH override worked. See `_with_stub_git`.
+    assert witness.exists(), (
+        "the stub git was never invoked, so this test proves nothing about the "
+        "clause it names — the PATH override in `_with_stub_git` is broken."
+    )
     assert result.returncode == 0, (
         "git failed but printed a path, and the registration used it anyway — "
         "the first `|| exit 0` is what refuses a root git itself reported as an "
@@ -2200,7 +2230,7 @@ def test_the_codex_registration_guards_an_empty_root_that_git_reports_as_success
     the guard is ever deleted as redundant, this fails and says why.
     """
     # Succeeds, prints nothing — the one case `|| exit 0` cannot see.
-    env = _with_stub_git(tmp_path, "exit 0")
+    env, witness = _with_stub_git(tmp_path, "exit 0")
 
     result = subprocess.run(
         ["sh", "-c", _codex_registration_command()],
@@ -2211,6 +2241,12 @@ def test_the_codex_registration_guards_an_empty_root_that_git_reports_as_success
         env=env,
     )
 
+    # See the sibling test and `_with_stub_git`: without this, real git's ordinary
+    # failure satisfies the assertions below and the stub is never needed.
+    assert witness.exists(), (
+        "the stub git was never invoked, so this test proves nothing about the "
+        "clause it names — the PATH override in `_with_stub_git` is broken."
+    )
     assert result.returncode == 0, (
         "with a git that succeeds and prints nothing, the registration ran "
         "python3 against a path built from an empty string — #359's mechanism, "
