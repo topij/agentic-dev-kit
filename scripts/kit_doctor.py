@@ -173,7 +173,6 @@ import ast
 import hashlib
 import json
 import re
-import shlex
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -832,10 +831,13 @@ def sha256_of(path: Path) -> str:
 # names, not the adopter's, and there is no config key that could hold them —
 # a repo that renamed `.claude/settings.json` has no hook either way.
 #
-# The third element is whether an ABSENT file is worth a line. The overlay is
-# optional by design, so its absence says nothing; the other two absences are
-# worth stating once, because "no registration here" and "a registration that
-# does not work" look identical to an operator who never sees the hook fire.
+# The third element is whether a file with NOTHING TO SAY is worth a line —
+# both when it is absent and when it is present but registers no kit hook. The
+# overlay is optional by design, so neither says anything about the install; the
+# other two are worth stating once, because "no registration here" and "a
+# registration that does not work" look identical to an operator who never sees
+# the hook fire. (The comment named only the absent case, which is half of what
+# the flag gates — panel, correctness lens.)
 REGISTRATION_SURFACES: tuple[tuple[str, str, bool], ...] = (
     ("claude", ".claude/settings.json", True),
     ("codex", ".codex/hooks.json", True),
@@ -880,7 +882,7 @@ class _RegistrationTooDeep(Exception):
     """
 
 
-def _hook_commands(node: object, depth: int = 0) -> list[str]:
+def _hook_commands(node: object, depth: int = 0, inside_hooks: bool = False) -> list[str]:
     """Every ``command`` string anywhere in a registration document.
 
     A recursive walk rather than a path lookup into `hooks.PostToolUse[…]`:
@@ -888,6 +890,14 @@ def _hook_commands(node: object, depth: int = 0) -> list[str]:
     already a second one), and a lookup that knows only the events the kit ships
     today would silently stop seeing a registration the day one is added — which
     is precisely the class of blindness this check exists to remove.
+
+    Scoped to a `hooks` subtree, at any depth, and that scoping is load-bearing:
+    `.claude/settings.json` carries `command` strings that are not hooks at all —
+    `statusLine.command` is one — and judging those reported a repo with NO kit
+    hook registered as having a BROKEN one, exit 1, while suppressing the line
+    that would have said "none registered" (panel, adversarial lens, PR #389).
+    Keying on `hooks` rather than on the event names keeps the property that
+    made the walk worth having.
 
     Depth-capped, because the recursion is over a file the adopter owns and the
     parse above it already promises to degrade rather than abort. A valid but
@@ -903,13 +913,13 @@ def _hook_commands(node: object, depth: int = 0) -> list[str]:
     found: list[str] = []
     if isinstance(node, dict):
         command = node.get("command")
-        if isinstance(command, str):
+        if inside_hooks and isinstance(command, str):
             found.append(command)
-        for value in node.values():
-            found.extend(_hook_commands(value, depth + 1))
+        for key, value in node.items():
+            found.extend(_hook_commands(value, depth + 1, inside_hooks or key == "hooks"))
     elif isinstance(node, list):
         for value in node:
-            found.extend(_hook_commands(value, depth + 1))
+            found.extend(_hook_commands(value, depth + 1, inside_hooks))
     return found
 
 
@@ -951,60 +961,99 @@ def _mark_root(command: str) -> str:
     return command
 
 
-def _script_words(command: str) -> list[str]:
-    """The shell WORDS of a command, quoting resolved.
+def _script_words(command: str) -> tuple[bool, list[str]]:
+    """The shell WORDS of a command, quoting resolved and root placeholders
+    marked — one pass, because in a shell those two things are the same pass.
 
-    A hand-rolled delimiter walk was here, and it was not shell-aware in two
-    ways that each produced a confident falsehood about a healthy install:
+    A hand-rolled delimiter walk was here first, and it was not shell-aware in
+    ways that each produced a confident falsehood about a healthy install: it
+    treated a quote as a word boundary, so `"$root"/scripts/hooks/x.py` — quoting
+    only the part that needs it, and identical to the fully-quoted form — was cut
+    at the closing quote and the remainder read as an absolute path; and it
+    stopped at any space, cutting `"/My Project/scripts/hooks/x.py"` in half.
 
-    - It treated a quote as a word boundary, so `"$root"/scripts/hooks/x.py` —
-      standard POSIX shell, quoting only the part that needs it, and identical
-      to the fully-quoted form — was cut at the closing quote. The remainder
-      began with `/`, so it was read as an ABSOLUTE path, checked at the
-      filesystem root, and reported `NO SUCH FILE` with exit 1.
-    - It stopped at any space, so a quoted literal path containing one
-      (`"/My Project/scripts/hooks/x.py"`) was cut in the middle.
+    `shlex` is the shell's own lexer, and neither of its modes fits: `posix=True`
+    discards the quoting this needs (see below), and `posix=False` ENDS a word at
+    a closing quote, splitting exactly the shape the walk got wrong. So the scan
+    is here, and it is small: split on unquoted whitespace, and mark placeholders
+    only in segments the shell would expand.
 
-    `shlex` is the shell's own lexing rules and gets both right. An unbalanced
-    quote is the one thing it refuses; that is a broken registration line rather
-    than a hostile one, and splitting on whitespace is a strictly better answer
-    than aborting a read-only diagnostic (panel, adversarial lens, delta
-    rounds 3 and 4).
+    **Single quotes suppress expansion**, and that is the load-bearing half:
+    `'$CLAUDE_PROJECT_DIR/hook.py'` is a literal path containing a `$`, a
+    registration that can never fire. Marking the root there anyway reported that
+    dead hook as `resolves`, exit 0 — the exact failure #379 exists to catch
+    (panel, adversarial lens, PR #389).
 
-    A leading `NAME=` is dropped so an assignment form (`HOOK="$root/…"`) yields
-    the path rather than the assignment. A path containing `=` after its last
-    separator is mangled by that; it is not a shape any shell writes willingly,
-    and the alternative loses the assignment form entirely.
+    A backslash escapes the next character outside single quotes, so an escaped
+    space keeps a word whole. An unterminated quote leaves its tail literal,
+    which is the conservative reading of a line no shell would run.
     """
-    try:
-        words = shlex.split(command, posix=True)
-    except ValueError:
-        words = command.split()
+    words: list[str] = []
+    parts: list[str] = []
+    buf: list[str] = []
+    state: str | None = None
+    escaped = False
+
+    def flush(expandable: bool) -> None:
+        if buf:
+            segment = "".join(buf)
+            parts.append(_mark_root(segment) if expandable else segment)
+            buf.clear()
+
+    def end_word() -> None:
+        flush(state != "'")
+        if parts:
+            words.append("".join(parts))
+            parts.clear()
+
+    for char in command:
+        if escaped:
+            buf.append(char)
+            escaped = False
+        elif state != "'" and char == "\\":
+            escaped = True
+        elif state is None and char in " \t\n\r":
+            end_word()
+        elif state is None and char in "\"'":
+            flush(True)
+            state = char
+        elif state == char:
+            flush(state == '"')
+            state = None
+        else:
+            buf.append(char)
+    end_word()
+
     cleaned = []
     for word in words:
         if "=" in word:
+            # An assignment form (`HOOK="$root/…"`) should yield the path.
             word = word.rsplit("=", 1)[-1]
-        # `shlex` splits on whitespace only, so a command separator glued to the
-        # last word of a statement (`…/hook.py; exec …`) rides along; and the
-        # whitespace fallback above leaves the quotes `shlex` would have
-        # removed. Both are stripped here rather than in two places.
-        cleaned.append(word.strip("\"'").rstrip(";&|"))
-    return cleaned
+        # A separator glued to the last word of a statement (`…/hook.py; exec …`).
+        cleaned.append(word.rstrip(";&|"))
+    # `state` is still set only when a quote never closed. A shell would refuse
+    # the line too, so the honest report is that this command was not judged —
+    # not that it registers nothing, and not that its path is missing.
+    return state is None, cleaned
 
 
-def _script_word(command: str, name: str) -> str | None:
+def _match_word(words: list[str], name: str) -> str | None:
     """The word naming `name`, or None.
 
     Matched on the BASENAME rather than by substring: `env_paths.py` ends with
     `paths.py`, and matching that claimed an adopter's own file as the kit's.
-    A trailing suffix still counts — `pr_followup_hook.py.disabled` is the most
-    ordinary way to take a hook out of rotation, and a registration pointing at
-    it names a file that is not there, which is the whole question this check
-    asks.
     """
-    for word in _script_words(command):
+    for word in words:
         base = PurePosixPath(word).name
-        if base == name or base.startswith(name + "."):
+        if base == name:
+            return word
+        # One extra extension, and no more: `pr_followup_hook.py.disabled` is a
+        # hook taken out of rotation and worth reporting; a log path like
+        # `/tmp/pr_followup_hook.py.out.log` is an unrelated ARGUMENT, and
+        # claiming it as a dead kit hook produced `✗ NO SUCH FILE` and exit 1 for
+        # a repo that had registered nothing at all (panel, adversarial lens).
+        suffix = base[len(name) + 1 :] if base.startswith(name + ".") else None
+        if suffix and "." not in suffix:
             return word
     return None
 
@@ -1081,9 +1130,18 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
         found: list[RegistrationStatus] = []
         seen: set[str] = set()
         for command in commands:
-            expanded = _mark_root(command)
+            # Marking happens per WORD, inside `_script_words`, because whether a
+            # placeholder expands depends on the quoting around it.
+            lexed, words = _script_words(command)
+            if not lexed:
+                found.append(
+                    RegistrationStatus(
+                        runtime, surface, "unresolvable", "unbalanced quote — not lexable"
+                    )
+                )
+                continue
             for name in sorted(kit_scripts):
-                token = _script_word(expanded, name)
+                token = _match_word(words, name)
                 if token is None or token in seen:
                     continue
                 seen.add(token)
@@ -1093,7 +1151,7 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                     # from a path that was never resolved.
                     found.append(
                         RegistrationStatus(
-                            runtime, surface, "unresolvable", _script_word(command, name) or name
+                            runtime, surface, "unresolvable", token.replace(_ROOT_SENTINEL, "$ROOT")
                         )
                     )
                     continue
