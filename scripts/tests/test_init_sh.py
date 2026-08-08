@@ -1430,7 +1430,11 @@ def test_gitignore_entries_added_exactly_once_across_reruns(tmp_path: Path) -> N
 
     lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
     for entry in (
-        "state/",
+        # Anchored for the same reason `/reports/` is: the kit's state root is
+        # always <repo-root>/state, and unanchored it reached a `src/state/`
+        # created after the install, which no tracked-file guard can see (#385,
+        # panel round 2).
+        "/state/",
         ".devkit_state_root",
         ".claude/worktrees/",
         # Anchored (#385). Unanchored it matched a `reports` directory at any
@@ -1623,20 +1627,74 @@ def test_a_policy_entry_is_skipped_when_tracked_files_would_be_hidden(
 ) -> None:
     """The second disagreement: no rule, but the repo already tracks files the
     entry would ignore. `state/` rather than reports/ on purpose — the class is
-    not about one path, and `state/` is a common source directory name, so the
-    unanchored kit line reaches a JS repo's `src/state/` too."""
+    not about one path — and at the ROOT, because that is what the anchored
+    entry can still reach: an adopter whose own `state/` directory holds
+    committed fixtures."""
     repo = _fixture(tmp_path, config=shipped_config(), git=True)
-    _write(repo, "src/state/index.ts", "export const x = 1\n")
-    _commit(repo, "src/state/index.ts")
+    _write(repo, "state/fixtures.json", "{}\n")
+    _commit(repo, "state/fixtures.json")
 
     result = _run_init(repo)
 
     lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
-    assert "state/" not in lines
-    assert "tracks files that 'state/' would ignore" in result.stdout
+    assert "/state/" not in lines
+    assert "tracks files that '/state/' would ignore" in result.stdout
     # The skip is per-entry, not a bail-out: everything the repo does not
     # disagree with is still seeded.
     assert "/reports/" in lines
+
+
+def test_the_seeded_state_line_cannot_reach_a_nested_state_directory(
+    tmp_path: Path,
+) -> None:
+    """The half the tracked-files guard cannot cover, and the reason `state/`
+    is anchored too (panel, adversarial lens, demonstrated live).
+
+    That guard only sees what is ALREADY committed. A JS repo that creates
+    `src/state/` AFTER running `init.sh` was silently caught by the unanchored
+    line — and `git add -A` skips an ignored path with no output at all, so the
+    file simply stops appearing in `git status`. The kit's own state root is
+    always `<repo-root>/state`, so the anchor gives up nothing."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
+
+    _run_init(repo)
+
+    # Created after the installer ran — the case the guard structurally cannot see.
+    _write(repo, "src/state/index.ts", "export const x = 1\n")
+    _write(repo, "state/sandbox.json", "{}\n")
+
+    def ignored(rel: str) -> bool:
+        return (
+            subprocess.run(
+                ["git", "check-ignore", "-q", rel],
+                cwd=repo,
+                env=_env(repo.parent),
+                capture_output=True,
+            ).returncode
+            == 0
+        )
+
+    assert ignored("state/sandbox.json"), "the kit's own state sandbox is not ignored"
+    assert not ignored("src/state/index.ts"), (
+        "the seeded line reached a nested state directory:\n"
+        + (repo / ".gitignore").read_text(encoding="utf-8")
+    )
+
+
+def test_an_indented_legacy_line_is_reported_as_the_kits_own_not_as_a_policy(
+    tmp_path: Path,
+) -> None:
+    """`.gitignore` is hand-edited, and an indented line is ordinary. The
+    debris check matched exactly while the rule check trimmed blanks, so an
+    indented `reports/` was reported as the adopter's own policy — the two
+    messages swapped (panel, adversarial lens)."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
+    (repo / ".gitignore").write_text("  reports/\n", encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert "seeded by an older" in result.stdout
+    assert "already rules on '/reports/'" not in result.stdout
 
 
 def test_hygiene_entries_are_seeded_even_when_the_repo_disagrees(
@@ -1680,7 +1738,7 @@ def test_policy_seeding_survives_a_tree_that_is_not_a_git_repo(tmp_path: Path) -
     _run_init(repo)
 
     lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
-    for entry in ("state/", ".devkit_state_root", ".claude/worktrees/", "/reports/"):
+    for entry in ("/state/", ".devkit_state_root", ".claude/worktrees/", "/reports/"):
         assert entry in lines
 
 
@@ -1750,7 +1808,7 @@ def test_gitignore_append_preserves_a_file_with_no_trailing_newline(tmp_path: Pa
 
     lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert ".env" in lines, f".env was corrupted: {lines}"
-    assert "state/" in lines
+    assert "/state/" in lines
     assert not any(line.startswith(".env") and line != ".env" for line in lines), lines
 
 

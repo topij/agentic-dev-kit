@@ -1567,7 +1567,11 @@ add_policy_ignore_line() {
   # edits nothing.
   case "$entry" in
     /*)
-      if grep -qxF "${entry#/}" .gitignore 2>/dev/null; then
+      # Leading blanks tolerated: `_ignore_rule_exists_for` below trims them, so
+      # an indented legacy line would otherwise skip this branch and be reported
+      # as the adopter's own policy — the two messages swapped, for a file that
+      # is edited by hand and sometimes indented (panel, adversarial lens).
+      if grep -qE "^[[:space:]]*$(printf '%s' "${entry#/}" | sed 's/[.[\*^$\/]/\\&/g')[[:space:]]*$" .gitignore 2>/dev/null; then
         echo "note: .gitignore carries an unanchored '${entry#/}' line, seeded by an older"
         echo "      init.sh — so '$entry' was NOT added ($what). The unanchored form ignores"
         echo "      a directory of that name at ANY depth, and git does not descend into an"
@@ -1593,7 +1597,22 @@ add_policy_ignore_line() {
   add_ignore_line "$entry"
 }
 
-add_policy_ignore_line "state/" "the state sandbox"
+# ANCHORED for the same reason `/reports/` is, and the panel is why it is here:
+# the tracked-files guard alone only sees what is ALREADY committed, so an
+# unanchored `state/` still silently swallows a `src/state/` a JS repo creates
+# LATER — demonstrated live, `git add -A` skipping the new file with no output.
+# The kit's own state root is always <repo-root>/state (scripts/lib/state_paths
+# resolves `$DEVKIT_ROOT/state` or `<repo-root>/state`, never a nested one), so
+# the anchor costs nothing there.
+#
+# The one shape it stops covering is a lane sandbox parked INSIDE the repo —
+# `dev_session.sh` puts sessions beside the repo by default, and an operator who
+# repoints `$DEVKIT_SESSIONS_DIR` inward already has that directory's `wt/` and
+# `activate` untracked and unignored, so this makes an existing partial
+# situation honest rather than creating one. The `.devkit_state_root` marker
+# below stays unanchored precisely because it is written AT a lane worktree
+# root, wherever that is.
+add_policy_ignore_line "/state/" "the state sandbox"
 add_policy_ignore_line ".devkit_state_root" "the sandbox marker"
 # A runtime that isolates review lenses by worktree may place one here. The
 # "No writes in the tree you were given" contract item of fallback-review-panel.md
