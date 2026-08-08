@@ -14,17 +14,99 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-08 — **the pre-Phase-3 work cs-toolkit's Phase 0 surfaced is nearly
-done: `#360` and `#359` are done, `#358` is what remains**, and the friction inbox has
-since been graduated to the tracker (`#375`), so it holds no un-graduated entries. Every gate
-`docs/kit-convergence-plan.md` named for Phase 3 had already cleared (Phase 0 `2ab63d255`,
-the fixer predicate `bfafe13b7`, kit `#285` / `#286` / `#297`); the ordering that mattered
-was the work the Phase 0 run itself found, because Phase 3 *is* the upgrade and `init.sh`
-is what performs it. `#304` was dropped from that order on evidence — it needs a line-1
-kit-own marker to act on and cs-toolkit's entry points carry none, so it blocks nothing
-there.
+Last updated: 2026-08-09 — **cs-toolkit's Phase 3 is merged and its findings are worked
+back into the kit.** `#385` (the one with an adopter blocked behind it), `#382`, `#383`,
+`#379`, `#381` and both halves of `#386` are closed; `#380` is blocked on a Codex CLI this
+host cannot start, and `#388` and `#392` are new. The adopter can take `init.sh` again —
+`#385` carries the measured before/after and the refresh steps. The convergence plan now
+records Phase 3 as done and carries the two defects a session following it found.
 
-## Latest session — 2026-08-08 (the tenth triage sweep, and what re-derivation changed)
+## Latest session — 2026-08-09 (the adopter's Phase 3 findings, worked back into the kit)
+
+**Theme —** cs-toolkit's Phase 3 filed seven kit issues and left an adopter holding
+`init.sh`. Six were worked and four PRs merged; the seventh needs a runtime this host
+cannot start. The panel found more than the issues did.
+
+- **`#387` merged (`ccbed71`) — `#385`, the blocking one.** `init.sh` no longer imposes a
+  `reports/` ignore. The seeding splits into *hygiene* (unconditional, always-wins — a
+  leak helps nobody) and *policy*, which declines to write when the repo disagrees: it
+  already tracks files the entry would hide (asked of `git ls-files -i -c --exclude=`, so
+  git's own matcher answers) or already carries a rule for that path. `state/` and
+  `reports/` are anchored too.
+- **`#389` — `#379` and `#381`.** `kit_doctor` reports whether each hook registration
+  RESOLVES, per surface, and only a dead path reaches the exit code. Not by hash: those
+  files are the adopter's, which is why `init.sh` only prints them (`#303`), and hashing
+  would report every adopter `locally-edited` forever — `#286`'s failure. A declined
+  `pre-push` now reads `· declined (recorded in not_installed)`.
+- **`#390` merged (`d2cd509`) — `#382`.** `adopt.md` and `upgrade.md` stopped telling
+  operators the installer is manifest-untracked. The convergence plan records Phase 3 as
+  merged and carries its two defects: a phase cs-toolkit does not declare, and SessionStart
+  wiring assigned to both the kit and the adopter.
+- **`#391` merged (`99ef579`) — `#383`, and the `init.sh` half of `#386`.** The installer's
+  comment scanner no longer closes a double-quoted scalar at an escaped quote, which had
+  `set_field` re-attaching a fragment of the adopter's own value as a comment.
+- **Filed: `#388`** (no state for a kit-owned file installed but PINNED — `--record-install`
+  refuses it and drops the whole `not_installed` declaration; reproduced against a clone of
+  the adopter), **`#392`** (a registration built from an unknown shell variable is
+  `unresolvable` and never reaches the exit code) and **`#393`** (a test that depends on
+  `json.loads` raising `RecursionError`, which stops being true on 3.14). Occurrence
+  comment on `#88`.
+- **`#380` is blocked, not skipped.** `codex-cli 0.42.0` here cannot start a session
+  (`400`, "requires a newer version of Codex"), so the fire-check is still owed. The
+  `matcher` half is settled: the one real `SessionStart` registration on this machine
+  carries **no `matcher` key at all**, against what the plan assumed from documentation.
+
+**Learned**
+
+- **A regression test can be masked by its own fixture.** `#387`'s flagship test was
+  written to catch the anchoring defect and did not: its fixture pre-seeded a rule that
+  made the guard return before anchoring was ever exercised, so reverting the fix left it
+  green. Found by a lens mutating the line, not by reading. Three more of the same shape
+  followed in one session — a property named in a comment and pinned by nothing — which is
+  a pattern, not four accidents.
+- **A liveness check that lies is worse than one that stays silent.** `#389`'s first
+  version reported `✓ resolves` for `…/pr_followup_hook.py.disabled`, because the token
+  stopped at the kit's filename and the real file exists. Renaming is the most ordinary way
+  to disable a hook. Before the feature the doctor said nothing; with the bug it said
+  something false, confidently — `#379`'s own failure mode, manufactured by `#379`'s fix.
+- **Two rounds later the same guess failed at the other end**, and that is the more useful
+  lesson: a hand-rolled scan of a shell command will keep disagreeing with the shell, in
+  shapes nobody enumerates in advance. The fix that held was deleting the guess — `shlex`
+  is the shell's own lexer and it is in the standard library. Patching the instance twice
+  cost two rounds; replacing the mechanism cost one.
+- **Volatile figures went stale three times in one session**, each caught by a lens: a
+  tracked-file count, a grep count, and a doctor report that this session's own manifest
+  bump falsified. Every one is now the command that produces it.
+- **The adopter's review bot is not the only free audit.** CodeRabbit was rate-limited on
+  all four PRs, so the panel was the gate throughout — 15 lens runs across 4 PRs and 8
+  rounds. It found one HIGH, five MEDIUMs and the masked-fixture class the bot has never
+  reported.
+
+**Open, and owned by nothing yet**
+
+- **`#389` is the one PR still in flight.** Six panel rounds, every one finding
+  something real, and the severity rose rather than fell: two HIGHs at the end, both
+  the same class — a hand-rolled delimiter walk disagreeing with the shell about
+  where a path ends, first losing the end of a token (a renamed hook reporting
+  `resolves`), then the beginning (a repo path with a space reporting a working hook
+  as `NO SUCH FILE`, exit 1). The second one is fixed at the class rather than the
+  instance: the walk is gone and `shlex` does the lexing. **If it is still open,
+  read the PR comments before touching the branch** — each round's finding and its
+  mutation evidence is there.
+- **`#380` needs a host with a working `codex-cli`.** Nothing else unblocks it.
+- **`#388` is the next adopter-facing gap**: cs-toolkit hand-maintains a manifest entry
+  because of it, and re-running `--record-install` there silently undoes that.
+- **`#358` remains untouched**, as it was last session.
+
+▶ Next: **`#388`, then `#363`.** `#388` has a named consumer — cs-toolkit will hit it the
+next time it pins a file — and its shape is decided (a third state beside `files` and
+`not_installed`, plus a refusal that does not take the declared scope with it). `#363` is
+the Claude registration hardening the adopter carried rather than forking, and `#389` has
+just added the instrument that would report it dead.
+
+______________________________________________________________________
+
+## Session — 2026-08-08 (the tenth triage sweep, and what re-derivation changed)
 
 **Theme —** The friction inbox graduated to the tracker. The sweep's value was in the
 routing rather than the volume: reading the tracker before drafting changed two of the
@@ -237,158 +319,6 @@ The block above is left as written: it is an accurate record of what was true th
 and its "still leaves this repo" reading was correct until Phase 0 merged that evening.
 The live next step is in the 2026-08-08 trail at the top of this file — the three kit
 items Phase 0 surfaced (`#360`+`#304`, `#359`, `#358`), then Phase 3.
-
-______________________________________________________________________
-
-## Session — 2026-08-07 (`#305`, and a vice removed at the pricing side)
-
-**Theme —** The review sprint resumed where `#209`'s decision left it. The panel's
-stopping rule was the picked hard item; the operator steered the design live and chose
-its shape; the change merged the same session.
-
-- **PR `#349` merged (`0e343c9`).** A record-prose-only fix-round delta on a change under
-  `safety-critical-changes.md` now takes **both** configured lenses over the delta — the
-  dual form — instead of a full panel at the new head, with rule 2 kept by composition
-  and a stated precondition: a full-panel review must be standing, so a Degraded-mode
-  initial review leaves nothing to compose with. The loop's three terminal states are
-  named, and a deletion's prose class is set by what the deleted text was doing where it
-  stood. The evidence companion buries the old categorical rule with the `#328` pricing,
-  the rejected severity-floor alternative, and the deferred dual-everywhere question.
-  Verified with `make test` in `/Users/topi/Coding/agentic-dev-kit`: 1006 passed, at both
-  heads.
-- **`#337` and `#334` merged before this session opened** (`fddbd31`, `b28df6b`), with no
-  session block of their own; recorded here so the trail has it. On `#349` the scoped
-  trigger produced one PR run and one `main` run, both green.
-- **CodeRabbit reviewed both heads of `#349`** and went rate-limited only after coverage
-  stood, so no panel was owed. Every finding is disposed on the PR's threads; the one not
-  fixed is deferred to `#194` with the bot's agreement. Another data point for the
-  friction inbox's bot-quota decision, still waiting on `triage-friction-log`.
-- **Filed this session: `#350`.** Comments on `#305` (the disposition) and `#194` (the
-  dual form sharpens its receipt-field ask).
-
-**Learned**
-
-- **The bot found the design's own missing precondition.** The dual form's composition
-  argument silently assumed a full-panel initial review; the author had reviewed the
-  argument and missed it. Principle #5 earning its keep on the doctrine that implements
-  it.
-- **Fix the price, not the duty.** The durable resolution of `#305`'s vice left
-  never-log-regressions untouched and moved what acting on it costs. The rejected
-  alternative — a severity floor on the duty — is in the companion so it is not
-  re-proposed.
-- **`mergeable` has no honest receipt for a bot-reviewed head** — all three literals
-  describe fallback passes, so the loop's best case (bot quota present, full coverage)
-  wedges the autonomous merge path. `#350`.
-
-**Decided this session (operator, live)**
-
-- **The dual-lens form**, over a severity floor and over record-only; **the ordinary
-  class stays single-lens**, with `#268`'s disjointness evidence recorded on `#305` as
-  the open question.
-- **Merge `#349`** — operator-merge per the doctrine's own closing rule applied to
-  itself.
-
-**Open, and owned by nothing yet**
-
-- **The critical path leaves this repo**: Phase 3 needs cs-toolkit's Phase 0 and its
-  fixer predicate (`done` → `converged`), both that repo's PRs, per
-  `docs/kit-convergence-plan.md`. Every kit-side gate is merged.
-- **The friction inbox is over budget and its triage is overdue** by its own entries;
-  graduating it needs tracker writes and operator approval (`triage-friction-log`).
-- **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
-- **Carried forward:** `#350`, `#304`, `#291`, `#243`, `#273`, `#290`, `#283`, `#287`,
-  `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
-  `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
-
-▶ Next: **cs-toolkit's Phase 0 + fixer predicate** — that repo's PRs, per
-`docs/kit-convergence-plan.md`'s agreed sequence; read its "The move is not a file move"
-paragraph before starting. Kit-side in parallel: `#211` (populate `--carry-forward` for
-fix rounds — the review sprint's named next move), and the overdue `triage-friction-log`
-sweep.
-
-______________________________________________________________________
-
-## Session — 2026-08-06 (`#330`, and a ticket's own objection that did not survive being run)
-
-**Theme —** The fix was one flag. The work was establishing that the flag was the right one,
-against a ticket that argued it was not — and then discovering that moving a file with no
-content change still regresses it.
-
-- **PR `#337` is open, reviewed, and deliberately unmerged.** `/upgrade` Step 2 now runs
-  `./init.sh --no-clobber`, so a marked-but-edited file is declined instead of rendered over
-  with no backup. Verified with `make test` in `/Users/topi/Coding/agentic-dev-kit`, on that
-  PR's branch — the figure is not restated here, and the branch has to be named because this
-  record sits on a different one where the same command in the same directory prints a
-  different number.
-- **`adopt` and `upgrade` are now shared workflow definitions**, with thin bindings per runtime
-  and `KIT_OWNED` entries; Codex gains `$adopt` and `$upgrade`, which it had not had. The move
-  was required — `#330`'s fix lands in `upgrade.md` and would otherwise have reached one
-  runtime — but the reason worth keeping is separate: `upgrade.md` Step 4 tells an adopter to
-  keep their own copy of a runtime *adapter*, so while these two were adapters, no kit fix to
-  the adopt or upgrade procedure could reach anyone running it.
-- **Filed this session:** `#338`, `#339`, `#340`, `#341`, `#342`, `#343`. Occurrence comments
-  on `#326` and `#323`, and a correction on `#330` recording that its objection to the chosen
-  option was measurably wrong.
-
-**Learned**
-
-- **A ticket's stated regression can be an artefact of conflating two states.** `#330` argued
-  `--no-clobber` would stop a partially-adopted repo receiving `AGENTS.md`. Two `git init`
-  sandboxes showed the flag narrows seeding to *absent* targets, and absent is exactly that
-  case — it still seeds. The real cost is one row narrower and is announced twice per run.
-  The three-option choice the ticket declined to make was decided by running it, not by
-  re-reading it.
-- **A byte-identical move still regresses.** `adopt.md`'s link to
-  `adopting-into-a-linted-repo.md` was correct from `.claude/commands/` and dangling from
-  `docs/agentic-dev-kit/workflows/`. Round 1 of the panel verified the move by diffing
-  extracted bodies and could not have caught it: correctness depended on the file's depth, and
-  the bytes are identical in both places. `#340` is the missing check; `#216` is why one was
-  built and reverted before.
-- **A hardcoded list in a test narrows coverage without failing.**
-  `test_codex_skill_adapters_are_valid_and_share_workflows` iterates a tuple that was the
-  complete set until this PR added two skills to it. An unnamed skill is unchecked, not red.
-  `#341`. A lens then mutation-tested it in both directions to show the gap was real.
-- **The bot's own findings were mostly older than the PR.** Four of its six were pre-existing
-  in a file that had simply never been read by a reviewer — as a `.claude/commands/` adapter it
-  sat outside every check the repo runs *and* outside what `/upgrade` refreshes. `#342`, `#343`.
-  A single bot pass over a long document is a lower bound, not an audit.
-
-**Decided this session (operator-absent, by doctrine)**
-
-- **Option 1 of `#330`'s three**, with the pristine-skeleton cost stated in the workflow rather
-  than buried, and option 3 filed as `#338` with the versioning problem that stops it being a
-  byte-compare.
-- **File rather than fix**, for every finding verified pre-existing. `safety-critical-changes.md`
-  rule 3 is explicit that a fix round addresses what the review found, and this PR gates a
-  destructive operation.
-- **Do not self-merge.** That same doctrine's closing line makes changes it governs
-  operator-merge, "even when green and clean". This is why `#337` is held; the outage is a
-  second, independent reason.
-
-**Open, and owned by nothing yet**
-
-- **`#337` and `#334` both need an operator merge and neither has CI.** Both branches have zero
-  workflow runs. **They are not queued — the push events were dropped**, so Actions recovering
-  will not create them: the incident open since 15:22Z later throttled webhooks to a fraction of
-  deliveries, and runs on other branches completed well into that window, which is what makes
-  "still queued" the wrong read. `#345` has the measurement and the recovery route, and the
-  route matters: a new commit would re-trigger CI and **invalidate the review receipt bound to
-  the reviewed sha**, while closing and reopening the PR re-fires `pull_request` without moving
-  the head. The panel substituted for what CI would confirm — each lens ran the suite in its own
-  isolated clone — which is evidence, not a green tick.
-- **The friction inbox is over its budget** and this session widened it. Not swept here;
-  graduating it needs tracker writes and operator approval, which is `triage-friction-log`'s job.
-- **`#342` is the largest of the new ones**: three Major correctness gaps in `adopt.md`, now
-  reachable and refreshable for the first time.
-- **Carried forward:** `#304`, `#291`, `#243`, `#273`, `#290`, `#283`, `#287`, `#292`, `#248`,
-  `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`, `#203`,
-  `#190`, `#187`, `#124`, `#169`, `#143`.
-
-▶ Next: **merge `#337`, then `#334`, once Actions is back** — both are operator calls, `#337`
-by the safety doctrine rather than only by the outage. Read `#337`'s round-3 comment first: it
-records what the panel substituted for CI and what the receipt does *not* cover. After that the
-substance is unchanged from last session — **cs-toolkit's Phase 0 and its fixer predicate**
-gate Phase 3, and are that repo's PRs.
 
 ______________________________________________________________________
 
