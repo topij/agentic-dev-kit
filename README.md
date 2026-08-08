@@ -108,7 +108,7 @@ cp -r /path/to/agentic-dev-kit/. .
 `init.sh` stamps your answers into `config/dev-model.yaml`, renders the narrative
 docs and both root entry points — `AGENTS.md` and the `CLAUDE.md` that imports
 it — from `docs/templates/`, installs the
-pre-push hook, and offers five entries to `.gitignore` — `state/`, `.devkit_state_root`,
+pre-push hook, and offers five entries to `.gitignore` — `/state/`, `.devkit_state_root`,
 `.claude/worktrees/` (isolated review lenses), `*.devkit-tmp` and `/reports/` (derived
 pipeline output). Those five are *policy*, not hygiene, so each is skipped — with a
 note saying why — when your repo already carries a rule about that path or already
