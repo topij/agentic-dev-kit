@@ -925,15 +925,19 @@ def _hook_commands(node: object, depth: int = 0, inside_hooks: bool = False) -> 
 
 
 
-# A stand-in for the repo root that survives tokenising. NOT the root itself:
-# `_script_token` finds a path by walking out to the nearest whitespace, and a
-# root path containing a space — `~/My Project`, a `OneDrive - Company` sync
-# folder, a home directory built from someone's full name — truncated the token
-# at that space and reported a hook that is present and would fire as
-# `✗ NO SUCH FILE`, with exit 1. The kit's own quoting does not help: the scan
-# is a delimiter walk, not a shell parser. The same substitution also makes the
-# inline `$(git rev-parse --show-toplevel)` form safe, which contains spaces of
-# its own (panel, adversarial lens, delta round 3).
+# A stand-in for the repo root that survives word-splitting. NOT the root
+# itself: a root path containing a space — `~/My Project`, a
+# `OneDrive - Company` sync folder, a home directory built from someone's full
+# name — ended the word at that space, and the remainder, beginning with `/`,
+# was read as an absolute path and reported `✗ NO SUCH FILE` with exit 1 for a
+# hook that is present and would fire. The same substitution makes the inline
+# `$(git rev-parse --show-toplevel)` form safe, which carries spaces of its own.
+#
+# `_script_words` is where the marking now happens, per segment, because
+# quoting decides whether a placeholder expands at all — see its docstring.
+# (This comment named `_script_token`, the delimiter walk two rounds of fixes
+# ago, and described the mechanism that replaced it as the one it replaced; a
+# lens caught it. Same class as the rest of this session.)
 #
 # NUL cannot appear in a path or in JSON text, so it cannot collide with
 # anything an adopter wrote.
@@ -1012,6 +1016,13 @@ def _script_words(command: str) -> tuple[bool, list[str]]:
             escaped = False
         elif state != "'" and char == "\\":
             escaped = True
+        elif state is None and char == "#" and not buf and not parts:
+            # A shell never runs what follows an unquoted `#` at a word start.
+            # The scan did, so a name mentioned in an explanatory comment beside
+            # a hook line was read as an invocation — reporting a phantom
+            # registration, or a dead one, from a comment (panel, adversarial
+            # lens, round 7).
+            break
         elif state is None and char in " \t\n\r":
             end_word()
         elif state is None and char in "\"'":
@@ -1037,6 +1048,13 @@ def _script_words(command: str) -> tuple[bool, list[str]]:
     return state is None, cleaned
 
 
+# What a file is renamed to when it is taken out of service, rather than "any
+# single extra extension" — see `_match_word`.
+_OUT_OF_ROTATION_SUFFIXES = frozenset(
+    {"disabled", "off", "bak", "old", "orig", "unused", "save", "skip"}
+)
+
+
 def _match_word(words: list[str], name: str) -> str | None:
     """The word naming `name`, or None.
 
@@ -1047,13 +1065,19 @@ def _match_word(words: list[str], name: str) -> str | None:
         base = PurePosixPath(word).name
         if base == name:
             return word
-        # One extra extension, and no more: `pr_followup_hook.py.disabled` is a
-        # hook taken out of rotation and worth reporting; a log path like
-        # `/tmp/pr_followup_hook.py.out.log` is an unrelated ARGUMENT, and
-        # claiming it as a dead kit hook produced `✗ NO SUCH FILE` and exit 1 for
-        # a repo that had registered nothing at all (panel, adversarial lens).
-        suffix = base[len(name) + 1 :] if base.startswith(name + ".") else None
-        if suffix and "." not in suffix:
+        # A named out-of-rotation suffix, and nothing else. `hook.py.disabled` is
+        # the kit's own hook taken out of service and worth reporting dead;
+        # `logs/hook.py.log` is an unrelated ARGUMENT, and claiming it produced
+        # `✗ NO SUCH FILE` and exit 1 for a repo that had registered no kit hook
+        # at all. The rule was "one extra extension with no further dot", which
+        # excluded `.out.log` and admitted `.log` — the commoner spelling of the
+        # same thing (panel, adversarial lens, rounds 6 and 7).
+        #
+        # An allowlist errs toward silence: a hook renamed to something not
+        # listed reports as unregistered rather than dead, which is this check's
+        # own doctrine — never claim a measurement it did not make.
+        suffix = base[len(name) + 1 :].lower() if base.startswith(name + ".") else None
+        if suffix in _OUT_OF_ROTATION_SUFFIXES:
             return word
     return None
 
@@ -1069,7 +1093,8 @@ def _invocable_kit_scripts() -> set[str]:
     adversarial lens). Anything under a `lib/` is imported, never invoked.
 
     Defence in depth rather than the whole defence: the boundary check in
-    `_script_token` is what actually stops `env_paths.py` matching `paths.py`.
+    `_match_word`'s basename comparison is what actually stops `env_paths.py`
+    matching `paths.py`.
     This narrows the surface that check has to be right about.
     """
     return {

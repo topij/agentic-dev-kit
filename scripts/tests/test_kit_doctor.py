@@ -3118,7 +3118,12 @@ def test_a_declined_pre_push_is_reported_as_declined_not_as_missing(tmp_path, ca
 
     assert report.hooks_state == "declined"
     assert "pre-push hook: declined" in out
-    assert "run ./init.sh" not in out.split("declined")[0].split("pre-push")[-1]
+    # The WHOLE line, not a window around it: an earlier form of this assertion
+    # looked only before the word "declined", so appending the advice after it
+    # survived (panel, correctness lens, round 7) — which is precisely where a
+    # regression would land.
+    hook_lines = [line for line in out.splitlines() if "pre-push hook" in line]
+    assert hook_lines and all("init.sh" not in line for line in hook_lines), hook_lines
 
 
 def test_an_undeclared_absent_pre_push_still_says_run_init(tmp_path, capsys):
@@ -3160,7 +3165,7 @@ def test_a_hook_renamed_out_of_rotation_is_reported_dead_not_resolved(tmp_path):
     """The most ordinary way anyone disables a hook is renaming the file, and
     the first version of this check reported that as `✓ resolves`.
 
-    `_script_token` stopped at the kit's own filename, so
+    The path scan stopped at the kit's own filename, so
     `…/pr_followup_hook.py.disabled` was truncated back to
     `…/pr_followup_hook.py` — which exists — and the registration invoking an
     absent file passed clean. That is #379's own failure mode manufactured by
@@ -3236,12 +3241,12 @@ def test_the_optional_overlay_is_silent_when_absent_and_read_when_present(tmp_pa
 
     _registration(
         root, ".claude/settings.local.json",
-        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}.moved" --runtime claude',
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}.disabled" --runtime claude',
     )
 
     read = kit_doctor.inspect_registrations(root, "scripts")
     overlay = [s for s in read if s.surface == ".claude/settings.local.json"]
-    assert [(s.state, s.detail) for s in overlay] == [("broken", f"{HOOK_REL}.moved")]
+    assert [(s.state, s.detail) for s in overlay] == [("broken", f"{HOOK_REL}.disabled")]
 
 
 def test_the_depth_cap_is_what_stops_a_deep_walk_not_the_json_parser(tmp_path):
@@ -3381,9 +3386,8 @@ def test_a_repo_root_containing_a_space_does_not_break_the_path_scan(tmp_path):
     checkout under a directory with a space in its name — `~/My Project`, a
     `OneDrive - Company` sync folder, a home directory built from a full name.
 
-    `_script_token` finds a path by walking out to the nearest whitespace, so
-    substituting the real root into the command BEFORE that walk truncated the
-    token at the root's own space. The kit's own quoting cannot help: the scan
+    The path scan ends a word at whitespace, so substituting the real root into
+    the command BEFORE the split truncated the word at the root's own space. The kit's own quoting cannot help: the scan
     is a delimiter walk, not a shell parser. The root is now marked with a
     sentinel that survives tokenising and resolved afterwards (panel,
     adversarial lens, delta round 3)."""
@@ -3534,21 +3538,60 @@ def test_a_command_string_outside_a_hooks_block_is_not_a_registration(tmp_path):
     assert report.dead_registrations == []
 
 
-def test_an_argument_that_merely_contains_a_kit_script_name_is_not_the_hook(tmp_path):
-    """A log path passed to an unrelated hook: `--log-file
-    /tmp/pr_followup_hook.py.out.log`. One extra extension is a hook taken out
-    of rotation and worth reporting; two is somebody else's file."""
+@pytest.mark.parametrize("log_name", ["pr_followup_hook.py.out.log", "pr_followup_hook.py.log"])
+def test_an_argument_that_merely_contains_a_kit_script_name_is_not_the_hook(tmp_path, log_name):
+    """A log path passed to an unrelated hook. The first spelling was excluded
+    by a "one extra extension, no further dot" rule — which admitted the second,
+    the commoner spelling of the same thing, and reported `✗ NO SUCH FILE` with
+    exit 1 for a repo that had registered no kit hook at all (panel, adversarial
+    lens, rounds 6 and 7). Both are somebody else's file."""
     root = _fake_repo(tmp_path)
     _write(root / "scripts" / "hooks" / "other.py", "print('theirs')\n")
     _registration(
         root, ".claude/settings.json",
-        'python3 "$CLAUDE_PROJECT_DIR/scripts/hooks/other.py" '
-        "--log-file /tmp/pr_followup_hook.py.out.log",
+        'python3 "$CLAUDE_PROJECT_DIR/scripts/hooks/other.py" ' f"--log-file /tmp/{log_name}",
     )
 
     report = _inspect(root, {ENGINE: _sha("x")}, None)
 
     assert report.dead_registrations == []
+
+
+def test_a_hook_taken_out_of_rotation_is_still_reported_dead(tmp_path):
+    """The other direction, so the exclusion above cannot pass by the check
+    simply going blind to suffixes: a NAMED out-of-rotation suffix is still a
+    registration pointing at a file that is not there."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}.disabled" --runtime claude',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+
+    assert [(s.state, s.detail) for s in report.dead_registrations] == [
+        ("broken", f"{HOOK_REL}.disabled")
+    ]
+
+
+def test_a_name_mentioned_in_a_shell_comment_is_not_an_invocation(tmp_path):
+    """A shell never runs what follows an unquoted `#` at a word start. The scan
+    did, so a script named in an explanatory comment beside a hook line was read
+    as an invocation — a phantom registration when the file exists, a dead one
+    when it does not (panel, adversarial lens, round 7)."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude  '
+        "# see also scripts/kit_doctor.py",
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [(s.state, s.detail) for s in claude] == [("resolves", HOOK_REL)]
 
 
 def test_an_escaped_space_keeps_a_path_whole(tmp_path):
