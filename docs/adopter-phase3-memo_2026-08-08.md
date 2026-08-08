@@ -2,9 +2,23 @@
 
 > Written 2026-08-08 from inside cs-toolkit, alongside
 > `in-parallel-oy/cs-toolkit#1883` (Phase 3 — "converge the install").
-> Every claim below names the command that produced it and the directory it ran
-> in. Anything inferred says so. Anything unsettled is in *Open questions*, not
-> in the findings.
+>
+> **The evidence rule, stated precisely enough to be checkable.** Every claim about
+> the *state of a file or repository* names the command that produced it and the
+> directory it ran in. Claims of three other kinds appear here too, and each is
+> labelled rather than dressed up as a measurement:
+>
+> - **Observed in-session** — something that happened while working, with no command
+>   to re-run (e.g. the follow-through hook firing on this PR's own `gh pr create`:
+>   the reminder arrived as `PostToolUse` context, which is the observation).
+> - **Judgement** — why something was carried rather than fixed. The *facts* under a
+>   judgement carry provenance; the decision itself is a call, not a measurement.
+> - **Unsettled** — in *Open questions*, never in the findings.
+>
+> This paragraph is narrower than the one it replaces, which claimed a command for
+> *every* claim. A reviewer pointed out that two classes of statement here could not
+> honour it — and a rule the document itself breaks is worse than no rule, since it
+> teaches the next reader to skim the provenance rather than check it.
 >
 > **Scope discipline**, inherited from the Phase 0 memo because it was that
 > memo's best feature: this is *what the kit must do*, ordered by what blocks an
@@ -95,11 +109,11 @@ a hook that silently stopped firing.
 
 Note the ownership subtlety, because "just add them to `KIT_OWNED`" is wrong: these
 files are legitimately the adopter's, which is *why* `init.sh` only prints them
-(#303). Hashing them would report every adopter permanently `locally-edited` —
-#286's failure. The tractable question is whether the registration **resolves**,
+(#303). Hashing them would report every adopter permanently `locally-edited`, which
+is #286's failure. The tractable question is whether the registration **resolves**,
 not whether it matches: a check that extracts the quoted hook path, expands the
-repo-root placeholder, and asserts the target exists would have caught #359 and
-#368 without hashing anything.
+repo-root placeholder, and asserts the target exists would have caught both #359
+and #368 without hashing anything.
 
 The only reason cs-toolkit catches this class is a hand-written, **adopter-local**
 `tests/test_pr_followup_hook.py` that resolves the hook *from each registration*
@@ -185,9 +199,9 @@ that worked: carried in Phase 0, shipped by the kit, **taken here in Phase 3**.
 |---|---|---|
 | Claude registration hardening | Fixing it downstream re-forks a registration the kit is about to change | #363 |
 | Codex SessionStart hooks | No kit shape exists to adopt; inventing one is a fork | #380 |
-| The kit's `dev_session.sh` (Phase 2B) | Would replace `CS_TOOLKIT_STATE_ROOT` + destructive-path guards the kit's copy lacks | adopter's own 2B |
+| The kit's `dev_session.sh` (Phase 2B) | Would replace `CS_TOOLKIT_STATE_ROOT` + destructive-path guards the kit's copy lacks — the underlying fact is the paired `grep -n "CS_TOOLKIT_STATE_ROOT"` in finding 5 (6 matches in the adopter's copy including `export …` at line 241; **zero** in the kit's); that the swap is therefore unsafe without operator review is a judgement | adopter's own 2B |
 | The kit's `pre-push` | All-or-nothing; adopter's carries two guards no config key expresses | #46 |
-| Every review finding on a kit-owned file (7 of them) | Fixing any would fork a byte-identical file and make the adopter's doctor report `locally-edited` forever | #382, #383, #343 |
+| All 8 actionable review findings, plus 1 nitpick, on kit-owned files | Fixing any would fork a byte-identical file and make the adopter's doctor report `locally-edited` forever | #382, #383, #343 |
 
 Each is recorded with its reason in `cs-toolkit/config/dev-model.yaml`, so the next
 session there finds the reasoning rather than a bare absence.
@@ -251,28 +265,37 @@ here), not on a property of the test.
 **1. Does Codex read a PROJECT-level `.codex/hooks.json` at all, and fire
 SessionStart from it?** Not settled, and it is not settleable on the adopter's
 host. A probe repo (`git init`, `.codex/hooks.json` with a sentinel-writing
-SessionStart hook) produced no sentinel, but the run died first:
+SessionStart hook) produced no sentinel, but the run died first.
 
-```
+`codex --version` → **`codex-cli 0.42.0`**. Probe repo: a throwaway `git init` tree
+under this session's scratchpad (`.../scratchpad/codexprobe1`), NOT the adopter
+checkout — deliberately, so no agent ran loose in a tree with uncommitted Phase 3
+work. Run from that directory:
+
+```console
 $ codex exec --sandbox read-only "Reply with exactly: OK"
 ERROR: unexpected status 400: {"detail":"The 'gpt-5.6-sol' model requires a newer
 version of Codex. Please upgrade..."}
 ```
 
 `-c model=gpt-5` fails differently (`not supported when using Codex with a ChatGPT
-account`), and `codex debug` exposes no hooks introspection. So the absent sentinel
-does **not** distinguish "project-level hooks are not read" from "the session never
-started". Needs a host with a working Codex CLI.
+account`), and `codex debug --help` lists only `seatbelt` / `landlock` — no hooks
+introspection. So the absent sentinel does **not** distinguish "project-level hooks
+are not read" from "the session never started". Needs a host with a working Codex CLI.
 
 **2. Therefore: cs-toolkit's Codex `PostToolUse` hook has never been observed
 firing *by Codex*.** This bears directly on how Phase 0's and Phase 3's done-when
 should be read, so it should not stay implicit. Both phases verified the hook by
 **executing the registration command string through a real shell** — which proves
 the command, the path, the guard and the hook all work, and is what the 26-test
-adopter suite does. Neither verified that *Codex dispatches it*. On Claude the
-distinction is closed: the follow-through hook fired unprompted on this very PR's
-`gh pr create`, from the installed path, in a real session. On Codex it remains
-open, and #379 is the reason nothing would tell you if it were broken.
+adopter suite does. Neither verified that *Codex dispatches it*.
+
+On Claude the distinction is closed — **observed in-session**, so flagged as such
+rather than given a command to re-run: the follow-through hook fired unprompted when
+this work ran `gh pr create` for `#1883`, from the installed path, and its reminder
+arrived as `PostToolUse` context. That *is* the observation; there is no way to
+re-derive it after the fact except by opening another PR. On Codex it remains open,
+and #379 is the reason nothing would tell you if it were broken.
 
 **3. Phase 0's unsettled observable (#364) did not recur.** No session was observed
 invoking a stale hook path during Phase 3. That is one clean run, not evidence of
