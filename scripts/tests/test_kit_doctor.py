@@ -3236,11 +3236,6 @@ def test_the_optional_overlay_is_silent_when_absent_and_read_when_present(tmp_pa
 
     _registration(
         root, ".claude/settings.local.json",
-        'python3 "$CLAUDE_PROJECT_DIR/scripts/hooks/gone.py" --runtime claude',
-    )
-    _write(root / "scripts" / "hooks" / "gone.py", "print('x')\n")
-    _registration(
-        root, ".claude/settings.local.json",
         f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}.moved" --runtime claude',
     )
 
