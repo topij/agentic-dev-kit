@@ -3374,3 +3374,46 @@ def test_an_unwired_runtime_names_the_engines_dir_it_looked_under(tmp_path, caps
     print(kit_doctor.render(report))
 
     assert "no kit hook registered (engines: scripts/devkit)" in capsys.readouterr().out
+
+
+def test_a_repo_root_containing_a_space_does_not_break_the_path_scan(tmp_path):
+    """A present, working hook reported `✗ NO SUCH FILE` with exit 1, for every
+    checkout under a directory with a space in its name — `~/My Project`, a
+    `OneDrive - Company` sync folder, a home directory built from a full name.
+
+    `_script_token` finds a path by walking out to the nearest whitespace, so
+    substituting the real root into the command BEFORE that walk truncated the
+    token at the root's own space. The kit's own quoting cannot help: the scan
+    is a delimiter walk, not a shell parser. The root is now marked with a
+    sentinel that survives tokenising and resolved afterwards (panel,
+    adversarial lens, delta round 3)."""
+    root = _fake_repo(tmp_path / "My Project")
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [(s.state, s.detail) for s in claude] == [("resolves", HOOK_REL)]
+    assert report.dead_registrations == []
+
+
+def test_the_inline_rev_parse_form_is_read_as_the_root(tmp_path):
+    """`$(git rev-parse --show-toplevel)` contains spaces of its own, so it has
+    the same hazard as a spaced root and is covered by the same sentinel. An
+    adopter who wrote the registration by hand rather than from `init.sh`'s
+    printed block reaches this shape."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".codex/hooks.json",
+        f'exec python3 "$(git rev-parse --show-toplevel)/{HOOK_REL}" --runtime codex',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
+
+    assert [(s.state, s.detail) for s in codex] == [("resolves", HOOK_REL)]

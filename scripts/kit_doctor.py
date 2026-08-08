@@ -915,8 +915,23 @@ def _hook_commands(node: object, depth: int = 0) -> list[str]:
 _TOKEN_DELIMITERS = " \t\"'="
 
 
-def _expand_root(command: str, root: Path) -> str:
-    """`command` with each known repo-root stand-in replaced by `root`.
+# A stand-in for the repo root that survives tokenising. NOT the root itself:
+# `_script_token` finds a path by walking out to the nearest whitespace, and a
+# root path containing a space — `~/My Project`, a `OneDrive - Company` sync
+# folder, a home directory built from someone's full name — truncated the token
+# at that space and reported a hook that is present and would fire as
+# `✗ NO SUCH FILE`, with exit 1. The kit's own quoting does not help: the scan
+# is a delimiter walk, not a shell parser. The same substitution also makes the
+# inline `$(git rev-parse --show-toplevel)` form safe, which contains spaces of
+# its own (panel, adversarial lens, delta round 3).
+#
+# NUL cannot appear in a path or in JSON text, so it cannot collide with
+# anything an adopter wrote.
+_ROOT_SENTINEL = "\x00devkit-root\x00"
+
+
+def _mark_root(command: str) -> str:
+    """`command` with each known repo-root stand-in replaced by `_ROOT_SENTINEL`.
 
     Bare `$NAME` forms are replaced only when what follows cannot be part of a
     shell identifier. A plain `str.replace` rewrote `$rootcause_dir` — an
@@ -928,10 +943,10 @@ def _expand_root(command: str, root: Path) -> str:
     """
     for placeholder in _ROOT_PLACEHOLDERS:
         if placeholder.endswith("}") or placeholder.startswith("$("):
-            command = command.replace(placeholder, str(root))
+            command = command.replace(placeholder, _ROOT_SENTINEL)
         else:
             command = re.sub(
-                re.escape(placeholder) + r"(?![A-Za-z0-9_])", lambda _: str(root), command
+                re.escape(placeholder) + r"(?![A-Za-z0-9_])", _ROOT_SENTINEL, command
             )
     return command
 
@@ -1040,7 +1055,7 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
         found: list[RegistrationStatus] = []
         seen: set[str] = set()
         for command in commands:
-            expanded = _expand_root(command, root)
+            expanded = _mark_root(command)
             for name in sorted(kit_scripts):
                 token = _script_token(expanded, name)
                 if token is None or token in seen:
@@ -1056,7 +1071,7 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                         )
                     )
                     continue
-                target = Path(token)
+                target = Path(token.replace(_ROOT_SENTINEL, str(root)))
                 if not target.is_absolute():
                     # A relative token is relative to the repo root: every shape
                     # the kit prints either interpolates the root or `cd`s to it
@@ -2520,8 +2535,11 @@ def main(argv: list[str] | None = None) -> int:
     # `dead_registrations` joins the exit code for the reason #379 was filed:
     # the observable for a registration naming a path that is not there is a
     # hook that silently stopped firing, and until now nothing in the kit's own
-    # instrument reported it. Only the `broken` state reaches here — see
-    # `Report.dead_registrations` for why an unwired runtime must not.
+    # instrument reported it. `broken` and `unreadable` reach here — see
+    # `Report.dead_registrations` for why those two and not the other three.
+    # (This said "only `broken`", written before `unreadable` joined the gate a
+    # round later, and a lens caught the sentence still describing the older
+    # behaviour — the same stale-prose class this session spent four PRs on.)
     return 1 if report.drifted or report.broken or report.dead_registrations else 0
 
 
