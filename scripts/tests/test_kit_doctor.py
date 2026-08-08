@@ -3242,3 +3242,100 @@ def test_the_optional_overlay_is_silent_when_absent_and_read_when_present(tmp_pa
     read = kit_doctor.inspect_registrations(root, "scripts")
     overlay = [s for s in read if s.surface == ".claude/settings.local.json"]
     assert [(s.state, s.detail) for s in overlay] == [("broken", f"{HOOK_REL}.moved")]
+
+
+def test_the_depth_cap_is_what_stops_a_deep_walk_not_the_json_parser(tmp_path):
+    """The cap, exercised where it is actually reachable.
+
+    A 10,000-deep document is stopped by `json.loads` exhausting its own
+    recursion budget, so the test written for the cap passed with the cap
+    REMOVED — the property was named by a test and pinned by nothing (panel,
+    adversarial lens, delta round). At a depth the parser handles comfortably
+    and the cap does not, the cap is the thing under test: without it the
+    registration below is found and reported, with it the surface is reported
+    `unreadable`, because a document this check declined to walk to the bottom
+    was not measured."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    depth = kit_doctor._MAX_REGISTRATION_DEPTH * 3
+    buried = json.dumps(
+        {"type": "command", "command": f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}"'}
+    )
+    payload = "[" * depth + buried + "]" * depth
+    _write(root / ".codex" / "hooks.json", f'{{"hooks": {{"PostToolUse": {payload}}}}}')
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    codex = [s for s in statuses if s.surface == ".codex/hooks.json"]
+
+    assert [s.state for s in codex] == ["unreadable"]
+    assert "nesting deeper than" in codex[0].detail
+
+
+def test_an_adopters_own_script_is_not_judged_as_a_kit_hook(tmp_path):
+    """`env_paths.py` ends in `paths.py`, which `KIT_OWNED` carries as a library
+    module. A substring match over every kit-owned filename claimed it, so an
+    adopter renaming *their own* unrelated tool got
+    `✗ … NO SUCH FILE` and exit 1 — permanently, with nothing telling them why
+    (panel, adversarial lens, delta round).
+
+    Two independent fixes, both needed: library modules are not invocable and
+    are out of the candidate set, and a name matches only at a path boundary."""
+    root = _fake_repo(tmp_path)
+    _registration(
+        root, ".claude/settings.json",
+        'python3 "$CLAUDE_PROJECT_DIR/scripts/my_hooks/env_paths.py" --their-flag',
+    )
+    # A second shape, and the one that pins the BOUNDARY half specifically: this
+    # basename ends with a name the narrowed set still contains, so only the
+    # boundary check keeps an adopter's derived hook from being judged as the
+    # kit's. (A repo that forked the hook and kept a related name is the
+    # ordinary way to end up here.)
+    _registration(
+        root, ".codex/hooks.json",
+        'exec python3 "$root/scripts/my_pr_followup_hook.py" --runtime codex',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
+    assert [s.state for s in codex] == ["unregistered"], (
+        "a name matched mid-token: " f"{[(s.state, s.detail) for s in codex]}"
+    )
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [s.state for s in claude] == ["unregistered"], (
+        "an adopter's own script was judged as a kit hook: "
+        f"{[(s.state, s.detail) for s in claude]}"
+    )
+    assert report.dead_registrations == []
+
+
+def test_a_variable_that_merely_starts_with_root_is_not_expanded(tmp_path):
+    """`$rootcause_dir` is one shell identifier — a shell resolves the longest
+    name and never `$root` plus a literal remainder. A plain `str.replace`
+    rewrote it to `<root>cause_dir` and then reported a hook that is right there
+    as `broken` at a path nothing would ever build (panel, adversarial lens)."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".codex/hooks.json",
+        f'exec python3 "$rootcause_dir/{HOOK_REL}" --runtime codex',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
+
+    assert [s.state for s in codex] == ["unresolvable"]
+    assert report.dead_registrations == []
+
+
+def test_only_invocable_scripts_are_candidates_for_a_registration_match(tmp_path):
+    """The candidate set, pinned directly — the adopter-script test above passes
+    on the boundary check alone, so this half would otherwise be unpinned
+    (checked by mutation: widening the set with the boundary check in place
+    changes nothing). A library module is imported by an engine, never named in
+    a hook command, so it has no business being matchable."""
+    candidates = kit_doctor._invocable_kit_scripts()
+
+    assert {"pr_followup_hook.py", "check_doc_budget.py"} <= candidates
+    for library in ("kitconfig.py", "paths.py", "resolver.py", "__init__.py"):
+        assert library not in candidates, f"{library} is imported, not invoked"

@@ -856,6 +856,22 @@ _ROOT_PLACEHOLDERS: tuple[str, ...] = (
 _MAX_REGISTRATION_DEPTH = 64
 
 
+class _RegistrationTooDeep(Exception):
+    """The walk hit `_MAX_REGISTRATION_DEPTH`.
+
+    Raised rather than returned so the surface can be reported `unreadable`,
+    which is what it is: a document this check declined to walk to the bottom
+    was not measured, and returning the commands found above the cap would say
+    "no kit hook registered" about a file that may well register one.
+
+    It is also what makes the cap TESTABLE. The first version returned an empty
+    list, and the test written for it passed with the cap removed — `json.loads`
+    exhausts its own recursion budget first on a 10,000-deep document, so the
+    walk was never reached and the property was named by a test and pinned by
+    nothing (panel, adversarial lens, delta round).
+    """
+
+
 def _hook_commands(node: object, depth: int = 0) -> list[str]:
     """Every ``command`` string anywhere in a registration document.
 
@@ -873,7 +889,9 @@ def _hook_commands(node: object, depth: int = 0) -> list[str]:
     (panel, adversarial lens, PR #389).
     """
     if depth > _MAX_REGISTRATION_DEPTH:
-        return []
+        raise _RegistrationTooDeep(
+            f"nesting deeper than {_MAX_REGISTRATION_DEPTH} levels — not walked"
+        )
     found: list[str] = []
     if isinstance(node, dict):
         command = node.get("command")
@@ -888,6 +906,27 @@ def _hook_commands(node: object, depth: int = 0) -> list[str]:
 
 
 _TOKEN_DELIMITERS = " \t\"'="
+
+
+def _expand_root(command: str, root: Path) -> str:
+    """`command` with each known repo-root stand-in replaced by `root`.
+
+    Bare `$NAME` forms are replaced only when what follows cannot be part of a
+    shell identifier. A plain `str.replace` rewrote `$rootcause_dir` — an
+    adopter's own variable — into `<root>cause_dir`, and then reported the real,
+    present hook `broken` at a path no shell would ever build: a shell resolves
+    the longest identifier, never `$root` plus a literal remainder (panel,
+    adversarial lens). The `${…}` and `$(…)` forms are self-delimiting and are
+    replaced literally.
+    """
+    for placeholder in _ROOT_PLACEHOLDERS:
+        if placeholder.endswith("}") or placeholder.startswith("$("):
+            command = command.replace(placeholder, str(root))
+        else:
+            command = re.sub(
+                re.escape(placeholder) + r"(?![A-Za-z0-9_])", lambda _: str(root), command
+            )
+    return command
 
 
 def _script_token(command: str, name: str) -> str | None:
@@ -907,6 +946,10 @@ def _script_token(command: str, name: str) -> str | None:
     falsehood confidently (panel, adversarial lens, PR #389).
     """
     index = command.find(name)
+    # At a PATH boundary, not anywhere: `env_paths.py` contains `paths.py`, and
+    # matching mid-token judged an adopter's own file as if it were the kit's.
+    while index >= 0 and index > 0 and command[index - 1] not in "/" + _TOKEN_DELIMITERS:
+        index = command.find(name, index + 1)
     if index < 0:
         return None
     start = index
@@ -918,6 +961,27 @@ def _script_token(command: str, name: str) -> str | None:
     return command[start:end]
 
 
+def _invocable_kit_scripts() -> set[str]:
+    """Kit script basenames a registration could plausibly INVOKE.
+
+    Narrower than "every kit-owned file with a script extension", which swept in
+    library modules — `paths.py`, `resolver.py`, `kitconfig.py`, `__init__.py`.
+    Combined with a name match, that set claimed an adopter's own
+    `scripts/my_hooks/env_paths.py`, and renaming their unrelated file produced
+    `✗ NO SUCH FILE` and exit 1 with nothing to tell them why (panel,
+    adversarial lens). Anything under a `lib/` is imported, never invoked.
+
+    Defence in depth rather than the whole defence: the boundary check in
+    `_script_token` is what actually stops `env_paths.py` matching `paths.py`.
+    This narrows the surface that check has to be right about.
+    """
+    return {
+        PurePosixPath(rel).name
+        for rel, role in KIT_OWNED
+        if rel.endswith((".py", ".sh")) and "/lib/" not in rel and role != "template"
+    }
+
+
 def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStatus]:
     """Whether each runtime's hook registration names a path that exists.
 
@@ -926,9 +990,15 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
     one registering `pr_followup_hook.py` on `PostToolUse`, and adding a kit
     script does not require remembering to add it here too.
     """
-    kit_scripts = {
-        PurePosixPath(rel).name for rel, _ in KIT_OWNED if rel.endswith((".py", ".sh"))
-    }
+    # Scripts a registration could plausibly INVOKE, not every kit-owned file
+    # with a script extension. The wider set swept in library modules —
+    # `paths.py`, `resolver.py`, `kitconfig.py`, `__init__.py` — and combined
+    # with a substring match that turned an adopter's own
+    # `scripts/my_hooks/env_paths.py` into a "kit hook" (it ends in `paths.py`).
+    # Renaming their own unrelated file then produced `✗ NO SUCH FILE` and exit
+    # 1, permanently and with no way for them to know why (panel, adversarial
+    # lens, delta round). Anything under a `lib/` is imported, never invoked.
+    kit_scripts = _invocable_kit_scripts()
     statuses: list[RegistrationStatus] = []
     for runtime, surface, report_absent in REGISTRATION_SURFACES:
         path = root / surface
@@ -952,12 +1022,18 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
             # adversarial lens, PR #389).
             statuses.append(RegistrationStatus(runtime, surface, "unreadable", str(exc)))
             continue
+        try:
+            commands = _hook_commands(document)
+        except (_RegistrationTooDeep, RecursionError) as exc:
+            # The walk gets the same treatment as the parse, and for the same
+            # reason. `RecursionError` stays beside the cap because the cap is
+            # this module's limit and the interpreter's is not the same number.
+            statuses.append(RegistrationStatus(runtime, surface, "unreadable", str(exc)))
+            continue
         found: list[RegistrationStatus] = []
         seen: set[str] = set()
-        for command in _hook_commands(document):
-            expanded = command
-            for placeholder in _ROOT_PLACEHOLDERS:
-                expanded = expanded.replace(placeholder, str(root))
+        for command in commands:
+            expanded = _expand_root(command, root)
             for name in sorted(kit_scripts):
                 token = _script_token(expanded, name)
                 if token is None or token in seen:
