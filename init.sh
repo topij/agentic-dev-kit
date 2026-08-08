@@ -134,6 +134,23 @@ fi
 # _strip_comment opens a quote at any position, and devkit_config_scalar strips
 # " #…" even inside quotes. Issue #88 tracks converging them; this scanner
 # takes YAML's side rather than copying either divergence.
+#
+# #383: in a DOUBLE-quoted YAML scalar a backslash escapes the next character,
+# so `\"` is a literal quote and does not close the scalar. The scan used to
+# close there and then read a `#` that is still INSIDE the value as a trailing
+# comment — for `url: "a \" b # c"`, get_field returned `"a \" b` and set_field
+# re-attached the rest of the old value as a comment, corrupting the adopter's
+# config silently. The single-quote arm handled its own doubled-apostrophe
+# escape already, and that asymmetry inside one loop is what marked this as an
+# oversight rather than a deliberate simplification. Skipping two characters is
+# right for a doubled backslash too: it is one literal backslash, and stepping
+# past both stops the second from escaping whatever follows.
+#
+# The fix is one line in the scanner below and the explanation is up here on
+# purpose: the awk program is a SINGLE-QUOTED shell string, so an apostrophe in
+# it has to be written `'\''` — a prose comment carrying one (or a doubled
+# apostrophe as an example) ends the string and the next `eval` of it dies with
+# a shell syntax error. Found by writing exactly that comment.
 AWK_COMMENT_IDX='
   function comment_idx(rest,   n, i, j, qc, c, prev) {
     n = length(rest)
@@ -145,6 +162,8 @@ AWK_COMMENT_IDX='
       qc = c
       j = i + 1
       while (j <= n) {
+        # backslash escape inside a double-quoted scalar — see #383 above
+        if (qc == "\"" && substr(rest, j, 1) == "\\") { j += 2; continue }
         if (substr(rest, j, 1) == qc) {
           if (qc == "'\''" && substr(rest, j + 1, 1) == qc) { j += 2; continue }
           break
@@ -716,7 +735,10 @@ TEMPLATE_MARKER="devkit-template: unrendered"
 #
 # So the discriminator is a marker here too, and AGENTS.md stops being the one
 # target reached by ABSENCE. The kit may now ship both files; what it may not do
-# is ship them unmarked. `test_kit_own_entry_points_carry_the_marker` pins that.
+# is ship them unmarked. `test_kit_own_entry_points_carry_the_marker` pins that —
+# in the KIT repo. `KIT_OWNED` tracks nothing under `scripts/tests/`, so that
+# test does not travel with this file: downstream, this reads as a guarantee and
+# is one only upstream (#386, both panel lenses on an adopter's PR).
 #
 # No apostrophe in the literal, deliberately: every marker here is matched from
 # shell, and this repo has already been bitten twice by a value that changed
@@ -1167,7 +1189,9 @@ register_pr_hook() {
   # verified and pinned: with `exec` the interpreter reports the shell's own PID,
   # without it a different one —
   # `test_the_codex_registration_execs_rather_than_forking_the_interpreter`
-  # asserts both directions.
+  # asserts both directions — in the KIT repo, which is where that suite lives
+  # and stays: `KIT_OWNED` tracks no tests, so an adopter reading this comment
+  # has the claim without the guard behind it (#386).
   #
   # WHY that is worth having here is an inference, and is marked as one because a
   # lens caught the previous wording asserting it as fact. The registration
