@@ -682,6 +682,106 @@ def test_set_field_writes_backslashes_literally(tmp_path: Path) -> None:
     assert r"a\nb\\c" in _config(repo)
 
 
+_GET_FIELD_DRIVER = '''CONFIG_FILE="config/dev-model.yaml"
+eval "$(sed -n "/^AWK_COMMENT_IDX=/,/^'/p" init.sh)"
+eval "$(sed -n '/^get_field() {/,/^}/p' init.sh)"
+get_field "tracker:" "" "^  url:"
+'''
+
+# `\\"` inside a double-quoted YAML scalar is an escaped quote, so this value is
+# one scalar containing a `#`, and PyYAML reads it as such. The scanner used to
+# close the scalar at the ESCAPED quote and then treat that `#` as opening a
+# trailing comment (#383).
+ESCAPED_QUOTE_CONFIG = 'tracker:\n  url: "a \\" b # c"\n'
+
+
+def test_get_field_does_not_read_a_hash_inside_an_escaped_quote_as_a_comment(
+    tmp_path: Path,
+) -> None:
+    """The read half of #383. On the old scanner this returned `"a \\" b` —
+    truncated mid-scalar, and with an unbalanced quote left on the front."""
+    repo = _fixture(tmp_path, config=ESCAPED_QUOTE_CONFIG)
+
+    result = subprocess.run(
+        ["sh", "-c", _GET_FIELD_DRIVER],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=_env(repo.parent),
+    )
+
+    assert result.stdout.strip() == r'a \" b # c'
+
+
+def test_set_field_does_not_reattach_part_of_the_old_value_as_a_comment(
+    tmp_path: Path,
+) -> None:
+    """The write half, and the one that costs something: `set_field` preserves
+    a trailing comment by design, so a scan that finds one INSIDE the old value
+    re-attaches that fragment to the new value. Measured on the pre-fix
+    installer, stamping `new-value` over this config produced
+
+        url: "new-value"  # c"
+
+    — a fragment of the old value, plus a dangling quote, written into the
+    adopter's `config/dev-model.yaml` with nothing to report it."""
+    repo = _fixture(tmp_path, config=ESCAPED_QUOTE_CONFIG)
+
+    subprocess.run(
+        ["sh", "-c", _SET_FIELD_DRIVER, "_", '"new-value"'],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=_env(repo.parent),
+    )
+
+    assert _config(repo) == 'tracker:\n  url: "new-value"\n'
+
+
+@pytest.mark.parametrize(
+    "config,expected",
+    [
+        # A REAL trailing comment on a double-quoted scalar must still be found —
+        # the fix must not make the scanner comment-blind.
+        ('tracker:\n  url: "plain" # a real comment\n', "plain"),
+        # A doubled backslash is one literal backslash, so the quote AFTER it is
+        # the closing quote and the comment beyond it is real. This is why the
+        # escape skips two characters rather than one.
+        ('tracker:\n  url: "trailing \\\\" # a real comment\n', "trailing \\\\"),
+        # The single-quote arm is unchanged: no backslash escaping there, and its
+        # own doubled-apostrophe escape still holds a `#` inside the scalar.
+        ("tracker:\n  url: 'O''Brien # x'\n", "'O''Brien # x'"),
+        # The SCOPING of the new rule, which the case above only asserted in
+        # prose. A single-quoted YAML scalar has no backslash escape — PyYAML
+        # reads this value as `trailing \` with the comment stripped — so a
+        # trailing backslash must NOT swallow the closing quote here. Broadening
+        # the guard to both quote kinds (the two forms differ by one condition
+        # and look almost identical) left the whole file green while making this
+        # input return `'trailing \' # comment`: a real comment absorbed into the
+        # value, which is the very bug #383 fixes on the other arm. Panel,
+        # correctness lens, mutation-verified.
+        ("tracker:\n  url: 'trailing \\' # a real comment\n", "'trailing \\'"),
+    ],
+)
+def test_the_comment_scan_still_finds_the_comments_it_should(
+    tmp_path: Path, config: str, expected: str
+) -> None:
+    repo = _fixture(tmp_path, config=config)
+
+    result = subprocess.run(
+        ["sh", "-c", _GET_FIELD_DRIVER],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=_env(repo.parent),
+    )
+
+    assert result.stdout.strip() == expected
+
+
 # --------------------------------------------------------------------------- #
 # narrative-doc seeding
 # --------------------------------------------------------------------------- #
@@ -1858,9 +1958,18 @@ def _lens_compute_block(text: str, *, unescape: bool = False) -> tuple[str, str]
 def test_init_sh_ships_the_same_lens_compute_values_as_the_reference_config():
     """A fresh install must not diverge from the shipped config's actual settings.
 
-    `init.sh` is NOT tracked in `kit-manifest.json`, so no drift check compares
-    it against anything — the two can separate silently, and a new adopter would
-    then get different panel compute than this repo runs.
+    The drift check does not cover this. `init.sh` IS tracked in
+    `kit-manifest.json` since #362 — this docstring said the opposite, which was
+    true when written and is the same stale claim #382 found in two workflow
+    documents — but that check compares the installer's BYTES against the kit's,
+    which says nothing about whether the values it stamps agree with
+    `config/dev-model.yaml`. Two files can each match their own manifest entry
+    and still disagree with each other, so this test is what holds them
+    together, and a new adopter would otherwise get different panel compute than
+    this repo runs. (Found by the panel's correctness lens, which flagged it as
+    out of scope for the change it was reviewing; corrected here because the
+    change was in this file and the claim is the class the same session was
+    sweeping.)
     """
     init_comment, init_values = _lens_compute_block(
         (REPO_ROOT / "init.sh").read_text(encoding="utf-8"), unescape=True
