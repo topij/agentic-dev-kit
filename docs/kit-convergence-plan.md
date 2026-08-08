@@ -80,8 +80,8 @@ un-fork.**
 > currently invisible to tooling," and that was false.** `init.sh` is the
 > counterexample: it is in neither `kit_doctor.KIT_OWNED` nor
 > `kit-manifest.json`, so the file that *performs* the install is the one file
-> the doctor structurally cannot report drift on. cs-toolkit's copy measures 852
-> differing lines against kit `3761bec` while its doctor reports `13 unchanged,
+> the doctor structurally cannot report drift on. cs-toolkit's copy stood
+> hundreds of lines behind kit `3761bec` while its doctor reported `13 unchanged,
 > 0 differ, 0 missing` and exit 0 — every statement in that report true, and the
 > drift entirely outside what it ranges over. Verified in this repo 2026-08-08 by
 > parsing the `KIT_OWNED` tuple (35 entries, no `init.sh`) and searching the
@@ -254,10 +254,23 @@ the move "safe" while omitting the registrations. It was neither safe nor a move
 
 **`#304`, in the kit** — the ready starter, small and adjacent to the `init.sh`
 work below; its body names the smaller of two repairs (`seed_doc` re-emitting
-the kit-own marker). **2026-08-08: now coupled to `#360`** — same file, and
-`#304` is the concrete instance of why tracking it matters, since with `init.sh`
-untracked an adopter cannot tell whether its copy carries that bug. Treat the two
-as one piece of work.
+the kit-own marker).
+
+> **2026-08-08, settled: `#304` is NOT coupled to `#360` and stays open.** An
+> earlier revision of this paragraph — written before `#360` was worked — said
+> "now coupled to `#360` … treat the two as one piece of work", following the
+> adopter memo's recommendation. That was reversed on evidence a few hours later
+> and the reversal is under *Before Phase 3* item 1: `#304` needs a line-1
+> `devkit-source: kit-own` marker to act on, and cs-toolkit's `AGENTS.md` and
+> `CLAUDE.md` open with `# CS-Toolkit` and carry none, so `_seedable` leaves both
+> untouched there and **`#304` blocks nothing in Phase 3.**
+>
+> The old wording is corrected here rather than only in the newer section because
+> an adversarial review lens found the two passages contradicting each other and
+> named the consequence precisely: a session following this document's own
+> `▶ Next:` pointer reaches "coupled to `#360`" *before* it reaches "deliberately
+> not bundled", and could reasonably conclude `#304` was resolved when `#360`
+> closed. It was not.
 
 **The SessionStart budget hooks on Codex, in the kit.** Question 3 is settled:
 the event exists (see below), so this is the cheapest parity win available.
@@ -273,7 +286,8 @@ from *broken* (`✓ intact for this adoption — 22 file(s) declined`) and print
 commands that work at a vendored engines path.
 
 **Phase 2 — make re-rendering safe** — **DONE.** `#297` closed; `init.sh` has a
-no-clobber mode. `#304` is still open and is now grouped with `#360` above.
+no-clobber mode. `#304` is still open and is **not** part of `#360`'s work — see
+the note under *`#304`, in the kit* above for why that grouping was reversed.
 
 **The fixer predicate, in cs-toolkit** — **DONE**, merged as `bfafe13b7`
 (`in-parallel-oy/cs-toolkit#1866`). It landed *after* this plan's 2026-08-06
@@ -286,9 +300,21 @@ repo-wide grep confirming no consumer still reads the `done` key.
 
 **Before Phase 3 — the kit work the forcing function found.** This is new as of
 2026-08-08 and sits *between* the cleared gates and Phase 3, because Phase 3 is
-the upgrade and `init.sh` is what performs it:
+the upgrade and `init.sh` is what performs it.
 
-1. **`#360`** — track `init.sh`. Its issue frames the tracking model as a design
+> **Status, end of 2026-08-08: items 1 and 2 are DONE, item 3 remains.** `#360`
+> closed (PR `#362`) and `#359` closed (PR `#366`); `#358` is the only one left,
+> and the coverage half of it is narrower than its issue proposes — the
+> measurement is a comment on that ticket. `#304` was **removed** from this list
+> rather than completed; the reasoning is under item 1.
+>
+> One consequence to carry into Phase 3, learned while doing item 1: `KIT_OWNED`
+> lives in the **engine**, not the manifest, so passing `--manifest` alone does
+> not backport a newly tracked path. cs-toolkit's vendored `kit_doctor.py` must be
+> refreshed before its own doctor can see `init.sh` at all.
+
+1. **`#360`** — **DONE** (PR `#362`). Track `init.sh`. Its issue frames the
+   tracking model as a design
    call between three options, on the premise that an adopter's copy is
    *expected* to diverge because it "encodes answers to the adoption prompts" —
    so a plain `KIT_OWNED` entry would report every adopter permanently
@@ -298,10 +324,25 @@ the upgrade and `init.sh` is what performs it:
    **That premise is false, checked 2026-08-08, and the design question dissolves
    with it.** cs-toolkit's `init.sh` is **byte-identical to kit commit
    `7485512b`** (2026-07-26) — found by hashing its copy and scanning every
-   `init.sh` blob in this repo's history for a match. So all 852 differing lines
-   are version drift and **none** are local rendering. Two supports: `init.sh`
-   never writes to itself (it writes `config/dev-model.yaml` and renders
-   `docs/templates/`), and nothing in the kit tells an adopter to edit it.
+   `init.sh` blob in this repo's history for a match. So **whatever** its line
+   delta is, all of it is version drift and **none** is local rendering. Two
+   supports: `init.sh` never writes to itself (it writes `config/dev-model.yaml`
+   and renders `docs/templates/`), and nothing in the kit tells an adopter to edit
+   it.
+
+   > **The line count is deliberately not stated here, and that is a correction.**
+   > Earlier revisions of this document said "all **852** differing lines", the
+   > figure `#360` measured. A correctness lens found it stale within the same
+   > session: `#366` changed `init.sh`, so it was already wrong when written.
+   > Restating it just resets a treadmill — the number moves every time either
+   > copy changes, while **the claim that matters cannot move at all.**
+   > Byte-identity with a known kit commit is what establishes that the delta is
+   > *entirely* drift, at any size. To recompute the size:
+   > `diff <adopter>/init.sh <kit>/init.sh | grep -c '^[<>]'` (adopter first; the
+   > count is argument-order dependent — **as measured 2026-08-08**, 887 that way
+   > and 883 reversed, which is recorded as a dated observation rather than a live
+   > figure precisely because a second lens caught this note committing the error
+   > it was written to retire).
 
    Consequences for the fix, read off `_drift_state`: a tracked, unedited,
    behind-the-kit copy reports **`stale`** ("installed X, kit ships Y"), which is
@@ -328,8 +369,18 @@ the upgrade and `init.sh` is what performs it:
    template on the first run; the repair that actually prevents it needs the
    kit-repo detector `#291` also wants and `#289` declined to add inside a fix
    round. That is an operator design call, not an overnight one.
-2. **`#359`** — before Phase 3 re-prints the registrations.
-3. **`#358`** — two prose paths, plus the coverage question its issue raises.
+2. **`#359`** — **DONE** (PR `#366`), before Phase 3 re-prints the registrations.
+   The registration now bails cleanly instead of running `python3` against a path
+   built from an empty string, and every clause of it is pinned by a test that
+   executes it. `#363` — no test *executed* a registration, which is why `#359`
+   shipped — stays open: this closed the gap for one registration, not the class.
+3. **`#358`** — **remaining.** Two prose paths, plus the coverage question its
+   issue raises. That question is answered on the ticket and the answer is "not as
+   proposed": a position-independent match over the closed `KIT_OWNED` set flags
+   two legitimate lines in `adopt.md` alongside the two real ones, because the
+   distinguishing feature is line position — which is what the existing anchored
+   regex already uses. Doctrine-scoped it is clean. The wider form needs a
+   judgment call about `adopt.md:142` first.
 
 **Phase 3 — converge the install.** After the three items above: an agent session
 working **in cs-toolkit** (question 5's decision)

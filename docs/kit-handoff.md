@@ -14,14 +14,96 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-08 — **cs-toolkit's Phase 0 landed, and the work it found is now
-the thing in front of Phase 3.** Every gate `docs/kit-convergence-plan.md` named for
-Phase 3 has cleared (Phase 0 `2ab63d255`, the fixer predicate `bfafe13b7`, kit `#285` /
-`#286` / `#297` closed). Phase 3 is unblocked on paper and should still not start first:
-the Phase 0 run surfaced `#360`, and Phase 3 *is* the upgrade while `init.sh` is what
-performs it. Order is `#360`+`#304` → `#359` → `#358` → Phase 3.
+Last updated: 2026-08-08 — **the pre-Phase-3 work cs-toolkit's Phase 0 surfaced is nearly
+done: `#360` and `#359` are closed, `#358` is what remains.** Every gate
+`docs/kit-convergence-plan.md` named for Phase 3 had already cleared (Phase 0 `2ab63d255`,
+the fixer predicate `bfafe13b7`, kit `#285` / `#286` / `#297`); the ordering that mattered
+was the work the Phase 0 run itself found, because Phase 3 *is* the upgrade and `init.sh`
+is what performs it. `#304` was dropped from that order on evidence — it needs a line-1
+kit-own marker to act on and cs-toolkit's entry points carry none, so it blocks nothing
+there.
 
-## Latest session — 2026-08-07 (`#353`, and a boundary its author could not settle)
+## Latest session — 2026-08-08 (the adopter's memo, checked rather than executed)
+
+**Theme —** cs-toolkit's Phase 0 handed the kit a memo of findings. Two of its
+load-bearing claims did not survive being re-derived, and the work that followed was
+smaller and better aimed than the memo proposed.
+
+- **PR `#361` merged.** Facts in `docs/kit-convergence-plan.md` and this file that a
+  reader would have acted on: Phase 3 no longer waits on cs-toolkit; "the only divergence
+  currently invisible to tooling" was false, `init.sh` being the counterexample; and
+  `adopt`/`upgrade` already have shared definitions with bindings on both runtimes since
+  `#330`. The adopter memo is committed beside the plan as
+  `docs/adopter-forcing-function-memo_2026-08-07.md`, preserved as the adopter's account
+  with its superseded recommendation marked rather than rewritten.
+- **PR `#362` merged — `#360` closed.** `init.sh` is tracked in `KIT_OWNED` and the
+  manifest, so the file that performs every install is inside the measurement. Verified
+  with `make test` in `/Users/topi/Coding/agentic-dev-kit`, and end-to-end by running the
+  new doctor with `--root` against `/Users/topi/Coding/in-parallel/cs-toolkit`.
+- **PR `#366` merged — `#359` closed.** The Codex registration no longer runs `python3`
+  against a path built from an empty string. Both surfaces changed together because
+  `test_the_advisory_matches_the_registrations_it_describes` requires it.
+- **Filed this session: `#363`, `#364`, `#365`, `#367`, `#368`.** Occurrence comment on
+  `#350`; the measurement that refutes `#358`'s proposed remedy is a comment on `#358`.
+
+**Learned**
+
+- **The memo's two false claims failed in opposite directions, and both came from reading
+  a document instead of the tree.** It reported the kit has no coverage of the hook
+  registrations — it has two real tests, and the true gap is that they compare *text*,
+  which is *why* `#359` shipped: when the command string itself is wrong, the advisory and
+  the shipped file are wrong identically and every equality holds. And it recommended
+  promoting `adopt`/`upgrade` extraction to a hard Phase 3 gate, which `#330` had
+  finished — taken from this repo's own stale plan section. **A stale plan does not merely
+  misinform; it produces confidently-scoped work that does not need doing.**
+- **`#360`'s design question dissolved instead of being decided.** Its three-way choice
+  rested on an adopter's `init.sh` being *expected* to diverge. cs-toolkit's copy is
+  byte-identical to kit commit `7485512b`, so the delta is version drift with no local
+  rendering — which makes a tracked copy report `stale`, not `locally-edited`. No new role,
+  no file split.
+- **`KIT_OWNED` lives in the engine, not the manifest**, so `--manifest` cannot backport a
+  newly tracked path. Found by running the adopter's *own* vendored doctor first and
+  getting a different file list than the kit's.
+- **Every panel round found the previous round's fix weaker than it claimed** — a regex
+  guard defeated by execution, a parametrization that exercised a flag without reaching its
+  branch, a positive control that did not discriminate its own path, a stub whose harness
+  could break silently, and an assertion that could never fail. The doctrine predicts this
+  about fix rounds; it held every round.
+- **A mutation harness can report kills that never happened.** Cloning a branch before
+  committing the fix meant the revert step restored the *unfixed* file, so two reported
+  kills were that state failing again — and they were hiding two genuine coverage gaps.
+  `#367`.
+- **A stale PR *description* is worse than a stale comment**, because a reviewer reads it
+  top-down before the diff. `#366`'s body asserted a rationale the code had already
+  retracted.
+- **One finding was beyond anything this machine could run:** the `exec` control in a new
+  test was shell-dependent, and `/bin/dash` — `/bin/sh` on most Linux runners — tail-call
+  optimises where the local shell forks. It would have failed there and passed here.
+
+**Open, and owned by nothing yet**
+
+- **`#358` is the remaining pre-Phase-3 item** — two prose paths plus a coverage question
+  whose proposed remedy is refuted on the ticket, with the viable narrower form identified.
+- **The friction inbox still awaits `triage-friction-log`**; nothing was added to it this
+  session, because everything issue-shaped was filed to the tracker instead.
+- **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
+- **Carried forward:** `#368`, `#367`, `#365`, `#364`, `#363`, `#358`, `#356`, `#350`,
+  `#346`, `#304`, `#291`, `#290`, `#287`, `#283`, `#273`, `#243`, `#248`, `#264`, `#236`,
+  `#231`, `#213`, `#209`, `#211`, `#120`, `#216`, `#220`, `#203`, `#190`, `#187`, `#124`,
+  `#169`, `#143`, `#46`, `#36`.
+
+▶ Next: **`#358`, then Phase 3 in cs-toolkit.** `#358` is two lines in
+`fallback-review-panel.md` plus the doctrine-scoped guard its comment thread already
+measures. Then Phase 3, from a session rooted in `/Users/topi/Coding/in-parallel/cs-toolkit`
+— read `docs/kit-convergence-plan.md`'s pre-Phase-3 section first. What that session
+must do beyond the upgrade: install `docs/agentic-dev-kit/workflows/adopt.md` and
+`upgrade.md` there (its manifest lists both as declined, so it has no installed workflow
+doc to follow), and refresh its vendored `kit_doctor.py` — until that is replaced, its own
+doctor cannot see `init.sh` however current the manifest is.
+
+______________________________________________________________________
+
+## Session — 2026-08-07 (`#353`, and a boundary its author could not settle)
 
 **Theme —** A two-paragraph doc correction whose own review ran four rounds, found two
 defects the branch had introduced, and ended on a classification the author was
@@ -239,134 +321,6 @@ by the safety doctrine rather than only by the outage. Read `#337`'s round-3 com
 records what the panel substituted for CI and what the receipt does *not* cover. After that the
 substance is unchanged from last session — **cs-toolkit's Phase 0 and its fixer predicate**
 gate Phase 3, and are that repo's PRs.
-
-______________________________________________________________________
-
-## Session — 2026-08-06 (`#297`, and a diagnosis corrected within the hour)
-
-**Theme —** Phase 2 shipped after a two-lens panel. The rest of the session went to a CI
-failure that looked like this repo's and was not — the correction is the part worth reading.
-
-- **`#297` shipped in PR `#328`** (merged `dc38c48`). `_seedable` returns a tri-state, so
-  `seed_doc` can tell ABSENT from MARKED and the mode is read at that **one call site** —
-  never inside the predicate, which is the fork `#297` exists to prevent. An unknown
-  argument now exits 2 rather than being skipped past. `/adopt` Step 3c hands the operator
-  `./init.sh --no-clobber` instead of asking them to inspect six line-1s. Verified with
-  `make test` in `/Users/topi/Coding/agentic-dev-kit`: 952 passed.
-- **`#329` is in PR `#334`, open and deliberately unmerged.** CI's `push:` trigger is scoped
-  to the protected branch; `scripts/tests/test_ci_workflow.py` pins that literal against
-  `vcs.protected_branch`, which is the only thing that can — a workflow cannot read the
-  config and GitHub forbids expressions in `on:`. Verified with `make test` in the same
-  checkout: 955 passed. **Held** because it cannot be validated while Actions is down: its
-  own evidence is "one run, not two", and it currently produces zero, which is
-  indistinguishable from having broken PR CI entirely.
-- **Filed this session:** `#329`, `#330`, `#331`, `#332`, `#333`, `#335`. Occurrence
-  comments on `#243` and `#305`.
-
-**Learned**
-
-- **Ask whether the provider is up before diagnosing the repo.** `#329` was filed
-  attributing 15-minute job starvation to this repo's duplicate CI runs; githubstatus.com
-  read `Actions: major_outage`, against an incident opened 15:22Z that predates every
-  starved run. What disproved the local claim was a run
-  with **no sibling to compete with** — PR `#328`'s merge to `main` produced zero check runs
-  under the old unscoped trigger. Corrected on the issue rather than by editing it, and the
-  workflow gap that permitted it is `#335`.
-- **Re-running during an outage is what created the second defect.** The re-run made a check
-  row vanish from the rollup instead of turning green, wedging `pr_watch`'s monotone
-  false-settle guard permanently (`#333`, measured over eight polls at an unchanged head).
-- **A test that names a property can cover half of it.** The byte-identical `--no-clobber`
-  test exercised one of `_seedable`'s two marker arms; mutating the other left it green, and
-  the kill came from an unrelated test that happened to use the other literal. Found by
-  mutation testing, not by review.
-- **The panel reviewed what shipped; the bot reviewed the design.** CodeRabbit went rate
-  limited after reviewing `4576f40`, so the fixes for its own three findings were never
-  bot-reviewed. `#305`'s shape, hit twice in one PR.
-
-**Decided this session (operator)**
-
-- **Record rather than repair**, again on a comment defect: PR `#328` ships a duplicated
-  comment paragraph in `init.sh`. Repairing it moves the head off the sha both lenses
-  reviewed, and `safety-critical-changes.md` gives that class no delta-pass exit — so three
-  lines of comment would have cost a full panel. Stated on the PR, recorded on `#305`.
-- **Run the panel** rather than wait out the bot's rate limit.
-- **Hold `#334`** rather than merge a CI-trigger change on a green that cannot be obtained.
-
-**Open, and owned by nothing yet**
-
-- **The critical path leaves this repo.** Phase 3 needs cs-toolkit's Phase 0 and its fixer
-  predicate (`done` → `converged`); its `pr_watch.py` still carries `decide_done`, and
-  `.codex/hooks.json` is absent there. Both are cs-toolkit PRs.
-- **`#330` does not block Phase 3.** Measured this session: all six of cs-toolkit's seedable
-  paths classify IN_USE under `init.sh`'s own `_seedable`, spliced from the script rather
-  than reimplemented. Re-run that before Phase 3 executes rather than trusting the snapshot.
-- **`#331`, `#332`, `#333`, `#335` are all `pr-watch` loop defects** found by using it. They
-  tax every future PR, and Phase 3 is the largest one in the plan.
-- **Carried forward:** `#304`, `#291`, `#243`, `#273`, `#290`, `#283`, `#287`, `#292`,
-  `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`,
-  `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
-
-▶ Next: **`pr-watch 334` once GitHub Actions recovers** — the check is one `toolkit` run on
-that PR rather than two, and a run on `main` after it merges; if zero runs still appear, the
-change broke PR CI and `test_pull_request_remains_a_trigger` is the thing to read. That is a
-gate, not the substance: the substance is **cs-toolkit's Phase 0 and its fixer predicate**,
-which gate Phase 3 and are that repo's PRs, per `docs/kit-convergence-plan.md`.
-
-______________________________________________________________________
-
-## Session — 2026-08-06 (`#286`, and a review that kept finding the same shape)
-
-**Theme —** One inline lane, steered live because `#286`'s three open questions were
-operator decisions. All three were answered before code was written; none changed under
-review.
-
-- **`#286` shipped in PR `#322`.** `--record-install` records `not_installed`, so an
-  absence resolves to `declined` / `removed` / `new-upstream` instead of one permanent
-  count. Verified with `make test` in `/Users/topi/Coding/agentic-dev-kit`: 943 passed.
-- **Phase 1's done-when is still open.** It asks that `kit_doctor` distinguish sized down
-  from broken *in cs-toolkit*, which needs a `--record-install` run there — adopter-side,
-  so it belongs to Phase 3 rather than to this PR. `#286` is closed; the phase is not.
-- **Operator decisions:** the declared set lives in the baseline (derived, not
-  hand-declared); a file the kit adds later gets its own state rather than defaulting
-  either way; declaring is opt-in via the key's presence, so an older baseline keeps its
-  existing report.
-- **Filed this session:** `#323`, `#324`, `#325`, `#326`.
-
-**Learned**
-
-- **A verdict line is a claim, and it drifted three times from the same blind spot.** Three
-  separate review rounds found a headline reading as an all-clear over something actionable
-  below it — for `removed`, then `unknown-version`, then `differs`. Each fix addressed the
-  case in hand and missed its sibling one line away. What ended it was routing all four
-  branches through one shared caveat rather than a fourth careful edit.
-- **The panel found what my own mutation testing could not.** Several findings were gaps in
-  the tests I had just written: I mutated the branches I was thinking about, and those were
-  the ones already covered. A lens picks its own targets, which is the property being paid
-  for.
-- **`#324` is the limit of what this axis can assert.** A path in neither map cannot be
-  told from a damaged record, because the baseline is the trust root and carries no
-  integrity check. PR `#322` hedges the wording and does not claim more.
-
-**Decided this session (operator)**
-
-- **Run the panel to convergence rather than to a round count.** Severity rose at round 3
-  (a HIGH after two Medium-only rounds), and the stopping rule is blast radius, not rounds.
-  Round 4 converged and the receipt was recorded then.
-
-**Open, and owned by nothing yet**
-
-- **`#297` is now the whole of the critical path's next step** — Phase 2, carrying `#304`.
-- **`#325` and `#326` are about the panel itself**, and the panel is now the review path
-  whenever the bot is limited, so they cost every PR rather than only this one.
-- **Carried forward:** `#243`, `#273`, `#291`, `#290`, `#283`, `#287`, `#292`, `#248`,
-  `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`, `#203`,
-  `#190`, `#187`, `#124`, `#169`, `#143`.
-
-▶ Next: **`#297` — Phase 2 of the convergence plan**, and now the critical path's only
-open step on the kit side. Its done-when is that something can run `init.sh` in an adopter
-without the operator reasoning about which files it will overwrite; `#304` is adjacent and
-may share parts of the change. The Codex `SessionStart` budget hooks and cs-toolkit's Phase
-0 still run in parallel per `docs/kit-convergence-plan.md`.
 
 ______________________________________________________________________
 
