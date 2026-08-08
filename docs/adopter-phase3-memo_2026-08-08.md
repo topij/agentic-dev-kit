@@ -74,7 +74,7 @@ form is the point, and it is the same lesson the Phase 0 memo learned the
 expensive way: **a commit named in a brief is a claim with a timestamp.** The
 baseline recorded by this phase stamps `7baca48`, not `796e16a`.
 
-## The invariant that made `init.sh` safe to replace
+## The invariant about `init.sh`, and why the refresh was reverted anyway
 
 `shasum -a 256` on `cs-toolkit/init.sh` and on `git show 7485512b:init.sh` in the
 kit both returned `01f7ea7ea6048c7ef382ad17603f843b1286ca36835a6849193847f58abf7ac7`.
@@ -88,7 +88,84 @@ not go stale. Prefer it.
 Corollary the adopter acted on: the local `init.sh` predated #301/#303/#359, so
 running it would have printed a registration advisory with no `--runtime`, the
 pre-Phase-0 `scripts/hooks/` path, and none of the empty-string guard —
-re-forking precisely what Phase 0 un-forked. **It was replaced, never run.**
+re-forking precisely what Phase 0 un-forked. So it was replaced, **never run**.
+
+> **Then the review panel found the refresh was not safe, and it was reverted.**
+> The invariant above is still correct and still the right tool — it establishes
+> that nothing *local* is lost. What it cannot establish, and what nobody asked
+> until a lens did, is whether the **kit's newer version is safe for this
+> adopter.** Those are different questions, and Phase 3 conflated them right up
+> until the panel ran. See *The finding that stopped the merge* below.
+
+## The finding that stopped the merge — [#385](https://github.com/topij/agentic-dev-kit/issues/385), new, blocking
+
+The kit's current `init.sh` unconditionally appends `reports/` to the adopter's
+`.gitignore` (`init.sh:1506`; `git show origin/main:init.sh | grep -n add_ignore_line`
+confirms the base has no such line). Its justifying comment states the premise:
+
+```text
+# ... the workflows commit only the doc/skill/config paths they edited — never reports/.
+```
+
+**True of the kit. False of its only adopter.** Measured in a throwaway `git init`
+tree holding a copy of cs-toolkit's `.gitignore`:
+
+```console
+=== BEFORE ===
+  stageable  domains/customer-voice/reports/customer-voice_NEWCO_latest.json
+  stageable  domains/customer-voice/reports/quotes/customer-quotes.json
+=== AFTER appending 'reports/' ===
+  IGNORED    (both)
+```
+
+Two properties combine: `reports/` has no leading slash, so it matches a `reports`
+directory at **any** depth (`domains/customer-voice/reports/`, not just the root
+one); and git does not descend into an excluded directory, so every
+`!**/reports/*_latest.*` negation the adopter maintains goes inert.
+`config/automations.yaml` carries **51** allowlist lines under `reports/`.
+
+Three things make this worse than a bad default:
+
+1. **No downstream fix exists.** `add_ignore_line` appends and later rules win, so
+   no ordering or negation in the adopter's own `.gitignore` can defend against it.
+2. **The damage is silent and selective.** Already-tracked files keep working —
+   git only ignores *untracked* paths — so nothing breaks visibly. The crons
+   simply stop committing **new** dated artifacts.
+3. **It is armed, not theoretical.** `kit_doctor` prints `⚠ pre-push hook: NOT
+   installed — run ./init.sh` on every run, and because the adopter declines the
+   kit's `pre-push` on principle (#46), that instruction is permanent — see #381.
+   The instrument tells the operator to run the thing that does this.
+
+**Resolution: `init.sh` is tracked and HELD**, reporting
+`STALE (installed 01f7ea7ea604, kit ships 009a12e3543d)`. That is #360's
+acceptance signal *working*, not failing: the point of tracking the installer is
+that the doctor can say something true about it, and "you are behind,
+deliberately" is true and actionable. Before #360 it could not have said even that.
+
+### A second defect surfaced while doing the hold — worth its own look
+
+`--record-install` **will not record a held file**, and the way it declines is
+costly. It refuses any present kit-owned path that does not match the source kit
+("a file this kit did not put there must never be reported STALE and replaced" —
+correct in itself), but when it refuses one it **also drops the entire
+`not_installed` declaration**. Observed directly: the manifest went to 15 files
+with no declared scope, and the next report read
+
+```text
+files: 15 unchanged, 1 differ, 20 missing, 0 unknown
+This baseline declares no install set, so a deliberate omission cannot be told
+from a deletion.
+```
+
+Twenty deliberately-declined files reporting as `missing` is precisely the shape
+**#286 was closed to fix**, reintroduced through a different door. The adopter's
+manifest entry for `init.sh` is therefore hand-maintained at the held hash.
+
+The deeper gap: **there is no way to declare a kit-owned file that is installed
+but deliberately held at an older version.** `not_installed` means "declined
+entirely" — using it here would make `init.sh` invisible again and undo #360. This
+is #290's shape ("no state for exists but is not usable") applied to *versions*
+rather than to usability, and it will bite any adopter who needs to pin one file.
 
 ## Findings that block an adopter — ordered
 
@@ -306,8 +383,15 @@ absence — the path did not move in this phase, which is probably why.
 Phase 0 predicted that upgrading a real adopter surfaces kit issues that reasoning
 about adopters does not. Phase 3's score, stated plainly rather than favourably:
 
-- **Five new issues** — #379, #380, #381 from the work itself; #382, #383 from the
-  review pass — plus concrete instances added to three open ones (#363, #343, #287).
+- **Six new issues** — #379, #380, #381 from the work itself; #382, #383 from the
+  bot review; **#385 from the fallback panel** — plus concrete instances added to
+  three open ones (#363, #343, #287).
+- **The panel caught what the bot did not, and it was the only merge-blocker.**
+  CodeRabbit reviewed the same diff and produced eight findings; none was #385.
+  The panel's adversarial lens got there by *running the installer in a disposable
+  copy and diffing `git add -n` before and after* — a check no amount of reading
+  produces. Worth remembering the next time a rate-limited bot makes the panel look
+  like a formality: on this PR the bot was the formality and the panel was the gate.
 - **#379 is the interesting one**, for the same reason #360 was: it is not an
   addition to a list, it is the *same structural blind spot* the previous phase
   found, in a place nobody looked. #360 was "the installer is outside the
