@@ -29,7 +29,7 @@ there.
 load-bearing claims did not survive being re-derived, and the work that followed was
 smaller and better aimed than the memo proposed.
 
-- **PR `#361` merged.** Three facts in `docs/kit-convergence-plan.md` and this file that a
+- **PR `#361` merged.** Facts in `docs/kit-convergence-plan.md` and this file that a
   reader would have acted on: Phase 3 no longer waits on cs-toolkit; "the only divergence
   currently invisible to tooling" was false, `init.sh` being the counterexample; and
   `adopt`/`upgrade` already have shared definitions with bindings on both runtimes since
@@ -95,7 +95,7 @@ smaller and better aimed than the memo proposed.
 ▶ Next: **`#358`, then Phase 3 in cs-toolkit.** `#358` is two lines in
 `fallback-review-panel.md` plus the doctrine-scoped guard its comment thread already
 measures. Then Phase 3, from a session rooted in `/Users/topi/Coding/in-parallel/cs-toolkit`
-— read `docs/kit-convergence-plan.md`'s pre-Phase-3 section first. Two things that session
+— read `docs/kit-convergence-plan.md`'s pre-Phase-3 section first. What that session
 must do beyond the upgrade: install `docs/agentic-dev-kit/workflows/adopt.md` and
 `upgrade.md` there (its manifest lists both as declined, so it has no installed workflow
 doc to follow), and refresh its vendored `kit_doctor.py` — until that is replaced, its own

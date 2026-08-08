@@ -80,8 +80,8 @@ un-fork.**
 > currently invisible to tooling," and that was false.** `init.sh` is the
 > counterexample: it is in neither `kit_doctor.KIT_OWNED` nor
 > `kit-manifest.json`, so the file that *performs* the install is the one file
-> the doctor structurally cannot report drift on. cs-toolkit's copy measures 852
-> differing lines against kit `3761bec` while its doctor reports `13 unchanged,
+> the doctor structurally cannot report drift on. cs-toolkit's copy stood
+> hundreds of lines behind kit `3761bec` while its doctor reported `13 unchanged,
 > 0 differ, 0 missing` and exit 0 — every statement in that report true, and the
 > drift entirely outside what it ranges over. Verified in this repo 2026-08-08 by
 > parsing the `KIT_OWNED` tuple (35 entries, no `init.sh`) and searching the
@@ -324,10 +324,22 @@ the upgrade and `init.sh` is what performs it.
    **That premise is false, checked 2026-08-08, and the design question dissolves
    with it.** cs-toolkit's `init.sh` is **byte-identical to kit commit
    `7485512b`** (2026-07-26) — found by hashing its copy and scanning every
-   `init.sh` blob in this repo's history for a match. So all 852 differing lines
-   are version drift and **none** are local rendering. Two supports: `init.sh`
-   never writes to itself (it writes `config/dev-model.yaml` and renders
-   `docs/templates/`), and nothing in the kit tells an adopter to edit it.
+   `init.sh` blob in this repo's history for a match. So **whatever** its line
+   delta is, all of it is version drift and **none** is local rendering. Two
+   supports: `init.sh` never writes to itself (it writes `config/dev-model.yaml`
+   and renders `docs/templates/`), and nothing in the kit tells an adopter to edit
+   it.
+
+   > **The line count is deliberately not stated here, and that is a correction.**
+   > Earlier revisions of this document said "all **852** differing lines", the
+   > figure `#360` measured. A correctness lens found it stale within the same
+   > session: `#366` changed `init.sh`, so a live recount gives 883/887 depending
+   > on `diff` argument order. Restating it just resets a treadmill — the number
+   > moves every time either copy changes, while **the claim that matters cannot
+   > move at all.** Byte-identity with a known kit commit is what establishes that
+   > the delta is *entirely* drift, at any size. To recompute the size:
+   > `diff <adopter>/init.sh <kit>/init.sh | grep -c '^[<>]'` (adopter first;
+   > the count is argument-order dependent).
 
    Consequences for the fix, read off `_drift_state`: a tracked, unedited,
    behind-the-kit copy reports **`stale`** ("installed X, kit ships Y"), which is
