@@ -3339,3 +3339,38 @@ def test_only_invocable_scripts_are_candidates_for_a_registration_match(tmp_path
     assert {"pr_followup_hook.py", "check_doc_budget.py"} <= candidates
     for library in ("kitconfig.py", "paths.py", "resolver.py", "__init__.py"):
         assert library not in candidates, f"{library} is imported, not invoked"
+
+
+def test_an_unparseable_registration_file_makes_the_run_non_green(tmp_path, capsys, monkeypatch):
+    """A file that does not parse is worse than one broken path: EVERY
+    registration in it is unmeasurable, and the runtime that must read the same
+    JSON is no better placed than this check was.
+
+    Reported `⚠` and exited 0 — a clean bill of health over a file nobody can
+    account for, which is #379's own shape one level up (panel, correctness
+    lens, delta round 2)."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    _write(root / "kit-manifest.json", json.dumps(_manifest({ENGINE: kit_doctor.sha256_of(target)})))
+    _write(root / ".claude" / "settings.json", "{not json at all")
+    monkeypatch.chdir(root)
+
+    # The file axis is clean, so a 1 can only have come from the registration.
+    quiet = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, None)
+    assert (quiet.drifted, quiet.broken) == ([], [])
+
+    assert kit_doctor.main(["--root", str(root)]) == 1
+    assert "unreadable" in capsys.readouterr().out
+
+
+def test_an_unwired_runtime_names_the_engines_dir_it_looked_under(tmp_path, capsys):
+    """The `unregistered` detail was computed and reached `--json` only. It is
+    the useful half of that line: an operator who sees no registration wants to
+    know which engines path the check resolved before going to look."""
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    _write(root / ".codex" / "hooks.json", json.dumps({"hooks": {}}))
+
+    report = _inspect(root, {}, None)
+    print(kit_doctor.render(report))
+
+    assert "no kit hook registered (engines: scripts/devkit)" in capsys.readouterr().out

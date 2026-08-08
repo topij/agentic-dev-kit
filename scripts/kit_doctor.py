@@ -797,17 +797,24 @@ class Report:
 
     @property
     def dead_registrations(self) -> list[RegistrationStatus]:
-        """Registrations that name a path which is not there.
+        """Registrations that cannot fire, by the two routes there are.
 
-        Only `broken` reaches the exit code, and the omissions are the point:
-        `unregistered` and `absent` describe an adopter who has not wired the
-        hook, which is a supported state — `init.sh` only ever PRINTS the block
-        (#303) — and failing them would be #286's bug in a third place, a
-        healthy adoption failing its own gate forever. `unresolvable` is a
-        registration this check could not evaluate; reporting that as broken
-        would be claiming a measurement it did not make.
+        `broken` — the file it names is not there. `unreadable` — the
+        registration file itself does not parse, so EVERY registration in it is
+        unmeasurable, and the runtime that must parse the same JSON is no better
+        placed than this check was. Leaving that one out was the shape #379 was
+        filed about, one level up: a `⚠` line and exit 0 over a file whose hooks
+        nobody can account for (panel, correctness lens, delta round 2).
+
+        The omissions are the point, and they are the other three: `unregistered`
+        and `absent` describe an adopter who has not wired the hook, which is a
+        supported state — `init.sh` only ever PRINTS the block (#303) — and
+        failing them would be #286's bug in a third place, a healthy adoption
+        failing its own gate forever. `unresolvable` is a registration this check
+        could not evaluate; reporting that as broken would be claiming a
+        measurement it did not make.
         """
-        return [r for r in self.registrations if r.state == "broken"]
+        return [r for r in self.registrations if r.state in ("broken", "unreadable")]
 
 
 def sha256_of(path: Path) -> str:
@@ -1815,7 +1822,10 @@ def render(report: Report) -> str:
             "resolves": ("✓", f"{reg.detail} resolves"),
             "broken": ("✗", f"{reg.detail} — NO SUCH FILE, so this hook cannot fire"),
             "unresolvable": ("⚠", f"{reg.detail} — path not resolvable from here"),
-            "unregistered": ("·", "no kit hook registered"),
+            # The detail names the engines dir the check resolved, which is the
+            # useful half when nothing is registered — it was computed and shown
+            # only in `--json` (panel, correctness lens).
+            "unregistered": ("·", f"no kit hook registered ({reg.detail})"),
             "absent": ("·", "not present — no registration on this runtime"),
             "unreadable": ("⚠", f"unreadable — {reg.detail}"),
         }.get(reg.state, ("⚠", reg.state))
