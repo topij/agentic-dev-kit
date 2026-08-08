@@ -932,9 +932,6 @@ _imports_agents_md() {
 # The precise property, because two looser versions of it shipped first and each
 # destroyed a real file with no backup, reported as `seeded`:
 #
-# The precise property, because two looser versions of it shipped first and each
-# destroyed a real file with no backup, reported as `seeded`:
-#
 #   line 1 matches  <!--  [blanks]  <marker>  [blank or end]
 #
 # Both ends are anchored. The left alone was not enough — an HTML comment that
