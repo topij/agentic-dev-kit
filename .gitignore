@@ -22,7 +22,12 @@ state/
 # the same runs that write state/: once a sweep lands, every proposal is a
 # tracker issue and every source entry is verbatim in the archive. Tracking them
 # would also be the kit's one narrative path with no doc_budgets tripwire.
-reports/
+#
+# ANCHORED (#385): unanchored, this would ignore a `reports` directory at any
+# depth, and git does not descend into an excluded directory — so any future
+# nested reports path here would be un-committable with no negation able to
+# reach it. The kit's reports land at the repo root; the line says only that.
+/reports/
 
 # Local config overlay. `kitconfig.load_config()` merges this over
 # config/dev-model.yaml per leaf, so a value that must not enter git — an

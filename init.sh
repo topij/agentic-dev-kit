@@ -1487,23 +1487,116 @@ add_ignore_line() {
     echo "added '$entry' to .gitignore"
   fi
 }
-add_ignore_line "state/"
-add_ignore_line ".devkit_state_root"
+# Two kinds of line end up in an adopter's .gitignore, and only one of them may
+# be imposed (#385).
+#
+#   add_ignore_line        — HYGIENE. Its absence leaks something: an operator id
+#                            in config/*.local.yaml, a literal token in .mcp.json.
+#                            Append-only and always-wins is the RIGHT shape there:
+#                            a later rule beating an adopter's earlier one is the
+#                            point, because no adopter benefits from a leak.
+#   add_policy_ignore_line — POLICY. It asserts "this path is derived scratch."
+#                            That is a belief about the adopter's repo, and an
+#                            adopter may hold the opposite one. Append-only is the
+#                            WRONG shape here: because later rules win, no
+#                            ordering or negation the adopter writes can defend
+#                            against it, so an imposed policy line is unappealable.
+#
+# The policy variant therefore refuses to write when the repo disagrees with it,
+# and says so. Two forms of disagreement, both read from the repo rather than
+# asked about:
+#   1. the adopter TRACKS files the entry would ignore. Git ignores only
+#      untracked paths, so the damage would be silent and would hit only NEW
+#      files — the shape that cost cs-toolkit its committed report artifacts.
+#   2. .gitignore already carries a rule about that path. An adopter with rules
+#      for it has a policy; ours goes last and would overrule theirs.
+_ignore_pattern_matches_tracked_files() {
+  # Tracked paths the candidate pattern would ignore, asked of git's own matcher
+  # rather than re-implemented in sh. `--exclude` applies the pattern as if it
+  # were a .gitignore line at the repo root, `-c -i` lists the CACHED files it
+  # matches — exactly "what would this line newly hide?".
+  git rev-parse --git-dir >/dev/null 2>&1 || return 1
+  [ -n "$(git ls-files --cached --ignored --exclude="$1" 2>/dev/null | head -n 1)" ]
+}
+
+_ignore_rule_exists_for() {
+  # Does .gitignore already rule on this path? Compare NORMALISED forms so the
+  # anchoring an adopter chose does not decide the answer: `/reports/`,
+  # `reports/`, `**/reports/**` and `!**/reports/*_latest.*` are all rules about
+  # `reports`. Prefix-matching on a path component is what catches the last one —
+  # a repo whose only reports rules are negations still has a policy.
+  awk -v entry="$1" '
+    function norm(p) {
+      sub(/^!/, "", p); sub(/^\*\*\//, "", p); sub(/^\//, "", p)
+      sub(/\/\*\*$/, "", p); sub(/\/$/, "", p)
+      return p
+    }
+    BEGIN { want = norm(entry); found = 0 }
+    {
+      line = $0
+      sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
+      if (line == "" || line ~ /^#/) next
+      have = norm(line)
+      if (have == want || index(have, want "/") == 1) found = 1
+    }
+    END { exit(found ? 0 : 1) }
+  ' .gitignore
+}
+
+add_policy_ignore_line() {
+  entry="$1"
+  what="$2"
+  grep -qxF "$entry" .gitignore 2>/dev/null && return 0
+  if _ignore_rule_exists_for "$entry"; then
+    echo "note: .gitignore already rules on '$entry' — NOT added ($what)."
+    echo "      An existing rule is a policy, and the kit's line would go last and win."
+    return 0
+  fi
+  if _ignore_pattern_matches_tracked_files "$entry"; then
+    echo "note: this repo tracks files that '$entry' would ignore — NOT added ($what)."
+    echo "      Git ignores only untracked paths, so adding it would silently stop"
+    echo "      NEW files there from being committable while the tracked ones kept"
+    echo "      working. Add it yourself if that directory is the kit's, not yours."
+    return 0
+  fi
+  add_ignore_line "$entry"
+}
+
+add_policy_ignore_line "state/" "the state sandbox"
+add_policy_ignore_line ".devkit_state_root" "the sandbox marker"
 # A runtime that isolates review lenses by worktree may place one here. The
 # "No writes in the tree you were given" contract item of fallback-review-panel.md
 # forbids a lens from writing inside a tree it
 # did not create, so this is not lens scratch — it is somebody else's tree, and
 # either way it must never be committed back into the repo.
-add_ignore_line ".claude/worktrees/"
+add_policy_ignore_line ".claude/worktrees/" "isolated review-lens worktrees"
 # Staged writes from scripts/lib/atomic_write.py, which publishes a narrative doc
 # by renaming a temp over it rather than truncating it (#164). The module removes
 # its own temp on every path it controls, but SIGKILL runs no handler — and the
 # debris lands beside the living handoff, which is where wrap-up stages files.
-add_ignore_line "*.devkit-tmp"
+add_policy_ignore_line "*.devkit-tmp" "atomic-write debris"
 # Pipeline reports (triage proposals, systemize digests) are derived scratch from
-# the same runs that write state/, and the workflows commit only the doc/skill/
-# config paths they edited — never reports/.
-add_ignore_line "reports/"
+# the same runs that write state/, and the kit's workflows commit only the
+# doc/skill/config paths they edited — never reports/.
+#
+# ANCHORED, and conditional, because that premise is the kit's and not every
+# adopter's (#385). Unanchored, `reports/` matches a `reports` directory at any
+# depth — cs-toolkit commits 277 tracked files under `domains/*/reports/` behind
+# a scheme of `!**/reports/…` negations, every one of which goes inert once the
+# parent directory is excluded, since git does not descend into an excluded
+# directory. The kit's own reports land at <repo-root>/reports, so `/reports/`
+# says what the kit actually means.
+add_policy_ignore_line "/reports/" "the kit's derived pipeline reports"
+# A repo seeded by a pre-#385 init.sh still carries the unanchored line, and the
+# guards above cannot help: the entry is already there, and .gitignore is
+# adopter-owned so the kit must never rewrite it. Say what it does instead.
+if grep -qxF "reports/" .gitignore 2>/dev/null; then
+  echo "note: .gitignore carries an unanchored 'reports/' line, seeded by an older"
+  echo "      init.sh. It ignores a 'reports' directory at ANY depth, and git does not"
+  echo "      descend into an excluded directory, so '!**/reports/…' negations below it"
+  echo "      are inert (#385). If only the kit's <repo-root>/reports/ was meant, change"
+  echo "      that line to '/reports/' — the kit will not edit your .gitignore for you."
+fi
 # The local config overlay. kitconfig.load_config() merges it over
 # config/dev-model.yaml per leaf, so it is where a value that must not enter git
 # lives — the operator id an approval DM targets, a tracker team id. This line is
