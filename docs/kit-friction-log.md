@@ -124,3 +124,22 @@ do the sweep, and a different reader might have declined on a projection of 5%. 
 kit already has (`#54`: name the command that establishes a claim) has no equivalent for a
 claim about the *future*, where there is no command to name. "Unknown until measured" was
 available and was not used.
+
+### 2026-08-09 — a record cited a source no reader inside the repo can reach
+
+The handoff recorded a finding from the adopter session's memo. That memo was delivered as a
+**rendered artifact**, not committed to either repo, so its URL is the only pointer to it.
+
+A review lens searched the adopter's PR body, every PR and inline comment, both repos'
+`git log --all` and `git grep`, and the adopter's friction log — found nothing, and scored it
+**HIGH** as a claim that "does not trace to any source I can find", while noting honestly it
+could not rule out a source it had no access to. **It was right to.** From inside the repo
+the claim was unverifiable, and an unverifiable claim in a narrative document is a defect
+whether or not it happens to be true.
+
+The fix was provenance, not deletion: carry the commands that re-derive the checkable parts
+(`git rev-list --count …` → 7) and name the artifact so the next reader knows the rest lives
+outside the tree. **The rule:** when evidence arrives from outside the repo — an artifact, a
+transcript, a runtime observation with no command to re-run — the record must quote enough to
+stand alone or name a command that re-derives it. A URL is a pointer for a human in the same
+session; it is not provenance. This is why the Phase 3 work committed its memo *into* the repo.
