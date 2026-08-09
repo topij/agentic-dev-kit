@@ -322,8 +322,9 @@ document is about:
   and then speaks in relative paths; the rule exists for review lenses and for no
   workflow.
 
-**Sequencing note — the install-path lane is DONE**, merged 2026-08-10 as `#401`
-(`4fc394f`). `#380`, `#397` and `#398` are closed with their verification on the
+**Sequencing note — the install-path lane is DONE**, merged as `#401` (`4fc394f`,
+`2026-08-10T01:32:44+03:00` — `22:32Z` the previous day, so a reader on either clock
+lands on the same commit). `#380`, `#397` and `#398` are closed with their verification on the
 tracker; `#399` stays open for its `adopt.md` half, which was deliberately not
 folded into that PR. `#380`'s standing question is settled: the hooks fire in a
 **trusted** Codex session, and the `matcher` assumption this plan carried from
