@@ -50,7 +50,32 @@ Also fetch the kit you are upgrading *to*, if it isn't already local:
 git clone --depth 1 https://github.com/topij/agentic-dev-kit /tmp/agentic-dev-kit
 ```
 
-Everything below copies **from** that checkout **into** this repo.
+Everything below copies **from** that checkout **into** this repo — **two trees, and
+from here every write must name which one.** Bind both roots now, before the first
+write, and use them for the rest of the workflow:
+
+```bash
+REPO="$(git rev-parse --show-toplevel)"   # the repo being upgraded
+KIT=/tmp/agentic-dev-kit                  # the kit you are upgrading TO
+echo "REPO=$REPO"; echo "KIT=$KIT"; echo "pwd=$(pwd)"
+```
+
+**Check that output before continuing.** `$REPO` must be the repo you meant to upgrade,
+and `pwd` must be inside it. This is the assertion, and it belongs *before* the first
+write — after it, it is a post-mortem.
+
+The hazard is that a `cd` into `$KIT` — to inspect the fetched kit, to read a file —
+**outlives the command that made it**, and every relative path afterwards resolves in
+the clone. Two sessions lost time to exactly this on 2026-08-09, and neither recognised
+it: one had `cp` and `./init.sh` land in the verification clone and read it as filesystem
+corruption; the other ran greps in the wrong tree and got a startling wrong answer it
+nearly believed. The failure mimics a broken tool rather than a wrong directory, which
+is why the guard has to be structural rather than attentive (`#399`).
+
+When you verify a copy landed, **hash it at the destination** —
+`shasum -a 256 "$REPO/<path>"` — rather than reading `git status` from wherever the
+shell is. In the first occurrence above, the destination hash is what would have
+revealed it, and `git status` is what concealed it.
 
 ## Step 1 — Diff the installation (read-only)
 
@@ -110,6 +135,7 @@ docs — so the "runs on a branch" guarantee has to be established *before* the 
 mutation, not before the file copies in Step 3:
 
 ```bash
+cd "$REPO" || exit 1
 git checkout -b chore/kit-upgrade
 ```
 
@@ -119,11 +145,159 @@ schema migrations — so running it would report success while silently applying
 Take the fetched kit's copy first:
 
 ```bash
-cp /tmp/agentic-dev-kit/init.sh ./init.sh
-chmod +x init.sh                                  # the kit ships it 100755; a copy can lose the bit
-mkdir -p docs/templates && cp /tmp/agentic-dev-kit/docs/templates/*.tmpl docs/templates/
-./init.sh --no-clobber
+cd "$REPO" || exit 1                              # every write below lands here, not in $KIT
+cp "$KIT/init.sh" "$REPO/init.sh"
+chmod +x "$REPO/init.sh"                          # the kit ships it 100755; a copy can lose the bit
+mkdir -p "$REPO/docs/templates"
+_gate_failed=0
+for _tmpl in "$KIT"/docs/templates/*.tmpl; do
+  _rel="docs/templates/$(basename "$_tmpl")"
+  python3 -c 'import json,pathlib,sys
+b = pathlib.Path(sys.argv[1]) / "kit-manifest.json"
+try:
+    d = json.loads(b.read_text(encoding="utf-8"))
+except FileNotFoundError:
+    if b.is_symlink():           # present but dangling: unreadable, not absent
+        print(f"{b}: dangling symlink", file=sys.stderr)
+        sys.exit(2)
+    sys.exit(1)                  # genuinely absent: no declared scope, copy
+except Exception as exc:         # ANY other read/parse failure: refuse, do not guess
+    print(f"{b}: {type(exc).__name__}: {exc}", file=sys.stderr)
+    sys.exit(2)
+if not isinstance(d, dict):
+    print(f"{b}: top-level value is {type(d).__name__}, not an object", file=sys.stderr)
+    sys.exit(2)
+if "kit_commit" not in d:
+    sys.exit(1)                  # not a --record-install baseline: no declared scope
+if "not_installed" not in d:     # PARTIAL record, not a broken one — see below
+    sys.exit(3)
+declared, files = d["not_installed"], d.get("files")
+if not isinstance(declared, list) or not isinstance(files, dict):
+    print(f"{b}: kit_commit is present but the declared scope is unreadable "
+          f"(not_installed={type(declared).__name__}, files={type(files).__name__})",
+          file=sys.stderr)
+    sys.exit(2)                  # a baseline that cannot state its scope is not a licence
+sys.exit(0 if sys.argv[2] in declared else 1)' \
+    "$REPO" "$_rel" && _verdict=0 || _verdict=$?
+  case "$_verdict" in
+    0) echo "declined (recorded in not_installed) — not copied: $_rel" ;;
+    1) cp "$_tmpl" "$REPO/$_rel" ;;
+    3) echo "no declared scope recorded — not copied: $_rel"; _partial=1 ;;
+    *) echo "STOP: $REPO/kit-manifest.json is not a readable manifest, so the declared set is unknown. Copied nothing." >&2
+       _gate_failed=1; break ;;
+  esac
+done
+if [ "${_partial:-0}" -ne 0 ]; then
+  echo "note: the baseline carries kit_commit but no not_installed key, so it declares no" >&2
+  echo "      scope and the templates above were left alone rather than copied over" >&2
+  echo "      declines that cannot be read. This is a PARTIAL record, not a broken one:" >&2
+  echo "      one kit-owned file that does not byte-match the source kit suppresses the" >&2
+  echo "      whole key (see Step 5, and kit #388). Reconcile the paths Step 4 named and" >&2
+  echo "      re-run this block if you want the templates refreshed." >&2
+fi
+if [ "$_gate_failed" -ne 0 ]; then
+  echo "Not running init.sh. Fix kit-manifest.json, then re-run this block." >&2
+else
+  "$REPO/init.sh" --no-clobber
+fi
 ```
+
+Every path above is absolute or `$REPO`-anchored, per **Working across two trees** in
+[`AGENTS.md`](../../../AGENTS.md) — the rule this workflow binds by setting `$REPO` and
+`$KIT` in Step 0 above — including the manifest the gate reads, which is the adopter's and
+not the kit's. The
+`cd "$REPO"` is still required and is not redundant with them: `init.sh` resolves the
+config and the templates **against the working directory**, not against its own location
+(the same reason running `$KIT/init.sh` in place of the copy is not equivalent, below). So
+the `cd` sets what `init.sh` reads and the absolute paths set where everything else lands
+— and if the `cd` fails, the run stops rather than writing into whatever tree the shell
+was in.
+
+**The template copy is gated on the declared install set, and that gate is the
+difference between a refresh and a silent reversal.** A path listed in the baseline's
+`not_installed` is a **decision** the adopter recorded. Copying it in anyway is invisible
+at the time — `cp` says nothing, and `kit_doctor`'s `missing` count goes *down*, which
+reads as an improvement — and Step 4's `--record-install` then derives the installed set
+from what is on disk and writes the reversal in as fact. A repo that declined six
+templates comes out the other side declaring twenty installed files where it declared
+twenty-six, with nothing anywhere recording that a decision was reversed. `#398`, found by
+an adopter who spotted the unconditional instruction and declined to follow it.
+
+**A manifest that is present but not readable as a manifest stops the step rather than
+falling back to copying.** Absent and corrupt are different states and only the first is
+safe to treat as "no declared scope": a corrupt manifest may well hold declines nobody can
+now read, and copying over them is the very reversal this gate exists to prevent, reached
+by another route. So `FileNotFoundError` means no baseline and every template is copied,
+while anything else refuses, names the file on stderr, and copies nothing.
+
+**The shape checks mirror `kit_doctor.py`'s `_declared_scope` deliberately** — the same
+`not_installed`-is-a-list test and the same companion `files`-is-a-dict test (a scope
+claim needs both halves). That function is where this repo already settled what a readable
+declared scope is, and it carries its own parametrized regression test. **Two deliberate
+differences:**
+
+- **Direction of failure.** `_declared_scope` returns `None` and its caller reports
+  "cannot judge", because it is a read-only diagnostic. Here the same condition must
+  REFUSE, because the alternative is copying over declines nobody can read.
+- **No string filter over the list.** `_declared_scope` needs one because it returns a
+  set other code consumes; a membership test does not — `x in [5, "x"]` and
+  `x in ["x"]` agree for every input. Carrying it here would be a guard that no
+  mutation can kill, which is the shape this repo keeps finding as "a property named in
+  a comment and pinned by nothing". It was written, mutation-tested, found inert, and
+  removed.
+
+**Each of these checks was added after the previous version was shown to fall through to
+copying** — four rounds of it, which is the argument for mirroring a settled
+implementation rather than continuing to invent one:
+
+- a read or parse error — **any** exception, not an enumerated set. The first form let
+  `JSONDecodeError` escape as a traceback, once per template, and copied anyway; the
+  second caught `(OSError, ValueError)` and left the same hole one type over, since
+  `RecursionError` is a `RuntimeError` and a deeply-nested array reaches it (verified at
+  depth 200,000 on CPython 3.14.6). **Two enumerations, two holes, same shape** — so the
+  enumeration is gone rather than extended a third time. The `try` body is one
+  `read_text` + `json.loads`, so `except Exception` is precise here rather than broad:
+  there is no other statement in it whose failure could be masked;
+- a top-level value that parses but is not an object — `null`, `42`, `true` raise
+  `TypeError` on the membership test and exit 1 (copy), while `[…]` and `"…"` evaluate
+  the test to `False` and exit 1 (copy) with no error at all, which is the quieter and
+  worse half;
+- the refusal has to stop **the workflow**, not just the loop. `break` leaves the
+  `for` loop and the next line still runs `init.sh` — printing "Copied nothing" and then
+  proceeding past the point the prose calls a hard stop. `_gate_failed` is what makes the
+  stop real;
+- a well-formed object is not a readable scope. `{"kit_commit": …, "not_installed": 5}`
+  raised `TypeError` on the membership test and exited 1 (copy); a **string** there was
+  worse than that, because `in` on a string is a SUBSTRING test — no error, and a
+  comma-joined value could answer *true* for a path nobody declined;
+- **an ABSENT `not_installed` is a partial record, not a broken one, and conflating the
+  two aborts a routine upgrade.** `kit_doctor.py`'s `record_install_manifest` omits the
+  key entirely — not `[]` — whenever any kit-owned path is `unverified`, writes the
+  baseline anyway, and exits 1 to say the record is partial. Step 5 below already calls
+  a deliberately-kept local patch "the usual way in" to that state. An earlier version of
+  this gate refused it and suppressed `init.sh` with it, so an adopter carrying one patch
+  found the whole config migration blocked, with a STOP message whose suggested remedy
+  did not address the cause — and whose only obvious workaround, deleting the manifest,
+  reopens `#398`. It now skips the copies (the declines genuinely cannot be read), says
+  why, names `#388`, and **still runs `init.sh`**;
+- and `FileNotFoundError` alone does not mean *absent*. A **dangling symlink** at that
+  path raises it too, so the one shape the taxonomy treats as safe was also catching a
+  present-but-unreadable manifest. `is_symlink()` separates them — it does not follow the
+  link, so it stays true exactly where `exists()` has gone false. `#303` records the same
+  shape one file over, where a dangling symlink at `.codex/hooks.json` defeated three
+  rounds of guards.
+
+All four came out of the fallback review panel, two of them as HIGHs, each in the previous
+round's remediation.
+
+The `kit_commit` test is what distinguishes a real baseline from the kit's own shipped
+manifest sitting at the same path (the same distinction Step 1 draws above): a manifest
+without it has no `not_installed` to honour, so nothing is gated and every template is
+copied — which is the correct behaviour for a repo that never declared a scope.
+
+If the operator wants a declined template *now*, that is a decision to state and record,
+not a side effect of a refresh: copy it by hand and say so in the PR, so Step 4 records a
+transition someone chose.
 
 **`--no-clobber` is not optional here, and it is the one flag that changes what this step
 can destroy.** Bare `init.sh` seeds two classes of target: one that is *absent*, and one

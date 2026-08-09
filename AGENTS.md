@@ -41,6 +41,38 @@ established it and its actual result — #54 tracks making this a standing rule.
   commit message, squash message), in any form, even negated or inside code spans.
   Write "#N stays open" instead.
 
+## Working across two trees
+
+Verifying in a throwaway clone, measuring against an adopter checkout, upgrading a
+second repo — any task with a second tree in play. **A `cd` outlives the command that
+made it**, so every later relative path resolves in the wrong tree.
+
+- **Absolute paths for every write.** Bind the two roots to variables once
+  (`REPO=/abs/path`, `KIT=/abs/path`) and write through them. A bare `cp x y` or
+  `./init.sh` is the failure.
+- **Assert `pwd` before the first write of a sequence**, not after. After is a
+  post-mortem.
+- **Verify at the destination.** Hash the file where it was supposed to land
+  (`shasum -a 256 "$REPO/path"`) rather than reading `git status` from wherever the
+  shell happens to be.
+
+This is a rule because the failure **mimics** something else. It does not look like a
+wrong directory; it looks like the tool or the filesystem misbehaving. It cost two
+sessions time on 2026-08-09 in two repos: one put `cp` and `./init.sh` into a
+verification clone and read as filesystem corruption (`stat` reporting one inode for
+two paths, ten minutes spent suspecting a sandbox overlay); the other ran kit greps
+inside an adopter checkout and briefly "found" that adopter's variable in
+`scripts/dev_session.sh`. Both sessions were doing the right thing — verify in a copy
+first — and were defeated by shell state, not reasoning (`#399`).
+
+`fallback-review-panel.md` rule 7 has carried this for review lenses since before
+either occurrence; nothing carried it for workflows. **Both `upgrade.md` and `adopt.md`
+clone the kit to a second tree** in their Step 0, and `adopt.md` Step 1 then sends you
+to read files inside it. Only `upgrade.md` is hardened so far — it binds `$REPO`/`$KIT`
+and anchors its writes — because that is where the occurrence landed and where the
+writes are literal shell. `adopt.md` states its copies mostly in prose, which narrows
+the blast radius without removing it; hardening it is `#399`'s remaining half.
+
 ## Runtime parity
 
 This repo is the kit itself, so its own two-runtime setup is the worked example:

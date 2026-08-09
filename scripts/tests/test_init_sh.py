@@ -1378,6 +1378,107 @@ def test_no_summary_when_nothing_was_declined(tmp_path: Path) -> None:
     assert "--no-clobber left these existing files untouched:" not in result.stdout
 
 
+# The `--no-clobber` summary under `set -eu` (#397)
+#
+# Driven as an extracted FRAGMENT rather than through `_run_init`, and that is
+# the whole reason these tests kill anything. The defect is unreachable
+# end-to-end: `seed_doc` returns early on an empty `_target`, so no empty entry
+# can enter `NO_CLOBBER_SKIPPED` today, and the trailing newline from the append
+# does not produce an empty final iteration either (`read` hits EOF instead). A
+# test that ran the whole installer would therefore pass with the fix REVERTED —
+# a test that names a property and pins nothing, which is the shape the
+# 2026-08-09 friction entry is about. Feeding the block directly is what makes
+# the mutation kill.
+_NO_CLOBBER_SUMMARY_DRIVER = r"""set -eu
+NO_CLOBBER_SKIPPED="$1"
+eval "$(sed -n '/^if \[ -n "\$NO_CLOBBER_SKIPPED" \]; then/,/^fi$/p' init.sh)"
+echo "SUMMARY-BLOCK-COMPLETED"
+"""
+
+_CLOSING_GUIDANCE = "Each carries a kit marker on line 1"
+
+
+@pytest.mark.parametrize(
+    ("skipped", "label"),
+    [
+        ("AGENTS.md\nCLAUDE.md\n", "no empty entry"),
+        ("AGENTS.md\n\n", "empty FINAL entry"),
+        ("\nAGENTS.md\n", "empty leading entry"),
+        ("AGENTS.md\n\n\n", "two trailing empty entries"),
+    ],
+    ids=["normal", "empty-final", "empty-leading", "two-empty-trailing"],
+)
+def test_the_no_clobber_summary_always_reaches_its_closing_guidance(
+    tmp_path: Path, skipped: str, label: str
+) -> None:
+    """#397 acceptance 1: the summary reaches its closing guidance whatever the
+    list contains.
+
+    A `while` loop's exit status is its last iteration's. With the body ending
+    in `[ -n "$_skipped" ] && echo …`, an empty final entry makes that chain
+    false, the loop exits non-zero, the PIPELINE it terminates exits non-zero,
+    and `set -eu` aborts the script between the file list and the four echoes
+    explaining what to do about it — printing the problem and swallowing the
+    instruction.
+
+    The pipeline matters and is why the sibling shapes in `dev_session.sh` and
+    `reconcile_sessions.sh` are not this bug: a STANDALONE `while` whose last
+    body statement is a falsy `&&` chain exits 0 under `set -e` (the AND-OR
+    list exemption), while the same loop at the end of a pipeline exits 1.
+    Verified both directions before narrowing this test to the pipeline form.
+    """
+    (tmp_path / "init.sh").write_bytes((REPO_ROOT / "init.sh").read_bytes())
+
+    proc = subprocess.run(
+        ["sh", "-c", _NO_CLOBBER_SUMMARY_DRIVER, "_", skipped],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert proc.returncode == 0, (
+        f"the summary block aborted under `set -eu` with {label} "
+        f"(rc={proc.returncode}); stderr={proc.stderr!r}"
+    )
+    assert "AGENTS.md" in proc.stdout, "the file list was not printed"
+    assert _CLOSING_GUIDANCE in proc.stdout, (
+        f"the block printed the file list and then died before its closing "
+        f"guidance ({label}) — this is the #397 abort"
+    )
+    assert "SUMMARY-BLOCK-COMPLETED" in proc.stdout, (
+        "control never left the summary block, so the run's own tail "
+        "(`Upgrading later: …`) is lost too"
+    )
+
+
+def test_the_no_clobber_summary_skips_an_empty_entry_rather_than_listing_it(
+    tmp_path: Path,
+) -> None:
+    """#397 acceptance 2: an empty entry is skipped SILENTLY.
+
+    `|| continue` must not be traded for something that keeps the run alive by
+    printing a blank bullet — the operator would be told to go open a file with
+    no name. Pins the skip, not just the survival.
+    """
+    (tmp_path / "init.sh").write_bytes((REPO_ROOT / "init.sh").read_bytes())
+
+    proc = subprocess.run(
+        ["sh", "-c", _NO_CLOBBER_SUMMARY_DRIVER, "_", "AGENTS.md\n\nCLAUDE.md\n"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    bullets = [
+        line for line in proc.stdout.splitlines() if line.startswith("  ")
+    ]
+    assert bullets == ["  AGENTS.md", "  CLAUDE.md"], (
+        f"expected exactly the two named files as bullets, got {bullets!r}"
+    )
+
+
 @pytest.mark.kit_repo_only("docs/templates")
 def test_an_unknown_flag_is_refused_before_anything_is_written(tmp_path: Path) -> None:
     """A mistyped safety flag must not degrade to the destructive default.
@@ -2346,6 +2447,276 @@ def test_both_shipped_registrations_name_their_own_runtime() -> None:
     assert codex_pr_entry["matcher"] == "^Bash$"
 
 
+# ── register_budget_hooks — the SessionStart tripwires on Codex (#380) ───────
+
+
+def _with_budget_engines(repo: Path) -> Path:
+    """`register_budget_hooks` returns early when both engines are absent."""
+    for name in ("check_doc_budget.py", "check_memory_budget.py"):
+        engine = repo / "scripts" / name
+        engine.parent.mkdir(parents=True, exist_ok=True)
+        engine.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    return repo
+
+
+def _codex_session_start_commands() -> list[str]:
+    """The SessionStart command strings, read OUT OF the shipped file.
+
+    Selected by CONTENT, never by position — the sibling helper's docstring
+    records three separate defects from positional reads of this same file, the
+    third of which sat one test below a commit message claiming both levels
+    filtered by content.
+    """
+    parsed = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    return [
+        hook["command"]
+        for entry in parsed["hooks"]["SessionStart"]
+        for hook in entry["hooks"]
+        if "budget" in hook.get("command", "")
+    ]
+
+
+def test_the_shipped_codex_session_start_carries_no_matcher() -> None:
+    """Kills: adding `"matcher": "startup"` to the Codex SessionStart entry.
+
+    MEASURED on `codex-cli 0.147.0`, not read off documentation — the
+    convergence plan assumed Claude's `startup`/`resume`/`clear` matcher shape
+    transferred, and it does not. The one real SessionStart registration on the
+    machine this was measured on (a shipping third-party integration) carries no
+    `matcher` key.
+
+    This is the load-bearing direction: a Codex registration carrying Claude's
+    matcher is ACCEPTED and simply never fires, so the failure is silent and
+    looks exactly like a hook that was never trusted. Nothing else in the suite
+    would notice — `kit-manifest.json` does not track this file.
+    """
+    parsed = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    entries = [
+        entry
+        for entry in parsed["hooks"]["SessionStart"]
+        if any("budget" in hook.get("command", "") for hook in entry["hooks"])
+    ]
+    assert entries, "no SessionStart budget registration in the shipped file"
+    for entry in entries:
+        assert "matcher" not in entry, (
+            "the Codex SessionStart entry grew a `matcher` key. Codex accepts it "
+            "and the hook then never fires — measured, not inferred."
+        )
+    assert len(_codex_session_start_commands()) == 2, (
+        "both budget tripwires must be registered; Principle #1's mechanism "
+        "reaching one runtime is what #380 is about"
+    )
+
+
+def test_the_budget_advisory_prints_the_shipped_codex_commands_verbatim(
+    tmp_path: Path,
+) -> None:
+    """The advisory is text an adopter pastes into JSON, and the shipped file is
+    what this repo actually runs. If they drift, one of the two is a lie and
+    nothing else reports it.
+
+    Read from the file rather than restated here, for the reason the sibling
+    helper gives: comparing a copy against a copy makes a shared defect
+    invisible.
+    """
+    repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    # Whole line, for the reason the Claude sibling's comment gives: substring
+    # matching misses a guard stripped from the FRONT of the shipped command.
+    printed = {line.strip() for line in result.stdout.splitlines()}
+    for command in _codex_session_start_commands():
+        assert command in printed, (
+            "the printed advisory has drifted from the shipped registration:\n"
+            f"  shipped: {command}"
+        )
+
+
+def _claude_session_start_commands() -> list[str]:
+    """The Claude SessionStart budget commands, read OUT OF the shipped file."""
+    parsed = json.loads(
+        (REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
+    )
+    return [
+        hook["command"]
+        for entry in parsed["hooks"]["SessionStart"]
+        for hook in entry["hooks"]
+        if "budget" in hook.get("command", "")
+    ]
+
+
+def test_the_budget_advisory_prints_the_shipped_claude_commands_verbatim(
+    tmp_path: Path,
+) -> None:
+    """The Claude half of the same advisory, drift-tested like the Codex half.
+
+    Added because a review lens found the coverage ASYMMETRIC rather than
+    absent: the Codex commands were compared byte-for-byte against
+    `.codex/hooks.json` and the Claude ones against nothing, so a future edit to
+    either surface would be caught on one runtime and silently not the other.
+
+    Nothing was wrong when this was written — the two matched by hand — which is
+    exactly when the asymmetry is worth closing, and `kit-manifest.json` tracks
+    neither settings file, so no drift check covers it either.
+    """
+    repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    shipped = _claude_session_start_commands()
+    assert len(shipped) == 2, (
+        "both budget tripwires must be registered on Claude too; found "
+        f"{len(shipped)}"
+    )
+    # WHOLE LINE, not `in result.stdout`, and the difference is load-bearing.
+    # Substring matching is directional: strip a guard from the FRONT of the
+    # shipped command and what remains is a contiguous tail of the printed line,
+    # so `command in stdout` still holds and the drift goes unseen. Measured —
+    # with the substring form, removing `[ -z "$JOB_NAME" ] && ` from
+    # .claude/settings.json left the whole suite green.
+    printed = {line.strip() for line in result.stdout.splitlines()}
+    for command in shipped:
+        assert command in printed, (
+            "the printed advisory has drifted from .claude/settings.json:\n"
+            f"  shipped: {command}"
+        )
+
+
+def test_the_budget_advisory_says_an_untrusted_hook_is_skipped_silently(
+    tmp_path: Path,
+) -> None:
+    """#380's acceptance names this sentence specifically, and it is the one an
+    adopter cannot derive.
+
+    Codex skips an untrusted hook with NO diagnostic: the session starts
+    normally and reports nothing. Verified by controlled comparison on
+    `codex-cli 0.147.0` — same repo, same `workspace-write` sandbox, the only
+    difference `--dangerously-bypass-hook-trust`; with it the hook fired, without
+    it nothing ran and nothing was said. Project trust (`trust_level =
+    "trusted"`) is NOT hook trust and does not substitute for it.
+
+    So the observable for "I forgot `/hooks`" is identical to the observable for
+    "the hook is broken". An advisory that omits this sends the adopter to debug
+    the command string.
+    """
+    repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    assert "/hooks" in result.stdout
+    lowered = result.stdout.lower()
+    assert "silently" in lowered, (
+        "the advisory must state that an untrusted hook is skipped SILENTLY"
+    )
+    assert "indistinguishable" in lowered, (
+        "the advisory must say a skipped hook cannot be told from a broken one — "
+        "that is the part an adopter cannot work out for themselves"
+    )
+
+
+def test_the_codex_session_start_takes_no_matcher_per_the_advisory(
+    tmp_path: Path,
+) -> None:
+    """The advisory must SAY the matcher rule, not merely omit the key.
+
+    An adopter hand-writing the entry from Claude's example will add
+    `"matcher": "startup"` unless told otherwise, and Codex will accept it.
+    """
+    repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    assert 'NO "matcher" key' in result.stdout
+    assert "never fires" in result.stdout
+
+
+@pytest.mark.parametrize("which", [0, 1], ids=["doc-budget", "memory-budget"])
+def test_the_codex_budget_registrations_survive_a_git_less_tree(
+    tmp_path: Path, which: int
+) -> None:
+    """`#359`'s guard, on the new commands — a LEVEL-2 test that EXECUTES them.
+
+    `$(git rev-parse --show-toplevel)` is the empty string outside a worktree, so
+    an unguarded form resolves to a path rooted at `/` and the interpreter exits
+    non-zero on every session start. Both registrations are parametrized rather
+    than looped, so a failure names which one broke.
+
+    Text-level assertions cannot catch this: when the command string is wrong,
+    the advisory and the shipped file are wrong identically.
+    """
+    command = _codex_session_start_commands()[which]
+
+    outside = subprocess.run(
+        ["sh", "-c", command],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=_env(tmp_path),
+    )
+
+    assert outside.returncode == 0, (
+        "the Codex budget registration failed in a tree with no .git — #359. "
+        f"exit={outside.returncode}\nstderr: {outside.stderr}"
+    )
+    assert not outside.stdout.strip(), f"unexpected output: {outside.stdout!r}"
+    assert outside.stderr == "", (
+        "the registration leaked git's error to stderr in a tree with no .git; "
+        f"stderr: {outside.stderr!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("present", "absent"),
+    [("check_doc_budget.py", "check_memory_budget.py"),
+     ("check_memory_budget.py", "check_doc_budget.py")],
+    ids=["only-doc-budget", "only-memory-budget"],
+)
+def test_the_budget_advisory_names_only_engines_that_exist(
+    tmp_path: Path, present: str, absent: str
+) -> None:
+    """Kills: gating the advisory on the PAIR instead of on each engine.
+
+    The early return covers "both absent". With exactly one present the advisory
+    printed both commands anyway, and the absent one then fails at every session
+    start with `|| true` hiding it — the same "instructions that fail with no clue
+    why" the early return exists to prevent, one granularity down.
+
+    Reachable rather than hypothetical: an adopter who declined one engine records
+    it in `not_installed`, which is the state #398 is about. Found by the review
+    bot on PR #401.
+    """
+    repo = _fixture(tmp_path, config=V1_CONFIG, git=True)
+    engine = repo / "scripts" / present
+    engine.parent.mkdir(parents=True, exist_ok=True)
+    engine.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert "SessionStart budget tripwires" in result.stdout, (
+        "one engine is present, so the advisory must still be printed"
+    )
+    assert present in result.stdout
+    assert absent not in result.stdout, (
+        f"the advisory named {absent}, which this repo does not have — the "
+        "registration would fail at every session start with `|| true` hiding it"
+    )
+
+
+def test_no_budget_advisory_when_both_engines_are_absent(tmp_path: Path) -> None:
+    """Kills: dropping the early return. An advisory naming engines the repo
+    does not have is instructions that fail with no clue why — the same defect
+    `test_no_advisory_when_the_engine_path_is_not_a_file` pins for the PR hook.
+    """
+    repo = _fixture(tmp_path, config=V1_CONFIG, git=True)
+
+    result = _run_init(repo)
+
+    assert "bootstrapped" in result.stdout
+    assert "SessionStart budget tripwires" not in result.stdout
+
+
 def _codex_registration_command() -> str:
     """The Codex registration's command string, read OUT OF the shipped file.
 
@@ -2521,6 +2892,127 @@ def test_the_codex_registration_execs_rather_than_forking_the_interpreter(
     )
 
 
+def _with_stub_uv(tmp_path: Path) -> tuple[dict[str, str], Path]:
+    """A `uv` on PATH that records having been called, and does nothing else.
+
+    Lets the SessionStart registrations be executed for real while observing only
+    whether they reached the interpreter. The alternative — running the actual
+    budget script and looking for its output — cannot see the guard under test,
+    because `--quiet` prints nothing on a repo that is under budget and the
+    absence of output would then satisfy both arms.
+    """
+    stub_dir = tmp_path / "stub-bin"
+    stub_dir.mkdir(parents=True, exist_ok=True)
+    witness = tmp_path / "uv-was-called"
+    stub = stub_dir / "uv"
+    stub.write_text(f'#!/bin/sh\n: > "{witness}"\nexit 0\n', encoding="utf-8")
+    stub.chmod(0o755)
+    env = _env(tmp_path)
+    env["PATH"] = f"{stub_dir}{os.pathsep}{env['PATH']}"
+    env.pop("JOB_NAME", None)
+    return env, witness
+
+
+@pytest.mark.parametrize("which", [0, 1], ids=["doc-budget", "memory-budget"])
+def test_the_codex_budget_registration_skips_a_cron_run(
+    tmp_path: Path, which: int
+) -> None:
+    """The `JOB_NAME` guard, EXECUTED — the level-2 test this guard did not have.
+
+    Mutation-checked, and the result is why this exists: dropping
+    `[ -z "${JOB_NAME:-}" ] || exit 0` from both shipped commands killed exactly
+    one test, `..._prints_the_shipped_codex_commands_verbatim`, which compares the
+    advisory against the shipped file. That is a DRIFT check — it fails only
+    because one surface moved. Change both surfaces consistently and the guard is
+    gone with the suite green, which is the level-1/level-2 distinction the
+    git-less sibling's docstring draws.
+
+    Both arms are asserted. Without the positive control, a registration that had
+    stopped invoking anything at all would satisfy the cron arm and pass.
+    """
+    command = _codex_session_start_commands()[which]
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    env, witness = _with_stub_uv(tmp_path)
+
+    interactive = subprocess.run(
+        ["sh", "-c", command], cwd=repo, capture_output=True, text=True, env=env
+    )
+    assert interactive.returncode == 0, interactive.stderr
+    assert witness.exists(), (
+        "the registration never reached `uv` even outside a cron run, so the "
+        "cron assertion below would hold for the wrong reason"
+    )
+
+    witness.unlink()
+    cron = subprocess.run(
+        ["sh", "-c", command],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env={**env, "JOB_NAME": "nightly"},
+    )
+
+    assert cron.returncode == 0, cron.stderr
+    assert not witness.exists(), (
+        "the budget tripwire ran under JOB_NAME — a scheduled/CI session gets a "
+        "housekeeping nudge no human will read, and the guard that stops it is "
+        "pinned by nothing but a drift check"
+    )
+
+
+@pytest.mark.parametrize("which", [0, 1], ids=["doc-budget", "memory-budget"])
+def test_the_claude_budget_registration_skips_a_cron_run(
+    tmp_path: Path, which: int
+) -> None:
+    """The Claude registration's `JOB_NAME` guard, EXECUTED — the half that had
+    no protection of any kind.
+
+    Found by mutation, not by reading: stripping `[ -z "$JOB_NAME" ] && ` from
+    both commands in `.claude/settings.json` left the FULL suite green
+    (1106/1106, driftcheck included). Neither `.claude/settings.json` nor
+    `.codex/hooks.json` is tracked by `kit-manifest.json`, so the drift check
+    cannot see either file, and the sibling Codex guard had an executed test
+    while this one had nothing.
+
+    The drift test alone is not enough here and that is measured too: the
+    shipped command is a contiguous TAIL of the printed advisory line, so a
+    substring comparison passes with the guard removed. This executes the real
+    command string instead.
+    """
+    command = _claude_session_start_commands()[which]
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "scripts").mkdir()
+    env, witness = _with_stub_uv(tmp_path)
+    env["CLAUDE_PROJECT_DIR"] = str(project)
+
+    interactive = subprocess.run(
+        ["sh", "-c", command], cwd=tmp_path, capture_output=True, text=True, env=env
+    )
+    assert interactive.returncode == 0, interactive.stderr
+    assert witness.exists(), (
+        "the registration never reached `uv` even outside a cron run, so the "
+        "cron assertion below would hold for the wrong reason"
+    )
+
+    witness.unlink()
+    cron = subprocess.run(
+        ["sh", "-c", command],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env={**env, "JOB_NAME": "nightly"},
+    )
+
+    assert cron.returncode == 0, cron.stderr
+    assert not witness.exists(), (
+        "the Claude budget tripwire ran under JOB_NAME — a scheduled/CI session "
+        "gets a housekeeping nudge no human will read"
+    )
+
+
 def _with_stub_git(tmp_path: Path, body: str) -> tuple[dict[str, str], Path]:
     """`_env` with a stub `git` first on PATH. `body` is its script body.
 
@@ -2678,22 +3170,34 @@ def test_the_codex_registration_guards_an_empty_root_that_git_reports_as_success
 # execute them, so every defect in one was found by a human running it by hand.
 
 
-def _upgrade_init_argv() -> list[str]:
-    """The `./init.sh …` line from upgrade.md Step 2, as argv beyond the script.
+def _step2_refresh_block() -> str:
+    """upgrade.md's Step 2 refresh block, as text.
 
-    Anchored on the `cp` of `init.sh` that opens that block so a future
-    `./init.sh` elsewhere in the document cannot be picked up instead.
+    Anchored on the `cp` of `init.sh` that opens it, so a code block elsewhere in
+    the document cannot be picked up instead. The anchor tolerates both the bare
+    `/tmp/agentic-dev-kit` form and the `$KIT`-anchored one (#399) — pinning the
+    literal path here would make the cross-tree rewrite look like a missing block.
     """
     doc = (
         REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
     ).read_text(encoding="utf-8")
     blocks = re.findall(r"```(?:bash|sh)\n(.*?)```", doc, re.DOTALL)
-    matching = [b for b in blocks if "cp /tmp/agentic-dev-kit/init.sh" in b]
+    matching = [b for b in blocks if re.search(r"cp \"?(\$KIT|/tmp/agentic-dev-kit)", b)]
     assert len(matching) == 1, f"expected one Step 2 refresh block, found {len(matching)}"
-    lines = [ln.strip() for ln in matching[0].splitlines() if ln.strip().startswith("./init.sh")]
-    assert len(lines) == 1, f"expected one ./init.sh invocation, found {lines!r}"
+    return matching[0]
+
+
+def _upgrade_init_argv() -> list[str]:
+    """The `init.sh …` line from upgrade.md Step 2, as argv beyond the script."""
+    matching = _step2_refresh_block()
+    lines = [
+        ln.strip()
+        for ln in matching.splitlines()
+        if re.match(r'^\s*(\./|"\$REPO/)init\.sh\b', ln)
+    ]
+    assert len(lines) == 1, f"expected one init.sh invocation, found {lines!r}"
     argv = shlex.split(lines[0].split("#")[0])
-    assert argv[0] == "./init.sh"
+    assert argv[0].endswith("init.sh"), argv
     return argv[1:]
 
 
@@ -2745,6 +3249,621 @@ def test_upgrade_workflows_init_invocation_still_seeds_a_genuinely_absent_file(
 
     assert (repo / "AGENTS.md").exists()
     assert template_marker() not in (repo / "AGENTS.md").read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- #
+# upgrade.md Step 2's template copy is gated on the declared install set (#398)
+#
+# Executed, not read. A prose assertion (`"not_installed" in text`) would pass on
+# a document that mentions the gate in a paragraph while the code block above it
+# still copies unconditionally — which is exactly the failure mode the sibling
+# section's banner describes for `--no-clobber`.
+
+
+def _upgrade_template_copy_block() -> str:
+    """The Step 2 refresh block from upgrade.md, minus the two lines that need a
+    real kit checkout and a real installer.
+
+    Anchored on the `cp` of `init.sh` like `_upgrade_init_argv`, so a future code
+    block elsewhere in the document cannot be picked up instead.
+    """
+    # The `init.sh` INVOCATION is kept and stubbed by `_run_template_copy`, not
+    # stripped. Stripping it is how a HIGH went uncaught: the gate's refusal used
+    # `break`, which leaves the `for` loop while the next line runs the installer
+    # anyway — "Copied nothing" followed by the workflow proceeding past its own
+    # hard stop. No test could see it while the interaction was cut out of the
+    # extract (review panel, adversarial lens).
+    #
+    # `cd` still goes, and for the opposite reason: keeping it would make
+    # `..._writes_into_repo_even_when_the_shell_sits_in_the_kit_clone` vacuous,
+    # since the block would put itself in the right tree before writing. Its
+    # presence in the SHIPPED block is asserted separately below.
+    kept = [
+        line
+        for line in _step2_refresh_block().splitlines()
+        # `cd "$REPO"` specifically, not any `cd `. An over-broad strip is how
+        # the round-2 HIGH stayed invisible: whatever the extract removes, no
+        # test can see. If Step 2 ever gains a second `cd`, this must fail
+        # loudly rather than quietly review a block that is not what ships.
+        if not re.match(r'^\s*(cd "\$REPO"|cp "\$KIT/init\.sh"|chmod \+x)', line)
+    ]
+    body = "\n".join(kept)
+    # Asserted against the SHIPPED block, not the stripped one, and that is the
+    # point. The `cd` has to be stripped for the extracted body to run against a
+    # fixture, which left it pinned by nothing: delete `cd "$REPO"` from
+    # upgrade.md and every test in this section still passes, while `init.sh`
+    # resolves the config and `docs/templates/*.tmpl` against the KIT clone —
+    # #399's exact failure, one line over from the one being guarded. Found by
+    # the review bot on PR #401.
+    assert re.search(r'^\s*cd "\$REPO"', _step2_refresh_block(), re.M), (
+        "Step 2 no longer cds into $REPO before running init.sh — the installer "
+        "resolves config and templates against the working directory (#399)"
+    )
+    assert "not_installed" in body, (
+        "the Step 2 code block no longer consults `not_installed` — the gate moved "
+        "into prose, or was removed (#398)"
+    )
+    return body
+
+
+def _fake_kit_templates(tmp_path: Path) -> Path:
+    """A stand-in for /tmp/agentic-dev-kit/docs/templates, since the block's
+    source path is hardcoded (that hardcoding is #343, not this test's subject)."""
+    src = tmp_path / "kit" / "docs" / "templates"
+    src.mkdir(parents=True)
+    for name in ("handoff.md.tmpl", "friction-log.md.tmpl", "AGENTS.md.tmpl"):
+        (src / name).write_text(f"# {name}\n", encoding="utf-8")
+    return src
+
+
+def _run_template_copy(
+    repo: Path, src: Path, *, cwd: Path | None = None, check: bool = True
+) -> subprocess.CompletedProcess[str]:
+    """Run the extracted block with `$KIT`/`$REPO` bound as Step 0 binds them.
+
+    `cwd` defaults to the repo but is overridable on purpose: #399's whole subject
+    is a working directory that is not where the writes belong, and a block that
+    only works when cwd already happens to be right has not been tested for it.
+    """
+    # Substitute the real installer with a witness writer: the block's LAST act
+    # is running `init.sh`, and whether it runs is exactly what the gate's
+    # refusal has to control. Running the real one here would rebuild config in
+    # a fixture and tell us nothing about the guard.
+    block = _upgrade_template_copy_block()
+    stubbed = re.sub(
+        r'^(\s*)"\$REPO/init\.sh" --no-clobber\s*$',
+        r'\1: > "$REPO/INIT_SH_RAN"',
+        block,
+        flags=re.M,
+    )
+    assert stubbed != block, (
+        "the init.sh invocation was not found in the extracted block, so the "
+        "stub did not apply and the gate/installer interaction is untested"
+    )
+    return subprocess.run(
+        ["sh", "-c", stubbed],
+        cwd=cwd or repo,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        check=check,
+        env={**os.environ, "REPO": str(repo), "KIT": str(src.parent.parent)},
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2s_branch_step_fails_loudly_when_the_cd_fails() -> None:
+    """Kills: reverting the branch step to `cd "$REPO" && git checkout -b …`.
+
+    Text-level on purpose, and weaker than the sibling tests here, which execute
+    what they check. Nothing in the kit executes this particular block — it
+    creates a branch — and #374 tracks the general gap that fenced shell ships
+    unchecked. Added because the mutation round found the `|| exit 1` fix pinned
+    by nothing at all, which is worse than pinned weakly: with the `&&` form the
+    `cd` can fail, the branch is never created, only the cd error is reported,
+    and Step 2 then writes into whatever tree the shell was in — #399 reached
+    through the one instruction that is supposed to establish the branch
+    guarantee.
+    """
+    doc = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+    ).read_text(encoding="utf-8")
+    blocks = re.findall(r"```(?:bash|sh)\n(.*?)```", doc, re.DOTALL)
+    matching = [b for b in blocks if "git checkout -b" in b]
+    assert len(matching) == 1, f"expected one branch block, found {len(matching)}"
+
+    assert re.search(r'^cd "\$REPO" \|\| exit 1$', matching[0], re.M), (
+        "the branch step must fail loudly when the cd fails; found:\n" + matching[0]
+    )
+    assert '&& git checkout' not in matching[0], (
+        "the branch step is chained to the cd with `&&` — a failed cd then reports "
+        "only the cd error and never creates the branch"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_does_not_copy_a_template_the_repo_declared_declined(
+    tmp_path: Path,
+) -> None:
+    """#398: a path in `not_installed` is a DECISION, and copying it in reverses
+    it silently — `cp` says nothing, the `missing` count goes DOWN (which reads as
+    an improvement), and Step 4's `--record-install` then derives the installed set
+    from disk and writes the reversal in as fact.
+
+    An adopter caught this before acting and declined the instruction; nothing in
+    the kit would have caught it after.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text(
+        json.dumps(
+            {
+                "kit_commit": "deadbeef",
+                "files": {},
+                "not_installed": [
+                    "docs/templates/handoff.md.tmpl",
+                    "docs/templates/friction-log.md.tmpl",
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run_template_copy(repo, src)
+
+    installed = sorted(p.name for p in (repo / "docs" / "templates").glob("*.tmpl"))
+    assert installed == ["AGENTS.md.tmpl"], (
+        "a declined template was copied in, converting a recorded decision into "
+        f"an install (#398). present: {installed}"
+    )
+    # and the skip is REPORTED — a silent skip is the other half of the same
+    # defect, one direction over: the operator cannot see what was withheld.
+    assert "declined" in result.stdout
+    assert "handoff.md.tmpl" in result.stdout
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_copies_every_template_when_nothing_was_declared(
+    tmp_path: Path,
+) -> None:
+    """The gate must not become a blanket refusal.
+
+    A repo with no baseline at all has declared no scope, so every template is
+    copied — the pre-#398 behaviour, which was correct for this shape and is what
+    the `missing`-count rationale in `adopt.md` is really about. Without this,
+    narrowing the gate until it copies nothing would pass the sibling test.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+
+    _run_template_copy(repo, src)
+
+    installed = sorted(p.name for p in (repo / "docs" / "templates").glob("*.tmpl"))
+    assert installed == ["AGENTS.md.tmpl", "friction-log.md.tmpl", "handoff.md.tmpl"]
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_refuses_rather_than_guesses_on_an_unreadable_manifest(
+    tmp_path: Path,
+) -> None:
+    """Present-but-corrupt is not the same state as absent, and only absent is
+    safe to read as "no declared scope".
+
+    A corrupt manifest may hold declines nobody can now read; copying over them
+    is #398's reversal reached by another route. So this refuses and copies
+    nothing rather than falling through to the permissive default.
+
+    The earlier form let `json.JSONDecodeError` escape: a Python traceback per
+    template file, and then the copy happened anyway. Found by the review
+    panel's adversarial lens, which fed it `{not valid json!!!`.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text("{not valid json!!!", encoding="utf-8")
+
+    result = _run_template_copy(repo, src, check=False)
+
+    _assert_gate_refused(repo, result, "{not valid json!!!")
+
+
+def _assert_gate_refused(
+    repo: Path, result: subprocess.CompletedProcess[str], shape: str
+) -> None:
+    installed = sorted(
+        p.name for p in (repo / "docs" / "templates").glob("*.tmpl")
+    ) if (repo / "docs" / "templates").exists() else []
+    assert installed == [], (
+        f"templates were copied over an unreadable declared set ({shape!r}): {installed}"
+    )
+    assert "STOP" in result.stdout + result.stderr, (
+        f"the refusal must be loud for {shape!r} — a silent skip is "
+        "indistinguishable from 'nothing needed copying'"
+    )
+    assert "Traceback" not in result.stderr, (
+        f"the manifest read raises instead of refusing for {shape!r}:\n{result.stderr}"
+    )
+    # The refusal must stop the WORKFLOW, not just the loop. `break` leaves the
+    # `for` and the next line runs the installer anyway — the HIGH a panel lens
+    # found, invisible while the extract cut this line out.
+    assert not (repo / "INIT_SH_RAN").exists(), (
+        f"init.sh ran after the gate refused ({shape!r}) — the STOP message "
+        "printed and the workflow carried on past its own hard stop"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize(
+    "shape",
+    ["null", "42", "true", '"a string"', "[1, 2, 3]"],
+    ids=["null", "number", "bool", "string", "array"],
+)
+def test_step_2_refuses_a_manifest_that_parses_but_is_not_an_object(
+    tmp_path: Path, shape: str
+) -> None:
+    """Valid JSON is not the same as a manifest, and the two failure shapes here
+    are not even the same as each other — which is why all five are parametrized.
+
+    `null`, `42` and `true` raise `TypeError` on `"kit_commit" in d`, exit 1, and
+    the shell's `case` copies anyway — the same crash-then-copy the syntax-error
+    fix was written to remove. `[…]` and `"…"` are quieter and worse: membership
+    against them is simply `False`, so there is no error at all and the copy
+    proceeds looking entirely normal.
+
+    Both were measured before this guard existed. `#279` is the same class one
+    engine over — a manifest load with no non-dict guard beside three siblings
+    that have one.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text(shape, encoding="utf-8")
+
+    result = _run_template_copy(repo, src, check=False)
+
+    _assert_gate_refused(repo, result, shape)
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize(
+    "declared",
+    [5, True, 3.14, "docs/templates/handoff.md.tmpl", {"a": 1}, None],
+    ids=["int", "bool", "float", "string", "object", "null"],
+)
+def test_step_2_refuses_a_baseline_whose_declared_scope_is_not_a_list(
+    tmp_path: Path, declared: object
+) -> None:
+    """A well-formed manifest object is not the same as a readable scope, and the
+    top-level `isinstance` check does not reach one field down.
+
+    Three of these raise `TypeError` on the membership test and exit 1, so the
+    shell copies — the crash-then-copy class again, two rounds after it was
+    supposedly closed. The `string` case is the sharpest and is why it is
+    parametrized with a path that WOULD be declined: `in` on a string is a
+    SUBSTRING test, so a comma-joined value answers *true* for a path nobody
+    declined, and the gate then reports a decline that was never recorded. That
+    is the one direction none of the earlier shapes could produce.
+
+    `kit_doctor.py`'s `_declared_scope` already rejects exactly this — a
+    `not_installed` that is not a list, and a `files` that is not a dict — with
+    its own parametrized regression test. This mirrors it, failing closed where
+    that one returns `None`.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text(
+        json.dumps({"kit_commit": "deadbeef", "files": {}, "not_installed": declared}),
+        encoding="utf-8",
+    )
+
+    result = _run_template_copy(repo, src, check=False)
+
+    _assert_gate_refused(repo, result, f"not_installed={declared!r}")
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_refuses_a_baseline_whose_files_half_is_unreadable(
+    tmp_path: Path,
+) -> None:
+    """`_declared_scope`'s companion check, for its stated reason: a scope claim
+    needs BOTH halves of the record, and a valid `not_installed` beside a
+    malformed `files` is half a record. CodeRabbit found that one on PR #322 in
+    the engine; the same reasoning applies to a gate that acts on the answer.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text(
+        json.dumps(
+            {
+                "kit_commit": "deadbeef",
+                "files": ["not", "a", "dict"],
+                "not_installed": ["docs/templates/handoff.md.tmpl"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run_template_copy(repo, src, check=False)
+
+    _assert_gate_refused(repo, result, "files=list")
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_refuses_a_dangling_symlink_at_the_manifest_path(
+    tmp_path: Path,
+) -> None:
+    """`FileNotFoundError` alone does not mean absent.
+
+    A dangling symlink raises it exactly as a missing file does, so the one
+    branch the taxonomy treats as safe to copy on was also catching a
+    present-but-unreadable manifest. `is_symlink()` separates them because it
+    does not follow the link — it stays true precisely where `exists()` has gone
+    false, verified directly.
+
+    `#303` is the same shape one file over: a dangling symlink at
+    `.codex/hooks.json` survived three rounds of guards there, where `[ -e ]` was
+    false and the redirect wrote through the link anyway.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").symlink_to(tmp_path / "no-such-manifest.json")
+    assert not (repo / "kit-manifest.json").exists()  # positive control
+    assert (repo / "kit-manifest.json").is_symlink()
+
+    result = _run_template_copy(repo, src, check=False)
+
+    _assert_gate_refused(repo, result, "dangling symlink")
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_refuses_on_an_exception_outside_the_old_enumerated_set(
+    tmp_path: Path,
+) -> None:
+    """The refusal must cover ANY read/parse failure, not an enumerated set.
+
+    Two enumerations have now had the same hole: the first let
+    `JSONDecodeError` escape, and its fix caught `(OSError, ValueError)` and left
+    `RecursionError` — a `RuntimeError`, reachable from a deeply-nested array —
+    falling through to the copy branch with a traceback per template.
+
+    **This test measures its own precondition rather than assuming it**, which is
+    `#393`'s lesson: a sibling test elsewhere in this repo depends on
+    `json.loads` raising `RecursionError` and that stops being true on newer
+    CPython. If this input does not raise outside the old tuple on the running
+    interpreter, the test cannot demonstrate anything and says so, instead of
+    passing vacuously.
+    """
+    depth = 200_000
+    payload = "[" * depth + "]" * depth
+
+    # Probed in the SAME interpreter the gate will use, not in pytest's.
+    # The gate runs in a subprocess that resolves a bare `python3` off PATH;
+    # probing in-process only agrees with that because `uv run` puts its managed
+    # venv first and `_run_template_copy` passes the environment through. Nothing
+    # asserted that, so a different invocation could silently desync the
+    # precondition from the thing under test and degrade this to an unconditional
+    # skip with nothing failing anywhere — the vacuous pass this test exists to
+    # avoid, reintroduced one layer up (review panel, adversarial lens).
+    probe = subprocess.run(
+        [
+            "python3",
+            "-c",
+            "import json,sys\n"
+            "try: json.loads(sys.stdin.read())\n"
+            "except (OSError, ValueError): sys.exit(10)\n"
+            "except Exception: sys.exit(11)\n"
+            "sys.exit(12)",
+        ],
+        input=payload,
+        capture_output=True,
+        text=True,
+        env=_env(tmp_path),
+    )
+    if probe.returncode == 10:
+        pytest.skip(
+            "the gate's own python3 raises an (OSError, ValueError) here, so this "
+            "input cannot exercise an exception outside the old enumerated set"
+        )
+    if probe.returncode == 12:
+        pytest.skip(
+            f"the gate's own python3 parses {depth} nested arrays without raising, "
+            "so this input cannot exercise the escape this test is about"
+        )
+    assert probe.returncode == 11, (
+        "the precondition probe itself failed to run, so a skip or pass here "
+        f"would mean nothing: rc={probe.returncode} stderr={probe.stderr!r}"
+    )
+
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text(payload, encoding="utf-8")
+
+    result = _run_template_copy(repo, src, check=False)
+
+    _assert_gate_refused(repo, result, "deeply nested array")
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_copies_against_a_manifest_carrying_neither_key(tmp_path: Path) -> None:
+    """Pins the ORDER of the gate's two absence checks, which is load-bearing and
+    was pinned by nothing.
+
+    `kit_commit` absent is tested (untrusted manifest → copy) and
+    `not_installed` absent is tested (partial record → skip). Neither reaches
+    the case where BOTH are absent, so swapping the two `if` blocks survived the
+    whole suite — found by mutation, not by reading.
+
+    That shape is not hypothetical: it is **the kit's own shipped
+    `kit-manifest.json`**, whose top-level keys are `adopter_owned`, `files` and
+    `kit_version`. Every fresh `/adopt` and every kit checkout carries it before
+    any `--record-install` has run. Under the swapped order it would skip every
+    template and print a `#388` PARTIAL-record note about a file that was never a
+    baseline — a misattributed cause on the commonest manifest there is.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    # the shipped shape: no kit_commit, no not_installed
+    (repo / "kit-manifest.json").write_text(
+        json.dumps({"kit_version": 2, "files": {}, "adopter_owned": []}),
+        encoding="utf-8",
+    )
+
+    result = _run_template_copy(repo, src)
+
+    installed = sorted(p.name for p in (repo / "docs" / "templates").glob("*.tmpl"))
+    assert installed == ["AGENTS.md.tmpl", "friction-log.md.tmpl", "handoff.md.tmpl"], (
+        "a manifest that is not a --record-install baseline declares no scope, so "
+        f"every template copies; got {installed}"
+    )
+    assert (repo / "INIT_SH_RAN").exists()
+    assert "#388" not in result.stderr, (
+        "a manifest with no kit_commit was reported as a PARTIAL record — the "
+        "two absence checks have swapped order, so the cause is misattributed"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_treats_a_partial_record_as_partial_not_broken(tmp_path: Path) -> None:
+    """An absent `not_installed` is a PARTIAL record, and blocking on it aborts a
+    routine upgrade.
+
+    `kit_doctor.py`'s `record_install_manifest` omits the key entirely — not
+    `[]` — whenever any kit-owned path is `unverified`, writes the baseline
+    anyway, and exits 1 to say so. `upgrade.md` Step 5 calls a deliberately-kept
+    local patch "the usual way in". So this shape is produced by the kit's own
+    instructed command, in a state the kit treats as first class.
+
+    An earlier version refused it AND suppressed `init.sh`, blocking the whole
+    config migration for anyone carrying one patch — and its STOP message
+    suggested a remedy that did not address the cause, whose obvious workaround
+    (delete the manifest) reopens #398.
+
+    Both halves are asserted, because the fix is precisely that they are
+    separable: skip the copies, because the declines genuinely cannot be read;
+    run `init.sh`, because template declines have nothing to do with the config
+    migration.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    # exactly what record_install_manifest writes for a partial record
+    (repo / "kit-manifest.json").write_text(
+        json.dumps({"kit_commit": "deadbeef", "files": {"init.sh": {"sha256": "x"}}}),
+        encoding="utf-8",
+    )
+
+    result = _run_template_copy(repo, src)
+
+    installed = sorted(
+        p.name for p in (repo / "docs" / "templates").glob("*.tmpl")
+    ) if (repo / "docs" / "templates").exists() else []
+    assert installed == [], (
+        f"templates were copied against a baseline declaring no scope: {installed}"
+    )
+    assert (repo / "INIT_SH_RAN").exists(), (
+        "init.sh was suppressed by a PARTIAL record — that blocks the config "
+        "migration for any adopter carrying a deliberate local patch"
+    )
+    assert "STOP" not in result.stdout + result.stderr, (
+        "a partial record is not a broken manifest and must not be reported as one"
+    )
+    assert "#388" in result.stderr, (
+        "the note must name the cause; without it the operator has no route from "
+        "the symptom to Step 5's remedy"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_runs_init_sh_when_the_gate_is_satisfied(tmp_path: Path) -> None:
+    """The positive control for the refusal tests above.
+
+    Without it, a block that had stopped running `init.sh` under ALL conditions
+    would satisfy every `not INIT_SH_RAN` assertion and the gate would look
+    perfect while the workflow no longer did its job.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+
+    _run_template_copy(repo, src)
+
+    assert (repo / "INIT_SH_RAN").exists(), (
+        "init.sh did not run on a repo with no manifest at all — the gate is "
+        "refusing something it should wave through"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_writes_into_repo_even_when_the_shell_sits_in_the_kit_clone(
+    tmp_path: Path,
+) -> None:
+    """#399, as an executable pin rather than a paragraph.
+
+    The failure this reproduces: a `cd` into the fetched kit — to inspect it, to
+    read one file — outlives the command that made it, and every relative path
+    afterwards resolves in the clone. It happened twice on 2026-08-09, in two
+    repos, and neither session recognised it as a wrong directory; one read it as
+    filesystem corruption and spent ten minutes on a suspected sandbox overlay.
+
+    So the block is run with the shell parked in `$KIT`, which is the state that
+    produced both occurrences. `$REPO`-anchored writes land correctly from any
+    cwd; the pre-#399 relative form wrote the templates into the kit clone and
+    left the repo untouched, with `cp` reporting nothing either way.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    kit_root = src.parent.parent
+
+    _run_template_copy(repo, src, cwd=kit_root)
+
+    installed = sorted(p.name for p in (repo / "docs" / "templates").glob("*.tmpl"))
+    assert installed == ["AGENTS.md.tmpl", "friction-log.md.tmpl", "handoff.md.tmpl"], (
+        "the copy did not land in $REPO when the shell was parked in $KIT — a "
+        f"persisted `cd` still redirects Step 2's writes (#399). present: {installed}"
+    )
+    # and nothing was written into the kit clone, which is the other half: the
+    # first occurrence's damage was writes landing in the throwaway tree.
+    assert not (kit_root / "docs" / "templates" / "docs").exists(), (
+        "Step 2 wrote a nested docs/templates inside the kit clone"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_ignores_a_not_installed_key_on_an_untrusted_manifest(
+    tmp_path: Path,
+) -> None:
+    """The `kit_commit` test is what separates a real baseline from the kit's own
+    shipped manifest sitting at the same path.
+
+    Step 1 of the workflow draws that distinction for the drift report; the gate
+    has to draw it too. A shipped manifest carries no `not_installed`, but a
+    hand-rolled or partial one might — and honouring it would withhold templates
+    from a repo that never declared a scope. Kills: dropping the `kit_commit`
+    condition.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text(
+        json.dumps({"files": {}, "not_installed": ["docs/templates/handoff.md.tmpl"]}),
+        encoding="utf-8",
+    )
+
+    _run_template_copy(repo, src)
+
+    installed = sorted(p.name for p in (repo / "docs" / "templates").glob("*.tmpl"))
+    assert "handoff.md.tmpl" in installed, (
+        "a manifest with no `kit_commit` is not a --record-install baseline, so "
+        "its `not_installed` must not gate the copy"
+    )
 
 
 # --------------------------------------------------------------------------- #

@@ -1208,6 +1208,91 @@ register_pr_hook() {
   echo "        with if: \"Bash(gh pr *)\""
 }
 
+# ── SessionStart budget tripwires (#380) ─────────────────────────────────
+# Principle #1's budget mechanism reached Claude only: the kit shipped a
+# `SessionStart` block for `.claude/settings.json` and no Codex shape at all,
+# so an adopter on Codex had the two tripwire scripts and nothing firing them.
+#
+# Same position as `register_pr_hook` above and for the same reasons (#303):
+# PRINT both, write neither, name `/hooks` as the authority. Do not re-derive
+# that stance from the ergonomics — the three defects behind it are recorded
+# in that function.
+#
+# Four properties below are MEASURED on `codex-cli 0.147.0`, not read off
+# documentation, because the documentation-derived guess was wrong about the
+# first one:
+#
+#   1. `SessionStart` takes NO `matcher` key. The convergence plan assumed
+#      Claude's `startup`/`resume`/`clear` shape transferred; the one real
+#      `SessionStart` registration on this machine (a shipping third-party
+#      integration) carries no `matcher`, and carrying Claude's over would
+#      ship a hook that silently never fires.
+#   2. A PROJECT-level `.codex/hooks.json` IS read — measured by that same
+#      probe, which is the point: it had been carried as an ASSUMPTION since
+#      Phase 0, and everything below depends on it. An earlier draft of this
+#      line read "Carried unverified since Phase 0", which standalone says the
+#      opposite of the header above it — a lens caught it.
+#   3. The gate is hook TRUST, and an untrusted hook is skipped SILENTLY —
+#      the session starts clean and says nothing. That is why the advisory
+#      below states it outright: the observable is identical to a broken
+#      hook, so an adopter who skips `/hooks` has no signal to debug from.
+#   4. Codex exposes no project-dir variable, so the root comes from
+#      `git rev-parse` with #359's guard clauses rather than from an
+#      environment variable. Claude's own registration uses
+#      `$CLAUDE_PROJECT_DIR` and is left alone.
+#
+# Two deliberate differences from the `PostToolUse` registration above, called
+# out because an unexplained asymmetry between two neighbouring registrations
+# is exactly what the banner over that function warns about:
+#
+#   - No `exec`. These end in `|| true`, which needs a shell left to run it.
+#   - `|| true` at all. The budget scripts are WARN-ONLY tripwires (they exit 0
+#     even when over budget, and 2 on a config error), and Claude's existing
+#     registration swallows failures the same way. A missing `uv` is swallowed
+#     by the same clause, which is why there is no `command -v uv` predicate:
+#     that is one more predicate about the adopter's machine restated here,
+#     and #303 is a record of how those end.
+register_budget_hooks() {
+  _doc_budget_src="${engines_dir}/check_doc_budget.py"
+  _mem_budget_src="${engines_dir}/check_memory_budget.py"
+  if [ ! -f "$_doc_budget_src" ] && [ ! -f "$_mem_budget_src" ]; then
+    return 0
+  fi
+
+  echo "note: the SessionStart budget tripwires are registered by hand, once per"
+  echo "      runtime. Skip whichever you have already done — \`/hooks\` in a"
+  echo "      session lists what that runtime actually loaded."
+  echo "      Codex — .codex/hooks.json, under hooks.SessionStart, NO \"matcher\" key:"
+  # Per ENGINE, not just per pair. The early return above covers "both absent";
+  # with exactly one present the advisory used to print both commands anyway, and
+  # the absent one then fails at every session start with `|| true` hiding it —
+  # the same "instructions that fail with no clue why" the early return exists to
+  # prevent, which is why the guard belongs at both granularities. Reachable via
+  # a declined engine (`not_installed`), not hypothetical. Found by the review bot.
+  #
+  # `if` blocks rather than `[ -f … ] && echo …`: that chain as a function's last
+  # statement is the abort this same PR fixes in the --no-clobber summary (#397),
+  # and the suggested patch that raised this finding was written in that shape.
+  if [ -f "$_doc_budget_src" ]; then
+    echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_doc_budget_src}\" --quiet || true"
+  fi
+  if [ -f "$_mem_budget_src" ]; then
+    echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_mem_budget_src}\" --quiet || true"
+  fi
+  echo "        SessionStart takes no \"matcher\" — a Codex registration carrying"
+  echo "        Claude's \"startup\" matcher is accepted and never fires."
+  echo "        Then TRUST it via /hooks. Codex skips an untrusted hook SILENTLY:"
+  echo "        the session starts normally and reports nothing, so a hook you"
+  echo "        have not trusted is indistinguishable from one that is broken."
+  echo "      Claude — .claude/settings.json, under hooks.SessionStart, matcher \"startup\":"
+  if [ -f "$_doc_budget_src" ]; then
+    echo "        [ -z \"\$JOB_NAME\" ] && cd \"\$CLAUDE_PROJECT_DIR\" && uv run --script ${_doc_budget_src} --quiet || true"
+  fi
+  if [ -f "$_mem_budget_src" ]; then
+    echo "        [ -z \"\$JOB_NAME\" ] && cd \"\$CLAUDE_PROJECT_DIR\" && uv run --script ${_mem_budget_src} --quiet || true"
+  fi
+}
+
 install_hooks() {
   if ! git rev-parse --git-dir >/dev/null 2>&1; then
     echo "note: not a git repo yet — run 'git init' then re-run ./init.sh to install hooks" >&2
@@ -1683,6 +1768,7 @@ fi
 
 install_hooks
 register_pr_hook
+register_budget_hooks
 
 # ── done ───────────────────────────────────────────────────────────────
 
@@ -1697,8 +1783,18 @@ echo ""
 # did not finish — and a notice they scrolled past is one they did not get.
 if [ -n "$NO_CLOBBER_SKIPPED" ]; then
   echo "--no-clobber left these existing files untouched:"
+  # `|| continue` rather than `&& echo`: a while loop's exit status is its last
+  # iteration's, so an `&&` chain whose test fails on the final read makes the
+  # loop — and the pipeline — exit non-zero, and `set -eu` (line 20) then aborts
+  # the script HERE. That kills the run after printing the list of files needing
+  # action and before the four echoes below explaining the action, which is the
+  # only part the operator cannot reconstruct. No empty entry can reach the
+  # variable today (`seed_doc` returns early on an empty target), so this is
+  # hardening, not a live-bug fix — but the guard is in a distant function and
+  # the failure is silent (#397).
   printf '%s' "$NO_CLOBBER_SKIPPED" | while IFS= read -r _skipped; do
-    [ -n "$_skipped" ] && echo "  $_skipped"
+    [ -n "$_skipped" ] || continue
+    echo "  $_skipped"
   done
   echo ""
   echo "Each carries a kit marker on line 1, which is how the kit says it MAY own"
