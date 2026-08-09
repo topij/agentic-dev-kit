@@ -62,8 +62,11 @@ A fifth, later: the same PR's own comment about which states reach the exit code
 one round after it was written, inside the same PR. And a sixth, in this very entry — its
 heading said "four instances" over a body listing five, and the session's handoff block
 carried two wrong counts and two claims that a PR had merged when it had not. A lens caught
-all four. **The pattern is not about tests; it is about any claim nobody re-derives**, and
-the session that wrote an entry about it produced four more instances while doing so.
+all four. Then the rewrite that fixed them stated `#389`'s HIGH count three times, in three
+different numbers, none of them right — one sentence after warning the reader that two
+figures in that very block had been wrong when a lens counted them. **The pattern is not
+about tests; it is about any claim nobody re-derives**, and the session that wrote an entry
+about it produced five more instances while doing so, including one inside the caution.
 
 One shape, not five: **a fixture that satisfies an earlier guard hides the later property**,
 and the property then lives only in prose. Worth asking whether the mutation step belongs in

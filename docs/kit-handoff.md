@@ -26,8 +26,8 @@ Phase 3 as done and carries the two defects a session following it found.
 
 **Theme —** cs-toolkit's Phase 3 filed seven kit issues and left an adopter holding
 `init.sh`. Six were worked and all four PRs merged; the seventh needs a runtime this host
-cannot start. The panel found far more than the issues did — including six HIGHs in the
-one feature that was new code rather than a correction.
+cannot start. The panel found far more than the issues did, and the HIGHs clustered
+entirely in the one feature that was new code rather than a correction.
 
 - **`#387` merged (`ccbed71`) — `#385`, the blocking one.** `init.sh` no longer imposes a
   `reports/` ignore. The seeding splits into *hygiene* (unconditional, always-wins — a
@@ -83,16 +83,18 @@ one feature that was new code rather than a correction.
   every PR, so the panel was the gate throughout — more than a dozen rounds across the
   four. Count them from the `## Fallback panel — round N` headers on each PR rather than
   from a figure here; two figures in this very block were wrong when a lens counted them.
-  The severity did not decay the way a fix-round sequence is supposed to: `#389` alone
-  produced five HIGHs, the last two in its final rounds, and every one came from a lens
-  executing the changed path rather than reading it.
+  The severity did not decay the way a fix-round sequence is supposed to: `#389`'s HIGHs
+  kept arriving into its final rounds. Its round-10 comment carries the round-by-round
+  table; read the count there rather than here, because three drafts of this sentence
+  carried three different numbers and a lens had to recount from the PR to settle it.
+  Every one of them came from a lens executing the changed path rather than reading it.
 
 **Open, and owned by nothing yet**
 
 - **`#395` is the open design question `#389` leaves behind**, and it is the one worth
-  reading the PR comments for. Ten panel rounds; nine found something real, six of them
-  HIGH, and every HIGH was one class: the check disagreeing with a real shell about which
-  file gets executed. Each is fixed and pinned. The residual is structural — the check
+  reading the PR comments for. Ten panel rounds; nine found something real, and six of
+  those nine carried at least one HIGH — all of one class: the check disagreeing with a
+  real shell about which file gets executed. Each is fixed and pinned. The residual is structural — the check
   judges any path-shaped word inside a hook command, so a path merely *mentioned* reads
   as invoked — and narrowing it to the shapes `init.sh` prints is a trade (it would lose
   the ability to judge a hand-written registration), which is why it is a ticket and not
