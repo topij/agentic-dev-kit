@@ -2955,3 +2955,745 @@ def test_a_malformed_baseline_reaches_the_same_note_and_it_does_not_claim_two_ca
     assert "declares no install set" in out
     assert "Either it predates" not in out, "two causes were presented as exhaustive"
     assert "malformed" in out, "the malformed route is not named at all"
+
+
+# --- the registrations the hook depends on (#379), and a declined hook (#381) --
+#
+# Both are the same shape as #360: a fact the doctor's verdict depends on, that
+# the doctor could not see. #360 was the file that PERFORMS the install; #379 is
+# the pair of files that decide whether the kit's one mandatory mechanism fires.
+# The measured occasion: an adopter reporting `16 unchanged, 0 differ, 0 missing`
+# and exit 0, over zero registration state.
+
+
+def _registration(root: Path, surface: str, command: str) -> None:
+    _write(
+        root / surface,
+        json.dumps({"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
+            {"type": "command", "command": command, "timeout": 10}
+        ]}]}}),
+    )
+
+
+HOOK_REL = "scripts/hooks/pr_followup_hook.py"
+
+
+def test_a_registration_naming_a_path_that_exists_resolves(tmp_path):
+    """The Claude shape as `init.sh` prints it, placeholder and all."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude',
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    claude = [s for s in statuses if s.surface == ".claude/settings.json"]
+
+    assert [(s.state, s.detail) for s in claude] == [("resolves", HOOK_REL)]
+
+
+def test_a_registration_naming_a_path_that_moved_is_reported_dead(tmp_path):
+    """#368's shape: the engines were vendored to `scripts/devkit/`, the
+    registration still names the old `scripts/hooks/` path. The operator's
+    observable is a hook that silently stopped firing — a PostToolUse failure
+    does not halt a session — so nothing else in the kit reports it."""
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    _write(root / "scripts" / "devkit" / "hooks" / "pr_followup_hook.py", "print('hook')\n")
+    _registration(
+        root, ".codex/hooks.json",
+        'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+        f'[ -n "$root" ] || exit 0; exec python3 "$root/{HOOK_REL}" --runtime codex',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    dead = report.dead_registrations
+
+    assert [(s.runtime, s.detail) for s in dead] == [("codex", HOOK_REL)]
+    assert "NO SUCH FILE" in kit_doctor.render(report)
+
+
+def test_a_dead_registration_makes_the_run_non_green(tmp_path, capsys, monkeypatch):
+    """The property the issue was filed for. Without it the adopter's report
+    was `0 differ, 0 missing`, exit 0, with a dead hook — which is the same
+    clean bill of health a working install gets."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    _write(root / "kit-manifest.json", json.dumps(_manifest({ENGINE: kit_doctor.sha256_of(target)})))
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude',
+    )
+    monkeypatch.chdir(root)
+
+    # Nothing on the FILE axis reaches the exit code here — no drift, nothing
+    # broken — so a 1 can only have come from the registration. Asserted on the
+    # report rather than on the rendered counts, which also carry the plain
+    # `missing` entries a minimal fixture always has and which are not findings.
+    quiet = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, None)
+    assert (quiet.drifted, quiet.broken) == ([], [])
+
+    assert kit_doctor.main(["--root", str(root)]) == 1
+    assert "NO SUCH FILE" in capsys.readouterr().out
+
+
+def test_an_unwired_runtime_is_not_an_error(tmp_path):
+    """`init.sh` PRINTS both registration blocks and writes neither (#303), so
+    an adopter who has not wired one is in a supported state. Failing it would
+    be #286's bug in a third place: a healthy adoption failing its own gate
+    forever, which is exactly what #381 is about on the sibling check."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+
+    assert report.dead_registrations == []
+    assert {s.state for s in report.registrations} == {"absent"}
+    assert "`/hooks` in a session is the authority" in kit_doctor.render(report)
+
+
+def test_a_registration_this_check_cannot_resolve_is_not_called_broken(tmp_path):
+    """An expansion the kit does not know is a limit of the CHECK, not a
+    finding about the repo. Reporting it as broken would assert a file is
+    missing from a path that was never resolved."""
+    root = _fake_repo(tmp_path)
+    _registration(
+        root, ".claude/settings.json", f'python3 "$MY_OWN_ROOT/{HOOK_REL}" --runtime claude'
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    claude = [s for s in statuses if s.surface == ".claude/settings.json"]
+
+    assert [s.state for s in claude] == ["unresolvable"]
+
+
+def test_a_malformed_registration_degrades_instead_of_aborting_the_report(tmp_path):
+    """Same rule the baseline read follows: a diagnostic that dies on one
+    unparseable file tells the adopter nothing about the other thirty-six."""
+    root = _fake_repo(tmp_path)
+    _write(root / ".codex" / "hooks.json", "{not json at all")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert [s.state for s in statuses if s.surface == ".codex/hooks.json"] == ["unreadable"]
+
+
+def test_a_session_start_registration_is_checked_too(tmp_path):
+    """The walk is over every `command` in the document, not a lookup into the
+    events the kit ships today — `SessionStart` is already a second one, and a
+    lookup would go blind the day a third arrives."""
+    root = _fake_repo(tmp_path)
+    _write(
+        root / ".claude" / "settings.json",
+        json.dumps({"hooks": {"SessionStart": [{"matcher": "startup", "hooks": [
+            {"type": "command",
+             "command": '[ -z "$JOB_NAME" ] && cd "$CLAUDE_PROJECT_DIR" '
+                        "&& uv run --script scripts/check_memory_budget.py --quiet || true"}
+        ]}]}}),
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    claude = [s for s in statuses if s.surface == ".claude/settings.json"]
+
+    # check_memory_budget.py is not in this fixture — only check_doc_budget.py is.
+    assert [(s.state, s.detail) for s in claude] == [
+        ("broken", "scripts/check_memory_budget.py")
+    ]
+
+
+def test_a_declined_pre_push_is_reported_as_declined_not_as_missing(tmp_path, capsys):
+    """#381. cs-toolkit declines the kit's `pre-push` on principle (#46, still
+    open — its own hook carries two guards no config key expresses), so the
+    `run ./init.sh` advice could never be taken and never be cleared. A
+    permanent warning is how the next real one gets skimmed past."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    assert kit_doctor.PRE_PUSH_REL in baseline["not_installed"], "fixture no longer declines it"
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+
+    assert report.hooks_state == "declined"
+    assert "pre-push hook: declined" in out
+    # The WHOLE line, not a window around it: an earlier form of this assertion
+    # looked only before the word "declined", so appending the advice after it
+    # survived (panel, correctness lens, round 7) — which is precisely where a
+    # regression would land.
+    hook_lines = [line for line in out.splitlines() if "pre-push hook" in line]
+    assert hook_lines and all("init.sh" not in line for line in hook_lines), hook_lines
+
+
+def test_an_undeclared_absent_pre_push_still_says_run_init(tmp_path, capsys):
+    """The other direction, so the test above cannot pass by the warning simply
+    being deleted: an adopter who never declared a decline gets the original
+    advice, because for them it is still correct."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    report = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, None)
+    print(kit_doctor.render(report))
+
+    assert report.hooks_state == "not-installed"
+    assert "NOT installed — run ./init.sh" in capsys.readouterr().out
+
+
+def test_json_carries_the_hook_state_and_the_registrations(tmp_path, capsys, monkeypatch):
+    """Both are invisible to a `--json` consumer otherwise: `hooks_installed`
+    is a bool with no room for "declined", and the two registration surfaces
+    are in neither KIT_OWNED nor any manifest."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    _write(root / "kit-manifest.json", json.dumps(_manifest({ENGINE: kit_doctor.sha256_of(target)})))
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".codex/hooks.json", f'exec python3 "$root/{HOOK_REL}" --runtime codex'
+    )
+    monkeypatch.chdir(root)
+
+    kit_doctor.main(["--root", str(root), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["hooks_installed"] is False
+    assert payload["hooks_state"] == "not-installed"
+    assert {"runtime": "codex", "surface": ".codex/hooks.json", "state": "resolves",
+            "detail": HOOK_REL} in payload["registrations"]
+
+
+def test_a_hook_renamed_out_of_rotation_is_reported_dead_not_resolved(tmp_path):
+    """The most ordinary way anyone disables a hook is renaming the file, and
+    the first version of this check reported that as `✓ resolves`.
+
+    The path scan stopped at the kit's own filename, so
+    `…/pr_followup_hook.py.disabled` was truncated back to
+    `…/pr_followup_hook.py` — which exists — and the registration invoking an
+    absent file passed clean. That is #379's own failure mode manufactured by
+    #379's fix, and worse than the silence it replaced: it asserts a specific
+    falsehood confidently (panel, adversarial lens)."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")  # the real file, still present
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}.disabled" --runtime claude',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+
+    assert [(s.state, s.detail) for s in report.dead_registrations] == [
+        ("broken", f"{HOOK_REL}.disabled")
+    ]
+
+
+def test_a_degenerately_nested_registration_does_not_abort_the_report(tmp_path):
+    """Valid JSON, absurd shape. The parse is guarded and says so ("a diagnostic
+    that dies on one malformed file tells the adopter nothing about the other
+    thirty-six"); the walk after it recursed without a cap and raised
+    `RecursionError` straight out of `inspect()` (panel, adversarial lens)."""
+    root = _fake_repo(tmp_path)
+    payload = "[" * 10000 + "]" * 10000
+    _write(root / ".codex" / "hooks.json", f'{{"hooks": {{"PostToolUse": {payload}}}}}')
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    # `unreadable`, not `unregistered`: the stack ran out inside `json.loads`
+    # before the walk was reached, and reporting "no kit hook registered" for a
+    # file this run could not read would be a claim it did not establish.
+    assert [s.state for s in statuses if s.surface == ".codex/hooks.json"] == [
+        "unreadable"
+    ]
+
+
+def test_an_installed_hook_beats_a_baseline_that_declares_it_declined(tmp_path):
+    """Evidence order, not declaration order — the property the comment claims
+    and nothing checked. A baseline is a record of a past decision; the file on
+    disk is the current fact, and a stale declaration must not hide a working
+    install (panel, correctness lens)."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "hooks" / "pre-push", "#!/bin/sh\n")
+    _write(root / ".git" / "hooks" / "pre-push", "#!/bin/sh\n")
+    target = root / "scripts" / "check_doc_budget.py"
+    recorded = kit_doctor.sha256_of(target)
+    baseline = _scoped_baseline({ENGINE: recorded})
+    assert kit_doctor.PRE_PUSH_REL in baseline["not_installed"]
+
+    report = _inspect(root, {ENGINE: recorded}, baseline)
+
+    assert report.hooks_installed is True
+    assert report.hooks_state == "installed"
+
+
+def test_the_optional_overlay_is_silent_when_absent_and_read_when_present(tmp_path):
+    """`.claude/settings.local.json` is optional by design, so its absence says
+    nothing and must produce no line — while a registration written there is
+    still the adopter's live registration and gets the same check. Both
+    directions, because either alone passes with the surface deleted (panel,
+    correctness lens)."""
+    root = _fake_repo(tmp_path)
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude',
+    )
+    _write(root / HOOK_REL, "print('hook')\n")
+
+    silent = kit_doctor.inspect_registrations(root, "scripts")
+    assert [s for s in silent if s.surface == ".claude/settings.local.json"] == []
+
+    _registration(
+        root, ".claude/settings.local.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}.disabled" --runtime claude',
+    )
+
+    read = kit_doctor.inspect_registrations(root, "scripts")
+    overlay = [s for s in read if s.surface == ".claude/settings.local.json"]
+    assert [(s.state, s.detail) for s in overlay] == [("broken", f"{HOOK_REL}.disabled")]
+
+
+def test_the_depth_cap_is_what_stops_a_deep_walk_not_the_json_parser(tmp_path):
+    """The cap, exercised where it is actually reachable.
+
+    A 10,000-deep document is stopped by `json.loads` exhausting its own
+    recursion budget, so the test written for the cap passed with the cap
+    REMOVED — the property was named by a test and pinned by nothing (panel,
+    adversarial lens, delta round). At a depth the parser handles comfortably
+    and the cap does not, the cap is the thing under test: without it the
+    registration below is found and reported, with it the surface is reported
+    `unreadable`, because a document this check declined to walk to the bottom
+    was not measured."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    depth = kit_doctor._MAX_REGISTRATION_DEPTH * 3
+    buried = json.dumps(
+        {"type": "command", "command": f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}"'}
+    )
+    payload = "[" * depth + buried + "]" * depth
+    _write(root / ".codex" / "hooks.json", f'{{"hooks": {{"PostToolUse": {payload}}}}}')
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    codex = [s for s in statuses if s.surface == ".codex/hooks.json"]
+
+    assert [s.state for s in codex] == ["unreadable"]
+    assert "nesting deeper than" in codex[0].detail
+
+
+def test_an_adopters_own_script_is_not_judged_as_a_kit_hook(tmp_path):
+    """`env_paths.py` ends in `paths.py`, which `KIT_OWNED` carries as a library
+    module. A substring match over every kit-owned filename claimed it, so an
+    adopter renaming *their own* unrelated tool got
+    `✗ … NO SUCH FILE` and exit 1 — permanently, with nothing telling them why
+    (panel, adversarial lens, delta round).
+
+    Two independent fixes, both needed: library modules are not invocable and
+    are out of the candidate set, and a name matches only at a path boundary."""
+    root = _fake_repo(tmp_path)
+    _registration(
+        root, ".claude/settings.json",
+        'python3 "$CLAUDE_PROJECT_DIR/scripts/my_hooks/env_paths.py" --their-flag',
+    )
+    # A second shape, and the one that pins the BOUNDARY half specifically: this
+    # basename ends with a name the narrowed set still contains, so only the
+    # boundary check keeps an adopter's derived hook from being judged as the
+    # kit's. (A repo that forked the hook and kept a related name is the
+    # ordinary way to end up here.)
+    _registration(
+        root, ".codex/hooks.json",
+        'exec python3 "$root/scripts/my_pr_followup_hook.py" --runtime codex',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
+    assert [s.state for s in codex] == ["unregistered"], (
+        "a name matched mid-token: " f"{[(s.state, s.detail) for s in codex]}"
+    )
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [s.state for s in claude] == ["unregistered"], (
+        "an adopter's own script was judged as a kit hook: "
+        f"{[(s.state, s.detail) for s in claude]}"
+    )
+    assert report.dead_registrations == []
+
+
+def test_a_variable_that_merely_starts_with_root_is_not_expanded(tmp_path):
+    """`$rootcause_dir` is one shell identifier — a shell resolves the longest
+    name and never `$root` plus a literal remainder. A plain `str.replace`
+    rewrote it to `<root>cause_dir` and then reported a hook that is right there
+    as `broken` at a path nothing would ever build (panel, adversarial lens)."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".codex/hooks.json",
+        f'exec python3 "$rootcause_dir/{HOOK_REL}" --runtime codex',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
+
+    assert [s.state for s in codex] == ["unresolvable"]
+    assert report.dead_registrations == []
+
+
+def test_only_invocable_scripts_are_candidates_for_a_registration_match(tmp_path):
+    """The candidate set, pinned directly — the adopter-script test above passes
+    on the boundary check alone, so this half would otherwise be unpinned
+    (checked by mutation: widening the set with the boundary check in place
+    changes nothing). A library module is imported by an engine, never named in
+    a hook command, so it has no business being matchable."""
+    candidates = kit_doctor._invocable_kit_scripts()
+
+    assert {"pr_followup_hook.py", "check_doc_budget.py"} <= candidates
+    for library in ("kitconfig.py", "paths.py", "resolver.py", "__init__.py"):
+        assert library not in candidates, f"{library} is imported, not invoked"
+
+
+def test_an_unparseable_registration_file_makes_the_run_non_green(tmp_path, capsys, monkeypatch):
+    """A file that does not parse is worse than one broken path: EVERY
+    registration in it is unmeasurable, and the runtime that must read the same
+    JSON is no better placed than this check was.
+
+    Reported `⚠` and exited 0 — a clean bill of health over a file nobody can
+    account for, which is #379's own shape one level up (panel, correctness
+    lens, delta round 2)."""
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    _write(root / "kit-manifest.json", json.dumps(_manifest({ENGINE: kit_doctor.sha256_of(target)})))
+    _write(root / ".claude" / "settings.json", "{not json at all")
+    monkeypatch.chdir(root)
+
+    # The file axis is clean, so a 1 can only have come from the registration.
+    quiet = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, None)
+    assert (quiet.drifted, quiet.broken) == ([], [])
+
+    assert kit_doctor.main(["--root", str(root)]) == 1
+    assert "unreadable" in capsys.readouterr().out
+
+
+def test_an_unwired_runtime_names_the_engines_dir_it_looked_under(tmp_path, capsys):
+    """The `unregistered` detail was computed and reached `--json` only. It is
+    the useful half of that line: an operator who sees no registration wants to
+    know which engines path the check resolved before going to look."""
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    _write(root / ".codex" / "hooks.json", json.dumps({"hooks": {}}))
+
+    report = _inspect(root, {}, None)
+    print(kit_doctor.render(report))
+
+    assert "no kit hook registered (engines: scripts/devkit)" in capsys.readouterr().out
+
+
+def test_a_repo_root_containing_a_space_does_not_break_the_path_scan(tmp_path):
+    """A present, working hook reported `✗ NO SUCH FILE` with exit 1, for every
+    checkout under a directory with a space in its name — `~/My Project`, a
+    `OneDrive - Company` sync folder, a home directory built from a full name.
+
+    The path scan ends a word at whitespace, so substituting the real root into
+    the command BEFORE the split truncated the word at the root's own space. The kit's own quoting cannot help: the scan
+    is a delimiter walk, not a shell parser. The root is now marked with a
+    sentinel that survives tokenising and resolved afterwards (panel,
+    adversarial lens, delta round 3)."""
+    root = _fake_repo(tmp_path / "My Project")
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [(s.state, s.detail) for s in claude] == [("resolves", HOOK_REL)]
+    assert report.dead_registrations == []
+
+
+def test_the_inline_rev_parse_form_is_read_as_the_root(tmp_path):
+    """`$(git rev-parse --show-toplevel)` contains spaces of its own, so it has
+    the same hazard as a spaced root and is covered by the same sentinel. An
+    adopter who wrote the registration by hand rather than from `init.sh`'s
+    printed block reaches this shape."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".codex/hooks.json",
+        f'exec python3 "$(git rev-parse --show-toplevel)/{HOOK_REL}" --runtime codex',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
+
+    assert [(s.state, s.detail) for s in codex] == [("resolves", HOOK_REL)]
+
+
+@pytest.mark.parametrize(
+    "label,command",
+    [
+        # The shape `init.sh` prints: the whole path inside one pair of quotes.
+        ("fully quoted", 'python3 "$CLAUDE_PROJECT_DIR/{rel}" --runtime claude'),
+        # Standard POSIX shell: quote only what needs it. Shell-identical to the
+        # form above, and the delimiter walk cut it at the closing quote — the
+        # remainder began with `/`, so it was read as an ABSOLUTE path, checked
+        # at the filesystem root and reported NO SUCH FILE with exit 1 on a
+        # healthy install (panel, adversarial lens, delta round 4).
+        ("variable quoted, suffix bare", 'python3 "$CLAUDE_PROJECT_DIR"/{rel} --runtime claude'),
+        # No quoting at all.
+        ("unquoted", "python3 $CLAUDE_PROJECT_DIR/{rel} --runtime claude"),
+        # Assignment form: the word is `HOOK=<path>`, and the path is what is
+        # being asked about.
+        ("assigned to a variable", 'HOOK="$CLAUDE_PROJECT_DIR/{rel}"; exec python3 "$HOOK"'),
+    ],
+)
+def test_every_shell_quoting_of_the_same_path_reads_the_same(tmp_path, label, command):
+    """Four spellings a shell treats identically. A check that disagrees with
+    the shell about which characters bound a path will report a working hook as
+    dead, and this one did — twice, at opposite ends of the token."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(root, ".claude/settings.json", command.format(rel=HOOK_REL))
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [s.state for s in claude] == ["resolves"], f"{label}: {claude}"
+
+
+def test_a_quoted_absolute_path_containing_a_space_is_one_path(tmp_path):
+    """The other half of the same lexing question, and not covered by the
+    sentinel: an adopter who hardcoded an absolute path rather than using the
+    runtime's placeholder. `shlex` keeps the quoted word whole; a walk that
+    stops at any space cuts it."""
+    root = _fake_repo(tmp_path / "My Project")
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".codex/hooks.json", f'exec python3 "{root}/{HOOK_REL}" --runtime codex'
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
+
+    assert [(s.state, s.detail) for s in codex] == [("resolves", HOOK_REL)]
+
+
+def test_an_unbalanced_quote_is_reported_as_unjudged_not_as_absent(tmp_path):
+    """A quote that never closes is a line a shell would refuse too, so the hook
+    cannot fire — but this check has not established WHERE it points, so it says
+    that rather than guessing. `unregistered` would be wrong (a registration is
+    plainly there) and `broken` would claim a measurement never made; the run
+    stays green and the operator gets a ⚠ naming the line.
+
+    The rule is the module's own, shared with the parse guard and the depth cap:
+    degrade, never abort."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".claude/settings.json", f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL} --runtime claude'
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [(s.state, s.detail) for s in claude] == [
+        ("unresolvable", "unbalanced quote — not lexable")
+    ]
+    assert report.dead_registrations == []
+
+
+def test_a_single_quoted_placeholder_is_not_expanded(tmp_path):
+    """Single quotes suppress expansion, so `'$CLAUDE_PROJECT_DIR/hook.py'` is a
+    literal path containing a `$` — a registration that can never fire. Marking
+    the root there anyway reported that dead hook as `resolves`, exit 0: the
+    exact failure #379 exists to catch, produced by #379's own check (panel,
+    adversarial lens).
+
+    It reports `unresolvable` rather than `broken` because the `$` that remains
+    is literal, and this check does not claim to know what a literal `$` path
+    means to the adopter — but it is a ⚠ the operator can see, not a ✓."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".claude/settings.json",
+        f"python3 '$CLAUDE_PROJECT_DIR/{HOOK_REL}' --runtime claude",
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [s.state for s in claude] == ["unresolvable"]
+
+
+def test_a_command_string_outside_a_hooks_block_is_not_a_registration(tmp_path):
+    """`.claude/settings.json` carries `command` strings that are not hooks —
+    `statusLine.command` is one. Judging those reported a repo with NO kit hook
+    registered as having a BROKEN one, exit 1, and suppressed the line that
+    would have said none was registered (panel, adversarial lens)."""
+    root = _fake_repo(tmp_path)
+    # The path is spelled EXACTLY as a kit script, so only the hooks-subtree
+    # scoping can exclude it. An earlier version of this test used a
+    # `.py.txt` log name, which the suffix allowlist added two rounds later
+    # excluded on its own — so the test kept passing while pinning nothing, and
+    # removing the scoping left the whole suite green (panel, adversarial lens,
+    # round 8). That is this session's own pattern, in the test written to
+    # prevent it.
+    _write(
+        root / ".claude" / "settings.json",
+        json.dumps({"statusLine": {"type": "command",
+                                   "command": "bash statusline.sh --budget scripts/check_doc_budget.py"}}),
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [s.state for s in claude] == ["unregistered"]
+    assert report.dead_registrations == []
+
+
+@pytest.mark.parametrize("log_name", ["pr_followup_hook.py.out.log", "pr_followup_hook.py.log"])
+def test_an_argument_that_merely_contains_a_kit_script_name_is_not_the_hook(tmp_path, log_name):
+    """A log path passed to an unrelated hook. The first spelling was excluded
+    by a "one extra extension, no further dot" rule — which admitted the second,
+    the commoner spelling of the same thing, and reported `✗ NO SUCH FILE` with
+    exit 1 for a repo that had registered no kit hook at all (panel, adversarial
+    lens, rounds 6 and 7). Both are somebody else's file."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "hooks" / "other.py", "print('theirs')\n")
+    _registration(
+        root, ".claude/settings.json",
+        'python3 "$CLAUDE_PROJECT_DIR/scripts/hooks/other.py" ' f"--log-file /tmp/{log_name}",
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+
+    assert report.dead_registrations == []
+
+
+def test_a_hook_taken_out_of_rotation_is_still_reported_dead(tmp_path):
+    """The other direction, so the exclusion above cannot pass by the check
+    simply going blind to suffixes: a NAMED out-of-rotation suffix is still a
+    registration pointing at a file that is not there."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}.disabled" --runtime claude',
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+
+    assert [(s.state, s.detail) for s in report.dead_registrations] == [
+        ("broken", f"{HOOK_REL}.disabled")
+    ]
+
+
+def test_a_name_mentioned_in_a_shell_comment_is_not_an_invocation(tmp_path):
+    """A shell never runs what follows an unquoted `#` at a word start. The scan
+    did, so a script named in an explanatory comment beside a hook line was read
+    as an invocation — a phantom registration when the file exists, a dead one
+    when it does not (panel, adversarial lens, round 7)."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _registration(
+        root, ".claude/settings.json",
+        f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude  '
+        "# see also scripts/kit_doctor.py",
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [(s.state, s.detail) for s in claude] == [("resolves", HOOK_REL)]
+
+
+def test_an_escaped_space_keeps_a_path_whole(tmp_path):
+    """`\\ ` is how a shell carries a space without quotes. A split that ignores
+    the escape cuts the path in half, which is the same defect as the two the
+    quoting cases cover, by a third route."""
+    root = _fake_repo(tmp_path / "My Project")
+    _write(root / HOOK_REL, "print('hook')\n")
+    escaped = str(root).replace(" ", "\\ ")
+    _registration(
+        root, ".codex/hooks.json", f"exec python3 {escaped}/{HOOK_REL} --runtime codex"
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
+
+    assert [(s.state, s.detail) for s in codex] == [("resolves", HOOK_REL)]
+
+
+def test_the_optional_overlay_is_silent_when_it_registers_nothing_too(tmp_path):
+    """The `report_absent` flag gates two cases, not one: the overlay being
+    absent, and the overlay being present with no kit hook in it. Both say
+    nothing about the install, and only the first was described (panel,
+    correctness lens) or tested."""
+    root = _fake_repo(tmp_path)
+    _write(
+        root / ".claude" / "settings.local.json",
+        json.dumps({"hooks": {"PostToolUse": [{"hooks": [
+            {"type": "command", "command": "echo hi"}
+        ]}]}}),
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert [s for s in statuses if s.surface == ".claude/settings.local.json"] == []
+    # The required surface with the same content is NOT silent, so this pins the
+    # flag rather than a general rule about empty hook blocks.
+    _write(
+        root / ".claude" / "settings.json",
+        json.dumps({"hooks": {"PostToolUse": [{"hooks": [
+            {"type": "command", "command": "echo hi"}
+        ]}]}}),
+    )
+    again = kit_doctor.inspect_registrations(root, "scripts")
+    assert [s.state for s in again if s.surface == ".claude/settings.json"] == ["unregistered"]
+
+
+def test_deep_nesting_outside_a_hooks_block_does_not_condemn_the_file(tmp_path):
+    """The depth budget counted every node in the document, so an unrelated deep
+    blob elsewhere in `.claude/settings.json` reported the whole surface
+    `unreadable` — exit 1 — while the install's actual hook sat shallow and
+    resolvable right beside it (panel, adversarial lens, round 8).
+
+    The cap is a stack guard, not a verdict on material this check does not
+    read: outside a `hooks` subtree it stops descending and says nothing."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    depth = kit_doctor._MAX_REGISTRATION_DEPTH + 1
+    document = {
+        "someAdopterKey": json.loads("[" * depth + "1" + "]" * depth),
+        "hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
+            {"type": "command",
+             "command": f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude'}
+        ]}]},
+    }
+    _write(root / ".claude" / "settings.json", json.dumps(document))
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [(s.state, s.detail) for s in claude] == [("resolves", HOOK_REL)]
+    assert report.dead_registrations == []
+
+
+def test_an_escaped_dollar_is_a_literal_not_a_placeholder(tmp_path):
+    """`\\$CLAUDE_PROJECT_DIR` is literal — a shell never expands it — so that
+    registration looks for a directory named `$CLAUDE_PROJECT_DIR` and can only
+    fail. Marking it anyway reported a dead hook as `resolves`, exit 0, which is
+    #379's own failure asserted by #379's check (panel, adversarial lens).
+
+    The word is tokenised before it is marked, and the escape was being consumed
+    in between — so the marker never saw that the `$` was literal."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _write(
+        root / ".claude" / "settings.json",
+        json.dumps({"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
+            {"type": "command",
+             "command": f'python3 "\\$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude'}
+        ]}]}}),
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [s.state for s in claude] == ["unresolvable"], (
+        f"an escaped placeholder was expanded: {[(s.state, s.detail) for s in claude]}"
+    )
