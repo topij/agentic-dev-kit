@@ -3219,6 +3219,36 @@ def _run_template_copy(
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2s_branch_step_fails_loudly_when_the_cd_fails() -> None:
+    """Kills: reverting the branch step to `cd "$REPO" && git checkout -b …`.
+
+    Text-level on purpose, and weaker than the sibling tests here, which execute
+    what they check. Nothing in the kit executes this particular block — it
+    creates a branch — and #374 tracks the general gap that fenced shell ships
+    unchecked. Added because the mutation round found the `|| exit 1` fix pinned
+    by nothing at all, which is worse than pinned weakly: with the `&&` form the
+    `cd` can fail, the branch is never created, only the cd error is reported,
+    and Step 2 then writes into whatever tree the shell was in — #399 reached
+    through the one instruction that is supposed to establish the branch
+    guarantee.
+    """
+    doc = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+    ).read_text(encoding="utf-8")
+    blocks = re.findall(r"```(?:bash|sh)\n(.*?)```", doc, re.DOTALL)
+    matching = [b for b in blocks if "git checkout -b" in b]
+    assert len(matching) == 1, f"expected one branch block, found {len(matching)}"
+
+    assert re.search(r'^cd "\$REPO" \|\| exit 1$', matching[0], re.M), (
+        "the branch step must fail loudly when the cd fails; found:\n" + matching[0]
+    )
+    assert '&& git checkout' not in matching[0], (
+        "the branch step is chained to the cd with `&&` — a failed cd then reports "
+        "only the cd error and never creates the branch"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
 def test_step_2_does_not_copy_a_template_the_repo_declared_declined(
     tmp_path: Path,
 ) -> None:
