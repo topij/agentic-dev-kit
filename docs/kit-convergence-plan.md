@@ -280,15 +280,53 @@ as Phase 0. Now tracked as **`#380`**, and **this is kit work**: the Phase 3
 paragraph below contradicted it by listing the same wiring as the adopter's, and
 that contradiction is corrected there.
 
-> Question 3's *shape* is less settled than it reads. It assumed Claude's
-> `startup`/`resume`/`clear` matcher transfers, from documentation. The
-> `SessionStart` entry in a shipping third-party integration's own
-> `~/.codex/hooks.json` carries **no `matcher` key at all** — establish which is
-> honoured before writing the registration, not after. And Phase 3's attempt to
-> settle it by running a probe could not: `codex-cli 0.42.0` on that host cannot
-> start a session (`400`, "requires a newer version of Codex"), so an absent
-> sentinel did not distinguish "project-level hooks are not read" from "the
-> session never started".
+> **2026-08-09 — the probe ran, and question 3's shape is now settled by
+> measurement rather than by documentation.** The `codex-cli 0.42.0` that could
+> not start a session was a stale Homebrew *formula* shadowing the real CLI; on
+> **0.147.0**, a throwaway repo registering both hooks establishes:
+>
+> - a **project-level `.codex/hooks.json` IS read** — an assumption carried
+>   unverified since Phase 0;
+> - **`SessionStart` fires with NO `matcher` key**, matching the shipping
+>   third-party registration and contradicting what this question assumed from
+>   Claude's `startup`/`resume`/`clear` shape. **Do not carry the matcher over;**
+> - **`PostToolUse` with `matcher: "^Bash$"` fires, dispatched by Codex** — the
+>   first observation of the kit's own shape firing *by the runtime* rather than
+>   by executing its command string through a shell, which closes the caveat the
+>   Phase 3 memo left open;
+> - the gate is **hook trust**, not support. An untrusted hook is skipped
+>   silently, which is why an earlier probe read as "not read".
+>
+> One caution for the build: this was proven with
+> `--dangerously-bypass-hook-trust`, a diagnostic no adopter uses. **Done when**
+> must mean *fires in a trusted session*, or it verifies a condition nobody
+> reproduces. Evidence is on `#380`.
+
+### What the adopter's refresh sent back — 2026-08-09
+
+cs-toolkit's refresh to `40eef8b` (`in-parallel-oy/cs-toolkit#1887`) merged, taking
+all four STALE files and retiring the `#385` hold. Three defects came back with it,
+and they belong on this plan because all three sit on the **install path** this
+document is about:
+
+- **`#397`** — `init.sh`'s `--no-clobber` summary can abort under `set -eu` after
+  listing the files needing action and before explaining the action. Found by the
+  adopter's review bot reading a kit-owned file in a diff — the audit mechanism the
+  Phase 3 memo named, firing a second time.
+- **`#398`** — `upgrade.md` Step 2 copies `docs/templates/*.tmpl` unconditionally,
+  which in a repo that *declined* them converts six deliberate decisions into
+  installs and lets `--record-install` make it permanent. The instruction is right
+  for a fresh adoption and wrong for a declared install set, with no carve-out.
+- **`#399`** — a persisted `cd` sent writes into a verification clone, twice in one
+  day across two repos. `upgrade.md` sends the operator to a second tree in Step 0
+  and then speaks in relative paths; the rule exists for review lenses and for no
+  workflow.
+
+**Sequencing note.** `#380` and `#397` are the same file, so they are one lane, and
+`#398` joins them as install-path work. That lane is disjoint from the kit's other
+live front — `cluster:merge-gate` (`#190`, `#39`, `#95` in `pr_watch.py`) — so the
+two can run in parallel. `#388` is **not** on either: cs-toolkit unpinned `init.sh`,
+so it has no current consumer and is future work for the next repo that pins a file.
 
 ### The critical path
 
