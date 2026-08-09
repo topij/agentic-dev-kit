@@ -1021,7 +1021,14 @@ def _script_words(command: str) -> tuple[bool, list[str]]:
 
     for char in command:
         if escaped:
-            buf.append(char)
+            # An escaped character is LITERAL, so it must not be marked: a shell
+            # never expands `\$CLAUDE_PROJECT_DIR`, and marking it anyway
+            # reported a registration that can only fail as `resolves` — a dead
+            # hook with a clean bill of health, which is #379's own failure
+            # (panel, adversarial lens, round 9). Flushing first keeps the
+            # segment before it expandable.
+            flush(True)
+            parts.append(char)
             escaped = False
         elif state != "'" and char == "\\":
             escaped = True

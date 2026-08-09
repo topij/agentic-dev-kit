@@ -113,7 +113,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "02dd8bcef5574798e6d4b9694deda9a7217fb6ae8c7a765cbb1a66391dd24dec"
+      "sha256": "6c375d818858513dc5dba73d52aa0afb353ed7310991462a895ad9d017ae7d0a"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [

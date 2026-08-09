@@ -3671,3 +3671,29 @@ def test_deep_nesting_outside_a_hooks_block_does_not_condemn_the_file(tmp_path):
 
     assert [(s.state, s.detail) for s in claude] == [("resolves", HOOK_REL)]
     assert report.dead_registrations == []
+
+
+def test_an_escaped_dollar_is_a_literal_not_a_placeholder(tmp_path):
+    """`\\$CLAUDE_PROJECT_DIR` is literal — a shell never expands it — so that
+    registration looks for a directory named `$CLAUDE_PROJECT_DIR` and can only
+    fail. Marking it anyway reported a dead hook as `resolves`, exit 0, which is
+    #379's own failure asserted by #379's check (panel, adversarial lens).
+
+    The word is tokenised before it is marked, and the escape was being consumed
+    in between — so the marker never saw that the `$` was literal."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _write(
+        root / ".claude" / "settings.json",
+        json.dumps({"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
+            {"type": "command",
+             "command": f'python3 "\\$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude'}
+        ]}]}}),
+    )
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [s.state for s in claude] == ["unresolvable"], (
+        f"an escaped placeholder was expanded: {[(s.state, s.detail) for s in claude]}"
+    )
