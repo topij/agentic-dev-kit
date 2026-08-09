@@ -2447,6 +2447,186 @@ def test_both_shipped_registrations_name_their_own_runtime() -> None:
     assert codex_pr_entry["matcher"] == "^Bash$"
 
 
+# ── register_budget_hooks — the SessionStart tripwires on Codex (#380) ───────
+
+
+def _with_budget_engines(repo: Path) -> Path:
+    """`register_budget_hooks` returns early when both engines are absent."""
+    for name in ("check_doc_budget.py", "check_memory_budget.py"):
+        engine = repo / "scripts" / name
+        engine.parent.mkdir(parents=True, exist_ok=True)
+        engine.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    return repo
+
+
+def _codex_session_start_commands() -> list[str]:
+    """The SessionStart command strings, read OUT OF the shipped file.
+
+    Selected by CONTENT, never by position — the sibling helper's docstring
+    records three separate defects from positional reads of this same file, the
+    third of which sat one test below a commit message claiming both levels
+    filtered by content.
+    """
+    parsed = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    return [
+        hook["command"]
+        for entry in parsed["hooks"]["SessionStart"]
+        for hook in entry["hooks"]
+        if "budget" in hook.get("command", "")
+    ]
+
+
+def test_the_shipped_codex_session_start_carries_no_matcher() -> None:
+    """Kills: adding `"matcher": "startup"` to the Codex SessionStart entry.
+
+    MEASURED on `codex-cli 0.147.0`, not read off documentation — the
+    convergence plan assumed Claude's `startup`/`resume`/`clear` matcher shape
+    transferred, and it does not. The one real SessionStart registration on the
+    machine this was measured on (a shipping third-party integration) carries no
+    `matcher` key.
+
+    This is the load-bearing direction: a Codex registration carrying Claude's
+    matcher is ACCEPTED and simply never fires, so the failure is silent and
+    looks exactly like a hook that was never trusted. Nothing else in the suite
+    would notice — `kit-manifest.json` does not track this file.
+    """
+    parsed = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    entries = [
+        entry
+        for entry in parsed["hooks"]["SessionStart"]
+        if any("budget" in hook.get("command", "") for hook in entry["hooks"])
+    ]
+    assert entries, "no SessionStart budget registration in the shipped file"
+    for entry in entries:
+        assert "matcher" not in entry, (
+            "the Codex SessionStart entry grew a `matcher` key. Codex accepts it "
+            "and the hook then never fires — measured, not inferred."
+        )
+    assert len(_codex_session_start_commands()) == 2, (
+        "both budget tripwires must be registered; Principle #1's mechanism "
+        "reaching one runtime is what #380 is about"
+    )
+
+
+def test_the_budget_advisory_prints_the_shipped_codex_commands_verbatim(
+    tmp_path: Path,
+) -> None:
+    """The advisory is text an adopter pastes into JSON, and the shipped file is
+    what this repo actually runs. If they drift, one of the two is a lie and
+    nothing else reports it.
+
+    Read from the file rather than restated here, for the reason the sibling
+    helper gives: comparing a copy against a copy makes a shared defect
+    invisible.
+    """
+    repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    for command in _codex_session_start_commands():
+        assert command in result.stdout, (
+            "the printed advisory has drifted from the shipped registration:\n"
+            f"  shipped: {command}"
+        )
+
+
+def test_the_budget_advisory_says_an_untrusted_hook_is_skipped_silently(
+    tmp_path: Path,
+) -> None:
+    """#380's acceptance names this sentence specifically, and it is the one an
+    adopter cannot derive.
+
+    Codex skips an untrusted hook with NO diagnostic: the session starts
+    normally and reports nothing. Verified by controlled comparison on
+    `codex-cli 0.147.0` — same repo, same `workspace-write` sandbox, the only
+    difference `--dangerously-bypass-hook-trust`; with it the hook fired, without
+    it nothing ran and nothing was said. Project trust (`trust_level =
+    "trusted"`) is NOT hook trust and does not substitute for it.
+
+    So the observable for "I forgot `/hooks`" is identical to the observable for
+    "the hook is broken". An advisory that omits this sends the adopter to debug
+    the command string.
+    """
+    repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    assert "/hooks" in result.stdout
+    lowered = result.stdout.lower()
+    assert "silently" in lowered, (
+        "the advisory must state that an untrusted hook is skipped SILENTLY"
+    )
+    assert "indistinguishable" in lowered, (
+        "the advisory must say a skipped hook cannot be told from a broken one — "
+        "that is the part an adopter cannot work out for themselves"
+    )
+
+
+def test_the_codex_session_start_takes_no_matcher_per_the_advisory(
+    tmp_path: Path,
+) -> None:
+    """The advisory must SAY the matcher rule, not merely omit the key.
+
+    An adopter hand-writing the entry from Claude's example will add
+    `"matcher": "startup"` unless told otherwise, and Codex will accept it.
+    """
+    repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    assert 'NO "matcher" key' in result.stdout
+    assert "never fires" in result.stdout
+
+
+@pytest.mark.parametrize("which", [0, 1], ids=["doc-budget", "memory-budget"])
+def test_the_codex_budget_registrations_survive_a_git_less_tree(
+    tmp_path: Path, which: int
+) -> None:
+    """`#359`'s guard, on the new commands — a LEVEL-2 test that EXECUTES them.
+
+    `$(git rev-parse --show-toplevel)` is the empty string outside a worktree, so
+    an unguarded form resolves to a path rooted at `/` and the interpreter exits
+    non-zero on every session start. Both registrations are parametrized rather
+    than looped, so a failure names which one broke.
+
+    Text-level assertions cannot catch this: when the command string is wrong,
+    the advisory and the shipped file are wrong identically.
+    """
+    command = _codex_session_start_commands()[which]
+
+    outside = subprocess.run(
+        ["sh", "-c", command],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=_env(tmp_path),
+    )
+
+    assert outside.returncode == 0, (
+        "the Codex budget registration failed in a tree with no .git — #359. "
+        f"exit={outside.returncode}\nstderr: {outside.stderr}"
+    )
+    assert not outside.stdout.strip(), f"unexpected output: {outside.stdout!r}"
+    assert outside.stderr == "", (
+        "the registration leaked git's error to stderr in a tree with no .git; "
+        f"stderr: {outside.stderr!r}"
+    )
+
+
+def test_no_budget_advisory_when_both_engines_are_absent(tmp_path: Path) -> None:
+    """Kills: dropping the early return. An advisory naming engines the repo
+    does not have is instructions that fail with no clue why — the same defect
+    `test_no_advisory_when_the_engine_path_is_not_a_file` pins for the PR hook.
+    """
+    repo = _fixture(tmp_path, config=V1_CONFIG, git=True)
+
+    result = _run_init(repo)
+
+    assert "bootstrapped" in result.stdout
+    assert "SessionStart budget tripwires" not in result.stdout
+
+
 def _codex_registration_command() -> str:
     """The Codex registration's command string, read OUT OF the shipped file.
 

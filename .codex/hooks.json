@@ -1,5 +1,21 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"$root\" ] || exit 0; [ -z \"${JOB_NAME:-}\" ] || exit 0; uv run --script \"$root/scripts/check_doc_budget.py\" --quiet || true",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"$root\" ] || exit 0; [ -z \"${JOB_NAME:-}\" ] || exit 0; uv run --script \"$root/scripts/check_memory_budget.py\" --quiet || true",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "^Bash$",
