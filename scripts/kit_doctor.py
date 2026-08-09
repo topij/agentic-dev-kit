@@ -907,6 +907,15 @@ def _hook_commands(node: object, depth: int = 0, inside_hooks: bool = False) -> 
     (panel, adversarial lens, PR #389).
     """
     if depth > _MAX_REGISTRATION_DEPTH:
+        if not inside_hooks:
+            # Deep material OUTSIDE a hooks subtree is not this check's business,
+            # so stop descending and say nothing. Counting it against the budget
+            # made an unrelated blob elsewhere in `.claude/settings.json` report
+            # the whole surface `unreadable` — exit 1, on an install whose hook
+            # was sitting shallow and resolvable right beside it. A permanent
+            # false warning is the shape #381 exists to remove (panel,
+            # adversarial lens, round 8).
+            return []
         raise _RegistrationTooDeep(
             f"nesting deeper than {_MAX_REGISTRATION_DEPTH} levels — not walked"
         )

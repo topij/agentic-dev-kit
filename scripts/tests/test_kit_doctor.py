@@ -3525,10 +3525,17 @@ def test_a_command_string_outside_a_hooks_block_is_not_a_registration(tmp_path):
     registered as having a BROKEN one, exit 1, and suppressed the line that
     would have said none was registered (panel, adversarial lens)."""
     root = _fake_repo(tmp_path)
+    # The path is spelled EXACTLY as a kit script, so only the hooks-subtree
+    # scoping can exclude it. An earlier version of this test used a
+    # `.py.txt` log name, which the suffix allowlist added two rounds later
+    # excluded on its own — so the test kept passing while pinning nothing, and
+    # removing the scoping left the whole suite green (panel, adversarial lens,
+    # round 8). That is this session's own pattern, in the test written to
+    # prevent it.
     _write(
         root / ".claude" / "settings.json",
         json.dumps({"statusLine": {"type": "command",
-                                   "command": "bash statusline.sh >> /tmp/check_doc_budget.py.txt"}}),
+                                   "command": "bash statusline.sh --budget scripts/check_doc_budget.py"}}),
     )
 
     report = _inspect(root, {ENGINE: _sha("x")}, None)
@@ -3637,3 +3644,30 @@ def test_the_optional_overlay_is_silent_when_it_registers_nothing_too(tmp_path):
     )
     again = kit_doctor.inspect_registrations(root, "scripts")
     assert [s.state for s in again if s.surface == ".claude/settings.json"] == ["unregistered"]
+
+
+def test_deep_nesting_outside_a_hooks_block_does_not_condemn_the_file(tmp_path):
+    """The depth budget counted every node in the document, so an unrelated deep
+    blob elsewhere in `.claude/settings.json` reported the whole surface
+    `unreadable` — exit 1 — while the install's actual hook sat shallow and
+    resolvable right beside it (panel, adversarial lens, round 8).
+
+    The cap is a stack guard, not a verdict on material this check does not
+    read: outside a `hooks` subtree it stops descending and says nothing."""
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    depth = kit_doctor._MAX_REGISTRATION_DEPTH + 1
+    document = {
+        "someAdopterKey": json.loads("[" * depth + "1" + "]" * depth),
+        "hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
+            {"type": "command",
+             "command": f'python3 "$CLAUDE_PROJECT_DIR/{HOOK_REL}" --runtime claude'}
+        ]}]},
+    }
+    _write(root / ".claude" / "settings.json", json.dumps(document))
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
+
+    assert [(s.state, s.detail) for s in claude] == [("resolves", HOOK_REL)]
+    assert report.dead_registrations == []
