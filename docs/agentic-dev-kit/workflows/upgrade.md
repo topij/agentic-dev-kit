@@ -50,7 +50,32 @@ Also fetch the kit you are upgrading *to*, if it isn't already local:
 git clone --depth 1 https://github.com/topij/agentic-dev-kit /tmp/agentic-dev-kit
 ```
 
-Everything below copies **from** that checkout **into** this repo.
+Everything below copies **from** that checkout **into** this repo — **two trees, and
+from here every write must name which one.** Bind both roots now, before the first
+write, and use them for the rest of the workflow:
+
+```bash
+REPO="$(git rev-parse --show-toplevel)"   # the repo being upgraded
+KIT=/tmp/agentic-dev-kit                  # the kit you are upgrading TO
+echo "REPO=$REPO"; echo "KIT=$KIT"; echo "pwd=$(pwd)"
+```
+
+**Check that output before continuing.** `$REPO` must be the repo you meant to upgrade,
+and `pwd` must be inside it. This is the assertion, and it belongs *before* the first
+write — after it, it is a post-mortem.
+
+The hazard is that a `cd` into `$KIT` — to inspect the fetched kit, to read a file —
+**outlives the command that made it**, and every relative path afterwards resolves in
+the clone. Two sessions lost time to exactly this on 2026-08-09, and neither recognised
+it: one had `cp` and `./init.sh` land in the verification clone and read it as filesystem
+corruption; the other ran greps in the wrong tree and got a startling wrong answer it
+nearly believed. The failure mimics a broken tool rather than a wrong directory, which
+is why the guard has to be structural rather than attentive (`#399`).
+
+When you verify a copy landed, **hash it at the destination** —
+`shasum -a 256 "$REPO/<path>"` — rather than reading `git status` from wherever the
+shell is. In the first occurrence above, the destination hash is what would have
+revealed it, and `git status` is what concealed it.
 
 ## Step 1 — Diff the installation (read-only)
 
@@ -110,7 +135,7 @@ docs — so the "runs on a branch" guarantee has to be established *before* the 
 mutation, not before the file copies in Step 3:
 
 ```bash
-git checkout -b chore/kit-upgrade
+cd "$REPO" && git checkout -b chore/kit-upgrade
 ```
 
 **Then refresh `init.sh` itself before running it.** This is the step that is easy to get
@@ -119,22 +144,32 @@ schema migrations — so running it would report success while silently applying
 Take the fetched kit's copy first:
 
 ```bash
-cp /tmp/agentic-dev-kit/init.sh ./init.sh
-chmod +x init.sh                                  # the kit ships it 100755; a copy can lose the bit
-mkdir -p docs/templates
-for _tmpl in /tmp/agentic-dev-kit/docs/templates/*.tmpl; do
+cd "$REPO" || exit 1                              # every write below lands here, not in $KIT
+cp "$KIT/init.sh" "$REPO/init.sh"
+chmod +x "$REPO/init.sh"                          # the kit ships it 100755; a copy can lose the bit
+mkdir -p "$REPO/docs/templates"
+for _tmpl in "$KIT"/docs/templates/*.tmpl; do
   _rel="docs/templates/$(basename "$_tmpl")"
   if python3 -c 'import json,pathlib,sys
-b = pathlib.Path("kit-manifest.json")
+b = pathlib.Path(sys.argv[1]) / "kit-manifest.json"
 d = json.loads(b.read_text(encoding="utf-8")) if b.is_file() else {}
-sys.exit(0 if "kit_commit" in d and sys.argv[1] in (d.get("not_installed") or []) else 1)' "$_rel"; then
+sys.exit(0 if "kit_commit" in d and sys.argv[2] in (d.get("not_installed") or []) else 1)' "$REPO" "$_rel"; then
     echo "declined (recorded in not_installed) — not copied: $_rel"
   else
-    cp "$_tmpl" "$_rel"
+    cp "$_tmpl" "$REPO/$_rel"
   fi
 done
-./init.sh --no-clobber
+"$REPO/init.sh" --no-clobber
 ```
+
+Every path above is absolute or `$REPO`-anchored, per *Working across two trees* in Step 0
+— including the manifest the gate reads, which is the adopter's and not the kit's. The
+`cd "$REPO"` is still required and is not redundant with them: `init.sh` resolves the
+config and the templates **against the working directory**, not against its own location
+(the same reason running `$KIT/init.sh` in place of the copy is not equivalent, below). So
+the `cd` sets what `init.sh` reads and the absolute paths set where everything else lands
+— and if the `cd` fails, the run stops rather than writing into whatever tree the shell
+was in.
 
 **The template copy is gated on the declared install set, and that gate is the
 difference between a refresh and a silent reversal.** A path listed in the baseline's

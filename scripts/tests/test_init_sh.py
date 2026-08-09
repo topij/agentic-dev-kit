@@ -2959,22 +2959,34 @@ def test_the_codex_registration_guards_an_empty_root_that_git_reports_as_success
 # execute them, so every defect in one was found by a human running it by hand.
 
 
-def _upgrade_init_argv() -> list[str]:
-    """The `./init.sh …` line from upgrade.md Step 2, as argv beyond the script.
+def _step2_refresh_block() -> str:
+    """upgrade.md's Step 2 refresh block, as text.
 
-    Anchored on the `cp` of `init.sh` that opens that block so a future
-    `./init.sh` elsewhere in the document cannot be picked up instead.
+    Anchored on the `cp` of `init.sh` that opens it, so a code block elsewhere in
+    the document cannot be picked up instead. The anchor tolerates both the bare
+    `/tmp/agentic-dev-kit` form and the `$KIT`-anchored one (#399) — pinning the
+    literal path here would make the cross-tree rewrite look like a missing block.
     """
     doc = (
         REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
     ).read_text(encoding="utf-8")
     blocks = re.findall(r"```(?:bash|sh)\n(.*?)```", doc, re.DOTALL)
-    matching = [b for b in blocks if "cp /tmp/agentic-dev-kit/init.sh" in b]
+    matching = [b for b in blocks if re.search(r"cp \"?(\$KIT|/tmp/agentic-dev-kit)", b)]
     assert len(matching) == 1, f"expected one Step 2 refresh block, found {len(matching)}"
-    lines = [ln.strip() for ln in matching[0].splitlines() if ln.strip().startswith("./init.sh")]
-    assert len(lines) == 1, f"expected one ./init.sh invocation, found {lines!r}"
+    return matching[0]
+
+
+def _upgrade_init_argv() -> list[str]:
+    """The `init.sh …` line from upgrade.md Step 2, as argv beyond the script."""
+    matching = _step2_refresh_block()
+    lines = [
+        ln.strip()
+        for ln in matching.splitlines()
+        if re.match(r'^\s*(\./|"\$REPO/)init\.sh\b', ln)
+    ]
+    assert len(lines) == 1, f"expected one init.sh invocation, found {lines!r}"
     argv = shlex.split(lines[0].split("#")[0])
-    assert argv[0] == "./init.sh"
+    assert argv[0].endswith("init.sh"), argv
     return argv[1:]
 
 
@@ -3044,17 +3056,11 @@ def _upgrade_template_copy_block() -> str:
     Anchored on the `cp` of `init.sh` like `_upgrade_init_argv`, so a future code
     block elsewhere in the document cannot be picked up instead.
     """
-    doc = (
-        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
-    ).read_text(encoding="utf-8")
-    blocks = re.findall(r"```(?:bash|sh)\n(.*?)```", doc, re.DOTALL)
-    matching = [b for b in blocks if "cp /tmp/agentic-dev-kit/init.sh" in b]
-    assert len(matching) == 1, f"expected one Step 2 refresh block, found {len(matching)}"
     kept = [
         line
-        for line in matching[0].splitlines()
-        if not line.startswith(("cp /tmp/agentic-dev-kit/init.sh", "chmod +x init.sh"))
-        and not line.startswith("./init.sh")
+        for line in _step2_refresh_block().splitlines()
+        if not re.match(r'^\s*(cd |cp "\$KIT/init\.sh"|chmod \+x)', line)
+        and not re.match(r'^\s*(\./|"\$REPO/)init\.sh\b', line)
     ]
     body = "\n".join(kept)
     assert "not_installed" in body, (
@@ -3074,17 +3080,23 @@ def _fake_kit_templates(tmp_path: Path) -> Path:
     return src
 
 
-def _run_template_copy(repo: Path, src: Path) -> subprocess.CompletedProcess[str]:
-    block = _upgrade_template_copy_block().replace(
-        "/tmp/agentic-dev-kit/docs/templates", str(src)
-    )
+def _run_template_copy(
+    repo: Path, src: Path, *, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run the extracted block with `$KIT`/`$REPO` bound as Step 0 binds them.
+
+    `cwd` defaults to the repo but is overridable on purpose: #399's whole subject
+    is a working directory that is not where the writes belong, and a block that
+    only works when cwd already happens to be right has not been tested for it.
+    """
     return subprocess.run(
-        ["sh", "-c", block],
-        cwd=repo,
+        ["sh", "-c", _upgrade_template_copy_block()],
+        cwd=cwd or repo,
         capture_output=True,
         text=True,
         stdin=subprocess.DEVNULL,
         check=True,
+        env={**os.environ, "REPO": str(repo), "KIT": str(src.parent.parent)},
     )
 
 
@@ -3149,6 +3161,42 @@ def test_step_2_copies_every_template_when_nothing_was_declared(
 
     installed = sorted(p.name for p in (repo / "docs" / "templates").glob("*.tmpl"))
     assert installed == ["AGENTS.md.tmpl", "friction-log.md.tmpl", "handoff.md.tmpl"]
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_writes_into_repo_even_when_the_shell_sits_in_the_kit_clone(
+    tmp_path: Path,
+) -> None:
+    """#399, as an executable pin rather than a paragraph.
+
+    The failure this reproduces: a `cd` into the fetched kit — to inspect it, to
+    read one file — outlives the command that made it, and every relative path
+    afterwards resolves in the clone. It happened twice on 2026-08-09, in two
+    repos, and neither session recognised it as a wrong directory; one read it as
+    filesystem corruption and spent ten minutes on a suspected sandbox overlay.
+
+    So the block is run with the shell parked in `$KIT`, which is the state that
+    produced both occurrences. `$REPO`-anchored writes land correctly from any
+    cwd; the pre-#399 relative form wrote the templates into the kit clone and
+    left the repo untouched, with `cp` reporting nothing either way.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    kit_root = src.parent.parent
+
+    _run_template_copy(repo, src, cwd=kit_root)
+
+    installed = sorted(p.name for p in (repo / "docs" / "templates").glob("*.tmpl"))
+    assert installed == ["AGENTS.md.tmpl", "friction-log.md.tmpl", "handoff.md.tmpl"], (
+        "the copy did not land in $REPO when the shell was parked in $KIT — a "
+        f"persisted `cd` still redirects Step 2's writes (#399). present: {installed}"
+    )
+    # and nothing was written into the kit clone, which is the other half: the
+    # first occurrence's damage was writes landing in the throwaway tree.
+    assert not (kit_root / "docs" / "templates" / "docs").exists(), (
+        "Step 2 wrote a nested docs/templates inside the kit clone"
+    )
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
