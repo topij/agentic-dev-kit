@@ -3029,6 +3029,159 @@ def test_upgrade_workflows_init_invocation_still_seeds_a_genuinely_absent_file(
 
 
 # --------------------------------------------------------------------------- #
+# upgrade.md Step 2's template copy is gated on the declared install set (#398)
+#
+# Executed, not read. A prose assertion (`"not_installed" in text`) would pass on
+# a document that mentions the gate in a paragraph while the code block above it
+# still copies unconditionally — which is exactly the failure mode the sibling
+# section's banner describes for `--no-clobber`.
+
+
+def _upgrade_template_copy_block() -> str:
+    """The Step 2 refresh block from upgrade.md, minus the two lines that need a
+    real kit checkout and a real installer.
+
+    Anchored on the `cp` of `init.sh` like `_upgrade_init_argv`, so a future code
+    block elsewhere in the document cannot be picked up instead.
+    """
+    doc = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+    ).read_text(encoding="utf-8")
+    blocks = re.findall(r"```(?:bash|sh)\n(.*?)```", doc, re.DOTALL)
+    matching = [b for b in blocks if "cp /tmp/agentic-dev-kit/init.sh" in b]
+    assert len(matching) == 1, f"expected one Step 2 refresh block, found {len(matching)}"
+    kept = [
+        line
+        for line in matching[0].splitlines()
+        if not line.startswith(("cp /tmp/agentic-dev-kit/init.sh", "chmod +x init.sh"))
+        and not line.startswith("./init.sh")
+    ]
+    body = "\n".join(kept)
+    assert "not_installed" in body, (
+        "the Step 2 code block no longer consults `not_installed` — the gate moved "
+        "into prose, or was removed (#398)"
+    )
+    return body
+
+
+def _fake_kit_templates(tmp_path: Path) -> Path:
+    """A stand-in for /tmp/agentic-dev-kit/docs/templates, since the block's
+    source path is hardcoded (that hardcoding is #343, not this test's subject)."""
+    src = tmp_path / "kit" / "docs" / "templates"
+    src.mkdir(parents=True)
+    for name in ("handoff.md.tmpl", "friction-log.md.tmpl", "AGENTS.md.tmpl"):
+        (src / name).write_text(f"# {name}\n", encoding="utf-8")
+    return src
+
+
+def _run_template_copy(repo: Path, src: Path) -> subprocess.CompletedProcess[str]:
+    block = _upgrade_template_copy_block().replace(
+        "/tmp/agentic-dev-kit/docs/templates", str(src)
+    )
+    return subprocess.run(
+        ["sh", "-c", block],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        check=True,
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_does_not_copy_a_template_the_repo_declared_declined(
+    tmp_path: Path,
+) -> None:
+    """#398: a path in `not_installed` is a DECISION, and copying it in reverses
+    it silently — `cp` says nothing, the `missing` count goes DOWN (which reads as
+    an improvement), and Step 4's `--record-install` then derives the installed set
+    from disk and writes the reversal in as fact.
+
+    An adopter caught this before acting and declined the instruction; nothing in
+    the kit would have caught it after.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text(
+        json.dumps(
+            {
+                "kit_commit": "deadbeef",
+                "files": {},
+                "not_installed": [
+                    "docs/templates/handoff.md.tmpl",
+                    "docs/templates/friction-log.md.tmpl",
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run_template_copy(repo, src)
+
+    installed = sorted(p.name for p in (repo / "docs" / "templates").glob("*.tmpl"))
+    assert installed == ["AGENTS.md.tmpl"], (
+        "a declined template was copied in, converting a recorded decision into "
+        f"an install (#398). present: {installed}"
+    )
+    # and the skip is REPORTED — a silent skip is the other half of the same
+    # defect, one direction over: the operator cannot see what was withheld.
+    assert "declined" in result.stdout
+    assert "handoff.md.tmpl" in result.stdout
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_copies_every_template_when_nothing_was_declared(
+    tmp_path: Path,
+) -> None:
+    """The gate must not become a blanket refusal.
+
+    A repo with no baseline at all has declared no scope, so every template is
+    copied — the pre-#398 behaviour, which was correct for this shape and is what
+    the `missing`-count rationale in `adopt.md` is really about. Without this,
+    narrowing the gate until it copies nothing would pass the sibling test.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+
+    _run_template_copy(repo, src)
+
+    installed = sorted(p.name for p in (repo / "docs" / "templates").glob("*.tmpl"))
+    assert installed == ["AGENTS.md.tmpl", "friction-log.md.tmpl", "handoff.md.tmpl"]
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_ignores_a_not_installed_key_on_an_untrusted_manifest(
+    tmp_path: Path,
+) -> None:
+    """The `kit_commit` test is what separates a real baseline from the kit's own
+    shipped manifest sitting at the same path.
+
+    Step 1 of the workflow draws that distinction for the drift report; the gate
+    has to draw it too. A shipped manifest carries no `not_installed`, but a
+    hand-rolled or partial one might — and honouring it would withhold templates
+    from a repo that never declared a scope. Kills: dropping the `kit_commit`
+    condition.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text(
+        json.dumps({"files": {}, "not_installed": ["docs/templates/handoff.md.tmpl"]}),
+        encoding="utf-8",
+    )
+
+    _run_template_copy(repo, src)
+
+    installed = sorted(p.name for p in (repo / "docs" / "templates").glob("*.tmpl"))
+    assert "handoff.md.tmpl" in installed, (
+        "a manifest with no `kit_commit` is not a --record-install baseline, so "
+        "its `not_installed` must not gate the copy"
+    )
+
+
+# --------------------------------------------------------------------------- #
 # The installer does not rewrite itself (#360)
 
 

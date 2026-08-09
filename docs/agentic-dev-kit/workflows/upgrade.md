@@ -121,9 +121,39 @@ Take the fetched kit's copy first:
 ```bash
 cp /tmp/agentic-dev-kit/init.sh ./init.sh
 chmod +x init.sh                                  # the kit ships it 100755; a copy can lose the bit
-mkdir -p docs/templates && cp /tmp/agentic-dev-kit/docs/templates/*.tmpl docs/templates/
+mkdir -p docs/templates
+for _tmpl in /tmp/agentic-dev-kit/docs/templates/*.tmpl; do
+  _rel="docs/templates/$(basename "$_tmpl")"
+  if python3 -c 'import json,pathlib,sys
+b = pathlib.Path("kit-manifest.json")
+d = json.loads(b.read_text(encoding="utf-8")) if b.is_file() else {}
+sys.exit(0 if "kit_commit" in d and sys.argv[1] in (d.get("not_installed") or []) else 1)' "$_rel"; then
+    echo "declined (recorded in not_installed) — not copied: $_rel"
+  else
+    cp "$_tmpl" "$_rel"
+  fi
+done
 ./init.sh --no-clobber
 ```
+
+**The template copy is gated on the declared install set, and that gate is the
+difference between a refresh and a silent reversal.** A path listed in the baseline's
+`not_installed` is a **decision** the adopter recorded. Copying it in anyway is invisible
+at the time — `cp` says nothing, and `kit_doctor`'s `missing` count goes *down*, which
+reads as an improvement — and Step 4's `--record-install` then derives the installed set
+from what is on disk and writes the reversal in as fact. A repo that declined six
+templates comes out the other side declaring twenty installed files where it declared
+twenty-six, with nothing anywhere recording that a decision was reversed. `#398`, found by
+an adopter who spotted the unconditional instruction and declined to follow it.
+
+The `kit_commit` test is what distinguishes a real baseline from the kit's own shipped
+manifest sitting at the same path (the same distinction Step 1 draws above): a manifest
+without it has no `not_installed` to honour, so nothing is gated and every template is
+copied — which is the correct behaviour for a repo that never declared a scope.
+
+If the operator wants a declined template *now*, that is a decision to state and record,
+not a side effect of a refresh: copy it by hand and say so in the PR, so Step 4 records a
+transition someone chose.
 
 **`--no-clobber` is not optional here, and it is the one flag that changes what this step
 can destroy.** Bare `init.sh` seeds two classes of target: one that is *absent*, and one
