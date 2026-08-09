@@ -2802,6 +2802,76 @@ def test_the_codex_registration_execs_rather_than_forking_the_interpreter(
     )
 
 
+def _with_stub_uv(tmp_path: Path) -> tuple[dict[str, str], Path]:
+    """A `uv` on PATH that records having been called, and does nothing else.
+
+    Lets the SessionStart registrations be executed for real while observing only
+    whether they reached the interpreter. The alternative — running the actual
+    budget script and looking for its output — cannot see the guard under test,
+    because `--quiet` prints nothing on a repo that is under budget and the
+    absence of output would then satisfy both arms.
+    """
+    stub_dir = tmp_path / "stub-bin"
+    stub_dir.mkdir(parents=True, exist_ok=True)
+    witness = tmp_path / "uv-was-called"
+    stub = stub_dir / "uv"
+    stub.write_text(f'#!/bin/sh\n: > "{witness}"\nexit 0\n', encoding="utf-8")
+    stub.chmod(0o755)
+    env = _env(tmp_path)
+    env["PATH"] = f"{stub_dir}{os.pathsep}{env['PATH']}"
+    env.pop("JOB_NAME", None)
+    return env, witness
+
+
+@pytest.mark.parametrize("which", [0, 1], ids=["doc-budget", "memory-budget"])
+def test_the_codex_budget_registration_skips_a_cron_run(
+    tmp_path: Path, which: int
+) -> None:
+    """The `JOB_NAME` guard, EXECUTED — the level-2 test this guard did not have.
+
+    Mutation-checked, and the result is why this exists: dropping
+    `[ -z "${JOB_NAME:-}" ] || exit 0` from both shipped commands killed exactly
+    one test, `..._prints_the_shipped_codex_commands_verbatim`, which compares the
+    advisory against the shipped file. That is a DRIFT check — it fails only
+    because one surface moved. Change both surfaces consistently and the guard is
+    gone with the suite green, which is the level-1/level-2 distinction the
+    git-less sibling's docstring draws.
+
+    Both arms are asserted. Without the positive control, a registration that had
+    stopped invoking anything at all would satisfy the cron arm and pass.
+    """
+    command = _codex_session_start_commands()[which]
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    env, witness = _with_stub_uv(tmp_path)
+
+    interactive = subprocess.run(
+        ["sh", "-c", command], cwd=repo, capture_output=True, text=True, env=env
+    )
+    assert interactive.returncode == 0, interactive.stderr
+    assert witness.exists(), (
+        "the registration never reached `uv` even outside a cron run, so the "
+        "cron assertion below would hold for the wrong reason"
+    )
+
+    witness.unlink()
+    cron = subprocess.run(
+        ["sh", "-c", command],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env={**env, "JOB_NAME": "nightly"},
+    )
+
+    assert cron.returncode == 0, cron.stderr
+    assert not witness.exists(), (
+        "the budget tripwire ran under JOB_NAME — a scheduled/CI session gets a "
+        "housekeeping nudge no human will read, and the guard that stops it is "
+        "pinned by nothing but a drift check"
+    )
+
+
 def _with_stub_git(tmp_path: Path, body: str) -> tuple[dict[str, str], Path]:
     """`_env` with a stub `git` first on PATH. `body` is its script body.
 
