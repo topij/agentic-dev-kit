@@ -37,3 +37,57 @@ step 2 still tells you to hand-author every lens prompt. The entry's wording had
 while its substance stood, which is `#373`. The cockpit mutation-harness entry went the other
 way: already fully represented on `#326`, so filing anything would have duplicated it. Swept
 entries are verbatim in the archive under `Graduated 2026-08-08`.
+
+## 2026-08-09 — un-graduated
+
+### A test that names a property and pins nothing — five instances, one session
+
+Every PR this session had at least one property stated in a comment or docstring and held by
+no test, and each was found by a review lens **mutating the line and watching the suite stay
+green** — never by reading:
+
+- `#387` — `test_the_adopters_nested_reports_stay_stageable` was written to catch the
+  anchoring defect and was masked by its own fixture, which pre-seeded a rule that made an
+  earlier guard return first. Reverting the fix left it green.
+- `#387` — the prefix branch of `_ignore_rule_exists_for` (negation-only rules).
+- `#391` — the escape rule's scoping to double-quoted scalars. **Both lenses found this
+  independently.** The PR's own comment calls the asymmetry "an oversight", which is exactly
+  the reasoning that would delete the scope later.
+- `#389` — "evidence order, not declaration order", the optional-overlay surface, and then
+  the depth cap itself, whose test turned out to be measuring `json.loads` rather than the
+  cap. That last one is the sharpest instance: the test was written *for* the cap, in
+  direct response to a finding about the cap, and still measured something else.
+
+A fifth, later: the same PR's own comment about which states reach the exit code went stale
+one round after it was written, inside the same PR. And a sixth, in this very entry — its
+heading said "four instances" over a body listing five, and the session's handoff block
+carried two wrong counts and two claims that a PR had merged when it had not. A lens caught
+all four. Then the rewrite that fixed them stated `#389`'s HIGH count three times, in three
+different numbers, none of them right — one sentence after warning the reader that two
+figures in that very block had been wrong when a lens counted them. **The pattern is not
+about tests; it is about any claim nobody re-derives**, and the session that wrote an entry
+about it produced five more instances while doing so, including one inside the caution.
+
+One shape, not five: **a fixture that satisfies an earlier guard hides the later property**,
+and the property then lives only in prose. Worth asking whether the mutation step belongs in
+the authoring loop rather than only in review — the author wrote all of these believing they
+were covered. Related to `#112`, which is about the drift test masking mutation results; this
+is the same blindness one layer up.
+
+### The panel is per-PR, and a batch of related PRs pays for it N times
+
+Four PRs from one session's findings needed seventeen rounds — ten on one PR alone — and
+upwards of twenty lens runs; count the `## Fallback panel — round N` headers per PR for
+the exact figures, which is the point of the neighbouring entry. Each run rebuilds context
+on the same repo, and several found the same class of defect independently. There is no
+shape in `fallback-review-panel.md` for "these four PRs are one change split by risk class",
+which is exactly what Principle #4 asks an author to do. The cost argues against splitting,
+which is the wrong pressure to put on that principle.
+
+### `AWK_COMMENT_IDX` cannot carry an apostrophe, and only breaking it tells you
+
+`init.sh`'s shared awk scanner is a single-quoted shell string, so an apostrophe anywhere
+inside it — including in a prose comment — ends the string and the next `eval` dies with a
+shell syntax error pointing *inside the awk program*, not at the apostrophe. Hit twice in one
+session, in two branches, the second time while writing the comment that documents the first.
+Now documented above the assignment (`#391`); nothing prevents it.

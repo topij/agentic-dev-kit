@@ -4,6 +4,154 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-07 (`#305`, and a vice removed at the pricing side)
+
+**Theme —** The review sprint resumed where `#209`'s decision left it. The panel's
+stopping rule was the picked hard item; the operator steered the design live and chose
+its shape; the change merged the same session.
+
+- **PR `#349` merged (`0e343c9`).** A record-prose-only fix-round delta on a change under
+  `safety-critical-changes.md` now takes **both** configured lenses over the delta — the
+  dual form — instead of a full panel at the new head, with rule 2 kept by composition
+  and a stated precondition: a full-panel review must be standing, so a Degraded-mode
+  initial review leaves nothing to compose with. The loop's three terminal states are
+  named, and a deletion's prose class is set by what the deleted text was doing where it
+  stood. The evidence companion buries the old categorical rule with the `#328` pricing,
+  the rejected severity-floor alternative, and the deferred dual-everywhere question.
+  Verified with `make test` in `/Users/topi/Coding/agentic-dev-kit`: 1006 passed, at both
+  heads.
+- **`#337` and `#334` merged before this session opened** (`fddbd31`, `b28df6b`), with no
+  session block of their own; recorded here so the trail has it. On `#349` the scoped
+  trigger produced one PR run and one `main` run, both green.
+- **CodeRabbit reviewed both heads of `#349`** and went rate-limited only after coverage
+  stood, so no panel was owed. Every finding is disposed on the PR's threads; the one not
+  fixed is deferred to `#194` with the bot's agreement. Another data point for the
+  friction inbox's bot-quota decision, still waiting on `triage-friction-log`.
+- **Filed this session: `#350`.** Comments on `#305` (the disposition) and `#194` (the
+  dual form sharpens its receipt-field ask).
+
+**Learned**
+
+- **The bot found the design's own missing precondition.** The dual form's composition
+  argument silently assumed a full-panel initial review; the author had reviewed the
+  argument and missed it. Principle #5 earning its keep on the doctrine that implements
+  it.
+- **Fix the price, not the duty.** The durable resolution of `#305`'s vice left
+  never-log-regressions untouched and moved what acting on it costs. The rejected
+  alternative — a severity floor on the duty — is in the companion so it is not
+  re-proposed.
+- **`mergeable` has no honest receipt for a bot-reviewed head** — all three literals
+  describe fallback passes, so the loop's best case (bot quota present, full coverage)
+  wedges the autonomous merge path. `#350`.
+
+**Decided this session (operator, live)**
+
+- **The dual-lens form**, over a severity floor and over record-only; **the ordinary
+  class stays single-lens**, with `#268`'s disjointness evidence recorded on `#305` as
+  the open question.
+- **Merge `#349`** — operator-merge per the doctrine's own closing rule applied to
+  itself.
+
+**Open, and owned by nothing yet**
+
+- **The critical path leaves this repo**: Phase 3 needs cs-toolkit's Phase 0 and its
+  fixer predicate (`done` → `converged`), both that repo's PRs, per
+  `docs/kit-convergence-plan.md`. Every kit-side gate is merged.
+- **The friction inbox is over budget and its triage is overdue** by its own entries;
+  graduating it needs tracker writes and operator approval (`triage-friction-log`).
+- **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
+- **Carried forward:** `#350`, `#304`, `#291`, `#243`, `#273`, `#290`, `#283`, `#287`,
+  `#292`, `#248`, `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`,
+  `#220`, `#203`, `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **cs-toolkit's Phase 0 + fixer predicate** — that repo's PRs, per
+`docs/kit-convergence-plan.md`'s agreed sequence; read its "The move is not a file move"
+paragraph before starting. Kit-side in parallel: `#211` (populate `--carry-forward` for
+fix rounds — the review sprint's named next move), and the overdue `triage-friction-log`
+sweep.
+
+## Session — 2026-08-06 (`#330`, and a ticket's own objection that did not survive being run)
+
+**Theme —** The fix was one flag. The work was establishing that the flag was the right one,
+against a ticket that argued it was not — and then discovering that moving a file with no
+content change still regresses it.
+
+- **PR `#337` is open, reviewed, and deliberately unmerged.** `/upgrade` Step 2 now runs
+  `./init.sh --no-clobber`, so a marked-but-edited file is declined instead of rendered over
+  with no backup. Verified with `make test` in `/Users/topi/Coding/agentic-dev-kit`, on that
+  PR's branch — the figure is not restated here, and the branch has to be named because this
+  record sits on a different one where the same command in the same directory prints a
+  different number.
+- **`adopt` and `upgrade` are now shared workflow definitions**, with thin bindings per runtime
+  and `KIT_OWNED` entries; Codex gains `$adopt` and `$upgrade`, which it had not had. The move
+  was required — `#330`'s fix lands in `upgrade.md` and would otherwise have reached one
+  runtime — but the reason worth keeping is separate: `upgrade.md` Step 4 tells an adopter to
+  keep their own copy of a runtime *adapter*, so while these two were adapters, no kit fix to
+  the adopt or upgrade procedure could reach anyone running it.
+- **Filed this session:** `#338`, `#339`, `#340`, `#341`, `#342`, `#343`. Occurrence comments
+  on `#326` and `#323`, and a correction on `#330` recording that its objection to the chosen
+  option was measurably wrong.
+
+**Learned**
+
+- **A ticket's stated regression can be an artefact of conflating two states.** `#330` argued
+  `--no-clobber` would stop a partially-adopted repo receiving `AGENTS.md`. Two `git init`
+  sandboxes showed the flag narrows seeding to *absent* targets, and absent is exactly that
+  case — it still seeds. The real cost is one row narrower and is announced twice per run.
+  The three-option choice the ticket declined to make was decided by running it, not by
+  re-reading it.
+- **A byte-identical move still regresses.** `adopt.md`'s link to
+  `adopting-into-a-linted-repo.md` was correct from `.claude/commands/` and dangling from
+  `docs/agentic-dev-kit/workflows/`. Round 1 of the panel verified the move by diffing
+  extracted bodies and could not have caught it: correctness depended on the file's depth, and
+  the bytes are identical in both places. `#340` is the missing check; `#216` is why one was
+  built and reverted before.
+- **A hardcoded list in a test narrows coverage without failing.**
+  `test_codex_skill_adapters_are_valid_and_share_workflows` iterates a tuple that was the
+  complete set until this PR added two skills to it. An unnamed skill is unchecked, not red.
+  `#341`. A lens then mutation-tested it in both directions to show the gap was real.
+- **The bot's own findings were mostly older than the PR.** Four of its six were pre-existing
+  in a file that had simply never been read by a reviewer — as a `.claude/commands/` adapter it
+  sat outside every check the repo runs *and* outside what `/upgrade` refreshes. `#342`, `#343`.
+  A single bot pass over a long document is a lower bound, not an audit.
+
+**Decided this session (operator-absent, by doctrine)**
+
+- **Option 1 of `#330`'s three**, with the pristine-skeleton cost stated in the workflow rather
+  than buried, and option 3 filed as `#338` with the versioning problem that stops it being a
+  byte-compare.
+- **File rather than fix**, for every finding verified pre-existing. `safety-critical-changes.md`
+  rule 3 is explicit that a fix round addresses what the review found, and this PR gates a
+  destructive operation.
+- **Do not self-merge.** That same doctrine's closing line makes changes it governs
+  operator-merge, "even when green and clean". This is why `#337` is held; the outage is a
+  second, independent reason.
+
+**Open, and owned by nothing yet**
+
+- **`#337` and `#334` both need an operator merge and neither has CI.** Both branches have zero
+  workflow runs. **They are not queued — the push events were dropped**, so Actions recovering
+  will not create them: the incident open since 15:22Z later throttled webhooks to a fraction of
+  deliveries, and runs on other branches completed well into that window, which is what makes
+  "still queued" the wrong read. `#345` has the measurement and the recovery route, and the
+  route matters: a new commit would re-trigger CI and **invalidate the review receipt bound to
+  the reviewed sha**, while closing and reopening the PR re-fires `pull_request` without moving
+  the head. The panel substituted for what CI would confirm — each lens ran the suite in its own
+  isolated clone — which is evidence, not a green tick.
+- **The friction inbox is over its budget** and this session widened it. Not swept here;
+  graduating it needs tracker writes and operator approval, which is `triage-friction-log`'s job.
+- **`#342` is the largest of the new ones**: three Major correctness gaps in `adopt.md`, now
+  reachable and refreshable for the first time.
+- **Carried forward:** `#304`, `#291`, `#243`, `#273`, `#290`, `#283`, `#287`, `#292`, `#248`,
+  `#264`, `#236`, `#231`, `#213`, `#167`, `#209`, `#211`, `#120`, `#216`, `#220`, `#203`,
+  `#190`, `#187`, `#124`, `#169`, `#143`.
+
+▶ Next: **merge `#337`, then `#334`, once Actions is back** — both are operator calls, `#337`
+by the safety doctrine rather than only by the outage. Read `#337`'s round-3 comment first: it
+records what the panel substituted for CI and what the receipt does *not* cover. After that the
+substance is unchanged from last session — **cs-toolkit's Phase 0 and its fixer predicate**
+gate Phase 3, and are that repo's PRs.
+
 ## Session — 2026-08-06 (`#297`, and a diagnosis corrected within the hour)
 
 **Theme —** Phase 2 shipped after a two-lens panel. The rest of the session went to a CI
