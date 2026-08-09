@@ -104,7 +104,54 @@ entirely in the one feature that was new code rather than a correction.
   because of it, and re-running `--record-install` there silently undoes that.
 - **`#358` remains untouched**, as it was last session.
 
-▶ Next: **`#388`, then `#363`.** `#388` has a named consumer — cs-toolkit will hit it the
+### Later the same day — the July-cohort sweep
+
+**94 issues re-derived against `main` at `40eef8b`, 17 closed (18%).** The sweep was run
+because filing was outrunning closing about 5:1 and 94 issues were ≥8 days old in a repo
+worked daily. Six read-only agents re-derived each premise with a command rather than
+reading the issue text; every close carries that command in a comment.
+
+- **Closed:** `#27` `#33` `#37` `#72` `#75` `#93` `#106` `#112` `#121` `#123` `#124`
+  `#136` `#146` `#163` `#178` `#183` `#187`. `#72` is the instructive one — it was filed
+  against behaviour that already shipped.
+- **Routed as decisions, not defects:** `#4` (describes a service scaffold this repo does
+  not have), `#167` (the split shipped; the rest is its own "what a repair needs to
+  decide"), `#169` (draft-vs-ready default).
+- **The remaining 74 are labelled into five clusters** — `cluster:merge-gate`,
+  `cluster:pre-push`, `cluster:suite-integrity`, `cluster:doctrine`,
+  `cluster:review-signal` — so a session picks a cluster, not a ticket.
+
+**The sweep's real finding is that the backlog is not stale.** An 18% close rate means the
+pile is unworked rather than rotten, so triage is not the lever. Two projections made
+before measuring were wrong and are recorded here because the pattern is this session's
+own theme: "expect 40–50 closes" came from a sample chosen *because* it looked fixed, and
+an "open issues: 30" figure came from a `gh` call that silently hit its default limit.
+
+**What the clusters say, ordered by what they threaten:**
+
+- **`cluster:merge-gate` is the one that matters.** Three independent routes make
+  `mergeable`/`converged` true when they should not: `#190` (losing or corrupting the
+  state file disables the false-settle guard — and a *fresh clone* reaches that with no
+  failed write), `#39` (the guard is one poll wide), `#95` (unanchored substring bot
+  matching lets a PR forge a check that cancels its own reviewer's block). This is the
+  kit's central promise, and cs-toolkit runs the engine.
+- **`cluster:pre-push`** — five issues on one file, and `#36` was mutation-verified during
+  the sweep: `exit 1` → `exit 0` and 1084 tests still pass. The kit's one mandatory
+  protection is unpinned.
+- **`cluster:suite-integrity`** — `#135` is quoted in `test_mutation_gate.py`'s own
+  docstring as unresolved. While this cluster stands, every "fixed" verdict anywhere is
+  softer than it reads.
+- **`cluster:doctrine`** — `#141` and `#142` both build on `#56`, which was never
+  implemented. Sequence `#56` first or they compound on nothing.
+
+▶ Next: **`cluster:merge-gate`** — `#190` and `#39` together (one guard, one change), then
+`#95` separately. Superseding the pointer below: `#388` lost its named consumer when
+cs-toolkit unpinned `init.sh`, and `#363` waits behind a gate that can currently be
+defeated three ways.
+
+______________________________________________________________________
+
+▶ Superseded by the sweep above, kept for the reasoning: **`#388`, then `#363`.** `#388` has a named consumer — cs-toolkit will hit it the
 next time it pins a file, and re-running `--record-install` there silently undoes the
 hand-maintained entry it keeps because of this — and its shape is decided: a third state
 beside `files` and `not_installed`, plus a refusal that does not take the declared scope
