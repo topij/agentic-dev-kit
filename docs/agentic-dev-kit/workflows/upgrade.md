@@ -135,7 +135,8 @@ docs — so the "runs on a branch" guarantee has to be established *before* the 
 mutation, not before the file copies in Step 3:
 
 ```bash
-cd "$REPO" && git checkout -b chore/kit-upgrade
+cd "$REPO" || exit 1
+git checkout -b chore/kit-upgrade
 ```
 
 **Then refresh `init.sh` itself before running it.** This is the step that is easy to get
@@ -162,8 +163,10 @@ done
 "$REPO/init.sh" --no-clobber
 ```
 
-Every path above is absolute or `$REPO`-anchored, per *Working across two trees* in Step 0
-— including the manifest the gate reads, which is the adopter's and not the kit's. The
+Every path above is absolute or `$REPO`-anchored, per **Working across two trees** in
+[`AGENTS.md`](../../../AGENTS.md) — the rule this workflow binds by setting `$REPO` and
+`$KIT` in Step 0 above — including the manifest the gate reads, which is the adopter's and
+not the kit's. The
 `cd "$REPO"` is still required and is not redundant with them: `init.sh` resolves the
 config and the templates **against the working directory**, not against its own location
 (the same reason running `$KIT/init.sh` in place of the copy is not equivalent, below). So

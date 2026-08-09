@@ -1260,16 +1260,34 @@ register_budget_hooks() {
   echo "      runtime. Skip whichever you have already done — \`/hooks\` in a"
   echo "      session lists what that runtime actually loaded."
   echo "      Codex — .codex/hooks.json, under hooks.SessionStart, NO \"matcher\" key:"
-  echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_doc_budget_src}\" --quiet || true"
-  echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_mem_budget_src}\" --quiet || true"
+  # Per ENGINE, not just per pair. The early return above covers "both absent";
+  # with exactly one present the advisory used to print both commands anyway, and
+  # the absent one then fails at every session start with `|| true` hiding it —
+  # the same "instructions that fail with no clue why" the early return exists to
+  # prevent, which is why the guard belongs at both granularities. Reachable via
+  # a declined engine (`not_installed`), not hypothetical. Found by the review bot.
+  #
+  # `if` blocks rather than `[ -f … ] && echo …`: that chain as a function's last
+  # statement is the abort this same PR fixes in the --no-clobber summary (#397),
+  # and the suggested patch that raised this finding was written in that shape.
+  if [ -f "$_doc_budget_src" ]; then
+    echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_doc_budget_src}\" --quiet || true"
+  fi
+  if [ -f "$_mem_budget_src" ]; then
+    echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_mem_budget_src}\" --quiet || true"
+  fi
   echo "        SessionStart takes no \"matcher\" — a Codex registration carrying"
   echo "        Claude's \"startup\" matcher is accepted and never fires."
   echo "        Then TRUST it via /hooks. Codex skips an untrusted hook SILENTLY:"
   echo "        the session starts normally and reports nothing, so a hook you"
   echo "        have not trusted is indistinguishable from one that is broken."
   echo "      Claude — .claude/settings.json, under hooks.SessionStart, matcher \"startup\":"
-  echo "        [ -z \"\$JOB_NAME\" ] && cd \"\$CLAUDE_PROJECT_DIR\" && uv run --script ${_doc_budget_src} --quiet || true"
-  echo "        [ -z \"\$JOB_NAME\" ] && cd \"\$CLAUDE_PROJECT_DIR\" && uv run --script ${_mem_budget_src} --quiet || true"
+  if [ -f "$_doc_budget_src" ]; then
+    echo "        [ -z \"\$JOB_NAME\" ] && cd \"\$CLAUDE_PROJECT_DIR\" && uv run --script ${_doc_budget_src} --quiet || true"
+  fi
+  if [ -f "$_mem_budget_src" ]; then
+    echo "        [ -z \"\$JOB_NAME\" ] && cd \"\$CLAUDE_PROJECT_DIR\" && uv run --script ${_mem_budget_src} --quiet || true"
+  fi
 }
 
 install_hooks() {

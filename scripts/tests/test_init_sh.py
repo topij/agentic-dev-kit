@@ -2614,6 +2614,43 @@ def test_the_codex_budget_registrations_survive_a_git_less_tree(
     )
 
 
+@pytest.mark.parametrize(
+    ("present", "absent"),
+    [("check_doc_budget.py", "check_memory_budget.py"),
+     ("check_memory_budget.py", "check_doc_budget.py")],
+    ids=["only-doc-budget", "only-memory-budget"],
+)
+def test_the_budget_advisory_names_only_engines_that_exist(
+    tmp_path: Path, present: str, absent: str
+) -> None:
+    """Kills: gating the advisory on the PAIR instead of on each engine.
+
+    The early return covers "both absent". With exactly one present the advisory
+    printed both commands anyway, and the absent one then fails at every session
+    start with `|| true` hiding it — the same "instructions that fail with no clue
+    why" the early return exists to prevent, one granularity down.
+
+    Reachable rather than hypothetical: an adopter who declined one engine records
+    it in `not_installed`, which is the state #398 is about. Found by the review
+    bot on PR #401.
+    """
+    repo = _fixture(tmp_path, config=V1_CONFIG, git=True)
+    engine = repo / "scripts" / present
+    engine.parent.mkdir(parents=True, exist_ok=True)
+    engine.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert "SessionStart budget tripwires" in result.stdout, (
+        "one engine is present, so the advisory must still be printed"
+    )
+    assert present in result.stdout
+    assert absent not in result.stdout, (
+        f"the advisory named {absent}, which this repo does not have — the "
+        "registration would fail at every session start with `|| true` hiding it"
+    )
+
+
 def test_no_budget_advisory_when_both_engines_are_absent(tmp_path: Path) -> None:
     """Kills: dropping the early return. An advisory naming engines the repo
     does not have is instructions that fail with no clue why — the same defect
@@ -3133,6 +3170,17 @@ def _upgrade_template_copy_block() -> str:
         and not re.match(r'^\s*(\./|"\$REPO/)init\.sh\b', line)
     ]
     body = "\n".join(kept)
+    # Asserted against the SHIPPED block, not the stripped one, and that is the
+    # point. The `cd` has to be stripped for the extracted body to run against a
+    # fixture, which left it pinned by nothing: delete `cd "$REPO"` from
+    # upgrade.md and every test in this section still passes, while `init.sh`
+    # resolves the config and `docs/templates/*.tmpl` against the KIT clone —
+    # #399's exact failure, one line over from the one being guarded. Found by
+    # the review bot on PR #401.
+    assert re.search(r'^\s*cd "\$REPO"', _step2_refresh_block(), re.M), (
+        "Step 2 no longer cds into $REPO before running init.sh — the installer "
+        "resolves config and templates against the working directory (#399)"
+    )
     assert "not_installed" in body, (
         "the Step 2 code block no longer consults `not_installed` — the gate moved "
         "into prose, or was removed (#398)"
