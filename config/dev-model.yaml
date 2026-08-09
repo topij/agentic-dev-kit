@@ -62,7 +62,7 @@ doc_budgets:
   # regardless of flags — including a `path:` here that no longer exists — so a renamed
   # doc gates any pipeline running it, however it is invoked.
   - path: docs/kit-handoff.md
-    budget: 400
+    budget: 10
     archive: docs/kit-handoff-history.md
     # This budget is in LINES; archive_plan_sessions.py's --keep is in BLOCKS, so
     # --keep at its default can be a no-op against this budget (issue #74: 5 blocks

@@ -157,7 +157,10 @@ b = pathlib.Path(sys.argv[1]) / "kit-manifest.json"
 try:
     d = json.loads(b.read_text(encoding="utf-8"))
 except FileNotFoundError:
-    sys.exit(1)                  # no baseline: no declared scope, copy
+    if b.is_symlink():           # present but dangling: unreadable, not absent
+        print(f"{b}: dangling symlink", file=sys.stderr)
+        sys.exit(2)
+    sys.exit(1)                  # genuinely absent: no declared scope, copy
 except (OSError, ValueError) as exc:
     print(f"{b}: {exc}", file=sys.stderr)
     sys.exit(2)                  # present but unreadable: refuse, do not guess
@@ -246,10 +249,16 @@ implementation rather than continuing to invent one:
   `for` loop and the next line still runs `init.sh` — printing "Copied nothing" and then
   proceeding past the point the prose calls a hard stop. `_gate_failed` is what makes the
   stop real;
-- and a well-formed object is not a readable scope. `{"kit_commit": …, "not_installed": 5}`
+- a well-formed object is not a readable scope. `{"kit_commit": …, "not_installed": 5}`
   raised `TypeError` on the membership test and exited 1 (copy); a **string** there was
   worse than that, because `in` on a string is a SUBSTRING test — no error, and a
-  comma-joined value could answer *true* for a path nobody declined.
+  comma-joined value could answer *true* for a path nobody declined;
+- and `FileNotFoundError` alone does not mean *absent*. A **dangling symlink** at that
+  path raises it too, so the one shape the taxonomy treats as safe was also catching a
+  present-but-unreadable manifest. `is_symlink()` separates them — it does not follow the
+  link, so it stays true exactly where `exists()` has gone false. `#303` records the same
+  shape one file over, where a dangling symlink at `.codex/hooks.json` defeated three
+  rounds of guards.
 
 All four came out of the fallback review panel, two of them as HIGHs, each in the previous
 round's remediation.

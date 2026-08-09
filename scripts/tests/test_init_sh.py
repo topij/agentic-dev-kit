@@ -3589,6 +3589,34 @@ def test_step_2_refuses_a_baseline_whose_files_half_is_unreadable(
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_refuses_a_dangling_symlink_at_the_manifest_path(
+    tmp_path: Path,
+) -> None:
+    """`FileNotFoundError` alone does not mean absent.
+
+    A dangling symlink raises it exactly as a missing file does, so the one
+    branch the taxonomy treats as safe to copy on was also catching a
+    present-but-unreadable manifest. `is_symlink()` separates them because it
+    does not follow the link — it stays true precisely where `exists()` has gone
+    false, verified directly.
+
+    `#303` is the same shape one file over: a dangling symlink at
+    `.codex/hooks.json` survived three rounds of guards there, where `[ -e ]` was
+    false and the redirect wrote through the link anyway.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").symlink_to(tmp_path / "no-such-manifest.json")
+    assert not (repo / "kit-manifest.json").exists()  # positive control
+    assert (repo / "kit-manifest.json").is_symlink()
+
+    result = _run_template_copy(repo, src, check=False)
+
+    _assert_gate_refused(repo, result, "dangling symlink")
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
 def test_step_2_runs_init_sh_when_the_gate_is_satisfied(tmp_path: Path) -> None:
     """The positive control for the refusal tests above.
 
