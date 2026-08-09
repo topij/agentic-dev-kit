@@ -15,20 +15,19 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
 Last updated: 2026-08-09 — **cs-toolkit's Phase 3 is merged and its findings are worked
-back into the kit.** `#385` (the one with an adopter blocked behind it), `#382` and `#383`
-are closed. `#379`, `#381` and the `kit_doctor` half of `#386` ride on `#389`, which was
-still open at wrap-up time — **check their state rather than trusting this line.** `#380`
-is blocked on a Codex CLI this host cannot start; `#388`, `#392` and `#393` are new. The
-adopter can take `init.sh` again — `#385` carries the measured before/after and the refresh
-steps. The convergence plan now records Phase 3 as done and carries the two defects a
-session following it found.
+back into the kit.** Six of its seven issues are closed — `#385` (the one with an adopter
+blocked behind it), `#382`, `#383`, `#379`, `#381`, `#386` — across four merged PRs.
+`#380` is the seventh and is blocked on a Codex CLI this host cannot start. Four issues
+are new: `#388`, `#392`, `#393` and `#395`. The adopter can take `init.sh` again — `#385`
+carries the measured before/after and the refresh steps. The convergence plan now records
+Phase 3 as done and carries the two defects a session following it found.
 
 ## Latest session — 2026-08-09 (the adopter's Phase 3 findings, worked back into the kit)
 
 **Theme —** cs-toolkit's Phase 3 filed seven kit issues and left an adopter holding
-`init.sh`. Six were worked across four PRs — three merged, `#389` still open at wrap-up —
-and the seventh needs a runtime this host cannot start. The panel found more than the
-issues did.
+`init.sh`. Six were worked and all four PRs merged; the seventh needs a runtime this host
+cannot start. The panel found far more than the issues did — including six HIGHs in the
+one feature that was new code rather than a correction.
 
 - **`#387` merged (`ccbed71`) — `#385`, the blocking one.** `init.sh` no longer imposes a
   `reports/` ignore. The seeding splits into *hygiene* (unconditional, always-wins — a
@@ -36,7 +35,7 @@ issues did.
   already tracks files the entry would hide (asked of `git ls-files -i -c --exclude=`, so
   git's own matcher answers) or already carries a rule for that path. `state/` and
   `reports/` are anchored too.
-- **`#389` — `#379` and `#381`.** `kit_doctor` reports whether each hook registration
+- **`#389` merged (`dd2c001`) — `#379`, `#381`, `#386`'s `kit_doctor` half, `#383` item 2.** `kit_doctor` reports whether each hook registration
   RESOLVES, per surface, and only a dead path reaches the exit code. Not by hash: those
   files are the adopter's, which is why `init.sh` only prints them (`#303`), and hashing
   would report every adopter `locally-edited` forever — `#286`'s failure. A declined
@@ -90,25 +89,25 @@ issues did.
 
 **Open, and owned by nothing yet**
 
-- **`#389` is the one PR still in flight.** Six panel rounds, every one finding
-  something real, and the severity rose rather than fell: two HIGHs at the end, both
-  the same class — a hand-rolled delimiter walk disagreeing with the shell about
-  where a path ends, first losing the end of a token (a renamed hook reporting
-  `resolves`), then the beginning (a repo path with a space reporting a working hook
-  as `NO SUCH FILE`, exit 1). The second one is fixed at the class rather than the
-  instance: the walk is gone and `shlex` does the lexing. **If it is still open,
-  read the PR comments before touching the branch** — each round's finding and its
-  mutation evidence is there.
+- **`#395` is the open design question `#389` leaves behind**, and it is the one worth
+  reading the PR comments for. Ten panel rounds; nine found something real, six of them
+  HIGH, and every HIGH was one class: the check disagreeing with a real shell about which
+  file gets executed. Each is fixed and pinned. The residual is structural — the check
+  judges any path-shaped word inside a hook command, so a path merely *mentioned* reads
+  as invoked — and narrowing it to the shapes `init.sh` prints is a trade (it would lose
+  the ability to judge a hand-written registration), which is why it is a ticket and not
+  a fix round.
 - **`#380` needs a host with a working `codex-cli`.** Nothing else unblocks it.
 - **`#388` is the next adopter-facing gap**: cs-toolkit hand-maintains a manifest entry
   because of it, and re-running `--record-install` there silently undoes that.
 - **`#358` remains untouched**, as it was last session.
 
 ▶ Next: **`#388`, then `#363`.** `#388` has a named consumer — cs-toolkit will hit it the
-next time it pins a file — and its shape is decided (a third state beside `files` and
-`not_installed`, plus a refusal that does not take the declared scope with it). `#363` is
-the Claude registration hardening the adopter carried rather than forking, and `#389` has
-just added the instrument that would report it dead.
+next time it pins a file, and re-running `--record-install` there silently undoes the
+hand-maintained entry it keeps because of this — and its shape is decided: a third state
+beside `files` and `not_installed`, plus a refusal that does not take the declared scope
+with it. `#363` is the Claude registration hardening the adopter carried rather than
+forking, and `#389` has now shipped the instrument that would report it dead.
 
 ______________________________________________________________________
 

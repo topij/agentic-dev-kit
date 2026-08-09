@@ -73,10 +73,10 @@ is the same blindness one layer up.
 
 ### The panel is per-PR, and a batch of related PRs pays for it N times
 
-Four PRs from one session's findings needed more than a dozen rounds and closer to twenty
-lens runs — count the `## Fallback panel — round N` headers per PR for the exact figures,
-which is the point of the neighbouring entry — each rebuilding context on the same repo,
-several finding the same class of defect independently. There is no
+Four PRs from one session's findings needed seventeen rounds — ten on one PR alone — and
+upwards of twenty lens runs; count the `## Fallback panel — round N` headers per PR for
+the exact figures, which is the point of the neighbouring entry. Each run rebuilds context
+on the same repo, and several found the same class of defect independently. There is no
 shape in `fallback-review-panel.md` for "these four PRs are one change split by risk class",
 which is exactly what Principle #4 asks an author to do. The cost argues against splitting,
 which is the wrong pressure to put on that principle.
