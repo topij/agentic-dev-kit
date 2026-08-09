@@ -18,7 +18,7 @@ Last updated: 2026-08-10 — **the install-path lane is merged** (`#401`, `4fc39
 `#397`, `#380` and `#398` are closed with their verification on the tracker; `#399` stays
 open for its `adopt.md` half. `#380`'s acceptance is finally met — the Codex SessionStart
 hooks fire in a **trusted** session, not under the bypass flag. New: `#402`, `#403`,
-`#404`, `#405`. The next lane is `cluster:merge-gate`, unchanged and now unblocked.
+`#404`, `#405`. The next lane is `cluster:merge-gate`, unchanged and now the only one left.
 
 ## Latest session — 2026-08-10 (the install-path lane, and a gate the panel kept breaking)
 
@@ -91,8 +91,10 @@ round after round, every one inside the previous round's remediation.
 - **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
 
 ▶ Next: **`cluster:merge-gate`** — `#190` and `#39` together (one guard, one change), then
-`#95` separately. It was the handoff's first-named `Next` before this lane and is now
-unblocked; `init.sh` and `pr_watch.py` do not touch, so nothing here supersedes it.
+`#95` separately. It was the handoff's first-named `Next` before this lane and was never
+gated on it — the previous block called the two disjoint and parallel-eligible, and
+`#190`/`#39`/`#95` are `pr_watch.py` defects that nothing in `#401` touched. What changed
+is only that it is now the sole remaining front.
 
 ______________________________________________________________________
 
