@@ -3621,6 +3621,57 @@ def test_step_2_refuses_a_dangling_symlink_at_the_manifest_path(
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_treats_a_partial_record_as_partial_not_broken(tmp_path: Path) -> None:
+    """An absent `not_installed` is a PARTIAL record, and blocking on it aborts a
+    routine upgrade.
+
+    `kit_doctor.py`'s `record_install_manifest` omits the key entirely — not
+    `[]` — whenever any kit-owned path is `unverified`, writes the baseline
+    anyway, and exits 1 to say so. `upgrade.md` Step 5 calls a deliberately-kept
+    local patch "the usual way in". So this shape is produced by the kit's own
+    instructed command, in a state the kit treats as first class.
+
+    An earlier version refused it AND suppressed `init.sh`, blocking the whole
+    config migration for anyone carrying one patch — and its STOP message
+    suggested a remedy that did not address the cause, whose obvious workaround
+    (delete the manifest) reopens #398.
+
+    Both halves are asserted, because the fix is precisely that they are
+    separable: skip the copies, because the declines genuinely cannot be read;
+    run `init.sh`, because template declines have nothing to do with the config
+    migration.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    # exactly what record_install_manifest writes for a partial record
+    (repo / "kit-manifest.json").write_text(
+        json.dumps({"kit_commit": "deadbeef", "files": {"init.sh": {"sha256": "x"}}}),
+        encoding="utf-8",
+    )
+
+    result = _run_template_copy(repo, src)
+
+    installed = sorted(
+        p.name for p in (repo / "docs" / "templates").glob("*.tmpl")
+    ) if (repo / "docs" / "templates").exists() else []
+    assert installed == [], (
+        f"templates were copied against a baseline declaring no scope: {installed}"
+    )
+    assert (repo / "INIT_SH_RAN").exists(), (
+        "init.sh was suppressed by a PARTIAL record — that blocks the config "
+        "migration for any adopter carrying a deliberate local patch"
+    )
+    assert "STOP" not in result.stdout + result.stderr, (
+        "a partial record is not a broken manifest and must not be reported as one"
+    )
+    assert "#388" in result.stderr, (
+        "the note must name the cause; without it the operator has no route from "
+        "the symptom to Step 5's remedy"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
 def test_step_2_runs_init_sh_when_the_gate_is_satisfied(tmp_path: Path) -> None:
     """The positive control for the refusal tests above.
 

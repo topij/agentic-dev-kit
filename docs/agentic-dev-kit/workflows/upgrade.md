@@ -169,7 +169,9 @@ if not isinstance(d, dict):
     sys.exit(2)
 if "kit_commit" not in d:
     sys.exit(1)                  # not a --record-install baseline: no declared scope
-declared, files = d.get("not_installed"), d.get("files")
+if "not_installed" not in d:     # PARTIAL record, not a broken one — see below
+    sys.exit(3)
+declared, files = d["not_installed"], d.get("files")
 if not isinstance(declared, list) or not isinstance(files, dict):
     print(f"{b}: kit_commit is present but the declared scope is unreadable "
           f"(not_installed={type(declared).__name__}, files={type(files).__name__})",
@@ -180,10 +182,19 @@ sys.exit(0 if sys.argv[2] in declared else 1)' \
   case "$_verdict" in
     0) echo "declined (recorded in not_installed) — not copied: $_rel" ;;
     1) cp "$_tmpl" "$REPO/$_rel" ;;
+    3) echo "no declared scope recorded — not copied: $_rel"; _partial=1 ;;
     *) echo "STOP: $REPO/kit-manifest.json is not a readable manifest, so the declared set is unknown. Copied nothing." >&2
        _gate_failed=1; break ;;
   esac
 done
+if [ "${_partial:-0}" -ne 0 ]; then
+  echo "note: the baseline carries kit_commit but no not_installed key, so it declares no" >&2
+  echo "      scope and the templates above were left alone rather than copied over" >&2
+  echo "      declines that cannot be read. This is a PARTIAL record, not a broken one:" >&2
+  echo "      one kit-owned file that does not byte-match the source kit suppresses the" >&2
+  echo "      whole key (see Step 5, and kit #388). Reconcile the paths Step 4 named and" >&2
+  echo "      re-run this block if you want the templates refreshed." >&2
+fi
 if [ "$_gate_failed" -ne 0 ]; then
   echo "Not running init.sh. Fix kit-manifest.json, then re-run this block." >&2
 else
@@ -253,6 +264,16 @@ implementation rather than continuing to invent one:
   raised `TypeError` on the membership test and exited 1 (copy); a **string** there was
   worse than that, because `in` on a string is a SUBSTRING test — no error, and a
   comma-joined value could answer *true* for a path nobody declined;
+- **an ABSENT `not_installed` is a partial record, not a broken one, and conflating the
+  two aborts a routine upgrade.** `kit_doctor.py`'s `record_install_manifest` omits the
+  key entirely — not `[]` — whenever any kit-owned path is `unverified`, writes the
+  baseline anyway, and exits 1 to say the record is partial. Step 5 below already calls
+  a deliberately-kept local patch "the usual way in" to that state. An earlier version of
+  this gate refused it and suppressed `init.sh` with it, so an adopter carrying one patch
+  found the whole config migration blocked, with a STOP message whose suggested remedy
+  did not address the cause — and whose only obvious workaround, deleting the manifest,
+  reopens `#398`. It now skips the copies (the declines genuinely cannot be read), says
+  why, names `#388`, and **still runs `init.sh`**;
 - and `FileNotFoundError` alone does not mean *absent*. A **dangling symlink** at that
   path raises it too, so the one shape the taxonomy treats as safe was also catching a
   present-but-unreadable manifest. `is_symlink()` separates them — it does not follow the
