@@ -1697,8 +1697,18 @@ echo ""
 # did not finish — and a notice they scrolled past is one they did not get.
 if [ -n "$NO_CLOBBER_SKIPPED" ]; then
   echo "--no-clobber left these existing files untouched:"
+  # `|| continue` rather than `&& echo`: a while loop's exit status is its last
+  # iteration's, so an `&&` chain whose test fails on the final read makes the
+  # loop — and the pipeline — exit non-zero, and `set -eu` (line 20) then aborts
+  # the script HERE. That kills the run after printing the list of files needing
+  # action and before the four echoes below explaining the action, which is the
+  # only part the operator cannot reconstruct. No empty entry can reach the
+  # variable today (`seed_doc` returns early on an empty target), so this is
+  # hardening, not a live-bug fix — but the guard is in a distant function and
+  # the failure is silent (#397).
   printf '%s' "$NO_CLOBBER_SKIPPED" | while IFS= read -r _skipped; do
-    [ -n "$_skipped" ] && echo "  $_skipped"
+    [ -n "$_skipped" ] || continue
+    echo "  $_skipped"
   done
   echo ""
   echo "Each carries a kit marker on line 1, which is how the kit says it MAY own"

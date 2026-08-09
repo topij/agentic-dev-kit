@@ -1378,6 +1378,107 @@ def test_no_summary_when_nothing_was_declined(tmp_path: Path) -> None:
     assert "--no-clobber left these existing files untouched:" not in result.stdout
 
 
+# The `--no-clobber` summary under `set -eu` (#397)
+#
+# Driven as an extracted FRAGMENT rather than through `_run_init`, and that is
+# the whole reason these tests kill anything. The defect is unreachable
+# end-to-end: `seed_doc` returns early on an empty `_target`, so no empty entry
+# can enter `NO_CLOBBER_SKIPPED` today, and the trailing newline from the append
+# does not produce an empty final iteration either (`read` hits EOF instead). A
+# test that ran the whole installer would therefore pass with the fix REVERTED —
+# a test that names a property and pins nothing, which is the shape the
+# 2026-08-09 friction entry is about. Feeding the block directly is what makes
+# the mutation kill.
+_NO_CLOBBER_SUMMARY_DRIVER = r"""set -eu
+NO_CLOBBER_SKIPPED="$1"
+eval "$(sed -n '/^if \[ -n "\$NO_CLOBBER_SKIPPED" \]; then/,/^fi$/p' init.sh)"
+echo "SUMMARY-BLOCK-COMPLETED"
+"""
+
+_CLOSING_GUIDANCE = "Each carries a kit marker on line 1"
+
+
+@pytest.mark.parametrize(
+    ("skipped", "label"),
+    [
+        ("AGENTS.md\nCLAUDE.md\n", "no empty entry"),
+        ("AGENTS.md\n\n", "empty FINAL entry"),
+        ("\nAGENTS.md\n", "empty leading entry"),
+        ("AGENTS.md\n\n\n", "two trailing empty entries"),
+    ],
+    ids=["normal", "empty-final", "empty-leading", "two-empty-trailing"],
+)
+def test_the_no_clobber_summary_always_reaches_its_closing_guidance(
+    tmp_path: Path, skipped: str, label: str
+) -> None:
+    """#397 acceptance 1: the summary reaches its closing guidance whatever the
+    list contains.
+
+    A `while` loop's exit status is its last iteration's. With the body ending
+    in `[ -n "$_skipped" ] && echo …`, an empty final entry makes that chain
+    false, the loop exits non-zero, the PIPELINE it terminates exits non-zero,
+    and `set -eu` aborts the script between the file list and the four echoes
+    explaining what to do about it — printing the problem and swallowing the
+    instruction.
+
+    The pipeline matters and is why the sibling shapes in `dev_session.sh` and
+    `reconcile_sessions.sh` are not this bug: a STANDALONE `while` whose last
+    body statement is a falsy `&&` chain exits 0 under `set -e` (the AND-OR
+    list exemption), while the same loop at the end of a pipeline exits 1.
+    Verified both directions before narrowing this test to the pipeline form.
+    """
+    (tmp_path / "init.sh").write_bytes((REPO_ROOT / "init.sh").read_bytes())
+
+    proc = subprocess.run(
+        ["sh", "-c", _NO_CLOBBER_SUMMARY_DRIVER, "_", skipped],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert proc.returncode == 0, (
+        f"the summary block aborted under `set -eu` with {label} "
+        f"(rc={proc.returncode}); stderr={proc.stderr!r}"
+    )
+    assert "AGENTS.md" in proc.stdout, "the file list was not printed"
+    assert _CLOSING_GUIDANCE in proc.stdout, (
+        f"the block printed the file list and then died before its closing "
+        f"guidance ({label}) — this is the #397 abort"
+    )
+    assert "SUMMARY-BLOCK-COMPLETED" in proc.stdout, (
+        "control never left the summary block, so the run's own tail "
+        "(`Upgrading later: …`) is lost too"
+    )
+
+
+def test_the_no_clobber_summary_skips_an_empty_entry_rather_than_listing_it(
+    tmp_path: Path,
+) -> None:
+    """#397 acceptance 2: an empty entry is skipped SILENTLY.
+
+    `|| continue` must not be traded for something that keeps the run alive by
+    printing a blank bullet — the operator would be told to go open a file with
+    no name. Pins the skip, not just the survival.
+    """
+    (tmp_path / "init.sh").write_bytes((REPO_ROOT / "init.sh").read_bytes())
+
+    proc = subprocess.run(
+        ["sh", "-c", _NO_CLOBBER_SUMMARY_DRIVER, "_", "AGENTS.md\n\nCLAUDE.md\n"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    bullets = [
+        line for line in proc.stdout.splitlines() if line.startswith("  ")
+    ]
+    assert bullets == ["  AGENTS.md", "  CLAUDE.md"], (
+        f"expected exactly the two named files as bullets, got {bullets!r}"
+    )
+
+
 @pytest.mark.kit_repo_only("docs/templates")
 def test_an_unknown_flag_is_refused_before_anything_is_written(tmp_path: Path) -> None:
     """A mistyped safety flag must not degrade to the destructive default.
