@@ -3621,6 +3621,46 @@ def test_step_2_refuses_a_dangling_symlink_at_the_manifest_path(
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_copies_against_a_manifest_carrying_neither_key(tmp_path: Path) -> None:
+    """Pins the ORDER of the gate's two absence checks, which is load-bearing and
+    was pinned by nothing.
+
+    `kit_commit` absent is tested (untrusted manifest → copy) and
+    `not_installed` absent is tested (partial record → skip). Neither reaches
+    the case where BOTH are absent, so swapping the two `if` blocks survived the
+    whole suite — found by mutation, not by reading.
+
+    That shape is not hypothetical: it is **the kit's own shipped
+    `kit-manifest.json`**, whose top-level keys are `adopter_owned`, `files` and
+    `kit_version`. Every fresh `/adopt` and every kit checkout carries it before
+    any `--record-install` has run. Under the swapped order it would skip every
+    template and print a `#388` PARTIAL-record note about a file that was never a
+    baseline — a misattributed cause on the commonest manifest there is.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    # the shipped shape: no kit_commit, no not_installed
+    (repo / "kit-manifest.json").write_text(
+        json.dumps({"kit_version": 2, "files": {}, "adopter_owned": []}),
+        encoding="utf-8",
+    )
+
+    result = _run_template_copy(repo, src)
+
+    installed = sorted(p.name for p in (repo / "docs" / "templates").glob("*.tmpl"))
+    assert installed == ["AGENTS.md.tmpl", "friction-log.md.tmpl", "handoff.md.tmpl"], (
+        "a manifest that is not a --record-install baseline declares no scope, so "
+        f"every template copies; got {installed}"
+    )
+    assert (repo / "INIT_SH_RAN").exists()
+    assert "#388" not in result.stderr, (
+        "a manifest with no kit_commit was reported as a PARTIAL record — the "
+        "two absence checks have swapped order, so the cause is misattributed"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
 def test_step_2_treats_a_partial_record_as_partial_not_broken(tmp_path: Path) -> None:
     """An absent `not_installed` is a PARTIAL record, and blocking on it aborts a
     routine upgrade.
