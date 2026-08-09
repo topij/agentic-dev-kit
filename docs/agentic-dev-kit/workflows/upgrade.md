@@ -151,14 +151,23 @@ chmod +x "$REPO/init.sh"                          # the kit ships it 100755; a c
 mkdir -p "$REPO/docs/templates"
 for _tmpl in "$KIT"/docs/templates/*.tmpl; do
   _rel="docs/templates/$(basename "$_tmpl")"
-  if python3 -c 'import json,pathlib,sys
+  python3 -c 'import json,pathlib,sys
 b = pathlib.Path(sys.argv[1]) / "kit-manifest.json"
-d = json.loads(b.read_text(encoding="utf-8")) if b.is_file() else {}
-sys.exit(0 if "kit_commit" in d and sys.argv[2] in (d.get("not_installed") or []) else 1)' "$REPO" "$_rel"; then
-    echo "declined (recorded in not_installed) — not copied: $_rel"
-  else
-    cp "$_tmpl" "$REPO/$_rel"
-  fi
+try:
+    d = json.loads(b.read_text(encoding="utf-8"))
+except FileNotFoundError:
+    d = {}                       # no baseline: no declared scope, copy everything
+except (OSError, ValueError) as exc:
+    print(f"{b}: {exc}", file=sys.stderr)
+    sys.exit(2)                  # present but unreadable: refuse, do not guess
+sys.exit(0 if "kit_commit" in d and sys.argv[2] in (d.get("not_installed") or []) else 1)' \
+    "$REPO" "$_rel" && _verdict=0 || _verdict=$?
+  case "$_verdict" in
+    0) echo "declined (recorded in not_installed) — not copied: $_rel" ;;
+    1) cp "$_tmpl" "$REPO/$_rel" ;;
+    *) echo "STOP: $REPO/kit-manifest.json exists but cannot be read, so the declared set is unknown. Copied nothing. Fix the manifest, then re-run." >&2
+       break ;;
+  esac
 done
 "$REPO/init.sh" --no-clobber
 ```
@@ -183,6 +192,16 @@ from what is on disk and writes the reversal in as fact. A repo that declined si
 templates comes out the other side declaring twenty installed files where it declared
 twenty-six, with nothing anywhere recording that a decision was reversed. `#398`, found by
 an adopter who spotted the unconditional instruction and declined to follow it.
+
+**A manifest that is present but unreadable stops the step rather than falling back to
+copying.** Absent and corrupt are different states and only the first is safe to treat as
+"no declared scope": a corrupt manifest may well hold declines nobody can now read, and
+copying over them is the very reversal this gate exists to prevent, reached by another
+route. So `FileNotFoundError` means no baseline and every template is copied, while a
+parse or read error refuses, names the file on stderr, and copies nothing — a loud stop
+rather than a silent guess. The earlier form let the exception escape, which printed a
+Python traceback once per template and then copied anyway (review panel, adversarial
+lens).
 
 The `kit_commit` test is what distinguishes a real baseline from the kit's own shipped
 manifest sitting at the same path (the same distinction Step 1 draws above): a manifest

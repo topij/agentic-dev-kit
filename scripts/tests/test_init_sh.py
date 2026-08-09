@@ -2523,9 +2523,62 @@ def test_the_budget_advisory_prints_the_shipped_codex_commands_verbatim(
 
     result = _run_init(repo)
 
+    # Whole line, for the reason the Claude sibling's comment gives: substring
+    # matching misses a guard stripped from the FRONT of the shipped command.
+    printed = {line.strip() for line in result.stdout.splitlines()}
     for command in _codex_session_start_commands():
-        assert command in result.stdout, (
+        assert command in printed, (
             "the printed advisory has drifted from the shipped registration:\n"
+            f"  shipped: {command}"
+        )
+
+
+def _claude_session_start_commands() -> list[str]:
+    """The Claude SessionStart budget commands, read OUT OF the shipped file."""
+    parsed = json.loads(
+        (REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
+    )
+    return [
+        hook["command"]
+        for entry in parsed["hooks"]["SessionStart"]
+        for hook in entry["hooks"]
+        if "budget" in hook.get("command", "")
+    ]
+
+
+def test_the_budget_advisory_prints_the_shipped_claude_commands_verbatim(
+    tmp_path: Path,
+) -> None:
+    """The Claude half of the same advisory, drift-tested like the Codex half.
+
+    Added because a review lens found the coverage ASYMMETRIC rather than
+    absent: the Codex commands were compared byte-for-byte against
+    `.codex/hooks.json` and the Claude ones against nothing, so a future edit to
+    either surface would be caught on one runtime and silently not the other.
+
+    Nothing was wrong when this was written — the two matched by hand — which is
+    exactly when the asymmetry is worth closing, and `kit-manifest.json` tracks
+    neither settings file, so no drift check covers it either.
+    """
+    repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    shipped = _claude_session_start_commands()
+    assert len(shipped) == 2, (
+        "both budget tripwires must be registered on Claude too; found "
+        f"{len(shipped)}"
+    )
+    # WHOLE LINE, not `in result.stdout`, and the difference is load-bearing.
+    # Substring matching is directional: strip a guard from the FRONT of the
+    # shipped command and what remains is a contiguous tail of the printed line,
+    # so `command in stdout` still holds and the drift goes unseen. Measured —
+    # with the substring form, removing `[ -z "$JOB_NAME" ] && ` from
+    # .claude/settings.json left the whole suite green.
+    printed = {line.strip() for line in result.stdout.splitlines()}
+    for command in shipped:
+        assert command in printed, (
+            "the printed advisory has drifted from .claude/settings.json:\n"
             f"  shipped: {command}"
         )
 
@@ -2909,6 +2962,57 @@ def test_the_codex_budget_registration_skips_a_cron_run(
     )
 
 
+@pytest.mark.parametrize("which", [0, 1], ids=["doc-budget", "memory-budget"])
+def test_the_claude_budget_registration_skips_a_cron_run(
+    tmp_path: Path, which: int
+) -> None:
+    """The Claude registration's `JOB_NAME` guard, EXECUTED — the half that had
+    no protection of any kind.
+
+    Found by mutation, not by reading: stripping `[ -z "$JOB_NAME" ] && ` from
+    both commands in `.claude/settings.json` left the FULL suite green
+    (1106/1106, driftcheck included). Neither `.claude/settings.json` nor
+    `.codex/hooks.json` is tracked by `kit-manifest.json`, so the drift check
+    cannot see either file, and the sibling Codex guard had an executed test
+    while this one had nothing.
+
+    The drift test alone is not enough here and that is measured too: the
+    shipped command is a contiguous TAIL of the printed advisory line, so a
+    substring comparison passes with the guard removed. This executes the real
+    command string instead.
+    """
+    command = _claude_session_start_commands()[which]
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "scripts").mkdir()
+    env, witness = _with_stub_uv(tmp_path)
+    env["CLAUDE_PROJECT_DIR"] = str(project)
+
+    interactive = subprocess.run(
+        ["sh", "-c", command], cwd=tmp_path, capture_output=True, text=True, env=env
+    )
+    assert interactive.returncode == 0, interactive.stderr
+    assert witness.exists(), (
+        "the registration never reached `uv` even outside a cron run, so the "
+        "cron assertion below would hold for the wrong reason"
+    )
+
+    witness.unlink()
+    cron = subprocess.run(
+        ["sh", "-c", command],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env={**env, "JOB_NAME": "nightly"},
+    )
+
+    assert cron.returncode == 0, cron.stderr
+    assert not witness.exists(), (
+        "the Claude budget tripwire ran under JOB_NAME — a scheduled/CI session "
+        "gets a housekeeping nudge no human will read"
+    )
+
+
 def _with_stub_git(tmp_path: Path, body: str) -> tuple[dict[str, str], Path]:
     """`_env` with a stub `git` first on PATH. `body` is its script body.
 
@@ -3199,7 +3303,7 @@ def _fake_kit_templates(tmp_path: Path) -> Path:
 
 
 def _run_template_copy(
-    repo: Path, src: Path, *, cwd: Path | None = None
+    repo: Path, src: Path, *, cwd: Path | None = None, check: bool = True
 ) -> subprocess.CompletedProcess[str]:
     """Run the extracted block with `$KIT`/`$REPO` bound as Step 0 binds them.
 
@@ -3213,7 +3317,7 @@ def _run_template_copy(
         capture_output=True,
         text=True,
         stdin=subprocess.DEVNULL,
-        check=True,
+        check=check,
         env={**os.environ, "REPO": str(repo), "KIT": str(src.parent.parent)},
     )
 
@@ -3309,6 +3413,43 @@ def test_step_2_copies_every_template_when_nothing_was_declared(
 
     installed = sorted(p.name for p in (repo / "docs" / "templates").glob("*.tmpl"))
     assert installed == ["AGENTS.md.tmpl", "friction-log.md.tmpl", "handoff.md.tmpl"]
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_refuses_rather_than_guesses_on_an_unreadable_manifest(
+    tmp_path: Path,
+) -> None:
+    """Present-but-corrupt is not the same state as absent, and only absent is
+    safe to read as "no declared scope".
+
+    A corrupt manifest may hold declines nobody can now read; copying over them
+    is #398's reversal reached by another route. So this refuses and copies
+    nothing rather than falling through to the permissive default.
+
+    The earlier form let `json.JSONDecodeError` escape: a Python traceback per
+    template file, and then the copy happened anyway. Found by the review
+    panel's adversarial lens, which fed it `{not valid json!!!`.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text("{not valid json!!!", encoding="utf-8")
+
+    result = _run_template_copy(repo, src, check=False)
+
+    installed = sorted(
+        p.name for p in (repo / "docs" / "templates").glob("*.tmpl")
+    ) if (repo / "docs" / "templates").exists() else []
+    assert installed == [], (
+        f"templates were copied over an unreadable declared set: {installed}"
+    )
+    assert "STOP" in result.stdout + result.stderr, (
+        "the refusal must be loud — a silent skip is indistinguishable from "
+        "'nothing needed copying'"
+    )
+    assert "Traceback" not in result.stderr, (
+        "the manifest read still raises instead of being handled:\n" + result.stderr
+    )
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")

@@ -1227,8 +1227,11 @@ register_pr_hook() {
 #      `SessionStart` registration on this machine (a shipping third-party
 #      integration) carries no `matcher`, and carrying Claude's over would
 #      ship a hook that silently never fires.
-#   2. A PROJECT-level `.codex/hooks.json` IS read. Carried unverified since
-#      Phase 0.
+#   2. A PROJECT-level `.codex/hooks.json` IS read — measured by that same
+#      probe, which is the point: it had been carried as an ASSUMPTION since
+#      Phase 0, and everything below depends on it. An earlier draft of this
+#      line read "Carried unverified since Phase 0", which standalone says the
+#      opposite of the header above it — a lens caught it.
 #   3. The gate is hook TRUST, and an untrusted hook is skipped SILENTLY —
 #      the session starts clean and says nothing. That is why the advisory
 #      below states it outright: the observable is identical to a broken
