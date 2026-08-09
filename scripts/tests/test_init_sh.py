@@ -3640,20 +3640,44 @@ def test_step_2_refuses_on_an_exception_outside_the_old_enumerated_set(
     """
     depth = 200_000
     payload = "[" * depth + "]" * depth
-    try:
-        json.loads(payload)
-    except (OSError, ValueError):
+
+    # Probed in the SAME interpreter the gate will use, not in pytest's.
+    # The gate runs in a subprocess that resolves a bare `python3` off PATH;
+    # probing in-process only agrees with that because `uv run` puts its managed
+    # venv first and `_run_template_copy` passes the environment through. Nothing
+    # asserted that, so a different invocation could silently desync the
+    # precondition from the thing under test and degrade this to an unconditional
+    # skip with nothing failing anywhere — the vacuous pass this test exists to
+    # avoid, reintroduced one layer up (review panel, adversarial lens).
+    probe = subprocess.run(
+        [
+            "python3",
+            "-c",
+            "import json,sys\n"
+            "try: json.loads(sys.stdin.read())\n"
+            "except (OSError, ValueError): sys.exit(10)\n"
+            "except Exception: sys.exit(11)\n"
+            "sys.exit(12)",
+        ],
+        input=payload,
+        capture_output=True,
+        text=True,
+        env=_env(tmp_path),
+    )
+    if probe.returncode == 10:
         pytest.skip(
-            "this interpreter raises an (OSError, ValueError) here, so the input "
-            "cannot exercise an exception outside the old enumerated set"
+            "the gate's own python3 raises an (OSError, ValueError) here, so this "
+            "input cannot exercise an exception outside the old enumerated set"
         )
-    except Exception:
-        pass  # the precondition holds: outside the old tuple
-    else:
+    if probe.returncode == 12:
         pytest.skip(
-            f"this interpreter parses {depth} nested arrays without raising, so "
-            "the input cannot exercise the escape this test is about"
+            f"the gate's own python3 parses {depth} nested arrays without raising, "
+            "so this input cannot exercise the escape this test is about"
         )
+    assert probe.returncode == 11, (
+        "the precondition probe itself failed to run, so a skip or pass here "
+        f"would mean nothing: rc={probe.returncode} stderr={probe.stderr!r}"
+    )
 
     repo = tmp_path / "adopter"
     repo.mkdir()
