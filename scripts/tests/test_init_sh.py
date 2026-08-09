@@ -3621,6 +3621,51 @@ def test_step_2_refuses_a_dangling_symlink_at_the_manifest_path(
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_refuses_on_an_exception_outside_the_old_enumerated_set(
+    tmp_path: Path,
+) -> None:
+    """The refusal must cover ANY read/parse failure, not an enumerated set.
+
+    Two enumerations have now had the same hole: the first let
+    `JSONDecodeError` escape, and its fix caught `(OSError, ValueError)` and left
+    `RecursionError` — a `RuntimeError`, reachable from a deeply-nested array —
+    falling through to the copy branch with a traceback per template.
+
+    **This test measures its own precondition rather than assuming it**, which is
+    `#393`'s lesson: a sibling test elsewhere in this repo depends on
+    `json.loads` raising `RecursionError` and that stops being true on newer
+    CPython. If this input does not raise outside the old tuple on the running
+    interpreter, the test cannot demonstrate anything and says so, instead of
+    passing vacuously.
+    """
+    depth = 200_000
+    payload = "[" * depth + "]" * depth
+    try:
+        json.loads(payload)
+    except (OSError, ValueError):
+        pytest.skip(
+            "this interpreter raises an (OSError, ValueError) here, so the input "
+            "cannot exercise an exception outside the old enumerated set"
+        )
+    except Exception:
+        pass  # the precondition holds: outside the old tuple
+    else:
+        pytest.skip(
+            f"this interpreter parses {depth} nested arrays without raising, so "
+            "the input cannot exercise the escape this test is about"
+        )
+
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text(payload, encoding="utf-8")
+
+    result = _run_template_copy(repo, src, check=False)
+
+    _assert_gate_refused(repo, result, "deeply nested array")
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
 def test_step_2_copies_against_a_manifest_carrying_neither_key(tmp_path: Path) -> None:
     """Pins the ORDER of the gate's two absence checks, which is load-bearing and
     was pinned by nothing.

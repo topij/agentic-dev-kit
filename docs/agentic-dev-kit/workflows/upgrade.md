@@ -161,9 +161,9 @@ except FileNotFoundError:
         print(f"{b}: dangling symlink", file=sys.stderr)
         sys.exit(2)
     sys.exit(1)                  # genuinely absent: no declared scope, copy
-except (OSError, ValueError) as exc:
-    print(f"{b}: {exc}", file=sys.stderr)
-    sys.exit(2)                  # present but unreadable: refuse, do not guess
+except Exception as exc:         # ANY other read/parse failure: refuse, do not guess
+    print(f"{b}: {type(exc).__name__}: {exc}", file=sys.stderr)
+    sys.exit(2)
 if not isinstance(d, dict):
     print(f"{b}: top-level value is {type(d).__name__}, not an object", file=sys.stderr)
     sys.exit(2)
@@ -250,8 +250,16 @@ differences:**
 copying** — four rounds of it, which is the argument for mirroring a settled
 implementation rather than continuing to invent one:
 
-- a read or parse error (`OSError`, `ValueError`) — the first form let this escape as a
-  Python traceback, once per template, and copied anyway;
+- a read or parse error — **any** exception, not an enumerated set. The first form let
+  `JSONDecodeError` escape as a traceback, once per template, and copied anyway; the
+  second caught `(OSError, ValueError)` and left the same hole one type over, since
+  `RecursionError` is a `RuntimeError` and a deeply-nested array reaches it (verified at
+  depth 200,000 on CPython 3.14.6). **Two enumerations, two holes, same shape** — so the
+  enumeration is gone rather than extended a third time. The `try` body is one
+  `read_text` + `json.loads`, so `except Exception` is precise here rather than broad:
+  there is no other statement in it whose failure could be masked. `kit_doctor.py` names
+  four types at the analogous read and is a degrade-don't-abort diagnostic rather than a
+  gate, so an escape there reports less rather than doing the destructive thing;
 - a top-level value that parses but is not an object — `null`, `42`, `true` raise
   `TypeError` on the membership test and exit 1 (copy), while `[…]` and `"…"` evaluate
   the test to `False` and exit 1 (copy) with no error at all, which is the quieter and
