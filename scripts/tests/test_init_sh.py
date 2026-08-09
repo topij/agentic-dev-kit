@@ -3281,7 +3281,11 @@ def _upgrade_template_copy_block() -> str:
     kept = [
         line
         for line in _step2_refresh_block().splitlines()
-        if not re.match(r'^\s*(cd |cp "\$KIT/init\.sh"|chmod \+x)', line)
+        # `cd "$REPO"` specifically, not any `cd `. An over-broad strip is how
+        # the round-2 HIGH stayed invisible: whatever the extract removes, no
+        # test can see. If Step 2 ever gains a second `cd`, this must fail
+        # loudly rather than quietly review a block that is not what ships.
+        if not re.match(r'^\s*(cd "\$REPO"|cp "\$KIT/init\.sh"|chmod \+x)', line)
     ]
     body = "\n".join(kept)
     # Asserted against the SHIPPED block, not the stripped one, and that is the
