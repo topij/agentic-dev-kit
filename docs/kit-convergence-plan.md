@@ -322,11 +322,17 @@ document is about:
   and then speaks in relative paths; the rule exists for review lenses and for no
   workflow.
 
-**Sequencing note.** `#380` and `#397` are the same file, so they are one lane, and
-`#398` joins them as install-path work. That lane is disjoint from the kit's other
-live front — `cluster:merge-gate` (`#190`, `#39`, `#95` in `pr_watch.py`) — so the
-two can run in parallel. `#388` is **not** on either: cs-toolkit unpinned `init.sh`,
-so it has no current consumer and is future work for the next repo that pins a file.
+**Sequencing note — the install-path lane is DONE**, merged 2026-08-10 as `#401`
+(`4fc394f`). `#380`, `#397` and `#398` are closed with their verification on the
+tracker; `#399` stays open for its `adopt.md` half, which was deliberately not
+folded into that PR. `#380`'s standing question is settled: the hooks fire in a
+**trusted** Codex session, and the `matcher` assumption this plan carried from
+documentation was wrong — `SessionStart` takes none.
+
+`cluster:merge-gate` (`#190`, `#39`, `#95` in `pr_watch.py`) is now the only live
+front, and was always disjoint from the lane above. `#388` is on neither:
+cs-toolkit unpinned `init.sh`, so it has no current consumer and is future work
+for the next repo that pins a file.
 
 ### The critical path
 
