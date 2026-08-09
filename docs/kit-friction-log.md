@@ -102,8 +102,16 @@ The general shape is worth more than the instance: **a paginated API's default l
 silent truncation**, and every count taken from one is a claim about the page, not the
 population. `session-start`'s tracker step already has a related problem (`#143` — its tool
 limit overflows at 68 open issues), so this is the second figure this repo has taken from a
-truncated read. Anything counting issues, comments, checks or files through `gh` should pass
-an explicit `--limit` well above the expected population and say so where the figure lands.
+truncated read.
+
+**The rule, stated narrowly enough to be right.** `--limit` is the control for the `gh`
+list commands (`gh issue list`, `gh pr list`, `gh run list`); `gh api` pages with
+`--paginate` instead, and other tools have their own. Passing a large `--limit` is
+necessary and **not sufficient**: if the result count *equals* the limit you asked for, you
+have learned nothing about how many more there were. This session demonstrated exactly that
+and missed it — `--limit 200` returned exactly 200, which was treated as the population;
+`--limit 1000` then returned 202. The check that actually works is to raise the bound until
+the count stops moving, or to page explicitly.
 
 ### 2026-08-09 — a projection presented as an estimate, from a sample chosen for its answer
 

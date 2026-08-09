@@ -122,10 +122,12 @@ reading the issue text; every close carries that command in a comment.
   `cluster:review-signal` — so a session picks a cluster, not a ticket.
 
 **The sweep's real finding is that the backlog is not stale.** An 18% close rate means the
-pile is unworked rather than rotten, so triage is not the lever. Two projections made
-before measuring were wrong and are recorded here because the pattern is this session's
-own theme: "expect 40–50 closes" came from a sample chosen *because* it looked fixed, and
-an "open issues: 30" figure came from a `gh` call that silently hit its default limit.
+pile is unworked rather than rotten, so triage is not the lever. Two pre-sweep claims were
+wrong — **one projection and one truncated measurement**, and the distinction matters
+because they fail differently. "Expect 40–50 closes" was a forecast drawn from a sample
+chosen *because* it looked fixed. "Open issues: 30" was an observation, taken from a `gh`
+call that silently hit its default limit; nothing about it was a guess, which is what made
+it convincing.
 
 **What the clusters say, ordered by what they threaten:**
 
@@ -145,8 +147,9 @@ an "open issues: 30" figure came from a `gh` call that silently hit its default 
   implemented. Sequence `#56` first or they compound on nothing.
 
 ▶ Next: **`cluster:merge-gate`** — `#190` and `#39` together (one guard, one change), then
-`#95` separately. Superseding the pointer below: `#388` lost its named consumer when
-cs-toolkit unpinned `init.sh`, and `#363` waits behind a gate that can currently be
+`#95` separately. Superseding the pointer below: `#388` has no *current* consumer now that
+cs-toolkit has unpinned `init.sh` — it remains the named **future** one, and will hit this
+the next time it pins a file — while `#363` waits behind a gate that can currently be
 defeated three ways.
 
 ______________________________________________________________________
