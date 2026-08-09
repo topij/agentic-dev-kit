@@ -172,7 +172,7 @@ if not isinstance(declared, list) or not isinstance(files, dict):
           f"(not_installed={type(declared).__name__}, files={type(files).__name__})",
           file=sys.stderr)
     sys.exit(2)                  # a baseline that cannot state its scope is not a licence
-sys.exit(0 if sys.argv[2] in [i for i in declared if isinstance(i, str)] else 1)' \
+sys.exit(0 if sys.argv[2] in declared else 1)' \
     "$REPO" "$_rel" && _verdict=0 || _verdict=$?
   case "$_verdict" in
     0) echo "declined (recorded in not_installed) — not copied: $_rel" ;;
@@ -217,13 +217,20 @@ by another route. So `FileNotFoundError` means no baseline and every template is
 while anything else refuses, names the file on stderr, and copies nothing.
 
 **The shape checks mirror `kit_doctor.py`'s `_declared_scope` deliberately** — the same
-`not_installed`-is-a-list test, the same companion `files`-is-a-dict test (a scope claim
-needs both halves), and the same string filter over the list. That function is where this
-repo already settled what a readable declared scope is, and it carries its own
-parametrized regression test. **Where the two differ is the direction they fail**:
-`_declared_scope` returns `None` and its caller reports "cannot judge", because it is a
-read-only diagnostic; here the same condition must REFUSE, because the alternative is
-copying over declines nobody can read.
+`not_installed`-is-a-list test and the same companion `files`-is-a-dict test (a scope
+claim needs both halves). That function is where this repo already settled what a readable
+declared scope is, and it carries its own parametrized regression test. **Two deliberate
+differences:**
+
+- **Direction of failure.** `_declared_scope` returns `None` and its caller reports
+  "cannot judge", because it is a read-only diagnostic. Here the same condition must
+  REFUSE, because the alternative is copying over declines nobody can read.
+- **No string filter over the list.** `_declared_scope` needs one because it returns a
+  set other code consumes; a membership test does not — `x in [5, "x"]` and
+  `x in ["x"]` agree for every input. Carrying it here would be a guard that no
+  mutation can kill, which is the shape this repo keeps finding as "a property named in
+  a comment and pinned by nothing". It was written, mutation-tested, found inert, and
+  removed.
 
 **Each of these checks was added after the previous version was shown to fall through to
 copying** — four rounds of it, which is the argument for mirroring a settled
