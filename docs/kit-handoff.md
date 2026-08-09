@@ -14,15 +14,91 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-09 — **cs-toolkit's Phase 3 is merged and its findings are worked
-back into the kit.** Six of its seven issues are closed — `#385` (the one with an adopter
-blocked behind it), `#382`, `#383`, `#379`, `#381`, `#386` — across four merged PRs.
-`#380` is the seventh and is blocked on a Codex CLI this host cannot start. Four issues
-are new: `#388`, `#392`, `#393` and `#395`. The adopter can take `init.sh` again — `#385`
-carries the measured before/after and the refresh steps. The convergence plan now records
-Phase 3 as done and carries the two defects a session following it found.
+Last updated: 2026-08-10 — **the install-path lane is merged** (`#401`, `4fc394f`).
+`#397`, `#380` and `#398` are closed with their verification on the tracker; `#399` stays
+open for its `adopt.md` half. `#380`'s acceptance is finally met — the Codex SessionStart
+hooks fire in a **trusted** session, not under the bypass flag. New: `#402`, `#403`,
+`#404`, `#405`. The next lane is `cluster:merge-gate`, unchanged and now the only one left.
 
-## Latest session — 2026-08-09 (the adopter's Phase 3 findings, worked back into the kit)
+## Latest session — 2026-08-10 (the install-path lane, and a gate the panel kept breaking)
+
+**Theme —** four install-path items shipped in one PR. The work was small; the review was
+not, and what it found is the more useful half. The `#398` template gate drew a defect in
+round after round, every one inside the previous round's remediation.
+
+- **`#397` closed.** `init.sh`'s `--no-clobber` summary aborted under `set -eu` between
+  the file list and the four echoes explaining the action. Swept `init.sh` for the shape:
+  no other instance. The similar lines in `dev_session.sh` and `reconcile_sessions.sh` are
+  a **different shape and not this bug** — a standalone `while` whose last body statement
+  is a falsy `&&` chain exits 0 under `set -e`; only one ending a **pipeline** exits 1.
+  Verified in both directions, which is what stopped a false ticket against those files.
+- **`#380` closed, acceptance met.** `init.sh` prints a Codex SessionStart registration
+  and the kit's own `.codex/hooks.json` carries it. The fire-check ran in a **trusted**
+  session with no bypass flag; the issue carries the before/after. Settled there too:
+  `SessionStart` takes **no** `matcher` key (Codex accepts Claude's shape and then never
+  fires), a project-level `.codex/hooks.json` **is** read, and project trust is **not**
+  hook trust — the probe repo had `trust_level = "trusted"` and the hook still did not run.
+- **`#398` closed.** The template refresh is gated on the declared set, keyed on
+  `kit_commit`. `adopt.md`'s bullet had the same shape via its rationale rather than its
+  instruction.
+- **`#399` partly.** The cross-tree rule is in `AGENTS.md` and `upgrade.md` is bound to it
+  — `$REPO`/`$KIT` in Step 0, `$REPO`-anchored writes, a `cd` that fails the run.
+  **`adopt.md` is not hardened** and the issue stays open for it.
+- **Filed:** `#402` (`kit_doctor`'s four manifest reads catch two exception types; a deep
+  JSON array crashes the diagnostic), `#403` (the record-prose carve-out has no disposal
+  for a claim that is *false* but marked imprecision), `#404` (the panel's scratch
+  namespace collides on a same-head re-run), `#405` (nothing checks a round was posted —
+  two were not, while four commits cited them). Occurrence comments on `#77` and `#399`.
+
+**Learned**
+
+- **A predicate restated where nothing executes it does not converge by patching.** The
+  `#398` gate reimplements manifest semantics in doc-embedded Python, next to
+  `kit_doctor.py`, which owns that schema. Read the `## Fallback panel — round N` headers
+  on `#401` for the sequence; each fix drew the next defect. `init.sh`'s own
+  `register_pr_hook` comment already names this pattern and its only known ending —
+  delete the predicate, do not guard it better — and it went unrecognised for most of the
+  loop while each round's fix was treated as the last one needed.
+  **The structural fix is Step 2 asking the engine instead of re-deriving**, which needs a
+  `kit_doctor` surface that does not exist; it gets its own PR.
+- **Two guards were the same class one type over.** The manifest read enumerated exception
+  types twice and was holed twice — `JSONDecodeError` escaped, then `RecursionError`
+  escaped `(OSError, ValueError)`. `except Exception` closed the class. `#402` is the same
+  enumeration, unfixed, in the engine.
+- **A fix round can over-apply a finding as easily as under-apply it.** Round 2 found that
+  the gate's refusal did not stop the workflow; the fix made *every* refusal stop it, which
+  blocked the config migration for any adopter carrying a deliberate local patch — a state
+  `record_install_manifest` writes by design. The narrower reading was available and not
+  taken.
+- **A `trap … EXIT` bounds damage in time, not against a concurrent reader.** A background
+  job held a temporarily-lowered doc budget while `git add -A` ran for an unrelated commit,
+  and the bad value merged into the branch before being restored. The trap fired correctly;
+  the window was simply open. Caught by `git status`, not by any test — the budget check is
+  warn-only, so a nonsense budget fails nothing.
+- **The panel's own doctrine bit back, correctly.** A record-prose finding marked
+  *imprecision below HIGH* must be **logged, not fixed** — and the rule says "as the lens
+  marked it" precisely so the author cannot relabel to justify the cheaper disposal. I
+  relabelled; two lenses caught it independently. `#403` is the gap that made the choice
+  genuinely hard: the claim was *false*, and logging a falsehood ships it.
+
+**Open, and owned by nothing yet**
+
+- **`#399`'s `adopt.md` half** — it clones to the same second tree in Step 0 and Step 1
+  sends you to read inside it, with no `$REPO`/`$KIT` binding.
+- **`#402`, `#403`, `#404`, `#405`** as filed. `#403` is the one worth a decision rather
+  than a fix.
+- **`#395`, `#388`, `#358`** unchanged by this session.
+- **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
+
+▶ Next: **`cluster:merge-gate`** — `#190` and `#39` together (one guard, one change), then
+`#95` separately. It was the handoff's first-named `Next` before this lane and was never
+gated on it — the previous block called the two disjoint and parallel-eligible, and
+`#190`/`#39`/`#95` are `pr_watch.py` defects that nothing in `#401` touched. What changed
+is only that it is now the sole remaining front.
+
+______________________________________________________________________
+
+## Session — 2026-08-09 (the adopter's Phase 3 findings, worked back into the kit)
 
 **Theme —** cs-toolkit's Phase 3 filed seven kit issues and left an adopter holding
 `init.sh`. Six were worked and all four PRs merged; the seventh needs a runtime this host
