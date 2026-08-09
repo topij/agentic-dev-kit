@@ -204,13 +204,21 @@ deliberately declined. It sent two things back:
   it**, and `upgrade.md` sends the operator to a second tree and then speaks in relative
   paths.
 
-**And their sixth learning was about this session's own prompt.** It stated cs-toolkit was
-"on branch `codex/support-docs-launch-refresh` with uncommitted work". It was on a clean
-`main`; that branch had seven *committed* commits and no worktree. Had they taken the
-precondition at face value, the plausible response — stash, or work around the uncommitted
-work — would have operated on a state that did not exist. The Phase 3 memo's rule about shas
-generalises: **a precondition in a brief is an observation with a timestamp**, and that goes
-double when it authorises a protective manoeuvre.
+**And their sixth learning was about this session's own prompt.** Source: that session's
+memo, delivered as a rendered artifact rather than committed anywhere — see the provenance
+note below, which is the more useful half. It reports that the prompt's opening precondition
+("on branch `codex/support-docs-launch-refresh` with uncommitted work") was false at run
+time: the repo was on a clean `main`, and the branch held seven *committed* commits with no
+worktree.
+
+Both checkable halves hold, and here are the commands. The branch is seven commits ahead —
+`git rev-list --count origin/main..origin/codex/support-docs-launch-refresh` → `7`. And the
+precondition was true when written: the session that wrote the prompt measured
+`git status --porcelain | wc -l` → `9` on that branch, minutes before. So nobody was wrong;
+the state moved between the measurement and the reading. That is the point: **a precondition
+in a brief is an observation with a timestamp**, the Phase 3 memo's rule about shas
+generalised — and it bites hardest when the false precondition authorises a *protective*
+manoeuvre, because the protection is what gets applied to a state that no longer exists.
 
 **`#380` and `#397` are the same file**, which makes them one session — and `init.sh` work
 is disjoint from `cluster:merge-gate`'s `pr_watch.py`, so the two can run in parallel lanes.
