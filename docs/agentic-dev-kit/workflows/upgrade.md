@@ -149,6 +149,7 @@ cd "$REPO" || exit 1                              # every write below lands here
 cp "$KIT/init.sh" "$REPO/init.sh"
 chmod +x "$REPO/init.sh"                          # the kit ships it 100755; a copy can lose the bit
 mkdir -p "$REPO/docs/templates"
+_gate_failed=0
 for _tmpl in "$KIT"/docs/templates/*.tmpl; do
   _rel="docs/templates/$(basename "$_tmpl")"
   python3 -c 'import json,pathlib,sys
@@ -160,16 +161,23 @@ except FileNotFoundError:
 except (OSError, ValueError) as exc:
     print(f"{b}: {exc}", file=sys.stderr)
     sys.exit(2)                  # present but unreadable: refuse, do not guess
+if not isinstance(d, dict):      # parseable, but not a manifest: same refusal
+    print(f"{b}: top-level value is {type(d).__name__}, not an object", file=sys.stderr)
+    sys.exit(2)
 sys.exit(0 if "kit_commit" in d and sys.argv[2] in (d.get("not_installed") or []) else 1)' \
     "$REPO" "$_rel" && _verdict=0 || _verdict=$?
   case "$_verdict" in
     0) echo "declined (recorded in not_installed) — not copied: $_rel" ;;
     1) cp "$_tmpl" "$REPO/$_rel" ;;
-    *) echo "STOP: $REPO/kit-manifest.json exists but cannot be read, so the declared set is unknown. Copied nothing. Fix the manifest, then re-run." >&2
-       break ;;
+    *) echo "STOP: $REPO/kit-manifest.json is not a readable manifest, so the declared set is unknown. Copied nothing." >&2
+       _gate_failed=1; break ;;
   esac
 done
-"$REPO/init.sh" --no-clobber
+if [ "$_gate_failed" -ne 0 ]; then
+  echo "Not running init.sh. Fix kit-manifest.json, then re-run this block." >&2
+else
+  "$REPO/init.sh" --no-clobber
+fi
 ```
 
 Every path above is absolute or `$REPO`-anchored, per **Working across two trees** in
@@ -193,15 +201,28 @@ templates comes out the other side declaring twenty installed files where it dec
 twenty-six, with nothing anywhere recording that a decision was reversed. `#398`, found by
 an adopter who spotted the unconditional instruction and declined to follow it.
 
-**A manifest that is present but unreadable stops the step rather than falling back to
-copying.** Absent and corrupt are different states and only the first is safe to treat as
-"no declared scope": a corrupt manifest may well hold declines nobody can now read, and
-copying over them is the very reversal this gate exists to prevent, reached by another
-route. So `FileNotFoundError` means no baseline and every template is copied, while a
-parse or read error refuses, names the file on stderr, and copies nothing — a loud stop
-rather than a silent guess. The earlier form let the exception escape, which printed a
-Python traceback once per template and then copied anyway (review panel, adversarial
-lens).
+**A manifest that is present but not readable as a manifest stops the step rather than
+falling back to copying.** Absent and corrupt are different states and only the first is
+safe to treat as "no declared scope": a corrupt manifest may well hold declines nobody can
+now read, and copying over them is the very reversal this gate exists to prevent, reached
+by another route. So `FileNotFoundError` means no baseline and every template is copied,
+while anything else refuses, names the file on stderr, and copies nothing.
+
+**Refusing takes three checks, not one**, and each was added after the previous version
+was shown to fall through to copying:
+
+- a read or parse error (`OSError`, `ValueError`) — the first form let this escape as a
+  Python traceback, once per template, and copied anyway;
+- a top-level value that parses but is not an object — `null`, `42`, `true` raise
+  `TypeError` on the membership test and exit 1 (copy), while `[…]` and `"…"` evaluate
+  the test to `False` and exit 1 (copy) with no error at all, which is the quieter and
+  worse half;
+- and the refusal has to stop **the workflow**, not just the loop. `break` leaves the
+  `for` loop and the next line still runs `init.sh` — printing "Copied nothing" and then
+  proceeding past the point the prose calls a hard stop. `_gate_failed` is what makes the
+  stop real.
+
+All three came out of the fallback review panel, the third as a HIGH.
 
 The `kit_commit` test is what distinguishes a real baseline from the kit's own shipped
 manifest sitting at the same path (the same distinction Step 1 draws above): a manifest

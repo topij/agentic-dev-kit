@@ -66,8 +66,12 @@ inside an adopter checkout and briefly "found" that adopter's variable in
 first — and were defeated by shell state, not reasoning (`#399`).
 
 `fallback-review-panel.md` rule 7 has carried this for review lenses since before
-either occurrence. Nothing carried it for workflows, and `upgrade.md` is the one that
-sends you to a second tree.
+either occurrence; nothing carried it for workflows. **Both `upgrade.md` and `adopt.md`
+clone the kit to a second tree** in their Step 0, and `adopt.md` Step 1 then sends you
+to read files inside it. Only `upgrade.md` is hardened so far — it binds `$REPO`/`$KIT`
+and anchors its writes — because that is where the occurrence landed and where the
+writes are literal shell. `adopt.md` states its copies mostly in prose, which narrows
+the blast radius without removing it; hardening it is `#399`'s remaining half.
 
 ## Runtime parity
 

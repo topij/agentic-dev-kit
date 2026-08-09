@@ -3267,11 +3267,21 @@ def _upgrade_template_copy_block() -> str:
     Anchored on the `cp` of `init.sh` like `_upgrade_init_argv`, so a future code
     block elsewhere in the document cannot be picked up instead.
     """
+    # The `init.sh` INVOCATION is kept and stubbed by `_run_template_copy`, not
+    # stripped. Stripping it is how a HIGH went uncaught: the gate's refusal used
+    # `break`, which leaves the `for` loop while the next line runs the installer
+    # anyway — "Copied nothing" followed by the workflow proceeding past its own
+    # hard stop. No test could see it while the interaction was cut out of the
+    # extract (review panel, adversarial lens).
+    #
+    # `cd` still goes, and for the opposite reason: keeping it would make
+    # `..._writes_into_repo_even_when_the_shell_sits_in_the_kit_clone` vacuous,
+    # since the block would put itself in the right tree before writing. Its
+    # presence in the SHIPPED block is asserted separately below.
     kept = [
         line
         for line in _step2_refresh_block().splitlines()
         if not re.match(r'^\s*(cd |cp "\$KIT/init\.sh"|chmod \+x)', line)
-        and not re.match(r'^\s*(\./|"\$REPO/)init\.sh\b', line)
     ]
     body = "\n".join(kept)
     # Asserted against the SHIPPED block, not the stripped one, and that is the
@@ -3311,8 +3321,23 @@ def _run_template_copy(
     is a working directory that is not where the writes belong, and a block that
     only works when cwd already happens to be right has not been tested for it.
     """
+    # Substitute the real installer with a witness writer: the block's LAST act
+    # is running `init.sh`, and whether it runs is exactly what the gate's
+    # refusal has to control. Running the real one here would rebuild config in
+    # a fixture and tell us nothing about the guard.
+    block = _upgrade_template_copy_block()
+    stubbed = re.sub(
+        r'^(\s*)"\$REPO/init\.sh" --no-clobber\s*$',
+        r'\1: > "$REPO/INIT_SH_RAN"',
+        block,
+        flags=re.M,
+    )
+    assert stubbed != block, (
+        "the init.sh invocation was not found in the extracted block, so the "
+        "stub did not apply and the gate/installer interaction is untested"
+    )
     return subprocess.run(
-        ["sh", "-c", _upgrade_template_copy_block()],
+        ["sh", "-c", stubbed],
         cwd=cwd or repo,
         capture_output=True,
         text=True,
@@ -3437,18 +3462,83 @@ def test_step_2_refuses_rather_than_guesses_on_an_unreadable_manifest(
 
     result = _run_template_copy(repo, src, check=False)
 
+    _assert_gate_refused(repo, result, "{not valid json!!!")
+
+
+def _assert_gate_refused(
+    repo: Path, result: subprocess.CompletedProcess[str], shape: str
+) -> None:
     installed = sorted(
         p.name for p in (repo / "docs" / "templates").glob("*.tmpl")
     ) if (repo / "docs" / "templates").exists() else []
     assert installed == [], (
-        f"templates were copied over an unreadable declared set: {installed}"
+        f"templates were copied over an unreadable declared set ({shape!r}): {installed}"
     )
     assert "STOP" in result.stdout + result.stderr, (
-        "the refusal must be loud — a silent skip is indistinguishable from "
-        "'nothing needed copying'"
+        f"the refusal must be loud for {shape!r} — a silent skip is "
+        "indistinguishable from 'nothing needed copying'"
     )
     assert "Traceback" not in result.stderr, (
-        "the manifest read still raises instead of being handled:\n" + result.stderr
+        f"the manifest read raises instead of refusing for {shape!r}:\n{result.stderr}"
+    )
+    # The refusal must stop the WORKFLOW, not just the loop. `break` leaves the
+    # `for` and the next line runs the installer anyway — the HIGH a panel lens
+    # found, invisible while the extract cut this line out.
+    assert not (repo / "INIT_SH_RAN").exists(), (
+        f"init.sh ran after the gate refused ({shape!r}) — the STOP message "
+        "printed and the workflow carried on past its own hard stop"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize(
+    "shape",
+    ["null", "42", "true", '"a string"', "[1, 2, 3]"],
+    ids=["null", "number", "bool", "string", "array"],
+)
+def test_step_2_refuses_a_manifest_that_parses_but_is_not_an_object(
+    tmp_path: Path, shape: str
+) -> None:
+    """Valid JSON is not the same as a manifest, and the two failure shapes here
+    are not even the same as each other — which is why all five are parametrized.
+
+    `null`, `42` and `true` raise `TypeError` on `"kit_commit" in d`, exit 1, and
+    the shell's `case` copies anyway — the same crash-then-copy the syntax-error
+    fix was written to remove. `[…]` and `"…"` are quieter and worse: membership
+    against them is simply `False`, so there is no error at all and the copy
+    proceeds looking entirely normal.
+
+    Both were measured before this guard existed. `#279` is the same class one
+    engine over — a manifest load with no non-dict guard beside three siblings
+    that have one.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text(shape, encoding="utf-8")
+
+    result = _run_template_copy(repo, src, check=False)
+
+    _assert_gate_refused(repo, result, shape)
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_runs_init_sh_when_the_gate_is_satisfied(tmp_path: Path) -> None:
+    """The positive control for the refusal tests above.
+
+    Without it, a block that had stopped running `init.sh` under ALL conditions
+    would satisfy every `not INIT_SH_RAN` assertion and the gate would look
+    perfect while the workflow no longer did its job.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+
+    _run_template_copy(repo, src)
+
+    assert (repo / "INIT_SH_RAN").exists(), (
+        "init.sh did not run on a repo with no manifest at all — the gate is "
+        "refusing something it should wave through"
     )
 
 
