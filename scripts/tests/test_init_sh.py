@@ -3523,6 +3523,72 @@ def test_step_2_refuses_a_manifest_that_parses_but_is_not_an_object(
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize(
+    "declared",
+    [5, True, 3.14, "docs/templates/handoff.md.tmpl", {"a": 1}, None],
+    ids=["int", "bool", "float", "string", "object", "null"],
+)
+def test_step_2_refuses_a_baseline_whose_declared_scope_is_not_a_list(
+    tmp_path: Path, declared: object
+) -> None:
+    """A well-formed manifest object is not the same as a readable scope, and the
+    top-level `isinstance` check does not reach one field down.
+
+    Three of these raise `TypeError` on the membership test and exit 1, so the
+    shell copies — the crash-then-copy class again, two rounds after it was
+    supposedly closed. The `string` case is the sharpest and is why it is
+    parametrized with a path that WOULD be declined: `in` on a string is a
+    SUBSTRING test, so a comma-joined value answers *true* for a path nobody
+    declined, and the gate then reports a decline that was never recorded. That
+    is the one direction none of the earlier shapes could produce.
+
+    `kit_doctor.py`'s `_declared_scope` already rejects exactly this — a
+    `not_installed` that is not a list, and a `files` that is not a dict — with
+    its own parametrized regression test. This mirrors it, failing closed where
+    that one returns `None`.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text(
+        json.dumps({"kit_commit": "deadbeef", "files": {}, "not_installed": declared}),
+        encoding="utf-8",
+    )
+
+    result = _run_template_copy(repo, src, check=False)
+
+    _assert_gate_refused(repo, result, f"not_installed={declared!r}")
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_step_2_refuses_a_baseline_whose_files_half_is_unreadable(
+    tmp_path: Path,
+) -> None:
+    """`_declared_scope`'s companion check, for its stated reason: a scope claim
+    needs BOTH halves of the record, and a valid `not_installed` beside a
+    malformed `files` is half a record. CodeRabbit found that one on PR #322 in
+    the engine; the same reasoning applies to a gate that acts on the answer.
+    """
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    (repo / "kit-manifest.json").write_text(
+        json.dumps(
+            {
+                "kit_commit": "deadbeef",
+                "files": ["not", "a", "dict"],
+                "not_installed": ["docs/templates/handoff.md.tmpl"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run_template_copy(repo, src, check=False)
+
+    _assert_gate_refused(repo, result, "files=list")
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
 def test_step_2_runs_init_sh_when_the_gate_is_satisfied(tmp_path: Path) -> None:
     """The positive control for the refusal tests above.
 

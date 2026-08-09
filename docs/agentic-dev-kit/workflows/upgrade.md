@@ -157,14 +157,22 @@ b = pathlib.Path(sys.argv[1]) / "kit-manifest.json"
 try:
     d = json.loads(b.read_text(encoding="utf-8"))
 except FileNotFoundError:
-    d = {}                       # no baseline: no declared scope, copy everything
+    sys.exit(1)                  # no baseline: no declared scope, copy
 except (OSError, ValueError) as exc:
     print(f"{b}: {exc}", file=sys.stderr)
     sys.exit(2)                  # present but unreadable: refuse, do not guess
-if not isinstance(d, dict):      # parseable, but not a manifest: same refusal
+if not isinstance(d, dict):
     print(f"{b}: top-level value is {type(d).__name__}, not an object", file=sys.stderr)
     sys.exit(2)
-sys.exit(0 if "kit_commit" in d and sys.argv[2] in (d.get("not_installed") or []) else 1)' \
+if "kit_commit" not in d:
+    sys.exit(1)                  # not a --record-install baseline: no declared scope
+declared, files = d.get("not_installed"), d.get("files")
+if not isinstance(declared, list) or not isinstance(files, dict):
+    print(f"{b}: kit_commit is present but the declared scope is unreadable "
+          f"(not_installed={type(declared).__name__}, files={type(files).__name__})",
+          file=sys.stderr)
+    sys.exit(2)                  # a baseline that cannot state its scope is not a licence
+sys.exit(0 if sys.argv[2] in [i for i in declared if isinstance(i, str)] else 1)' \
     "$REPO" "$_rel" && _verdict=0 || _verdict=$?
   case "$_verdict" in
     0) echo "declined (recorded in not_installed) — not copied: $_rel" ;;
@@ -208,8 +216,18 @@ now read, and copying over them is the very reversal this gate exists to prevent
 by another route. So `FileNotFoundError` means no baseline and every template is copied,
 while anything else refuses, names the file on stderr, and copies nothing.
 
-**Refusing takes three checks, not one**, and each was added after the previous version
-was shown to fall through to copying:
+**The shape checks mirror `kit_doctor.py`'s `_declared_scope` deliberately** — the same
+`not_installed`-is-a-list test, the same companion `files`-is-a-dict test (a scope claim
+needs both halves), and the same string filter over the list. That function is where this
+repo already settled what a readable declared scope is, and it carries its own
+parametrized regression test. **Where the two differ is the direction they fail**:
+`_declared_scope` returns `None` and its caller reports "cannot judge", because it is a
+read-only diagnostic; here the same condition must REFUSE, because the alternative is
+copying over declines nobody can read.
+
+**Each of these checks was added after the previous version was shown to fall through to
+copying** — four rounds of it, which is the argument for mirroring a settled
+implementation rather than continuing to invent one:
 
 - a read or parse error (`OSError`, `ValueError`) — the first form let this escape as a
   Python traceback, once per template, and copied anyway;
@@ -217,12 +235,17 @@ was shown to fall through to copying:
   `TypeError` on the membership test and exit 1 (copy), while `[…]` and `"…"` evaluate
   the test to `False` and exit 1 (copy) with no error at all, which is the quieter and
   worse half;
-- and the refusal has to stop **the workflow**, not just the loop. `break` leaves the
+- the refusal has to stop **the workflow**, not just the loop. `break` leaves the
   `for` loop and the next line still runs `init.sh` — printing "Copied nothing" and then
   proceeding past the point the prose calls a hard stop. `_gate_failed` is what makes the
-  stop real.
+  stop real;
+- and a well-formed object is not a readable scope. `{"kit_commit": …, "not_installed": 5}`
+  raised `TypeError` on the membership test and exited 1 (copy); a **string** there was
+  worse than that, because `in` on a string is a SUBSTRING test — no error, and a
+  comma-joined value could answer *true* for a path nobody declined.
 
-All three came out of the fallback review panel, the third as a HIGH.
+All four came out of the fallback review panel, two of them as HIGHs, each in the previous
+round's remediation.
 
 The `kit_commit` test is what distinguishes a real baseline from the kit's own shipped
 manifest sitting at the same path (the same distinction Step 1 draws above): a manifest
