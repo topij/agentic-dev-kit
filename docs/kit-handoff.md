@@ -117,9 +117,16 @@ reading the issue text; every close carries that command in a comment.
 - **Routed as decisions, not defects:** `#4` (describes a service scaffold this repo does
   not have), `#167` (the split shipped; the rest is its own "what a repair needs to
   decide"), `#169` (draft-vs-ready default).
-- **The remaining 74 are labelled into five clusters** — `cluster:merge-gate`,
-  `cluster:pre-push`, `cluster:suite-integrity`, `cluster:doctrine`,
-  `cluster:review-signal` — so a session picks a cluster, not a ticket.
+- **31 of the remaining 74 are labelled into five clusters** — `cluster:merge-gate` (3),
+  `cluster:pre-push` (5), `cluster:suite-integrity` (7), `cluster:doctrine` (8),
+  `cluster:review-signal` (9); `#36` carries two, so 32 assignments over 31 issues. Counted
+  with `gh issue list --state open --label "cluster:<name>" --limit 300`, not estimated —
+  a first draft of this line claimed all 74 and a lens counted it.
+  **43 are deliberately unlabelled**: no evidence-backed cluster emerged for them during
+  the sweep, and inventing one to reach a round number would make the labels worse than
+  useless. So the labels are an index of what the sweep *found*, not of the backlog — a
+  session picking a cluster gets a real work package; a session wanting the rest still has
+  to read.
 
 **The sweep's real finding is that the backlog is not stale.** An 18% close rate means the
 pile is unworked rather than rotten, so triage is not the lever. Two pre-sweep claims were
