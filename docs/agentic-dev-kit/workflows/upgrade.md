@@ -257,9 +257,7 @@ implementation rather than continuing to invent one:
   depth 200,000 on CPython 3.14.6). **Two enumerations, two holes, same shape** — so the
   enumeration is gone rather than extended a third time. The `try` body is one
   `read_text` + `json.loads`, so `except Exception` is precise here rather than broad:
-  there is no other statement in it whose failure could be masked. `kit_doctor.py` names
-  four types at the analogous read and is a degrade-don't-abort diagnostic rather than a
-  gate, so an escape there reports less rather than doing the destructive thing;
+  there is no other statement in it whose failure could be masked;
 - a top-level value that parses but is not an object — `null`, `42`, `true` raise
   `TypeError` on the membership test and exit 1 (copy), while `[…]` and `"…"` evaluate
   the test to `False` and exit 1 (copy) with no error at all, which is the quieter and
