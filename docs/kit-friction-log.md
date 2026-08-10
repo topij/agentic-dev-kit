@@ -143,3 +143,32 @@ outside the tree. **The rule:** when evidence arrives from outside the repo — 
 transcript, a runtime observation with no command to re-run — the record must quote enough to
 stand alone or name a command that re-derives it. A URL is a pointer for a human in the same
 session; it is not provenance. This is why the Phase 3 work committed its memo *into* the repo.
+
+## 2026-08-10 — un-graduated
+
+### The panel loop terminated by exhausting the author's regressions, not the original defect
+
+`#407` ran the panel to a clean round. Read the `## Fallback panel — round N` comments there
+for what each found; the shape is the point rather than the tally. The original two defects
+were fixed in the first commit and never re-opened. A later round found a **third original
+defect** in the same guard — a fail-open crediting settle time across a rollup dip — and
+after that, every finding was about **the fix rounds themselves**: the dip fix was a
+permanent wedge, and the wedge fix hollowed test fixtures. The loop ended when that chain
+ran out, not when the subject did. Severity: **M** — nothing shipped wrong, but the
+doctrine has no reading for the state the loop was in.
+
+`fallback-review-panel.md`'s stopping section says the criterion is blast radius, not round
+count, and warns the termination condition may never arrive. Both held. But it offers no
+reading for the situation this session was actually in: **every recent finding is about my
+own remediation, and none is about the thing under review.** That is a distinguishable state,
+and arguably a signal to stop patching and re-derive — which is what finally worked here, the
+third anchor being a change of what the clock compares against rather than another edit to the
+condition.
+
+Proposed direction, not yet a ticket: give the stopping section a way to name that state.
+Something like — when consecutive rounds find only defects introduced by this loop's own fix
+rounds, the next move is to re-derive the mechanism rather than to fix the finding. Rule 3
+already says a fix round addresses only what the review found; this is the complementary
+observation about when the fixes themselves have become the subject. Related: `#410` (one
+mechanism by which a remediation creates the next finding), `#209` (proportionality of
+re-runs).
