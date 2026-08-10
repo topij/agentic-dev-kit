@@ -1308,6 +1308,87 @@ def test_a_trusted_identity_is_matched_exactly_never_by_prefix() -> None:
     )
 
 
+def test_a_bot_listed_only_by_its_bot_login_is_still_trusted_as_an_app_slug() -> None:
+    """The two identity namespaces spell the same service differently (#95).
+
+    A status context reports `creator.login: coderabbitai[bot]`; the same service
+    is `coderabbitai` as a check run's `app.slug`. An adopter who enumerated only
+    the login form must not silently lose outage detection on the check-run
+    surface — so `_trusted_bot_identities` admits each configured entry in its
+    `[bot]`-stripped spelling too.
+
+    This is invisible under the SHIPPED config, which happens to list both forms,
+    and it was a mutation survivor for exactly that reason: the property was real,
+    the default config made it redundant, and no test reached the case where it
+    matters.
+    """
+    pr_watch = _load_pr_watch()
+    bots = ("coderabbit",)
+    # An adopter who wrote only the `[bot]` login.
+    login_only = {"coderabbit": frozenset({"somereviewer[bot]"})}
+
+    assert {"coderabbit", "somereviewer", "somereviewer[bot]"} <= pr_watch._trusted_bot_identities(
+        "coderabbit", aliases=login_only, app_slugs={}
+    )
+    # The app-slug spelling of the login they DID write is trusted…
+    assert (
+        pr_watch._match_bot_identity("somereviewer", bots, aliases=login_only, app_slugs={})
+        == "coderabbit"
+    )
+    # …and stripping never invents an identity they did not write.
+    assert (
+        pr_watch._match_bot_identity("somereviewer-evil", bots, aliases=login_only, app_slugs={})
+        is None
+    )
+    assert (
+        pr_watch._match_bot_identity("otherreviewer", bots, aliases=login_only, app_slugs={})
+        is None
+    )
+
+
+def test_the_render_says_an_untrusted_outage_did_not_cancel_anything() -> None:
+    """A reported-but-untrusted outage must not read like a normal one (#95).
+
+    Both entries carry the same `reason`, so without this the operator sees the
+    identical "review unavailable" line whether the outage cancelled the pending
+    block or was ignored — and the difference is the whole point of the gate.
+    """
+    pr_watch = _load_pr_watch()
+    forged = pr_watch.build_report(
+        _green_view(),
+        [],
+        set(),
+        check_details=[
+            _bot_check(name="CodeRabbit", state="PENDING", bucket="pending", startedAt=_minutes_ago(1)),
+            _bot_check(
+                name="coderabbit-shim",
+                description="Review rate limited",
+                identity="github-actions",
+            ),
+        ],
+        now=NOW,
+    )
+    forged_text = pr_watch.render(forged)
+
+    assert "does NOT cancel a pending review (#95)" in forged_text
+    assert "github-actions" in forged_text
+    assert "review.bot_app_slugs" in forged_text
+
+    # The positive control: a genuine outage keeps the plain wording, so the
+    # assertions above are about trust and not about any outage line at all.
+    genuine = pr_watch.render(
+        pr_watch.build_report(
+            _green_view(),
+            [],
+            set(),
+            check_details=[_bot_check(description="Review rate limited")],
+            now=NOW,
+        )
+    )
+    assert "review unavailable" in genuine
+    assert "does NOT cancel" not in genuine
+
+
 def test_the_newest_posting_owns_a_status_context_identity() -> None:
     """`/commits/{sha}/statuses` returns history, and only the latest row counts.
 
