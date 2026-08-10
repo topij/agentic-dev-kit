@@ -172,3 +172,22 @@ already says a fix round addresses only what the review found; this is the compl
 observation about when the fixes themselves have become the subject. Related: `#410` (one
 mechanism by which a remediation creates the next finding), `#209` (proportionality of
 re-runs).
+
+**Second occurrence, same day, on `#412`.** The shape recurred with one difference worth the
+note: the loop *did* end on a clean full pass of the subject, so it reached
+`fallback-review-panel.md`'s first terminal state rather than running out of chain. But
+rounds 3, 4 and 5 found no defect in the previous round's fix *itself*, and what they did
+find was about my remediation's **test coverage** rather than about the subject — round 4's
+worst finding was that the new guard's tests were scaffolding, not that the guard was wrong.
+So the state this entry names is reachable even on a loop that terminates correctly, which
+argues the stopping section needs a way to *say* which of the two happened rather than only
+a rule for when to stop. The proposed direction above still stands; this occurrence narrows
+it. The distinguishable signal is "no finding this round was about the code under review".
+
+### A test that mocks the unit under test — filed as `#417`
+
+It recurred through one PR, each time hiding a real defect from a green suite, including a
+CRITICAL. Recorded here only as the pointer; the instances and the proposed contract
+amendment are on the ticket. Related: the "test that names a property and
+pins nothing" entry above — same blindness, one layer down: that one is a property with no
+test, this one is a test with no subject.
