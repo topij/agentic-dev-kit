@@ -54,12 +54,11 @@ review found about *my own fix rounds* after that is the part worth carrying for
   round 8 after my sweep missed more. Both regressions are now permanent harness mutations,
   so each is pinned as a thing that must fail. `safety-critical-changes.md` rule 3 names
   this pattern; the loop ending only once the chain ran out is the friction-log entry.
-- **The anchor was the mistake, not the disjunct.** Two failed anchors were both about
-  what the clock compares against: growth past `max_total` let a stamp survive a dip;
-  `settling` inherited `max_total`'s one-way ratchet, so a check that disappears for good
-  wedged the gate forever. Comparing against the **previous poll's count** has neither
-  failure. Twice I patched the condition and once I changed what it was anchored to; only
-  the third worked.
+- **The anchor was the mistake, not the disjunct.** Both failures came from anchoring on
+  `max_total`: growth past it let a stamp survive a dip, and `settling` inherited its
+  one-way ratchet, so a check that disappears for good wedged the gate forever. Comparing
+  against the **previous poll's count** has neither failure. What held changed what the
+  clock compares against, not the condition that reads it.
 - **A negative assertion is evidence only if the same fixture can produce the positive.**
   Three fixtures kept passing after `total` became required, one having stopped exercising
   its function entirely — none found by reading. The repaired tests lead with a positive
