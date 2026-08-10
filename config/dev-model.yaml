@@ -120,6 +120,39 @@ review:
   # reviewer. Custom bots whose check name and author login differ belong here.
   bot_author_aliases:
     coderabbit: [coderabbitai, "coderabbitai[bot]"]
+  # Extra CREATOR identities trusted to announce an OUTAGE for a bot (#95).
+  #
+  # A check's NAME is chosen by whoever created the check, and on a same-repo PR
+  # that can be the PR's own workflow (`checks: write` / `statuses: write`). A
+  # check called `coderabbit-shim` whose description matched an
+  # `unavailable_markers` entry used to cancel the real reviewer's pending block
+  # and open the merge gate mid-review. So the CANCEL now requires the creator
+  # identity GitHub records — `app.slug` on a check run, `creator.login` on a
+  # status context — which a workflow cannot forge: its GITHUB_TOKEN
+  # authenticates as `github-actions`, never as the reviewer's app. The outage is
+  # still REPORTED either way, so the signal to run the fallback panel survives.
+  #
+  # Ordinarily leave this empty. pr_watch already derives the common case from
+  # `bot_author_aliases` above, since an app's slug and its `<slug>[bot]` login
+  # are conventionally the same string — verified on this repo, whose real
+  # CodeRabbit status contexts carry `creator.login: coderabbitai[bot]` while the
+  # aliases already list `coderabbitai`. Set it only for a bot whose app slug
+  # genuinely differs from the login it comments under.
+  #
+  # Same "enumerate, never infer" rule as the aliases: entries are matched
+  # EXACTLY, never as a prefix or substring. A prefix rule here would let
+  # `coderabbit-impersonator` announce CodeRabbit's outage, which is the defect
+  # this key exists to close, one namespace over.
+  #
+  # Left ABSENT rather than written as an empty `{}`: the kit's own config reader
+  # (`scripts/lib/kitconfig`) supports flow SEQUENCES but not flow MAPPINGS, so
+  # `bot_app_slugs: {}` parses to the *string* `"{}"` there while PyYAML reads an
+  # empty dict — the two disagree, which `test_matches_pyyaml_on_the_shipped_config`
+  # catches. An absent key takes the same built-in empty default. When you do need
+  # it, write it in block form, which both parsers agree on:
+  #
+  #   bot_app_slugs:
+  #     coderabbit: [some-other-app-slug]
   # The independent pass to run when a configured bot can't review. TWO shapes,
   # and the difference is whether the reviewer is independent of the author:
   #

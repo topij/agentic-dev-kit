@@ -287,6 +287,21 @@ _DEFAULT_REVIEW_BOT_AUTHOR_ALIASES = {
     "coderabbit": frozenset({"coderabbitai", "coderabbitai[bot]"}),
 }
 
+# Extra CREATOR identities trusted to announce an outage for a bot, for the case
+# where an app's slug differs from the login it comments under (#95). Ordinarily
+# empty: `_trusted_bot_identities` already derives the common case from the
+# author-alias table above, since a GitHub App's slug and its `<slug>[bot]` login
+# are conventionally the same string — verified on this repo, where the real
+# reviewer's status contexts carry `creator.login: coderabbitai[bot]` while
+# `bot_author_aliases` already enumerates `coderabbitai`.
+#
+# Derived, never inferred from the bot key alone: an app slug is an
+# attacker-relevant identity, so it comes from a table an adopter curates. Same
+# "enumerate, never infer" discipline as the aliases — a prefix rule here would
+# let `coderabbit-impersonator` announce CodeRabbit's outage, which is the whole
+# of #95 one namespace over.
+_DEFAULT_REVIEW_BOT_APP_SLUGS: dict[str, frozenset[str]] = {}
+
 # How long a configured review bot's own check may sit non-terminal before the
 # merge gate stops waiting for it. Below the bound, a pending bot is "a review
 # is coming" and blocks `mergeable` (issue #19 — a receipt recorded against a
@@ -342,12 +357,18 @@ class ReviewConfig(NamedTuple):
     require_ci: bool
     bots: tuple[str, ...]
     bot_author_aliases: dict[str, frozenset[str]]
+    bot_app_slugs: dict[str, frozenset[str]]
     bot_pending_grace_minutes: float
     settle_grace_minutes: float
 
 
 def _normalize_bot_author_aliases(value: Any) -> dict[str, frozenset[str]] | None:
-    """Normalize ``review.bot_author_aliases`` or reject the whole mapping.
+    """Normalize a ``{bot: [identity, …]}`` config mapping, or reject all of it.
+
+    Serves both ``review.bot_author_aliases`` and ``review.bot_app_slugs`` — the
+    two have identical shape and identical trust semantics (an enumerated set of
+    identities allowed to speak for a bot), so they share one normalizer rather
+    than two that can drift apart.
 
     Partial acceptance is unsafe: one malformed entry among several would make
     that reviewer silently lose outage detection while the rest appeared to
@@ -420,6 +441,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         require_ci=_DEFAULT_REQUIRE_CI,
         bots=_DEFAULT_REVIEW_BOTS,
         bot_author_aliases=dict(_DEFAULT_REVIEW_BOT_AUTHOR_ALIASES),
+        bot_app_slugs=dict(_DEFAULT_REVIEW_BOT_APP_SLUGS),
         bot_pending_grace_minutes=_DEFAULT_BOT_PENDING_GRACE_MINUTES,
         settle_grace_minutes=_DEFAULT_SETTLE_GRACE_MINUTES,
     )
@@ -452,6 +474,19 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
                 file=sys.stderr,
             )
             aliases = dict(_DEFAULT_REVIEW_BOT_AUTHOR_ALIASES)
+        raw_slugs = get(config, "review.bot_app_slugs", _DEFAULT_REVIEW_BOT_APP_SLUGS)
+        # An EMPTY mapping is the default and must stay valid, so the reject
+        # sentinel is distinguished from a legitimately empty result rather than
+        # by truthiness — `if not slugs` would treat `{}` as malformed and warn on
+        # every poll of every repo that never sets the key.
+        app_slugs = _normalize_bot_author_aliases(raw_slugs) if raw_slugs else {}
+        if app_slugs is None:
+            print(
+                "warning: review.bot_app_slugs must map bot names to non-empty string lists; "
+                "using pr_watch's built-in app slugs",
+                file=sys.stderr,
+            )
+            app_slugs = dict(_DEFAULT_REVIEW_BOT_APP_SLUGS)
         require_ci = get(config, "review.require_ci", _DEFAULT_REQUIRE_CI)
         if not isinstance(require_ci, bool):
             require_ci = _DEFAULT_REQUIRE_CI
@@ -508,6 +543,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         require_ci=require_ci,
         bots=tuple(bot.strip().lower() for bot in bots if bot.strip()),
         bot_author_aliases=aliases,
+        bot_app_slugs=app_slugs,
         bot_pending_grace_minutes=float(grace),
         settle_grace_minutes=float(settle_grace),
     )
@@ -520,6 +556,7 @@ _INFORMATIONAL_CHECK_NAMES = _REVIEW_CONFIG.informational_checks
 _REQUIRE_CI = _REVIEW_CONFIG.require_ci
 _REVIEW_BOTS = _REVIEW_CONFIG.bots
 _REVIEW_BOT_AUTHOR_ALIASES = _REVIEW_CONFIG.bot_author_aliases
+_REVIEW_BOT_APP_SLUGS = _REVIEW_CONFIG.bot_app_slugs
 _BOT_PENDING_GRACE_MINUTES = _REVIEW_CONFIG.bot_pending_grace_minutes
 _SETTLE_GRACE_MINUTES = _REVIEW_CONFIG.settle_grace_minutes
 
@@ -1068,13 +1105,35 @@ def _rest_str(value: object) -> str:
     return value if isinstance(value, str) else ""
 
 
-def _rest_check_rows(check_runs: list[dict], statuses: list[dict]) -> list[dict]:
+def _rest_check_rows(
+    check_runs: list[dict],
+    statuses: list[dict],
+    *,
+    status_creators: dict[str, str] | None = None,
+) -> list[dict]:
     """Shape REST check runs + legacy status contexts into ``gh pr checks`` rows.
 
     Carries ``description`` and ``startedAt``, which is the whole point: the
     GraphQL rollup `gh pr view` returns has neither, and without them #23's
     outage guard and #19's queued-bot grace window have nothing to read. On the
     REST path this shaping is the ONLY source of both.
+
+    Also carries ``identity`` — the creator the outage path must trust (#95) —
+    and it comes from a different place per surface, which is why this is not one
+    expression:
+
+    - a **check run** carries its own ``app.slug`` on the object, so the identity
+      is exact and needs no join.
+    - a **status context** does not: the combined-status endpoint this reads
+      (``/commits/{sha}/status``) omits ``creator`` entirely — verified against
+      this repo, whose real CodeRabbit context returns only
+      ``avatar_url, context, created_at, description, id, node_id, state,
+      target_url, updated_at, url``. So its identity arrives via
+      ``status_creators``, keyed by context name, from the sibling
+      ``/commits/{sha}/statuses`` endpoint that does carry it.
+
+    ``status_creators=None`` (the identity read was not performed or failed)
+    leaves every status row's ``identity`` empty, which reads as untrusted.
     """
     rows: list[dict] = []
     for run in check_runs:
@@ -1103,8 +1162,21 @@ def _rest_check_rows(check_runs: list[dict], statuses: list[dict]) -> list[dict]
                     else ""
                 ),
                 "startedAt": _rest_str(run.get("started_at")),
+                # The app that authenticated the check-run creation. A PR
+                # workflow's GITHUB_TOKEN always resolves to `github-actions`, so
+                # a forged check cannot claim a reviewer's app here — verified on
+                # this repo, where the Actions check carries
+                # `app.slug: github-actions` while the real reviewer's identity is
+                # `coderabbitai[bot]`.
+                "identity": (
+                    _rest_str((run.get("app") or {}).get("slug"))
+                    if isinstance(run.get("app"), dict)
+                    else ""
+                ),
+                "identity_source": "app",
             }
         )
+    creators = status_creators or {}
     for status in statuses:
         if not isinstance(status, dict):
             continue
@@ -1131,9 +1203,48 @@ def _rest_check_rows(check_runs: list[dict], statuses: list[dict]) -> list[dict]
                 # state. The transport's job is parity with `gh`, not improving
                 # on it.
                 "startedAt": "",
+                "identity": _rest_str(creators.get(_rest_str(status.get("context")))),
+                "identity_source": "creator",
             }
         )
     return rows
+
+
+def _newest_status_creators(statuses: list[dict]) -> dict[str, str]:
+    """``{context: creator.login}`` for the NEWEST status per context (#95).
+
+    ``/commits/{sha}/statuses`` returns the full history, so one context appears
+    once per posting — this repo's own PR head carries three ``CodeRabbit`` rows
+    (two ``pending``, then ``success``). Only the newest matters, and taking any
+    other row would be the fail-open direction: a context whose latest posting
+    came from a forged writer would still resolve to the real reviewer's identity
+    from an older row, and the forged description would then cancel the block
+    under a trusted name.
+
+    Newest is computed, not assumed from response order. GitHub happens to return
+    these newest-first, but ordering is not part of the contract this engine can
+    rely on, and the consequence of being wrong is a security decision rather than
+    a display nit. ``created_at`` is the key, with the monotonic ``id`` as the
+    tie-break for two postings in the same second.
+    """
+    newest: dict[str, tuple[str, int, str]] = {}
+    for status in statuses:
+        if not isinstance(status, dict):
+            continue
+        context = _rest_str(status.get("context"))
+        if not context:
+            continue
+        creator = status.get("creator")
+        login = _rest_str(creator.get("login")) if isinstance(creator, dict) else ""
+        raw_id = status.get("id")
+        # bool is an int subclass and `True` would sort as 1; a non-numeric id
+        # sorts as 0 rather than raising, since the timestamp is the primary key
+        # and this only breaks ties.
+        status_id = raw_id if isinstance(raw_id, int) and not isinstance(raw_id, bool) else 0
+        key = (_rest_str(status.get("created_at")), status_id, login)
+        if context not in newest or key > newest[context]:
+            newest[context] = key
+    return {context: key[2] for context, key in newest.items()}
 
 
 def _rest_object(data: Any, what: str) -> dict:
@@ -1325,8 +1436,124 @@ class CheckDetails(NamedTuple):
     signal: str  # "ok" | "skipped" | "unavailable"
 
 
-def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> CheckDetails:
-    """Per-check ``{name, state, bucket, description, startedAt}`` for one PR.
+def _outage_row_present(rows: list[dict], bots: tuple[str, ...]) -> bool:
+    """Whether any row could cancel a pending block — i.e. whether identity matters.
+
+    The precondition for the whole #95 identity read. A poll with no
+    bot-named, outage-marked row has no fail-open decision to make, so resolving
+    identities would cost a round trip (two, on the `gh` backend) to change
+    nothing. This is the overwhelmingly common case: a healthy reviewer never
+    matches it.
+
+    Deliberately evaluated over the SAME predicates
+    :func:`summarize_review_bots` uses — an unanchored name match and
+    :func:`review_unavailable_reason` — so the two cannot disagree about whether
+    a row is interesting. A narrower test here would skip the fetch for a row the
+    consumer then judges on an empty identity, which reads as untrusted and would
+    silently disable the outage path.
+    """
+    for row in rows:
+        name = str(row.get("name") or row.get("context") or "")
+        if not _match_bot(name, bots):
+            continue
+        if review_unavailable_reason(str(row.get("description") or "")):
+            return True
+    return False
+
+
+def _gh_api_pages(path: str) -> list:
+    """``gh api --paginate --slurp`` for one path — the list of PAGES, or ``[]``.
+
+    ``--slurp`` is what makes ``--paginate`` usable here: without it, gh
+    concatenates one JSON document per page, which is not parseable as a single
+    value for the object-shaped ``check-runs`` endpoint. With it, both endpoints
+    return a list whose elements are pages — page objects for ``check-runs``,
+    page lists for ``statuses``. Verified on gh 2.96.0.
+
+    Never raises. Every failure — an old gh without ``--slurp``, no auth, a
+    network error — degrades to ``[]``, which resolves no identities and so reads
+    as untrusted. See :func:`summarize_review_bots` for why that direction is
+    bounded rather than a wedge.
+    """
+    try:
+        raw = _gh(["api", "--paginate", "--slurp", path])
+    except RuntimeError:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
+def _gh_identity_map(sha: str) -> dict[str, str]:
+    """``{check name: creator identity}`` for one commit, via ``gh api`` (#95).
+
+    ``gh pr checks --json`` exposes no creator on either surface — its full field
+    set is ``bucket, completedAt, description, event, link, name, startedAt,
+    state, workflow``, verified by probing an invalid field on gh 2.96.0 — so the
+    `gh` backend has to ask REST for identity even though its rows come from the
+    CLI. The rows are then joined by NAME, which the REST backend does not need
+    to do: there, each check run carries its own ``app``.
+
+    **A name that resolves to more than one distinct identity resolves to none.**
+    Two check runs may share a name, and gh's rows carry nothing to tell them
+    apart — so if the real reviewer's check and a forged one are both called
+    ``CodeRabbit``, picking either is a guess. Picking the trusted one is the
+    fail-OPEN guess: it would let the forged row's description cancel the block
+    under the real app's identity. Collapsing to no identity instead costs the
+    grace window and cannot be gamed, and an attacker can force this state
+    anyway — which is exactly why it must be the harmless one.
+    """
+    identities: dict[str, set[str]] = {}
+
+    def record(name: str, identity: str) -> None:
+        if name:
+            identities.setdefault(name, set()).add(identity)
+
+    for page in _gh_api_pages(f"repos/{{owner}}/{{repo}}/commits/{sha}/check-runs?per_page=100"):
+        runs = page.get("check_runs") if isinstance(page, dict) else None
+        for run in runs or []:
+            if not isinstance(run, dict):
+                continue
+            app = run.get("app")
+            record(
+                _rest_str(run.get("name")),
+                _rest_str(app.get("slug")) if isinstance(app, dict) else "",
+            )
+    status_pages = _gh_api_pages(
+        f"repos/{{owner}}/{{repo}}/commits/{sha}/statuses?per_page=100"
+    )
+    flat_statuses = [
+        status for page in status_pages if isinstance(page, list) for status in page
+    ]
+    for context, login in _newest_status_creators(flat_statuses).items():
+        record(context, login)
+    return {
+        name: next(iter(found))
+        for name, found in identities.items()
+        if len(found) == 1 and next(iter(found))
+    }
+
+
+def fetch_check_details(
+    pr: int, *, bots: tuple[str, ...] | None = None, head_sha: str | None = None
+) -> CheckDetails:
+    """Per-check ``{name, state, bucket, description, startedAt, identity}`` for one PR.
+
+    ``identity`` is the #95 addition: the creator a check is attributable to,
+    which the outage path requires before letting a description cancel a pending
+    reviewer. It is resolved **lazily** — only when :func:`_outage_row_present`
+    finds a row that could cancel something — so a healthy poll pays nothing.
+    Every row gets the key either way; an unresolved one is ``""``, which reads as
+    untrusted.
+
+    ``head_sha`` is an optimisation for the `gh` backend only. That backend needs
+    a commit SHA to reach the REST identity endpoints and has none to hand, so
+    without this it spends a ``gh pr view`` to find one. Both call sites already
+    hold the head from their own snapshot. The REST backend ignores it and keeps
+    deriving the SHA from its own ``pulls/{pr}`` read, so the identity it resolves
+    can never be for a different commit than the rows it shaped.
 
     A SECOND ``gh`` call, and deliberately so. ``gh pr view --json
     statusCheckRollup`` — the source :func:`summarize_checks` reads — returns a
@@ -1389,6 +1616,23 @@ def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> Chec
             if not sha:
                 raise RuntimeError(f"PR #{pr} response carried no head SHA")
             check_runs, statuses = _rest_fetch_checks(sha, token=token, slug=slug)
+            rows = _rest_check_rows(check_runs, statuses)
+            # The #95 identity read, only when a row could actually cancel a
+            # pending block. Check runs already carry `app.slug` from the fetch
+            # above; it is the STATUS surface that needs a second endpoint,
+            # because the combined-status read has no `creator`.
+            if _outage_row_present(rows, bots):
+                rows = _rest_check_rows(
+                    check_runs,
+                    statuses,
+                    status_creators=_newest_status_creators(
+                        _http_get_all_wrapped(
+                            _rest_api(f"commits/{sha}/statuses?per_page=100", slug),
+                            token,
+                            "statuses",
+                        )
+                    ),
+                )
         # AttributeError/TypeError included on purpose: this function is called
         # OUTSIDE `main`'s try, so anything escaping here crashes the whole poll
         # rather than degrading. A `null` or list body would otherwise raise
@@ -1396,7 +1640,7 @@ def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> Chec
         except (RuntimeError, OSError, KeyError, ValueError, AttributeError, TypeError) as exc:
             _warn_bot_signal_lost(str(exc))
             return CheckDetails([], "unavailable")
-        return CheckDetails(_rest_check_rows(check_runs, statuses), "ok")
+        return CheckDetails(rows, "ok")
     cmd = [
         "gh",
         "pr",
@@ -1427,7 +1671,24 @@ def fetch_check_details(pr: int, *, bots: tuple[str, ...] | None = None) -> Chec
     if not isinstance(parsed, list):
         _warn_bot_signal_lost("gh pr checks returned an unexpected shape")
         return CheckDetails([], "unavailable")
-    return CheckDetails([item for item in parsed if isinstance(item, dict)], "ok")
+    rows = [item for item in parsed if isinstance(item, dict)]
+    # The #95 identity read on the `gh` backend. Same precondition as the REST
+    # branch, but both surfaces need the extra call here, since `gh pr checks`
+    # carries no creator on either.
+    if _outage_row_present(rows, bots):
+        sha = head_sha
+        if not sha:
+            try:
+                sha = str((_gh_json(["pr", "view", str(pr), "--json", "headRefOid"]) or {}).get(
+                    "headRefOid"
+                ) or "")
+            except (RuntimeError, json.JSONDecodeError, AttributeError):
+                sha = ""
+        identities = _gh_identity_map(sha) if sha else {}
+        for row in rows:
+            row["identity"] = identities.get(str(row.get("name") or ""), "")
+            row["identity_source"] = "gh-api"
+    return CheckDetails(rows, "ok")
 
 
 def resolve_pr(explicit: int | None) -> int:
@@ -1796,9 +2057,19 @@ def _match_bot(text: str, bots: tuple[str, ...], *, anchored: bool = False) -> s
     comment authors because that input is not the repo's to control: on a public
     repo any account may comment. Each configured bot trusts its exact key, its
     conventional ``[bot]`` form, and explicitly enumerated service aliases.
-    Check names come from the repo's own CI and bot configuration, so substring
-    matching remains appropriate there. Different rules because the inputs have
-    different trust, not by oversight.
+
+    **A check NAME is not a trust boundary either, and the unanchored branch is
+    no longer relied on as one** (#95). An earlier version of this docstring said
+    check names "come from the repo's own CI and bot configuration" — which is
+    false for a pull request, because a same-repo PR's own workflow runs with
+    ``checks: write`` and can create a check named anything. The looseness here is
+    kept, because it is what lets one key cover ``CodeRabbit`` and ``Review /
+    CodeRabbit``, and because everything it now decides is fail-CLOSED: a forged
+    name can only *add* a pending entry that blocks the PR that forged it. The
+    one decision that was fail-open — a check description cancelling the pending
+    block — moved to :func:`_match_bot_identity` over an unforgeable creator
+    identity. Different rules because the inputs have different trust; the
+    correction is about which decisions may rest on which input.
     """
     low = str(text or "").strip().lower()
     if not low:
@@ -1810,6 +2081,76 @@ def _match_bot(text: str, bots: tuple[str, ...], *, anchored: bool = False) -> s
                 return bot
         return None
     return next((bot for bot in bots if bot in low), None)
+
+
+def _trusted_bot_identities(
+    bot: str,
+    *,
+    aliases: dict[str, frozenset[str]] | None = None,
+    app_slugs: dict[str, frozenset[str]] | None = None,
+) -> frozenset[str]:
+    """The creator identities allowed to announce an outage for ``bot`` (#95).
+
+    Two namespaces reach this, and both are normalized to the same set because a
+    row carries one or the other, never both:
+
+    - a **check run**'s ``app.slug`` (``coderabbitai``, ``github-actions``)
+    - a **status context**'s ``creator.login`` (``coderabbitai[bot]``)
+
+    Derived from the tables an adopter already curates — the bot key, its
+    conventional ``[bot]`` form, its enumerated author aliases, and any extra
+    ``bot_app_slugs`` — with each entry also admitted in its ``[bot]``-stripped
+    form, because the same service appears as ``coderabbitai[bot]`` on a status
+    and ``coderabbitai`` as an app slug. That stripping is a namespace
+    normalization, not a widening: it never introduces a string the adopter did
+    not write, only the other spelling of one they did.
+
+    **Why derivation rather than a new mandatory key.** Requiring every adopter
+    to enumerate app slugs before outage detection worked again would silently
+    change behaviour on upgrade for every repo that already has a bot configured
+    by name. Deriving from ``bot_author_aliases`` keeps those repos working,
+    because a GitHub App's slug and its bot login are conventionally the same
+    string. ``bot_app_slugs`` exists for the repos where they are not.
+    """
+    if aliases is None:
+        aliases = _REVIEW_BOT_AUTHOR_ALIASES
+    if app_slugs is None:
+        app_slugs = _REVIEW_BOT_APP_SLUGS
+    named = {bot, f"{bot}[bot]", *aliases.get(bot, ()), *app_slugs.get(bot, ())}
+    stripped = {
+        name[: -len("[bot]")] for name in named if name.endswith("[bot]") and name != "[bot]"
+    }
+    return frozenset(
+        identity for identity in (named | stripped) if identity and identity != "[bot]"
+    )
+
+
+def _match_bot_identity(
+    identity: str,
+    bots: tuple[str, ...],
+    *,
+    aliases: dict[str, frozenset[str]] | None = None,
+    app_slugs: dict[str, frozenset[str]] | None = None,
+) -> str | None:
+    """The bot that ``identity`` is trusted to speak for, or ``None`` (#95).
+
+    Exact normalized match against :func:`_trusted_bot_identities`, never a
+    substring or prefix one. Deliberately the same discipline as the anchored
+    author branch of :func:`_match_bot`, for the same reason: a substring rule
+    would let ``coderabbit-shim`` speak for ``coderabbit``, which is the defect
+    this function exists to close.
+
+    An empty ``identity`` — the row's creator could not be resolved — returns
+    ``None`` and is therefore untrusted. That is the fail-closed direction and
+    its cost is bounded; see :func:`summarize_review_bots`.
+    """
+    low = str(identity or "").strip().lower()
+    if not low:
+        return None
+    for bot in bots:
+        if low in _trusted_bot_identities(bot, aliases=aliases, app_slugs=app_slugs):
+            return bot
+    return None
 
 
 # Check states that mean the reviewer has finished — anything else (PENDING,
@@ -1993,8 +2334,18 @@ def summarize_review_bots(
       It is an action signal: run the fallback review panel
       (docs/agentic-dev-kit/fallback-review-panel.md).
 
-      Only a **check**-surface hit suppresses the pending block below. A check
-      describes the bot's state now; a comment describes the past, and
+      Only a **check**-surface hit **from a trusted creator** suppresses the
+      pending block below. The trust half is #95: a check name is chosen by
+      whoever created the check, and on a same-repo PR that can be the PR's own
+      workflow — so a check called ``coderabbit-shim`` carrying an outage marker
+      used to cancel the real reviewer's pending block and open the merge gate
+      mid-review. The cancel now requires the row's creator identity
+      (``app.slug`` / ``creator.login``) to match the bot, which a workflow
+      cannot forge; the *report* still does not, so the signal to run the panel
+      never goes missing. Entries carry ``identity`` and ``trusted`` so the
+      difference is visible rather than inferred from whether a block vanished.
+
+      A check describes the bot's state now; a comment describes the past, and
       ``collect_comments`` returns the entire PR history unscoped by head or
       age — so letting a comment cancel would mean one transient rate limit on
       commit 1 waves through every queued review for the rest of the PR. Since
@@ -2086,16 +2437,45 @@ def summarize_review_bots(
             continue
         reason = review_unavailable_reason(detail.get("description") or "")
         if reason:
+            # #95: the CANCEL requires an unforgeable identity, the REPORT does
+            # not. A same-repo PR's own workflow runs with `checks: write` and
+            # `statuses: write`, so it can post a check named `coderabbit-shim`
+            # whose description matches an outage marker — and cancelling the
+            # pending block is the one thing that opened the merge gate while the
+            # real reviewer was mid-review. The row's creator (`app.slug` on a
+            # check run, `creator.login` on a status context) is not the PR's to
+            # choose: a workflow's GITHUB_TOKEN authenticates as
+            # `github-actions`, never as the reviewer's app.
+            identity = str(detail.get("identity") or "")
+            trusted = _match_bot_identity(identity, bots) == bot
             unavailable.append(
                 {
                     "bot": bot,
                     "surface": "check",
                     "where": name,
                     "reason": reason,
+                    "identity": identity,
+                    "trusted": trusted,
                 }
             )
-            unavailable_bots.add(bot)
-            continue
+            if trusted:
+                unavailable_bots.add(bot)
+                continue
+            # Untrusted: reported (so the panel signal never regresses), and then
+            # this row falls through to the ordinary pending logic below instead
+            # of cancelling anything. What that costs depends on the row, and both
+            # cases are bounded:
+            #
+            #   - a TERMINAL row (#23's own case — an outage on an otherwise
+            #     SUCCESS context) adds no pending entry at all, so an
+            #     unresolvable identity costs exactly nothing here.
+            #   - a NON-TERMINAL row becomes a pending entry, which blocks until
+            #     `grace_minutes` and then ages out by itself.
+            #
+            # Neither can wedge the merge gate, which is what makes requiring
+            # identity safe as the default rather than an opt-in. The worst an
+            # unresolvable identity can do is delay a merge by the grace window —
+            # the same bound a bot that never reports already has.
         if not _check_is_pending(detail):
             continue
         # Our own clock wins whenever we already have one. Preferring the
@@ -2532,7 +2912,7 @@ def record_review(
         # :func:`summarize_review_bots`), so fetching them here would cost a
         # round trip to compute nothing — and would give this path a different
         # view of the same predicate than the poll has.
-        details = fetch_check_details(pr)
+        details = fetch_check_details(pr, head_sha=current_head)
         bot_status = summarize_review_bots(
             details.rows,
             [],
@@ -3089,6 +3469,21 @@ def render(report: dict) -> str:
                 "say so explicitly"
             )
     for entry in bots.get("unavailable") or []:
+        # `.get`, not indexing: only the check surface carries the #95 trust
+        # fields, and a comment-surface entry legitimately has neither. Indexing
+        # would KeyError on every rate-limit comment.
+        if entry["surface"] == "check" and not entry.get("trusted", True):
+            identity = entry.get("identity") or "unattributable"
+            lines.append(
+                f"  ⚠ review unavailable [{entry['surface']}] {entry['where']}: "
+                f"{entry['reason']} — but its creator is {identity}, not "
+                f"{entry['bot']}, so it does NOT cancel a pending review (#95). "
+                "Run the fallback review panel "
+                "(docs/agentic-dev-kit/fallback-review-panel.md); if this is the "
+                "real reviewer under an identity the config does not know, add it "
+                "to review.bot_app_slugs"
+            )
+            continue
         lines.append(
             f"  ⚠ review unavailable [{entry['surface']}] {entry['where']}: "
             f"{entry['reason']} — run the fallback review panel (docs/agentic-dev-kit/fallback-review-panel.md)"
@@ -3461,7 +3856,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     # Deliberately outside the try: this call never raises and never blocks the
     # loop — see :func:`fetch_check_details`.
-    check_details = fetch_check_details(pr)
+    check_details = fetch_check_details(pr, head_sha=view.get("headRefOid"))
 
     state = load_state(pr)
     seen = set(state.get("seen", []))
