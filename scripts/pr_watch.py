@@ -295,8 +295,8 @@ _DEFAULT_REVIEW_BOT_AUTHOR_ALIASES = {
 # the anti-wedge property that `_DEFAULT_INFORMATIONAL_CHECK_NAMES` exists for.
 _DEFAULT_BOT_PENDING_GRACE_MINUTES = 15.0
 
-# How long the check rollup must hold still for the current head before the merge
-# gate believes it is COMPLETE. See the settle-baseline block in
+# How long the check rollup must sit unchanged at its highest count, for the
+# current head, before the merge gate believes it is COMPLETE. See the settle-baseline block in
 # :func:`build_report` for what this is protecting and why a count alone cannot.
 #
 # NOT A MEASURED VALUE ON THIS REPO, and saying so is the honest form: the kit's
@@ -2676,7 +2676,8 @@ def build_report(
       sentence promised is now carried by ``rollup_settled`` below, on the merge
       gate.
     - ``settle_since`` / ``settle_age_minutes`` / ``rollup_settled`` — the settle
-      baseline (#190/#39): how long the rollup has held still for this head, and
+      baseline (#190/#39): how long the rollup has sat unchanged at its highest
+      count for this head, and
       whether that is long enough for the merge gate to believe it is complete.
       ``settle_age_minutes`` is ``None`` when there is no usable baseline, which
       is NOT the same as zero and never reads as settled.
@@ -2769,7 +2770,7 @@ def build_report(
     #
     # No count can close either, because the rollup never says how many checks
     # are still coming: 2 of 5 and 2 of 2 are the same number. The only fact that
-    # separates them is that the rollup stopped changing and STAYED stopped, and
+    # separates them is that the rollup stopped MOVING and stayed stopped, and
     # that needs a clock plus a persisted baseline.
     #
     # ONE KNOWN COST, decided rather than inherited. A `require_ci: false` repo's
@@ -2798,15 +2799,22 @@ def build_report(
     # from the observed head change"). Additive to the merge gate is also what
     # keeps `done` — its alias — tightening rather than loosening.
     rollup_grew = checks["total"] > prior_max_total
-    # A stamp only carries forward while the rollup has not GROWN for this head.
-    # A rollup that is still growing is not stable however old the stamp is,
-    # which is what stops the clock ageing out mid-registration. "Not grown"
-    # rather than "unchanged" on purpose: a rollup that SHRANK keeps its stamp,
-    # because `settling` below already catches a shrink and forces `converged`
-    # false, so re-stamping here would only add a second, slower block on a case
-    # that is already held.
+    # A stamp carries forward only while the rollup sat UNCHANGED AT ITS MAXIMUM
+    # for this head. Anything else restarts it: a push, a check appearing, a
+    # check disappearing. `settling` is exactly "head moved, or the rollup is
+    # below its max", so `settling or rollup_grew` is that predicate.
+    #
+    # Reusing `settling` here rather than re-deriving it is what closes the
+    # dip-and-recovery hole, and an earlier version of this comment argued the
+    # opposite — that a shrink could keep its stamp because `settling` already
+    # forces `converged` false. That is true only on the poll where the shrink is
+    # SEEN. On the poll where the count returns to exactly its old maximum,
+    # `settling` is false again (not below max) and `rollup_grew` is false (not
+    # above it), so the old argument left the gate crediting the whole span
+    # either side of the dip as settled — measured at `mergeable: true` after
+    # 2m45s of real stability against a 3m grace.
     carried_stamp = (
-        None if (head_changed or rollup_grew) else (prior_settle_since or None)
+        None if (settling or rollup_grew) else (prior_settle_since or None)
     )
     settle_age_minutes = _age_minutes(carried_stamp, now_dt)
     # `_age_minutes` returns None for a stamp it cannot use — unparseable, the
@@ -2891,7 +2899,7 @@ def build_report(
         # One prefix, two wordings, because a reader who cannot tell them apart
         # cannot act: "no baseline" means no clock is running, "stable Nm of Mm"
         # means one is. NEITHER is a promise about when. Both end when the rollup
-        # has held still for the grace, and "no baseline" RECURS on every poll
+        # has sat unchanged at its max for the grace, and "no baseline" RECURS on every poll
         # that restarts the clock rather than appearing once — this comment said
         # it "clears on the next poll" for four commits, which is false in
         # exactly the case the guard exists for.
@@ -2926,7 +2934,8 @@ def build_report(
         # The settle baseline in force for THIS head, and what it is worth.
         # `settle_since` is written back by `persist_poll`, so it must be the
         # stamp the next poll should carry — the carried one while the rollup
-        # holds still, a fresh one the moment it moves or becomes unusable.
+        # sits unchanged at its max, a fresh one the moment it moves either way
+        # or the stamp goes unusable.
         "settle_since": settle_since,
         "settle_age_minutes": settle_age_minutes,
         "rollup_settled": rollup_settled,

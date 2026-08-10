@@ -50,22 +50,26 @@ Repeat until the report says **converged**:
 
    The other routine reason is a `merge_blockers[]` entry reading
    **`check rollup has not settled for current head`**. The merge gate waits for
-   the check rollup to hold still before believing it is complete, because a
+   the check rollup to stop growing before believing it is complete, because a
    partial rollup and a finished one report the same thing — a count, with no
    indication of how many checks are still coming. **Poll again rather than
    working around it:** it clears on its own, with no intervention.
 
    It reports two wordings — `no settle baseline recorded` (no clock is running)
-   and `stable Nm of Mm` (one is). They are states of the same clock, and it
-   restarts when the head moves, or when the rollup **grows past the most it has
-   ever held for that head** — so either wording can follow the other, and
-   **`no settle baseline recorded` can reappear** rather than showing once. The
-   same wording covers a stored stamp that is unusable at all (unparseable, or a
-   clock that ran backwards), which fails closed like everything else here.
+   and `stable Nm of Mm` (one is). They are states of the same clock, which runs
+   only while the rollup sits **unchanged at its highest count for this head**.
+   A push, a check appearing, and a check *disappearing* all restart it — so
+   either wording can follow the other, and **`no settle baseline recorded` can
+   reappear** rather than showing once. The same wording covers a stored stamp
+   that is unusable at all — unparseable, the zero time, or one meaningfully in
+   the future (a state file copied between machines, or a clock corrected
+   backwards) — which fails closed like everything else here.
 
-   Neither wording is a deadline: the gate opens once the rollup has held still
-   for `review.settle_grace_minutes`. It never blocks `converged`, so it cannot
-   stall this loop — only the merge that follows it.
+   Neither wording is a deadline: the gate opens once that has been true for
+   `review.settle_grace_minutes` continuously. A rollup that dips and returns to
+   its old count does **not** get credited the time before the dip. It never
+   blocks `converged`, so it cannot stall this loop — only the merge that
+   follows it.
 
    `done` also appears in the report. It is a **legacy alias for `mergeable`**, kept
    so that an older `dev_session.sh` still gates on merge authorization. Prefer

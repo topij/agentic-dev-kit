@@ -251,7 +251,7 @@ review:
   # against itself. Neither is detectable from a count: the rollup never says how
   # many checks are still coming, so 2-of-5 and 2-of-2 are the same number.
   #
-  # The clock runs from when the rollup last GREW, not from the push, so it
+  # The clock runs from when the rollup last MOVED, not from the push, so it
   # elapses concurrently with CI rather than after it — on a repo whose checks
   # take longer than this to finish, it adds no merge latency at all. Blocks
   # `mergeable` only, NEVER `converged`: the watch loop must stay runnable.

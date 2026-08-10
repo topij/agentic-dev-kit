@@ -125,7 +125,8 @@ def _settled(view: dict, minutes: float = 30.0, *, now: datetime | None = None) 
     the fail-open #190 and #39 are about, and is exactly how
     `comparable_max_total` failed.
 
-    So a test that wants a *mergeable* report has to say the rollup held still,
+    So a test that wants a *mergeable* report has to say the rollup sat unchanged
+    at its maximum,
     which takes all three of these together. The stamp alone is not enough: a
     `prior_max_total` left at its 0 default reads as "the rollup just grew from
     nothing", which restarts the clock — correctly, since that IS a first poll.
@@ -4934,6 +4935,74 @@ def test_the_anchor_survives_a_real_poll_sequence(
     )
     assert second["rollup_settled"] is True
     assert second["mergeable"] is True, "a genuinely settled rollup must merge"
+
+
+def test_a_dip_and_recovery_does_not_credit_the_time_before_the_dip(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The recovery poll is the one that matters, and it is not the shrink poll.
+
+    A rollup that drops below its maximum and then returns to exactly that
+    maximum is, at the moment of return, indistinguishable from one that never
+    moved: `settling` is false again (not BELOW max) and `rollup_grew` is false
+    (not ABOVE it). An earlier version of this guard reset only on growth, so the
+    stamp survived the whole excursion and the gate credited the span either side
+    of the dip — measured by a review lens at `mergeable: true` after 2m45s of
+    real stability against a 3m grace.
+
+    Three real polls through `build_report` -> `persist_poll` -> `load_state`,
+    because the defect lives in what one poll persists for the next and no
+    single-poll assertion can see it.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path)
+    grace = pr_watch._SETTLE_GRACE_MINUTES
+    receipt = {"head": "abc123", "source": "fallback:panel"}
+
+    def _view(n: int) -> dict:
+        return _green_view(
+            headRefOid="abc123",
+            statusCheckRollup=[
+                {"name": f"c{i}", "status": "COMPLETED", "conclusion": "SUCCESS"}
+                for i in range(n)
+            ],
+        )
+
+    def _poll(view: dict, now: datetime) -> dict:
+        state = pr_watch.load_state(9)
+        report = pr_watch.build_report(
+            view,
+            [],
+            set(),
+            review_receipt=receipt,
+            check_details=pr_watch.CheckDetails([], "skipped"),
+            now=now,
+            prior_head=state.get("head"),
+            prior_max_total=int(state.get("max_total") or 0),
+            prior_settle_since=pr_watch.read_settle_since(state, "abc123"),
+        )
+        pr_watch.persist_poll(9, report, set())
+        return report
+
+    t0 = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
+    _poll(_view(5), t0)                                     # five checks, clock starts
+    dip = _poll(_view(3), t0 + timedelta(seconds=30))       # one drops out
+    assert dip["settling"] is True, "the dip itself is caught by settling"
+
+    # Back to exactly five, comfortably past the grace measured from t0 — but
+    # only seconds past it measured from when the rollup actually recovered.
+    recovered = _poll(_view(5), t0 + timedelta(minutes=grace + 0.25))
+    assert recovered["settling"] is False, "at the max again, so settling has lapsed"
+    assert recovered["rollup_settled"] is False, (
+        "the gate credited the span either side of the dip"
+    )
+    assert recovered["mergeable"] is False
+    assert recovered["done"] is False
+
+    # And it still clears once the recovered rollup has genuinely held.
+    settled = _poll(_view(5), t0 + timedelta(minutes=2 * grace + 1))
+    assert settled["rollup_settled"] is True, "a real wait must still open the gate"
+    assert settled["mergeable"] is True
 
 
 def test_a_settle_stamp_from_another_head_is_discarded(
