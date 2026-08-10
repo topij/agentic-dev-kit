@@ -56,13 +56,19 @@ Repeat until the report says **converged**:
    working around it:** it clears on its own, with no intervention.
 
    The two wordings say where you are, not which of two ways out you get.
-   `no settle baseline recorded` means no clock has started yet — a first run, or
-   a state directory that was never written, which a fresh clone reaches
-   normally; the poll that reports it is what starts one. `stable Nm of Mm` means
-   the clock is running. Both end the same way, when N reaches M, so the wait is
-   one poll plus `review.settle_grace_minutes` — **seeing the first wording
-   replaced by the second is progress, not resolution.** It never blocks
-   `converged`, so it cannot stall this loop — only the merge that follows it.
+   `no settle baseline recorded` means no clock is running — a first run, a state
+   directory that was never written (which a fresh clone reaches normally), or a
+   poll on which the rollup **grew**, because a rollup still gaining checks is by
+   definition not stable and restarts the clock. `stable Nm of Mm` means the
+   clock is running. Both end the same way, when N reaches M.
+
+   So the wait is `review.settle_grace_minutes` measured from when the rollup
+   **stopped changing**, not from the push — and on CI that registers its checks
+   across several polls, the `no settle baseline recorded` wording **reappears**
+   each time another one lands. **The first wording giving way to the second is
+   progress, not resolution; the second giving way back to the first is the
+   clock restarting, not an error.** It never blocks `converged`, so it cannot
+   stall this loop — only the merge that follows it.
 
    `done` also appears in the report. It is a **legacy alias for `mergeable`**, kept
    so that an older `dev_session.sh` still gates on merge authorization. Prefer

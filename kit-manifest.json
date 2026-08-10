@@ -45,7 +45,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "0faf82196135dd7279c8b9e3b94c6cda7caea8b003be0097ed284f4258536c65"
+      "sha256": "74a515531dbc30a6e0cc9e29cea57b22140753a3a0d4056fdef5b012ef83af7f"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",

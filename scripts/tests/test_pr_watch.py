@@ -4841,11 +4841,20 @@ def test_the_settle_guard_never_blocks_the_watch_loop(
     assert report["mergeable"] is False
 
 
-def test_the_settle_baseline_rides_every_poll(
+def test_the_settle_baseline_is_written_to_the_state_file(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """The stamp has to be PERSISTED or the gate can never clear: every poll
-    would find no baseline, re-stamp it, and block forever."""
+    would find no baseline, re-stamp it, and block forever.
+
+    Scoped to the WRITER: that `persist_poll` puts a head-scoped stamp on disk
+    and `load_state` reads it back. It was called `..._rides_every_poll`, which
+    promised more than one round-trip can show — a lens said so, and the repo has
+    a documented pattern of exactly that shape. Whether the value being written
+    is the right ANCHOR across polls is
+    `test_the_anchor_survives_a_real_poll_sequence`, and the distinction is the
+    whole of round 2's HIGH.
+    """
     pr_watch = _load_pr_watch()
     monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path)
 
@@ -4881,7 +4890,7 @@ def test_the_anchor_survives_a_real_poll_sequence(
     - minting the fresh stamp already backdated by the grace makes poll 2 settle
       30 seconds after a push, which is #39 reopened, and nothing failed.
 
-    `test_the_settle_baseline_rides_every_poll` does not cover this: it asserts a
+    `test_the_settle_baseline_is_written_to_the_state_file` does not cover this: it asserts a
     stamp round-trips through the file unchanged, which is a fact about the
     writer, not about whether the value handed to it is the right anchor.
     """
