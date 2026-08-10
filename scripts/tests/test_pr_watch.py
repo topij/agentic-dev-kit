@@ -4637,12 +4637,6 @@ def _settle_state(**overrides) -> dict:
     return state
 
 
-def _ago_iso(minutes: float) -> str:
-    return (
-        datetime.now(timezone.utc) - timedelta(minutes=minutes)
-    ).isoformat().replace("+00:00", "Z")
-
-
 def _poll_via_main(monkeypatch: pytest.MonkeyPatch, pr_watch, state: dict, view: dict):
     """Drive a real `main` poll against `state`, returning the built report.
 
@@ -4928,6 +4922,104 @@ def test_the_settle_grace_is_configurable_and_rejects_nonsense(
     assert _grace("review:\n  settle_grace_minutes: 0\n") == 0.0, "0 is a legitimate opt-out"
     for nonsense in ("'soon'", "-1", "true"):
         assert _grace(f"review:\n  settle_grace_minutes: {nonsense}\n") == default, nonsense
+
+
+def test_a_ci_less_repo_still_waits_for_the_settle_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The `require_ci: false` interaction, decided rather than inherited.
+
+    A CI-less repo's rollup is permanently empty, so nothing can "still be
+    registering" and the ambiguity this guard resolves cannot arise there. The
+    guard applies anyway, and that costs such a repo one extra poll plus the
+    grace before it can merge. Found by a review lens, by execution.
+
+    **The short-circuit was considered and refused.** Skipping the gate when the
+    rollup is empty would authorize a merge on a first poll whose rollup is empty
+    *because the checks have not registered yet* — which is #39 exactly, for any
+    adopter who set `require_ci: false` while still having intermittent CI.
+    `safety-critical-changes.md` rule 3 names that trade: the harm is swapping a
+    fail-CLOSED limitation for a fail-OPEN mechanism. So the latency stands as a
+    known cost, and this test is here so it is a decision somebody made rather
+    than a default nobody examined.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_REQUIRE_CI", False)
+    view = _green_view(statusCheckRollup=[], mergeStateStatus="CLEAN")
+    receipt = {"head": "abc123", "source": "fallback:panel"}
+
+    first_poll = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt=receipt,
+        check_details=pr_watch.CheckDetails([], "skipped"),
+    )
+    assert first_poll["checks"]["all_green"] is True, "a zero-check PR reads green here"
+    assert first_poll["converged"] is True, "the watch loop is not blocked"
+    assert first_poll["mergeable"] is False, "the documented cost is one extra poll"
+
+    settled = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt=receipt,
+        check_details=pr_watch.CheckDetails([], "skipped"),
+        **_settled(view),
+    )
+    assert settled["mergeable"] is True, "and it clears — a cost, not a wedge"
+
+
+def test_a_head_change_drops_the_stamp_even_if_the_caller_did_not() -> None:
+    """Belt-and-braces, pinned at the level where it is reachable.
+
+    Through `main` this is redundant: `read_settle_since` head-scopes before
+    `build_report` ever sees the stamp, so a mismatched pair cannot occur — which
+    is why mutating it survives the suite, as a lens found. It still guards a
+    direct caller (a test, an embedder) that threads state itself, and the
+    assertion is on `rollup_settled` rather than `mergeable` because
+    `head_changed` independently forces `settling`, which would mask it.
+    """
+    pr_watch = _load_pr_watch()
+    report = pr_watch.build_report(
+        _green_view(headRefOid="newsha"),
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails([], "skipped"),
+        prior_head="oldsha",
+        prior_max_total=1,
+        # Inconsistent on purpose: a long-settled stamp handed alongside a
+        # DIFFERENT prior head. `main` cannot produce this pair.
+        prior_settle_since=_ago_iso(600.0),
+    )
+    assert report["head_changed"] is True
+    assert report["rollup_settled"] is False, "a push inherited the old head's clock"
+
+
+def test_the_grace_boundary_is_inclusive() -> None:
+    """`>=`, not `>`. Flipping it survives every other test, because the fixtures
+    sit far past the grace and nothing lands on the boundary itself."""
+    pr_watch = _load_pr_watch()
+    view = _green_view()
+    now = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
+    grace = pr_watch._SETTLE_GRACE_MINUTES
+
+    def _at(minutes: float) -> bool:
+        return pr_watch.build_report(
+            view,
+            [],
+            set(),
+            check_details=pr_watch.CheckDetails([], "skipped"),
+            now=now,
+            prior_head=view["headRefOid"],
+            prior_max_total=len(view["statusCheckRollup"]),
+            prior_settle_since=(
+                (now - timedelta(minutes=minutes)).isoformat().replace("+00:00", "Z")
+            ),
+        )["rollup_settled"]
+
+    assert _at(grace) is True, "exactly at the grace must settle (>= not >)"
+    assert _at(grace - 0.01) is False, "a hair under must not"
 
 
 def test_the_settle_blocker_is_reported_to_the_operator() -> None:

@@ -260,6 +260,15 @@ review:
   # fresh clone blocks for the single poll it takes to record one. Re-measure
   # against your own CI's check-registration spread before tuning; this repo runs
   # one check, so it has no spread to measure.
+  #
+  # IF YOU SET `require_ci: false` ABOVE, read this. Your rollup is permanently
+  # empty, so this guard buys you nothing and still costs one extra poll plus the
+  # grace before a merge. `0` is the setting for you: it keeps the one-poll
+  # baseline (so a lost state file still cannot authorize a merge) and drops the
+  # wait. The engine deliberately does NOT skip the guard on an empty rollup by
+  # itself — a first poll looks identical whether there are no checks or the
+  # checks have not registered yet, and guessing there is the fail-open the guard
+  # exists to prevent.
   settle_grace_minutes: 3
   # Whether a PR must have at least one real (non-informational) CI check before
   # pr_watch will report green. True is the safe default: it stops an autonomous

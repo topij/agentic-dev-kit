@@ -2772,6 +2772,17 @@ def build_report(
     # separates them is that the rollup stopped changing and STAYED stopped, and
     # that needs a clock plus a persisted baseline.
     #
+    # ONE KNOWN COST, decided rather than inherited. A `require_ci: false` repo's
+    # rollup is permanently empty, so nothing can be mid-registration there and
+    # this guard buys it nothing — but it still charges it one extra poll plus
+    # the grace. Short-circuiting on an empty rollup was considered and REFUSED:
+    # a first poll's rollup is also empty when the checks merely have not
+    # registered yet, so the short-circuit is #39 again for any adopter who set
+    # the flag while still having intermittent CI. `safety-critical-changes.md`
+    # rule 3 names that trade — a fail-CLOSED limitation swapped for a fail-OPEN
+    # mechanism — so the latency stands and is documented instead.
+    # `test_a_ci_less_repo_still_waits_for_the_settle_baseline` pins it.
+    #
     # NOT A SECURITY BOUNDARY, and it should not be read as one. The baseline
     # lives in the per-PR state file, so anyone who can run this engine can
     # backdate the stamp and satisfy the gate — the same standing of
