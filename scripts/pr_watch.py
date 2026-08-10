@@ -1512,6 +1512,28 @@ def _gh_api_pages(path: str) -> list:
     return parsed if isinstance(parsed, list) else []
 
 
+def _gh_head_sha(pr: int) -> str:
+    """The PR's current head sha via ``gh``, or ``""`` when it cannot be read.
+
+    Never raises, for the same reason :func:`_gh_api_pages` does not: it is
+    reached from :func:`fetch_check_details`, which is documented as
+    never-raising and whose caller in ``main`` sits outside the try. ``_gh``
+    translates only ``TimeoutExpired``, so the process-level classes are caught
+    here explicitly.
+    """
+    try:
+        data = _gh_json(["pr", "view", str(pr), "--json", "headRefOid"]) or {}
+        return str(data.get("headRefOid") or "")
+    except (
+        RuntimeError,
+        OSError,
+        subprocess.SubprocessError,
+        json.JSONDecodeError,
+        AttributeError,
+    ):
+        return ""
+
+
 def _gh_identity_map(sha: str) -> dict[str, str]:
     """``{check name: creator identity}`` for one commit, via ``gh api`` (#95).
 
@@ -1657,9 +1679,22 @@ def fetch_check_details(
             # above; it is the STATUS surface that needs a second endpoint,
             # because the combined-status read has no `creator`.
             if _outage_row_present(rows, bots):
-                rows = _rest_check_rows(
-                    check_runs,
-                    statuses,
+                # ITS OWN try, inside the outer one. `rows` above is already read
+                # and already carries the outage marker; letting a failure in this
+                # third call discard it would take #19's and #23's guards dark for
+                # the whole poll over a transient 403 or a network blip — the same
+                # "silent bypass, and the worse of the two" shape as the
+                # wrong-reader bug, reached by ordinary flakiness instead of by a
+                # defect. Degrading to no-identity keeps every row and costs at
+                # most the grace window, and it is what the `gh` backend already
+                # does (`_gh_api_pages` swallows the same classes and returns
+                # `{}`), so this is the transport parity this file's own doctrine
+                # asks for rather than a new policy.
+                #
+                # Not silent: an unresolved identity renders as the explicit
+                # "creator is unattributable … does NOT cancel a pending review"
+                # line, so the operator sees the degradation at merge time.
+                try:
                     # `_http_get_all`, NOT `_http_get_all_wrapped`. The PLURAL
                     # `/commits/{sha}/statuses` endpoint's body IS the array;
                     # only the SINGULAR combined `/status` wraps it in
@@ -1668,20 +1703,32 @@ def fetch_check_details(
                     # `_rest_fetch_checks` above reads the singular one with the
                     # wrapped reader and the key `"statuses"` — so reusing that
                     # call's shape here raised `RuntimeError` ("returned list,
-                    # expected a JSON object"), which `fetch_check_details`'s own
-                    # handler then degraded to `([], "unavailable")`, discarding
-                    # EVERY row rather than just the identities. That switched
-                    # #19's and #23's guards off in exactly the case they exist
-                    # for — an outage-marked row — and `record_review` names that
-                    # state as "the SILENT bypass, and the worse of the two",
-                    # because no blockers means no refusal.
-                    status_creators=_newest_status_creators(
+                    # expected a JSON object"), which this function's handler then
+                    # degraded to `([], "unavailable")`, discarding EVERY row
+                    # rather than just the identities. That switched #19's and
+                    # #23's guards off in exactly the case they exist for — an
+                    # outage-marked row — and `record_review` names that state as
+                    # "the SILENT bypass, and the worse of the two", because no
+                    # blockers means no refusal.
+                    creators = _newest_status_creators(
                         _http_get_all(
                             _rest_api(f"commits/{sha}/statuses?per_page=100", slug),
                             token,
                         )
-                    ),
-                )
+                    )
+                except (
+                    RuntimeError,
+                    OSError,
+                    KeyError,
+                    ValueError,
+                    AttributeError,
+                    TypeError,
+                ):
+                    creators = None
+                if creators is not None:
+                    rows = _rest_check_rows(
+                        check_runs, statuses, status_creators=creators
+                    )
         # AttributeError/TypeError included on purpose: this function is called
         # OUTSIDE `main`'s try, so anything escaping here crashes the whole poll
         # rather than degrading. A `null` or list body would otherwise raise
@@ -1732,24 +1779,25 @@ def fetch_check_details(
     # branch, but both surfaces need the extra call here, since `gh pr checks`
     # carries no creator on either.
     if _outage_row_present(rows, bots):
-        sha = head_sha
-        if not sha:
-            try:
-                sha = str((_gh_json(["pr", "view", str(pr), "--json", "headRefOid"]) or {}).get(
-                    "headRefOid"
-                ) or "")
-            # Same class as `_gh_api_pages` above, and for the same reason: this
-            # runs inside a function documented never to raise, whose caller is
-            # outside `main`'s try.
-            except (
-                RuntimeError,
-                OSError,
-                subprocess.SubprocessError,
-                json.JSONDecodeError,
-                AttributeError,
-            ):
-                sha = ""
+        sha = head_sha or _gh_head_sha(pr)
         identities = _gh_identity_map(sha) if sha else {}
+        # Fail closed if the head moved across this read. `gh pr checks` always
+        # reports the PR's CURRENT head and carries no sha, while identities are
+        # resolved for `sha` — so a push landing between the two calls leaves rows
+        # from one commit joined, BY NAME, to identities from another. A same-repo
+        # PR can push, which is the capability #95 already assumes, so a forged
+        # row on the new commit could inherit the real reviewer's identity from a
+        # same-named check on the old one — a bypass of this very guard.
+        #
+        # `record_review`'s `current_head != expected_head` check does not cover
+        # it: that compares the caller's `--head` against its snapshot, not the
+        # snapshot against this function's own later reads.
+        #
+        # Dropping every identity on any movement is the cheap fail-closed
+        # answer, and it costs only the grace window. The REST branch needs none
+        # of this: it derives one sha and reads both surfaces for it.
+        if identities and sha and _gh_head_sha(pr) != sha:
+            identities = {}
         for row in rows:
             row["identity"] = identities.get(str(row.get("name") or ""), "")
     return CheckDetails(rows, "ok")

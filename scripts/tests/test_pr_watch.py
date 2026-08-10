@@ -1611,6 +1611,183 @@ def test_a_gh_spawn_failure_in_the_identity_read_cannot_crash_the_poll(
     )
 
 
+def test_a_failed_identity_read_keeps_the_rows_it_already_had(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transient failure in the identity read must not blank the bot signal.
+
+    The rows are already fetched and already carry the outage marker by the time
+    the identity read runs. If a 403 or a network blip on that third call
+    discarded them, #19's and #23's guards would go dark for the whole poll — the
+    same "silent bypass" shape as the wrong-reader defect, reached by ordinary
+    flakiness rather than by a bug. Degrading to no-identity keeps every row and
+    costs at most the grace window.
+
+    Also the transport-parity check: `_gh_api_pages` already swallows these
+    classes and returns `{}` while keeping its rows, and this file's own doctrine
+    says the REST path's job is parity with `gh`.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    calls: list[str] = []
+
+    def _get(url: str, token: str, **_kw):
+        calls.append(url)
+        if "/statuses?" in url:
+            # Transient, and specifically NOT a shape problem — the failure the
+            # wrong-reader fix cannot help with.
+            raise RuntimeError("GitHub API GET … returned 403 (secondary rate limit)")
+        if "check-runs" in url:
+            return {"total_count": 0, "check_runs": []}, None
+        if "/status?" in url:
+            return {
+                "state": "success",
+                "statuses": [
+                    {
+                        "context": "CodeRabbit",
+                        "state": "success",
+                        "description": "Review rate limited",
+                    }
+                ],
+            }, None
+        if "pulls/5" in url:
+            return {"head": {"sha": "abc123"}}, None
+        raise AssertionError(f"unrouted GET {url}")
+
+    monkeypatch.setattr(pr_watch, "_http_get", _get)
+
+    details = pr_watch.fetch_check_details(5, bots=("coderabbit",))
+
+    # The identity read was attempted and failed…
+    assert any("/statuses?" in url for url in calls), calls
+    # …and the row survived it, rather than the signal going dark.
+    assert details.signal == "ok"
+    assert [row["name"] for row in details.rows] == ["CodeRabbit"]
+    assert details.rows[0]["description"] == "Review rate limited"
+
+    # The outage is still REPORTED, just not trusted — so the panel signal
+    # survives while the cancel does not.
+    bots = pr_watch.summarize_review_bots(
+        details.rows, [], now=NOW, bots=("coderabbit",), signal=details.signal
+    )
+    assert bots["unavailable"][0]["trusted"] is False
+    assert bots["unavailable"][0]["identity"] == ""
+
+
+def test_a_head_move_during_the_gh_identity_read_drops_every_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`gh pr checks` reports the CURRENT head and carries no sha (#95 TOCTOU).
+
+    Identities are resolved for a specific sha, so a push landing between the two
+    calls leaves rows from one commit joined BY NAME to identities from another. A
+    same-repo PR can push — the capability #95 already assumes — so a forged row
+    on the new commit could otherwise inherit the real reviewer's identity from a
+    same-named check on the old one, bypassing this PR's own guard.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_resolve_backend", lambda: ("gh", None))
+
+    class _Result:
+        def __init__(self) -> None:
+            self.stdout = (
+                '[{"name":"CodeRabbit","state":"SUCCESS","bucket":"pass",'
+                '"description":"Review rate limited"}]'
+            )
+            self.returncode = 0
+            self.stderr = ""
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", lambda *a, **k: _Result())
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh_identity_map",
+        lambda _sha: {"CodeRabbit": "coderabbitai[bot]"},
+    )
+
+    # Head UNCHANGED: the identity stands and the genuine outage can cancel.
+    monkeypatch.setattr(pr_watch, "_gh_head_sha", lambda _pr: "abc123")
+    steady = pr_watch.fetch_check_details(5, bots=("coderabbit",), head_sha="abc123")
+    assert steady.rows[0]["identity"] == "coderabbitai[bot]"
+
+    # Head MOVED between the rows read and the identity read: every identity is
+    # dropped, so nothing can cancel on a cross-commit name join.
+    monkeypatch.setattr(pr_watch, "_gh_head_sha", lambda _pr: "def456")
+    moved = pr_watch.fetch_check_details(5, bots=("coderabbit",), head_sha="abc123")
+    assert moved.rows[0]["identity"] == ""
+    assert (
+        pr_watch.summarize_review_bots(
+            moved.rows, [], now=NOW, bots=("coderabbit",)
+        )["unavailable"][0]["trusted"]
+        is False
+    )
+
+
+def test_the_gh_backend_resolves_a_status_contexts_creator_across_pages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The `gh` backend's STATUS-context identity path, which is the one that
+    matters most on this repo and was pinned by nothing.
+
+    CodeRabbit posts a status context here, not a check run — verified against
+    this repo's own PR heads. So on the default backend the reviewer's identity
+    arrives exclusively through the plural-statuses read and its page-list
+    flattening. Emptying that flattening left the whole suite green while every
+    genuine outage silently became untrusted: fail-closed, so bounded, but it
+    disables #23's acceleration for the primary reviewer on the default backend.
+
+    The two endpoints' `--paginate --slurp` shapes differ and both are exercised
+    here: check-runs yields page OBJECTS, statuses yields page LISTS. Two status
+    pages, so a flattening that only reads the first is caught too.
+    """
+    pr_watch = _load_pr_watch()
+
+    def fake_pages(path: str):
+        if "check-runs" in path:
+            return [{"check_runs": [{"name": "toolkit", "app": {"slug": "github-actions"}}]}]
+        return [
+            [
+                {
+                    "context": "CodeRabbit",
+                    "created_at": "2026-08-10T11:00:00Z",
+                    "id": 1,
+                    "creator": {"login": "coderabbitai[bot]"},
+                }
+            ],
+            [
+                {
+                    "context": "legacy/ci",
+                    "created_at": "2026-08-10T11:30:00Z",
+                    "id": 2,
+                    "creator": {"login": "some-ci[bot]"},
+                }
+            ],
+        ]
+
+    monkeypatch.setattr(pr_watch, "_gh_api_pages", fake_pages)
+
+    resolved = pr_watch._gh_identity_map("abc")
+
+    assert resolved["CodeRabbit"] == "coderabbitai[bot]"
+    # From the SECOND page, so a first-page-only flattening fails here.
+    assert resolved["legacy/ci"] == "some-ci[bot]"
+    # The check-run surface still resolves in the same call.
+    assert resolved["toolkit"] == "github-actions"
+
+    # End to end: that identity is what lets the real reviewer's outage cancel.
+    outage = pr_watch.summarize_review_bots(
+        [
+            _bot_check(
+                name="CodeRabbit",
+                description="Review rate limited",
+                identity=resolved["CodeRabbit"],
+            )
+        ],
+        [],
+        now=NOW,
+    )
+    assert outage["unavailable"][0]["trusted"] is True
+
+
 def test_identity_is_read_only_when_a_row_could_cancel_something() -> None:
     """The lazy precondition: a healthy poll must not pay for the identity read.
 
