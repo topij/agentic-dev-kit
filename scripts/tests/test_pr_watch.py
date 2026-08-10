@@ -5090,20 +5090,89 @@ def test_a_settle_stamp_from_another_head_is_discarded(
     """Head-scoped like `bot_pending_since`, and for the same reason: a push
     means the rollup is being rebuilt, so a clock from the previous head is
     discarded rather than aged. Carrying it forward would let a long-settled
-    prior head satisfy the gate for a commit pushed seconds ago."""
+    prior head satisfy the gate for a commit pushed seconds ago.
+
+    **Written with a positive control, because the earlier version of this test
+    was hollowed out by an unrelated change and nobody noticed.** When
+    `settle_since` grew a `total` field, this fixture kept omitting it — so the
+    stamp was rejected for having no usable count, head-scoping was never
+    reached, and deleting the head check entirely still passed. The test went on
+    reporting a property it had stopped exercising. Varying ONLY the head, with
+    the matching case asserted to settle, is what makes that impossible: if the
+    stamp is rejected for any other reason the control fails first and says so.
+    """
     pr_watch = _load_pr_watch()
+
+    def _poll(stamp_head: str) -> dict:
+        return _poll_via_main(
+            monkeypatch,
+            pr_watch,
+            _settle_state(
+                head="newsha",
+                max_total=1,
+                # Identical in every respect except whose head it was taken at.
+                settle_since={
+                    "head": stamp_head,
+                    "at": _ago_iso(600.0),
+                    "total": 1,
+                },
+                review_receipt={"head": "newsha", "source": "fallback:panel"},
+            ),
+            _green_view(headRefOid="newsha"),
+        )
+
+    control = _poll("newsha")
+    assert control["mergeable"] is True, (
+        "positive control: this stamp must otherwise satisfy the gate, or the "
+        "negative case below proves nothing about head-scoping"
+    )
+
+    stale = _poll("oldsha")
+    assert stale["mergeable"] is False, "a stale head's clock satisfied the gate"
+    assert stale["settle_age_minutes"] is None, "the stamp was aged, not discarded"
+
+
+@pytest.mark.parametrize(
+    "stored_total",
+    [None, "3", 1.0, True],
+    ids=["absent", "string", "float", "bool"],
+)
+def test_a_stamp_that_cannot_say_its_count_is_not_a_baseline(
+    stored_total, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The timestamp alone is not a baseline — it has to say what size rollup it
+    stands for, or the next poll cannot tell whether anything moved.
+
+    Fail closed rather than pairing a real timestamp with an unknown size: a
+    stamp accepted without its count would settle on the very next poll whatever
+    the rollup did, which is #190 wearing a timestamp. `True` is in the cases
+    because `bool` is an `int` subclass and would otherwise slip through as the
+    count 1 — the same trap `bot_pending_grace_minutes` validation already
+    guards.
+
+    **Two of these four cases carry the type guard; the other two would pass
+    without it**, and saying so keeps the case list honest. Deleting the guard
+    kills only `bool` and `float`, because `True == 1` and `1.0 == 1` compare
+    equal to a one-check rollup and would be accepted as its count. `absent` and
+    `string` fail closed anyway — `None` and `"3"` never equal an int, so the
+    movement check rejects them a line later. They stay because they pin the
+    intended behaviour at the boundary, not because they pin the guard.
+    """
+    pr_watch = _load_pr_watch()
+    stamp = {"head": "abc123", "at": _ago_iso(600.0)}
+    if stored_total is not None:
+        stamp["total"] = stored_total
+
     report = _poll_via_main(
         monkeypatch,
         pr_watch,
-        _settle_state(
-            head="newsha",
-            settle_since={"head": "oldsha", "at": _ago_iso(600.0)},
-            review_receipt={"head": "newsha", "source": "fallback:panel"},
-        ),
-        _green_view(headRefOid="newsha"),
+        _settle_state(settle_since=stamp),
+        _green_view(headRefOid="abc123"),
     )
 
-    assert report["mergeable"] is False, "a stale head's clock satisfied the gate"
+    assert report["settle_age_minutes"] is None, f"a {stored_total!r} count was used"
+    assert report["rollup_settled"] is False
+    assert report["mergeable"] is False
 
 
 def test_an_unusable_settle_stamp_fails_closed(
