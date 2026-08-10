@@ -295,8 +295,8 @@ _DEFAULT_REVIEW_BOT_AUTHOR_ALIASES = {
 # the anti-wedge property that `_DEFAULT_INFORMATIONAL_CHECK_NAMES` exists for.
 _DEFAULT_BOT_PENDING_GRACE_MINUTES = 15.0
 
-# How long the check rollup must sit unchanged at its highest count, for the
-# current head, before the merge gate believes it is COMPLETE. See the settle-baseline block in
+# How long the check rollup must go without changing size, for the current head,
+# before the merge gate believes it is COMPLETE. See the settle-baseline block in
 # :func:`build_report` for what this is protecting and why a count alone cannot.
 #
 # NOT A MEASURED VALUE ON THIS REPO, and saying so is the honest form: the kit's
@@ -2301,25 +2301,39 @@ def read_pending_since(state: dict, head: str | None) -> dict:
     return bots if isinstance(bots, dict) else {}
 
 
-def read_settle_since(state: dict, head: str | None) -> str | None:
-    """The persisted settle stamp, but only if it belongs to ``head``.
+def read_settle_since(state: dict, head: str | None) -> tuple[str | None, int | None]:
+    """The persisted settle stamp and the check count it was taken at.
 
-    Head-scoped and self-describing (``{"head": sha, "at": iso}``) for the same
-    reason :func:`read_pending_since` is: a push means the rollup is being
-    rebuilt from nothing, so a clock from the previous head is DISCARDED rather
-    than aged. Carrying it forward would let a long-settled prior head satisfy
-    the gate for a commit pushed seconds ago — the exact substitution the guard
-    exists to refuse.
+    Head-scoped and self-describing (``{"head": sha, "at": iso, "total": n}``)
+    for the same reason :func:`read_pending_since` is: a push means the rollup is
+    being rebuilt from nothing, so a clock from the previous head is DISCARDED
+    rather than aged. Carrying it forward would let a long-settled prior head
+    satisfy the gate for a commit pushed seconds ago — the exact substitution the
+    guard exists to refuse.
 
-    ``None`` means "no baseline for this head", which the merge gate reads as
-    not-settled. That is the whole of #190: absent must never be equivalent to
-    satisfied.
+    ``total`` rides along because the clock's meaning is "the rollup has been
+    THIS size since then". Comparing against the *previous poll's* count rather
+    than against ``max_total`` is what keeps the guard from wedging: ``max_total``
+    is a one-way ratchet, so a check that permanently disappears leaves
+    ``total < max_total`` true forever.
+
+    ``(None, None)`` means "no baseline for this head", which the merge gate
+    reads as not-settled. That is the whole of #190: absent must never be
+    equivalent to satisfied.
     """
     stored = state.get("settle_since")
     if not isinstance(stored, dict) or not head or stored.get("head") != head:
-        return None
+        return None, None
     at = stored.get("at")
-    return at if isinstance(at, str) and at.strip() else None
+    total = stored.get("total")
+    if not isinstance(at, str) or not at.strip():
+        return None, None
+    # A stamp with no usable count cannot say what it is a baseline FOR, so it
+    # is not one. Fail closed rather than pairing a real timestamp with an
+    # unknown size — that would settle on the next poll whatever the rollup did.
+    if isinstance(total, bool) or not isinstance(total, int):
+        return None, None
+    return at, total
 
 
 def write_pending_since(state: dict, head: str | None, bots: dict) -> dict:
@@ -2651,6 +2665,7 @@ def build_report(
     now: datetime | None = None,
     prior_pending_since: dict | None = None,  # already head-scoped by the caller
     prior_settle_since: str | None = None,  # already head-scoped by the caller
+    prior_settle_total: int | None = None,  # the count that stamp was taken at
     # The backend that PERFORMED THE READS in `view`/`inline`. Threaded rather
     # than re-resolved so the REST bound cannot drift from the data it is bounding
     # — see :func:`rest_cannot_authorize_merge`. None means "resolve it", which is
@@ -2676,8 +2691,8 @@ def build_report(
       sentence promised is now carried by ``rollup_settled`` below, on the merge
       gate.
     - ``settle_since`` / ``settle_age_minutes`` / ``rollup_settled`` — the settle
-      baseline (#190/#39): how long the rollup has sat unchanged at its highest
-      count for this head, and
+      baseline (#190/#39): how long the rollup has gone without changing size
+      for this head, and
       whether that is long enough for the merge gate to believe it is complete.
       ``settle_age_minutes`` is ``None`` when there is no usable baseline, which
       is NOT the same as zero and never reads as settled.
@@ -2798,23 +2813,35 @@ def build_report(
     # refusing a receipt when no max_total was ever recorded"; #39: "time-based
     # from the observed head change"). Additive to the merge gate is also what
     # keeps `done` — its alias — tightening rather than loosening.
-    rollup_grew = checks["total"] > prior_max_total
-    # A stamp carries forward only while the rollup sat UNCHANGED AT ITS MAXIMUM
-    # for this head. Anything else restarts it: a push, a check appearing, a
-    # check disappearing. `settling` is exactly "head moved, or the rollup is
-    # below its max", so `settling or rollup_grew` is that predicate.
+    # A stamp carries forward only while the rollup is the SAME SIZE it was when
+    # the stamp was taken. Any movement restarts it — a check appearing, a check
+    # disappearing, a push.
     #
-    # Reusing `settling` here rather than re-deriving it is what closes the
-    # dip-and-recovery hole, and an earlier version of this comment argued the
-    # opposite — that a shrink could keep its stamp because `settling` already
-    # forces `converged` false. That is true only on the poll where the shrink is
-    # SEEN. On the poll where the count returns to exactly its old maximum,
-    # `settling` is false again (not below max) and `rollup_grew` is false (not
-    # above it), so the old argument left the gate crediting the whole span
-    # either side of the dip as settled — measured at `mergeable: true` after
-    # 2m45s of real stability against a 3m grace.
+    # Anchored on the PREVIOUS POLL'S count, not on `max_total`, and the two
+    # earlier versions of this line are why. Resetting only on growth
+    # (`head_changed or rollup_grew`) let a stamp survive a dip and credited the
+    # span either side of it: a rollup that dropped and returned to its old count
+    # settled having been stable for seconds. Resetting on `settling or
+    # rollup_grew` closed that and opened something worse — `max_total` is a
+    # one-way ratchet, so a check that disappears for good leaves
+    # `total < max_total` true on every future poll, the clock re-stamps forever
+    # and the gate never opens for that head. Measured: stable at 4 checks for
+    # five hours, never settled, with `settle_grace_minutes: 0` no escape because
+    # the age stays None. A wedge, which is the one thing this engine's design
+    # refuses.
+    #
+    # Comparing to the previous count has neither failure: a dip is movement, and
+    # so is the recovery; a rollup that settles at a permanently lower count is
+    # unchanged from the poll after the drop onward, so it ages normally.
+    #
+    # KNOWN BOUND: this is a count, so a same-size SWAP — one check vanishing as
+    # another appears between two polls — reads as no movement. That is the same
+    # bound the whole mechanism has always had (`max_total`, `settling` and #39
+    # are all counts); closing it needs check identities, which is a bigger change
+    # than this guard.
+    rollup_moved = checks["total"] != prior_settle_total
     carried_stamp = (
-        None if (settling or rollup_grew) else (prior_settle_since or None)
+        None if (head_changed or rollup_moved) else (prior_settle_since or None)
     )
     settle_age_minutes = _age_minutes(carried_stamp, now_dt)
     # `_age_minutes` returns None for a stamp it cannot use — unparseable, the
@@ -2899,7 +2926,7 @@ def build_report(
         # One prefix, two wordings, because a reader who cannot tell them apart
         # cannot act: "no baseline" means no clock is running, "stable Nm of Mm"
         # means one is. NEITHER is a promise about when. Both end when the rollup
-        # has sat unchanged at its max for the grace, and "no baseline" RECURS on every poll
+        # has gone the grace without changing size, and "no baseline" RECURS on every poll
         # that restarts the clock rather than appearing once — this comment said
         # it "clears on the next poll" for four commits, which is false in
         # exactly the case the guard exists for.
@@ -2934,7 +2961,7 @@ def build_report(
         # The settle baseline in force for THIS head, and what it is worth.
         # `settle_since` is written back by `persist_poll`, so it must be the
         # stamp the next poll should carry — the carried one while the rollup
-        # sits unchanged at its max, a fresh one the moment it moves either way
+        # is the same size it was, a fresh one the moment it changes either way
         # or the stamp goes unusable.
         "settle_since": settle_since,
         "settle_age_minutes": settle_age_minutes,
@@ -3258,7 +3285,14 @@ def persist_poll(pr: int, report: dict, seen: set[str]) -> dict:
         # It MUST ride every poll: a gate whose baseline is never persisted finds
         # no baseline on every poll, re-stamps it, and blocks forever — a wedge,
         # not a guard.
-        "settle_since": {"head": report["head"], "at": report["settle_since"]},
+        "settle_since": {
+            "head": report["head"],
+            "at": report["settle_since"],
+            # The count the stamp stands for. Without it the next poll cannot
+            # tell whether the rollup moved, and a stamp that cannot say what
+            # it is a baseline FOR is not one.
+            "total": report["checks"]["total"],
+        },
     }
     # The fallback grace clock for a bot whose check carries no usable timestamp.
     # Persisted rather than derived per poll, because a clock that restarts on
@@ -3431,6 +3465,7 @@ def main(argv: list[str] | None = None) -> int:
 
     state = load_state(pr)
     seen = set(state.get("seen", []))
+    settle_since, settle_total = read_settle_since(state, view.get("headRefOid"))
     report = build_report(
         view,
         inline,
@@ -3440,7 +3475,8 @@ def main(argv: list[str] | None = None) -> int:
         review_receipt=state.get("review_receipt"),
         check_details=check_details,
         prior_pending_since=read_pending_since(state, view.get("headRefOid")),
-        prior_settle_since=read_settle_since(state, view.get("headRefOid")),
+        prior_settle_since=settle_since,
+        prior_settle_total=settle_total,
         backend=backend_name,
     )
 

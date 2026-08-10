@@ -125,8 +125,8 @@ def _settled(view: dict, minutes: float = 30.0, *, now: datetime | None = None) 
     the fail-open #190 and #39 are about, and is exactly how
     `comparable_max_total` failed.
 
-    So a test that wants a *mergeable* report has to say the rollup sat unchanged
-    at its maximum,
+    So a test that wants a *mergeable* report has to say the rollup was already
+    this size on the previous poll,
     which takes all three of these together. The stamp alone is not enough: a
     `prior_max_total` left at its 0 default reads as "the rollup just grew from
     nothing", which restarts the clock — correctly, since that IS a first poll.
@@ -149,6 +149,7 @@ def _settled(view: dict, minutes: float = 30.0, *, now: datetime | None = None) 
             .isoformat()
             .replace("+00:00", "Z")
         ),
+        "prior_settle_total": len(view.get("statusCheckRollup") or []),
     }
 
 
@@ -4627,7 +4628,7 @@ def _settle_state(**overrides) -> dict:
         "head": "abc123",
         "max_total": 1,
         "seen": [],
-        "settle_since": {"head": "abc123", "at": _ago_iso(30.0)},
+        "settle_since": {"head": "abc123", "at": _ago_iso(30.0), "total": 1},
         "review_receipt": {
             "head": "abc123",
             "source": "fallback:panel",
@@ -4904,6 +4905,7 @@ def test_the_anchor_survives_a_real_poll_sequence(
 
     def _poll(now: datetime) -> tuple[dict, dict]:
         state = pr_watch.load_state(9)
+        _since, _total = pr_watch.read_settle_since(state, view["headRefOid"])
         report = pr_watch.build_report(
             view,
             [],
@@ -4913,7 +4915,8 @@ def test_the_anchor_survives_a_real_poll_sequence(
             now=now,
             prior_head=state.get("head"),
             prior_max_total=int(state.get("max_total") or 0),
-            prior_settle_since=pr_watch.read_settle_since(state, view["headRefOid"]),
+            prior_settle_since=_since,
+            prior_settle_total=_total,
         )
         return report, pr_watch.persist_poll(9, report, set())
 
@@ -4935,6 +4938,80 @@ def test_the_anchor_survives_a_real_poll_sequence(
     )
     assert second["rollup_settled"] is True
     assert second["mergeable"] is True, "a genuinely settled rollup must merge"
+
+
+def test_a_rollup_that_settles_at_a_lower_count_still_opens_the_gate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The anti-wedge half of the dip fix, and it is not hypothetical.
+
+    A check can disappear for good — a superseded rerun, a
+    `concurrency: cancel-in-progress` consolidation, a bot retracting its check
+    after an outage. `max_total` is a one-way ratchet, so an earlier version of
+    this guard anchored on it and left `total < max_total` true on every future
+    poll: the clock re-stamped forever and the gate never opened for that head
+    again. A lens measured it stable at 4 checks for five hours, still refusing,
+    with `settle_grace_minutes: 0` no escape because the age stays None.
+
+    Anchoring on the PREVIOUS POLL's count instead has no such state: once the
+    rollup stops moving at its new size it ages normally, whatever its old
+    maximum was.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path)
+    grace = pr_watch._SETTLE_GRACE_MINUTES
+    receipt = {"head": "abc123", "source": "fallback:panel"}
+
+    def _view(n: int) -> dict:
+        return _green_view(
+            headRefOid="abc123",
+            statusCheckRollup=[
+                {"name": f"c{i}", "status": "COMPLETED", "conclusion": "SUCCESS"}
+                for i in range(n)
+            ],
+        )
+
+    def _poll(view: dict, now: datetime) -> dict:
+        state = pr_watch.load_state(9)
+        _since, _total = pr_watch.read_settle_since(state, "abc123")
+        report = pr_watch.build_report(
+            view,
+            [],
+            set(),
+            review_receipt=receipt,
+            check_details=pr_watch.CheckDetails([], "skipped"),
+            now=now,
+            prior_head=state.get("head"),
+            prior_max_total=int(state.get("max_total") or 0),
+            prior_settle_since=_since,
+            prior_settle_total=_total,
+        )
+        pr_watch.persist_poll(9, report, set())
+        return report
+
+    t0 = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
+    _poll(_view(5), t0)                                   # five checks seen
+    _poll(_view(4), t0 + timedelta(seconds=30))           # one gone, for good
+    # It never comes back. The count is now stable, but permanently below the
+    # maximum this head ever recorded.
+    for minutes in (1, 2, grace + 1):
+        report = _poll(_view(4), t0 + timedelta(minutes=minutes))
+
+    assert report["checks"]["total"] < report["max_total"], (
+        "precondition: the count really is below the head's recorded maximum"
+    )
+    assert report["rollup_settled"] is True, "the settle clock wedged permanently"
+
+    # …and the PR is still blocked, by the OLDER guard, which this change does
+    # not touch. `settling` is `total < max_total` against a ratcheting
+    # `max_total`, so a permanently-dropped check holds `converged` false for
+    # this head forever. That is #333, it predates this branch, and pinning the
+    # boundary here is deliberate: without it a later reader would credit this
+    # change with a wedge it does not cause, or "fix" #333 by loosening the
+    # settle clock, which is the direction that reopens #39.
+    assert report["settling"] is True, "#333's wedge is unchanged by this guard"
+    assert report["converged"] is False
+    assert report["mergeable"] is False
 
 
 def test_a_dip_and_recovery_does_not_credit_the_time_before_the_dip(
@@ -4970,6 +5047,7 @@ def test_a_dip_and_recovery_does_not_credit_the_time_before_the_dip(
 
     def _poll(view: dict, now: datetime) -> dict:
         state = pr_watch.load_state(9)
+        _since, _total = pr_watch.read_settle_since(state, "abc123")
         report = pr_watch.build_report(
             view,
             [],
@@ -4979,7 +5057,8 @@ def test_a_dip_and_recovery_does_not_credit_the_time_before_the_dip(
             now=now,
             prior_head=state.get("head"),
             prior_max_total=int(state.get("max_total") or 0),
-            prior_settle_since=pr_watch.read_settle_since(state, "abc123"),
+            prior_settle_since=_since,
+            prior_settle_total=_total,
         )
         pr_watch.persist_poll(9, report, set())
         return report
@@ -5133,6 +5212,7 @@ def test_a_head_change_drops_the_stamp_even_if_the_caller_did_not() -> None:
         # Inconsistent on purpose: a long-settled stamp handed alongside a
         # DIFFERENT prior head. `main` cannot produce this pair.
         prior_settle_since=_ago_iso(600.0),
+        prior_settle_total=1,
     )
     assert report["head_changed"] is True
     assert report["rollup_settled"] is False, "a push inherited the old head's clock"
@@ -5158,6 +5238,7 @@ def test_the_grace_boundary_is_inclusive() -> None:
             prior_settle_since=(
                 (now - timedelta(minutes=minutes)).isoformat().replace("+00:00", "Z")
             ),
+            prior_settle_total=len(view["statusCheckRollup"]),
         )["rollup_settled"]
 
     assert _at(grace) is True, "exactly at the grace must settle (>= not >)"

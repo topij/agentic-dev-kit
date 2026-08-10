@@ -242,7 +242,8 @@ review:
   # never going to report and stops blocking, which is what keeps a dead bot from
   # wedging the merge gate. Never affects `converged`.
   bot_pending_grace_minutes: 15
-  # How long the check rollup must hold STILL for the current head before the
+  # How long the check rollup must STOP CHANGING SIZE, for the
+  # current head, before the
   # merge gate believes it is complete. Guards the two routes by which a partial
   # rollup used to read as a finished one (issues #190 and #39): a lost or
   # first-run state file, which leaves no baseline to compare against — a fresh
