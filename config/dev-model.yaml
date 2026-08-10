@@ -242,6 +242,35 @@ review:
   # never going to report and stops blocking, which is what keeps a dead bot from
   # wedging the merge gate. Never affects `converged`.
   bot_pending_grace_minutes: 15
+  # How long the check rollup must STOP CHANGING SIZE, for the
+  # current head, before the
+  # merge gate believes it is complete. Guards the two routes by which a partial
+  # rollup used to read as a finished one (issues #190 and #39): a lost or
+  # first-run state file, which leaves no baseline to compare against — a fresh
+  # clone reaches that with no failed write anywhere — and a head change, which
+  # rebaselines to the new commit's PARTIAL count so the next poll compares it
+  # against itself. Neither is detectable from a count: the rollup never says how
+  # many checks are still coming, so 2-of-5 and 2-of-2 are the same number.
+  #
+  # The clock runs from when the rollup last MOVED, not from the push, so it
+  # elapses concurrently with CI rather than after it — on a repo whose checks
+  # take longer than this to finish, it adds no merge latency at all. Blocks
+  # `mergeable` only, NEVER `converged`: the watch loop must stay runnable.
+  #
+  # 0 drops the time requirement but still requires a baseline to exist, so a
+  # fresh clone blocks for the single poll it takes to record one. Re-measure
+  # against your own CI's check-registration spread before tuning; this repo runs
+  # one check, so it has no spread to measure.
+  #
+  # IF YOU SET `require_ci: false` ABOVE, read this. Your rollup is permanently
+  # empty, so this guard buys you nothing and still costs one extra poll plus the
+  # grace before a merge. `0` is the setting for you: it keeps the one-poll
+  # baseline (so a lost state file still cannot authorize a merge) and drops the
+  # wait. The engine deliberately does NOT skip the guard on an empty rollup by
+  # itself — a first poll looks identical whether there are no checks or the
+  # checks have not registered yet, and guessing there is the fail-open the guard
+  # exists to prevent.
+  settle_grace_minutes: 3
   # Whether a PR must have at least one real (non-informational) CI check before
   # pr_watch will report green. True is the safe default: it stops an autonomous
   # merge on a PR whose CI never ran. Set false for a repo with no CI at all —
