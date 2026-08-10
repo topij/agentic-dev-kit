@@ -2798,9 +2798,13 @@ def build_report(
     # from the observed head change"). Additive to the merge gate is also what
     # keeps `done` — its alias — tightening rather than loosening.
     rollup_grew = checks["total"] > prior_max_total
-    # A stamp only carries forward while the rollup is unchanged for this head.
-    # A rollup that is still GROWING is not stable however old the stamp is,
-    # which is what stops the clock ageing out mid-registration.
+    # A stamp only carries forward while the rollup has not GROWN for this head.
+    # A rollup that is still growing is not stable however old the stamp is,
+    # which is what stops the clock ageing out mid-registration. "Not grown"
+    # rather than "unchanged" on purpose: a rollup that SHRANK keeps its stamp,
+    # because `settling` below already catches a shrink and forces `converged`
+    # false, so re-stamping here would only add a second, slower block on a case
+    # that is already held.
     carried_stamp = (
         None if (head_changed or rollup_grew) else (prior_settle_since or None)
     )
