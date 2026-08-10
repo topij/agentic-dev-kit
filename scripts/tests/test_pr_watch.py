@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -1511,6 +1512,82 @@ def test_an_ambiguous_check_name_resolves_to_no_identity(
     assert resolved["toolkit"] == "github-actions"
 
 
+def test_a_gh_spawn_failure_in_the_identity_read_cannot_crash_the_poll(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`_gh` translates only TimeoutExpired, so the identity read must catch more.
+
+    `fetch_check_details` is documented as never raising and `main` calls it
+    OUTSIDE its try deliberately. An `OSError` or a non-timeout
+    `SubprocessError` escaping the identity read would therefore crash the poll
+    *before* `persist_poll` — no state written, and every later poll repeating it.
+    A wedge from one failed subprocess spawn.
+
+    Each raiser below escapes `_gh` untranslated today, which is what makes this
+    a real path rather than a defensive nicety.
+    """
+    pr_watch = _load_pr_watch()
+
+    for raiser in (
+        FileNotFoundError("gh: No such file or directory"),
+        OSError(12, "Cannot allocate memory"),
+        subprocess.SubprocessError("spawn failed"),
+        subprocess.CalledProcessError(1, "gh"),
+    ):
+
+        def boom(*args, _exc=raiser, **kwargs):
+            raise _exc
+
+        monkeypatch.setattr(pr_watch, "_gh", boom)
+
+        # Degrades to no pages, so no identity — never a raise.
+        assert pr_watch._gh_api_pages("repos/x/y/commits/abc/check-runs") == []
+        assert pr_watch._gh_identity_map("abc") == {}
+
+    # A positive control: with `_gh` working, pages really do come back — so the
+    # assertions above are about the guard and not about a function that returns
+    # {} regardless.
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh",
+        lambda *a, **k: '[{"check_runs": [{"name": "toolkit", "app": {"slug": "github-actions"}}]}]',
+    )
+    assert pr_watch._gh_identity_map("abc") == {"toolkit": "github-actions"}
+
+    # The SECOND `_gh` call on this path: resolving the head sha when the caller
+    # supplied none. It goes through `_gh_json`, whose own except clause needs the
+    # same class — reached end-to-end through `fetch_check_details` rather than by
+    # calling the helper, because that is the contract that must not raise.
+    class _Result:
+        def __init__(self) -> None:
+            # A bot-named row WITH an outage marker, so `_outage_row_present` is
+            # true and the identity read is actually attempted.
+            self.stdout = (
+                '[{"name":"CodeRabbit","state":"SUCCESS","bucket":"pass",'
+                '"description":"Review rate limited"}]'
+            )
+            self.returncode = 0
+            self.stderr = ""
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", lambda *a, **k: _Result())
+
+    def _gh_boom(*a, **k):
+        raise OSError("gh vanished between backend resolution and this call")
+
+    monkeypatch.setattr(pr_watch, "_gh", _gh_boom)
+
+    # No `head_sha=`, so the sha fallback runs and raises inside `_gh_json`.
+    details = pr_watch.fetch_check_details(1)
+
+    assert details.signal == "ok"
+    assert details.rows[0]["identity"] == ""
+    # …and the unresolved identity means the outage cannot cancel anything.
+    assert (
+        pr_watch.summarize_review_bots(details.rows, [], now=NOW)["unavailable"][0]["trusted"]
+        is False
+    )
+
+
 def test_identity_is_read_only_when_a_row_could_cancel_something() -> None:
     """The lazy precondition: a healthy poll must not pay for the identity read.
 
@@ -1835,8 +1912,11 @@ def test_check_detail_fetch_never_raises_and_degrades_to_no_signal(
         "run",
         lambda *a, **k: _Result('[{"name":"CodeRabbit","state":"PENDING"}]', 8),
     )
+    # `identity` is present on every row even on a healthy poll where the #95
+    # identity read never ran — the key's presence must not depend on that, or a
+    # caller indexing it raises on the common path.
     assert pr_watch.fetch_check_details(1) == (
-        [{"name": "CodeRabbit", "state": "PENDING"}],
+        [{"name": "CodeRabbit", "state": "PENDING", "identity": ""}],
         "ok",
     )
 
@@ -3666,7 +3746,6 @@ def test_rest_check_rows_carry_the_fields_both_guards_read() -> None:
         # No `app` on the input run, so no identity to carry — untrusted, which is
         # the fail-closed direction (#95).
         "identity": "",
-        "identity_source": "app",
     }
     # A StatusContext gets NO timestamp, matching what the `gh` path effectively
     # provides (gh reports the zero time, which `_age_minutes` rejects). Passing

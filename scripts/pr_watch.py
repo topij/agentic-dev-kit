@@ -1173,7 +1173,6 @@ def _rest_check_rows(
                     if isinstance(run.get("app"), dict)
                     else ""
                 ),
-                "identity_source": "app",
             }
         )
     creators = status_creators or {}
@@ -1204,7 +1203,6 @@ def _rest_check_rows(
                 # on it.
                 "startedAt": "",
                 "identity": _rest_str(creators.get(_rest_str(status.get("context")))),
-                "identity_source": "creator",
             }
         )
     return rows
@@ -1226,6 +1224,17 @@ def _newest_status_creators(statuses: list[dict]) -> dict[str, str]:
     rely on, and the consequence of being wrong is a security decision rather than
     a display nit. ``created_at`` is the key, with the monotonic ``id`` as the
     tie-break for two postings in the same second.
+
+    **The ``created_at`` compare is lexicographic, and that is correct only
+    because GitHub emits fixed-width Z-suffixed UTC timestamps** — the same
+    assumption ``bot_review_coverage`` states about its own recency compare. It is
+    safe *here* for a stronger reason than shape: both ``created_at`` and
+    ``creator`` on this endpoint are **server-assigned**, so neither is
+    attacker-suppliable, and a malformed value is therefore not a live route. A
+    non-ISO string would nevertheless sort above a real timestamp and win the
+    identity pick — the fail-open shape this function exists to prevent. So if
+    this helper is ever pointed at a less-trusted source, the compare needs
+    hardening first; the guarantee is about the source, not about the parse.
     """
     newest: dict[str, tuple[str, int, str]] = {}
     for status in statuses:
@@ -1474,10 +1483,24 @@ def _gh_api_pages(path: str) -> list:
     network error — degrades to ``[]``, which resolves no identities and so reads
     as untrusted. See :func:`summarize_review_bots` for why that direction is
     bounded rather than a wedge.
+
+    **``OSError``/``SubprocessError`` are caught here, not left to ``_gh``.**
+    ``_gh`` translates only ``TimeoutExpired`` into ``RuntimeError``; a missing
+    binary, a spawn failure (ENOMEM, EAGAIN, too many open files) or any other
+    ``SubprocessError`` escapes it raw. :func:`fetch_check_details` is documented
+    as never raising and its caller in ``main`` sits **outside** the try
+    deliberately, so one of those would crash the poll *before* ``persist_poll``
+    — no state written, every later poll repeating it. That is the wedge shape
+    ``_rest_str`` documents, reached from a different direction. ``gh`` existing
+    at backend-resolution time does not settle it: resolution and this call are
+    not the same moment, and fork can fail for reasons unrelated to the binary.
+    The `gh` branch of :func:`fetch_check_details` already catches this exact
+    class around its own ``subprocess.run``; this keeps the new call sites
+    consistent with it rather than a narrower rule three lines away.
     """
     try:
         raw = _gh(["api", "--paginate", "--slurp", path])
-    except RuntimeError:
+    except (RuntimeError, OSError, subprocess.SubprocessError):
         return []
     try:
         parsed = json.loads(raw)
@@ -1545,8 +1568,10 @@ def fetch_check_details(
     which the outage path requires before letting a description cancel a pending
     reviewer. It is resolved **lazily** — only when :func:`_outage_row_present`
     finds a row that could cancel something — so a healthy poll pays nothing.
-    Every row gets the key either way; an unresolved one is ``""``, which reads as
-    untrusted.
+    Every row carries the key on **both** backends whether or not that read ran;
+    an unresolved one is ``""``, which reads as untrusted. Consumers still use
+    ``.get`` — the uniform key exists so a future reader who indexes it is not
+    punished on the common path, not as a licence to drop the default.
 
     ``head_sha`` is an optimisation for the `gh` backend only. That backend needs
     a commit SHA to reach the REST identity endpoints and has none to hand, so
@@ -1672,6 +1697,13 @@ def fetch_check_details(
         _warn_bot_signal_lost("gh pr checks returned an unexpected shape")
         return CheckDetails([], "unavailable")
     rows = [item for item in parsed if isinstance(item, dict)]
+    # Unconditionally, so the key's presence does not depend on whether the
+    # identity read ran. `summarize_review_bots` uses `.get`, so this changes no
+    # behaviour today — it keeps the docstring's "every row gets the key" true on
+    # this backend as well as REST, and stops a future reader's `row["identity"]`
+    # from raising on the common (healthy) poll.
+    for row in rows:
+        row.setdefault("identity", "")
     # The #95 identity read on the `gh` backend. Same precondition as the REST
     # branch, but both surfaces need the extra call here, since `gh pr checks`
     # carries no creator on either.
@@ -1682,12 +1714,20 @@ def fetch_check_details(
                 sha = str((_gh_json(["pr", "view", str(pr), "--json", "headRefOid"]) or {}).get(
                     "headRefOid"
                 ) or "")
-            except (RuntimeError, json.JSONDecodeError, AttributeError):
+            # Same class as `_gh_api_pages` above, and for the same reason: this
+            # runs inside a function documented never to raise, whose caller is
+            # outside `main`'s try.
+            except (
+                RuntimeError,
+                OSError,
+                subprocess.SubprocessError,
+                json.JSONDecodeError,
+                AttributeError,
+            ):
                 sha = ""
         identities = _gh_identity_map(sha) if sha else {}
         for row in rows:
             row["identity"] = identities.get(str(row.get("name") or ""), "")
-            row["identity_source"] = "gh-api"
     return CheckDetails(rows, "ok")
 
 
