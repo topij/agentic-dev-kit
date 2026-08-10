@@ -14,7 +14,7 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-10 — **two thirds of `cluster:merge-gate` is closed** (`#190`, `#39`,
+Last updated: 2026-08-10 — **two-thirds of `cluster:merge-gate` is closed** (`#190`, `#39`,
 via `#407`/`1de29b3`). `#95` is the remaining item and now carries its own re-derived
 groundwork as a comment, because its filed premise had moved. New: `#408`, `#409`, `#410`;
 occurrence on `#399`. `#333` stays open and is now pinned by name in a test.
@@ -168,11 +168,11 @@ round after round, every one inside the previous round's remediation.
 - **`#395`, `#388`, `#358`** unchanged by this session.
 - **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
 
-▶ Next: **`cluster:merge-gate`** — `#190` and `#39` together (one guard, one change), then
-`#95` separately. It was the handoff's first-named `Next` before this lane and was never
-gated on it — the previous block called the two disjoint and parallel-eligible, and
-`#190`/`#39`/`#95` are `pr_watch.py` defects that nothing in `#401` touched. What changed
-is only that it is now the sole remaining front.
+▶ Superseded by the block above, kept for the reasoning: **`cluster:merge-gate`** — `#190`
+and `#39` together (one guard, one change), then `#95` separately. `#190` and `#39` are now
+closed; `#95` remains and is the live `▶ Next:`. The reasoning worth keeping is why the
+three were ever grouped: they are `pr_watch.py` defects that nothing in `#401` touched, and
+the cluster was never gated on the install-path lane.
 
 ______________________________________________________________________
 

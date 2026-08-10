@@ -146,14 +146,16 @@ session; it is not provenance. This is why the Phase 3 work committed its memo *
 
 ## 2026-08-10 — un-graduated
 
-### The panel loop terminated by exhausting the author's regressions, not the original defect — M
+### The panel loop terminated by exhausting the author's regressions, not the original defect
 
 `#407` ran the panel to a clean round. Read the `## Fallback panel — round N` comments there
 for what each found; the shape is the point rather than the tally. The original two defects
-were fixed in the first commit and never re-opened. Everything after that was **findings
-about the fix rounds themselves** — a fail-open, then a permanent wedge introduced by the fix
-for the fail-open, then three test fixtures hollowed by the fix for the wedge. The loop ended
-when that chain ran out, not when the subject matter did.
+were fixed in the first commit and never re-opened. A later round found a **third original
+defect** in the same guard — a fail-open crediting settle time across a rollup dip — and
+after that, every finding was about **the fix rounds themselves**: the dip fix was a
+permanent wedge, and the wedge fix hollowed test fixtures. The loop ended when that chain
+ran out, not when the subject did. Severity: **M** — nothing shipped wrong, but the
+doctrine has no reading for the state the loop was in.
 
 `fallback-review-panel.md`'s stopping section says the criterion is blast radius, not round
 count, and warns the termination condition may never arrive. Both held. But it offers no
