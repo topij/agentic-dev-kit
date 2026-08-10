@@ -2772,6 +2772,12 @@ def build_report(
     # separates them is that the rollup stopped changing and STAYED stopped, and
     # that needs a clock plus a persisted baseline.
     #
+    # NOT A SECURITY BOUNDARY, and it should not be read as one. The baseline
+    # lives in the per-PR state file, so anyone who can run this engine can
+    # backdate the stamp and satisfy the gate — the same standing of
+    # `bot_pending_since`, whose forgeability #95 records. This guards a race
+    # (a rollup read mid-registration), not an adversary.
+    #
     # It gates `merge_blockers` and NOT `settling`, deliberately, because those
     # feed different predicates. `converged` answers "is there more for me to
     # fix?" and must stay answerable — blocking it would wedge the watch loop,
@@ -2873,7 +2879,7 @@ def build_report(
         merge_blockers.append(
             "check rollup has not settled for current head "
             + (
-                f"(stable {settle_age_minutes:g}m of {_SETTLE_GRACE_MINUTES:g}m)"
+                f"(stable {settle_age_minutes:.1f}m of {_SETTLE_GRACE_MINUTES:g}m)"
                 if settle_age_minutes is not None
                 else "(no settle baseline recorded)"
             )
