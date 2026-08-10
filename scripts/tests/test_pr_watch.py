@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -50,6 +51,7 @@ def _pin_engine_defaults(module: ModuleType) -> None:
     module._REQUIRE_CI = defaults.require_ci
     module._REVIEW_BOTS = defaults.bots
     module._REVIEW_BOT_AUTHOR_ALIASES = defaults.bot_author_aliases
+    module._REVIEW_BOT_APP_SLUGS = defaults.bot_app_slugs
     module._BOT_PENDING_GRACE_MINUTES = defaults.bot_pending_grace_minutes
     module._SETTLE_GRACE_MINUTES = defaults.settle_grace_minutes
 
@@ -969,13 +971,27 @@ NOW = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
 
 
 def _bot_check(**overrides):
-    """One `gh pr checks --json` row for the configured review bot."""
+    """One `gh pr checks --json` row for the configured review bot.
+
+    ``identity`` defaults to the REAL reviewer's creator identity, so a test
+    whose subject is outage *semantics* keeps testing that and not #95's trust
+    boundary. It is the identity GitHub actually reports for this repo's
+    CodeRabbit status contexts (`creator.login: coderabbitai[bot]`).
+
+    A test whose subject IS the trust boundary must set ``identity`` explicitly —
+    to a forged value, or to ``""`` for the unresolvable case. Both directions are
+    pinned in ``test_a_forged_check_cannot_cancel_a_pending_reviewer`` and
+    ``test_an_unresolvable_identity_cannot_cancel_but_costs_only_the_grace``; if
+    this default ever silently became the *only* thing keeping the outage path
+    alive, those two would fail.
+    """
     detail = {
         "name": "CodeRabbit",
         "state": "SUCCESS",
         "bucket": "pass",
         "description": "",
         "startedAt": "2026-07-25T11:50:00Z",
+        "identity": "coderabbitai[bot]",
     }
     detail.update(overrides)
     return detail
@@ -1140,6 +1156,849 @@ def test_only_a_check_surface_outage_cancels_the_pending_block() -> None:
     )
     assert two_checks["blockers"] == []
     assert two_checks["pending"][0]["cancelled_by"] == "outage"
+
+
+def test_a_forged_check_cannot_cancel_a_pending_reviewer() -> None:
+    """#95: the demonstration from the issue, as a regression.
+
+    A same-repo PR's own workflow holds `checks: write`, so the PR under review
+    can create a check named anything with any description. Named
+    `coderabbit-shim` and described `Review rate limited`, it used to be read as
+    the configured reviewer announcing an outage — which cancelled the REAL
+    reviewer's pending block and opened the merge gate mid-review.
+
+    The forged row is still REPORTED (an operator wants to see it) but may not
+    cancel, because its creator is `github-actions`: a workflow's GITHUB_TOKEN
+    cannot authenticate as the reviewer's app.
+    """
+    pr_watch = _load_pr_watch()
+    real_pending = _bot_check(
+        name="CodeRabbit", state="PENDING", bucket="pending", startedAt=_minutes_ago(1)
+    )
+    forged = _bot_check(
+        name="coderabbit-shim",
+        description="Review rate limited",
+        # What GitHub records for any check a workflow creates — verified on this
+        # repo, whose Actions check carries `app.slug: github-actions`.
+        identity="github-actions",
+    )
+
+    forged_poll = pr_watch.summarize_review_bots([real_pending, forged], [], now=NOW)
+
+    assert forged_poll["blockers"] != [], "a forged check reopened #95"
+    assert forged_poll["pending"][0]["cancelled_by"] is None
+    reported = [e for e in forged_poll["unavailable"] if e["surface"] == "check"]
+    assert reported[0]["where"] == "coderabbit-shim"
+    assert reported[0]["trusted"] is False
+    assert reported[0]["identity"] == "github-actions"
+
+    # THE POSITIVE CONTROL. Identical fixture, real creator identity — the cancel
+    # still works, so the assertions above are evidence about the trust boundary
+    # and not about a fixture that could never cancel anything. Deleting the
+    # identity gate makes this pass and the block above fail; breaking the outage
+    # path entirely makes this fail.
+    genuine_poll = pr_watch.summarize_review_bots(
+        [real_pending, _bot_check(name="CodeRabbit / stale", description="Review rate limited")],
+        [],
+        now=NOW,
+    )
+    assert genuine_poll["blockers"] == []
+    assert genuine_poll["pending"][0]["cancelled_by"] == "outage"
+    assert [e for e in genuine_poll["unavailable"] if e["surface"] == "check"][0][
+        "trusted"
+    ] is True
+
+
+def test_an_unresolvable_identity_cannot_cancel_but_costs_only_the_grace() -> None:
+    """An empty identity is untrusted, and the cost of that is BOUNDED (#95).
+
+    This is the case that decides whether requiring identity is safe as a
+    default: an old `gh` without `--slurp`, a missing token, a rate-limited API
+    call. All of them resolve no identity, and the answer must not be a wedge.
+
+    Two shapes, both bounded — which is the argument for shipping the gate on by
+    default rather than behind an opt-in:
+
+    - a TERMINAL outage row (#23's own case, an outage on an otherwise SUCCESS
+      context) creates no pending entry at all, so an unresolved identity costs
+      exactly nothing.
+    - a NON-TERMINAL one blocks, then ages out at the grace bound like any other
+      pending check. It cannot block forever.
+    """
+    pr_watch = _load_pr_watch()
+
+    # #23's shape: the outage is the bot's ONLY row, and it is terminal.
+    terminal = pr_watch.summarize_review_bots(
+        [_bot_check(description="Review rate limited", identity="")], [], now=NOW
+    )
+    assert terminal["blockers"] == []
+    assert terminal["pending"] == []
+    assert terminal["unavailable"][0]["trusted"] is False
+
+    # A pending row with no resolvable identity blocks while young…
+    young = pr_watch.summarize_review_bots(
+        [
+            _bot_check(
+                state="PENDING",
+                bucket="pending",
+                description="Review rate limited",
+                startedAt=_minutes_ago(1),
+                identity="",
+            )
+        ],
+        [],
+        now=NOW,
+    )
+    assert young["blockers"] != []
+
+    # …and ages out on its own once past the grace bound, so the worst an
+    # unresolvable identity can do is delay a merge by the grace window.
+    aged = pr_watch.summarize_review_bots(
+        [
+            _bot_check(
+                state="PENDING",
+                bucket="pending",
+                description="Review rate limited",
+                startedAt=_minutes_ago(1),
+                identity="",
+            )
+        ],
+        [],
+        now=NOW,
+        grace_minutes=15.0,
+        pending_since={"coderabbit": _minutes_ago(45)},
+    )
+    assert aged["blockers"] == []
+    assert aged["pending"][0]["cancelled_by"] == "grace"
+
+
+def test_a_trusted_identity_is_matched_exactly_never_by_prefix() -> None:
+    """The #95 fix must not re-import the defect one namespace over.
+
+    A substring/prefix rule on the identity would let `coderabbitai-evil` speak
+    for CodeRabbit, which is precisely what an unanchored check-NAME match let
+    `coderabbit-shim` do.
+    """
+    pr_watch = _load_pr_watch()
+    bots = ("coderabbit",)
+
+    # Both namespaces the real reviewer can appear under: an app slug on a check
+    # run, a `[bot]` login on a status context.
+    assert pr_watch._match_bot_identity("coderabbitai", bots) == "coderabbit"
+    assert pr_watch._match_bot_identity("coderabbitai[bot]", bots) == "coderabbit"
+    assert pr_watch._match_bot_identity("CodeRabbitAI[bot]", bots) == "coderabbit"
+    assert pr_watch._match_bot_identity("coderabbit", bots) == "coderabbit"
+
+    for forged in (
+        "coderabbitai-evil",
+        "coderabbit-shim",
+        "xcoderabbitai",
+        "github-actions",
+        "",
+        "[bot]",
+    ):
+        assert pr_watch._match_bot_identity(forged, bots) is None, forged
+
+    # An extra slug reaches matching only when configured — never inferred.
+    assert pr_watch._match_bot_identity("reviewer-app", bots) is None
+    assert (
+        pr_watch._match_bot_identity(
+            "reviewer-app", bots, app_slugs={"coderabbit": frozenset({"reviewer-app"})}
+        )
+        == "coderabbit"
+    )
+
+
+def test_a_bot_listed_only_by_its_bot_login_is_still_trusted_as_an_app_slug() -> None:
+    """The two identity namespaces spell the same service differently (#95).
+
+    A status context reports `creator.login: coderabbitai[bot]`; the same service
+    is `coderabbitai` as a check run's `app.slug`. An adopter who enumerated only
+    the login form must not silently lose outage detection on the check-run
+    surface — so `_trusted_bot_identities` admits each configured entry in its
+    `[bot]`-stripped spelling too.
+
+    This is invisible under the SHIPPED config, which happens to list both forms,
+    and it was a mutation survivor for exactly that reason: the property was real,
+    the default config made it redundant, and no test reached the case where it
+    matters.
+    """
+    pr_watch = _load_pr_watch()
+    bots = ("coderabbit",)
+    # An adopter who wrote only the `[bot]` login.
+    login_only = {"coderabbit": frozenset({"somereviewer[bot]"})}
+
+    assert {"coderabbit", "somereviewer", "somereviewer[bot]"} <= pr_watch._trusted_bot_identities(
+        "coderabbit", aliases=login_only, app_slugs={}
+    )
+    # The app-slug spelling of the login they DID write is trusted…
+    assert (
+        pr_watch._match_bot_identity("somereviewer", bots, aliases=login_only, app_slugs={})
+        == "coderabbit"
+    )
+    # …and stripping never invents an identity they did not write.
+    assert (
+        pr_watch._match_bot_identity("somereviewer-evil", bots, aliases=login_only, app_slugs={})
+        is None
+    )
+    assert (
+        pr_watch._match_bot_identity("otherreviewer", bots, aliases=login_only, app_slugs={})
+        is None
+    )
+
+
+def test_the_render_says_an_untrusted_outage_did_not_cancel_anything() -> None:
+    """A reported-but-untrusted outage must not read like a normal one (#95).
+
+    Both entries carry the same `reason`, so without this the operator sees the
+    identical "review unavailable" line whether the outage cancelled the pending
+    block or was ignored — and the difference is the whole point of the gate.
+    """
+    pr_watch = _load_pr_watch()
+    forged = pr_watch.build_report(
+        _green_view(),
+        [],
+        set(),
+        check_details=[
+            _bot_check(name="CodeRabbit", state="PENDING", bucket="pending", startedAt=_minutes_ago(1)),
+            _bot_check(
+                name="coderabbit-shim",
+                description="Review rate limited",
+                identity="github-actions",
+            ),
+        ],
+        now=NOW,
+    )
+    forged_text = pr_watch.render(forged)
+
+    assert "does NOT cancel a pending review (#95)" in forged_text
+    assert "github-actions" in forged_text
+    assert "review.bot_app_slugs" in forged_text
+
+    # The positive control: a genuine outage keeps the plain wording, so the
+    # assertions above are about trust and not about any outage line at all.
+    genuine = pr_watch.render(
+        pr_watch.build_report(
+            _green_view(),
+            [],
+            set(),
+            check_details=[_bot_check(description="Review rate limited")],
+            now=NOW,
+        )
+    )
+    assert "review unavailable" in genuine
+    assert "does NOT cancel" not in genuine
+
+
+def test_the_newest_posting_owns_a_status_context_identity() -> None:
+    """`/commits/{sha}/statuses` returns history, and only the latest row counts.
+
+    A context can be posted to repeatedly — this repo's own head carries three
+    `CodeRabbit` rows. If an older row could supply the identity, a forged latest
+    posting would inherit the real reviewer's identity from history and its
+    description would cancel under a trusted name. That is the fail-open
+    direction, so newest wins, computed from `created_at` rather than assumed
+    from response order.
+    """
+    pr_watch = _load_pr_watch()
+    # Deliberately NOT newest-first, to prove ordering is computed.
+    history = [
+        {
+            "context": "CodeRabbit",
+            "created_at": "2026-08-10T11:00:00Z",
+            "id": 1,
+            "creator": {"login": "coderabbitai[bot]"},
+        },
+        {
+            "context": "CodeRabbit",
+            "created_at": "2026-08-10T12:00:00Z",
+            "id": 3,
+            "creator": {"login": "github-actions[bot]"},
+        },
+        {
+            "context": "CodeRabbit",
+            "created_at": "2026-08-10T11:30:00Z",
+            "id": 2,
+            "creator": {"login": "coderabbitai[bot]"},
+        },
+    ]
+
+    assert pr_watch._newest_status_creators(history) == {"CodeRabbit": "github-actions[bot]"}
+
+    # Reversing the input cannot change the answer.
+    assert pr_watch._newest_status_creators(list(reversed(history))) == {
+        "CodeRabbit": "github-actions[bot]"
+    }
+
+    # Same second: the monotonic id breaks the tie. The two rows are ordered
+    # OPPOSITELY by id and by login on purpose — higher id is "a", higher login is
+    # "b" — so only an implementation that really consults the id can return "a".
+    # An earlier version of this fixture had id and login agreeing ("b" both
+    # ways), which meant replacing the id with a constant passed the whole suite:
+    # the property was named in the comment above and pinned by nothing.
+    same_second = [
+        {"context": "c", "created_at": "2026-08-10T12:00:00Z", "id": 9, "creator": {"login": "a"}},
+        {"context": "c", "created_at": "2026-08-10T12:00:00Z", "id": 4, "creator": {"login": "b"}},
+    ]
+    assert pr_watch._newest_status_creators(same_second) == {"c": "a"}
+
+    # A malformed row cannot crash the resolver.
+    assert pr_watch._newest_status_creators(
+        ["not-a-dict", {"context": ""}, {"context": "c", "creator": "nope"}]
+    ) == {"c": ""}
+
+    # A NEWER malformed row does replace an older good identity, and that is the
+    # intended direction: eviction here can only downgrade a context to
+    # untrusted, never forge a trusted one. Stated as a test rather than a
+    # comment because the safety of the whole helper rests on which way this
+    # goes — resolving to the older row's identity is the fail-open shape
+    # `_newest_status_creators` exists to prevent.
+    assert pr_watch._newest_status_creators(
+        [
+            {
+                "context": "c",
+                "created_at": "2026-08-10T11:00:00Z",
+                "id": 1,
+                "creator": {"login": "coderabbitai[bot]"},
+            },
+            {"context": "c", "created_at": "2026-08-10T12:00:00Z", "id": 2, "creator": "nope"},
+        ]
+    ) == {"c": ""}
+
+
+def test_a_status_rows_identity_comes_from_the_creator_join() -> None:
+    """The combined-status endpoint has no `creator`, so identity is joined in.
+
+    Verified against this repo: `/commits/{sha}/status` returns only
+    `avatar_url, context, created_at, description, id, node_id, state,
+    target_url, updated_at, url` — no creator anywhere. A check RUN needs no join
+    because it carries its own `app`.
+    """
+    pr_watch = _load_pr_watch()
+    check_runs = [
+        {
+            "name": "toolkit",
+            "status": "completed",
+            "conclusion": "success",
+            "app": {"slug": "github-actions"},
+        }
+    ]
+    statuses = [{"context": "CodeRabbit", "state": "success", "description": "Review completed"}]
+
+    joined = pr_watch._rest_check_rows(
+        check_runs, statuses, status_creators={"CodeRabbit": "coderabbitai[bot]"}
+    )
+    assert joined[0]["identity"] == "github-actions"
+    assert joined[1]["identity"] == "coderabbitai[bot]"
+
+    # No join performed (the identity read was skipped or failed) -> untrusted,
+    # never a silent trust.
+    unjoined = pr_watch._rest_check_rows(check_runs, statuses)
+    assert unjoined[1]["identity"] == ""
+    # …but the check run's own identity does not depend on the join at all.
+    assert unjoined[0]["identity"] == "github-actions"
+
+
+def test_an_ambiguous_check_name_resolves_to_no_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two check runs sharing a name must collapse to no identity (#95).
+
+    `gh pr checks` rows carry nothing to tell same-named runs apart, so the join
+    is by name. Picking the trusted one would be the fail-open guess: a forged
+    run named exactly `CodeRabbit` would lend its description the real app's
+    identity. An attacker can always force this state, so it has to be the
+    harmless one.
+    """
+    pr_watch = _load_pr_watch()
+
+    def fake_pages(path: str):
+        if "check-runs" in path:
+            return [
+                {
+                    "check_runs": [
+                        {"name": "CodeRabbit", "app": {"slug": "coderabbitai"}},
+                        {"name": "CodeRabbit", "app": {"slug": "github-actions"}},
+                        {"name": "toolkit", "app": {"slug": "github-actions"}},
+                    ]
+                }
+            ]
+        return [[]]
+
+    monkeypatch.setattr(pr_watch, "_gh_api_pages", fake_pages)
+
+    resolved = pr_watch._gh_identity_map("deadbeef")
+
+    assert "CodeRabbit" not in resolved
+    # An unambiguous name in the same payload still resolves — otherwise this
+    # test would pass against a function that returned {} unconditionally.
+    assert resolved["toolkit"] == "github-actions"
+
+
+def test_a_gh_spawn_failure_in_the_identity_read_cannot_crash_the_poll(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`_gh` translates only TimeoutExpired, so the identity read must catch more.
+
+    `fetch_check_details` is documented as never raising and `main` calls it
+    OUTSIDE its try deliberately. An `OSError` or a non-timeout
+    `SubprocessError` escaping the identity read would therefore crash the poll
+    *before* `persist_poll` — no state written, and every later poll repeating it.
+    A wedge from one failed subprocess spawn.
+
+    Each raiser below escapes `_gh` untranslated today, which is what makes this
+    a real path rather than a defensive nicety.
+    """
+    pr_watch = _load_pr_watch()
+
+    for raiser in (
+        FileNotFoundError("gh: No such file or directory"),
+        OSError(12, "Cannot allocate memory"),
+        subprocess.SubprocessError("spawn failed"),
+        subprocess.CalledProcessError(1, "gh"),
+    ):
+
+        def boom(*args, _exc=raiser, **kwargs):
+            raise _exc
+
+        monkeypatch.setattr(pr_watch, "_gh", boom)
+
+        # Degrades to no pages, so no identity — never a raise.
+        assert pr_watch._gh_api_pages("repos/x/y/commits/abc/check-runs") == []
+        assert pr_watch._gh_identity_map("abc") == {}
+
+    # A positive control: with `_gh` working, pages really do come back — so the
+    # assertions above are about the guard and not about a function that returns
+    # {} regardless.
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh",
+        lambda *a, **k: '[{"check_runs": [{"name": "toolkit", "app": {"slug": "github-actions"}}]}]',
+    )
+    assert pr_watch._gh_identity_map("abc") == {"toolkit": "github-actions"}
+
+    # The SECOND `_gh` call on this path: resolving the head sha when the caller
+    # supplied none. It goes through `_gh_json`, whose own except clause needs the
+    # same class — reached end-to-end through `fetch_check_details` rather than by
+    # calling the helper, because that is the contract that must not raise.
+    class _Result:
+        def __init__(self) -> None:
+            # A bot-named row WITH an outage marker, so `_outage_row_present` is
+            # true and the identity read is actually attempted.
+            self.stdout = (
+                '[{"name":"CodeRabbit","state":"SUCCESS","bucket":"pass",'
+                '"description":"Review rate limited"}]'
+            )
+            self.returncode = 0
+            self.stderr = ""
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", lambda *a, **k: _Result())
+
+    def _gh_boom(*a, **k):
+        raise OSError("gh vanished between backend resolution and this call")
+
+    monkeypatch.setattr(pr_watch, "_gh", _gh_boom)
+
+    # No `head_sha=`, so the sha fallback runs and raises inside `_gh_json`.
+    details = pr_watch.fetch_check_details(1)
+
+    assert details.signal == "ok"
+    assert details.rows[0]["identity"] == ""
+    # …and the unresolved identity means the outage cannot cancel anything.
+    assert (
+        pr_watch.summarize_review_bots(details.rows, [], now=NOW)["unavailable"][0]["trusted"]
+        is False
+    )
+
+
+def test_a_failed_identity_read_keeps_the_rows_it_already_had(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transient failure in the identity read must not blank the bot signal.
+
+    The rows are already fetched and already carry the outage marker by the time
+    the identity read runs. If a 403 or a network blip on that third call
+    discarded them, #19's and #23's guards would go dark for the whole poll — the
+    same "silent bypass" shape as the wrong-reader defect, reached by ordinary
+    flakiness rather than by a bug. Degrading to no-identity keeps every row and
+    costs at most the grace window.
+
+    Also the transport-parity check: `_gh_api_pages` already swallows these
+    classes and returns `{}` while keeping its rows, and this file's own doctrine
+    says the REST path's job is parity with `gh`.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    calls: list[str] = []
+
+    def _get(url: str, token: str, **_kw):
+        calls.append(url)
+        if "/statuses?" in url:
+            # Transient, and specifically NOT a shape problem — the failure the
+            # wrong-reader fix cannot help with.
+            raise RuntimeError("GitHub API GET … returned 403 (secondary rate limit)")
+        if "check-runs" in url:
+            return {"total_count": 0, "check_runs": []}, None
+        if "/status?" in url:
+            return {
+                "state": "success",
+                "statuses": [
+                    {
+                        "context": "CodeRabbit",
+                        "state": "success",
+                        "description": "Review rate limited",
+                    }
+                ],
+            }, None
+        if "pulls/5" in url:
+            return {"head": {"sha": "abc123"}}, None
+        raise AssertionError(f"unrouted GET {url}")
+
+    monkeypatch.setattr(pr_watch, "_http_get", _get)
+
+    details = pr_watch.fetch_check_details(5, bots=("coderabbit",))
+
+    # The identity read was attempted and failed…
+    assert any("/statuses?" in url for url in calls), calls
+    # …and the row survived it, rather than the signal going dark.
+    assert details.signal == "ok"
+    assert [row["name"] for row in details.rows] == ["CodeRabbit"]
+    assert details.rows[0]["description"] == "Review rate limited"
+
+    # The outage is still REPORTED, just not trusted — so the panel signal
+    # survives while the cancel does not.
+    bots = pr_watch.summarize_review_bots(
+        details.rows, [], now=NOW, bots=("coderabbit",), signal=details.signal
+    )
+    assert bots["unavailable"][0]["trusted"] is False
+    assert bots["unavailable"][0]["identity"] == ""
+
+
+def test_the_real_gh_head_sha_drives_the_head_move_guard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exercise `_gh_head_sha` ITSELF, not a stand-in for it.
+
+    The head-move guard's other test patches `_gh_head_sha` to canned strings, so
+    hardwiring its real body to a constant left the entire suite green. That is the
+    same "mocked the helper under test" shape that made the wrong-reader CRITICAL
+    invisible while 500+ new test lines were already in the diff — so the guard
+    against a bypass had an illusory safety net of exactly the kind this loop keeps
+    finding.
+
+    Here only `subprocess.run` is stubbed, at the process boundary. `_gh`,
+    `_gh_json` and `_gh_head_sha` all run for real, and both guard directions are
+    driven end-to-end through `fetch_check_details`.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_resolve_backend", lambda: ("gh", None))
+    monkeypatch.setattr(
+        pr_watch, "_gh_identity_map", lambda _sha: {"CodeRabbit": "coderabbitai[bot]"}
+    )
+
+    class _Result:
+        def __init__(self, stdout: str) -> None:
+            self.stdout = stdout
+            self.returncode = 0
+            self.stderr = ""
+
+    head = {"sha": "abc123"}
+    seen: list[list[str]] = []
+
+    def _run(cmd, **_kwargs):
+        seen.append(list(cmd))
+        if "checks" in cmd:
+            return _Result(
+                '[{"name":"CodeRabbit","state":"SUCCESS","bucket":"pass",'
+                '"description":"Review rate limited"}]'
+            )
+        if "view" in cmd:
+            return _Result(json.dumps({"headRefOid": head["sha"]}))
+        raise AssertionError(f"unexpected gh call: {cmd}")
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", _run)
+
+    # The real helper parses `headRefOid` — the success path nothing reached.
+    assert pr_watch._gh_head_sha(5) == "abc123"
+
+    # Head STEADY: the real helper agrees with the supplied sha, identity stands.
+    steady = pr_watch.fetch_check_details(5, bots=("coderabbit",), head_sha="abc123")
+    assert steady.rows[0]["identity"] == "coderabbitai[bot]"
+    assert any("view" in cmd for cmd in seen), seen
+
+    # Head MOVED: the real helper reports a different sha, identity is dropped.
+    head["sha"] = "def456"
+    moved = pr_watch.fetch_check_details(5, bots=("coderabbit",), head_sha="abc123")
+    assert moved.rows[0]["identity"] == ""
+
+    # And with no `head_sha` supplied, the real helper is what resolves it, so a
+    # steady head still resolves identity through two live reads of the same sha.
+    resolved = pr_watch.fetch_check_details(5, bots=("coderabbit",))
+    assert resolved.rows[0]["identity"] == "coderabbitai[bot]"
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        RuntimeError("gh failed"),
+        OSError("gh is not installed"),
+        subprocess.SubprocessError("spawn failed"),
+        json.JSONDecodeError("bad", "doc", 0),
+        AttributeError("None has no attribute get"),
+    ],
+)
+def test_gh_head_sha_swallows_every_class_it_declares(
+    monkeypatch: pytest.MonkeyPatch, exc: Exception
+) -> None:
+    """Each class in `_gh_head_sha`'s except tuple must actually be exercised.
+
+    Trimming that tuple to `OSError` alone left the suite green, so the breadth was
+    documented and unverified. It matters because this helper is reached from
+    `fetch_check_details`, which is documented as never raising and whose caller in
+    `main` sits outside the try — an escaping class crashes the poll before
+    `persist_poll` and wedges every later poll.
+    """
+    pr_watch = _load_pr_watch()
+
+    def _boom(*_a, **_k):
+        raise exc
+
+    monkeypatch.setattr(pr_watch, "_gh", _boom)
+
+    assert pr_watch._gh_head_sha(5) == ""
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        RuntimeError("returned list, expected a JSON object"),
+        OSError("connection reset"),
+        KeyError("statuses"),
+        ValueError("bad json"),
+        AttributeError("NoneType has no attribute get"),
+        TypeError("string indices must be integers"),
+    ],
+)
+def test_the_rest_identity_read_swallows_every_class_it_declares(
+    monkeypatch: pytest.MonkeyPatch, exc: Exception
+) -> None:
+    """Same for the REST inner try: trimming it to `RuntimeError` stayed green.
+
+    Every class here must leave the already-fetched rows intact rather than
+    blanking the bot signal, which is the whole point of that inner try.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+
+    def _get(url: str, token: str, **_kw):
+        if "/statuses?" in url:
+            raise exc
+        if "check-runs" in url:
+            return {"total_count": 0, "check_runs": []}, None
+        if "/status?" in url:
+            return {
+                "state": "success",
+                "statuses": [
+                    {
+                        "context": "CodeRabbit",
+                        "state": "success",
+                        "description": "Review rate limited",
+                    }
+                ],
+            }, None
+        if "pulls/5" in url:
+            return {"head": {"sha": "abc123"}}, None
+        raise AssertionError(f"unrouted GET {url}")
+
+    monkeypatch.setattr(pr_watch, "_http_get", _get)
+
+    details = pr_watch.fetch_check_details(5, bots=("coderabbit",))
+
+    assert details.signal == "ok"
+    assert [row["name"] for row in details.rows] == ["CodeRabbit"]
+    assert details.rows[0]["identity"] == ""
+
+
+def test_a_head_move_during_the_gh_identity_read_drops_every_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`gh pr checks` reports the CURRENT head and carries no sha (#95 TOCTOU).
+
+    Identities are resolved for a specific sha, so a push landing between the two
+    calls leaves rows from one commit joined BY NAME to identities from another. A
+    same-repo PR can push — the capability #95 already assumes — so a forged row
+    on the new commit could otherwise inherit the real reviewer's identity from a
+    same-named check on the old one, bypassing this PR's own guard.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_resolve_backend", lambda: ("gh", None))
+
+    class _Result:
+        def __init__(self) -> None:
+            self.stdout = (
+                '[{"name":"CodeRabbit","state":"SUCCESS","bucket":"pass",'
+                '"description":"Review rate limited"}]'
+            )
+            self.returncode = 0
+            self.stderr = ""
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", lambda *a, **k: _Result())
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh_identity_map",
+        lambda _sha: {"CodeRabbit": "coderabbitai[bot]"},
+    )
+
+    # Head UNCHANGED: the identity stands and the genuine outage can cancel.
+    monkeypatch.setattr(pr_watch, "_gh_head_sha", lambda _pr: "abc123")
+    steady = pr_watch.fetch_check_details(5, bots=("coderabbit",), head_sha="abc123")
+    assert steady.rows[0]["identity"] == "coderabbitai[bot]"
+
+    # Head MOVED between the rows read and the identity read: every identity is
+    # dropped, so nothing can cancel on a cross-commit name join.
+    monkeypatch.setattr(pr_watch, "_gh_head_sha", lambda _pr: "def456")
+    moved = pr_watch.fetch_check_details(5, bots=("coderabbit",), head_sha="abc123")
+    assert moved.rows[0]["identity"] == ""
+    assert (
+        pr_watch.summarize_review_bots(
+            moved.rows, [], now=NOW, bots=("coderabbit",)
+        )["unavailable"][0]["trusted"]
+        is False
+    )
+
+
+def test_the_gh_backend_resolves_a_status_contexts_creator_across_pages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The `gh` backend's STATUS-context identity path, which is the one that
+    matters most on this repo and was pinned by nothing.
+
+    CodeRabbit posts a status context here, not a check run — verified against
+    this repo's own PR heads. So on the default backend the reviewer's identity
+    arrives exclusively through the plural-statuses read and its page-list
+    flattening. Emptying that flattening left the whole suite green while every
+    genuine outage silently became untrusted: fail-closed, so bounded, but it
+    disables #23's acceleration for the primary reviewer on the default backend.
+
+    The two endpoints' `--paginate --slurp` shapes differ and both are exercised
+    here: check-runs yields page OBJECTS, statuses yields page LISTS. Two status
+    pages, so a flattening that only reads the first is caught too.
+    """
+    pr_watch = _load_pr_watch()
+
+    def fake_pages(path: str):
+        if "check-runs" in path:
+            return [{"check_runs": [{"name": "toolkit", "app": {"slug": "github-actions"}}]}]
+        return [
+            [
+                {
+                    "context": "CodeRabbit",
+                    "created_at": "2026-08-10T11:00:00Z",
+                    "id": 1,
+                    "creator": {"login": "coderabbitai[bot]"},
+                }
+            ],
+            [
+                {
+                    "context": "legacy/ci",
+                    "created_at": "2026-08-10T11:30:00Z",
+                    "id": 2,
+                    "creator": {"login": "some-ci[bot]"},
+                }
+            ],
+        ]
+
+    monkeypatch.setattr(pr_watch, "_gh_api_pages", fake_pages)
+
+    resolved = pr_watch._gh_identity_map("abc")
+
+    assert resolved["CodeRabbit"] == "coderabbitai[bot]"
+    # From the SECOND page, so a first-page-only flattening fails here.
+    assert resolved["legacy/ci"] == "some-ci[bot]"
+    # The check-run surface still resolves in the same call.
+    assert resolved["toolkit"] == "github-actions"
+
+    # End to end: that identity is what lets the real reviewer's outage cancel.
+    outage = pr_watch.summarize_review_bots(
+        [
+            _bot_check(
+                name="CodeRabbit",
+                description="Review rate limited",
+                identity=resolved["CodeRabbit"],
+            )
+        ],
+        [],
+        now=NOW,
+    )
+    assert outage["unavailable"][0]["trusted"] is True
+
+
+def test_identity_is_read_only_when_a_row_could_cancel_something() -> None:
+    """The lazy precondition: a healthy poll must not pay for the identity read.
+
+    Also the guard against the read being skipped when it DOES matter — the two
+    directions are one predicate, so they are pinned together.
+    """
+    pr_watch = _load_pr_watch()
+    bots = ("coderabbit",)
+
+    # Healthy reviewer, nothing to cancel.
+    assert not pr_watch._outage_row_present([_bot_check()], bots)
+    assert not pr_watch._outage_row_present(
+        [_bot_check(state="PENDING", bucket="pending")], bots
+    )
+    # A non-bot check carrying outage-shaped text is not the reviewer's outage.
+    assert not pr_watch._outage_row_present(
+        [{"name": "toolkit", "description": "Review rate limited"}], bots
+    )
+    # A bot-named row with an outage marker is exactly the case that needs it —
+    # including the forged name, which is the whole point: the fetch must happen
+    # so the identity can be judged.
+    assert pr_watch._outage_row_present(
+        [_bot_check(description="Review rate limited")], bots
+    )
+    assert pr_watch._outage_row_present(
+        [{"name": "coderabbit-shim", "description": "Review rate limited"}], bots
+    )
+
+
+def test_configured_bot_app_slugs_reach_runtime_matching(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`review.bot_app_slugs` must reach the outage decision, not just parse."""
+    _load_pr_watch()
+    kitconfig = sys.modules["kitconfig"]
+    monkeypatch.setattr(
+        kitconfig,
+        "load_config",
+        lambda *args, **kwargs: {
+            "review": {
+                "bots": ["otherbot"],
+                "bot_app_slugs": {"otherbot": ["otherbot-review-app"]},
+                "unavailable_markers": ["review offline"],
+            }
+        },
+    )
+
+    runtime = _load_pr_watch(pin_defaults=False)
+
+    assert {"otherbot": frozenset({"otherbot-review-app"})} == runtime._REVIEW_BOT_APP_SLUGS
+    outage = runtime.summarize_review_bots(
+        [
+            {
+                "name": "otherbot",
+                "state": "PENDING",
+                "bucket": "pending",
+                "description": "review offline",
+                "identity": "otherbot-review-app",
+                "startedAt": _minutes_ago(1),
+            }
+        ],
+        [],
+        now=NOW,
+    )
+    assert outage["unavailable"][0]["trusted"] is True
+    assert outage["blockers"] == []
 
 
 def test_a_non_reviewer_commenter_cannot_speak_for_the_bot() -> None:
@@ -1398,8 +2257,11 @@ def test_check_detail_fetch_never_raises_and_degrades_to_no_signal(
         "run",
         lambda *a, **k: _Result('[{"name":"CodeRabbit","state":"PENDING"}]', 8),
     )
+    # `identity` is present on every row even on a healthy poll where the #95
+    # identity read never ran — the key's presence must not depend on that, or a
+    # caller indexing it raises on the common path.
     assert pr_watch.fetch_check_details(1) == (
-        [{"name": "CodeRabbit", "state": "PENDING"}],
+        [{"name": "CodeRabbit", "state": "PENDING", "identity": ""}],
         "ok",
     )
 
@@ -1957,6 +2819,7 @@ def test_missing_config_falls_back_to_defaults_silently(
         True,
         pr_watch._DEFAULT_REVIEW_BOTS,
         pr_watch._DEFAULT_REVIEW_BOT_AUTHOR_ALIASES,
+        pr_watch._DEFAULT_REVIEW_BOT_APP_SLUGS,
         pr_watch._DEFAULT_BOT_PENDING_GRACE_MINUTES,
         pr_watch._DEFAULT_SETTLE_GRACE_MINUTES,
     )
@@ -2101,6 +2964,10 @@ def test_every_config_derived_global_is_pinned() -> None:
         "_REVIEW_BOT_AUTHOR_ALIASES": (
             {"zzz-sentinel-bot": frozenset({"zzz-sentinel-alias"})},
             "bot_author_aliases",
+        ),
+        "_REVIEW_BOT_APP_SLUGS": (
+            {"zzz-sentinel-bot": frozenset({"zzz-sentinel-slug"})},
+            "bot_app_slugs",
         ),
         "_BOT_PENDING_GRACE_MINUTES": (-99999.0, "bot_pending_grace_minutes"),
         "_SETTLE_GRACE_MINUTES": (-99998.0, "settle_grace_minutes"),
@@ -3221,6 +4088,9 @@ def test_rest_check_rows_carry_the_fields_both_guards_read() -> None:
         "bucket": "pass",
         "description": "Review rate limited",
         "startedAt": "2026-07-25T11:50:00Z",
+        # No `app` on the input run, so no identity to carry — untrusted, which is
+        # the fail-closed direction (#95).
+        "identity": "",
     }
     # A StatusContext gets NO timestamp, matching what the `gh` path effectively
     # provides (gh reports the zero time, which `_age_minutes` rejects). Passing
@@ -3366,6 +4236,89 @@ def test_fetch_check_details_on_rest_never_raises_and_says_so_once(
     assert pr_watch.fetch_check_details(1) == ([], "unavailable")
 
 
+def test_the_rest_identity_read_uses_the_bare_array_reader_for_plural_statuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The #95 identity read must survive the shape of the endpoint it calls.
+
+    Two endpoints one character apart, with different shapes:
+
+      ``commits/{sha}/status``   -> ``{"state": …, "statuses": [...]}``  wrapped
+      ``commits/{sha}/statuses`` -> ``[ … ]``                            bare array
+
+    Reading the plural one with `_http_get_all_wrapped` raises ("returned list,
+    expected a JSON object"), which `fetch_check_details`'s own handler degrades to
+    ``([], "unavailable")`` — **discarding every row**, not just the identities.
+    That switches #19's and #23's guards off in precisely the case they exist
+    for, an outage-marked row, and `record_review` names that state as the silent
+    bypass: no rows means no blockers means no refusal.
+
+    Driven through the real `_http_get` boundary on purpose. The sibling test
+    below mocks `_http_get_all_wrapped` itself, so it exercises the reader's
+    caller and can never see a shape mismatch — which is why this defect reached
+    review with 500+ new test lines already in the diff.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    # Fragments chosen not to overlap: "/status?" cannot match "/statuses?...",
+    # because the plural has an "e" where the singular has "?".
+    seen = _route_http(
+        pr_watch,
+        monkeypatch,
+        {
+            "check-runs": {
+                "total_count": 1,
+                "check_runs": [
+                    {
+                        "name": "toolkit",
+                        "status": "completed",
+                        "conclusion": "success",
+                        "app": {"slug": "github-actions"},
+                    }
+                ],
+            },
+            # The #23 shape: the outage announced only as a status description.
+            "/status?": {
+                "state": "success",
+                "statuses": [
+                    {
+                        "context": "CodeRabbit",
+                        "state": "success",
+                        "description": "Review rate limited",
+                    }
+                ],
+            },
+            # The plural endpoint — a BARE ARRAY, and the only source of `creator`.
+            "/statuses?": [
+                {
+                    "context": "CodeRabbit",
+                    "state": "success",
+                    "description": "Review rate limited",
+                    "created_at": "2026-08-10T12:15:00Z",
+                    "id": 51945692384,
+                    "creator": {"login": "coderabbitai[bot]", "type": "Bot"},
+                }
+            ],
+            "pulls/5": {"head": {"sha": "abc123"}},
+        },
+    )
+
+    details = pr_watch.fetch_check_details(5, bots=("coderabbit",))
+
+    # The rows survive at all — this is what the wrong reader destroyed.
+    assert details.signal == "ok"
+    assert [row["name"] for row in details.rows] == ["toolkit", "CodeRabbit"]
+    assert any("/statuses?per_page=100" in url for url in seen), seen
+
+    # …and the genuine outage resolves to the real reviewer, so it still cancels.
+    bots = pr_watch.summarize_review_bots(
+        details.rows, [], now=NOW, bots=("coderabbit",), signal=details.signal
+    )
+    outage = [e for e in bots["unavailable"] if e["surface"] == "check"]
+    assert outage[0]["identity"] == "coderabbitai[bot]"
+    assert outage[0]["trusted"] is True
+
+
 def test_fetch_check_details_on_rest_returns_rows_with_a_real_signal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3375,6 +4328,13 @@ def test_fetch_check_details_on_rest_returns_rows_with_a_real_signal(
         pr_watch,
         monkeypatch,
         {
+            # ORDER MATTERS: `_route_http` returns the first fragment that is a
+            # substring of the URL, and "commits/abc123/status" is a substring of
+            # ".../statuses?per_page=100" too. The plural route must come first or
+            # it never wins. This row's check carries an outage marker, so the #95
+            # identity read fires and really does request the plural endpoint —
+            # which needs its own BARE ARRAY body.
+            "commits/abc123/statuses": [],
             "commits/abc123/status": {"statuses": []},
             "pulls/5": {"head": {"sha": "abc123"}},
         },
