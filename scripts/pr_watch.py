@@ -2884,9 +2884,13 @@ def build_report(
     if not review_evidence["valid"]:
         merge_blockers.append("independent review evidence is missing for current head")
     if not rollup_settled:
-        # One prefix, two reasons, because the causes are genuinely different and
-        # a reader who cannot tell them apart cannot act: "no baseline" clears on
-        # the next poll, "still stabilising" clears with time.
+        # One prefix, two wordings, because a reader who cannot tell them apart
+        # cannot act: "no baseline" means no clock is running, "stable Nm of Mm"
+        # means one is. NEITHER is a promise about when. Both end when the rollup
+        # has held still for the grace, and "no baseline" RECURS on every poll
+        # that restarts the clock rather than appearing once — this comment said
+        # it "clears on the next poll" for four commits, which is false in
+        # exactly the case the guard exists for.
         merge_blockers.append(
             "check rollup has not settled for current head "
             + (
