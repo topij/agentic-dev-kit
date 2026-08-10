@@ -4863,6 +4863,70 @@ def test_the_settle_baseline_rides_every_poll(
     assert pr_watch.load_state(9)["settle_since"] == state["settle_since"]
 
 
+def test_the_anchor_survives_a_real_poll_sequence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The clock must ACCUMULATE across polls, and start when the head was first
+    seen — not be re-minted each poll, and not be born already aged.
+
+    Two chained polls through the real `build_report` -> `persist_poll` ->
+    `load_state` -> `read_settle_since` path, because that loop is where the
+    value's meaning lives and no fixture-injected stamp exercises it. A review
+    lens found the whole ternary that decides the persisted anchor survives the
+    entire suite mutated in EITHER direction:
+
+    - always re-stamping with `now` makes the age never exceed one poll interval,
+      so the gate never opens — the permanent wedge `persist_poll`'s own comment
+      warns about, and nothing failed.
+    - minting the fresh stamp already backdated by the grace makes poll 2 settle
+      30 seconds after a push, which is #39 reopened, and nothing failed.
+
+    `test_the_settle_baseline_rides_every_poll` does not cover this: it asserts a
+    stamp round-trips through the file unchanged, which is a fact about the
+    writer, not about whether the value handed to it is the right anchor.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path)
+    view = _green_view(headRefOid="abc123")
+    receipt = {"head": "abc123", "source": "fallback:panel"}
+    first_seen = datetime(2026, 7, 25, 12, 0, tzinfo=timezone.utc)
+    grace = pr_watch._SETTLE_GRACE_MINUTES
+
+    def _poll(now: datetime) -> tuple[dict, dict]:
+        state = pr_watch.load_state(9)
+        report = pr_watch.build_report(
+            view,
+            [],
+            set(),
+            review_receipt=receipt,
+            check_details=pr_watch.CheckDetails([], "skipped"),
+            now=now,
+            prior_head=state.get("head"),
+            prior_max_total=int(state.get("max_total") or 0),
+            prior_settle_since=pr_watch.read_settle_since(state, view["headRefOid"]),
+        )
+        return report, pr_watch.persist_poll(9, report, set())
+
+    # Poll 1 — nothing on disk. The anchor is minted HERE, at `now`, un-aged.
+    first, state1 = _poll(first_seen)
+    assert first["mergeable"] is False, "a first poll has no baseline yet"
+    assert state1["settle_since"]["at"] == first_seen.isoformat().replace(
+        "+00:00", "Z"
+    ), "the fresh anchor was not stamped at the moment the head was first seen"
+
+    # Poll 2 — same head, same rollup, past the grace. The anchor must not move.
+    later = first_seen + timedelta(minutes=grace + 5)
+    second, state2 = _poll(later)
+    assert state2["settle_since"] == state1["settle_since"], (
+        "the anchor was re-minted, so the clock can never accumulate"
+    )
+    assert second["settle_age_minutes"] == pytest.approx(grace + 5), (
+        "age is measured from the first sighting, not from this poll"
+    )
+    assert second["rollup_settled"] is True
+    assert second["mergeable"] is True, "a genuinely settled rollup must merge"
+
+
 def test_a_settle_stamp_from_another_head_is_discarded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

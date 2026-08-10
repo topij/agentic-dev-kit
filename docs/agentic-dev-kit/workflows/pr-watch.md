@@ -53,11 +53,16 @@ Repeat until the report says **converged**:
    the check rollup to hold still before believing it is complete, because a
    partial rollup and a finished one report the same thing — a count, with no
    indication of how many checks are still coming. **Poll again rather than
-   working around it:** it clears on its own, either on the next poll (`no settle
-   baseline recorded` — a first run, or a state directory that was never written,
-   which a fresh clone reaches normally) or once the stated grace elapses
-   (`stable Nm of Mm`). It never blocks `converged`, so it cannot stall this loop
-   — only the merge that follows it.
+   working around it:** it clears on its own, with no intervention.
+
+   The two wordings say where you are, not which of two ways out you get.
+   `no settle baseline recorded` means no clock has started yet — a first run, or
+   a state directory that was never written, which a fresh clone reaches
+   normally; the poll that reports it is what starts one. `stable Nm of Mm` means
+   the clock is running. Both end the same way, when N reaches M, so the wait is
+   one poll plus `review.settle_grace_minutes` — **seeing the first wording
+   replaced by the second is progress, not resolution.** It never blocks
+   `converged`, so it cannot stall this loop — only the merge that follows it.
 
    `done` also appears in the report. It is a **legacy alias for `mergeable`**, kept
    so that an older `dev_session.sh` still gates on merge authorization. Prefer
