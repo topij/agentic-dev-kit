@@ -1430,16 +1430,39 @@ def test_the_newest_posting_owns_a_status_context_identity() -> None:
         "CodeRabbit": "github-actions[bot]"
     }
 
-    # Same second: the monotonic id breaks the tie.
+    # Same second: the monotonic id breaks the tie. The two rows are ordered
+    # OPPOSITELY by id and by login on purpose — higher id is "a", higher login is
+    # "b" — so only an implementation that really consults the id can return "a".
+    # An earlier version of this fixture had id and login agreeing ("b" both
+    # ways), which meant replacing the id with a constant passed the whole suite:
+    # the property was named in the comment above and pinned by nothing.
     same_second = [
-        {"context": "c", "created_at": "2026-08-10T12:00:00Z", "id": 9, "creator": {"login": "b"}},
-        {"context": "c", "created_at": "2026-08-10T12:00:00Z", "id": 4, "creator": {"login": "a"}},
+        {"context": "c", "created_at": "2026-08-10T12:00:00Z", "id": 9, "creator": {"login": "a"}},
+        {"context": "c", "created_at": "2026-08-10T12:00:00Z", "id": 4, "creator": {"login": "b"}},
     ]
-    assert pr_watch._newest_status_creators(same_second) == {"c": "b"}
+    assert pr_watch._newest_status_creators(same_second) == {"c": "a"}
 
-    # A malformed row cannot crash the resolver or evict a good one.
+    # A malformed row cannot crash the resolver.
     assert pr_watch._newest_status_creators(
         ["not-a-dict", {"context": ""}, {"context": "c", "creator": "nope"}]
+    ) == {"c": ""}
+
+    # A NEWER malformed row does replace an older good identity, and that is the
+    # intended direction: eviction here can only downgrade a context to
+    # untrusted, never forge a trusted one. Stated as a test rather than a
+    # comment because the safety of the whole helper rests on which way this
+    # goes — resolving to the older row's identity is the fail-open shape
+    # `_newest_status_creators` exists to prevent.
+    assert pr_watch._newest_status_creators(
+        [
+            {
+                "context": "c",
+                "created_at": "2026-08-10T11:00:00Z",
+                "id": 1,
+                "creator": {"login": "coderabbitai[bot]"},
+            },
+            {"context": "c", "created_at": "2026-08-10T12:00:00Z", "id": 2, "creator": "nope"},
+        ]
     ) == {"c": ""}
 
 
@@ -3891,6 +3914,89 @@ def test_fetch_check_details_on_rest_never_raises_and_says_so_once(
     assert pr_watch.fetch_check_details(1) == ([], "unavailable")
 
 
+def test_the_rest_identity_read_uses_the_bare_array_reader_for_plural_statuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The #95 identity read must survive the shape of the endpoint it calls.
+
+    Two endpoints one character apart, with different shapes:
+
+      ``commits/{sha}/status``   -> ``{"state": …, "statuses": [...]}``  wrapped
+      ``commits/{sha}/statuses`` -> ``[ … ]``                            bare array
+
+    Reading the plural one with `_http_get_all_wrapped` raises ("returned list,
+    expected a JSON object"), which `fetch_check_details`'s own handler degrades to
+    ``([], "unavailable")`` — **discarding every row**, not just the identities.
+    That switches #19's and #23's guards off in precisely the case they exist
+    for, an outage-marked row, and `record_review` names that state as the silent
+    bypass: no rows means no blockers means no refusal.
+
+    Driven through the real `_http_get` boundary on purpose. The sibling test
+    below mocks `_http_get_all_wrapped` itself, so it exercises the reader's
+    caller and can never see a shape mismatch — which is why this defect reached
+    review with 500+ new test lines already in the diff.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    # Fragments chosen not to overlap: "/status?" cannot match "/statuses?...",
+    # because the plural has an "e" where the singular has "?".
+    seen = _route_http(
+        pr_watch,
+        monkeypatch,
+        {
+            "check-runs": {
+                "total_count": 1,
+                "check_runs": [
+                    {
+                        "name": "toolkit",
+                        "status": "completed",
+                        "conclusion": "success",
+                        "app": {"slug": "github-actions"},
+                    }
+                ],
+            },
+            # The #23 shape: the outage announced only as a status description.
+            "/status?": {
+                "state": "success",
+                "statuses": [
+                    {
+                        "context": "CodeRabbit",
+                        "state": "success",
+                        "description": "Review rate limited",
+                    }
+                ],
+            },
+            # The plural endpoint — a BARE ARRAY, and the only source of `creator`.
+            "/statuses?": [
+                {
+                    "context": "CodeRabbit",
+                    "state": "success",
+                    "description": "Review rate limited",
+                    "created_at": "2026-08-10T12:15:00Z",
+                    "id": 51945692384,
+                    "creator": {"login": "coderabbitai[bot]", "type": "Bot"},
+                }
+            ],
+            "pulls/5": {"head": {"sha": "abc123"}},
+        },
+    )
+
+    details = pr_watch.fetch_check_details(5, bots=("coderabbit",))
+
+    # The rows survive at all — this is what the wrong reader destroyed.
+    assert details.signal == "ok"
+    assert [row["name"] for row in details.rows] == ["toolkit", "CodeRabbit"]
+    assert any("/statuses?per_page=100" in url for url in seen), seen
+
+    # …and the genuine outage resolves to the real reviewer, so it still cancels.
+    bots = pr_watch.summarize_review_bots(
+        details.rows, [], now=NOW, bots=("coderabbit",), signal=details.signal
+    )
+    outage = [e for e in bots["unavailable"] if e["surface"] == "check"]
+    assert outage[0]["identity"] == "coderabbitai[bot]"
+    assert outage[0]["trusted"] is True
+
+
 def test_fetch_check_details_on_rest_returns_rows_with_a_real_signal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3900,6 +4006,13 @@ def test_fetch_check_details_on_rest_returns_rows_with_a_real_signal(
         pr_watch,
         monkeypatch,
         {
+            # ORDER MATTERS: `_route_http` returns the first fragment that is a
+            # substring of the URL, and "commits/abc123/status" is a substring of
+            # ".../statuses?per_page=100" too. The plural route must come first or
+            # it never wins. This row's check carries an outage marker, so the #95
+            # identity read fires and really does request the plural endpoint —
+            # which needs its own BARE ARRAY body.
+            "commits/abc123/statuses": [],
             "commits/abc123/status": {"statuses": []},
             "pulls/5": {"head": {"sha": "abc123"}},
         },

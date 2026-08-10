@@ -1168,8 +1168,11 @@ def _rest_check_rows(
                 # this repo, where the Actions check carries
                 # `app.slug: github-actions` while the real reviewer's identity is
                 # `coderabbitai[bot]`.
+                # The `isinstance` check is the whole guard: a missing, null or
+                # string `app` yields `""`. No `or {}` — it was dead, since
+                # `isinstance` has already established a dict by then.
                 "identity": (
-                    _rest_str((run.get("app") or {}).get("slug"))
+                    _rest_str(run["app"].get("slug"))
                     if isinstance(run.get("app"), dict)
                     else ""
                 ),
@@ -1527,6 +1530,13 @@ def _gh_identity_map(sha: str) -> dict[str, str]:
     under the real app's identity. Collapsing to no identity instead costs the
     grace window and cannot be gamed, and an attacker can force this state
     anyway — which is exactly why it must be the harmless one.
+
+    The join is keyed by name across **both** surfaces, so a status context and a
+    check run sharing one name string collapse together before the ambiguity test
+    runs, and a resolvable identity can read as ambiguous. Left as is: the effect
+    is the fail-closed one above — extra waiting, never a bypass — and separating
+    the namespaces would mean carrying a surface tag through rows that
+    `gh pr checks` returns without one.
     """
     identities: dict[str, set[str]] = {}
 
@@ -1650,11 +1660,25 @@ def fetch_check_details(
                 rows = _rest_check_rows(
                     check_runs,
                     statuses,
+                    # `_http_get_all`, NOT `_http_get_all_wrapped`. The PLURAL
+                    # `/commits/{sha}/statuses` endpoint's body IS the array;
+                    # only the SINGULAR combined `/status` wraps it in
+                    # `{"state": …, "statuses": [...]}`. The two differ by one
+                    # character in the URL and by their whole shape, and
+                    # `_rest_fetch_checks` above reads the singular one with the
+                    # wrapped reader and the key `"statuses"` — so reusing that
+                    # call's shape here raised `RuntimeError` ("returned list,
+                    # expected a JSON object"), which `fetch_check_details`'s own
+                    # handler then degraded to `([], "unavailable")`, discarding
+                    # EVERY row rather than just the identities. That switched
+                    # #19's and #23's guards off in exactly the case they exist
+                    # for — an outage-marked row — and `record_review` names that
+                    # state as "the SILENT bypass, and the worse of the two",
+                    # because no blockers means no refusal.
                     status_creators=_newest_status_creators(
-                        _http_get_all_wrapped(
+                        _http_get_all(
                             _rest_api(f"commits/{sha}/statuses?per_page=100", slug),
                             token,
-                            "statuses",
                         )
                     ),
                 )
