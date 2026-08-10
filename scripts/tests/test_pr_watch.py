@@ -1674,6 +1674,151 @@ def test_a_failed_identity_read_keeps_the_rows_it_already_had(
     assert bots["unavailable"][0]["identity"] == ""
 
 
+def test_the_real_gh_head_sha_drives_the_head_move_guard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exercise `_gh_head_sha` ITSELF, not a stand-in for it.
+
+    The head-move guard's other test patches `_gh_head_sha` to canned strings, so
+    hardwiring its real body to a constant left the entire suite green. That is the
+    same "mocked the helper under test" shape that made the wrong-reader CRITICAL
+    invisible while 500+ new test lines were already in the diff — so the guard
+    against a bypass had an illusory safety net of exactly the kind this loop keeps
+    finding.
+
+    Here only `subprocess.run` is stubbed, at the process boundary. `_gh`,
+    `_gh_json` and `_gh_head_sha` all run for real, and both guard directions are
+    driven end-to-end through `fetch_check_details`.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_resolve_backend", lambda: ("gh", None))
+    monkeypatch.setattr(
+        pr_watch, "_gh_identity_map", lambda _sha: {"CodeRabbit": "coderabbitai[bot]"}
+    )
+
+    class _Result:
+        def __init__(self, stdout: str) -> None:
+            self.stdout = stdout
+            self.returncode = 0
+            self.stderr = ""
+
+    head = {"sha": "abc123"}
+    seen: list[list[str]] = []
+
+    def _run(cmd, **_kwargs):
+        seen.append(list(cmd))
+        if "checks" in cmd:
+            return _Result(
+                '[{"name":"CodeRabbit","state":"SUCCESS","bucket":"pass",'
+                '"description":"Review rate limited"}]'
+            )
+        if "view" in cmd:
+            return _Result(json.dumps({"headRefOid": head["sha"]}))
+        raise AssertionError(f"unexpected gh call: {cmd}")
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", _run)
+
+    # The real helper parses `headRefOid` — the success path nothing reached.
+    assert pr_watch._gh_head_sha(5) == "abc123"
+
+    # Head STEADY: the real helper agrees with the supplied sha, identity stands.
+    steady = pr_watch.fetch_check_details(5, bots=("coderabbit",), head_sha="abc123")
+    assert steady.rows[0]["identity"] == "coderabbitai[bot]"
+    assert any("view" in cmd for cmd in seen), seen
+
+    # Head MOVED: the real helper reports a different sha, identity is dropped.
+    head["sha"] = "def456"
+    moved = pr_watch.fetch_check_details(5, bots=("coderabbit",), head_sha="abc123")
+    assert moved.rows[0]["identity"] == ""
+
+    # And with no `head_sha` supplied, the real helper is what resolves it, so a
+    # steady head still resolves identity through two live reads of the same sha.
+    resolved = pr_watch.fetch_check_details(5, bots=("coderabbit",))
+    assert resolved.rows[0]["identity"] == "coderabbitai[bot]"
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        RuntimeError("gh failed"),
+        OSError("gh is not installed"),
+        subprocess.SubprocessError("spawn failed"),
+        json.JSONDecodeError("bad", "doc", 0),
+        AttributeError("None has no attribute get"),
+    ],
+)
+def test_gh_head_sha_swallows_every_class_it_declares(
+    monkeypatch: pytest.MonkeyPatch, exc: Exception
+) -> None:
+    """Each class in `_gh_head_sha`'s except tuple must actually be exercised.
+
+    Trimming that tuple to `OSError` alone left the suite green, so the breadth was
+    documented and unverified. It matters because this helper is reached from
+    `fetch_check_details`, which is documented as never raising and whose caller in
+    `main` sits outside the try — an escaping class crashes the poll before
+    `persist_poll` and wedges every later poll.
+    """
+    pr_watch = _load_pr_watch()
+
+    def _boom(*_a, **_k):
+        raise exc
+
+    monkeypatch.setattr(pr_watch, "_gh", _boom)
+
+    assert pr_watch._gh_head_sha(5) == ""
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        RuntimeError("returned list, expected a JSON object"),
+        OSError("connection reset"),
+        KeyError("statuses"),
+        ValueError("bad json"),
+        AttributeError("NoneType has no attribute get"),
+        TypeError("string indices must be integers"),
+    ],
+)
+def test_the_rest_identity_read_swallows_every_class_it_declares(
+    monkeypatch: pytest.MonkeyPatch, exc: Exception
+) -> None:
+    """Same for the REST inner try: trimming it to `RuntimeError` stayed green.
+
+    Every class here must leave the already-fetched rows intact rather than
+    blanking the bot signal, which is the whole point of that inner try.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+
+    def _get(url: str, token: str, **_kw):
+        if "/statuses?" in url:
+            raise exc
+        if "check-runs" in url:
+            return {"total_count": 0, "check_runs": []}, None
+        if "/status?" in url:
+            return {
+                "state": "success",
+                "statuses": [
+                    {
+                        "context": "CodeRabbit",
+                        "state": "success",
+                        "description": "Review rate limited",
+                    }
+                ],
+            }, None
+        if "pulls/5" in url:
+            return {"head": {"sha": "abc123"}}, None
+        raise AssertionError(f"unrouted GET {url}")
+
+    monkeypatch.setattr(pr_watch, "_http_get", _get)
+
+    details = pr_watch.fetch_check_details(5, bots=("coderabbit",))
+
+    assert details.signal == "ok"
+    assert [row["name"] for row in details.rows] == ["CodeRabbit"]
+    assert details.rows[0]["identity"] == ""
+
+
 def test_a_head_move_during_the_gh_identity_read_drops_every_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

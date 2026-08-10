@@ -1725,6 +1725,15 @@ def fetch_check_details(
                     TypeError,
                 ):
                     creators = None
+                # `is not None`, not a truthy test, so "the read returned no
+                # creators" and "the read failed" stay distinguishable at the type
+                # level. Be honest about what that buys TODAY: nothing
+                # behavioural — `_rest_check_rows` normalizes `status_creators or
+                # {}`, so recomputing with `{}` and leaving `rows` as first built
+                # produce identical output, and a truthy test here passes every
+                # test. It is written this way so the distinction survives if that
+                # normalization ever stops, not because it currently decides
+                # anything.
                 if creators is not None:
                     rows = _rest_check_rows(
                         check_runs, statuses, status_creators=creators
@@ -1796,6 +1805,19 @@ def fetch_check_details(
         # Dropping every identity on any movement is the cheap fail-closed
         # answer, and it costs only the grace window. The REST branch needs none
         # of this: it derives one sha and reads both surfaces for it.
+        #
+        # **This fires on two different conditions and cannot tell them apart**,
+        # so do not read a drop here as evidence a push happened. `_gh_head_sha`
+        # returns `""` when it merely FAILS — a network blip, a `gh` hiccup — and
+        # `"" != sha` is indistinguishable from a real move. Both are treated the
+        # same on purpose: identity we cannot confirm for this exact commit is
+        # identity we will not trust, and a transient failure is not a licence to
+        # keep the previous answer. The cost is the same bounded one either way.
+        #
+        # A narrower residual window stays open and is not closed by this: a
+        # double push that moves the head away and back to the SAME sha between
+        # the two reads passes the comparison. These are two point-in-time reads,
+        # not one joint fetch, and `gh pr checks` exposes no sha to make it one.
         if identities and sha and _gh_head_sha(pr) != sha:
             identities = {}
         for row in rows:
