@@ -295,6 +295,26 @@ _DEFAULT_REVIEW_BOT_AUTHOR_ALIASES = {
 # the anti-wedge property that `_DEFAULT_INFORMATIONAL_CHECK_NAMES` exists for.
 _DEFAULT_BOT_PENDING_GRACE_MINUTES = 15.0
 
+# How long the check rollup must hold still for the current head before the merge
+# gate believes it is COMPLETE. See the settle-baseline block in
+# :func:`build_report` for what this is protecting and why a count alone cannot.
+#
+# NOT A MEASURED VALUE ON THIS REPO, and saying so is the honest form: the kit's
+# own CI registers exactly one check
+# (`gh api repos/topij/agentic-dev-kit/commits/<sha>/check-runs`), so there is no
+# registration *spread* here to measure. What the number has to exceed is the gap
+# between a head's first and last check appearing, which is a property of the
+# adopter's CI, not of this engine — so re-measure it against your own repo before
+# treating this default as tuned for you.
+#
+# What makes 3 safe to ship without that measurement is the shape of the cost
+# rather than the size of the number. The clock runs from when the rollup last
+# GREW, which is seconds after a push — concurrently with CI, not after it — so on
+# any repo whose checks take longer than the grace to finish, the added merge
+# latency is zero. Being too large is fail-CLOSED (a slower merge); the only
+# fail-open setting is 0, and that is opt-out, not tuning.
+_DEFAULT_SETTLE_GRACE_MINUTES = 3.0
+
 
 # Whether a PR must carry at least one real (non-informational) check before it
 # can read as green. True is the safe default — see :func:`summarize_checks`.
@@ -323,6 +343,7 @@ class ReviewConfig(NamedTuple):
     bots: tuple[str, ...]
     bot_author_aliases: dict[str, frozenset[str]]
     bot_pending_grace_minutes: float
+    settle_grace_minutes: float
 
 
 def _normalize_bot_author_aliases(value: Any) -> dict[str, frozenset[str]] | None:
@@ -386,6 +407,11 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
       wants the #23 outage signal without the #19 wait, but it is opt-out of a
       safety check, so set it deliberately rather than as a way to quiet a slow
       bot.
+    - ``settle_grace_minutes`` validates identically, and its ``0`` is narrower
+      than the one above: it drops the *time* requirement but NOT the
+      requirement that a baseline exist at all, so a fresh clone still blocks
+      for the one poll it takes to record one (#190 is not a timing bug and is
+      not opted out of here). Setting it high is fail-closed.
     """
     defaults = ReviewConfig(
         noise_markers=_DEFAULT_NOISE_MARKERS,
@@ -395,6 +421,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         bots=_DEFAULT_REVIEW_BOTS,
         bot_author_aliases=dict(_DEFAULT_REVIEW_BOT_AUTHOR_ALIASES),
         bot_pending_grace_minutes=_DEFAULT_BOT_PENDING_GRACE_MINUTES,
+        settle_grace_minutes=_DEFAULT_SETTLE_GRACE_MINUTES,
     )
     try:
         from kitconfig import get, get_str_list, load_config
@@ -435,6 +462,17 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         )
         if isinstance(grace, bool) or not isinstance(grace, (int, float)) or grace < 0:
             grace = _DEFAULT_BOT_PENDING_GRACE_MINUTES
+        settle_grace = get(
+            config,
+            "review.settle_grace_minutes",
+            _DEFAULT_SETTLE_GRACE_MINUTES,
+        )
+        if (
+            isinstance(settle_grace, bool)
+            or not isinstance(settle_grace, (int, float))
+            or settle_grace < 0
+        ):
+            settle_grace = _DEFAULT_SETTLE_GRACE_MINUTES
     except FileNotFoundError:
         # `load_config` raises this for an absent config file — a standalone
         # engine run. Defaults are exactly right; stay quiet.
@@ -471,6 +509,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         bots=tuple(bot.strip().lower() for bot in bots if bot.strip()),
         bot_author_aliases=aliases,
         bot_pending_grace_minutes=float(grace),
+        settle_grace_minutes=float(settle_grace),
     )
 
 
@@ -482,6 +521,7 @@ _REQUIRE_CI = _REVIEW_CONFIG.require_ci
 _REVIEW_BOTS = _REVIEW_CONFIG.bots
 _REVIEW_BOT_AUTHOR_ALIASES = _REVIEW_CONFIG.bot_author_aliases
 _BOT_PENDING_GRACE_MINUTES = _REVIEW_CONFIG.bot_pending_grace_minutes
+_SETTLE_GRACE_MINUTES = _REVIEW_CONFIG.settle_grace_minutes
 
 
 # --------------------------------------------------------------------------- gh
@@ -2165,10 +2205,17 @@ def decide_converged(
     into recording a receipt early just to terminate the loop — exactly the
     premature-receipt failure tracked in issue #19.
 
-    ``settling`` is set right after a push (the PR head SHA moved, or the rollup
-    is smaller than the largest seen for this head — new checks not yet
-    registered), so a poll can't false-settle on the *stale pre-push* rollup
-    (an all-green old commit) before the new commit's CI even starts.
+    ``settling`` is set when the PR head SHA moved, or the rollup is smaller than
+    the largest seen for this head, so a poll can't false-settle on the *stale
+    pre-push* rollup (an all-green old commit) before the new commit's CI even
+    starts.
+
+    **It is one poll wide, and that is deliberate here.** The baseline resets to
+    the new commit's partial count, so the next poll compares that count against
+    itself and settles (#39). Widening it would hold ``converged`` false while
+    checks register, wedging the watch loop this predicate exists to keep
+    runnable. The merge gate carries the wider guard instead — see
+    ``rollup_settled`` in :func:`build_report`.
     """
     return checks["all_green"] and not new_items and not settling
 
@@ -2254,6 +2301,27 @@ def read_pending_since(state: dict, head: str | None) -> dict:
     return bots if isinstance(bots, dict) else {}
 
 
+def read_settle_since(state: dict, head: str | None) -> str | None:
+    """The persisted settle stamp, but only if it belongs to ``head``.
+
+    Head-scoped and self-describing (``{"head": sha, "at": iso}``) for the same
+    reason :func:`read_pending_since` is: a push means the rollup is being
+    rebuilt from nothing, so a clock from the previous head is DISCARDED rather
+    than aged. Carrying it forward would let a long-settled prior head satisfy
+    the gate for a commit pushed seconds ago — the exact substitution the guard
+    exists to refuse.
+
+    ``None`` means "no baseline for this head", which the merge gate reads as
+    not-settled. That is the whole of #190: absent must never be equivalent to
+    satisfied.
+    """
+    stored = state.get("settle_since")
+    if not isinstance(stored, dict) or not head or stored.get("head") != head:
+        return None
+    at = stored.get("at")
+    return at if isinstance(at, str) and at.strip() else None
+
+
 def write_pending_since(state: dict, head: str | None, bots: dict) -> dict:
     """Set the head-scoped grace clock on ``state`` (dropping an empty one)."""
     if bots and head:
@@ -2266,8 +2334,16 @@ def write_pending_since(state: dict, head: str | None, bots: dict) -> dict:
 def load_state(pr: int) -> dict:
     """Full per-PR watch state (missing/corrupt → {}).
 
+    **Returning {} here is a fail-open route into the merge gate, not merely a
+    lost cache** — it drops ``head``/``max_total`` and, before #190, left nothing
+    to distinguish "never observed this head settling" from "this head has
+    settled". ``settle_since`` is what closes that: absent means not-established,
+    and :func:`read_settle_since` never invents one.
+
     Keys: ``seen`` (acked comment keys), ``head`` / ``max_total`` (false-settle
-    guard, see :func:`build_report`), ``bot_pending_since`` (the head-scoped
+    guard, see :func:`build_report`), ``settle_since`` (the head-scoped settle
+    baseline the merge gate reads, see :func:`read_settle_since`),
+    ``bot_pending_since`` (the head-scoped
     fallback grace clock for a review bot whose check carries no usable
     timestamp, see :func:`read_pending_since`), ``pending_seen`` — the ``all_seen_keys``
     of the most recently *reported* plain poll, present only between a poll and
@@ -2574,6 +2650,7 @@ def build_report(
     check_details: list[dict] | CheckDetails | None = None,
     now: datetime | None = None,
     prior_pending_since: dict | None = None,  # already head-scoped by the caller
+    prior_settle_since: str | None = None,  # already head-scoped by the caller
     # The backend that PERFORMED THE READS in `view`/`inline`. Threaded rather
     # than re-resolved so the REST bound cannot drift from the data it is bounding
     # — see :func:`rest_cannot_authorize_merge`. None means "resolve it", which is
@@ -2588,9 +2665,21 @@ def build_report(
       ``review_decision`` — PR identity + merge/review state.
     - ``head`` — the PR head SHA (``headRefOid``); ``head_changed`` — true when it
       moved since ``prior_head``; ``max_total`` — the largest check count seen for
-      this head (persisted across runs); ``settling`` — true while a just-pushed
-      commit's checks are still registering (the false-settle guard; forces
-      ``converged`` false). See :func:`decide_converged`.
+      this head (persisted across runs); ``settling`` — true when the head moved
+      or the rollup shrank *on this poll* (forces ``converged`` false). See
+      :func:`decide_converged`.
+
+      ``settling`` used to be documented here as "true while a just-pushed
+      commit's checks are still registering". It is not, and #39 is the issue
+      that measured it: the baseline resets to the new commit's partial count, so
+      it is true only on the poll that OBSERVES the change. The property that
+      sentence promised is now carried by ``rollup_settled`` below, on the merge
+      gate.
+    - ``settle_since`` / ``settle_age_minutes`` / ``rollup_settled`` — the settle
+      baseline (#190/#39): how long the rollup has held still for this head, and
+      whether that is long enough for the merge gate to believe it is complete.
+      ``settle_age_minutes`` is ``None`` when there is no usable baseline, which
+      is NOT the same as zero and never reads as settled.
     - ``checks`` — the :func:`summarize_checks` rollup (``total`` / ``success`` /
       ``pending`` / ``informational`` / ``failing`` / ``all_green``).
     - ``new_comments`` — only the *fresh, actionable* comments (not in ``seen``,
@@ -2636,10 +2725,11 @@ def build_report(
         if isinstance(check_details, CheckDetails)
         else CheckDetails(list(check_details or []), "ok")
     )
+    now_dt = now or datetime.now(timezone.utc)
     review_bots = summarize_review_bots(
         details.rows,
         comments,
-        now=now or datetime.now(timezone.utc),
+        now=now_dt,
         pending_since=prior_pending_since or {},
         signal=details.signal,
         reviews=view.get("reviews") or [],
@@ -2660,6 +2750,58 @@ def build_report(
         checks["total"] if head_changed else max(prior_max_total, checks["total"])
     )
     settling = head_changed or checks["total"] < max_total
+
+    # ------------------------------------------------ the settle baseline (#190/#39)
+    #
+    # `settling` above is a SINGLE-POLL question — did the head move, or did the
+    # rollup shrink, between the last poll and this one. Both merge-gate holes it
+    # leaves open are about what one poll cannot see, and they are the same hole
+    # from two directions:
+    #
+    #   #190  With no state file, `prior_head` is None, so `head_changed` is
+    #         False and `max_total` collapses to `checks["total"]` — making
+    #         `checks["total"] < max_total` unsatisfiable. The guard is not
+    #         merely absent, it is unfalsifiable. A FRESH CLONE reaches this with
+    #         no failed write anywhere, so it is the first run, not an error path.
+    #   #39   On a head change the baseline resets to the new commit's PARTIAL
+    #         count, so the very next poll compares that count against itself and
+    #         settles — while most of the commit's checks have not registered.
+    #
+    # No count can close either, because the rollup never says how many checks
+    # are still coming: 2 of 5 and 2 of 2 are the same number. The only fact that
+    # separates them is that the rollup stopped changing and STAYED stopped, and
+    # that needs a clock plus a persisted baseline.
+    #
+    # It gates `merge_blockers` and NOT `settling`, deliberately, because those
+    # feed different predicates. `converged` answers "is there more for me to
+    # fix?" and must stay answerable — blocking it would wedge the watch loop,
+    # which is the one thing the converged/mergeable split exists to prevent.
+    # Both issues' own suggested directions land here too (#190: "decide_mergeable
+    # refusing a receipt when no max_total was ever recorded"; #39: "time-based
+    # from the observed head change"). Additive to the merge gate is also what
+    # keeps `done` — its alias — tightening rather than loosening.
+    rollup_grew = checks["total"] > prior_max_total
+    # A stamp only carries forward while the rollup is unchanged for this head.
+    # A rollup that is still GROWING is not stable however old the stamp is,
+    # which is what stops the clock ageing out mid-registration.
+    carried_stamp = (
+        None if (head_changed or rollup_grew) else (prior_settle_since or None)
+    )
+    settle_age_minutes = _age_minutes(carried_stamp, now_dt)
+    # `_age_minutes` returns None for a stamp it cannot use — unparseable, the
+    # zero time, or meaningfully in the future (a state file copied between
+    # machines, a clock NTP-corrected backwards). Unknown is not settled; and
+    # re-stamping rather than keeping it is what stops a future stamp pinning the
+    # gate closed until real time catches up, the failure its own docstring warns
+    # about.
+    settle_since = (
+        carried_stamp
+        if settle_age_minutes is not None
+        else now_dt.isoformat().replace("+00:00", "Z")
+    )
+    rollup_settled = (
+        settle_age_minutes is not None and settle_age_minutes >= _SETTLE_GRACE_MINUTES
+    )
 
     pr_state = (view.get("state") or "UNKNOWN").upper()
     base = view.get("baseRefName")
@@ -2724,6 +2866,18 @@ def build_report(
         merge_blockers.append("review decision is CHANGES_REQUESTED")
     if not review_evidence["valid"]:
         merge_blockers.append("independent review evidence is missing for current head")
+    if not rollup_settled:
+        # One prefix, two reasons, because the causes are genuinely different and
+        # a reader who cannot tell them apart cannot act: "no baseline" clears on
+        # the next poll, "still stabilising" clears with time.
+        merge_blockers.append(
+            "check rollup has not settled for current head "
+            + (
+                f"(stable {settle_age_minutes:g}m of {_SETTLE_GRACE_MINUTES:g}m)"
+                if settle_age_minutes is not None
+                else "(no settle baseline recorded)"
+            )
+        )
     # Additive to the merge gate only. `done` is an alias of `mergeable`, so
     # these tighten `done` too — the safe skew direction: an older
     # `dev_session.sh` reading `done` merges LESS, never more.
@@ -2744,6 +2898,13 @@ def build_report(
         "head_changed": head_changed,
         "settling": settling,
         "max_total": max_total,
+        # The settle baseline in force for THIS head, and what it is worth.
+        # `settle_since` is written back by `persist_poll`, so it must be the
+        # stamp the next poll should carry — the carried one while the rollup
+        # holds still, a fresh one the moment it moves or becomes unusable.
+        "settle_since": settle_since,
+        "settle_age_minutes": settle_age_minutes,
+        "rollup_settled": rollup_settled,
         "checks": checks,
         # Reported, and gating nothing. It does not need to gate: REST cannot
         # authorize a merge at all, so the only thing truncation can still
@@ -3059,6 +3220,11 @@ def persist_poll(pr: int, report: dict, seen: set[str]) -> dict:
         # the same checks, which is #94 territory.
         "max_total_backend": report.get("backend"),
         "pending_seen": report["all_seen_keys"],
+        # The settle baseline (#190/#39), head-scoped like `bot_pending_since`.
+        # It MUST ride every poll: a gate whose baseline is never persisted finds
+        # no baseline on every poll, re-stamps it, and blocks forever — a wedge,
+        # not a guard.
+        "settle_since": {"head": report["head"], "at": report["settle_since"]},
     }
     # The fallback grace clock for a bot whose check carries no usable timestamp.
     # Persisted rather than derived per poll, because a clock that restarts on
@@ -3240,6 +3406,7 @@ def main(argv: list[str] | None = None) -> int:
         review_receipt=state.get("review_receipt"),
         check_details=check_details,
         prior_pending_since=read_pending_since(state, view.get("headRefOid")),
+        prior_settle_since=read_settle_since(state, view.get("headRefOid")),
         backend=backend_name,
     )
 

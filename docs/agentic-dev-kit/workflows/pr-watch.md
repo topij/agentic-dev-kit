@@ -48,6 +48,17 @@ Repeat until the report says **converged**:
    receipt has been recorded yet. That is the normal, expected state at the end of
    the loop, not a failure.
 
+   The other routine reason is a `merge_blockers[]` entry reading
+   **`check rollup has not settled for current head`**. The merge gate waits for
+   the check rollup to hold still before believing it is complete, because a
+   partial rollup and a finished one report the same thing — a count, with no
+   indication of how many checks are still coming. **Poll again rather than
+   working around it:** it clears on its own, either on the next poll (`no settle
+   baseline recorded` — a first run, or a state directory that was never written,
+   which a fresh clone reaches normally) or once the stated grace elapses
+   (`stable Nm of Mm`). It never blocks `converged`, so it cannot stall this loop
+   — only the merge that follows it.
+
    `done` also appears in the report. It is a **legacy alias for `mergeable`**, kept
    so that an older `dev_session.sh` still gates on merge authorization. Prefer
    `converged` / `mergeable`; never assume `done` means "the loop finished."

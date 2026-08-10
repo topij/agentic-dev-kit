@@ -51,6 +51,7 @@ def _pin_engine_defaults(module: ModuleType) -> None:
     module._REVIEW_BOTS = defaults.bots
     module._REVIEW_BOT_AUTHOR_ALIASES = defaults.bot_author_aliases
     module._BOT_PENDING_GRACE_MINUTES = defaults.bot_pending_grace_minutes
+    module._SETTLE_GRACE_MINUTES = defaults.settle_grace_minutes
 
 
 def _pin_engine_backend(module: ModuleType) -> None:
@@ -107,6 +108,47 @@ def _load_pr_watch(*, pin_defaults: bool = True) -> ModuleType:
         _pin_engine_defaults(module)
     _pin_engine_backend(module)
     return module
+
+
+def _ago_iso(minutes: float) -> str:
+    return (
+        datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    ).isoformat().replace("+00:00", "Z")
+
+
+def _settled(view: dict, minutes: float = 30.0, *, now: datetime | None = None) -> dict:
+    """The prior-state kwargs a real SECOND poll carries for ``view``.
+
+    `build_report` defaults `prior_settle_since` to None — "no baseline for this
+    head" — and the merge gate reads that as NOT settled. That default is
+    deliberate and must stay: reading an absent baseline as a satisfied one is
+    the fail-open #190 and #39 are about, and is exactly how
+    `comparable_max_total` failed.
+
+    So a test that wants a *mergeable* report has to say the rollup held still,
+    which takes all three of these together. The stamp alone is not enough: a
+    `prior_max_total` left at its 0 default reads as "the rollup just grew from
+    nothing", which restarts the clock — correctly, since that IS a first poll.
+    Tests exercising the guard itself build their own state instead of calling
+    this.
+
+    ``now`` must be passed by any test that pins `build_report`'s clock, and the
+    failure if it is not is silent in the dangerous direction: a real-time stamp
+    against the suite's fixed ``NOW`` lands weeks in the FUTURE, which
+    `_age_minutes` reports as unusable, which reads as not-settled. That fails
+    closed here — but it would make such a test pass for a reason it does not
+    state.
+    """
+    reference = now or datetime.now(timezone.utc)
+    return {
+        "prior_head": view.get("headRefOid"),
+        "prior_max_total": len(view.get("statusCheckRollup") or []),
+        "prior_settle_since": (
+            (reference - timedelta(minutes=minutes))
+            .isoformat()
+            .replace("+00:00", "Z")
+        ),
+    }
 
 
 def _green_view(**overrides):
@@ -295,9 +337,16 @@ def test_render_never_lets_convergence_read_as_merge_clearance() -> None:
     pr_watch = _load_pr_watch()
     receipt = {"head": "abc123", "source": "fallback:codex"}
 
-    converged = pr_watch.render(pr_watch.build_report(_green_view(), [], set()))
+    view = _green_view()
+    converged = pr_watch.render(pr_watch.build_report(view, [], set()))
     authorized = pr_watch.render(
-        pr_watch.build_report(_green_view(), [], set(), review_receipt=receipt)
+        pr_watch.build_report(
+            view,
+            [],
+            set(),
+            review_receipt=receipt,
+            **_settled(view),
+        )
     )
 
     assert "NOT mergeable" in converged
@@ -360,35 +409,42 @@ def test_unstable_is_allowed_only_when_remaining_check_is_informational() -> Non
         "state": "PENDING",
     }
 
+    informational_view = _green_view(
+        mergeStateStatus="UNSTABLE",
+        statusCheckRollup=[
+            {"name": "tests", "conclusion": "SUCCESS"},
+            coderabbit_pending,
+        ],
+    )
+    unstable_view = _green_view(mergeStateStatus="UNSTABLE")
+    successful_view = _green_view(
+        mergeStateStatus="UNSTABLE",
+        statusCheckRollup=[
+            {"name": "tests", "conclusion": "SUCCESS"},
+            {"context": "CodeRabbit", "state": "SUCCESS"},
+        ],
+    )
+
     informational_only = pr_watch.build_report(
-        _green_view(
-            mergeStateStatus="UNSTABLE",
-            statusCheckRollup=[
-                {"name": "tests", "conclusion": "SUCCESS"},
-                coderabbit_pending,
-            ],
-        ),
+        informational_view,
         [],
         set(),
         review_receipt=receipt,
+        **_settled(informational_view),
     )
     unexplained_unstable = pr_watch.build_report(
-        _green_view(mergeStateStatus="UNSTABLE"),
+        unstable_view,
         [],
         set(),
         review_receipt=receipt,
+        **_settled(unstable_view),
     )
     successful_informational = pr_watch.build_report(
-        _green_view(
-            mergeStateStatus="UNSTABLE",
-            statusCheckRollup=[
-                {"name": "tests", "conclusion": "SUCCESS"},
-                {"context": "CodeRabbit", "state": "SUCCESS"},
-            ],
-        ),
+        successful_view,
         [],
         set(),
         review_receipt=receipt,
+        **_settled(successful_view),
     )
 
     # All three converged — an informational check never blocks the watch loop.
@@ -463,6 +519,7 @@ The incident report says: Review limit reached. We couldn't start this review.
         inline,
         set(),
         review_receipt={"head": "abc123", "source": "fallback:panel"},
+        **_settled(view),
     )
 
     assert report["new_comments"] == []
@@ -542,6 +599,7 @@ def test_legacy_prefix_outage_is_visible_but_not_authenticated() -> None:
         inline,
         seen,
         review_receipt={"head": "abc123", "source": "fallback:panel"},
+        **_settled(view),
     )
     assert acknowledged["new_comments"] == []
     assert acknowledged["mergeable"] is True
@@ -590,6 +648,7 @@ def test_review_receipt_must_match_current_head() -> None:
         [],
         set(),
         review_receipt={"head": "abc123", "source": "fallback:codex"},
+        **_settled(view),
     )
 
     # All three are green and comment-clean, so the watch loop has converged for
@@ -861,7 +920,11 @@ def test_zero_check_pr_still_needs_current_head_review_evidence(
         view, [], set(), review_receipt={"head": "older", "source": "fallback:codex"}
     )
     with_receipt = pr_watch.build_report(
-        view, [], set(), review_receipt={"head": "abc123", "source": "fallback:codex"}
+        view,
+        [],
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:codex"},
+        **_settled(view),
     )
 
     assert without_receipt["checks"]["all_green"] is True
@@ -1731,11 +1794,16 @@ def test_bot_blockers_only_ever_tighten_the_merge_gate() -> None:
     would be a silent fail-open on an unreviewed PR.
     """
     pr_watch = _load_pr_watch()
-    args = dict(review_receipt={"head": "abc123", "source": "coderabbit"}, now=NOW)
+    view = _green_view()
+    args = dict(
+        review_receipt={"head": "abc123", "source": "coderabbit"},
+        now=NOW,
+        **_settled(view, now=NOW),
+    )
 
-    without = pr_watch.build_report(_green_view(), [], set(), **args)
+    without = pr_watch.build_report(view, [], set(), **args)
     with_pending = pr_watch.build_report(
-        _green_view(),
+        view,
         [],
         set(),
         check_details=[
@@ -1888,6 +1956,7 @@ def test_missing_config_falls_back_to_defaults_silently(
         pr_watch._DEFAULT_REVIEW_BOTS,
         pr_watch._DEFAULT_REVIEW_BOT_AUTHOR_ALIASES,
         pr_watch._DEFAULT_BOT_PENDING_GRACE_MINUTES,
+        pr_watch._DEFAULT_SETTLE_GRACE_MINUTES,
     )
     assert capsys.readouterr().err == ""
 
@@ -2032,6 +2101,7 @@ def test_every_config_derived_global_is_pinned() -> None:
             "bot_author_aliases",
         ),
         "_BOT_PENDING_GRACE_MINUTES": (-99999.0, "bot_pending_grace_minutes"),
+        "_SETTLE_GRACE_MINUTES": (-99998.0, "settle_grace_minutes"),
     }
 
     # If someone adds a field to ReviewConfig, this fails until they extend the
@@ -2159,6 +2229,7 @@ Summary only.
         [],
         set(),
         review_receipt={"head": "abc123", "source": "coderabbit"},
+        **_settled(view),
     )
 
     assert report["new_comments"] == []
@@ -2211,7 +2282,11 @@ def test_review_coverage_is_reported_and_never_gates() -> None:
     )
 
     report = pr_watch.build_report(
-        view, [], set(), review_receipt={"head": "abc123", "source": "fallback:panel"}
+        view,
+        [],
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:panel"},
+        **_settled(view),
     )
 
     assert report["review_bots"]["coverage"][0]["covers_head"] is False
@@ -4295,12 +4370,14 @@ def test_gh_is_still_allowed_to_authorize_a_merge() -> None:
     and no test of the invariant above would notice."""
     pr_watch = _load_pr_watch()  # loader pins the backend to gh
 
+    view = _green_view(headRefOid="abc123")
     report = pr_watch.build_report(
-        _green_view(headRefOid="abc123"),
+        view,
         [],
         set(),
         review_receipt={"head": "abc123", "source": "fallback:panel", "lenses": ["adversarial", "correctness"]},
         check_details=pr_watch.CheckDetails([], "skipped"),
+        **_settled(view),
     )
     assert report["mergeable"] is True
     assert not any("cannot authorize" in b for b in report["merge_blockers"])
@@ -4535,6 +4612,339 @@ def test_the_false_settle_guard_is_not_disabled_by_a_missing_state_key(
     assert report["mergeable"] is False
 
 
+# ------------------------------------------------- the settle baseline (#190/#39)
+#
+# One guard, two holes. `settling` answers "did the rollup shrink or the head
+# move on THIS poll" — a single-poll question, and both issues are about what it
+# cannot see. The gate these pin is `merge_blockers`, deliberately: `converged`
+# is the watch-loop predicate and blocking it would wedge the loop.
+
+
+def _settle_state(**overrides) -> dict:
+    """A state file mid-watch, with an established settle baseline."""
+    state = {
+        "head": "abc123",
+        "max_total": 1,
+        "seen": [],
+        "settle_since": {"head": "abc123", "at": _ago_iso(30.0)},
+        "review_receipt": {
+            "head": "abc123",
+            "source": "fallback:panel",
+            "lenses": ["adversarial", "correctness"],
+        },
+    }
+    state.update(overrides)
+    return state
+
+
+def _ago_iso(minutes: float) -> str:
+    return (
+        datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    ).isoformat().replace("+00:00", "Z")
+
+
+def _poll_via_main(monkeypatch: pytest.MonkeyPatch, pr_watch, state: dict, view: dict):
+    """Drive a real `main` poll against `state`, returning the built report.
+
+    Through `main`, not `build_report`: the deleted `comparable_max_total` test
+    called its helper directly and stayed green when the production call site was
+    reverted. Same shape, third occurrence — so these go through the call site.
+    """
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    monkeypatch.setattr(pr_watch, "fetch_pr_view", lambda pr: (view, []))
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_check_details",
+        lambda pr, **kw: pr_watch.CheckDetails([], "skipped"),
+    )
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: dict(state))
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, s: None)
+
+    captured: list[dict] = []
+    real_build = pr_watch.build_report
+    monkeypatch.setattr(
+        pr_watch,
+        "build_report",
+        lambda *a, **kw: captured.append(real_build(*a, **kw)) or captured[-1],
+    )
+    assert pr_watch.main(["9", "--json"]) == 0
+    return captured[0]
+
+
+def test_a_lost_state_file_cannot_authorize_a_merge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#190. `load_state` returns {} for a missing, empty OR corrupt file — and a
+    FRESH CLONE reaches that with no failed write anywhere, so this is the first
+    run, not an error path.
+
+    That drops `head`/`max_total`, and the guard collapses: `head_changed` is
+    False (no `prior_head` to differ from), `max_total` becomes `checks["total"]`,
+    so `checks["total"] < max_total` can never hold. `settling` is False and a
+    partial rollup reads as complete.
+
+    The receipt goes with the same file, so the gate does hold — until the next
+    `--record-review`, which merges a receipt back in while `head`/`max_total`
+    stay absent. That is the state driven here, and it is row 3 of #190's
+    measured table: identical PR, head and rollup to row 1, differing ONLY in
+    whether the state file survived, and disagreeing about whether the PR may
+    merge with most of its checks unregistered.
+    """
+    pr_watch = _load_pr_watch()
+    report = _poll_via_main(
+        monkeypatch,
+        pr_watch,
+        # Exactly what `--record-review` leaves behind on an emptied file: a
+        # receipt for the current head, and no settle baseline of any kind.
+        {
+            "review_receipt": {
+                "head": "abc123",
+                "source": "fallback:panel",
+                "lenses": ["adversarial", "correctness"],
+            }
+        },
+        _green_view(headRefOid="abc123"),
+    )
+
+    assert report["review_evidence"]["valid"] is True, "the receipt is for this head"
+    assert report["mergeable"] is False, "a lost baseline authorized a merge (#190)"
+    assert report["done"] is False, "the legacy alias fell open"
+    assert any(
+        "settle" in blocker for blocker in report["merge_blockers"]
+    ), report["merge_blockers"]
+
+
+def test_an_upgrade_from_a_state_file_with_no_settle_stamp_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The upgrade path, and the direction is the whole point.
+
+    Every state file the shipped engine has written carries `head`/`max_total`
+    and NO settle stamp. Reading that absence as "settled long ago" would flip
+    the gate open for every in-flight PR at the moment of upgrade — which is
+    precisely how `comparable_max_total` failed, and it was deleted for it under
+    `safety-critical-changes.md` rule 1. Absent must mean "not established yet":
+    fail-closed, and self-clearing on the next poll.
+    """
+    pr_watch = _load_pr_watch()
+    state = _settle_state()
+    del state["settle_since"]
+
+    report = _poll_via_main(
+        monkeypatch, pr_watch, state, _green_view(headRefOid="abc123")
+    )
+
+    assert report["mergeable"] is False, "an upgrade opened the gate (comparable_max_total's failure)"
+    assert report["done"] is False
+
+
+def test_the_settle_guard_is_wider_than_the_poll_that_observes_the_push(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#39. The reproduced sequence, re-derived rather than trusted.
+
+    `max_total` resets to the NEW commit's partial count on a head change, so on
+    the very next poll `checks["total"] < max_total` is false and `settling`
+    drops — while most of the commit's checks have not registered. #39's table
+    has poll 2 authorizing the merge at 2 of 5 checks, and poll 3 showing one of
+    the missing three would have failed.
+
+    Poll 2 is the row under test: same head as poll 1, same partial count, and
+    seconds later.
+    """
+    pr_watch = _load_pr_watch()
+    partial = _green_view(
+        headRefOid="newsha",
+        statusCheckRollup=[
+            {"name": "a", "status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"name": "b", "status": "COMPLETED", "conclusion": "SUCCESS"},
+        ],
+    )
+    # Poll 1 observed the push 30 seconds ago and recorded 2 of the 5 checks.
+    state = _settle_state(
+        head="newsha",
+        max_total=2,
+        settle_since={"head": "newsha", "at": _ago_iso(0.5)},
+        review_receipt={
+            "head": "newsha",
+            "source": "fallback:panel",
+            "lenses": ["adversarial", "correctness"],
+        },
+    )
+
+    report = _poll_via_main(monkeypatch, pr_watch, state, partial)
+
+    assert report["checks"]["all_green"] is True, "the partial rollup reads green"
+    assert report["settling"] is False, (
+        "this pins #39's precondition: the one-poll guard has already dropped"
+    )
+    assert report["mergeable"] is False, "poll 2 authorized a partial rollup (#39)"
+    assert report["done"] is False
+
+
+def test_the_settle_clock_restarts_when_more_checks_register(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rollup that is still GROWING is not stable, however long ago the head
+    was first seen. Without this the clock would age out during registration and
+    authorize the merge at the moment the count was still climbing."""
+    pr_watch = _load_pr_watch()
+    grown = _green_view(
+        headRefOid="abc123",
+        statusCheckRollup=[
+            {"name": "a", "status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"name": "b", "status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"name": "c", "status": "COMPLETED", "conclusion": "SUCCESS"},
+        ],
+    )
+    # Baseline is old enough to have aged out, but only 1 check was in it.
+    report = _poll_via_main(
+        monkeypatch, pr_watch, _settle_state(max_total=1), grown
+    )
+
+    assert report["mergeable"] is False, "the gate opened while checks were still arriving"
+    assert report["done"] is False
+
+
+def test_a_stable_rollup_past_the_grace_still_merges(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The anti-wedge half, and it is not optional.
+
+    A guard that only ever blocks is a wedge, and this repo has deleted a
+    mechanism for being one. The normal path must still authorize: same head,
+    same count, stamp older than the grace.
+    """
+    pr_watch = _load_pr_watch()
+    report = _poll_via_main(
+        monkeypatch, pr_watch, _settle_state(), _green_view(headRefOid="abc123")
+    )
+
+    assert report["converged"] is True
+    assert report["mergeable"] is True, "the settle guard wedged a clean PR"
+    assert report["done"] is True
+    assert report["merge_blockers"] == []
+
+
+def test_the_settle_guard_never_blocks_the_watch_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`converged` answers "is there more for me to fix?" and must stay
+    answerable while the merge gate waits. Blocking it would wedge exactly the
+    loop the converged/mergeable split exists to keep runnable — so the guard is
+    additive to `merge_blockers` ONLY.
+    """
+    pr_watch = _load_pr_watch()
+    report = _poll_via_main(
+        monkeypatch,
+        pr_watch,
+        # No baseline at all: the most-blocking state the gate has.
+        {"review_receipt": {"head": "abc123", "source": "fallback:panel"}},
+        _green_view(headRefOid="abc123"),
+    )
+
+    assert report["converged"] is True, "the settle guard wedged the watch loop"
+    assert report["mergeable"] is False
+
+
+def test_the_settle_baseline_rides_every_poll(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The stamp has to be PERSISTED or the gate can never clear: every poll
+    would find no baseline, re-stamp it, and block forever."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path)
+
+    report = pr_watch.build_report(
+        _green_view(headRefOid="abc123"),
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails([], "skipped"),
+    )
+    state = pr_watch.persist_poll(9, report, set())
+
+    assert state["settle_since"]["head"] == "abc123"
+    assert state["settle_since"]["at"], "no stamp was written"
+    # And it round-trips through the file, not just the return value.
+    assert pr_watch.load_state(9)["settle_since"] == state["settle_since"]
+
+
+def test_a_settle_stamp_from_another_head_is_discarded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Head-scoped like `bot_pending_since`, and for the same reason: a push
+    means the rollup is being rebuilt, so a clock from the previous head is
+    discarded rather than aged. Carrying it forward would let a long-settled
+    prior head satisfy the gate for a commit pushed seconds ago."""
+    pr_watch = _load_pr_watch()
+    report = _poll_via_main(
+        monkeypatch,
+        pr_watch,
+        _settle_state(
+            head="newsha",
+            settle_since={"head": "oldsha", "at": _ago_iso(600.0)},
+            review_receipt={"head": "newsha", "source": "fallback:panel"},
+        ),
+        _green_view(headRefOid="newsha"),
+    )
+
+    assert report["mergeable"] is False, "a stale head's clock satisfied the gate"
+
+
+def test_an_unusable_settle_stamp_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`_age_minutes` returns None for a stamp it cannot use — unparseable, the
+    zero time, or meaningfully in the future (a state file copied between
+    machines, or a clock that ran ahead and was then NTP-corrected). None means
+    "unknown", and unknown must not read as settled.
+    """
+    pr_watch = _load_pr_watch()
+    for stamp in ("not-a-timestamp", "0001-01-01T00:00:00Z", _ago_iso(-600.0)):
+        report = _poll_via_main(
+            monkeypatch,
+            pr_watch,
+            _settle_state(settle_since={"head": "abc123", "at": stamp}),
+            _green_view(headRefOid="abc123"),
+        )
+        assert report["mergeable"] is False, f"an unusable stamp opened the gate: {stamp}"
+
+
+def test_the_settle_grace_is_configurable_and_rejects_nonsense(
+    tmp_path: Path,
+) -> None:
+    """Same validation shape as `bot_pending_grace_minutes`, and the same
+    asymmetry: a large value is fail-closed (a slow merge), while 0 disables the
+    guard outright, so a typo must never land on 0."""
+    pr_watch = _load_pr_watch()
+    default = pr_watch._DEFAULT_SETTLE_GRACE_MINUTES
+
+    def _grace(body: str) -> float:
+        path = tmp_path / f"cfg{abs(hash(body))}.yaml"
+        path.write_text(body, encoding="utf-8")
+        return pr_watch._load_review_config(path).settle_grace_minutes
+
+    assert _grace("review:\n  settle_grace_minutes: 7\n") == 7.0
+    assert _grace("review:\n  settle_grace_minutes: 0\n") == 0.0, "0 is a legitimate opt-out"
+    for nonsense in ("'soon'", "-1", "true"):
+        assert _grace(f"review:\n  settle_grace_minutes: {nonsense}\n") == default, nonsense
+
+
+def test_the_settle_blocker_is_reported_to_the_operator() -> None:
+    """A blocker nobody prints is a blocker nobody can act on — the PR just
+    refuses to merge with no stated reason."""
+    pr_watch = _load_pr_watch()
+    report = pr_watch.build_report(
+        _green_view(headRefOid="abc123"),
+        [],
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:panel"},
+        check_details=pr_watch.CheckDetails([], "skipped"),
+    )
+    assert report["mergeable"] is False
+    assert "settle" in pr_watch.render(report).lower()
+
+
 def test_the_rest_bound_uses_the_backend_that_did_the_reads(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4566,6 +4976,7 @@ def test_the_rest_bound_uses_the_backend_that_did_the_reads(
     gh = pr_watch.build_report(
         view, [], set(), review_receipt=receipt,
         check_details=pr_watch.CheckDetails([], "skipped"), backend="gh",
+        **_settled(view),
     )
     assert gh["mergeable"] is True
     assert gh["backend"] == "gh"
