@@ -4747,6 +4747,11 @@ def test_the_settle_guard_is_wider_than_the_poll_that_observes_the_push(
 
     Poll 2 is the row under test: same head as poll 1, same partial count, and
     seconds later.
+
+    The stamp age is varied against a control, because the earlier version of
+    this test was blocked for the wrong reason: its stamp carried no `total`, so
+    it was rejected as malformed and the assertion below held whatever the age
+    was — a stamp 10,000 minutes old passed it just the same.
     """
     pr_watch = _load_pr_watch()
     partial = _green_view(
@@ -4756,19 +4761,30 @@ def test_the_settle_guard_is_wider_than_the_poll_that_observes_the_push(
             {"name": "b", "status": "COMPLETED", "conclusion": "SUCCESS"},
         ],
     )
-    # Poll 1 observed the push 30 seconds ago and recorded 2 of the 5 checks.
-    state = _settle_state(
-        head="newsha",
-        max_total=2,
-        settle_since={"head": "newsha", "at": _ago_iso(0.5)},
-        review_receipt={
-            "head": "newsha",
-            "source": "fallback:panel",
-            "lenses": ["adversarial", "correctness"],
-        },
-    )
 
-    report = _poll_via_main(monkeypatch, pr_watch, state, partial)
+    def _poll(stamp_age_minutes: float) -> dict:
+        return _poll_via_main(
+            monkeypatch,
+            pr_watch,
+            _settle_state(
+                head="newsha",
+                max_total=2,
+                settle_since={
+                    "head": "newsha",
+                    "at": _ago_iso(stamp_age_minutes),
+                    "total": 2,
+                },
+                review_receipt={
+                    "head": "newsha",
+                    "source": "fallback:panel",
+                    "lenses": ["adversarial", "correctness"],
+                },
+            ),
+            partial,
+        )
+
+    # Poll 1 observed the push 30 seconds ago and recorded 2 of the 5 checks.
+    report = _poll(0.5)
 
     assert report["checks"]["all_green"] is True, "the partial rollup reads green"
     assert report["settling"] is False, (
@@ -4776,6 +4792,11 @@ def test_the_settle_guard_is_wider_than_the_poll_that_observes_the_push(
     )
     assert report["mergeable"] is False, "poll 2 authorized a partial rollup (#39)"
     assert report["done"] is False
+
+    # Control: the ONLY thing holding the gate above is the grace, so the same
+    # state with an aged stamp must merge. Without this, the assertions above
+    # pass for any reason at all.
+    assert _poll(pr_watch._SETTLE_GRACE_MINUTES + 5)["mergeable"] is True
 
 
 def test_the_settle_clock_restarts_when_more_checks_register(
@@ -5019,13 +5040,19 @@ def test_a_dip_and_recovery_does_not_credit_the_time_before_the_dip(
 ) -> None:
     """The recovery poll is the one that matters, and it is not the shrink poll.
 
-    A rollup that drops below its maximum and then returns to exactly that
-    maximum is, at the moment of return, indistinguishable from one that never
-    moved: `settling` is false again (not BELOW max) and `rollup_grew` is false
-    (not ABOVE it). An earlier version of this guard reset only on growth, so the
-    stamp survived the whole excursion and the gate credited the span either side
-    of the dip — measured by a review lens at `mergeable: true` after 2m45s of
-    real stability against a 3m grace.
+    A rollup that drops and returns to its old count is, at the moment of
+    return, indistinguishable from one that never moved — unless the baseline
+    remembers what size it was taken at. It does: the stamp carries its `total`,
+    and any difference restarts the clock, so both the drop and the return are
+    movement.
+
+    Two earlier anchors failed here, in opposite directions, and this test exists
+    because of the first: resetting only on growth past `max_total` let the stamp
+    survive the whole excursion and credited the span either side of the dip —
+    measured by a review lens at `mergeable: true` after 2m45s of real stability
+    against a 3m grace. (The second anchor, `settling or rollup_grew`, closed
+    that and wedged the gate forever on a permanently-dropped check; that one is
+    pinned by `test_a_rollup_that_settles_at_a_lower_count_still_opens_the_gate`.)
 
     Three real polls through `build_report` -> `persist_poll` -> `load_state`,
     because the defect lives in what one poll persists for the next and no
@@ -5182,15 +5209,35 @@ def test_an_unusable_settle_stamp_fails_closed(
     zero time, or meaningfully in the future (a state file copied between
     machines, or a clock that ran ahead and was then NTP-corrected). None means
     "unknown", and unknown must not read as settled.
+
+    Every stamp carries a valid `total`, and the control below asserts a well
+    formed one settles. Both matter: without them this test stopped exercising
+    `_age_minutes` entirely the moment `total` became required — the stamps were
+    rejected as malformed one branch earlier, and disabling all three of
+    `_age_minutes`'s validation branches left it green. A lens caught that; it
+    had been passing for the wrong reason since the field was added.
     """
     pr_watch = _load_pr_watch()
-    for stamp in ("not-a-timestamp", "0001-01-01T00:00:00Z", _ago_iso(-600.0)):
-        report = _poll_via_main(
+    view = _green_view(headRefOid="abc123")
+
+    def _poll(stamp: str) -> dict:
+        return _poll_via_main(
             monkeypatch,
             pr_watch,
-            _settle_state(settle_since={"head": "abc123", "at": stamp}),
-            _green_view(headRefOid="abc123"),
+            _settle_state(
+                settle_since={"head": "abc123", "at": stamp, "total": 1},
+            ),
+            view,
         )
+
+    assert _poll(_ago_iso(600.0))["mergeable"] is True, (
+        "control: a usable stamp of this exact shape must settle, or the cases "
+        "below prove nothing about `_age_minutes`"
+    )
+
+    for stamp in ("not-a-timestamp", "0001-01-01T00:00:00Z", _ago_iso(-600.0)):
+        report = _poll(stamp)
+        assert report["settle_age_minutes"] is None, f"an unusable stamp was aged: {stamp}"
         assert report["mergeable"] is False, f"an unusable stamp opened the gate: {stamp}"
 
 
