@@ -73,11 +73,11 @@ was in the record prose *about* it, including one that turned out to have no cor
 - **`#403`, `#140`** each carry a new occurrence from this session's panel. `#403`'s is the
   substantive one: a claim that is false and *unrepairable* is outside its three proposed
   shapes, and it sharpens shape 1.
-- **`#399`** gained a third occurrence, and it is single-repo — a scratchpad `cd` persisting
-  into the next command, with no second tree in play. The rule's statement in `AGENTS.md`
-  covers it; its heading ("Working across two trees") does not, so it reaches only readers who
-  think they are doing two-tree work. Cheaper to fix than `#399`'s `adopt.md` half and
-  separate from it.
+- **`#399`** gained an occurrence this session, and it is the first single-repo one — a
+  scratchpad `cd` persisting into the next command, with no second tree in play. The rule's
+  statement in `AGENTS.md` covers it; its heading ("Working across two trees") does not, so it
+  reaches only readers who think they are doing two-tree work. Cheaper to address than
+  `#399`'s `adopt.md` half and separate from it.
 - **`#378`** has a second miscount noted on it: the 2026-08-08 marker calls itself the tenth
   sweep where `#198` and the archive's own sections put it eleventh. The 2026-08-11 marker
   carries no ordinal, deliberately.
