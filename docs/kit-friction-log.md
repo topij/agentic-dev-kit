@@ -28,11 +28,14 @@ ts `1786448223.387429`), and this block is the committed approval record `#128` 
 interactive path to carry — the proposals, the decision, and the snapshot digest, none of
 which survive in `state/` or `reports/`, both gitignored.
 
-**Frozen inbox:** 12,309 bytes, `sha256 2393e19e…`, reproducing from
-`tail -n +14 docs/kit-friction-log.md | shasum -a 256` **against `main` at `a539587`** —
-the pre-sweep tree, since this rewrite changes what line 14 is. Taken at draft time and
-re-checked at finalize; the digests matched, so the inbox was byte-identical to the
-snapshot and every block swept with nothing held back.
+**Frozen inbox:** 12,309 bytes, sha256
+`2393e19e0a2d5cc960a5beb2ab257a2bef62b9b769a165c83b07da486ca8d272`, reproducing from
+`git show a539587:docs/kit-friction-log.md | tail -n +14 | shasum -a 256`. The revision
+qualifier is load-bearing rather than decorative: this sweep rewrites the file, so the
+same pipeline run against the working tree hashes the post-sweep content and returns
+`2a963795…` instead. Taken at draft time and re-checked at finalize; the digests matched,
+so the inbox was byte-identical to the snapshot and every block swept with nothing held
+back.
 
 **Reading the tracker before drafting moved two entries off the new-issue path.** The
 panel-loop entry proposed a stopping-rule change that `#305` already carries as its
