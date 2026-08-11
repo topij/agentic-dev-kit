@@ -73,14 +73,12 @@ was in the record prose *about* it, including one that turned out to have no cor
 - **`#403`, `#140`** each carry a new occurrence from this session's panel. `#403`'s is the
   substantive one: a claim that is false and *unrepairable* is outside its three proposed
   shapes, and it sharpens shape 1.
-- **`#399`** gained another occurrence this session — the same scratchpad-`cd` shape, and the
-  same argument that the rule's heading is narrower than its statement, that its 2026-08-10
-  comment already records. A second data point, not a new case. Its `adopt.md` half is
-  untouched.
+- **`#399`** gained another occurrence this session; it is on the issue, alongside the
+  2026-08-10 comment that already made the argument. Its `adopt.md` half is untouched.
 - **`#378`** has a second miscount noted on it: the 2026-08-08 marker calls itself the tenth
   sweep where `#198` and the archive's own sections put it eleventh. The 2026-08-11 marker
   carries no ordinal, deliberately.
-- Everything listed as open in the 2026-08-10 block below is unchanged by this session.
+- Nothing else in the 2026-08-10 block's open list below moved this session.
 
 ▶ Next: **cs-toolkit kit refresh** — carried forward untouched from the 2026-08-10 block
 below; read its bullet there for the verified preconditions rather than trusting this line.
