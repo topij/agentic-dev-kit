@@ -32,10 +32,11 @@ which survive in `state/` or `reports/`, both gitignored.
 `2393e19e0a2d5cc960a5beb2ab257a2bef62b9b769a165c83b07da486ca8d272`, reproducing from
 `git show a539587:docs/kit-friction-log.md | tail -n +14 | shasum -a 256`. The revision
 qualifier is load-bearing rather than decorative: this sweep rewrites the file, so the
-same pipeline run against the working tree hashes the post-sweep content and returns
-`2a963795…` instead. Taken at draft time and re-checked at finalize; the digests matched,
-so the inbox was byte-identical to the snapshot and every block swept with nothing held
-back.
+same pipeline against the working tree hashes post-sweep content and returns something
+else. Naming that other digest here is not possible — the sentence naming it would sit
+inside the region being hashed, so any value written invalidates itself. Taken at draft
+time and re-checked at finalize; the digests matched, so the inbox was byte-identical to
+the snapshot and every block swept with nothing held back.
 
 **Reading the tracker before drafting moved two entries off the new-issue path.** The
 panel-loop entry proposed a stopping-rule change that `#305` already carries as its
