@@ -498,9 +498,22 @@ Commit the rewritten `kit-manifest.json` with the rest of the upgrade.
 
 ```bash
 uv run <engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
-uv run --with pytest --with pyyaml python -m pytest <engine-dir>/lib/state_paths/tests <engine-dir>/tests -q
+DEVKIT_STATE_ROOT=$(mktemp -d) uv run --with pytest --with pyyaml python -m pytest <engine-dir>/lib/state_paths/tests <engine-dir>/tests -q
 uv run <engine-dir>/check_doc_budget.py
 ```
+
+**`DEVKIT_STATE_ROOT=$(mktemp -d)` is not optional here.** Several engines —
+`pr_watch.py` above all — compute their persistence root once, at import
+time, from that env var or (absent it) this repo's own `state/`. Without the
+override, running this suite writes fixture data straight into this repo's
+live `state/pr-watch/` — the merge gate's own evidence store — while the run
+otherwise looks clean. `#428` measured it: an unpatched run overwrote
+`state/pr-watch/1.json` and `4242.json` with a fabricated review receipt and
+a reset `seen` set. A conftest fixture closes this for anyone who has it (see
+`scripts/tests/conftest.py`'s `_hermetic_state_root`), but this command is
+the second, independent layer: it protects an adopter who vendored the
+tests by hand, without that conftest, which `#40`/`#132` make a real case
+rather than a hypothetical one — no test file is in the kit manifest.
 
 `kit_doctor` should now report zero mismatches of every kind — `differs`, `STALE`,
 `STALE and LOCALLY EDITED` — and zero `unknown-version`. `LOCALLY EDITED` should be zero

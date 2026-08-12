@@ -25,6 +25,7 @@ where that was measured.
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
@@ -62,6 +63,119 @@ _ROOT_FOUND = any((c / ".git").exists() for c in (ENGINE_DIR, *ENGINE_DIR.parent
 _UNRESOLVED = (
     "" if _ROOT_FOUND else f" (repo root unresolved — no .git above {ENGINE_DIR}; see #233)"
 )
+
+
+# --------------------------------------------------------------------------- #
+# hermetic state root (#428)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Redirect every ``$DEVKIT_STATE_ROOT``-resolved write into a per-test dir.
+
+    #428: several engines — `pr_watch.py` above all — compute their
+    persistence root as a MODULE-LEVEL constant, evaluated once at import
+    time (``STATE_DIR = _STATE_ROOT / "pr-watch"``, computed from
+    ``$DEVKIT_STATE_ROOT`` or, absent that, the real repo root). A test that
+    exercises the persistence path without individually remembering
+    ``monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path)`` therefore
+    inherits the exact default the real CLI uses. Confirmed via `make test`
+    on the unpatched suite: an ordinary run overwrote this repo's own
+    ``state/pr-watch/1.json`` and ``4242.json`` with fixture data (a
+    fabricated ``fallback:panel`` review receipt; a reset ``seen`` set) —
+    the artifact the merge gate reads as proof a review happened.
+
+    This sets the env var rather than patching ``STATE_DIR`` on an
+    already-loaded module, because no such shared module exists to patch:
+    `test_pr_watch.py`'s ``_load_pr_watch()`` (and similar helpers in other
+    modules here) builds a FRESH module instance inside every test body via
+    ``importlib.util.spec_from_file_location``. Each fresh exec reads
+    ``os.environ`` again when it computes ``_STATE_ROOT``, so setting the
+    var here — a normal autouse fixture, which pytest runs before the test
+    body — reaches every one of them, in this module and any other
+    collected under ``scripts/tests/``. It also means the module keeps
+    doing its OWN real derivation; nothing here shortcuts or replaces it
+    (see ``test_state_dir_is_the_pr_watch_subdir_of_the_resolved_root`` in
+    ``test_pr_watch.py``, which pins that derivation directly and opts out
+    of this fixture to do it).
+
+    The 6 tests that already ``monkeypatch.setattr(pr_watch, "STATE_DIR",
+    tmp_path)`` by hand stay correct and are not redundant to remove: their
+    explicit patch, applied after this fixture's env var already took
+    effect, simply overrides it to their own literal path.
+
+    ``monkeypatch.setenv`` restores whatever was ambient before the test
+    (normally unset) once the test ends, so this cannot leak between tests
+    or outlive the run.
+    """
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "state"))
+
+
+def _hash_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _real_state_snapshot() -> dict[str, str]:
+    """``{relpath: sha256}`` for every file under the REAL ``<repo>/state/``.
+
+    Deliberately independent of ``$DEVKIT_STATE_ROOT`` and of
+    ``_hermetic_state_root`` above: this reads straight off disk at
+    ``REPO_ROOT / "state"``, using this conftest's OWN repo-root resolution
+    (module-level ``REPO_ROOT``, from ``_repo_layout.find_repo_root``) —
+    never `pr_watch`'s or any other engine's — so a bug in an engine's own
+    root/env resolution cannot blind the guard that exists to catch it.
+    """
+    state_dir = REPO_ROOT / "state"
+    if not state_dir.is_dir():
+        return {}
+    return {
+        str(path.relative_to(state_dir)): _hash_file(path)
+        for path in sorted(state_dir.rglob("*"))
+        if path.is_file()
+    }
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _real_state_root_is_never_written_by_the_suite():
+    """Regression pin for #428 — load-bearing, not decorative.
+
+    Session-scoped and autouse rather than a single ``test_...`` function so
+    it cannot be defeated by test selection or collection order: its
+    finalizer (the code after ``yield``) runs at the actual end of the WHOLE
+    pytest session, however the suite was invoked, and compares against a
+    snapshot taken at the session's actual start — before
+    ``_hermetic_state_root`` or any test body has run.
+
+    Without this, the next engine that computes a state/cache/whatever path
+    as an import-time module constant (`pr_watch.py`'s own mistake, #428)
+    reopens the hole ``_hermetic_state_root`` closes — silently, the moment
+    some test exercises it without an individual, easy-to-forget
+    ``monkeypatch.setattr``. This fixture is what turns that into a loud
+    local failure instead of fixture data quietly sitting in this repo's
+    live merge-gate evidence store.
+
+    A finalizer assertion failure surfaces as a teardown ERROR on whichever
+    test last tears this fixture down (pytest's normal reporting for a
+    session fixture), not as a distinct ``FAILED`` line — but it still turns
+    the run red and the exit code non-zero, which is what `make test`
+    depends on to catch this.
+    """
+    before = _real_state_snapshot()
+    yield
+    after = _real_state_snapshot()
+    if after == before:
+        return
+    changed = sorted(
+        rel for rel in set(before) | set(after) if before.get(rel) != after.get(rel)
+    )
+    assert after == before, (
+        "REGRESSION (#428): the test suite wrote into the real "
+        f"{REPO_ROOT / 'state'} directory during this run instead of staying "
+        "inside the per-test $DEVKIT_STATE_ROOT sandbox that "
+        "_hermetic_state_root (this conftest) sets. Changed paths: "
+        f"{changed}"
+    )
 
 
 def require_kit_paths(*paths: str) -> None:

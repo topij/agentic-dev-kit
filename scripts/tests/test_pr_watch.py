@@ -818,10 +818,33 @@ def test_marker_is_found_from_a_vendored_engine_dir(tmp_path: Path) -> None:
     assert pr_watch._resolve_state_root(vendored, wt, None) == sandbox
 
 
-def test_state_dir_is_the_pr_watch_subdir_of_the_resolved_root() -> None:
-    """Pin the wiring: whatever the root resolves to, state lands in pr-watch/."""
+def test_state_dir_is_the_pr_watch_subdir_of_the_resolved_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pin the wiring: whatever the root resolves to, state lands in pr-watch/.
+
+    #428's suite-wide `_hermetic_state_root` autouse fixture (in this
+    directory's ``conftest.py``) sets ``$DEVKIT_STATE_ROOT`` before every
+    test body runs, including this one — so without the ``delenv`` below,
+    ``pr_watch._STATE_ROOT`` would resolve to that fixture's tmp sandbox
+    rather than this repo's real default, and the two assertions that used
+    to close this test (``STATE_DIR == _STATE_ROOT / "pr-watch"`` and
+    ``is_absolute()``) would keep passing for a reason no longer stated:
+    they would hold no matter what `_resolve_state_root` computed, since a
+    pytest tmp dir is absolute by construction. That is not this test lying,
+    but it is testing less than its name claims.
+
+    ``delenv`` restores this ONE test to what it always was: the module
+    computing its OWN real derivation, with no override in effect — so the
+    added assertion below (``_STATE_ROOT == REPO_ROOT / "state"``) is a
+    genuine pin of the production default, not a tautology reachable no
+    matter what the wiring does. Still never touches disk: only `Path`
+    objects are inspected here, `STATE_DIR.mkdir()` is never called.
+    """
+    monkeypatch.delenv("DEVKIT_STATE_ROOT", raising=False)
     pr_watch = _load_pr_watch()
 
+    assert pr_watch._STATE_ROOT == pr_watch.REPO_ROOT / "state"
     assert pr_watch.STATE_DIR == pr_watch._STATE_ROOT / "pr-watch"
     assert pr_watch.STATE_DIR.is_absolute()
 
