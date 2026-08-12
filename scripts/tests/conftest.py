@@ -78,11 +78,10 @@ def _hermetic_state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     constant, evaluated once at import time (``STATE_DIR = _STATE_ROOT /
     "pr-watch"``, resolving ``$DEVKIT_STATE_ROOT``, then a
     ``.devkit_state_root`` marker, then the real repo root). It is the only
-    engine here that does — every other reader goes through
-    ``state_paths.state_root()``, which resolves per call and so picks up an
-    env var set after import. That asymmetry is why this fixture is written
-    as an env-var set rather than as an attribute patch, and why a
-    call-time resolver needs no equivalent. A test that
+    engine here that reaches ``state/`` at all, and it resolves at import
+    rather than per call — which is why this fixture sets the env var, which
+    a fresh module load will read, rather than patching an attribute on a
+    module instance that does not outlive the test. A test that
     exercises the persistence path without individually remembering
     ``monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path)`` therefore
     inherits the exact default the real CLI uses. Confirmed via `make test`

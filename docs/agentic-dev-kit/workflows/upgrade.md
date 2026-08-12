@@ -504,9 +504,9 @@ uv run <engine-dir>/check_doc_budget.py
 
 **`DEVKIT_STATE_ROOT` is not optional here, and the `&&` is what makes it
 fail closed.** `pr_watch.py` computes its persistence root once, at import
-time — the only engine that does; everything else reaching state goes
-through `state_paths.state_root()`, which resolves per call and so honours
-an override set after import. The resolution has three branches, not two:
+time — the only engine that reaches `state/` at all, and it resolves at
+import rather than per call, so an override has to be in the environment
+before the process starts. The resolution has three branches, not two:
 `$DEVKIT_STATE_ROOT`,
 then a `.devkit_state_root` marker walked up from the engine's own directory,
 then `<repo>/state`. Outside a lane there is no marker, so absent the env var

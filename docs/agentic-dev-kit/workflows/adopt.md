@@ -339,11 +339,9 @@ Two things to warn them about, both measured, because neither is obvious from th
   **`DEVKIT_STATE_ROOT` is not optional, and the `&&` is what makes it fail
   closed.** `pr_watch.py` computes its persistence root once, at import time,
   resolving `$DEVKIT_STATE_ROOT`, then a `.devkit_state_root` marker, then
-  `<repo>/state`. It is the only engine that does — everything else reaching
-  state goes through `state_paths.state_root()`, which resolves per call and
-  so honours an env var set after import. That asymmetry is the whole reason
-  this line is needed: a call-time resolver would pick the override up
-  whenever it was set, and an import-time constant will not. A fresh adoption has no marker, so absent the env var the
+  `<repo>/state`. It is the only engine that reaches `state/` at all, and it
+  resolves at import rather than per call — which is why an override has to
+  be in the environment before the process starts. A fresh adoption has no marker, so absent the env var the
   third branch is what you get. `state/` may not exist yet at that point, but
   the very first run of this command is what creates it — without the
   override, that first run seeds live `state/pr-watch/` with fixture data (a
