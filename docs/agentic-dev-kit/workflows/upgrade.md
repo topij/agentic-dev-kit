@@ -181,9 +181,11 @@ if [ -z "$BASELINE" ] ||
    ! git -C "$KIT" merge-base --is-ancestor "$BASELINE" HEAD 2>/dev/null; then
   echo "no usable install provenance — take the degraded path below"
 else
+  COUNT="$(git -C "$KIT" rev-list --count "$BASELINE..HEAD")"
   SUBJECTS="$(git -C "$KIT" log --format='%s' "$BASELINE..HEAD")"
-  if [ -n "$SUBJECTS" ]; then
-    UNINDEXED="$(printf '%s\n' "$SUBJECTS" | grep -cvE '\(#[0-9]+\)$' || true)"
+  if [ "$COUNT" -gt 0 ]; then
+    INDEXED="$(printf '%s\n' "$SUBJECTS" | grep -cE '\(#[0-9]+\)$' || true)"
+    UNINDEXED=$(( COUNT - INDEXED ))
     [ "$UNINDEXED" -gt 0 ] && echo "⚠ $UNINDEXED commit(s) in range carry no trailing (#NNN);
    they are NOT indexed below — read CHANGELOG.md from the top as well"
     printf '%s\n' "$SUBJECTS" | grep -oE '\(#[0-9]+\)$' | tr -d '()#' |

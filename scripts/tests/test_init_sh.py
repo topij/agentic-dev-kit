@@ -4076,6 +4076,82 @@ def test_upgrade_changelog_lookup_degrades_when_the_baseline_is_unusable(
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_changelog_lookup_counts_commits_not_subject_text(
+    tmp_path: Path,
+) -> None:
+    """A range of blank-subject commits is not an empty range (#430).
+
+    `git log --format=%s` over such a range emits only newlines, and `$(...)`
+    strips them — so a `-n "$SUBJECTS"` test reads a populated range as empty
+    and claims "up to date". That is worse than the silence it replaced: a
+    wrong positive rather than an ambiguous absence. The condition has to count
+    commits.
+    """
+    kit = tmp_path / "kit"
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e"}
+    subprocess.run(["git", "init", "-q", str(kit)], check=True)
+    subprocess.run(["git", "-C", str(kit), "commit", "-q", "--allow-empty",
+                    "-m", "base (#1)"], check=True, env=env)
+    baseline = subprocess.run(["git", "-C", str(kit), "rev-parse", "HEAD"],
+                              capture_output=True, text=True, check=True).stdout.strip()
+    for _ in range(2):
+        subprocess.run(["git", "-C", str(kit), "commit", "-q", "--allow-empty",
+                        "--allow-empty-message", "-m", ""], check=True, env=env)
+    (kit / "CHANGELOG.md").write_text("## #1 — dated\n\nirrelevant\n", encoding="utf-8")
+
+    result = _run_lookup(tmp_path, baseline, kit)
+
+    assert "up to date" not in result.stdout, (
+        "two commits past the baseline were reported as no commits, because "
+        f"their subjects are blank.\nstdout:\n{result.stdout}"
+    )
+    assert "2 commit(s) in range carry no trailing" in result.stdout, (
+        "both blank-subject commits should count as unindexed — counting "
+        "lines of `git log --format=%s` collapses them to one or zero.\n"
+        f"stdout:\n{result.stdout}"
+    )
+
+
+@pytest.mark.kit_repo_only(
+    "docs/agentic-dev-kit/workflows/upgrade.md", "CHANGELOG.md"
+)
+def test_real_changelog_headings_match_the_extraction_pattern() -> None:
+    """The shipped CHANGELOG must satisfy the awk the workflow runs on it (#430).
+
+    Every other test here builds a synthetic CHANGELOG under tmp_path, so the
+    real file's heading format was coupled to the extraction by nothing. A
+    malformed heading yields empty output, which is indistinguishable from "no
+    observable change" — the exact ambiguity this section exists to remove.
+    """
+    changelog = REPO_ROOT / "CHANGELOG.md"
+    headings = [
+        ln for ln in changelog.read_text(encoding="utf-8").splitlines()
+        if ln.startswith("## ")
+    ]
+    assert headings, "CHANGELOG.md has no `## ` entry headings to check"
+
+    for heading in headings:
+        fields = heading.split()
+        assert re.fullmatch(r"#\d+", fields[1]), (
+            f"heading {heading!r} puts {fields[1]!r} where the workflow's "
+            "`awk -v pr` compares `$2` against `\"#\" pr` — this entry can "
+            "never be extracted, and the lookup would render it as 'nothing "
+            "changed'"
+        )
+        pr = fields[1][1:]
+        extracted = subprocess.run(
+            ["awk", "-v", f"pr={pr}", '/^## /{p = ($2 == "#" pr)} p', str(changelog)],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        assert heading in extracted, f"awk could not extract {heading!r}"
+        others = [h for h in headings if h != heading]
+        assert not any(h in extracted for h in others), (
+            f"extracting {heading!r} leaked another entry's section"
+        )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
 def test_upgrade_changelog_lookup_says_so_when_the_range_is_empty(
     tmp_path: Path,
 ) -> None:
