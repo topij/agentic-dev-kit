@@ -4151,14 +4151,23 @@ def test_real_changelog_headings_match_the_extraction_pattern() -> None:
     ]
     assert headings, "CHANGELOG.md has no `## ` entry headings to check"
 
+    # WHICH field the awk compares also comes from the document. Hardcoding `$2`
+    # here would restore the duplication this test was just rewritten to remove,
+    # one level down: an edit changing the selector would make this assertion
+    # blame the heading for a change made to the extraction.
+    selector = re.search(r'\$(\d+)\s*==\s*"#"\s*pr', program)
+    assert selector, f"no `$N == \"#\" pr` comparison found in the awk:\n{program}"
+    field = int(selector.group(1))
+
     for heading in headings:
-        number = re.search(r"#(\d+)", heading)
-        assert number, (
-            f"heading {heading!r} carries no `#NNN`, so no PR number indexes it "
-            "and the lookup can never emit this entry"
+        fields = heading.split()
+        assert len(fields) >= field and re.fullmatch(r"#\d+", fields[field - 1]), (
+            f"heading {heading!r} does not put `#NNN` in field {field}, which is "
+            f"where the document's awk compares against `\"#\" pr`. This entry can "
+            "never be extracted, and the lookup would render it as 'nothing changed'"
         )
         extracted = subprocess.run(
-            ["awk", "-v", f"pr={number.group(1)}", program, str(changelog)],
+            ["awk", "-v", f"pr={fields[field - 1][1:]}", program, str(changelog)],
             capture_output=True, text=True, check=True,
         ).stdout
         assert heading in extracted, (
