@@ -836,15 +836,31 @@ def test_state_dir_is_the_pr_watch_subdir_of_the_resolved_root(
 
     ``delenv`` restores this ONE test to what it always was: the module
     computing its OWN real derivation, with no override in effect — so the
-    added assertion below (``_STATE_ROOT == REPO_ROOT / "state"``) is a
-    genuine pin of the production default, not a tautology reachable no
-    matter what the wiring does. Still never touches disk: only `Path`
-    objects are inspected here, `STATE_DIR.mkdir()` is never called.
+    root assertion below is a genuine pin of the production rule, not a
+    tautology reachable no matter what the wiring does. Still never touches
+    disk: only `Path` objects are inspected here, `STATE_DIR.mkdir()` is
+    never called.
+
+    That rule is TWO-armed, and asserting only the second arm
+    (``REPO_ROOT / "state"``) would pass here and fail in a headless lane.
+    With the env var gone, `_resolve_state_root` consults the
+    ``.devkit_state_root`` marker BEFORE falling back to the repo default —
+    and `dev_session.sh new --headless` writes exactly that marker into
+    every lane worktree, so a lane running `make test` resolves to its own
+    sandbox and is right to. Pinning one arm would have put this test in the
+    same class as the `state_paths` tests that `upgrade.md`'s "Known gotcha"
+    (kit issue #10) already tells you to run from the main checkout. So the
+    expectation is derived the way production derives it, and holds in both
+    a plain checkout and a lane.
     """
     monkeypatch.delenv("DEVKIT_STATE_ROOT", raising=False)
     pr_watch = _load_pr_watch()
 
-    assert pr_watch._STATE_ROOT == pr_watch.REPO_ROOT / "state"
+    engine_dir = Path(pr_watch.__file__).resolve().parent
+    marker = pr_watch._marker_state_root(engine_dir)
+    expected_root = marker if marker is not None else pr_watch.REPO_ROOT / "state"
+
+    assert expected_root == pr_watch._STATE_ROOT
     assert pr_watch.STATE_DIR == pr_watch._STATE_ROOT / "pr-watch"
     assert pr_watch.STATE_DIR.is_absolute()
 
