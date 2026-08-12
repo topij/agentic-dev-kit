@@ -151,9 +151,18 @@ answer as a complete one:
 git -C "$KIT" fetch --unshallow 2>/dev/null || git -C "$KIT" fetch --depth=1000
 ```
 
-Then resolve the baseline and the PRs that landed after it. Every squash merge on the kit
-carries its PR number as a trailing `(#NNN)`, and every changelog entry is headed by the
-PR that made the change — so those numbers are the index:
+Then resolve the baseline and the PRs that landed after it. A squash merge on the kit
+ordinarily carries its PR number as a trailing `(#NNN)`, and every changelog entry is
+headed by the PR that made the change — so those numbers are the index.
+
+**Ordinarily, not always, and the gap is silent.** A subject ending any other way —
+several references (`(#37, #146)`), text inside the parens (`(#134 cause 1)`), a
+`Merge pull request` subject, or a commit that never went through a PR — yields no number
+and is simply skipped. That looks exactly like "this commit changed nothing observable",
+which is the same fail-open shape as the empty baseline below. In this repo 26 of the
+first 169 commits do not match, all before 2026-08-01; every one of the 60 most recent
+does. So the count below is a tripwire rather than a formality — if it fires, the index is
+incomplete and the top of `CHANGELOG.md` is the fallback:
 
 ```bash
 BASELINE="$(uv run <engine-dir>/kit_doctor.py --manifest "$KIT/kit-manifest.json" --json \
@@ -163,10 +172,16 @@ if [ -z "$BASELINE" ] ||
    ! git -C "$KIT" merge-base --is-ancestor "$BASELINE" HEAD 2>/dev/null; then
   echo "no usable install provenance — take the degraded path below"
 else
-  git -C "$KIT" log --format='%s' "$BASELINE..HEAD" | grep -oE '\(#[0-9]+\)$' | tr -d '()#' |
-    while read -r pr; do
-      awk -v pr="$pr" '/^## /{p = ($2 == "#" pr)} p' "$KIT/CHANGELOG.md"
-    done
+  SUBJECTS="$(git -C "$KIT" log --format='%s' "$BASELINE..HEAD")"
+  if [ -n "$SUBJECTS" ]; then
+    UNINDEXED="$(printf '%s\n' "$SUBJECTS" | grep -cvE '\(#[0-9]+\)$' || true)"
+    [ "$UNINDEXED" -gt 0 ] && echo "⚠ $UNINDEXED commit(s) in range carry no trailing (#NNN);
+   they are NOT indexed below — read CHANGELOG.md from the top as well"
+    printf '%s\n' "$SUBJECTS" | grep -oE '\(#[0-9]+\)$' | tr -d '()#' |
+      while read -r pr; do
+        awk -v pr="$pr" '/^## /{p = ($2 == "#" pr)} p' "$KIT/CHANGELOG.md"
+      done
+  fi
 fi
 ```
 
@@ -181,12 +196,14 @@ written for exactly their case. `merge-base --is-ancestor` covers both, and cove
 baseline that resolves but sits on a history this checkout does not descend from.
 
 **Deepen before you guard — the order is the whole point.** `--is-ancestor` cannot tell
-"the clone is shallow" from "that commit is not in this history": in a `--depth 1` clone a
-perfectly valid baseline reports *not* an ancestor. Run the guard against an undeepened
-clone and every upgrade quietly takes the degraded path, which is strictly worse than the
-`fatal:` it replaced — an error stops you, a degraded read looks like an answer. Verified
-both directions on a real shallow clone: before deepening, a valid baseline reports not an
-ancestor; after `fetch --unshallow`, it reports ancestor and the normal path returns.
+"the clone is shallow" from "that commit is not in this history", because in a `--depth 1`
+clone the object is simply absent: it exits **128** with `fatal: Not a valid object name`,
+where a commit that is present but off this history exits **1**. The `!` and the
+`2>/dev/null` collapse those two into one degraded-path decision — correct for the case
+this guards, and the reason the redirect is load-bearing rather than tidying. Run the
+guard against an undeepened clone and every upgrade quietly takes the degraded path, which
+is strictly worse than the error it replaced: an error stops you, a degraded read looks
+like an answer.
 
 A PR that produced no output has no entry, and a PR with no entry made no observable
 change. That is the file's contract rather than an omission to chase.

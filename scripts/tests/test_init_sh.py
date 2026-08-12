@@ -3979,3 +3979,139 @@ def test_running_the_installer_does_not_modify_the_installer(
         f"{proof!r} absent from stdout, so the unchanged-bytes assertion above "
         f"passed vacuously.\nstdout:\n{result.stdout}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# The upgrade workflow's changelog-lookup block (#430)
+# --------------------------------------------------------------------------- #
+# Same reasoning as the Step 2 block above, and the same defect class (#330):
+# this is executable payload shipped as prose. It is extracted and RUN rather
+# than pattern-matched, because every assertion worth making here is about what
+# the shell does, not about which words the document contains.
+#
+# The property under test is the guard's fail-CLOSED direction. Its two inputs
+# fail differently and both must land on the degraded path: an empty baseline
+# interpolates to `..HEAD`, which git reads as `HEAD..HEAD` and prints nothing
+# (silent, and the worse of the two); a non-empty baseline this checkout cannot
+# resolve exits 128 from `merge-base --is-ancestor` (loud, but still not the
+# degraded path unless something routes it there). A panel lens hardwired this
+# guard to its fail-open branch and the whole suite still passed, which is why
+# the test exists.
+
+
+def _changelog_lookup_block() -> str:
+    """upgrade.md's Step 1 changelog-lookup block, as text.
+
+    Anchored on the `merge-base --is-ancestor` guard rather than on a path or a
+    heading: the guard IS the behaviour under test, so an edit that removes it
+    must fail here as a missing block rather than pass against some other
+    fenced block in the document.
+    """
+    doc = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+    ).read_text(encoding="utf-8")
+    blocks = re.findall(r"```(?:bash|sh)\n(.*?)```", doc, re.DOTALL)
+    matching = [b for b in blocks if "merge-base --is-ancestor" in b]
+    assert len(matching) == 1, (
+        f"expected one changelog-lookup block in upgrade.md, found {len(matching)}"
+    )
+    return matching[0]
+
+
+def _run_lookup(tmp_path: Path, baseline: str, kit: Path) -> subprocess.CompletedProcess:
+    """Run the document's own block with $BASELINE pre-set and $KIT bound.
+
+    The `BASELINE=` assignment in the document shells out to `kit_doctor.py`,
+    which needs an installed repo to report on. That resolution is not what this
+    test covers, so the line is replaced by the value under test and everything
+    after it — the guard and the extraction — runs verbatim from the document.
+    """
+    block = _changelog_lookup_block()
+    body = re.sub(
+        r'BASELINE="\$\(.*?\)"\n', "", block, count=1, flags=re.DOTALL
+    )
+    assert "merge-base --is-ancestor" in body, body
+    script = f'set -u\nKIT={shlex.quote(str(kit))}\nBASELINE={shlex.quote(baseline)}\n{body}'
+    return subprocess.run(
+        ["bash", "-c", script], capture_output=True, text=True, cwd=tmp_path
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize(
+    "baseline, label",
+    [
+        ("", "empty baseline"),
+        ("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", "unresolvable baseline"),
+    ],
+)
+def test_upgrade_changelog_lookup_degrades_when_the_baseline_is_unusable(
+    tmp_path: Path, baseline: str, label: str
+) -> None:
+    """Neither unusable baseline may reach the range query (#430).
+
+    Both must print the degraded-path notice. Asserting on that string rather
+    than on the absence of output is deliberate: silence is what the empty
+    baseline produced BEFORE the guard, so an assertion that accepted silence
+    would pass against the defect.
+    """
+    kit = tmp_path / "kit"
+    subprocess.run(["git", "init", "-q", str(kit)], check=True)
+    subprocess.run(["git", "-C", str(kit), "commit", "-q", "--allow-empty",
+                    "-m", "seed (#1)"], check=True,
+                   env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e"})
+    (kit / "CHANGELOG.md").write_text("## #1 — leaked\n\nmust not appear\n", encoding="utf-8")
+
+    result = _run_lookup(tmp_path, baseline, kit)
+
+    assert "degraded path" in result.stdout, (
+        f"the {label} did not reach the degraded path — the guard let it through.\n"
+        f"exit={result.returncode}\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
+    assert "leaked" not in result.stdout, (
+        f"the {label} reached the changelog extraction, which is the fail-OPEN "
+        f"direction this guard exists to close.\nstdout:\n{result.stdout}"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_changelog_lookup_reports_commits_it_could_not_index(
+    tmp_path: Path,
+) -> None:
+    """A commit with no trailing `(#NNN)` is skipped — say so (#430).
+
+    The positive control matters more than the warning: without an entry that
+    DOES get emitted, a test asserting only the warning would pass on a block
+    that emitted nothing at all.
+    """
+    kit = tmp_path / "kit"
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e"}
+    subprocess.run(["git", "init", "-q", str(kit)], check=True)
+    for subject in ("base (#1)", "indexed change (#42)", "Merge pull request #7 from x"):
+        subprocess.run(["git", "-C", str(kit), "commit", "-q", "--allow-empty",
+                        "-m", subject], check=True, env=env)
+    (kit / "CHANGELOG.md").write_text(
+        "## #42 — dated\n\nBREAKING: the indexed one\n\n## #99 — dated\n\nunrelated\n",
+        encoding="utf-8",
+    )
+    baseline = subprocess.run(
+        ["git", "-C", str(kit), "rev-list", "--max-parents=0", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    result = _run_lookup(tmp_path, baseline, kit)
+
+    assert "BREAKING: the indexed one" in result.stdout, (
+        "the conforming commit's entry was not emitted, so the warning assertion "
+        f"below would pass vacuously.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
+    assert "unrelated" not in result.stdout, (
+        f"extraction leaked past its own section into #99.\nstdout:\n{result.stdout}"
+    )
+    assert "1 commit(s) in range carry no trailing" in result.stdout, (
+        "the `Merge pull request` subject yields no PR number and was skipped "
+        f"silently — the failure this warning exists to make visible.\n"
+        f"stdout:\n{result.stdout}"
+    )

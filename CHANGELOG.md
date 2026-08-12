@@ -37,7 +37,8 @@ kit *commit*, not a version.
 **Axes.** `BREAKING (…)` — a repo pinning the old contract fails. `CHANGED` —
 observable but compatible. `ADDED` — new surface you may adopt or ignore.
 
-Entries before `#412` are not backfilled. This file starts where it starts.
+`#407` is the oldest entry; nothing before it is backfilled. This file starts where it
+starts.
 
 ---
 
