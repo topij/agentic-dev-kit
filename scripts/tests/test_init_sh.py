@@ -4113,6 +4113,21 @@ def test_upgrade_changelog_lookup_counts_commits_not_subject_text(
     )
 
 
+def _changelog_awk_program() -> str:
+    """The awk program the workflow actually runs, taken FROM the document.
+
+    Hardcoding a copy here is the defect this function exists to remove: a test
+    holding its own duplicate of the pattern validates the CHANGELOG against
+    that duplicate, so editing the document's awk leaves the test green while
+    the shipped procedure is broken. Verified by mutation — with the copy in
+    place, changing the document's field selector did not fail this test.
+    """
+    block = _changelog_lookup_block()
+    match = re.search(r"awk -v pr=\"\$pr\" '([^']*)'", block)
+    assert match, f"no `awk -v pr` invocation found in the block:\n{block}"
+    return match.group(1)
+
+
 @pytest.mark.kit_repo_only(
     "docs/agentic-dev-kit/workflows/upgrade.md", "CHANGELOG.md"
 )
@@ -4123,7 +4138,12 @@ def test_real_changelog_headings_match_the_extraction_pattern() -> None:
     real file's heading format was coupled to the extraction by nothing. A
     malformed heading yields empty output, which is indistinguishable from "no
     observable change" — the exact ambiguity this section exists to remove.
+
+    The awk comes from the document, never from a copy here, so this fails when
+    EITHER side drifts: a malformed heading, or an edit to the extraction the
+    headings no longer satisfy.
     """
+    program = _changelog_awk_program()
     changelog = REPO_ROOT / "CHANGELOG.md"
     headings = [
         ln for ln in changelog.read_text(encoding="utf-8").splitlines()
@@ -4132,19 +4152,19 @@ def test_real_changelog_headings_match_the_extraction_pattern() -> None:
     assert headings, "CHANGELOG.md has no `## ` entry headings to check"
 
     for heading in headings:
-        fields = heading.split()
-        assert re.fullmatch(r"#\d+", fields[1]), (
-            f"heading {heading!r} puts {fields[1]!r} where the workflow's "
-            "`awk -v pr` compares `$2` against `\"#\" pr` — this entry can "
-            "never be extracted, and the lookup would render it as 'nothing "
-            "changed'"
+        number = re.search(r"#(\d+)", heading)
+        assert number, (
+            f"heading {heading!r} carries no `#NNN`, so no PR number indexes it "
+            "and the lookup can never emit this entry"
         )
-        pr = fields[1][1:]
         extracted = subprocess.run(
-            ["awk", "-v", f"pr={pr}", '/^## /{p = ($2 == "#" pr)} p', str(changelog)],
+            ["awk", "-v", f"pr={number.group(1)}", program, str(changelog)],
             capture_output=True, text=True, check=True,
         ).stdout
-        assert heading in extracted, f"awk could not extract {heading!r}"
+        assert heading in extracted, (
+            f"the document's own awk could not extract {heading!r} — the "
+            "shipped CHANGELOG and the shipped extraction disagree"
+        )
         others = [h for h in headings if h != heading]
         assert not any(h in extracted for h in others), (
             f"extracting {heading!r} leaked another entry's section"
