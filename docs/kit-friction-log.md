@@ -25,14 +25,35 @@ Proposed fix: give the launch prompt a dispositions section (finding, disposal, 
 artifact lives) and require a lens re-raising one to say why the disposal is wrong, rather
 than restating the finding. Related: `#405` (nothing checks a round was posted), `#420`.
 
-**The lens contract's scratch rule collides with the permission layer, in every run.**
+**The lens contract's scratch rule implies a route the permission layer refuses.**
 Severity **L**. `fallback-review-panel.md` tells each lens to namespace its scratch by lens
 and revision; lenses reach for remove-then-recreate to honour that, and `rm -rf` is refused
-here. Every lens on `#437` reported the refusal and worked around it the same way — a fresh,
-never-reused directory name — which is what the namespacing rule wanted anyway. The rule is
-right and the route it implies is not. Proposed fix: say so in the contract — a fresh path
-per lens per revision, never a removal — which is one sentence and removes a refusal from
-every lens run.
+here, so each works around it with a fresh never-reused path — which is what the
+namespacing rule wanted anyway. The rule is right and the route it implies is not.
+Proposed fix: say so in the contract — a fresh path per lens per revision, never a
+removal — one sentence that removes a refusal from every lens run.
+
+**Provenance, deliberately narrow:** a lens reported this first-hand in `#440`'s own panel,
+which is where a reader can check it. An earlier draft of this entry claimed *every* lens on
+`#437` hit it. That was drawn from session transcripts rather than from anything `#437`
+publishes, and both `#440` lenses independently went looking for it in that PR's record and
+found nothing — which is `#423`'s subject exactly, so the claim was narrowed to what an
+artifact carries rather than restated more confidently.
+
+**A full panel's launch prompt handed each lens the author's own class draws.**
+Severity **M**. Found by a lens reviewing this very entry's PR, against my orchestration
+rather than against the diff. `fallback-review-panel.md` hands the author's stated draws to
+the **delta pass** on purpose — an anchoring accepted deliberately — and says the opposite
+for a full panel: *"Full-panel lens prompts are untouched by all of this"*, plus "do not
+push the gate into the lens prompts". I passed the draws through
+`panel_prompt.py --carry-forward` on every full panel from `#437`'s third round onward, so
+each of those was anchored toward confirming me. The lens that caught it had re-derived
+both draws independently and said so, so the damage looks small — but "it happened not to
+matter" is not a property of the mechanism. Proposed fix: `--carry-forward` is the wrong
+carrier for a draw, since its own rendered heading is about what prior rounds *covered*;
+either refuse draws there for a full panel, or give the delta pass its own flag so the two
+cannot be confused. Related: the disposition-carrying gap in the entry above, which wants a
+separate channel for the same reason.
 
 ## 2026-08-11 — Backlog migrated to GitHub Issues (#419–#423)
 
