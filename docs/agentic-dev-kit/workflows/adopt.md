@@ -337,10 +337,13 @@ Two things to warn them about, both measured, because neither is obvious from th
   (Adjust the prefix when engines live directly under `scripts/`.)
 
   **`DEVKIT_STATE_ROOT` is not optional, and the `&&` is what makes it fail
-  closed.** `pr_watch.py` and other
-  engines compute their persistence root once, at import time, resolving
-  `$DEVKIT_STATE_ROOT`, then a `.devkit_state_root` marker, then
-  `<repo>/state`. A fresh adoption has no marker, so absent the env var the
+  closed.** `pr_watch.py` computes its persistence root once, at import time,
+  resolving `$DEVKIT_STATE_ROOT`, then a `.devkit_state_root` marker, then
+  `<repo>/state`. It is the only engine that does — everything else reaching
+  state goes through `state_paths.state_root()`, which resolves per call and
+  so honours an env var set after import. That asymmetry is the whole reason
+  this line is needed: a call-time resolver would pick the override up
+  whenever it was set, and an import-time constant will not. A fresh adoption has no marker, so absent the env var the
   third branch is what you get. `state/` may not exist yet at that point, but
   the very first run of this command is what creates it — without the
   override, that first run seeds live `state/pr-watch/` with fixture data (a
@@ -354,11 +357,14 @@ Two things to warn them about, both measured, because neither is obvious from th
   fixture protects a run of the suite, while the fail-closed form above
   protects against `mktemp` itself failing, which no fixture can; and an
   adopter who vendored selectively may have the tests without the conftest,
-  since no test file is tracked by `kit-manifest.json` (`#40`). The two-step form matters for the same reason it does there —
-  an inline `DEVKIT_STATE_ROOT=$(mktemp -d)` sets the empty string when
-  `mktemp` fails, which the resolver reads as *no override* and answers with
-  the repo default, so the failure lands the suite exactly where it must not
-  go. `&&` gates the run on the assignment instead.
+  since no test file is tracked by `kit-manifest.json` (`#40`).
+
+  The two-step form is what makes the override fail closed, and `/upgrade`
+  Step 5 carries the same idiom for the same reason: an inline
+  `DEVKIT_STATE_ROOT=$(mktemp -d)` sets the empty string when `mktemp` fails,
+  which the resolver reads as *no override* and answers with the repo
+  default, so the failure lands the suite exactly where it must not go. `&&`
+  gates the run on the assignment instead.
 - `check_doc_budget`: run it — it should read the configured plan via `config/dev-model.yaml`.
 - `kit_doctor`: run it **against the kit checkout's manifest**, not bare:
 
