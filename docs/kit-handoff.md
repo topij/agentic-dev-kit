@@ -14,11 +14,79 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-11 — the friction-log inbox is graduated (`#424`, `463dc26`). Filed this
-session: `#419`, `#420`, `#421`, `#422`, `#423`, `#425`. The cs-toolkit refresh is still the
-outstanding thread, unchanged from the block below it.
+Last updated: 2026-08-12 — the cs-toolkit refresh landed and `#428` is fixed on `#432`,
+which is `mergeable` and waiting on an operator merge. Filed this session: `#433`, `#434`,
+`#435`.
 
-## Latest session — 2026-08-11 (the sweep, and a record claim that could not be repaired)
+## Latest session — 2026-08-12 (the adopter refresh's first upstream fix, and a boundary I drew wrong)
+
+**Theme —** `#428`, the sharpest of the four issues the cs-toolkit refresh filed against the
+kit. The fix is small; what the review found in it, round after round, is the part worth
+carrying.
+
+- **The cs-toolkit refresh is done** — the thread this handoff carried as outstanding since
+  2026-08-10. It went `40eef8b` → `0c73bdf` clean: `kit_doctor` 0 differ, config migration
+  byte-identical, 6 of 6 declines preserved. Filed upstream: `#428`, `#429`, `#430`, `#431`,
+  plus an occurrence comment on `#40`. **Its field report exists only as a chat artifact**,
+  which is `#423`'s own shape — a URL is a pointer for one reader, not provenance. The
+  findings above are the durable half.
+- **`#428` fixed on `#432`** — the kit's own `make test` was overwriting `state/pr-watch/1.json`
+  and `4242.json`, and `1.json` is a real PR's record slot. Two layers: an autouse fixture
+  binding a per-test state root, and a session-scoped pin that fails the run if the real
+  `state/` changes. Receipt `fallback:panel` at `752d9fe`, both lenses.
+  **Not merged — operator-merge under the ruling below.**
+- **Filed:** `#433` (the pin's snapshot is taken after the first test directory has already
+  run — the conftest is directory-scoped and a session fixture instantiates lazily),
+  `#434` (`safety-critical-changes.md`'s glob does not reach the guard, with the breadth
+  decided as `scripts/tests/conftest.py` only), `#435` (wrap-up step 8 sends the handoff
+  commit to the session branch, which voids that PR's review receipt — hit while wrapping
+  up this session, worked around by branching off `main`). Occurrence comments on `#54`,
+  `#182`, `#209`.
+
+**Learned**
+
+- **The isolation command I wrote failed open.** `DEVKIT_STATE_ROOT=$(mktemp -d) pytest …`
+  sets the empty string when `mktemp` fails, and `_resolve_state_root` reads empty as *no
+  override* — so it would have redirected the suite into live `state/` exactly when the
+  isolation failed, which is worse than not having the line, because the command reads as
+  protected. CodeRabbit found it. The two-step `tmp="$(mktemp -d)" && …` gates the run on
+  the assignment.
+- **I drew the safety-critical boundary wrong, and a lens overturned it.** My reasoning was
+  that the globs name `dev_session.sh` and `pr_watch.py` and the diff touches neither —
+  literally true. But the glob's own frontmatter says `pr_watch.py` was added because the
+  rule must match where the decision is *made*; a fabricated receipt is indistinguishable
+  from a real one by the time the gate reads it, so the defence has to be upstream. The
+  operator upheld the dispute. **The resolution is the operator's own comment on `#432`**,
+  because the doctrine excludes a relayed account from the party that drew the boundary —
+  which was me.
+- **Four of the defects the loop caught were introduced while fixing the previous round.**
+  A deleted referent left a dangling pronoun; a corrected claim described an empty set as a
+  population. That is `safety-critical-changes.md` rule 3's own subject, and it is why
+  `#433` and `#434` were filed rather than built into a fix round.
+- **A figure that crosses an agent boundary arrives with its provenance collapsed.** Two
+  numbers I relayed from a delegated report into the PR body named commands that did not
+  produce them — and naming a command is what made them look established. Recorded on `#54`;
+  it sharpens that issue rather than restating it.
+- **A lens returned a placeholder instead of a report** and would have counted as a passing
+  lens to anything tallying rather than reading. Caught only because the output was visibly
+  not a report. `#182`.
+
+**Open, and owned by nothing yet**
+
+- **`#432`** is `mergeable` and unmerged. Operator-merge; do not self-merge it.
+- **`#429`, `#430`, `#431`** — the rest of the cs-toolkit refresh's upstream findings,
+  untouched. `#430` is the one three of the others are downstream of.
+- **`#433`, `#434`** as filed. `#434` needs `#273` accounted for or it is half a fix —
+  `.claude/rules/` binds one runtime.
+- Nothing in the 2026-08-11 block's open list below moved this session.
+
+▶ Next: **merge `#432`** (operator-merge, receipt `fallback:panel` at `752d9fe`), then
+`#430` — the adopter-facing signal for an upgrade that changes observable engine behaviour,
+which `#429` and the `#431` decline-labour both trace back to.
+
+______________________________________________________________________
+
+## Session — 2026-08-11 (the sweep, and a record claim that could not be repaired)
 
 **Theme —** a routine graduation sweep. The routing went clean; every defect the review found
 was in the record prose *about* it, including one that turned out to have no correct value.
@@ -250,84 +318,6 @@ only. But it also said `/commits/{sha}/status` exposes `creator.login` per conte
 endpoint carries **no `creator` at all** — only the plural `/statuses` does. Worth keeping
 because the error was in a document written specifically to spare the next session the
 probes, and only re-running them caught it.
-
-______________________________________________________________________
-
-## Session — 2026-08-10 (the install-path lane, and a gate the panel kept breaking)
-
-**Theme —** four install-path items shipped in one PR. The work was small; the review was
-not, and what it found is the more useful half. The `#398` template gate drew a defect in
-round after round, every one inside the previous round's remediation.
-
-- **`#397` closed.** `init.sh`'s `--no-clobber` summary aborted under `set -eu` between
-  the file list and the four echoes explaining the action. Swept `init.sh` for the shape:
-  no other instance. The similar lines in `dev_session.sh` and `reconcile_sessions.sh` are
-  a **different shape and not this bug** — a standalone `while` whose last body statement
-  is a falsy `&&` chain exits 0 under `set -e`; only one ending a **pipeline** exits 1.
-  Verified in both directions, which is what stopped a false ticket against those files.
-- **`#380` closed, acceptance met.** `init.sh` prints a Codex SessionStart registration
-  and the kit's own `.codex/hooks.json` carries it. The fire-check ran in a **trusted**
-  session with no bypass flag; the issue carries the before/after. Settled there too:
-  `SessionStart` takes **no** `matcher` key (Codex accepts Claude's shape and then never
-  fires), a project-level `.codex/hooks.json` **is** read, and project trust is **not**
-  hook trust — the probe repo had `trust_level = "trusted"` and the hook still did not run.
-- **`#398` closed.** The template refresh is gated on the declared set, keyed on
-  `kit_commit`. `adopt.md`'s bullet had the same shape via its rationale rather than its
-  instruction.
-- **`#399` partly.** The cross-tree rule is in `AGENTS.md` and `upgrade.md` is bound to it
-  — `$REPO`/`$KIT` in Step 0, `$REPO`-anchored writes, a `cd` that fails the run.
-  **`adopt.md` is not hardened** and the issue stays open for it.
-- **Filed:** `#402` (`kit_doctor`'s four manifest reads catch two exception types; a deep
-  JSON array crashes the diagnostic), `#403` (the record-prose carve-out has no disposal
-  for a claim that is *false* but marked imprecision), `#404` (the panel's scratch
-  namespace collides on a same-head re-run), `#405` (nothing checks a round was posted —
-  two were not, while four commits cited them). Occurrence comments on `#77` and `#399`.
-
-**Learned**
-
-- **A predicate restated where nothing executes it does not converge by patching.** The
-  `#398` gate reimplements manifest semantics in doc-embedded Python, next to
-  `kit_doctor.py`, which owns that schema. Read the `## Fallback panel — round N` headers
-  on `#401` for the sequence; each fix drew the next defect. `init.sh`'s own
-  `register_pr_hook` comment already names this pattern and its only known ending —
-  delete the predicate, do not guard it better — and it went unrecognised for most of the
-  loop while each round's fix was treated as the last one needed.
-  **The structural fix is Step 2 asking the engine instead of re-deriving**, which needs a
-  `kit_doctor` surface that does not exist; it gets its own PR.
-- **Two guards were the same class one type over.** The manifest read enumerated exception
-  types twice and was holed twice — `JSONDecodeError` escaped, then `RecursionError`
-  escaped `(OSError, ValueError)`. `except Exception` closed the class. `#402` is the same
-  enumeration, unfixed, in the engine.
-- **A fix round can over-apply a finding as easily as under-apply it.** Round 2 found that
-  the gate's refusal did not stop the workflow; the fix made *every* refusal stop it, which
-  blocked the config migration for any adopter carrying a deliberate local patch — a state
-  `record_install_manifest` writes by design. The narrower reading was available and not
-  taken.
-- **A `trap … EXIT` bounds damage in time, not against a concurrent reader.** A background
-  job held a temporarily-lowered doc budget while `git add -A` ran for an unrelated commit,
-  and the bad value merged into the branch before being restored. The trap fired correctly;
-  the window was simply open. Caught by `git status`, not by any test — the budget check is
-  warn-only, so a nonsense budget fails nothing.
-- **The panel's own doctrine bit back, correctly.** A record-prose finding marked
-  *imprecision below HIGH* must be **logged, not fixed** — and the rule says "as the lens
-  marked it" precisely so the author cannot relabel to justify the cheaper disposal. I
-  relabelled; two lenses caught it independently. `#403` is the gap that made the choice
-  genuinely hard: the claim was *false*, and logging a falsehood ships it.
-
-**Open, and owned by nothing yet**
-
-- **`#399`'s `adopt.md` half** — it clones to the same second tree in Step 0 and Step 1
-  sends you to read inside it, with no `$REPO`/`$KIT` binding.
-- **`#402`, `#403`, `#404`, `#405`** as filed. `#403` is the one worth a decision rather
-  than a fix.
-- **`#395`, `#388`, `#358`** unchanged by this session.
-- **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
-
-▶ Superseded by the block above, kept for the reasoning: **`cluster:merge-gate`** — `#190`
-and `#39` together (one guard, one change), then `#95` separately. `#190` and `#39` are now
-closed; `#95` remains and is the live `▶ Next:`. The reasoning worth keeping is why the
-three were ever grouped: they are `pr_watch.py` defects that nothing in `#401` touched, and
-the cluster was never gated on the install-path lane.
 
 ______________________________________________________________________
 
