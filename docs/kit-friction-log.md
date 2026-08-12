@@ -11,6 +11,29 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-12
+
+**A multi-round panel cannot tell a lens what a previous round already disposed of.**
+Severity **M**. A lens has fresh context by design, so it re-raises a finding the cockpit
+already answered — on `#437` the same enforcement gap was raised in an early round, filed
+as an issue, and raised again identically two rounds later. Re-raising is correct
+behaviour for the lens and costs the cockpit a repeated reply each round, and a cockpit
+that tired of replying would start ignoring a live finding that happened to look familiar.
+`panel_prompt.py --carry-forward` is the obvious home — it already carries the
+round-to-round aim — but it carries what prior rounds *covered*, not what was *decided*.
+Proposed fix: give the launch prompt a dispositions section (finding, disposal, where the
+artifact lives) and require a lens re-raising one to say why the disposal is wrong, rather
+than restating the finding. Related: `#405` (nothing checks a round was posted), `#420`.
+
+**The lens contract's scratch rule collides with the permission layer, in every run.**
+Severity **L**. `fallback-review-panel.md` tells each lens to namespace its scratch by lens
+and revision; lenses reach for remove-then-recreate to honour that, and `rm -rf` is refused
+here. Every lens on `#437` reported the refusal and worked around it the same way — a fresh,
+never-reused directory name — which is what the namespacing rule wanted anyway. The rule is
+right and the route it implies is not. Proposed fix: say so in the contract — a fresh path
+per lens per revision, never a removal — which is one sentence and removes a refusal from
+every lens run.
+
 ## 2026-08-11 — Backlog migrated to GitHub Issues (#419–#423)
 
 Swept in LLM-only mode

@@ -14,11 +14,77 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-12 — the cs-toolkit refresh landed and `#428` is fixed on `#432`,
-which is `mergeable` and waiting on an operator merge. Filed this session: `#433`, `#434`,
-`#435`.
+Last updated: 2026-08-12 — `#432` landed and `#430` shipped on `#437`. `#429` and `#431`
+are what remain of the cs-toolkit upstream set. Filed this session: `#438`, `#439`.
 
-## Latest session — 2026-08-12 (the adopter refresh's first upstream fix, and a boundary I drew wrong)
+## Latest session — 2026-08-12 (the changelog an adopter reads, and a loop that kept finding my own fixes)
+
+**Theme —** `#430`: `/upgrade` said *which* file to take and nothing said what taking it
+would change. Shipped on `#437`. The mechanism is small; what the review found inside my
+own work, round after round, is the part worth carrying.
+
+- **`#430` closed** (`#437`, `9833e95`). Split deliberately, and the split is the design
+  decision: `CHANGELOG.md` at the root records **observable**
+  changes only; the *reading* half went into `upgrade.md` Step 1, where
+  `baseline_kit_commit` is already in hand; the *authoring* half went into `AGENTS.md`,
+  because only kit authors write entries and that rule must not ship to adopters.
+- **`CHANGELOG.md` is deliberately outside `KIT_OWNED` and the manifest.** Adopters read
+  the kit's copy in the clone Step 0 already makes; installing one would create another
+  file that drifts and reports `differs` forever. Entries are keyed by the **PR that made
+  the change**, not by the commit an adopter happened to land on — `#430`'s own sketch
+  keyed the backfill to a wrap-up commit that changed no code.
+- **`#432` landed**, closing the thread the previous block left waiting on an operator
+  merge.
+- **Filed:** `#438` (nothing enforces the new rule; every cheap proxy for "is this
+  observable" fails in the expensive direction — a signature check misses `#190`/`#39`,
+  whose signature never changed), `#439` (the unreachable test-helper gaps, whose
+  filing is what ended the review loop). Occurrence comment on `#243`.
+
+**Learned**
+
+- **"Verified against the code" covered the behaviour and not the symbols.** I stated it
+  on the PR; a lens then found the entry named a function that exists nowhere, and another
+  quoted a `merge_blockers` value that is only ever a prefix. The behaviour claims were
+  right, which is what made the rest look established. `#54`'s own subject, recorded there.
+- **Each fix round carried the next defect, including into a test written to close the
+  previous round's finding.** One round's correction introduced a false claim about the
+  lines it was correcting; a later round's coverage fix hardcoded a copy of the thing
+  under test, so mutating the document left the test green. `safety-critical-changes.md`
+  rule 3's subject, with the loop's own transcript on `#437` as the evidence.
+- **A claim repaired twice was deleted rather than corrected a third time.** The quoted
+  git error text was wrong for every real input — `baseline_kit_commit` is a full sha and
+  git words that case differently from an abbreviated one. The exit codes are what the
+  guard keys on, so the quotation went. `fallback-review-panel.md`'s "keep the record
+  small", applied rather than cited.
+- **The lenses split on a finding and agreed on every fact beneath it** — one called a
+  looser check a regression, the other tried to construct a false pass, could not, and
+  reported clean. Fixed rather than adjudicated, because the repair removed the *reason*
+  the looser form existed.
+- **The stopping rule was stated on the PR before the last round's results were read.**
+  Every bound on that loop is settable by the author of the change under review, so
+  pre-committing is the only defence against choosing the cheaper answer afterwards. The
+  loop ended on blast radius, not on findings running out.
+- **The bot reviewed the first head and was rate-limited on every one after**, again, and
+  the panel carried the rest. `#372` is the posture decision this keeps costing, and this
+  session is the sharpest evidence for it and for `#420`.
+
+**Open, and owned by nothing yet**
+
+- **`#429`, `#431`** — the remainder of the cs-toolkit upstream set, untouched. The
+  previous block called `#430` the one the others are downstream of; neither issue body
+  records that dependency, so treat the ordering as a judgement to re-make rather than a
+  blocker that has now cleared.
+- **`#438`, `#439`** as filed. `#438` is the enforcement half `#437` deliberately left out.
+- **`#433`, `#434`** untouched; `#434` still needs `#273` accounted for or it is half a fix.
+- Nothing in the blocks below moved this session.
+
+▶ Next: **`#429`** — `#134`'s defect surviving in `test_pr_watch.py`, the one file `#40`
+certifies as portable. Read its body for the downstream fix already applied and offered
+upstream, rather than starting from the title.
+
+______________________________________________________________________
+
+## Session — 2026-08-12 (the adopter refresh's first upstream fix, and a boundary I drew wrong)
 
 **Theme —** `#428`, the sharpest of the four issues the cs-toolkit refresh filed against the
 kit. The fix is small; what the review found in it, round after round, is the part worth
