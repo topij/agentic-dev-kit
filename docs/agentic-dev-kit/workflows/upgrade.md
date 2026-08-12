@@ -128,6 +128,74 @@ A `baseline: none recorded` line here is expected on a first upgrade and is not 
 Step 4 writes the baseline. Do **not** run `--record-install` at this point — it writes a
 file, and everything before Step 2 must stay read-only.
 
+### Then read what the new files will *do* differently
+
+`kit_doctor` answers "did this drift". It never answers "what does the new one do
+differently", and Step 3 below hands you a per-file verdict without that second answer
+attached. `CHANGELOG.md` in the kit checkout is where it lives — the observable changes
+only, no rationale — and **this** is the step that can narrow it to *your* answer, because
+the report you just ran knows which kit commit this repo installed from.
+
+Read it now, before Step 3 copies anything. Skipping it does not fail the upgrade; it
+defers the cost to whenever your own tests go red after a file copy, with no way to tell
+"the kit broke my repo" from "my repo pinned the old contract". Distinguishing those was
+the bulk of one adopter's refresh session, for two changes that were both landing
+correctly (`#430`).
+
+**The Step 0 clone is `--depth 1`, so it has no history to range over.** Deepen it first.
+Without this the `git log` below fails with `unknown revision`, which reads as a bad
+baseline rather than a shallow clone:
+
+```bash
+git -C "$KIT" fetch --unshallow 2>/dev/null || git -C "$KIT" fetch --depth=1000
+```
+
+Then resolve the baseline and the PRs that landed after it. Every squash merge on the kit
+carries its PR number as a trailing `(#NNN)`, and every changelog entry is headed by the
+PR that made the change — so those numbers are the index:
+
+```bash
+BASELINE="$(uv run <engine-dir>/kit_doctor.py --manifest "$KIT/kit-manifest.json" --json \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("baseline_kit_commit") or "")')"
+echo "baseline=${BASELINE:-NONE}"
+if [ -z "$BASELINE" ]; then
+  echo "no install provenance recorded — take the degraded path below"
+else
+  git -C "$KIT" log --format='%s' "$BASELINE..HEAD" | grep -oE '\(#[0-9]+\)$' | tr -d '()#' |
+    while read -r pr; do
+      awk -v pr="$pr" '/^## /{p = ($2 == "#" pr)} p' "$KIT/CHANGELOG.md"
+    done
+fi
+```
+
+**The `if` is not decoration.** An empty `$BASELINE` interpolated into `"$BASELINE..HEAD"`
+gives `..HEAD`, which git reads as `HEAD..HEAD` and prints nothing at all — so the one
+case that knows least about your repo is the one that renders as "no observable changes
+since your baseline". That is the fail-open direction, and it is silent.
+
+A PR that produced no output has no entry, and a PR with no entry made no observable
+change. That is the file's contract rather than an omission to chase.
+
+**`baseline_kit_commit` empty is a real, supported value — degrade, do not guess.** Three
+causes reach it and nothing here can tell them apart: `--record-install` never ran
+(`baseline: none recorded`); it ran without `--from-kit`, so the baseline is trusted but
+carries no provenance (`recorded, install provenance unknown`); or the recorded value is
+not a string, which `kit_doctor` normalizes away rather than aborting the report over.
+There is no range to compute, so:
+
+- Read `$KIT/CHANGELOG.md` from the top instead, and treat every `BREAKING` line as
+  applying to you until you can show otherwise. It is newest-first and short by
+  construction — this is minutes, not the session `#430` describes.
+- If you know roughly when this repo last upgraded, bound it by date instead:
+  `git -C "$KIT" log --since=<date> --format='%s'`, then index as above.
+- Either way, **Step 4's `--record-install --from-kit "$KIT"` is what stops the next
+  upgrade paying this** — the same step, and the same `kit_commit` key, that the `STALE`
+  / `LOCALLY EDITED` split above already depends on.
+
+A baseline **older than the changelog itself** also finds nothing, and that is not a fault
+either: the file records nothing before the PR it starts at, and says so in its own
+header.
+
 ## Step 2 — Branch, refresh the migrator, then migrate
 
 **Branch first.** Everything from here mutates the repo — config, hooks, rendered
@@ -368,6 +436,11 @@ Press Enter through every prompt to keep current values. Then re-read the diff o
 Work through `kit_doctor`'s file list. You are already on the branch from Step 2 —
 `init.sh` refreshed itself and migrated the config there, so those changes are captured
 too. Confirm with `git branch --show-current` before the first copy.
+
+**Every verdict below decides *whether* to take a file. None of them says what taking it
+will change** — that is Step 1's changelog read, and it is the half this step used to
+omit entirely. Have those entries to hand before the first copy: they are what makes a
+red test afterwards an expected edit instead of an investigation (`#430`).
 
 **Install every `missing-required` file first, before any other copy in this step.**
 Those are the kit's own libraries — `lib/kitconfig.py` above all, which every Python
