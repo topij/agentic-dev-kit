@@ -190,6 +190,8 @@ else
       while read -r pr; do
         awk -v pr="$pr" '/^## /{p = ($2 == "#" pr)} p' "$KIT/CHANGELOG.md"
       done
+  else
+    echo "up to date — no commits between your baseline and the kit's HEAD"
   fi
 fi
 ```
@@ -213,10 +215,10 @@ cannot, because both land on the same degraded path.
 
 **Deepen before you guard — the order is the whole point.** `--is-ancestor` cannot tell
 "the clone is shallow" from "that commit is not in this history", because in a `--depth 1`
-clone the object is simply absent: it exits **128** with `fatal: Not a valid object name`,
-where a commit that is present but off this history exits **1**. The `!` is what collapses
-those two into one degraded-path decision, since it negates any non-zero exit; the
-`2>/dev/null` beside it only suppresses the `fatal:` line, which would otherwise read as a
+clone the object is simply absent, so it exits **128** with a `fatal:` message, where a
+commit that is present but off this history exits **1** silently. The `!` is what
+collapses those two into one degraded-path decision, since it negates any non-zero exit;
+the `2>/dev/null` beside it only suppresses the message, which would otherwise read as a
 procedure that broke rather than one that took its documented fallback. Run the
 guard against an undeepened clone and every upgrade quietly takes the degraded path, which
 is strictly worse than the error it replaced: an error stops you, a degraded read looks

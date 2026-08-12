@@ -53,7 +53,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "e16efb677176e1b37d62da5e50e91baf953c77b0c55f8567f5ee798d09265919"
+      "sha256": "c6c3cd95602ae8146277b29193074205508cebd685a7f81543bfd0a5ad9f394f"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",

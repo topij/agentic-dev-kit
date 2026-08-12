@@ -4076,6 +4076,42 @@ def test_upgrade_changelog_lookup_degrades_when_the_baseline_is_unusable(
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_changelog_lookup_says_so_when_the_range_is_empty(
+    tmp_path: Path,
+) -> None:
+    """An up-to-date baseline must say it is, not print nothing (#430).
+
+    Every other outcome in this section emits a sentence — both degraded
+    branches and the unindexed-commit warning. This one printed only the
+    `baseline=` echo, so "nothing to report" and "the procedure broke" looked
+    identical, which is the confusion the whole section exists to remove.
+    """
+    kit = tmp_path / "kit"
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e"}
+    subprocess.run(["git", "init", "-q", str(kit)], check=True)
+    subprocess.run(["git", "-C", str(kit), "commit", "-q", "--allow-empty",
+                    "-m", "only commit (#1)"], check=True, env=env)
+    (kit / "CHANGELOG.md").write_text("## #1 — dated\n\nmust not appear\n", encoding="utf-8")
+    head = subprocess.run(["git", "-C", str(kit), "rev-parse", "HEAD"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+    result = _run_lookup(tmp_path, head, kit)
+
+    assert "up to date" in result.stdout, (
+        "an empty range printed no verdict, so silence stands in for both "
+        f"'nothing to report' and 'this broke'.\nstdout:\n{result.stdout}"
+    )
+    assert "must not appear" not in result.stdout, (
+        f"an empty range still reached the extraction.\nstdout:\n{result.stdout}"
+    )
+    assert "degraded path" not in result.stdout, (
+        "a resolvable, current baseline was wrongly routed to the degraded "
+        f"path — the fail-CLOSED direction over-firing.\nstdout:\n{result.stdout}"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
 def test_upgrade_changelog_lookup_reports_commits_it_could_not_index(
     tmp_path: Path,
 ) -> None:
