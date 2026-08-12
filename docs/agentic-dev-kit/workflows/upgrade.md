@@ -143,8 +143,9 @@ the bulk of one adopter's refresh session, for two changes that were both landin
 correctly (`#430`).
 
 **The Step 0 clone is `--depth 1`, so it has no history to range over.** Deepen it first.
-Without this the `git log` below fails with `unknown revision`, which reads as a bad
-baseline rather than a shallow clone:
+Skip this and the guard below cannot distinguish your shallow clone from a baseline that
+was never in this history, so it routes you to the degraded path and you read a partial
+answer as a complete one:
 
 ```bash
 git -C "$KIT" fetch --unshallow 2>/dev/null || git -C "$KIT" fetch --depth=1000
@@ -158,8 +159,9 @@ PR that made the change — so those numbers are the index:
 BASELINE="$(uv run <engine-dir>/kit_doctor.py --manifest "$KIT/kit-manifest.json" --json \
   | python3 -c 'import json,sys; print(json.load(sys.stdin).get("baseline_kit_commit") or "")')"
 echo "baseline=${BASELINE:-NONE}"
-if [ -z "$BASELINE" ]; then
-  echo "no install provenance recorded — take the degraded path below"
+if [ -z "$BASELINE" ] ||
+   ! git -C "$KIT" merge-base --is-ancestor "$BASELINE" HEAD 2>/dev/null; then
+  echo "no usable install provenance — take the degraded path below"
 else
   git -C "$KIT" log --format='%s' "$BASELINE..HEAD" | grep -oE '\(#[0-9]+\)$' | tr -d '()#' |
     while read -r pr; do
@@ -168,10 +170,23 @@ else
 fi
 ```
 
-**The `if` is not decoration.** An empty `$BASELINE` interpolated into `"$BASELINE..HEAD"`
-gives `..HEAD`, which git reads as `HEAD..HEAD` and prints nothing at all — so the one
-case that knows least about your repo is the one that renders as "no observable changes
-since your baseline". That is the fail-open direction, and it is silent.
+**The `if` is not decoration, and it guards two different failures.** An empty
+`$BASELINE` interpolated into `"$BASELINE..HEAD"` gives `..HEAD`, which git reads as
+`HEAD..HEAD` and prints nothing at all — so the one case that knows least about your repo
+is the one that renders as "no observable changes since your baseline". That is the
+fail-open direction, and it is silent. A *non-empty* baseline that `$KIT` cannot resolve
+fails the other way — `fatal: Invalid revision range` — which is loud but still never
+reaches the degraded path below, so the reader gets a git error instead of the procedure
+written for exactly their case. `merge-base --is-ancestor` covers both, and covers the
+baseline that resolves but sits on a history this checkout does not descend from.
+
+**Deepen before you guard — the order is the whole point.** `--is-ancestor` cannot tell
+"the clone is shallow" from "that commit is not in this history": in a `--depth 1` clone a
+perfectly valid baseline reports *not* an ancestor. Run the guard against an undeepened
+clone and every upgrade quietly takes the degraded path, which is strictly worse than the
+`fatal:` it replaced — an error stops you, a degraded read looks like an answer. Verified
+both directions on a real shallow clone: before deepening, a valid baseline reports not an
+ancestor; after `fetch --unshallow`, it reports ancestor and the normal path returns.
 
 A PR that produced no output has no entry, and a PR with no entry made no observable
 change. That is the file's contract rather than an omission to chase.
