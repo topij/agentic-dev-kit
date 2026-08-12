@@ -117,7 +117,7 @@ def _hash_file(path: Path) -> str:
 
 
 def _real_state_snapshot() -> dict[str, str]:
-    """``{relpath: sha256}`` for every file under the REAL ``<repo>/state/``.
+    """``{relpath: sha256}`` for every entry under the REAL ``<repo>/state/``.
 
     Deliberately independent of ``$DEVKIT_STATE_ROOT`` and of
     ``_hermetic_state_root`` above: this reads straight off disk at
@@ -125,15 +125,27 @@ def _real_state_snapshot() -> dict[str, str]:
     (module-level ``REPO_ROOT``, from ``_repo_layout.find_repo_root``) —
     never `pr_watch`'s or any other engine's — so a bug in an engine's own
     root/env resolution cannot blind the guard that exists to catch it.
+
+    DIRECTORIES ARE RECORDED TOO, under a trailing-slash key, and that is not
+    tidiness. The write this guard is built to catch is an engine resolving
+    its state path at import time and then reaching for it — and the first
+    thing `pr_watch.py` does on that path is
+    ``STATE_DIR.mkdir(parents=True, exist_ok=True)``. A files-only snapshot
+    sees nothing when a suite creates ``<repo>/state/<some-new-engine>/`` and
+    writes no file into it, so the very next engine to acquire this bug would
+    land in the blind spot rather than trip the guard.
     """
     state_dir = REPO_ROOT / "state"
     if not state_dir.is_dir():
         return {}
-    return {
-        str(path.relative_to(state_dir)): _hash_file(path)
-        for path in sorted(state_dir.rglob("*"))
-        if path.is_file()
-    }
+    snapshot: dict[str, str] = {}
+    for path in sorted(state_dir.rglob("*")):
+        relative = str(path.relative_to(state_dir))
+        if path.is_dir():
+            snapshot[f"{relative}/"] = "<dir>"
+        elif path.is_file():
+            snapshot[relative] = _hash_file(path)
+    return snapshot
 
 
 @pytest.fixture(scope="session", autouse=True)

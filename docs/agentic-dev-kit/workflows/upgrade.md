@@ -498,11 +498,12 @@ Commit the rewritten `kit-manifest.json` with the rest of the upgrade.
 
 ```bash
 uv run <engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
-DEVKIT_STATE_ROOT=$(mktemp -d) uv run --with pytest --with pyyaml python -m pytest <engine-dir>/lib/state_paths/tests <engine-dir>/tests -q
+tmp="$(mktemp -d)" && DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python -m pytest <engine-dir>/lib/state_paths/tests <engine-dir>/tests -q
 uv run <engine-dir>/check_doc_budget.py
 ```
 
-**`DEVKIT_STATE_ROOT=$(mktemp -d)` is not optional here.** Several engines —
+**`DEVKIT_STATE_ROOT` is not optional here, and the `&&` is what makes it
+fail closed.** Several engines —
 `pr_watch.py` above all — compute their persistence root once, at import
 time, from that env var or (absent it) this repo's own `state/`. Without the
 override, running this suite writes fixture data straight into this repo's
@@ -514,6 +515,15 @@ a reset `seen` set. A conftest fixture closes this for anyone who has it (see
 the second, independent layer: it protects an adopter who vendored the
 tests by hand, without that conftest, which `#40`/`#132` make a real case
 rather than a hypothetical one — no test file is in the kit manifest.
+
+Write it as the two-step `tmp="$(mktemp -d)" && …`, not as an inline
+`DEVKIT_STATE_ROOT=$(mktemp -d) …`. The inline form fails **open**: a failed
+`mktemp -d` prints nothing to stdout, so the var is set to the empty string,
+and `_resolve_state_root` treats an empty value as *no override at all* and
+falls back to the repo default — landing the whole suite in live `state/`,
+which is the one outcome this line exists to prevent. The `&&` makes the
+assignment's exit status gate the run, so a failed `mktemp` skips the tests
+instead of silently redirecting them at the thing they would damage.
 
 `kit_doctor` should now report zero mismatches of every kind — `differs`, `STALE`,
 `STALE and LOCALLY EDITED` — and zero `unknown-version`. `LOCALLY EDITED` should be zero

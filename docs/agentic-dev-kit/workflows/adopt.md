@@ -330,13 +330,14 @@ Two things to warn them about, both measured, because neither is obvious from th
   `Makefile`, and a mature repo's own `make test` will run *its* suite, not these:
 
   ```sh
-  DEVKIT_STATE_ROOT=$(mktemp -d) uv run --with pytest --with pyyaml python -m pytest \
+  tmp="$(mktemp -d)" && DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python -m pytest \
     scripts/devkit/lib/state_paths/tests/ scripts/devkit/tests/ -q
   ```
 
   (Adjust the prefix when engines live directly under `scripts/`.)
 
-  **`DEVKIT_STATE_ROOT=$(mktemp -d)` is not optional.** `pr_watch.py` and other
+  **`DEVKIT_STATE_ROOT` is not optional, and the `&&` is what makes it fail
+  closed.** `pr_watch.py` and other
   engines compute their persistence root once, at import time, from that env
   var or (absent it) this repo's own `state/`. On a brand-new adoption
   `state/` may not exist yet, but the very first run of this command is what
@@ -346,7 +347,11 @@ Two things to warn them about, both measured, because neither is obvious from th
   watches. This is the same fix `/upgrade` Step 5 documents, needed here for
   the same reason: no test file is in the kit manifest (`#40`/`#132`), so a
   conftest-level fixture cannot be assumed present just because the test
-  files are.
+  files are. The two-step form matters for the same reason it does there —
+  an inline `DEVKIT_STATE_ROOT=$(mktemp -d)` sets the empty string when
+  `mktemp` fails, which the resolver reads as *no override* and answers with
+  the repo default, so the failure lands the suite exactly where it must not
+  go. `&&` gates the run on the assignment instead.
 - `check_doc_budget`: run it — it should read the configured plan via `config/dev-model.yaml`.
 - `kit_doctor`: run it **against the kit checkout's manifest**, not bare:
 
