@@ -159,9 +159,18 @@ headed by the PR that made the change — so those numbers are the index.
 several references (`(#37, #146)`), text inside the parens (`(#134 cause 1)`), a
 `Merge pull request` subject, or a commit that never went through a PR — yields no number
 and is simply skipped. That looks exactly like "this commit changed nothing observable",
-which is the same fail-open shape as the empty baseline below. In this repo 26 of the
-first 169 commits do not match, all before 2026-08-01; every one of the 60 most recent
-does. So the count below is a tripwire rather than a formality — if it fires, the index is
+which is the same fail-open shape as the empty baseline below.
+
+Non-conforming subjects are a real part of this repo's early history and absent from its
+recent history. Count them for yourself rather than trusting a figure written here, which
+goes stale the moment another commit lands — and count against `main`, since an unmerged
+branch's own commits have no PR number yet and would read as a fault:
+
+```bash
+git -C "$KIT" log --format='%s' origin/main | grep -cvE '\(#[0-9]+\)$'
+```
+
+So the count below is a tripwire rather than a formality — if it fires, the index is
 incomplete and the top of `CHANGELOG.md` is the fallback:
 
 ```bash
@@ -185,22 +194,30 @@ else
 fi
 ```
 
-**The `if` is not decoration, and it guards two different failures.** An empty
-`$BASELINE` interpolated into `"$BASELINE..HEAD"` gives `..HEAD`, which git reads as
-`HEAD..HEAD` and prints nothing at all — so the one case that knows least about your repo
-is the one that renders as "no observable changes since your baseline". That is the
-fail-open direction, and it is silent. A *non-empty* baseline that `$KIT` cannot resolve
-fails the other way — `fatal: Invalid revision range` — which is loud but still never
-reaches the degraded path below, so the reader gets a git error instead of the procedure
-written for exactly their case. `merge-base --is-ancestor` covers both, and covers the
-baseline that resolves but sits on a history this checkout does not descend from.
+**The `if` is not decoration.** An empty `$BASELINE` interpolated into
+`"$BASELINE..HEAD"` gives `..HEAD`, which git reads as `HEAD..HEAD` and prints nothing at
+all — so the one case that knows least about your repo is the one that renders as "no
+observable changes since your baseline". That is the fail-open direction, and it is
+silent. A *non-empty* baseline that `$KIT` cannot resolve fails the other way —
+`fatal: Invalid revision range` — which is loud but still never reaches the degraded path
+below, so the reader gets a git error instead of the procedure written for exactly their
+case. `merge-base --is-ancestor` covers both, and covers the baseline that resolves but
+sits on a history this checkout does not descend from.
+
+The `-z` test in front of it is deliberate redundancy, not a second guard: `merge-base
+--is-ancestor "" HEAD` already fails, so removing `-z` changes no outcome here. It is
+written out because that behaviour is git's, not this procedure's, and a guard whose
+correctness rests on how another tool treats an empty argument is one silent upstream
+change from being wrong. Nothing downstream distinguishes the two forms — the tests
+cannot, because both land on the same degraded path.
 
 **Deepen before you guard — the order is the whole point.** `--is-ancestor` cannot tell
 "the clone is shallow" from "that commit is not in this history", because in a `--depth 1`
 clone the object is simply absent: it exits **128** with `fatal: Not a valid object name`,
-where a commit that is present but off this history exits **1**. The `!` and the
-`2>/dev/null` collapse those two into one degraded-path decision — correct for the case
-this guards, and the reason the redirect is load-bearing rather than tidying. Run the
+where a commit that is present but off this history exits **1**. The `!` is what collapses
+those two into one degraded-path decision, since it negates any non-zero exit; the
+`2>/dev/null` beside it only suppresses the `fatal:` line, which would otherwise read as a
+procedure that broke rather than one that took its documented fallback. Run the
 guard against an undeepened clone and every upgrade quietly takes the degraded path, which
 is strictly worse than the error it replaced: an error stops you, a degraded read looks
 like an answer.

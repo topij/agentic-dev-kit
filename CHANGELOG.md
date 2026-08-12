@@ -47,9 +47,10 @@ starts.
 - **BREAKING (report shape)** — every check row now carries an `identity` key
   (`#95`): the row's creator, `app.slug` for a check run and `creator.login` for a
   status context, empty string when it could not be read. Both backends set it —
-  `_rest_check_rows` builds it, `check_rows` sets it unconditionally on the `gh`
-  path. **Exact-equality assertions on check-row dicts fail.** Add `identity` to the
-  expected dict, or compare only the keys you care about.
+  `_rest_check_rows` builds it on the REST path, and `fetch_check_details` sets it
+  unconditionally on the `gh` path. **Exact-equality assertions on check-row dicts
+  fail.** Add `identity` to the expected dict, or compare only the keys you care
+  about.
 - **BREAKING (report shape)** — entries in `review_bots["unavailable"]` with
   `surface: "check"` gained `identity` and `trusted` (`#95`). Same remedy as above for
   any exact-dict assertion over them.
@@ -74,8 +75,10 @@ starts.
 - **BREAKING (gate semantics)** — `mergeable` now additionally requires a **settle
   baseline**: the check rollup must have held the same size for at least
   `review.settle_grace_minutes` on this head (`#190`/`#39`). Until it has,
-  `merge_blockers` carries `check rollup has not settled for current head`, so
-  `mergeable` — and its alias `done` — is `False`. **A single `build_report` call
+  `merge_blockers` carries an entry **beginning** `check rollup has not settled for
+  current head` and always closing with a parenthetical — `(no settle baseline
+  recorded)` or `(stable 1.2m of 3m)` — so match on the prefix, never the whole
+  string. `mergeable` — and its alias `done` — is `False` while it is present. **A single `build_report` call
   with no `prior_settle_since` / `prior_settle_total` is `mergeable: False` by
   design**, because a missing baseline reads as "the rollup just moved". Adopters
   constructing reports directly in tests must supply both: `prior_settle_total` equal
