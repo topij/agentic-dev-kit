@@ -36,6 +36,15 @@ established it and its actual result — #54 tracks making this a standing rule.
   there. Never hardcode a value that belongs in it.
 - The living plan is `docs/kit-handoff.md` — read at session start, updated at wrap-up.
   New friction is recorded in `docs/kit-friction-log.md`.
+- **If a change is observable, the PR that makes it adds its own `CHANGELOG.md` entry.**
+  Observable means a repo pinning the old contract breaks: a report or return **shape**,
+  **gate semantics** (`converged` / `mergeable` / `done`, a hook's exit code), a
+  `config/dev-model.yaml` **key**, or an engine's **CLI surface**. Head the entry with
+  this PR's number, newest first, and say what the adopter must *do*; the rationale
+  belongs in the comment beside the code, not there. Nothing stamps entries after the
+  merge, so one omitted here reaches the adopter as a red test after a file copy with no
+  way to tell a kit break from a pinned old contract (`#430`). A change with no
+  adopter-visible consequence gets no entry — that silence is the file's contract.
 - Never write a GitHub closing keyword (`close` / `fix` / `resolve` and their forms)
   adjacent to an issue number you do not intend to close — on any surface (PR body,
   commit message, squash message), in any form, even negated or inside code spans.

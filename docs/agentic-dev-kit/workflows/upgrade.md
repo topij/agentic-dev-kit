@@ -128,6 +128,127 @@ A `baseline: none recorded` line here is expected on a first upgrade and is not 
 Step 4 writes the baseline. Do **not** run `--record-install` at this point — it writes a
 file, and everything before Step 2 must stay read-only.
 
+### Then read what the new files will *do* differently
+
+`kit_doctor` answers "did this drift". It never answers "what does the new one do
+differently", and Step 3 below hands you a per-file verdict without that second answer
+attached. `CHANGELOG.md` in the kit checkout is where it lives — the observable changes
+only, no rationale — and **this** is the step that can narrow it to *your* answer, because
+the report you just ran knows which kit commit this repo installed from.
+
+Read it now, before Step 3 copies anything. Skipping it does not fail the upgrade; it
+defers the cost to whenever your own tests go red after a file copy, with no way to tell
+"the kit broke my repo" from "my repo pinned the old contract". Distinguishing those was
+the bulk of one adopter's refresh session, for two changes that were both landing
+correctly (`#430`).
+
+**The Step 0 clone is `--depth 1`, so it has no history to range over.** Deepen it first.
+Skip this and the guard below cannot distinguish your shallow clone from a baseline that
+was never in this history, so it routes you to the degraded path and you read a partial
+answer as a complete one:
+
+```bash
+git -C "$KIT" fetch --unshallow 2>/dev/null || git -C "$KIT" fetch --depth=1000
+```
+
+Then resolve the baseline and the PRs that landed after it. A squash merge on the kit
+ordinarily carries its PR number as a trailing `(#NNN)`, and every changelog entry is
+headed by the PR that made the change — so those numbers are the index.
+
+**Ordinarily, not always, and the gap is silent.** A subject ending any other way —
+several references (`(#37, #146)`), text inside the parens (`(#134 cause 1)`), a
+`Merge pull request` subject, or a commit that never went through a PR — yields no number
+and is simply skipped. That looks exactly like "this commit changed nothing observable",
+which is the same fail-open shape as the empty baseline below.
+
+Non-conforming subjects are a real part of this repo's early history and absent from its
+recent history. Count them for yourself rather than trusting a figure written here, which
+goes stale the moment another commit lands — and count against `main`, since an unmerged
+branch's own commits have no PR number yet and would read as a fault:
+
+```bash
+git -C "$KIT" log --format='%s' origin/main | grep -cvE '\(#[0-9]+\)$'
+```
+
+So the count below is a tripwire rather than a formality — if it fires, the index is
+incomplete and the top of `CHANGELOG.md` is the fallback:
+
+```bash
+BASELINE="$(uv run <engine-dir>/kit_doctor.py --manifest "$KIT/kit-manifest.json" --json \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("baseline_kit_commit") or "")')"
+echo "baseline=${BASELINE:-NONE}"
+if [ -z "$BASELINE" ] ||
+   ! git -C "$KIT" merge-base --is-ancestor "$BASELINE" HEAD 2>/dev/null; then
+  echo "no usable install provenance — take the degraded path below"
+else
+  COUNT="$(git -C "$KIT" rev-list --count "$BASELINE..HEAD")"
+  SUBJECTS="$(git -C "$KIT" log --format='%s' "$BASELINE..HEAD")"
+  if [ "$COUNT" -gt 0 ]; then
+    INDEXED="$(printf '%s\n' "$SUBJECTS" | grep -cE '\(#[0-9]+\)$' || true)"
+    UNINDEXED=$(( COUNT - INDEXED ))
+    [ "$UNINDEXED" -gt 0 ] && echo "⚠ $UNINDEXED commit(s) in range carry no trailing (#NNN);
+   they are NOT indexed below — read CHANGELOG.md from the top as well"
+    printf '%s\n' "$SUBJECTS" | grep -oE '\(#[0-9]+\)$' | tr -d '()#' |
+      while read -r pr; do
+        awk -v pr="$pr" '/^## /{p = ($2 == "#" pr)} p' "$KIT/CHANGELOG.md"
+      done
+  else
+    echo "up to date — no commits between your baseline and the kit's HEAD"
+  fi
+fi
+```
+
+**The `if` is not decoration.** An empty `$BASELINE` interpolated into
+`"$BASELINE..HEAD"` gives `..HEAD`, which git reads as `HEAD..HEAD` and prints nothing at
+all — so the one case that knows least about your repo is the one that renders as "no
+observable changes since your baseline". That is the fail-open direction, and it is
+silent. A *non-empty* baseline that `$KIT` cannot resolve fails the other way —
+`fatal: Invalid revision range` — which is loud but still never reaches the degraded path
+below, so the reader gets a git error instead of the procedure written for exactly their
+case. `merge-base --is-ancestor` covers both, and covers the baseline that resolves but
+sits on a history this checkout does not descend from.
+
+The `-z` test in front of it is deliberate redundancy, not a second guard: `merge-base
+--is-ancestor "" HEAD` already fails, so removing `-z` changes no outcome here. It is
+written out because that behaviour is git's, not this procedure's, and a guard whose
+correctness rests on how another tool treats an empty argument is one silent upstream
+change from being wrong. Nothing downstream distinguishes the two forms — the tests
+cannot, because both land on the same degraded path.
+
+**Deepen before you guard — the order is the whole point.** `--is-ancestor` cannot tell
+"the clone is shallow" from "that commit is not in this history", because in a `--depth 1`
+clone the object is simply absent, so it exits **128** with a `fatal:` message, where a
+commit that is present but off this history exits **1** silently. The `!` is what
+collapses those two into one degraded-path decision, since it negates any non-zero exit;
+the `2>/dev/null` beside it only suppresses the message, which would otherwise read as a
+procedure that broke rather than one that took its documented fallback. Run the
+guard against an undeepened clone and every upgrade quietly takes the degraded path, which
+is strictly worse than the error it replaced: an error stops you, a degraded read looks
+like an answer.
+
+A PR that produced no output has no entry, and a PR with no entry made no observable
+change. That is the file's contract rather than an omission to chase.
+
+**`baseline_kit_commit` empty is a real, supported value — degrade, do not guess.** Three
+causes reach it and nothing here can tell them apart: `--record-install` never ran
+(`baseline: none recorded`); it ran without `--from-kit`, so the baseline is trusted but
+carries no provenance (`recorded, install provenance unknown`); or the recorded value is
+not a string, which `kit_doctor` normalizes away rather than aborting the report over.
+There is no range to compute, so:
+
+- Read `$KIT/CHANGELOG.md` from the top instead, and treat every `BREAKING` line as
+  applying to you until you can show otherwise. It is newest-first and short by
+  construction — this is minutes, not the session `#430` describes.
+- If you know roughly when this repo last upgraded, bound it by date instead:
+  `git -C "$KIT" log --since=<date> --format='%s'`, then index as above.
+- Either way, **Step 4's `--record-install --from-kit "$KIT"` is what stops the next
+  upgrade paying this** — the same step, and the same `kit_commit` key, that the `STALE`
+  / `LOCALLY EDITED` split above already depends on.
+
+A baseline **older than the changelog itself** also finds nothing, and that is not a fault
+either: the file records nothing before the PR it starts at, and says so in its own
+header.
+
 ## Step 2 — Branch, refresh the migrator, then migrate
 
 **Branch first.** Everything from here mutates the repo — config, hooks, rendered
@@ -368,6 +489,11 @@ Press Enter through every prompt to keep current values. Then re-read the diff o
 Work through `kit_doctor`'s file list. You are already on the branch from Step 2 —
 `init.sh` refreshed itself and migrated the config there, so those changes are captured
 too. Confirm with `git branch --show-current` before the first copy.
+
+**Every verdict below decides *whether* to take a file. None of them says what taking it
+will change** — that is Step 1's changelog read, and it is the half this step used to
+omit entirely. Have those entries to hand before the first copy: they are what makes a
+red test afterwards an expected edit instead of an investigation (`#430`).
 
 **Install every `missing-required` file first, before any other copy in this step.**
 Those are the kit's own libraries — `lib/kitconfig.py` above all, which every Python
