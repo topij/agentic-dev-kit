@@ -338,16 +338,23 @@ Two things to warn them about, both measured, because neither is obvious from th
 
   **`DEVKIT_STATE_ROOT` is not optional, and the `&&` is what makes it fail
   closed.** `pr_watch.py` and other
-  engines compute their persistence root once, at import time, from that env
-  var or (absent it) this repo's own `state/`. On a brand-new adoption
-  `state/` may not exist yet, but the very first run of this command is what
-  creates it — without the override, that first run seeds live
-  `state/pr-watch/` with fixture data (a fabricated review receipt, per
-  `#428`) instead of leaving it for the first real PR the merge gate
-  watches. This is the same fix `/upgrade` Step 5 documents, needed here for
-  the same reason: no test file is in the kit manifest (`#40`/`#132`), so a
-  conftest-level fixture cannot be assumed present just because the test
-  files are. The two-step form matters for the same reason it does there —
+  engines compute their persistence root once, at import time, resolving
+  `$DEVKIT_STATE_ROOT`, then a `.devkit_state_root` marker, then
+  `<repo>/state`. A fresh adoption has no marker, so absent the env var the
+  third branch is what you get. `state/` may not exist yet at that point, but
+  the very first run of this command is what creates it — without the
+  override, that first run seeds live `state/pr-watch/` with fixture data (a
+  fabricated review receipt, per `#428`) instead of leaving it for the first
+  real PR the merge gate watches.
+
+  Set it here even though `/adopt` is the path that *does* deliver the tests,
+  and with them the `conftest.py` whose `_hermetic_state_root` fixture covers
+  the same ground — that is `#132`'s point, and citing it for the opposite
+  claim would get it backwards. Two reasons it still earns its place: the
+  fixture protects a run of the suite, while the fail-closed form above
+  protects against `mktemp` itself failing, which no fixture can; and an
+  adopter who vendored selectively may have the tests without the conftest,
+  since no test file is tracked by `kit-manifest.json` (`#40`). The two-step form matters for the same reason it does there —
   an inline `DEVKIT_STATE_ROOT=$(mktemp -d)` sets the empty string when
   `mktemp` fails, which the resolver reads as *no override* and answers with
   the repo default, so the failure lands the suite exactly where it must not

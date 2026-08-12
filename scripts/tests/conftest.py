@@ -153,11 +153,26 @@ def _real_state_root_is_never_written_by_the_suite():
     """Regression pin for #428 — load-bearing, not decorative.
 
     Session-scoped and autouse rather than a single ``test_...`` function so
-    it cannot be defeated by test selection or collection order: its
-    finalizer (the code after ``yield``) runs at the actual end of the WHOLE
-    pytest session, however the suite was invoked, and compares against a
-    snapshot taken at the session's actual start — before
-    ``_hermetic_state_root`` or any test body has run.
+    no test selection within this directory can deselect it: its finalizer
+    (the code after ``yield``) runs once, at the end of the session.
+
+    WHAT IT DOES NOT COVER, because a session fixture's scope is not the
+    session's. This conftest binds only to tests collected under
+    ``scripts/tests/``, and pytest instantiates a session-scoped fixture
+    lazily — on the first test that requests it. `make test` runs
+    ``pytest scripts/lib/state_paths/tests scripts/tests``, so the FIRST
+    directory has already run to completion before the snapshot below is
+    taken, and a write into the real ``state/`` from there lands in the
+    baseline rather than being caught by it. Confirmed with
+    ``pytest <one test from each dir> --setup-show``, which puts
+    ``SETUP S _real_state_root_is_never_written_by_the_suite`` after the
+    state_paths test has already reported.
+
+    That gap is not currently reachable — ``test_state_paths.py`` has its own
+    ``_clear_env`` autouse fixture that clears every state-root env var and
+    chdirs into a ``tmp_path`` — and closing it properly means moving the
+    snapshot into a session hook, which is a mechanism this pin does not need
+    in order to do its own job. #433 holds that.
 
     Without this, the next engine that computes a state/cache/whatever path
     as an import-time module constant (`pr_watch.py`'s own mistake, #428)

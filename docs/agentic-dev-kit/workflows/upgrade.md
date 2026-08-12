@@ -505,10 +505,12 @@ uv run <engine-dir>/check_doc_budget.py
 **`DEVKIT_STATE_ROOT` is not optional here, and the `&&` is what makes it
 fail closed.** Several engines —
 `pr_watch.py` above all — compute their persistence root once, at import
-time, from that env var or (absent it) this repo's own `state/`. Without the
-override, running this suite writes fixture data straight into this repo's
-live `state/pr-watch/` — the merge gate's own evidence store — while the run
-otherwise looks clean. `#428` measured it: an unpatched run overwrote
+time, and the resolution has three branches, not two: `$DEVKIT_STATE_ROOT`,
+then a `.devkit_state_root` marker walked up from the engine's own directory,
+then `<repo>/state`. Outside a lane there is no marker, so absent the env var
+the third branch is what you get — and running this suite then writes fixture
+data straight into this repo's live `state/pr-watch/`, the merge gate's own
+evidence store, while the run otherwise looks clean. `#428` measured it: an unpatched run overwrote
 `state/pr-watch/1.json` and `4242.json` with a fabricated review receipt and
 a reset `seen` set. A conftest fixture closes this for anyone who has it (see
 `scripts/tests/conftest.py`'s `_hermetic_state_root`), but this command is
