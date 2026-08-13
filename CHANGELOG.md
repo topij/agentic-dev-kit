@@ -42,6 +42,24 @@ starts.
 
 ---
 
+## #445 — 2026-08-13
+
+- **ADDED (engine CLI surface)** — `panel_prompt.py --delta-draws <text>`, for a
+  **delta pass** only. Renders the author's stated draws (prose class,
+  safety-critical boundary) into the lens prompt with the duty to dispute them and
+  the one-verdict-line-per-draw requirement `fallback-review-panel.md` asks that
+  prompt to carry. An empty value is refused, like every other optional override.
+  **Nothing to do unless you assemble delta-pass prompts**: omit the flag and a full
+  panel's prompt is what it was.
+- **CHANGED (engine CLI surface)** — `panel_prompt.py --carry-forward` renders four
+  further lines after your text, telling the lens the section is not the author's
+  view of the change and to report it as a finding if it reads that way. **A test
+  asserting the exact text of a `--carry-forward` prompt must be updated**; a prompt
+  assembled without the flag is byte-identical to before. Draws now go to
+  `--delta-draws`; a full panel's prompt carries neither.
+
+---
+
 ## #412 — 2026-08-10
 
 - **BREAKING (report shape)** — every check row now carries an `identity` key
