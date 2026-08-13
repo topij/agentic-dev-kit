@@ -21,11 +21,20 @@ it by building one.
 `pyproject.toml` makes `uv run --with pytest … python` fall into project mode
 and materialise a `.venv/` and a stub `uv.lock` — see the header of `ruff.toml`,
 where that was measured.
+
+THE #428 GUARD'S TWO HALVES NOW LIVE IN DIFFERENT FILES, deliberately.
+``_hermetic_state_root`` below is the PREVENTION and stays here, because it must
+not reach ``lib/state_paths/tests`` — those tests drive ``$DEVKIT_STATE_ROOT``
+themselves, and several assert on its ABSENCE, so an autouse fixture setting it
+would rewrite the very condition under test. The DETECTION half — the baseline
+snapshot and `pytest_sessionfinish` — moved up to ``<engine-dir>/conftest.py``,
+which every test directory reaches (#448). Detection without prevention is the
+correct arrangement for ``state_paths``: those tests should not be sandboxed,
+and should still be caught if they write into the real ``state/``.
 """
 
 from __future__ import annotations
 
-import hashlib
 import sys
 from pathlib import Path
 
@@ -66,7 +75,7 @@ _UNRESOLVED = (
 
 
 # --------------------------------------------------------------------------- #
-# hermetic state root (#428)
+# hermetic state root (#428) — the PREVENTION half; detection is one level up
 # --------------------------------------------------------------------------- #
 
 
@@ -104,6 +113,12 @@ def _hermetic_state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     ``test_pr_watch.py``, which pins that derivation directly and opts out
     of this fixture to do it).
 
+    DELIBERATELY SCOPED TO THIS DIRECTORY, and not moved up beside the
+    detection half. ``lib/state_paths/tests`` drives ``$DEVKIT_STATE_ROOT``
+    as its subject — setting it, clearing it, and asserting on the
+    unset case — so an autouse fixture setting it there would not sandbox
+    those tests, it would rewrite what they are testing.
+
     The 6 tests that already ``monkeypatch.setattr(pr_watch, "STATE_DIR",
     tmp_path)`` by hand stay correct and are not redundant to remove: their
     explicit patch, applied after this fixture's env var already took
@@ -114,166 +129,6 @@ def _hermetic_state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     or outlive the run.
     """
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "state"))
-
-
-def _hash_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _real_state_snapshot() -> dict[str, str]:
-    """``{relpath: sha256}`` for every entry under the REAL ``<repo>/state/``.
-
-    Deliberately independent of ``$DEVKIT_STATE_ROOT`` and of
-    ``_hermetic_state_root`` above: this reads straight off disk at
-    ``REPO_ROOT / "state"``, using this conftest's OWN repo-root resolution
-    (module-level ``REPO_ROOT``, from ``_repo_layout.find_repo_root``) —
-    never `pr_watch`'s or any other engine's — so a bug in an engine's own
-    root/env resolution cannot blind the guard that exists to catch it.
-
-    DIRECTORIES ARE RECORDED TOO, under a trailing-slash key, and that is not
-    tidiness. The write this guard is built to catch is an engine resolving
-    its state path at import time and then reaching for it — and the first
-    thing `pr_watch.py` does on that path is
-    ``STATE_DIR.mkdir(parents=True, exist_ok=True)``. A files-only snapshot
-    sees nothing when a suite creates ``<repo>/state/<some-new-engine>/`` and
-    writes no file into it, so the very next engine to acquire this bug would
-    land in the blind spot rather than trip the guard.
-    """
-    state_dir = REPO_ROOT / "state"
-    if not state_dir.is_dir():
-        return {}
-    snapshot: dict[str, str] = {}
-    for path in sorted(state_dir.rglob("*")):
-        relative = str(path.relative_to(state_dir))
-        if path.is_dir():
-            snapshot[f"{relative}/"] = "<dir>"
-        elif path.is_file():
-            snapshot[relative] = _hash_file(path)
-    return snapshot
-
-
-# The baseline half of the #428 guard, taken HERE — at conftest import — and
-# never re-taken. Its partner is `pytest_sessionfinish` below.
-#
-# WHY IMPORT TIME AND NOT `pytest_sessionstart` (#433 asked for sessionstart).
-# `pytest_sessionstart` is not a historic hook — unlike `pytest_configure`
-# below — so only a plugin already registered when it fires receives it. A
-# conftest is registered that early only when it is an INITIAL conftest, and
-# `_set_initial_conftests` decides that from the command line: each argument
-# is an anchor, plus, for a directory argument, its `test*` SUBDIRECTORIES.
-# So `pytest scripts/tests` and `pytest scripts` both make this file initial
-# (`tests` matches the glob), while a bare `pytest` at the repo root does not —
-# nothing there matches `test*` — and this file is then imported during
-# collection instead. `pytest_sessionstart` never arrives in that shape while
-# `pytest_sessionfinish` still does, so a sessionstart-taken baseline would be
-# missing at exactly the moment it is compared.
-#
-# That is measured, not reasoned: with the baseline moved into
-# `pytest_sessionstart` and a leaking test planted in
-# `scripts/lib/state_paths/tests`, `pytest <repo>` reported four changed paths
-# — three of them files the run never touched, hashed identical before and
-# after — because the baseline was still its `{}` initial value. The same tree
-# with the baseline taken here reported the one path that really changed.
-# (Initialising to `None` instead trades that false alarm for a silent miss;
-# both are the same defect.)
-#
-# Import is the one moment that exists in every invocation shape, and it is
-# always before the first test body runs, because pytest completes collection
-# (`pytest_collection`) before it enters the run loop (`pytest_runtestloop`) —
-# so a conftest reached only during collection is still imported before
-# anything executes.
-#
-# It is deliberately not ALSO refreshed in `pytest_sessionstart`: a baseline
-# re-taken later can only absorb writes made in between, which is the exact
-# defect #433 is about. Earliest wins, once.
-_STATE_BASELINE = _real_state_snapshot()
-
-
-def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Regression pin for #428 — load-bearing, not decorative.
-
-    A session hook rather than the session-scoped autouse fixture this
-    replaces (#433). That fixture's reach was narrower than "the session" in
-    two compounding ways: this conftest binds only to tests collected under
-    ``scripts/tests/``, and pytest instantiates a session-scoped fixture
-    lazily, on the first test that REQUESTS it. `make test` runs ``pytest
-    scripts/lib/state_paths/tests scripts/tests``, so the first directory had
-    already run to completion before the baseline was taken, and a write into
-    the real ``state/`` originating there was absorbed into the baseline
-    instead of caught by it. Hooks have no such lazy step: this one fires once
-    per session, for the whole session, and `_STATE_BASELINE` above is taken
-    before any test runs at all — so the guard now covers every test in the
-    run, ``scripts/lib/state_paths/tests`` included.
-
-    Without this, the next engine that computes a state/cache/whatever path
-    as an import-time module constant (`pr_watch.py`'s own mistake, #428)
-    reopens the hole ``_hermetic_state_root`` closes — silently, the moment
-    some test exercises it without an individual, easy-to-forget
-    ``monkeypatch.setattr``. This is what turns that into a loud local failure
-    instead of fixture data quietly sitting in this repo's live merge-gate
-    evidence store, where a fabricated review receipt is indistinguishable
-    from a real one by the time the merge gate reads it.
-
-    HOW IT FAILS, AND WHY NOT BY RAISING. The two obvious forms were measured
-    on pytest 9.1.1 rather than reasoned about, and both are worse than what
-    is written here:
-
-      - `assert` / `raise`. `wrap_session` calls this hook from inside its
-        own ``finally``, outside every ``except`` it has, so the exception
-        escapes ``python -m pytest`` entirely: 62 lines of runpy/pluggy
-        traceback, no test summary of any kind, and the actual message on the
-        last line. It reads as pytest having crashed, not as a guard firing.
-      - ``pytest.exit(msg, returncode=1)``. Caught cleanly by `wrap_session`
-        and it does set the exit code — but it unwinds through the terminal
-        reporter's OWN ``pytest_sessionfinish`` wrapper before that wrapper
-        can print, so the whole FAILURES section and short summary are
-        suppressed. Measured with a deliberately failing test alongside: the
-        run printed ``.F`` and one ``Exit:`` line, and the real failure was
-        never reported. A guard that hides other failures is worse than the
-        leak it catches.
-
-    So: set the two attributes the reporter and `wrap_session` already read.
-    ``session.exitstatus`` is returned by `wrap_session` AFTER its ``finally``
-    completes, so assigning it here is what turns the process red;
-    ``session.shouldfail`` is printed by the terminal reporter as a red
-    ``!!!!`` banner in the last position before the stats line, which is the
-    only tail-most slot a plugin can reach (``pytest_terminal_summary`` runs
-    earlier). Normal reporting is left completely intact, verified the same
-    way — a real failure alongside the guard still prints its FAILURES
-    section and its ``FAILED`` line.
-
-    The one residual: on an otherwise all-passing run the final stats line
-    still reads ``N passed``, because nothing here fabricates a test report to
-    make it say otherwise. The red banner directly above it and the non-zero
-    exit are what carry the verdict — `make test` stops with ``Error 1``.
-    """
-    after = _real_state_snapshot()
-    if after == _STATE_BASELINE:
-        return
-    changed = sorted(
-        rel
-        for rel in set(_STATE_BASELINE) | set(after)
-        if _STATE_BASELINE.get(rel) != after.get(rel)
-    )
-    # Two lengths on purpose. The banner goes through `write_sep`, which pads
-    # to the terminal width, so the changed-path list — unbounded, one entry
-    # per leaked file — stays out of it and goes in the section body instead.
-    summary = f"REGRESSION (#428): the suite wrote into the real {REPO_ROOT / 'state'}"
-    detail = (
-        f"{summary} during this run instead of staying inside the per-test "
-        "$DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (this conftest) "
-        f"sets. Changed paths: {changed}"
-    )
-    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
-    if reporter is not None:
-        reporter.write_sep("=", "REAL state/ WAS WRITTEN (#428)", red=True, bold=True)
-        reporter.write_line(detail)
-    else:
-        # `-p no:terminal`, or any other run with the reporter unregistered.
-        # The verdict must survive the message having nowhere to go.
-        print(detail, file=sys.stderr)
-    session.shouldfail = summary
-    session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 def require_kit_paths(*paths: str) -> None:
