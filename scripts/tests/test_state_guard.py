@@ -55,43 +55,75 @@ pytestmark = pytest.mark.skipif(
     reason=f"the engine-root conftest carrying the #428 guard is not vendored here: {ENGINE_CONFTEST}",
 )
 
-# Every sanctioned invocation shape, keyed by id. `make test` passes both
-# directories; an agent iterating on one subsystem passes one. Keyed rather than
-# a positional list because `_LEAK_CASES` below selects from it: an index would
-# let a reordering here silently change which shape each leak case exercises,
-# and every test would still pass.
-_SHAPES = {
-    "both-dirs": ["scripts/lib/state_paths/tests", "scripts/tests"],
-    "tests-only": ["scripts/tests"],
-    "state-paths-only": ["scripts/lib/state_paths/tests"],
-    "repo-root": ["."],
-}
+# The engine directory's position, keyed by id. `flat` is the kit's own layout;
+# `nested` is the `paths.engines: scripts/devkit` shape `adopt.md` defaults to and
+# cs-toolkit actually uses. Both are claimed as measured in the guard's docstring,
+# so both are exercised here rather than only asserted there.
+_LAYOUTS = {"flat": "scripts", "nested": "scripts/devkit"}
 
 
-def _build_tree(root: Path, *, leak_in: str | None) -> None:
+def _shapes(engine_rel: str) -> dict[str, list[str]]:
+    """Every sanctioned invocation shape, as arguments relative to the repo root.
+
+    Keyed by id rather than positional because the case tables below select from
+    it: an index would let a reordering silently change which shape each case
+    exercises, with every test still passing.
+    """
+    return {
+        "both-dirs": [f"{engine_rel}/lib/state_paths/tests", f"{engine_rel}/tests"],
+        "tests-only": [f"{engine_rel}/tests"],
+        "state-paths-only": [f"{engine_rel}/lib/state_paths/tests"],
+        "repo-root": ["."],
+    }
+
+
+_SHAPES = _shapes(_LAYOUTS["flat"])
+
+# What the planted test does to the real `state/`. Both are leaks the guard
+# claims to catch, and they exercise DIFFERENT branches of `_real_state_snapshot`:
+# `file` is caught by the file-hash entries, `dir` only by the trailing-slash
+# directory entries. The directory branch is the one that catches the next engine
+# to acquire #428's bug, since `pr_watch.py`'s first act on that path is
+# `STATE_DIR.mkdir(parents=True, exist_ok=True)` — an engine that creates its
+# directory and writes no file in the same run is invisible to a files-only
+# snapshot. Measured: with the snapshot reduced to files only, every file-leak
+# case here still passes and only the `dir` cases fail.
+_LEAK_KINDS = ("file", "dir")
+
+
+def _build_tree(
+    root: Path, *, leak_in: str | None, leak_kind: str = "file", engine_rel: str = "scripts"
+) -> None:
     """A throwaway repo mirroring the kit's engine layout.
 
-    ``leak_in`` names the test directory whose planted test writes into the
-    real ``<root>/state/``; ``None`` plants only inert tests, which is the
-    negative control.
+    ``leak_in`` names the test directory whose planted test writes into the real
+    ``<root>/state/``; ``None`` plants only inert tests, which is the negative
+    control. ``leak_kind`` selects whether that write is a file or a bare
+    directory. ``engine_rel`` positions the engine directory, flat or nested.
     """
     # A `.git` marker so the copied conftest's walk-up resolves to `root`
     # deterministically, rather than to whatever happens to sit above tmp_path.
     (root / ".git").mkdir(parents=True)
-    engine = root / "scripts"
+    engine = root / engine_rel
     tests = engine / "tests"
     state_paths_tests = engine / "lib" / "state_paths" / "tests"
     tests.mkdir(parents=True)
     state_paths_tests.mkdir(parents=True)
     (engine / "conftest.py").write_bytes(ENGINE_CONFTEST.read_bytes())
 
-    leak_body = (
-        "from pathlib import Path\n"
-        "def test_writes_into_real_state():\n"
-        f"    d = Path({str(root)!r}) / 'state' / 'pr-watch'\n"
-        "    d.mkdir(parents=True, exist_ok=True)\n"
-        "    (d / '9999.json').write_text('{}')\n"
-    )
+    if leak_kind == "file":
+        leak_stmt = (
+            f"    d = Path({str(root)!r}) / 'state' / 'pr-watch'\n"
+            "    d.mkdir(parents=True, exist_ok=True)\n"
+            "    (d / '9999.json').write_text('{}')\n"
+        )
+    else:
+        # No file written at all — exactly `pr_watch.py`'s import-time mkdir.
+        leak_stmt = (
+            f"    d = Path({str(root)!r}) / 'state' / 'brand-new-engine'\n"
+            "    d.mkdir(parents=True, exist_ok=True)\n"
+        )
+    leak_body = "from pathlib import Path\ndef test_writes_into_real_state():\n" + leak_stmt
     inert_body = "def test_inert():\n    assert True\n"
 
     for name, directory in (("tests", tests), ("state_paths", state_paths_tests)):
@@ -99,30 +131,59 @@ def _build_tree(root: Path, *, leak_in: str | None) -> None:
         (directory / f"test_{name}_probe.py").write_text(body)
 
 
-def _run_pytest(root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
-    """Run a nested pytest session in ``root`` and capture its verdict.
+def _leaked_path(root: Path, leak_kind: str) -> Path:
+    return (
+        root / "state" / "pr-watch" / "9999.json"
+        if leak_kind == "file"
+        else root / "state" / "brand-new-engine"
+    )
 
-    ``DEVKIT_*`` is stripped from the child's environment so the nested run
-    cannot inherit this test's own ``_hermetic_state_root`` sandbox. The guard
-    does not read those variables — that independence is the point of its own
-    root resolution — but a harness that quietly depends on them would be
-    testing something other than what ships.
+
+def _run_pytest(
+    root: Path, args: list[str], *, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run a nested pytest session and capture its verdict.
+
+    ``cwd`` defaults to ``root``; pass the engine directory to exercise the
+    invocation an adopter makes from inside their vendored engines. ``DEVKIT_*``
+    is stripped from the child's environment so the nested run cannot inherit
+    this test's own ``_hermetic_state_root`` sandbox. The guard does not read
+    those variables — that independence is the point of its own root resolution
+    — but a harness that quietly depended on them would be testing something
+    other than what ships.
     """
     env = {k: v for k, v in os.environ.items() if not k.startswith("DEVKIT_")}
     return subprocess.run(
         [sys.executable, "-m", "pytest", *args, "-q", "-p", "no:cacheprovider"],
-        cwd=root,
+        cwd=cwd or root,
         env=env,
         capture_output=True,
         text=True,
     )
 
 
-# (id, pytest arguments, which directory leaks). Written out rather than crossed
-# with `_SHAPES`, because a leak only proves something in a shape that COLLECTS
-# it: `pytest scripts/tests` never runs a test planted under `state_paths`, so
-# that pairing would assert the guard stayed silent about a write that never
-# happened — a passing test measuring nothing.
+def _assert_guard_fired(
+    result: subprocess.CompletedProcess[str], leaked: Path, names: str
+) -> None:
+    if not leaked.exists():
+        pytest.fail(
+            f"the planted test did not write {leaked}, so this run proves nothing "
+            f"about the guard.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+    assert result.returncode != 0, (
+        f"the guard did not fail the run after a write into {leaked}.\n"
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
+    combined = result.stdout + result.stderr
+    assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
+    assert names in combined, f"the guard fired but did not name the changed path:\n{combined}"
+
+
+# (shape, which directory leaks). Written out rather than crossed with `_SHAPES`,
+# because a leak only proves something in a shape that COLLECTS it: `pytest
+# scripts/tests` never runs a test planted under `state_paths`, so that pairing
+# would assert the guard stayed silent about a write that never happened — a
+# passing test measuring nothing.
 _LEAK_CASES = [
     ("both-dirs", "tests"),
     ("both-dirs", "state_paths"),
@@ -133,34 +194,57 @@ _LEAK_CASES = [
 ]
 
 
+@pytest.mark.parametrize("leak_kind", _LEAK_KINDS)
 @pytest.mark.parametrize(
     ("shape", "leak_in"), _LEAK_CASES, ids=[f"{s}-leak-in-{d}" for s, d in _LEAK_CASES]
 )
-def test_guard_catches_a_write_into_real_state(tmp_path: Path, shape: str, leak_in: str) -> None:
+def test_guard_catches_a_write_into_real_state(
+    tmp_path: Path, shape: str, leak_in: str, leak_kind: str
+) -> None:
     """A leak anywhere in the collected set turns the run red, in every shape.
 
     ``state-paths-only`` is #448 exactly: before the guard moved to the engine
-    root, that row exited 0 with the write sitting on disk.
+    root, that row exited 0 with the write sitting on disk. The ``dir`` kind is
+    the branch that catches an engine which creates its state directory and
+    writes no file — see ``_LEAK_KINDS``.
     """
-    _build_tree(tmp_path, leak_in=leak_in)
+    _build_tree(tmp_path, leak_in=leak_in, leak_kind=leak_kind)
     result = _run_pytest(tmp_path, _SHAPES[shape])
-
-    leaked = tmp_path / "state" / "pr-watch" / "9999.json"
-    if not leaked.exists():
-        pytest.fail(
-            f"the planted test did not write the leak, so this run proves nothing "
-            f"about the guard.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
-        )
-
-    assert result.returncode != 0, (
-        f"the guard did not fail the run after a write into {leaked}.\n"
-        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    _assert_guard_fired(
+        result,
+        _leaked_path(tmp_path, leak_kind),
+        "9999.json" if leak_kind == "file" else "brand-new-engine/",
     )
-    combined = result.stdout + result.stderr
-    assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
-    assert "9999.json" in combined, (
-        f"the guard fired but did not name the changed path:\n{combined}"
-    )
+
+
+@pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
+@pytest.mark.parametrize("invoked_from", ["repo-root", "engine-dir"])
+def test_guard_reaches_every_layout_and_working_directory(
+    tmp_path: Path, layout: str, invoked_from: str
+) -> None:
+    """The docstring's MEASURED REACH claim, pinned rather than only asserted.
+
+    ``<engine-dir>/conftest.py`` states it fires in the kit's flat layout and in
+    a nested ``scripts/devkit/`` adopter layout, invoked from the repo root or
+    from inside the engine directory. Both lenses of #453's panel confirmed the
+    claim is true and observed that nothing in the suite would notice if one of
+    those four cells broke. This is that pin.
+
+    ``state_paths`` is the leaking directory throughout: it is the one #448 was
+    found in, and the one whose conftest coverage the placement depends on.
+    """
+    engine_rel = _LAYOUTS[layout]
+    _build_tree(tmp_path, leak_in="state_paths", engine_rel=engine_rel)
+
+    if invoked_from == "repo-root":
+        args, cwd = _shapes(engine_rel)["state-paths-only"], None
+    else:
+        # Relative to the engine directory, which is what an adopter standing in
+        # their vendored engines actually types.
+        args, cwd = ["lib/state_paths/tests"], tmp_path / engine_rel
+
+    result = _run_pytest(tmp_path, args, cwd=cwd)
+    _assert_guard_fired(result, _leaked_path(tmp_path, "file"), "9999.json")
 
 
 @pytest.mark.parametrize("shape", list(_SHAPES), ids=list(_SHAPES))
