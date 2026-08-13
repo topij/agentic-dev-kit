@@ -67,6 +67,16 @@ therefore — the classes, not an enumeration of their members (#457):
     concurrent writer (a backgrounded `pr_watch.py` poll does exactly this
     during long suites) and trades a fail-closed limitation for a fail-open
     mechanism, the harm `safety-critical-changes.md` rule 3 names.
+  - Anything written AFTER the second instant (#460). `pytest_sessionfinish`
+    runs before interpreter shutdown, so an ``atexit`` callback registered by
+    a test, a surviving non-daemon thread, or a child process that outlives
+    the session writes after the comparison has already passed — a green
+    run, exit 0, and the write on disk once the process is gone.
+    Demonstrated live by #459's round-4 adversarial lens, and pre-existing:
+    the bracket has never extended past this hook. Unlike the flag-and-signal
+    routes below, this needs no unusual privilege and no visible abnormality,
+    so it is tracked as a mechanism decision on #460 rather than disposed as
+    adversary-only.
 
 THE REACH RESIDUAL, separate from the observation window above.
 **Any run whose CWD is a test directory itself loses the guard** — the boundary
