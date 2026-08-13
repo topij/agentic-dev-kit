@@ -49,14 +49,20 @@ starts.
   safety-critical boundary) into the lens prompt with the duty to dispute them and
   the one-verdict-line-per-draw requirement `fallback-review-panel.md` asks that
   prompt to carry. An empty value is refused, like every other optional override.
-  **Nothing to do unless you assemble delta-pass prompts**: omit the flag and a full
-  panel's prompt is what it was.
+  **Nothing to do unless you assemble delta-pass prompts**: omit the flag and no
+  draws section is rendered.
 - **CHANGED (engine CLI surface)** — `panel_prompt.py --carry-forward` renders four
   further lines after your text, telling the lens the section is not the author's
   view of the change and to report it as a finding if it reads that way. **A test
-  asserting the exact text of a `--carry-forward` prompt must be updated**; a prompt
-  assembled without the flag is byte-identical to before. Draws now go to
-  `--delta-draws`; a full panel's prompt carries neither.
+  asserting the exact text of a `--carry-forward` prompt must be updated.** Draws now
+  go to `--delta-draws`; a full panel's prompt carries neither.
+- **CHANGED (engine CLI surface)** — if you also refresh
+  `docs/agentic-dev-kit/fallback-review-panel.md`, **every** rendered prompt changes
+  whatever flags you pass: the engine quotes that file's contract section verbatim,
+  and this PR adds a sentence to contract item **Scratch namespace** (reach the
+  namespace by creating a fresh path, never by removing and recreating one). **A test
+  pinning a rendered prompt's exact bytes must be updated even if you use no new
+  flag.** Take the engine without the doctrine and only the two flags above move.
 
 ---
 

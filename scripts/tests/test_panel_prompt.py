@@ -316,8 +316,8 @@ def test_carry_forward_reaches_the_prompt_when_given_and_is_absent_otherwise(rep
 def test_a_full_panel_prompt_carries_no_authors_draw(repo):
     """The defect: draws typed into `--carry-forward` reached FULL-panel prompts.
 
-    The doctrine hands the author's stated draws to the **delta lens only** — "Full
-    panel lens prompts are untouched by all of this" — so the draws section must be
+    The doctrine hands the author's stated draws to the **delta lens only** —
+    "Full-panel lens prompts are untouched by all of this" — so the draws section must be
     unreachable without `--delta-draws`, including from a prompt that carries a
     carry-forward. Unpinned, moving the draws render under the carry-forward guard
     reproduces the exact anchoring, and every other test still passes.
@@ -357,6 +357,13 @@ def test_delta_draws_reach_the_lens_with_the_duty_to_dispute_them(repo):
     # assertion a measurement's weight — the same defect `--base` and `--branch`
     # already carry provenance labels for.
     assert "asserted by whoever assembled this prompt, not\nobserved here" in out.stdout
+    # The cockpit posts each verdict line on the PR verbatim, and the doctrine reads
+    # "confirmed" as a specific word ('"confirmed" means both are confirmed'). So the
+    # vocabulary is part of the contract between the lens and the record, not phrasing:
+    # renaming it silently leaves the doctrine describing words no prompt asks for.
+    # Named by this test's neighbours and pinned by nothing until now — swapping it for
+    # `yes`/`no` passed the whole file.
+    assert "`confirmed` or `disputed`" in out.stdout
 
 
 def test_the_carry_forward_section_tells_the_lens_what_it_is_not(repo):
