@@ -12,15 +12,26 @@ failure path was never exercised and the mutation survived silently.
 WHY A SUBPROCESS AND NOT ``pytester``. The guard is a *session*-level property:
 a baseline taken at conftest import, compared once at ``pytest_sessionfinish``.
 Observing it needs a whole pytest session that is allowed to fail, nested inside
-a passing one. ``pytester`` is the usual instrument and is unavailable here:
-enabling it requires ``pytest_plugins = ["pytester"]``, and pytest has made that
-an ERROR in any non-rootdir conftest since 4.0 — the kit's conftests are
-non-rootdir by construction, because they travel into adopter trees and are
-collected against the adopter's rootdir (#33/#112). ``-p pytester`` on the
-command line would work but pushes the requirement onto every caller, including
-`make test` and the adopter invocations `adopt.md`/`upgrade.md` prescribe. A
-subprocess needs no plugin registration, no shipped-surface change, and
-exercises the real file rather than a re-registration of it.
+a passing one. ``pytester`` is the usual instrument, and enabling it requires
+``pytest_plugins = ["pytester"]`` in a conftest — which pytest refuses with
+*"Defining 'pytest_plugins' in a non-top-level conftest is no longer supported"*.
+
+**The trigger is being a non-INITIAL conftest, not being outside the rootdir**,
+and the distinction matters because it decides which invocations break. pytest's
+`_check_non_top_pytest_plugins` fires when the conftest is loaded after the
+config is already configured — so the *same* file is accepted under
+`pytest <engine-dir>/tests`, which makes it an initial conftest, and rejected
+under a bare `pytest .`, which does not. (Isolated on pytest 9.1.1 by placing an
+identical file in both shapes; an earlier version of this paragraph said "an
+ERROR in any non-rootdir conftest since 4.0", which overstates it.)
+
+That leaves `pytester` usable for some sanctioned shapes and not others, and a
+guard built to cover bare `pytest .` cannot depend on a plugin that bare
+`pytest .` refuses to load. ``-p pytester`` on the command line sidesteps the
+conftest rule but pushes the requirement onto every caller, including `make test`
+and the adopter invocations `adopt.md`/`upgrade.md` prescribe. A subprocess needs
+no plugin registration, no shipped-surface change, and exercises the real file
+rather than a re-registration of it.
 
 WHAT EACH SHAPE PINS. The parametrisation is not repetition for its own sake:
 each entry is one of the invocation shapes #448 is about, and the
@@ -95,9 +106,15 @@ _SHAPES = _shapes(_LAYOUTS["flat"])
 #              actually happened as: "an ordinary run overwrote this repo's own
 #              state/pr-watch/1.json and 4242.json with fixture data". A snapshot
 #              that recorded mere presence would miss it entirely, and every
-#              add-shaped case above would still pass — measured: replace
-#              `_hash_file(path)` with a constant and the full suite reports
-#              1208 passed, 1 deselected, exit 0, a clean survivor.
+#              add-shaped case above would still pass.
+#
+#              Measured, and stated in the right tense: replacing
+#              `_hash_file(path)` with a constant was a CLEAN SURVIVOR of the
+#              suite as it stood BEFORE these cases existed — 1208 passed,
+#              1 deselected, exit 0. Against the suite as it now ships the same
+#              mutation reports 6 failed, 1208 passed, and a non-zero exit; the
+#              six are exactly these cases. The identical "1208 passed" on both
+#              sides is a coincidence of arithmetic, not evidence of anything.
 _LEAK_KINDS = ("file", "dir", "overwrite")
 
 # Seeded into the throwaway `state/` before pytest starts, so it is part of the
@@ -306,24 +323,83 @@ def test_guard_is_silent_when_nothing_writes(tmp_path: Path, shape: str) -> None
     assert _SUMMARY not in combined, f"the guard's summary leaked into a clean run:\n{combined}"
 
 
-def test_the_guards_own_root_resolution_agrees_with_the_test_suites() -> None:
+def _guards_resolver():
+    """The guard's own ``_find_repo_root``, extracted without importing it.
+
+    Importing the conftest here would take a second baseline snapshot and
+    register a duplicate session hook, so only the helper is compiled.
+    """
+    namespace: dict[str, object] = {}
+    source = ENGINE_CONFTEST.read_text()
+    start = source.index("def _find_repo_root")
+    end = source.index("REPO_ROOT = _find_repo_root")
+    exec(compile(source[start:end], str(ENGINE_CONFTEST), "exec"), namespace)  # noqa: S102
+    return namespace["_find_repo_root"]
+
+
+def test_the_guards_own_root_resolution_agrees_with_the_test_suites(tmp_path: Path) -> None:
     """The deliberate duplication must stay a duplication, not a divergence.
 
     ``<engine-dir>/conftest.py`` carries its own ``_find_repo_root`` instead of
     importing ``_repo_layout`` — it has to work in a tree that vendors engines
     without tests, and it must not borrow an ENGINE's root resolution, since an
     engine resolving its state path wrongly is the bug it exists to catch. That
-    is a defensible copy and an undefensible place for the two to disagree, so
-    this pins them equal on the tree we are running in. #203 tracks the wider
-    four-helper consolidation; this keeps these two from drifting meanwhile.
-    """
-    namespace: dict[str, object] = {}
-    source = ENGINE_CONFTEST.read_text()
-    # Execute only the helper, not the module: importing the conftest here would
-    # take a second baseline snapshot and register a duplicate session hook.
-    start = source.index("def _find_repo_root")
-    end = source.index("REPO_ROOT = _find_repo_root")
-    exec(compile(source[start:end], str(ENGINE_CONFTEST), "exec"), namespace)  # noqa: S102
-    guard_resolver = namespace["_find_repo_root"]
+    is a defensible copy and an undefensible place for the two to disagree.
+    #203 tracks the wider four-helper consolidation; this keeps these two from
+    drifting meanwhile.
 
+    BOTH BRANCHES, not just the reachable one. An earlier version compared the
+    two only at ``ENGINE_DIR``, which always has a ``.git`` ancestor — so the
+    marker-found branch was pinned and the no-marker FALLBACK was not, while
+    this docstring claimed the pair could not drift. Measured by the round-4
+    correctness lens: mutating the guard's fallback from ``start.parent`` to
+    ``start`` survived the full ``make mutation-test`` scope at 1214 passed,
+    1 deselected, exit 0. That fallback is the branch carrying #60's known
+    nested-layout defect, so an undetected divergence there moves which
+    ``state/`` the guard watches.
+    """
+    guard_resolver = _guards_resolver()
+
+    # Branch 1 — a marker exists above.
     assert guard_resolver(ENGINE_DIR) == find_repo_root(ENGINE_DIR)
+
+    # Branch 2 — the fallback. `deep` has no `.git` at or above it inside
+    # tmp_path; assert the two agree AND that the fallback is what ran, so this
+    # cannot quietly become a second copy of branch 1 on a machine whose temp
+    # directory happens to sit under a repository.
+    deep = tmp_path / "no-marker" / "engines"
+    deep.mkdir(parents=True)
+    marker_above = any((c / ".git").exists() for c in (deep, *deep.parents))
+    assert guard_resolver(deep) == find_repo_root(deep)
+    if not marker_above:
+        assert guard_resolver(deep) == deep.parent, (
+            "the fallback branch did not run, so this case pinned nothing"
+        )
+
+
+def test_the_documented_residual_still_behaves_as_documented(tmp_path: Path) -> None:
+    """Characterisation pin for the one shape the guard does NOT cover.
+
+    ``<engine-dir>/conftest.py`` documents, as measured fact, that a run whose
+    CWD is a test directory loses the guard whatever arguments it gets — pytest
+    resolves rootdir, and with it confcutdir, from cwd and args together. Every
+    other measured claim in that docstring has a pin; this one did not, which
+    the round-4 correctness lens flagged as the PR's own pattern stopping one
+    claim short.
+
+    **This asserts a limitation, deliberately.** It is not a blessing of the
+    gap: #455 tracks closing it, and this test is expected to FAIL when that
+    lands — which is the point. Until then it catches the same behaviour
+    drifting silently in either direction under a future pytest.
+    """
+    _build_tree(tmp_path, leak_in="tests", leak_kind="file")
+    result = _run_pytest(tmp_path, [], cwd=tmp_path / "scripts" / "tests")
+
+    assert _leak_landed(tmp_path, "file"), "the planted test did not write; nothing is pinned"
+    combined = result.stdout + result.stderr
+    assert result.returncode == 0, (
+        "the residual documented in <engine-dir>/conftest.py has changed — a run "
+        "with CWD inside the test directory now DOES fail on a leak. If #455 "
+        f"landed, delete this test and the docstring's residual section.\n{combined}"
+    )
+    assert _BANNER not in combined, f"the guard fired where it is documented not to:\n{combined}"
