@@ -14,11 +14,65 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-13 — first unattended multi-lane batch. `#441`, `#442`, `#443`
-merged; `#444` and `#445` are green and held for the operator. Filed this session:
-`#446`, `#447`, `#448`, `#449`, `#450`.
+Last updated: 2026-08-13 — `#453` merged, closing `#447` and `#448`. Filed this
+session: `#455`, `#456`, `#457`.
 
-## Latest session — 2026-08-13 (five lanes overnight, and the reviewer catching the author each time)
+## Latest session — 2026-08-13 (one guard, and the reviewer finding my own claims)
+
+**Theme —** `#453`: the `#428` state guard, which keeps fabricated review receipts out of
+`state/pr-watch/`. `#447` (nothing pinned it) and `#448` (it was absent when a run
+collected only `lib/state_paths/tests`) were one mechanism's two symptoms and shipped
+together. Merged as `175bda0`; `make test` at the kit root on the merged tip is green.
+
+- **The placement `#448` did not consider.** That ticket weighed a repo-root conftest
+  (reaches no adopter) against a second conftest beside `state_paths` (a copy to drift)
+  and called neither right. The **engine root** has neither objection: pytest loads
+  conftests from rootdir down, so one file there covers every test directory under it,
+  and it sits inside what an adopter vendors. Only the detection half moved —
+  `_hermetic_state_root` stays beside the tests because `lib/state_paths/tests` drives
+  `$DEVKIT_STATE_ROOT` as its subject and asserts on the unset case.
+- **The review kept finding defects in my own work, and the ones that mattered were
+  claims I had written and defended.** I argued in the PR body that manifest-tracking the
+  new file would cascade through `kit_doctor`, as the reason to defer it;
+  measured, it was clean, and the file had been invisible to `/upgrade` — `#422`'s shape,
+  committed by me. I documented the `cd`-into-tests residual as the no-argument form when
+  the boundary is the working directory. I quoted `make test` as running
+  `pytest lib/state_paths/tests tests`, having dropped both `scripts/` prefixes while
+  moving text that claims to quote the command.
+- **CodeRabbit's quota returned mid-PR and it found things the panel had not** — one
+  with a better fix than mine (`_require_no_ancestor_marker`, already this
+  repo's convention). Its outage is why the panel ran at all; `#372` is still the open
+  question about that posture.
+- **Filed:** `#455` (the guard is lost for any run whose cwd is a test directory),
+  `#456` (a dangling symlink is invisible to the snapshot), `#457` (further routes past it,
+  plus `session.shouldfail` unpinned). Occurrences recorded on `#40` and `#416`.
+
+**Learned**
+
+- **`#457`'s routes share one root, which is worth more than the tickets.** The
+  guard observes **two instants** — disk at conftest import, disk at session end — and
+  not the interval between them, so anything netting to zero across those instants is
+  permanently outside what it can see. A resolution that keeps the two-instant design
+  should say so instead of enumerating; one that watches the interval closes every route
+  that nets to zero across them.
+- **A count beside a list went stale within one round, in the file that teaches this.**
+  I wrote "TWO THINGS THIS TRAVERSAL STILL CANNOT SEE" and the next round found a third.
+  `fallback-review-panel.md` records that exact lesson — enumerate, never count — from
+  getting a consumer count wrong twice. Dropping volatile figures from the record is not
+  a style preference; it is the repair that keeps working.
+- **The panel's own attestation cannot catch a shared-`.git` write.** A lens fetched into
+  the linked worktree it was handed; `git status` was clean before and after, because a
+  ref write touches no working-tree byte. Self-reporting was the only detection route,
+  and that is not a mechanism (`#416`).
+
+▶ Next: **`#457`** — decide whether the `#428` guard should keep observing two instants
+or watch the interval. That one choice disposes of every route that nets to zero across
+the two instants, and tells you what `#455` and `#456` are worth; taking them as separate
+tickets is the more expensive reading.
+
+______________________________________________________________________
+
+## Session — 2026-08-13 (five lanes overnight, and the reviewer catching the author each time)
 
 **Theme —** the first autonomous batch run through `parallel-headless.md`. The mechanism
 held; what the review found in the lanes' own work, and what the launch could not honour,
@@ -293,100 +347,12 @@ was in the record prose *about* it, including one that turned out to have no cor
 - **`#378`** has a second miscount noted on it: the 2026-08-08 marker calls itself the tenth
   sweep where `#198` and the archive's own sections put it eleventh. The 2026-08-11 marker
   carries no ordinal, deliberately.
-- Nothing else in the 2026-08-10 block's open list below moved this session.
+- Nothing else in the 2026-08-10 block's open list moved this session (that block is
+  now in [`kit-handoff-history.md`](kit-handoff-history.md); swept 2026-08-13).
 
 ▶ Next: **cs-toolkit kit refresh** — carried forward untouched from the 2026-08-10 block
+(now in [`kit-handoff-history.md`](kit-handoff-history.md))
 below; read its bullet there for the verified preconditions rather than trusting this line.
-
-______________________________________________________________________
-
-## Session — 2026-08-10 (the check-name trust boundary, and a fix worse than the bug)
-
-**Theme —** `#95` shipped. The fix itself is small; what the panel found *inside my own
-work* is the part worth carrying. Round 2 found a CRITICAL I had introduced that was
-strictly worse than `#95`, and round 4 found that the new guard's own tests were
-scaffolding.
-
-- **`#95` closed** (`#412`, `247d2c8`), and with it `cluster:merge-gate`. A check's *name*
-  is chosen by whoever created the check, so on a same-repo PR it is not a trust
-  boundary; the **cancel** now requires the creator identity GitHub records (`app.slug`
-  on a check run, `creator.login` on a status context), which a workflow cannot forge.
-  The **report** deliberately does not, so the signal to run the panel never goes
-  missing. New optional knob: `review.bot_app_slugs`, ordinarily absent.
-- **Safe on by default because the cancel only ACCELERATES the grace clock.** An
-  unresolvable identity costs at most `bot_pending_grace_minutes`; a terminal outage row
-  (`#23`'s own shape) costs nothing, having no pending entry to cancel. Fail-closed and
-  bounded, never a wedge — which is why it needed no opt-in.
-- **Two premises in the issue's groundwork were wrong**, and re-deriving them changed the
-  design: the combined `/commits/{sha}/status` endpoint carries **no `creator`** (only the
-  plural `/statuses` does), and a `workflow`-field discriminator would have looked like a
-  fix while leaving the reviewer's actual surface open. Both re-derived against live
-  payloads, not read off the issue.
-- **Filed:** `#413` (kitconfig parses flow sequences but turns flow mappings into
-  strings), `#414` (`_gh` translates only `TimeoutExpired`), `#415` (`_route_http`
-  misroutes when one route fragment prefixes another), `#416` (the panel's cockpit-built
-  worktree is *linked*, so a lens establishing base against the remote writes into the
-  operator's `.git`), `#417` (a test that mocks the unit under test — the pattern below).
-
-**Learned**
-
-- **My fix was briefly worse than the bug.** The REST identity read called the plural
-  statuses endpoint with the object-wrapped reader; it raised, and `fetch_check_details`
-  degraded to `([], "unavailable")`, discarding **every** row and switching `#19`'s and
-  `#23`'s guards off in exactly the outage case they exist for. `record_review` already
-  names that state "the SILENT bypass, and the worse of the two". Found in round 2, on a
-  supported backend, in the engine that decides a PR is safe to merge.
-- **A test that mocks the unit under test cannot see that unit's defects.** It recurred
-  through this PR: the reader whose shape assumption was wrong was itself the mock; then
-  the helper the new guard depends on; then a path with no test at all. Each left a green
-  suite. Once the shape was named it was cheap to hunt — the later ones were found by
-  looking for it rather than by review. The move that works is hardwiring the *real*
-  unit's body to a constant, which is strictly stronger than mutating the branch under
-  review. `#417` enumerates the instances and proposes the amendment.
-- **A mutation sweep's own restore step can invalidate it.** The harness restored the
-  engine with `git checkout --` before applying each mutation, which reverted files
-  copied in from the working tree — so mutations never applied and would have read as
-  survivors. Caught only because the harness asserts its anchor is present before
-  trusting a result. The fix is to commit the state under test in the throwaway clone
-  first.
-- **The panel's stopping rule worked here, and the loop ended on the subject.** Severity
-  fell every round and round 5 was a clean pass from both lenses — the first of
-  `fallback-review-panel.md`'s three terminal states, not "the findings got small". But
-  rounds 3–5 found nothing wrong with the previous round's *fix*, and their findings were
-  about my remediation's coverage rather than about `#95`. That is the second occurrence
-  of the state the friction log's 2026-08-10 entry describes.
-- **CodeRabbit reviewed the first head and was rate-limited on every one after**, so the
-  panel carried rounds 2–5 and the receipt records that its last review covered
-  `d3140f9`, not the merging head. `#372` is the posture decision this keeps costing.
-
-**Open, and owned by nothing yet**
-
-- **`#417`** proposes a panel-contract amendment; `#410` proposes another. Worth deciding
-  together rather than separately.
-- **`#416`** is mine to have caused: `fallback-review-panel.md` step 2 has the cockpit
-  build a linked worktree while the contract asks the lens to establish base against the
-  remote. Lenses in rounds 4 and 5 each disclosed hitting it independently; impact was
-  verified nil from the cockpit (`git reflog show refs/remotes/origin/main`, kit root),
-  cause is structural.
-- **`#333`** — its ratchet wedge is untouched and still pinned by name in a test, so
-  nobody credits `#412` with it or "fixes" it by loosening the settle clock.
-- **`#413`, `#414`, `#415`** as filed. `#414` should also remove the now-redundant local
-  guards `#412` added, rather than leaving two overlapping rules.
-- **`#408`, `#409`, `#410`, `#399`'s `adopt.md` half, `#402`, `#403`, `#404`, `#405`,
-  `#395`, `#388`, `#358`** unchanged by this session.
-- **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
-- **cs-toolkit's refresh is unblocked** — it was waiting on this landing. Its kit-owned
-  files are all byte-identical to what was installed (no local edits to merge), and its
-  `paths.engines` is `scripts/devkit`. Drive `/upgrade` from **the kit's** copy of
-  `upgrade.md`: the adopter's own copy predates the cross-tree hardening. Verified with
-  `python3 scripts/kit_doctor.py --root <cs-toolkit> --manifest <kit manifest>` run from
-  the kit root.
-
-▶ Next: **cs-toolkit kit refresh** — `/upgrade` for `/Users/topi/Coding/in-parallel/cs-toolkit`,
-driving from this repo's `docs/agentic-dev-kit/workflows/upgrade.md` rather than the
-adopter's older copy. Bind `$REPO`/`$KIT` before the first write and verify at the
-destination. Its own `tests/test_pr_watch.py` will not pin the refreshed engine's new
-merge-gate behaviour — decide deliberately whether to vendor the kit's tests too.
 
 ______________________________________________________________________
 

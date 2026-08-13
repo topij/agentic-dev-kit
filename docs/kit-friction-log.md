@@ -13,6 +13,35 @@
 
 ## 2026-08-13
 
+**`kit_doctor.py --generate-manifest` both writes the file and prints to stdout, so
+redirecting it corrupts the manifest.** Severity **M**. The obvious invocation —
+`kit_doctor.py --generate-manifest > kit-manifest.json` — writes the manifest twice over:
+the flag writes it itself, and the shell then truncates that file and fills it with the
+status line `wrote /…/kit-manifest.json (37 files, kit_version=2)` followed by whatever
+the flag had already emitted. The result still parses far enough to look plausible in a
+diff, and the exit code is 0. Caught on `#453` only by reading the diff and noticing the
+first hunk replaced the file's opening brace with the status message. This is `#112`'s
+own hazard class — regenerate-first bookkeeping whose failure is silent and in the
+confident direction — arriving in the command `#112` points at. Proposed fix: print the
+status line to **stderr**, so a redirect captures nothing and the two routes stop
+competing for stdout; or refuse to run when stdout is not a tty and no `--output` is
+given. Related: `#402`.
+
+**The `#428` guard false-positives when anything else writes `state/` during a test
+run.** Severity **L**. The guard compares the real `state/` before and after a pytest
+session, so a concurrent writer — in practice a backgrounded `pr_watch.py <PR#> --json`
+poll, which persists `state/pr-watch/<PR#>.json` on every call — makes an innocent run
+fail with `REGRESSION (#428)` naming a file the suite never touched. Hit while running
+`make test` and polling a PR at the same time during `#453`, which is an ordinary
+cockpit shape rather than a contrived one. `--no-persist` avoids it and is already the
+documented flag for a read-only poll, so the fix may be documentation rather than code.
+Proposed fix: say so where the guard's failure is explained — a run that fails naming a
+`pr-watch/<PR#>.json` you were polling is this, not a leak — and consider whether
+`pr-watch.md` should recommend `--no-persist` for any poll issued while a suite is
+running. Related: `#457`, which collects what the guard cannot see; this is the opposite
+direction, what it sees that is not the suite's doing.
+
+
 **`parallel-headless.md` requires an `env` map that the runtime the kit ships an adapter
 for cannot supply.** Severity **M**. The contract makes the descriptor's `env` field
 mandatory for an unattended lane and says a fan-out tool that cannot replace the spawned
