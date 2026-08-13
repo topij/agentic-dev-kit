@@ -156,17 +156,26 @@ def _real_state_snapshot() -> dict[str, str]:
 # never re-taken. Its partner is `pytest_sessionfinish` below.
 #
 # WHY IMPORT TIME AND NOT `pytest_sessionstart` (#433 asked for sessionstart).
-# `pytest_sessionstart` is not a historic hook, so only a plugin already
-# registered when it fires receives it. A conftest is registered that early
-# only when its own directory is an INITIAL command-line argument. `make test`
-# passes `scripts/tests` explicitly, so it would fire there — but a bare
-# `pytest` from the repo root loads this file during collection instead, and
-# then `pytest_sessionstart` never arrives while `pytest_sessionfinish` still
-# does, leaving the comparison with no baseline at all. Measured on pytest
-# 9.1.1 with a two-directory probe carrying both hooks:
+# `pytest_sessionstart` is not a historic hook — unlike `pytest_configure`
+# below — so only a plugin already registered when it fires receives it. A
+# conftest is registered that early only when it is an INITIAL conftest, and
+# `_set_initial_conftests` decides that from the command line: each argument
+# is an anchor, plus, for a directory argument, its `test*` SUBDIRECTORIES.
+# So `pytest scripts/tests` and `pytest scripts` both make this file initial
+# (`tests` matches the glob), while a bare `pytest` at the repo root does not —
+# nothing there matches `test*` — and this file is then imported during
+# collection instead. `pytest_sessionstart` never arrives in that shape while
+# `pytest_sessionfinish` still does, so a sessionstart-taken baseline would be
+# missing at exactly the moment it is compared.
 #
-#     pytest <probe>/sub -q   -> "sessionstart FIRED", "sessionfinish FIRED"
-#     pytest <probe>     -q   -> "sessionfinish FIRED"   (no sessionstart)
+# That is measured, not reasoned: with the baseline moved into
+# `pytest_sessionstart` and a leaking test planted in
+# `scripts/lib/state_paths/tests`, `pytest <repo>` reported four changed paths
+# — three of them files the run never touched, hashed identical before and
+# after — because the baseline was still its `{}` initial value. The same tree
+# with the baseline taken here reported the one path that really changed.
+# (Initialising to `None` instead trades that false alarm for a silent miss;
+# both are the same defect.)
 #
 # Import is the one moment that exists in every invocation shape, and it is
 # always before the first test body runs, because pytest completes collection
