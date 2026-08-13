@@ -4,6 +4,82 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-10 (the merge gate, and the fix rounds that became the subject)
+
+**Theme —** `#190` and `#39` were one guard seen from two directions and shipped as one
+change. The original defects were fixed in the first commit and never re-opened; what the
+review found about *my own fix rounds* after that is the part worth carrying forward.
+
+- **`#190` + `#39` closed** (`#407`, `1de29b3`). Neither is closable by counting: the
+  rollup never says how many checks are still coming, so 2-of-5 and 2-of-2 are the same
+  number. The fix is a persisted, head-scoped baseline carrying **the count it stands
+  for**, whose stamp survives only while the rollup is that same size. It gates
+  `merge_blockers` and never `converged`, so the watch loop stays runnable, and `done`
+  tightens rather than loosens. Knob: `review.settle_grace_minutes`.
+- **Both defects were re-derived through `main` before any fix**, with their preconditions
+  asserted rather than assumed — `#190`'s receipt *is* valid for the head, `#39`'s
+  `settling` *has* already dropped.
+- **The panel was the gate throughout** — CodeRabbit was rate-limited across most of the
+  branch, and its one completed review was of an early head, which the engine's own
+  `bot_review_coverage` reported rather than letting the check status pass for a review.
+  Read the `## Fallback panel — round N` comments on `#407` for what each round found;
+  every round but the last found something real.
+- **Filed:** `#408` (mutation testing under concurrency yields both false kills and a
+  false *clean pass*), `#409` (`render` names a cause it cannot know on the shrink path —
+  flagged independently by both lenses, rounds apart), `#410` (a required-field addition
+  silently hollows test fixtures). Occurrence comment on `#399`; groundwork comment on
+  `#95`.
+
+**Learned**
+
+- **A fix round for a gate became the next round's subject.** Round 6 closed a fail-open
+  that credited settle time across a rollup dip — that hole was original, not introduced.
+  Its fix was a **permanent wedge**, found by round 7. That fix added a required field,
+  which hollowed test fixtures — found first by the harness as survivors, then again by
+  round 8 after my sweep missed more. Both regressions are now permanent harness mutations,
+  so each is pinned as a thing that must fail. `safety-critical-changes.md` rule 3 names
+  this pattern; the loop ending only once the chain ran out is the friction-log entry.
+- **The anchor was the mistake, not the disjunct.** Both failures came from anchoring on
+  `max_total`: growth past it let a stamp survive a dip, and `settling` inherited its
+  one-way ratchet, so a check that disappears for good wedged the gate forever. Comparing
+  against the **previous poll's count** has neither failure. What held changed what the
+  clock compares against, not the condition that reads it.
+- **A negative assertion is evidence only if the same fixture can produce the positive.**
+  Three fixtures kept passing after `total` became required, one having stopped exercising
+  its function entirely — none found by reading. The repaired tests lead with a positive
+  control, and the control was itself verified by deleting it and watching the test pass
+  vacuously. `#410`.
+- **Three completeness claims of mine were wrong, all about sweeps.** One because the grep
+  was case-sensitive against a differently-cased site. Naming the command is not the fix;
+  pasting the residual output is.
+- **A green mutation run is not evidence without reading which test failed.** The harness
+  first scored a kill that was ruff failing at `lint` before pytest ran, and later reported
+  three false kills under concurrency while a lens independently hit the opposite — a
+  genuine mutation reporting a clean pass. `#408`.
+
+**Open, and owned by nothing yet**
+
+- **`#95`** — the remaining `cluster:merge-gate` item. Its issue body predates the current
+  code; the groundwork comment carries what the transports actually expose and why the
+  obvious discriminator is insufficient. Read that before the body.
+- **`#333`** — its ratchet wedge predates this work, is untouched, and is now pinned by
+  name in a test so nobody credits `#407` with it or "fixes" it by loosening the settle
+  clock, which is the direction that reopens `#39`.
+- **`#408`, `#409`, `#410`** as filed. `#410` proposes a panel-contract amendment.
+- **`#399`'s `adopt.md` half**, plus a third occurrence recorded on it — this one in the
+  cockpit's own session, from a `cd` into a *scratchpad* rather than a second tree, which
+  is narrower than the rule as written covers.
+- **`#402`, `#403`, `#404`, `#405`, `#395`, `#388`, `#358`** unchanged by this session.
+- **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
+
+▶ Done in `#412`, kept for what the groundwork got wrong: **`#95`** — the check-name trust
+boundary. The groundwork's reading of the transports was half right. `gh pr checks --json`
+does expose no app identity, and the `workflow` field really does discriminate check *runs*
+only. But it also said `/commits/{sha}/status` exposes `creator.login` per context, and that
+endpoint carries **no `creator` at all** — only the plural `/statuses` does. Worth keeping
+because the error was in a document written specifically to spare the next session the
+probes, and only re-running them caught it.
+
 ## Session — 2026-08-10 (the install-path lane, and a gate the panel kept breaking)
 
 **Theme —** four install-path items shipped in one PR. The work was small; the review was
