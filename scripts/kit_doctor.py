@@ -1414,7 +1414,7 @@ def _was_written_by_record_install(candidate: object) -> bool:
     entry — to classify a release manifest. That was the same mistake this whole
     engine exists to stop: ``required_by`` is not a property `generate_manifest`
     guarantees, it is an emergent fact about the current Python import graph
-    (today 5 of 32 kit-owned files have a dependent). A kit whose graph loses
+    (most kit-owned files have no dependent today). A kit whose graph loses
     its last shared-library edge produces a release manifest with no
     ``required_by``, the guard silently stops recognising it, and
     `--record-install --root <the kit's own checkout>` destroys it again — exit

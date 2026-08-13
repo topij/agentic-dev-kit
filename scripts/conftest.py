@@ -162,7 +162,10 @@ def _hash_file(path: Path) -> str:
 
 
 def _real_state_snapshot() -> dict[str, str]:
-    """``{relpath: sha256}`` for every entry under the REAL ``<repo>/state/``.
+    """``{relpath: recorded kind}`` for every entry under the REAL ``<repo>/state/``.
+
+    The recorded kind is a content hash for a regular file, ``<dir>``,
+    ``symlink -> <target>``, or ``<special>`` — the branches below.
 
     Deliberately independent of ``$DEVKIT_STATE_ROOT`` and of
     ``_hermetic_state_root``: this reads straight off disk at ``REPO_ROOT /

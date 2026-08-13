@@ -234,7 +234,8 @@ def _leaked_path(root: Path, leak_kind: str) -> Path:
 def _leak_landed(root: Path, leak_kind: str) -> bool:
     """Whether the planted test's write actually happened.
 
-    Existence is the test for the two add-shaped kinds and is NOT for
+    Existence is the test for the add-shaped kinds — every kind without its
+    own branch below — and is NOT for
     ``overwrite``, whose path exists either way — there the question is whether
     the bytes changed. Getting this wrong would make the `overwrite` case pass
     against a guard that never fired, which is the failure this whole file
