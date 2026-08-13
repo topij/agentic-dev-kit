@@ -13,6 +13,18 @@
 
 ## 2026-08-13
 
+**`panel_prompt.py --carry-forward` is a framing channel, measured from the receiving
+end.** Severity **M**. Round 5 of `#459`'s panel passed a dispositions section and a
+"highest-risk surface" label through `--carry-forward`; the adversarial lens flagged
+both under the contract's No-framing clause, declined to defer, and re-derived the
+restated figure independently — finding it staler than the prompt claimed. This is the
+2026-08-12 disposition-gap entry's proposed fix run live, and it drew a finding from
+the very panel it launched: a dispositions section works only as a *pointer* to the PR
+record ("dispositions are recorded on the PR's round comments"), never as a
+restatement — a restated disposition is framing plus a second copy that goes stale.
+When that entry graduates, this occurrence belongs on its ticket. Related: `#450`,
+`#405`.
+
 **`kit_doctor.py --generate-manifest` both writes the file and prints to stdout, so
 redirecting it corrupts the manifest.** Severity **M**. The obvious invocation —
 `kit_doctor.py --generate-manifest > kit-manifest.json` — leaves a spliced file, and the

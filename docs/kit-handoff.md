@@ -14,10 +14,62 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-13 — `#453` merged, closing `#447` and `#448`. Filed this
-session: `#455`, `#456`, `#457`.
+Last updated: 2026-08-13 — `#459` merged, closing `#456` and `#457`. Filed this
+session: `#460`, `#461`.
 
-## Latest session — 2026-08-13 (one guard, and the reviewer finding my own claims)
+## Latest session — 2026-08-13 (the #457 ruling: two instants kept, six rounds to hold one guard)
+
+**Theme —** `#457` ruled and shipped (`#459`, squash `7ef068c`): the `#428` guard keeps
+comparing two instants, because `state/` is a live store `pr_watch.py` writes between
+and during sessions — only a change across the session is evidence, and what persists
+at session end is all the merge gate can ever read. Within that design the traversal
+became total (a symlink records by target as a value at its own path, the root's own
+presence records, `<special>` covers the rest); the comparison's blind spots are now
+stated as classes in the module docstring instead of an enumeration that kept growing.
+`make test` at the kit root on the merged tip `7ef068c` is green.
+
+- **Merged with a `fallback:panel` receipt at `417d3a1`, both lenses, after six full
+  dual-lens rounds** — CodeRabbit was rate-limited on every head, again. Round records
+  and every disposition are comments on `#459`; the loop ended in the doctrine's second
+  terminal state, a round whose one finding was disposed without a commit. Occurrence
+  recorded on `#372`, which this keeps costing.
+- **The round that mattered: a lens broke my fix's own mechanism.** The `@`-suffix
+  symlink key was a design choice I weighed and dismissed as unlikely to collide;
+  round 3's adversarial lens demonstrated a real file named `<name>@` masking a
+  brand-new symlink, end-to-end with a control. The kind marker moved into the value
+  (`symlink -> <target>`), where no legal filename can collide. "Unlikely" is not a
+  property of a mechanism.
+- **Filed:** `#460` (an `atexit` callback writes after the second instant with a green
+  run — the bracket's mechanism decision), `#461` (an unreadable file under `state/`
+  crashes conftest import — fail-closed, undocumented). `#455` stays open: the cwd
+  reach gap is in the threat model, and its fix is a second registration point on a
+  load-bearing guard — its own PR, never a fix-round patch.
+- Occurrences recorded on `#416` (a lens fetched inside its handed linked worktree
+  again, self-disclosed; the `ls-remote` route is noted on the issue) and `#457` (the
+  "stale by four" repair itself went stale — logged, then swept along with the two
+  surviving `5 of 32` copies the round-5 adversarial lens found).
+
+**Learned**
+
+- **I published a commit sha before the commit existed.** A round comment named the
+  fix commit by a sha no command had produced; the real sha differed. Corrected on the
+  one surface it reached, with the correction left visible rather than silent —
+  `#422`'s subject arriving inside a review record.
+- **`--carry-forward` leaks framing, measured from the receiving end.** Round 5's
+  prompt restated dispositions and a risk label; the lens flagged both under
+  No framing, declined to defer, and re-derived the restated figure independently —
+  finding it staler than the prompt claimed. Coverage-only carry-forward from round 6
+  on; the friction entry carries the shape.
+- **Severity fell monotonically and the loop's terminal states were reachable as
+  written** — the last three rounds found nothing in the mechanism itself, and the
+  close-out was a filed issue, not another fix round.
+
+▶ Next: run the `triage-friction-log` workflow — the inbox has been over budget since
+session start (the tripwire fires on it) and gained an entry this session.
+
+______________________________________________________________________
+
+## Session — 2026-08-13 (one guard, and the reviewer finding my own claims)
 
 **Theme —** `#453`: the `#428` state guard, which keeps fabricated review receipts out of
 `state/pr-watch/`. `#447` (nothing pinned it) and `#448` (it was absent when a run
@@ -287,75 +339,6 @@ carrying.
 ▶ Next: **merge `#432`** (operator-merge, receipt `fallback:panel` at `752d9fe`), then
 `#430` — the adopter-facing signal for an upgrade that changes observable engine behaviour,
 which `#429` and the `#431` decline-labour both trace back to.
-
-______________________________________________________________________
-
-## Session — 2026-08-11 (the sweep, and a record claim that could not be repaired)
-
-**Theme —** a routine graduation sweep. The routing went clean; every defect the review found
-was in the record prose *about* it, including one that turned out to have no correct value.
-
-- **Inbox graduated** (`#424`, `463dc26`). Eight entries, all accounted for: new issues
-  `#419` (mutation in the authoring loop), `#420` (the panel is per-PR, so a split change
-  pays N times), `#421` (init.sh's awk scanner and the apostrophe), `#422` (extend `#54` to
-  predictive claims), `#423` (extend `#54` to out-of-repo evidence); occurrence comments on
-  `#305` and `#313`; and one entry already filed as `#417`.
-- **Reading the tracker before drafting moved two entries off the new-issue path**, the same
-  step the 2026-08-08 sweep recorded as changing its own routings. `#305` already carried the
-  panel-loop entry's proposal as its direction 3, and `#313` already reproduced the
-  `gh --limit` defect. Each comment carries what the entry *added*; filing either fresh would
-  have fragmented a family that already holds `#209`, `#305`, `#211`.
-- **`#128`'s interactive path was exercised.** The operator was in-session, so the DM was not
-  the only review surface — but `state/` and `reports/` are gitignored, so the approval record
-  (proposals, decision, snapshot digest) went into the graduation marker, which is `#128`'s
-  point 2 and the half that makes the exception honest.
-- **Filed:** `#425` (this skill's Step 6 deletes the state file, that delete can be refused,
-  and auto-detect keys on file *existence* — so a refused cleanup leaves a run that falsely
-  auto-resumes, and can suppress every scheduled sweep after it).
-
-**Learned**
-
-- **A record claim can have no correct value, and the doctrine assumes one always exists.**
-  CodeRabbit found the frozen-inbox digest command was working-tree-relative and did not
-  re-derive its own digest. The repair then named the wrong answer a reader would get — false
-  against the tree that shipped it, because the repair edited the paragraph being hashed. Both
-  panel lenses found that independently. It could not be corrected: the sentence naming the
-  digest sits inside the region the digest hashes, so every value written invalidates itself.
-  Deleted the specific, kept the caveat. `#403` is open about the disposal gap this lands in
-  and its framing assumes correcting is always available; the occurrence is recorded there.
-- **Departing from a lens's label is legitimate; doing it silently is what failed before.**
-  Both lenses marked that finding MEDIUM/imprecision, whose record-prose disposal is *logged,
-  not fixed*. Logging would have shipped a permanently false claim, so I departed — and said
-  so on the PR rather than relabelling the finding, which is the half the earlier instance on
-  `#401` got wrong. Note the direction: the departure **cost** an extra review round rather
-  than saving one.
-- **The defects landed in the hand-written half, not the judgement half.** All three review
-  findings were in record prose a deterministic finalize engine would generate; the routing,
-  the two comment-not-issue decisions, and the verbatim archive sweep were re-derived by both
-  lenses against live GitHub state with no findings. Recorded on `#6` as priority evidence —
-  the parts that keep breaking are the derivable ones.
-- **CodeRabbit reviewed the first head and was rate-limited on every one after**, again. The
-  panel carried the rest and the receipt records that its last review covered `6ac50e2`, not
-  the merging head. `#372` is the posture decision this keeps costing.
-
-**Open, and owned by nothing yet**
-
-- **`#425`** — the state-file gap above. Its directions (1) and (2) compose and need no engine,
-  so it is actionable before `#6` lands.
-- **`#403`, `#140`** each carry a new occurrence from this session's panel. `#403`'s is the
-  substantive one: a claim that is false and *unrepairable* is outside its three proposed
-  shapes, and it sharpens shape 1.
-- **`#399`** gained another occurrence this session; it is on the issue, alongside the
-  2026-08-10 comment that already made the argument. Its `adopt.md` half is untouched.
-- **`#378`** has a second miscount noted on it: the 2026-08-08 marker calls itself the tenth
-  sweep where `#198` and the archive's own sections put it eleventh. The 2026-08-11 marker
-  carries no ordinal, deliberately.
-- Nothing else in the 2026-08-10 block's open list moved this session (that block is
-  now in [`kit-handoff-history.md`](kit-handoff-history.md); swept 2026-08-13).
-
-▶ Next: **cs-toolkit kit refresh** — carried forward untouched from the 2026-08-10 block
-(now in [`kit-handoff-history.md`](kit-handoff-history.md))
-below; read its bullet there for the verified preconditions rather than trusting this line.
 
 ______________________________________________________________________
 
