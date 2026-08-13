@@ -42,6 +42,26 @@ starts.
 
 ---
 
+## #453 — 2026-08-13
+
+- **ADDED (gate semantics)** — `<engine-dir>/conftest.py` is a new kit-owned file,
+  tracked in `kit-manifest.json`, so `/upgrade` Step 3 now lists it. **Take it.** It
+  carries the #428 guard's detection half, which moved out of
+  `<engine-dir>/tests/conftest.py`; taking the latter alone leaves you with the
+  prevention fixture and no detection, and nothing fails to tell you so.
+- **CHANGED (gate semantics)** — with that file in place, a pytest run's exit code
+  now flips on a write into the real `<repo>/state/`, for **every** collected
+  directory rather than only `<engine-dir>/tests`. **A run of
+  `<engine-dir>/lib/state_paths/tests` alone can now fail** with `REGRESSION
+  (#428)` where it previously passed. If your vendored suite writes there
+  deliberately, sandbox it via `$DEVKIT_STATE_ROOT` before upgrading.
+- **CHANGED (gate semantics)** — `cd <engine-dir>/tests && pytest` with no path
+  argument no longer carries the guard: pytest's confcutdir becomes the cwd and no
+  ancestor conftest loads. Invoke the test directories **by path from the repo
+  root**, as the Makefile does.
+
+---
+
 ## #445 — 2026-08-13
 
 - **ADDED (engine CLI surface)** — `panel_prompt.py --delta-draws <text>`, for a
