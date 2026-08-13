@@ -114,11 +114,13 @@ _SHAPES = _shapes(_LAYOUTS["flat"])
 #              `_hash_file(path)` with a constant fails exactly these cases and
 #              no others, and survived the suite entirely before they existed.
 #
-# These three are not a partition of everything the guard could miss. A dangling
-# symlink written into an existing `state/` subdirectory is invisible to all of
-# them, because `is_dir()` and `is_file()` both follow the link and both answer
-# False — inherited from before this file and tracked separately. Read the list
-# as three branches pinned, never as full coverage.
+# These three are not a partition of everything the guard could miss. Two known
+# leaks pass all of them, both inherited from before this file and both tracked
+# rather than fixed here — a dangling symlink (#456), which `is_dir()` and
+# `is_file()` each answer False for because both follow the link, and the
+# creation of a bare, childless `state/` itself (#457), which `rglob("*")` never
+# enumerates because it yields descendants only. Read the list as three branches
+# pinned, never as full coverage.
 #
 # Absolute pass counts are deliberately not recorded here: the figure was wrong
 # twice in consecutive review rounds as tests were added beside it. Run
@@ -436,13 +438,16 @@ def test_a_nested_layout_with_no_marker_watches_the_wrong_state_dir(tmp_path: Pa
         f"resolution landed, this test and the docstrings citing it need updating.\n{combined}"
     )
     assert _BANNER not in combined, f"the guard fired where #60 says it cannot see:\n{combined}"
-    # The positive half: it is watching the WRONG directory, not simply disabled.
-    assert not (tmp_path / "scripts" / "state").exists(), (
-        "the guard's watched directory was created; this case no longer isolates #60"
-    )
 
 
-def test_the_documented_residual_still_behaves_as_documented(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("leak_in", "cwd_rel"),
+    [("tests", "scripts/tests"), ("state_paths", "scripts/lib/state_paths/tests")],
+    ids=["tests", "state-paths"],
+)
+def test_the_documented_residual_still_behaves_as_documented(
+    tmp_path: Path, leak_in: str, cwd_rel: str
+) -> None:
     """Characterisation pin for the one shape the guard does NOT cover.
 
     ``<engine-dir>/conftest.py`` documents, as measured fact, that a run whose
@@ -457,8 +462,8 @@ def test_the_documented_residual_still_behaves_as_documented(tmp_path: Path) -> 
     lands — which is the point. Until then it catches the same behaviour
     drifting silently in either direction under a future pytest.
     """
-    _build_tree(tmp_path, leak_in="tests", leak_kind="file")
-    result = _run_pytest(tmp_path, [], cwd=tmp_path / "scripts" / "tests")
+    _build_tree(tmp_path, leak_in=leak_in, leak_kind="file")
+    result = _run_pytest(tmp_path, [], cwd=tmp_path / cwd_rel)
 
     assert _leak_landed(tmp_path, "file"), "the planted test did not write; nothing is pinned"
     combined = result.stdout + result.stderr

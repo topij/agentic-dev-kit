@@ -44,6 +44,11 @@ silent on a write into the real ``state/``:
     cd <engine-dir>/tests && pytest                  # rc=0, no banner
     cd <engine-dir>/tests && pytest test_pr_watch.py # rc=0, no banner
     cd <engine-dir>/tests && pytest .                # rc=0, no banner
+    cd <engine-dir>/lib/state_paths/tests && pytest  # rc=0, no banner
+
+**Including that last one**, which is the directory #448 was found in and the
+one this placement exists to protect. The examples above used to show only
+``<engine-dir>/tests``, which read as if the residual were confined to it.
 
 while both of these fire correctly:
 
@@ -126,6 +131,17 @@ def _real_state_snapshot() -> dict[str, str]:
     ``<repo>/state/<some-new-engine>/`` and writes no file into it, so the very
     next engine to acquire this bug would land in the blind spot rather than
     trip the guard.
+
+    TWO THINGS THIS TRAVERSAL STILL CANNOT SEE, said here because the paragraph
+    above reads as though directories are now fully covered. Both predate this
+    file and are tracked (#457, #456) rather than fixed here:
+
+      - ``state/`` ITSELF. ``rglob("*")`` enumerates descendants, never the root
+        it is called on, so a run that does only ``state.mkdir()`` and writes
+        nothing below it compares ``{}`` against ``{}``. The one real precedent,
+        `pr_watch.py`, always nests a level below and so is caught.
+      - A DANGLING SYMLINK. ``is_dir()`` and ``is_file()`` both follow the link
+        and both answer False for a broken one, so it lands in neither snapshot.
     """
     state_dir = REPO_ROOT / "state"
     if not state_dir.is_dir():
@@ -180,10 +196,12 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     A session hook rather than a session-scoped autouse fixture (#433). A
     fixture's reach was narrower than "the session" because pytest instantiates
     a session-scoped fixture lazily, on the first test that REQUESTS it: `make
-    test` runs ``pytest lib/state_paths/tests tests``, so the first directory
-    had already run to completion before the baseline was taken, and a write
-    into the real ``state/`` originating there was absorbed into the baseline
-    instead of caught by it. Hooks have no such lazy step — this one fires once
+    test` runs ``pytest scripts/lib/state_paths/tests scripts/tests`` (paths as
+    the Makefile writes them, from the repo root — an earlier version of this
+    line dropped both ``scripts/`` prefixes while still claiming to quote the
+    command), so the first directory had already run to completion before the
+    baseline was taken, and a write into the real ``state/`` originating there
+    was absorbed into the baseline instead of caught by it. Hooks have no such lazy step — this one fires once
     per session, for the whole session, and `_STATE_BASELINE` above is taken
     before any test runs at all.
 
