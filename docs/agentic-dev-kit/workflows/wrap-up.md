@@ -214,10 +214,14 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    re-opening the full review obligation for a diff that is entirely the
    handoff update ([`#435`](https://github.com/topij/agentic-dev-kit/issues/435)).
    In that case, or if you're on the protected branch (e.g. a planning-only
-   session), branch first (`chore/update-handoff-<date>`) before committing,
-   then push and open a PR. Either way, once there's nothing left to push,
-   **mark the PR ready** so it gets reviewed, and run the watch-and-fix loop
-   (`pr-watch`) to merge — per your project's branching convention.
+   session), branch the handoff off the **protected branch**, not off the
+   session's feature branch — branching from the feature branch would carry
+   its already-reviewed commits into the new PR too, defeating the point of
+   keeping the handoff separate. Branch first (`chore/update-handoff-<date>`)
+   before committing, then push and open a PR. Either way, once there's
+   nothing left to push, **mark the PR ready** so it gets reviewed, and run
+   the watch-and-fix loop (`pr-watch`) to merge — per your project's
+   branching convention.
 
    **Keep tracker identifiers out of the title and body unless this PR is really
    about that ticket.** Trackers parse titles and bodies; they do not parse diffs.
