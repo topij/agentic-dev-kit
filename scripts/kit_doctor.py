@@ -1354,10 +1354,11 @@ def generate_manifest(root: Path, kit_version: int) -> dict:
     later gets checked.
 
     ``required_by`` is written only where the derived dependent set is non-empty
-    — most kit files are needed by nothing, and an entry per file would be
-    twenty-seven empty lists to read past in every manifest diff (32 KIT_OWNED
-    entries, 5 with a dependent; the earlier figure of "thirty" was a guess and
-    the correctness lens on PR #225 computed the real one). A reader must
+    — most kit files are needed by nothing, and an entry per file would be a
+    file of empty lists to read past in every manifest diff (only a handful of
+    entries have a dependent. Earlier versions of this sentence carried exact
+    totals — one guessed, one computed and then stale by four within weeks
+    (#457) — so it now carries none; count the manifest itself). A reader must
     therefore treat an ABSENT key as "no known dependents", which is also what
     an older manifest (written before this field existed) yields: it reports
     every missing file as an ordinary `missing`, exactly as it did before.
