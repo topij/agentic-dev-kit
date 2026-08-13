@@ -4,6 +4,94 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-10 (the check-name trust boundary, and a fix worse than the bug)
+
+**Theme —** `#95` shipped. The fix itself is small; what the panel found *inside my own
+work* is the part worth carrying. Round 2 found a CRITICAL I had introduced that was
+strictly worse than `#95`, and round 4 found that the new guard's own tests were
+scaffolding.
+
+- **`#95` closed** (`#412`, `247d2c8`), and with it `cluster:merge-gate`. A check's *name*
+  is chosen by whoever created the check, so on a same-repo PR it is not a trust
+  boundary; the **cancel** now requires the creator identity GitHub records (`app.slug`
+  on a check run, `creator.login` on a status context), which a workflow cannot forge.
+  The **report** deliberately does not, so the signal to run the panel never goes
+  missing. New optional knob: `review.bot_app_slugs`, ordinarily absent.
+- **Safe on by default because the cancel only ACCELERATES the grace clock.** An
+  unresolvable identity costs at most `bot_pending_grace_minutes`; a terminal outage row
+  (`#23`'s own shape) costs nothing, having no pending entry to cancel. Fail-closed and
+  bounded, never a wedge — which is why it needed no opt-in.
+- **Two premises in the issue's groundwork were wrong**, and re-deriving them changed the
+  design: the combined `/commits/{sha}/status` endpoint carries **no `creator`** (only the
+  plural `/statuses` does), and a `workflow`-field discriminator would have looked like a
+  fix while leaving the reviewer's actual surface open. Both re-derived against live
+  payloads, not read off the issue.
+- **Filed:** `#413` (kitconfig parses flow sequences but turns flow mappings into
+  strings), `#414` (`_gh` translates only `TimeoutExpired`), `#415` (`_route_http`
+  misroutes when one route fragment prefixes another), `#416` (the panel's cockpit-built
+  worktree is *linked*, so a lens establishing base against the remote writes into the
+  operator's `.git`), `#417` (a test that mocks the unit under test — the pattern below).
+
+**Learned**
+
+- **My fix was briefly worse than the bug.** The REST identity read called the plural
+  statuses endpoint with the object-wrapped reader; it raised, and `fetch_check_details`
+  degraded to `([], "unavailable")`, discarding **every** row and switching `#19`'s and
+  `#23`'s guards off in exactly the outage case they exist for. `record_review` already
+  names that state "the SILENT bypass, and the worse of the two". Found in round 2, on a
+  supported backend, in the engine that decides a PR is safe to merge.
+- **A test that mocks the unit under test cannot see that unit's defects.** It recurred
+  through this PR: the reader whose shape assumption was wrong was itself the mock; then
+  the helper the new guard depends on; then a path with no test at all. Each left a green
+  suite. Once the shape was named it was cheap to hunt — the later ones were found by
+  looking for it rather than by review. The move that works is hardwiring the *real*
+  unit's body to a constant, which is strictly stronger than mutating the branch under
+  review. `#417` enumerates the instances and proposes the amendment.
+- **A mutation sweep's own restore step can invalidate it.** The harness restored the
+  engine with `git checkout --` before applying each mutation, which reverted files
+  copied in from the working tree — so mutations never applied and would have read as
+  survivors. Caught only because the harness asserts its anchor is present before
+  trusting a result. The fix is to commit the state under test in the throwaway clone
+  first.
+- **The panel's stopping rule worked here, and the loop ended on the subject.** Severity
+  fell every round and round 5 was a clean pass from both lenses — the first of
+  `fallback-review-panel.md`'s three terminal states, not "the findings got small". But
+  rounds 3–5 found nothing wrong with the previous round's *fix*, and their findings were
+  about my remediation's coverage rather than about `#95`. That is the second occurrence
+  of the state the friction log's 2026-08-10 entry describes.
+- **CodeRabbit reviewed the first head and was rate-limited on every one after**, so the
+  panel carried rounds 2–5 and the receipt records that its last review covered
+  `d3140f9`, not the merging head. `#372` is the posture decision this keeps costing.
+
+**Open, and owned by nothing yet**
+
+- **`#417`** proposes a panel-contract amendment; `#410` proposes another. Worth deciding
+  together rather than separately.
+- **`#416`** is mine to have caused: `fallback-review-panel.md` step 2 has the cockpit
+  build a linked worktree while the contract asks the lens to establish base against the
+  remote. Lenses in rounds 4 and 5 each disclosed hitting it independently; impact was
+  verified nil from the cockpit (`git reflog show refs/remotes/origin/main`, kit root),
+  cause is structural.
+- **`#333`** — its ratchet wedge is untouched and still pinned by name in a test, so
+  nobody credits `#412` with it or "fixes" it by loosening the settle clock.
+- **`#413`, `#414`, `#415`** as filed. `#414` should also remove the now-redundant local
+  guards `#412` added, rather than leaving two overlapping rules.
+- **`#408`, `#409`, `#410`, `#399`'s `adopt.md` half, `#402`, `#403`, `#404`, `#405`,
+  `#395`, `#388`, `#358`** unchanged by this session.
+- **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
+- **cs-toolkit's refresh is unblocked** — it was waiting on this landing. Its kit-owned
+  files are all byte-identical to what was installed (no local edits to merge), and its
+  `paths.engines` is `scripts/devkit`. Drive `/upgrade` from **the kit's** copy of
+  `upgrade.md`: the adopter's own copy predates the cross-tree hardening. Verified with
+  `python3 scripts/kit_doctor.py --root <cs-toolkit> --manifest <kit manifest>` run from
+  the kit root.
+
+▶ Next: **cs-toolkit kit refresh** — `/upgrade` for `/Users/topi/Coding/in-parallel/cs-toolkit`,
+driving from this repo's `docs/agentic-dev-kit/workflows/upgrade.md` rather than the
+adopter's older copy. Bind `$REPO`/`$KIT` before the first write and verify at the
+destination. Its own `tests/test_pr_watch.py` will not pin the refreshed engine's new
+merge-gate behaviour — decide deliberately whether to vendor the kit's tests too.
+
 ## Session — 2026-08-10 (the merge gate, and the fix rounds that became the subject)
 
 **Theme —** `#190` and `#39` were one guard seen from two directions and shipped as one
