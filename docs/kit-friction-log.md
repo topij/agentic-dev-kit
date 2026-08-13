@@ -15,11 +15,16 @@
 
 **`kit_doctor.py --generate-manifest` both writes the file and prints to stdout, so
 redirecting it corrupts the manifest.** Severity **M**. The obvious invocation —
-`kit_doctor.py --generate-manifest > kit-manifest.json` — writes the manifest twice over:
-the flag writes it itself, and the shell then truncates that file and fills it with the
-status line `wrote /…/kit-manifest.json (37 files, kit_version=2)` followed by whatever
-the flag had already emitted. The result still parses far enough to look plausible in a
-diff, and the exit code is 0. Caught on `#453` only by reading the diff and noticing the
+`kit_doctor.py --generate-manifest > kit-manifest.json` — leaves a spliced file, and the
+order is the part worth getting right. The **shell** opens and truncates
+`kit-manifest.json` first, before `kit_doctor.py` is even exec'd. The flag then writes the
+real JSON through its **own** descriptor (`manifest_path.write_text`, `kit_doctor.py:2550`),
+which is unaffected by the redirect. Finally `print(f"wrote {manifest_path} …")`
+(`:2554`) goes to stdout — the redirect's descriptor, still at offset 0 — and **overwrites
+the beginning** of what was just written while the JSON tail survives. Reproduced with a
+two-line stand-in: the file ends up as the status line followed by the tail of the JSON
+from the point the line stopped overwriting. That is why it looks plausible in a diff —
+only the first hunk is wrong — and the exit code is 0. Caught on `#453` only by reading the diff and noticing the
 first hunk replaced the file's opening brace with the status message. This is `#112`'s
 own hazard class — regenerate-first bookkeeping whose failure is silent and in the
 confident direction — arriving in the command `#112` points at. Proposed fix: print the
@@ -27,8 +32,11 @@ status line to **stderr**, so a redirect captures nothing and the two routes sto
 competing for stdout; or refuse to run when stdout is not a tty and no `--output` is
 given. Related: `#402`.
 
-**The `#428` guard false-positives when anything else writes `state/` during a test
-run.** Severity **L**. The guard compares the real `state/` before and after a pytest
+**The `#428` guard false-positives when another process changes a snapshotted descendant
+under `state/` during a test run.** Severity **L**. Scoped deliberately: the snapshot does
+not see the `state/` root itself or a dangling symlink (`#457`, `#456`), so "anything that
+writes `state/`" would overstate it — but `state/pr-watch/<PR#>.json` is squarely a
+snapshotted descendant. The guard compares the real `state/` before and after a pytest
 session, so a concurrent writer — in practice a backgrounded `pr_watch.py <PR#> --json`
 poll, which persists `state/pr-watch/<PR#>.json` on every call — makes an innocent run
 fail with `REGRESSION (#428)` naming a file the suite never touched. Hit while running
