@@ -327,9 +327,10 @@ def test_guard_catches_a_write_into_real_state(
     """A leak anywhere in the collected set turns the run red, in every shape.
 
     ``state-paths-only`` is #448 exactly: before the guard moved to the engine
-    root, that row exited 0 with the write sitting on disk. The ``dir`` kind is
-    the branch that catches an engine which creates its state directory and
-    writes no file — see ``_LEAK_KINDS``.
+    root, that row exited 0 with the write sitting on disk. Every kind in
+    ``_LEAK_KINDS`` rides this same cross — ``file``, ``dir``, ``overwrite``,
+    ``symlink``, ``bare-root`` — and what each one pins is that table's
+    comment, not repeated here.
     """
     _build_tree(tmp_path, leak_in=leak_in, leak_kind=leak_kind)
     result = _run_pytest(tmp_path, _SHAPES[shape])
@@ -366,6 +367,85 @@ def test_guard_reaches_every_layout_and_working_directory(
     _assert_guard_fired(result, tmp_path, "file")
 
 
+def test_a_live_symlink_retarget_to_equal_bytes_is_caught(tmp_path: Path) -> None:
+    """The branch ORDER is load-bearing, and only a LIVE link can pin it.
+
+    Every other symlink case in this file uses a dangling target — and a
+    dangling link lands in the `@` branch even if `is_symlink()` is tested
+    LAST, because `is_dir()`/`is_file()` follow the link and answer False for
+    a broken one. So reordering the checks — reintroducing exactly the
+    historical bug `_real_state_snapshot`'s docstring describes, a live link
+    recorded as its target's kind — survived every dangling-target test, as
+    both lenses of #459's round-1 panel measured independently. This is the
+    kill for that mutant: two real files with IDENTICAL bytes, a link moved
+    from one to the other. Under the correct ordering the recorded
+    `os.readlink` value changes; under the reordered mutant the link is
+    hashed THROUGH, and identical bytes make the retarget invisible. Equal
+    content is the essential ingredient — differing content would let the
+    mutant pass on the hash difference alone.
+    """
+    _build_tree(tmp_path, leak_in=None)
+    store = tmp_path / "state" / "pr-watch"
+    store.mkdir(parents=True)
+    (store / "a.json").write_text('{"receipt": "identical bytes"}')
+    (store / "b.json").write_text('{"receipt": "identical bytes"}')
+    link = store / "live.json"
+    os.symlink(store / "a.json", link)
+    (tmp_path / "scripts" / "tests" / "test_live_retarget_probe.py").write_text(
+        "import os\n"
+        "from pathlib import Path\n"
+        "def test_retargets_a_live_state_symlink():\n"
+        f"    link = Path({str(link)!r})\n"
+        "    os.unlink(link)\n"
+        f"    os.symlink({str(store / 'b.json')!r}, link)\n"
+    )
+
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+
+    assert os.readlink(link) == str(store / "b.json"), (
+        "the planted test did not retarget the link, so this run proves nothing"
+    )
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, f"a live-target retarget was not caught:\n{combined}"
+    assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
+    assert "pr-watch/live.json@" in combined, (
+        f"the guard fired but did not name the retargeted link:\n{combined}"
+    )
+
+
+def test_a_special_file_appearing_is_caught(tmp_path: Path) -> None:
+    """A fifo appearing under `state/` turns the run red — the `<special>` pin.
+
+    The `else` branch recording non-link/dir/file entries had no test at all:
+    both lenses of #459's round-1 panel mutated it to a silent skip — the
+    pre-#459 behaviour — and the whole suite stayed green while the CHANGELOG
+    promised the case. The parent is seeded into the baseline so the fifo is
+    the run's only change. Appearance is what this pins; a special file
+    REPLACED at a stable path compares `<special>` == `<special>` and is
+    documented as outside the snapshot's sight, not covered here.
+    """
+    _build_tree(tmp_path, leak_in=None)
+    (tmp_path / "state" / "pr-watch").mkdir(parents=True)
+    (tmp_path / "scripts" / "tests" / "test_fifo_probe.py").write_text(
+        "import os\n"
+        "from pathlib import Path\n"
+        "def test_writes_a_fifo_into_real_state():\n"
+        f"    os.mkfifo(Path({str(tmp_path)!r}) / 'state' / 'pr-watch' / 'node')\n"
+    )
+
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+
+    assert (tmp_path / "state" / "pr-watch" / "node").exists(), (
+        "the planted test did not create the fifo, so this run proves nothing"
+    )
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, f"a fifo appearing was not caught:\n{combined}"
+    assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
+    assert "pr-watch/node" in combined, (
+        f"the guard fired but did not name the fifo:\n{combined}"
+    )
+
+
 def test_a_retargeted_symlink_is_caught(tmp_path: Path) -> None:
     """A symlink whose TARGET moves while its path stays is a change.
 
@@ -374,7 +454,9 @@ def test_a_retargeted_symlink_is_caught(tmp_path: Path) -> None:
     differing only in where an existing link points compare unequal. A
     `<symlink>` sentinel value would pass every appearance case and read a
     retarget as no change — the second blind spot #456 names, and the
-    mutation this test exists to kill.
+    mutation this test exists to kill. Both targets here are dangling, so the
+    branch-ORDER property is deliberately not this test's subject —
+    `test_a_live_symlink_retarget_to_equal_bytes_is_caught` carries that one.
     """
     _build_tree(tmp_path, leak_in=None)
     link = tmp_path / "state" / "pr-watch" / "receipt.json"

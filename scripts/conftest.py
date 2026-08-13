@@ -184,13 +184,24 @@ def _real_state_snapshot() -> dict[str, str]:
     ``state.mkdir()`` and wrote nothing below it used to compare ``{}``
     against ``{}`` (#457).
 
-    Still outside the traversal's sight — the known shape, stated without
-    claiming to be the last: ``state/`` ITSELF BEING A SYMLINK, which the
-    ``is_dir()`` at the top of this function follows silently. Nothing in the
-    kit creates one. And what any traversal records is one instant; what the
-    guard can conclude from comparing two of them is bounded by the module
-    docstring's observation-window section, a different mechanism with its
-    own blind spots.
+    Still outside the traversal's sight — the known shapes, stated without
+    claiming to be the last:
+
+      - ``state/`` ITSELF BEING A SYMLINK, which the ``is_dir()`` at the top
+        of this function follows silently. Nothing in the kit creates one.
+      - REPLACEMENT AT A STABLE PATH, for any kind recorded as a CONSTANT. A
+        directory or special file deleted and recreated at the same path
+        between the two instants compares ``<dir>`` == ``<dir>`` or
+        ``<special>`` == ``<special>`` and reads as no change — only files
+        (content hash) and symlinks (target path) carry a value that can
+        differ. This predates #459 for directories and arrives with the
+        ``<special>`` branch for the rest; #459's round-1 adversarial lens
+        demonstrated it live with a fifo recreated at its baseline path.
+
+    And what any traversal records is one instant; what the guard can
+    conclude from comparing two of them is bounded by the module docstring's
+    observation-window section, a different mechanism with its own blind
+    spots.
     """
     state_dir = REPO_ROOT / "state"
     if not state_dir.is_dir():
