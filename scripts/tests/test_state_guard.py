@@ -52,6 +52,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 
+# Reused rather than re-implemented. It is the repo's existing convention for
+# "this case needs the walk to find no marker", and duplicating it here would
+# give the suite a second copy to drift — see its own docstring for why the
+# remedy is a named precondition and not a patched `Path.exists`.
+from test_repo_layout import _require_no_ancestor_marker  # noqa: E402
+
 ENGINE_DIR = engine_dir(Path(__file__))
 ENGINE_CONFTEST = ENGINE_DIR / "conftest.py"
 
@@ -128,7 +134,12 @@ _OVERWRITTEN = '{"fixture": "overwrote the real receipt"}'
 
 
 def _build_tree(
-    root: Path, *, leak_in: str | None, leak_kind: str = "file", engine_rel: str = "scripts"
+    root: Path,
+    *,
+    leak_in: str | None,
+    leak_kind: str = "file",
+    engine_rel: str = "scripts",
+    git: bool = True,
 ) -> None:
     """A throwaway repo mirroring the kit's engine layout.
 
@@ -139,7 +150,10 @@ def _build_tree(
     """
     # A `.git` marker so the copied conftest's walk-up resolves to `root`
     # deterministically, rather than to whatever happens to sit above tmp_path.
-    (root / ".git").mkdir(parents=True)
+    # `git=False` builds the no-marker tree the fallback branch is reached from.
+    root.mkdir(parents=True, exist_ok=True)
+    if git:
+        (root / ".git").mkdir()
     engine = root / engine_rel
     tests = engine / "tests"
     state_paths_tests = engine / "lib" / "state_paths" / "tests"
@@ -362,29 +376,70 @@ def test_the_guards_own_root_resolution_agrees_with_the_test_suites(tmp_path: Pa
     fallback carries #60's known nested-layout defect, so a divergence there
     moves which ``state/`` the guard watches.
 
-    What the second case guarantees, exactly: the two resolvers **agree**,
-    unconditionally. That they agree *via the fallback* is asserted only when
-    no ``.git`` sits above ``tmp_path``, which is the normal case and not
-    something this test can compel — a machine whose temp directory lives
-    inside a repository would silently exercise the marker branch twice.
+    Both assertions in the second case are UNCONDITIONAL, behind a named
+    precondition. An earlier version gated the fallback-specific assertion on
+    ``if not marker_above``, so on a machine whose temp directory sits inside a
+    checkout the test would quietly exercise the marker branch twice and still
+    pass. ``_require_no_ancestor_marker`` — the repo's existing convention for
+    this, raised by the review bot on #453 — turns that environment into a
+    legible failure naming ``--basetemp`` instead.
     """
     guard_resolver = _guards_resolver()
 
     # Branch 1 — a marker exists above.
     assert guard_resolver(ENGINE_DIR) == find_repo_root(ENGINE_DIR)
 
-    # Branch 2 — the fallback. `deep` has no `.git` at or above it inside
-    # tmp_path; assert the two agree AND that the fallback is what ran, so this
-    # cannot quietly become a second copy of branch 1 on a machine whose temp
-    # directory happens to sit under a repository.
+    # Branch 2 — the fallback.
     deep = tmp_path / "no-marker" / "engines"
     deep.mkdir(parents=True)
-    marker_above = any((c / ".git").exists() for c in (deep, *deep.parents))
+    _require_no_ancestor_marker(deep)
     assert guard_resolver(deep) == find_repo_root(deep)
-    if not marker_above:
-        assert guard_resolver(deep) == deep.parent, (
-            "the fallback branch did not run, so this case pinned nothing"
-        )
+    assert guard_resolver(deep) == deep.parent, (
+        "the fallback branch did not run, so this case pinned nothing"
+    )
+
+
+def test_a_nested_layout_with_no_marker_watches_the_wrong_state_dir(tmp_path: Path) -> None:
+    """#60's depth limit, reaching the guard — pinned, not repaired.
+
+    With no ``.git`` anywhere, ``_find_repo_root`` falls back to
+    ``start.parent``. For a nested ``<root>/scripts/devkit`` engine that is
+    ``<root>/scripts``, one level short, so the guard snapshots
+    ``<root>/scripts/state`` while the engines write to ``<root>/state``. A real
+    leak in such a tree is therefore invisible to it.
+
+    **Not repaired here, deliberately.** The fallback mirrors
+    ``kitconfig.repo_root``, whose depth problem is #60 and still open, and
+    ``_repo_layout``'s own docstring records three attempts to be cleverer that
+    were each withdrawn: the root is genuinely unknowable without a marker, so
+    any guess is wrong in some layout. Raised by the review bot on #453, which
+    asked for the root to be derived without the one-level fallback — that is
+    #60's job, and doing it here would fork the resolution the guard is pinned
+    to agree with.
+
+    What this test adds is the half that WAS missing: the harness always planted
+    a ``.git``, so nothing exercised the guard in the layout where its root
+    resolution is known to be wrong. It is the sibling of
+    ``test_repo_layout.py::test_the_fallback_is_wrong_in_a_nested_layout_and_that_is_known``
+    and fails the same way — loudly, when #60 lands.
+    """
+    engine_rel = _LAYOUTS["nested"]
+    _build_tree(tmp_path, leak_in="tests", leak_kind="file", engine_rel=engine_rel, git=False)
+    _require_no_ancestor_marker(tmp_path / engine_rel)
+
+    result = _run_pytest(tmp_path, _shapes(engine_rel)["tests-only"])
+
+    assert _leak_landed(tmp_path, "file"), "the planted test did not write; nothing is pinned"
+    combined = result.stdout + result.stderr
+    assert result.returncode == 0, (
+        "the guard caught a leak in a no-marker nested tree. If #60's depth "
+        f"resolution landed, this test and the docstrings citing it need updating.\n{combined}"
+    )
+    assert _BANNER not in combined, f"the guard fired where #60 says it cannot see:\n{combined}"
+    # The positive half: it is watching the WRONG directory, not simply disabled.
+    assert not (tmp_path / "scripts" / "state").exists(), (
+        "the guard's watched directory was created; this case no longer isolates #60"
+    )
 
 
 def test_the_documented_residual_still_behaves_as_documented(tmp_path: Path) -> None:
