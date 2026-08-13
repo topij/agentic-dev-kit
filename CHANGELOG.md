@@ -42,6 +42,24 @@ starts.
 
 ---
 
+## #453 — 2026-08-13
+
+- **CHANGED (test-suite layout)** — the #428 state guard's detection half (the
+  baseline snapshot and `pytest_sessionfinish`) moved out of
+  `<engine-dir>/tests/conftest.py` into a new `<engine-dir>/conftest.py`. **If you
+  vendor the kit's tests by hand, take both files.** Taking only
+  `tests/conftest.py` leaves you with the prevention fixture and no detection, and
+  the loss is silent — nothing fails, and a write into your real `state/` stops
+  being caught. `/upgrade` delivers neither file (no test file is manifest-tracked,
+  #40/#132), so hand-vendoring is the only path that reaches this.
+- **CHANGED (test-suite layout)** — `pytest <engine-dir>/lib/state_paths/tests` on
+  its own now carries the guard, where it previously ran unguarded. **A run of that
+  directory alone can now fail** with `REGRESSION (#428)` if it writes into the real
+  `state/`. Conversely `cd <engine-dir>/tests && pytest` no longer carries the guard;
+  invoke the directories by path from the repo root, as the Makefile does.
+
+---
+
 ## #445 — 2026-08-13
 
 - **ADDED (engine CLI surface)** — `panel_prompt.py --delta-draws <text>`, for a
