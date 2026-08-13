@@ -14,10 +14,91 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-12 — `#432` landed and `#430` shipped on `#437`. `#429` and `#431`
-are what remain of the cs-toolkit upstream set. Filed this session: `#438`, `#439`.
+Last updated: 2026-08-13 — first unattended multi-lane batch. `#441`, `#442`, `#443`
+merged; `#444` and `#445` are green and held for the operator. Filed this session:
+`#446`, `#447`, `#448`, `#449`, `#450`.
 
-## Latest session — 2026-08-12 (the changelog an adopter reads, and a loop that kept finding my own fixes)
+## Latest session — 2026-08-13 (five lanes overnight, and the reviewer catching the author each time)
+
+**Theme —** the first autonomous batch run through `parallel-headless.md`. The mechanism
+held; what the review found in the lanes' own work, and what the launch could not honour,
+are the parts worth carrying.
+
+- **Merged, each self-merge class via `dev_session.sh merge <scope>`:** `#441` (the two
+  `#439` gaps in the changelog test helper), `#442` (`#429`'s path arithmetic, resolved
+  through `_repo_layout.find_repo_root`), `#443` (`#435`'s receipt exception in
+  `wrap-up.md` step 8). `make test` at the kit root is green on the merged tip `4d7e573`.
+- **Held for the operator, both green with a current-head `fallback:panel` receipt:**
+  `#444` (`#433`'s state guard, moved onto `pytest_sessionfinish`) and `#445` (the
+  author's draws given their own `--delta-draws` channel). Persisted class `operator` on
+  both; the merge wrapper refuses them by design.
+- **`#444` did not take `#433`'s prescribed direction, and the deviation is the finding.**
+  The ticket directs the baseline to `pytest_sessionstart`; that hook is never delivered
+  when a bare `pytest` at the repo root loads the conftest lazily, so the baseline sits at
+  conftest import. Found by mutating it back and watching a false alarm name three
+  untouched files — not by reading. The operator rules on the shipped shape.
+- **The launch could not honour `parallel-headless.md`'s mandatory `env` map.** Claude
+  Code's delegation tool takes no environment, so `DEVKIT_REFUSE_UNSANDBOXED_STATE=1`
+  never reached a lane. Isolation itself held on the on-disk marker — the cockpit exports
+  no `DEVKIT_*`, so nothing could be inherited to collapse the lanes into one sandbox.
+  Ran on the marker plus a prompt-level cwd guard, at the operator's decision. Friction
+  entry filed; the contract's own alternative needs `--dangerously-skip-permissions`.
+- **Filed:** `#446` (the workflow docs never say to fetch before branching off the
+  protected branch), `#447` (the `#428` guard is unpinned — a no-op mutation of it passes
+  the suite bit-identically), `#448` (that guard is absent entirely when a run does not
+  collect `scripts/tests`), `#449` (`panel_prompt.py` interpolates free-text flag values
+  naively), `#450` (`panel_prompt.py` cannot tell a full panel from a delta pass).
+
+**Learned**
+
+- **The panel caught the author on every lane that ran one, including on prose.** `#443`'s
+  first wording said "branch first" without naming which tip, which would have let an
+  agent cut from the already-reviewed feature-branch tip and carry those commits into the
+  new PR — defeating the fix the PR existed to make. A MED regression in two paragraphs,
+  in a change whose entire deliverable was the wording. `#445` round 1 found an overclaim
+  reading as a structural guarantee; round 2 falsified a byte-identity claim in its own
+  `CHANGELOG` entry.
+- **A claim crossed from a ticket body into a commit message unchallenged.** `#442`'s
+  commit message overstated when the duplicated `sys.path.insert` bites, inherited
+  near-verbatim from `#429`'s own body; both lenses found it independently. `#54`'s
+  subject one hop further out than it is usually seen — the ticket is not a source.
+- **An operator-class lane has no terminal state.** `reconcile_sessions.sh` resolves
+  merged / parked / open, and a lane that is finished, green and waiting on a human
+  reports **open** — indistinguishable from one still working. So a batch holding any
+  operator lane can never reconcile closed, which is the state every well-run autonomous
+  batch ends in.
+- **`#416` recurred twice in one night**, each time self-disclosed by the lens that did
+  it — a `git fetch` inside the handed linked worktree writing the shared
+  `refs/remotes/origin/main`. Verified additive-only from the kit root with
+  `git reflog show refs/remotes/origin/main`: fast-forward on every entry, nothing
+  rewound. The disclosure works; the structural cause is untouched.
+- **`#439`'s fixes shipped on `#441` and the issue is still open**, because the lane
+  correctly wrote no closing keyword and nothing else retires an issue. The discipline
+  that prevents a wrong auto-close also prevents a right one.
+
+**Open, and owned by nothing yet**
+
+- **`#444`, `#445`** — green, reviewed, awaiting the operator's merge. `#444` carries one
+  LOW docstring imprecision left unpatched on purpose, with the exact correction on the
+  PR: a new head would bind the receipt to a head no lens reviewed, which is `#435`'s
+  subject applied the same night it landed.
+- **`#429` and `#435` stayed open deliberately** — `#429` for the nested-layout CI smoke
+  (it touches `.github/workflows`, operator-merge territory), `#435` for direction 2.
+  **`#439` needs closing or a note.**
+- **`#447`** is the sharpest of the new set: the guard protecting the receipt store ships
+  with no failing case behind it, which is `#417`'s pattern one level up.
+- **`#450`** is a decision, not a build: whether `panel_prompt.py` should gate
+  `--delta-draws` behind a self-reported pass kind — `#32`'s family.
+- `#431`, `#434`, `#438` untouched; `#434` still needs `#273` accounted for.
+- Nothing in the blocks below moved this session.
+
+▶ Next: **rule on `#444` and `#445`** — both are green with dual-lens receipts and cannot
+merge without you. Read `#444`'s deviation from `#433`'s prescribed direction first; it is
+the one judgement the batch could not make for itself.
+
+______________________________________________________________________
+
+## Session — 2026-08-12 (the changelog an adopter reads, and a loop that kept finding my own fixes)
 
 **Theme —** `#430`: `/upgrade` said *which* file to take and nothing said what taking it
 would change. Shipped on `#437`. The mechanism is small; what the review found inside my
@@ -306,84 +387,6 @@ driving from this repo's `docs/agentic-dev-kit/workflows/upgrade.md` rather than
 adopter's older copy. Bind `$REPO`/`$KIT` before the first write and verify at the
 destination. Its own `tests/test_pr_watch.py` will not pin the refreshed engine's new
 merge-gate behaviour — decide deliberately whether to vendor the kit's tests too.
-
-______________________________________________________________________
-
-## Session — 2026-08-10 (the merge gate, and the fix rounds that became the subject)
-
-**Theme —** `#190` and `#39` were one guard seen from two directions and shipped as one
-change. The original defects were fixed in the first commit and never re-opened; what the
-review found about *my own fix rounds* after that is the part worth carrying forward.
-
-- **`#190` + `#39` closed** (`#407`, `1de29b3`). Neither is closable by counting: the
-  rollup never says how many checks are still coming, so 2-of-5 and 2-of-2 are the same
-  number. The fix is a persisted, head-scoped baseline carrying **the count it stands
-  for**, whose stamp survives only while the rollup is that same size. It gates
-  `merge_blockers` and never `converged`, so the watch loop stays runnable, and `done`
-  tightens rather than loosens. Knob: `review.settle_grace_minutes`.
-- **Both defects were re-derived through `main` before any fix**, with their preconditions
-  asserted rather than assumed — `#190`'s receipt *is* valid for the head, `#39`'s
-  `settling` *has* already dropped.
-- **The panel was the gate throughout** — CodeRabbit was rate-limited across most of the
-  branch, and its one completed review was of an early head, which the engine's own
-  `bot_review_coverage` reported rather than letting the check status pass for a review.
-  Read the `## Fallback panel — round N` comments on `#407` for what each round found;
-  every round but the last found something real.
-- **Filed:** `#408` (mutation testing under concurrency yields both false kills and a
-  false *clean pass*), `#409` (`render` names a cause it cannot know on the shrink path —
-  flagged independently by both lenses, rounds apart), `#410` (a required-field addition
-  silently hollows test fixtures). Occurrence comment on `#399`; groundwork comment on
-  `#95`.
-
-**Learned**
-
-- **A fix round for a gate became the next round's subject.** Round 6 closed a fail-open
-  that credited settle time across a rollup dip — that hole was original, not introduced.
-  Its fix was a **permanent wedge**, found by round 7. That fix added a required field,
-  which hollowed test fixtures — found first by the harness as survivors, then again by
-  round 8 after my sweep missed more. Both regressions are now permanent harness mutations,
-  so each is pinned as a thing that must fail. `safety-critical-changes.md` rule 3 names
-  this pattern; the loop ending only once the chain ran out is the friction-log entry.
-- **The anchor was the mistake, not the disjunct.** Both failures came from anchoring on
-  `max_total`: growth past it let a stamp survive a dip, and `settling` inherited its
-  one-way ratchet, so a check that disappears for good wedged the gate forever. Comparing
-  against the **previous poll's count** has neither failure. What held changed what the
-  clock compares against, not the condition that reads it.
-- **A negative assertion is evidence only if the same fixture can produce the positive.**
-  Three fixtures kept passing after `total` became required, one having stopped exercising
-  its function entirely — none found by reading. The repaired tests lead with a positive
-  control, and the control was itself verified by deleting it and watching the test pass
-  vacuously. `#410`.
-- **Three completeness claims of mine were wrong, all about sweeps.** One because the grep
-  was case-sensitive against a differently-cased site. Naming the command is not the fix;
-  pasting the residual output is.
-- **A green mutation run is not evidence without reading which test failed.** The harness
-  first scored a kill that was ruff failing at `lint` before pytest ran, and later reported
-  three false kills under concurrency while a lens independently hit the opposite — a
-  genuine mutation reporting a clean pass. `#408`.
-
-**Open, and owned by nothing yet**
-
-- **`#95`** — the remaining `cluster:merge-gate` item. Its issue body predates the current
-  code; the groundwork comment carries what the transports actually expose and why the
-  obvious discriminator is insufficient. Read that before the body.
-- **`#333`** — its ratchet wedge predates this work, is untouched, and is now pinned by
-  name in a test so nobody credits `#407` with it or "fixes" it by loosening the settle
-  clock, which is the direction that reopens `#39`.
-- **`#408`, `#409`, `#410`** as filed. `#410` proposes a panel-contract amendment.
-- **`#399`'s `adopt.md` half**, plus a third occurrence recorded on it — this one in the
-  cockpit's own session, from a `cd` into a *scratchpad* rather than a second tree, which
-  is narrower than the rule as written covers.
-- **`#402`, `#403`, `#404`, `#405`, `#395`, `#388`, `#358`** unchanged by this session.
-- **Kit-side review-sprint continuation, in `#209`'s decided order: `#211`, then `#120`.**
-
-▶ Done in `#412`, kept for what the groundwork got wrong: **`#95`** — the check-name trust
-boundary. The groundwork's reading of the transports was half right. `gh pr checks --json`
-does expose no app identity, and the `workflow` field really does discriminate check *runs*
-only. But it also said `/commits/{sha}/status` exposes `creator.login` per context, and that
-endpoint carries **no `creator` at all** — only the plural `/statuses` does. Worth keeping
-because the error was in a document written specifically to spare the next session the
-probes, and only re-running them caught it.
 
 ______________________________________________________________________
 

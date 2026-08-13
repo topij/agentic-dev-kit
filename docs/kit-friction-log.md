@@ -11,6 +11,56 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-13
+
+**`parallel-headless.md` requires an `env` map that the runtime the kit ships an adapter
+for cannot supply.** Severity **M**. The contract makes the descriptor's `env` field
+mandatory for an unattended lane and says a fan-out tool that cannot replace the spawned
+process's environment must not drive a state-writing lane. Claude Code's delegation tool
+takes no environment parameter, and every lane writes `state/` — the lane contract itself
+has each lane run `pr_watch.py --assert-draft/--assert-ready`. So the kit's own documented
+headless path is unavailable in Claude Code, and the contract's stated alternative
+(a subprocess per lane with the env set inline) needs `--dangerously-skip-permissions` on
+this host, since the operator's allowlist covers none of `git commit`, `git push`,
+`git add`, `gh pr create`, `gh pr ready`, `uv run`. What was actually lost is narrower
+than the blanket prohibition suggests and worth stating: isolation held on the on-disk
+marker, because the cockpit exports no `DEVKIT_*` and there was nothing to inherit; only
+`DEVKIT_REFUSE_UNSANDBOXED_STATE=1`, the warn→refuse backstop, went missing. Ran on the
+marker plus a prompt-level "never cd outside your worktree, assert `pwd` before writes"
+rule, at the operator's decision, with the cockpit's `state/` digest snapshotted before
+launch and re-checked at every lane return — it never moved. Proposed fix: either name the
+marker-only route a sanctioned degraded mode with the cwd rule as its stated condition, or
+have `new --headless` emit an activation the launcher can apply without an env map.
+Related: `#399` (whose third occurrence was exactly a `cd` out of the tree), `#428`.
+
+**`reconcile_sessions.sh` has no terminal state for a lane held for operator sign-off.**
+Severity **M**. It resolves each scope to merged, parked, or open, and exits 3 while any
+scope is open. An operator-class lane that is finished — green, reviewed, receipt bound —
+reports **open**, identical to one still working, because its PR is neither merged nor
+closed. `parallel.md`'s joint wrap-up says not to write the block until every scope is
+merged or consciously parked, so a batch containing any operator lane can never reconcile
+closed, which is the state every correctly-run autonomous batch ends in. The tally line it
+prints (`launched N, merged M, parked K`) has the same gap. Proposed fix: a fourth state —
+`held` — for a scope whose persisted merge class is `operator` and whose PR is open,
+green, and carrying a current-head receipt; it is distinguishable from `open` with data
+the reconciler can already reach.
+
+**A `noise_markers` entry has drifted from the wording the bot actually emits.** Severity
+**L**. `config/dev-model.yaml` lists `"actionable comments posted: 0"`; CodeRabbit's
+current clean-result phrasing is *"No actionable comments were generated in the recent
+review."* — verified absent on `#441`, where that comment was nonetheless filtered because
+two other markers matched it. So the marker meant to catch this case has been matching
+nothing, and `converged` was correct by redundancy. The failure is silent by construction:
+nothing reports a marker that never fires, and the first symptom would be a clean review
+blocking the loop as an unacknowledged comment. Proposed fix: assert each marker still
+matches something observed in the wild, or retire the count-phrased one as dead config.
+
+**The panel demonstrated the disposition gap recorded below, in the same night.** Severity
+**M**, and this is an occurrence rather than a new entry: `#445`'s round 3 re-raised,
+identically, a finding round 2 had disposed of — which is exactly what the 2026-08-12
+entry immediately below predicts. Recorded here because that entry is still un-ticketed,
+so there is no issue to comment on; it should carry this occurrence when it graduates.
+
 ## 2026-08-12
 
 **A multi-round panel cannot tell a lens what a previous round already disposed of.**
