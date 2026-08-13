@@ -192,7 +192,11 @@ author re-reading their own diff. **Cite them by name, never by number.**
    scratch root, both reached for `mut/`, and one reported having deleted the
    other's (`#136`). Namespace by **lens and revision** —
    `mut-adversarial-<short-sha>/` — not by lens alone, or the panel's own re-run
-   collides with your previous round's copy at a different head (`#75`). If a
+   collides with your previous round's copy at a different head (`#75`). **Reach
+   that namespace by creating a fresh path, never by removing and recreating one**:
+   the lens-and-revision namespace already guarantees the path is unused, a removal
+   is the only route by which one lens deletes another's copy, and a sandbox
+   refusing `rm -rf` is refusing the wrong route rather than blocking you. If a
    file changes underneath you, rule out a colliding lens, then treat it as a
    finding: `#136` exists *because* a lens reported it, and a change that writes
    into the tree looks identical.
@@ -535,7 +539,13 @@ reference, no instruction to a future reader, no claim a process consumes.
 Each delta lens reads both surfaces, and its first duty is to dispute both
 stated draws — the prose class and the safety-critical boundary; "confirmed"
 means both are confirmed. The launch prompt requires each lens to end its
-report with **one verdict line per draw**. **Every verdict line is posted on
+report with **one verdict line per draw**. That prompt is assembled by
+`panel_prompt.py --delta-draws`, which is the **only** channel a draw takes:
+`--carry-forward` renders under a heading about what prior rounds *covered*,
+so a draw typed there is framing a full panel is not entitled to hand a lens —
+which is how full panels came to carry their author's draws before the flags
+were separated. **A full panel is run with no `--delta-draws` at all.**
+**Every verdict line is posted on
 the PR by the cockpit, verbatim — both lenses' pairs, in the dual form —
 before any `fallback:delta` receipt is recorded** — quoting them all is what
 closes selective quotation, and the posting is self-reported, like the
