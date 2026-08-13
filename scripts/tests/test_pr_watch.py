@@ -12,7 +12,11 @@ from types import ModuleType
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _repo_layout import find_repo_root  # noqa: E402
+
 ENGINE_DIR = Path(__file__).resolve().parent.parent
+REPO_ROOT = find_repo_root(ENGINE_DIR)
 
 
 def _pin_engine_defaults(module: ModuleType) -> None:
@@ -177,7 +181,7 @@ def _green_view(**overrides):
 
 def test_workflow_routes_check_only_review_outages_to_the_fallback_panel() -> None:
     workflow = (
-        ENGINE_DIR.parent / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
     ).read_text(encoding="utf-8")
 
     start = workflow.index("If `review_bots.unavailable` contains an entry")
