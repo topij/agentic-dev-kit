@@ -104,17 +104,19 @@ _SHAPES = _shapes(_LAYOUTS["flat"])
 #   overwrite  an EXISTING file's bytes change while its path stays → the
 #              CONTENT-sensitivity of `_hash_file`. This is the shape #428
 #              actually happened as: "an ordinary run overwrote this repo's own
-#              state/pr-watch/1.json and 4242.json with fixture data". A snapshot
-#              that recorded mere presence would miss it entirely, and every
-#              add-shaped case above would still pass.
+#              state/pr-watch/1.json and 4242.json with fixture data". Replacing
+#              `_hash_file(path)` with a constant fails exactly these cases and
+#              no others, and survived the suite entirely before they existed.
 #
-#              Measured, and stated in the right tense: replacing
-#              `_hash_file(path)` with a constant was a CLEAN SURVIVOR of the
-#              suite as it stood BEFORE these cases existed — 1208 passed,
-#              1 deselected, exit 0. Against the suite as it now ships the same
-#              mutation reports 6 failed, 1208 passed, and a non-zero exit; the
-#              six are exactly these cases. The identical "1208 passed" on both
-#              sides is a coincidence of arithmetic, not evidence of anything.
+# These three are not a partition of everything the guard could miss. A dangling
+# symlink written into an existing `state/` subdirectory is invisible to all of
+# them, because `is_dir()` and `is_file()` both follow the link and both answer
+# False — inherited from before this file and tracked separately. Read the list
+# as three branches pinned, never as full coverage.
+#
+# Absolute pass counts are deliberately not recorded here: the figure was wrong
+# twice in consecutive review rounds as tests were added beside it. Run
+# `make mutation-test` and read which tests failed.
 _LEAK_KINDS = ("file", "dir", "overwrite")
 
 # Seeded into the throwaway `state/` before pytest starts, so it is part of the
@@ -333,6 +335,12 @@ def _guards_resolver():
     source = ENGINE_CONFTEST.read_text()
     start = source.index("def _find_repo_root")
     end = source.index("REPO_ROOT = _find_repo_root")
+    # The slice omits the conftest's own `from __future__ import annotations`,
+    # and the function's signature annotates `Path`, which `namespace` does not
+    # hold. It works because `compile` defaults to `dont_inherit=False` and so
+    # inherits THIS module's future flags — verified on 3.12 and 3.14. That makes
+    # it dependent on the `from __future__ import annotations` at the top of this
+    # file: remove that and this helper starts raising NameError.
     exec(compile(source[start:end], str(ENGINE_CONFTEST), "exec"), namespace)  # noqa: S102
     return namespace["_find_repo_root"]
 
@@ -348,15 +356,17 @@ def test_the_guards_own_root_resolution_agrees_with_the_test_suites(tmp_path: Pa
     #203 tracks the wider four-helper consolidation; this keeps these two from
     drifting meanwhile.
 
-    BOTH BRANCHES, not just the reachable one. An earlier version compared the
-    two only at ``ENGINE_DIR``, which always has a ``.git`` ancestor — so the
-    marker-found branch was pinned and the no-marker FALLBACK was not, while
-    this docstring claimed the pair could not drift. Measured by the round-4
-    correctness lens: mutating the guard's fallback from ``start.parent`` to
-    ``start`` survived the full ``make mutation-test`` scope at 1214 passed,
-    1 deselected, exit 0. That fallback is the branch carrying #60's known
-    nested-layout defect, so an undetected divergence there moves which
-    ``state/`` the guard watches.
+    Both branches, not just the marker-found one. Comparing the pair only at
+    ``ENGINE_DIR`` — which always has a ``.git`` ancestor — left the no-marker
+    fallback unpinned, and a mutation of it survived the whole suite. That
+    fallback carries #60's known nested-layout defect, so a divergence there
+    moves which ``state/`` the guard watches.
+
+    What the second case guarantees, exactly: the two resolvers **agree**,
+    unconditionally. That they agree *via the fallback* is asserted only when
+    no ``.git`` sits above ``tmp_path``, which is the normal case and not
+    something this test can compel — a machine whose temp directory lives
+    inside a repository would silently exercise the marker branch twice.
     """
     guard_resolver = _guards_resolver()
 

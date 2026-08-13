@@ -51,13 +51,13 @@ starts.
   fixture. **Taking only the second silently leaves you with no detection** —
   nothing fails to tell you so. Not filed as `ADDED`, whose meaning in this file
   is "new surface you may adopt or ignore": ignoring this one degrades a guard.
-- **CHANGED (gate semantics)** — with both files in place, a pytest run's exit
+- **BREAKING (gate semantics)** — with both files in place, a pytest run's exit
   code now flips on a write into the real `<repo>/state/` for **every** collected
   directory rather than only `<engine-dir>/tests`. **A run of
   `<engine-dir>/lib/state_paths/tests` alone can now fail** with `REGRESSION
   (#428)` where it previously passed. If your vendored suite writes there
   deliberately, sandbox it via `$DEVKIT_STATE_ROOT` before upgrading.
-- **CHANGED (gate semantics)** — **any pytest run whose CWD is a test directory
+- **BREAKING (gate semantics)** — **any pytest run whose CWD is a test directory
   itself no longer carries the guard**, whatever arguments it is given: `cd
   <engine-dir>/tests && pytest`, `… && pytest test_x.py` and `… && pytest .` are
   all silent on a leak, because pytest resolves rootdir — and with it confcutdir —
