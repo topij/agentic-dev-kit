@@ -13,7 +13,7 @@ what it cost — an omitted contract item is invisible (a lens cannot report the
 of an instruction it never received), and asserted-but-wrong provenance sends a lens
 looking for things that are not there.
 
-Three properties, each earned by a real failure:
+Four properties, each earned by a real failure:
 
 1. **The contract is quoted, never restated.** This script parses it out of the
    doctrine at run time. A second copy would drift, which is the argument the doctrine
@@ -28,6 +28,11 @@ Three properties, each earned by a real failure:
    delivered. Measured on PR #218: what moved finding-yield across five rounds was
    what the prompt aimed lenses at, not how big the pass was — and that carry-forward
    had no home except an author remembering to type it.
+4. **One channel per kind of framing.** ``--carry-forward`` carries what prior rounds
+   *covered*; ``--delta-draws`` carries the author's own classification of the change,
+   which the doctrine hands to a **delta lens only**, precisely so it can be disputed.
+   Sharing one flag between the two is how a full panel came to be handed its author's
+   draws — the anchoring **No framing** exists to keep out of a full panel.
 
 This assembles the prompt. It does not launch lenses, build worktrees, or read reports:
 ``--lenses`` staying self-reported is #32, and this is what a real check would build on.
@@ -37,6 +42,12 @@ Usage:
     uv run scripts/panel_prompt.py --lens correctness --head <sha> \\
         --scratch /tmp/panel --pr 218 --carry-forward "Rounds 1-3 found everything in
         the author's claims and nothing in the changed content. Invert that."
+
+A delta pass — and only a delta pass — adds the author's stated draws for the lens
+to dispute, as a continuation of either form above::
+
+        --delta-draws "Prose class: record prose (a handoff block, nothing reads it).
+        Safety-critical: not under safety-critical-changes.md."
 
 Exits 2 on any condition that would produce a misleading prompt.
 """
@@ -321,6 +332,11 @@ def render(
     verify_command: str | None,
     base_from_remote: bool,
     branch_from_checkout: bool = True,
+    # Defaulted, and the direction is what earns the default: a caller that forgets
+    # this parameter emits a FULL-panel prompt carrying no draws, which is the safe
+    # render. No omission here can silently add author framing — passing the flag on
+    # a full panel still can, which nothing here is able to detect (see the render).
+    delta_draws: str | None = None,
 ) -> str:
     # An unconfigured runtime legitimately means "inherit the cockpit's compute"
     # (the doctrine says so), but a TYPO looks identical. Saying which runtime was
@@ -339,9 +355,48 @@ def render(
         "do not write into any tree you were handed.\n"
     )
     pr_line = "" if pr is None else f"- **PR:** #{pr}\n"
+    # The scope sentence is the half that could not be enforced. Nothing can inspect
+    # free prose and tell "rounds 1-3 covered the guards" from "I judge this record
+    # prose": a classifier over an author's own wording fails open on exactly the
+    # wording that matters, and shipping one would license the belief that the channel
+    # is policed. So the boundary is stated to the party that CAN check it — telling
+    # the lens what this section is for turns author framing arriving here from
+    # invisible into a reportable finding, the only defence a free-text field admits.
     carry = (
         f"\n## What prior rounds have and have not covered\n\n{carry_forward.strip()}\n"
+        "\nThis section carries only what prior rounds *covered*. It is not the author's\n"
+        "view of what this change is for, what is risky, or how it should be classified.\n"
+        "If it reads that way, report that as a finding — the contract's **No framing**\n"
+        "forbids it, and it is not something this pass is entitled to hand you.\n"
         if carry_forward is not None and carry_forward.strip()
+        else ""
+    )
+    # A delta pass is the doctrine's ONE sanctioned exception to **No framing**: the
+    # delta lens is handed the author's stated draws — the prose class and the
+    # safety-critical boundary — precisely in order to dispute them. It gets its own
+    # flag rather than sharing `--carry-forward` because the two were confused in
+    # practice: draws typed into `--carry-forward` reached FULL-panel prompts, which
+    # the doctrine says carry none of this ("Full-panel lens prompts are untouched by
+    # all of this").
+    #
+    # Restated here rather than quoted from the doctrine, unlike the contract section:
+    # the delta-pass rules sit mid-paragraph under "Re-running, and when to stop" with
+    # no heading to anchor a slice on, and a substring anchor is exactly the fragility
+    # `_HEADING` refuses. The cost is a second copy that can drift, so the doctrine
+    # names this flag beside the rule — the two are found together.
+    draws = (
+        "\n## The author's stated draws — dispute them\n\n"
+        "This is a **delta pass** — asserted by whoever assembled this prompt, not\n"
+        "observed here. What follows is the author's own classification of\n"
+        "this change, handed to you because disputing it is your first duty here. It is\n"
+        "the one anchoring this panel accepts on purpose, and it is confined to a delta\n"
+        "pass: a full panel's prompt carries no draw at all.\n\n"
+        f"{delta_draws.strip()}\n\n"
+        "End your report with **one verdict line per draw**: name the draw, then\n"
+        "`confirmed` or `disputed`, with your reason. Confirm a draw only if you checked\n"
+        'it yourself — "confirmed" means every draw is confirmed. A dispute moves the\n'
+        "round toward more review, never less, so raising one costs you nothing.\n"
+        if delta_draws is not None and delta_draws.strip()
         else ""
     )
     # The base label must match the path actually taken. Saying "resolved from the
@@ -395,7 +450,7 @@ git show {head}:<path>
 Diffstat at assembly time: {diffstat}
 {verify}
 Name the command that established any claim you make.
-{carry}
+{carry}{draws}
 ## The contract every lens gets
 
 {contract_text}
@@ -428,6 +483,7 @@ def build(args: argparse.Namespace) -> str:
     o_base_branch = _override("--base-branch", args.base_branch)
     o_scratch = _override("--scratch", args.scratch)
     o_carry = _override("--carry-forward", args.carry_forward)
+    o_draws = _override("--delta-draws", args.delta_draws)
     o_verify = _override("--verify-command", args.verify_command)
     o_runtime = _override("--runtime", args.runtime) or "claude"
     # --head and --lens are required=True, so argparse guarantees presence but not
@@ -480,6 +536,7 @@ def build(args: argparse.Namespace) -> str:
         scratch=o_scratch,
         pr=args.pr,
         carry_forward=o_carry,
+        delta_draws=o_draws,
         verify_command=o_verify,
         base_from_remote=base_from_remote,
         branch_from_checkout=o_branch is None,
@@ -505,7 +562,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--carry-forward",
         default=None,
-        help="what prior rounds covered — the round-to-round aim that has no other home",
+        help="what prior rounds COVERED — the round-to-round aim that has no other home. "
+        "Never the author's draws or risk assessment: those go to --delta-draws, and a "
+        "full panel's prompt carries neither",
+    )
+    parser.add_argument(
+        "--delta-draws",
+        default=None,
+        help="DELTA PASS ONLY: the author's stated draws (prose class, safety-critical "
+        "boundary) for the lens to dispute, ending its report with one verdict line per "
+        "draw. Omit for a full panel — this is the doctrine's one exception to No framing",
     )
     parser.add_argument(
         "--verify-command",

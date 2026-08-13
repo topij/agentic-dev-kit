@@ -310,6 +310,79 @@ def test_carry_forward_reaches_the_prompt_when_given_and_is_absent_otherwise(rep
     assert "What prior rounds have and have not covered" not in without.stdout
 
 
+# --- the two kinds of framing are different channels (friction log, 2026-08-12) ---
+
+
+def test_a_full_panel_prompt_carries_no_authors_draw(repo):
+    """The defect: draws typed into `--carry-forward` reached FULL-panel prompts.
+
+    The doctrine hands the author's stated draws to the **delta lens only** —
+    "Full-panel lens prompts are untouched by all of this" — so the draws section must be
+    unreachable without `--delta-draws`, including from a prompt that carries a
+    carry-forward. Unpinned, moving the draws render under the carry-forward guard
+    reproduces the exact anchoring, and every other test still passes.
+    """
+    base, head = _revs(repo)
+    plain = _run(repo, "--lens", "adversarial", "--head", head, "--base", base)
+    assert plain.returncode == 0, plain.stderr
+    assert "stated draws" not in plain.stdout
+    assert "one verdict line per draw" not in plain.stdout
+
+    with_carry = _run(
+        repo, "--lens", "adversarial", "--head", head, "--base", base,
+        "--carry-forward", "Round 1 covered the guards.",
+    )
+    assert with_carry.returncode == 0, with_carry.stderr
+    assert "stated draws" not in with_carry.stdout
+    assert "one verdict line per draw" not in with_carry.stdout
+
+
+def test_delta_draws_reach_the_lens_with_the_duty_to_dispute_them(repo):
+    """Handing a lens the author's classification without the dispute duty and the
+    per-draw verdict line is anchoring with nothing asked in return — which is what
+    the doctrine's exception buys the panel."""
+    base, head = _revs(repo)
+    marker = "Prose class: record prose. Safety-critical: not under it."
+    out = _run(
+        repo, "--lens", "correctness", "--head", head, "--base", base,
+        "--delta-draws", marker,
+    )
+    assert out.returncode == 0, out.stderr
+    assert marker in out.stdout
+    assert "The author's stated draws — dispute them" in out.stdout
+    assert "one verdict line per draw" in out.stdout
+    assert "disputing it is your first duty" in out.stdout
+    # Nothing here can observe which pass it is being run for, so "this is a delta
+    # pass" is the caller's assertion. Rendering it unqualified would give an
+    # assertion a measurement's weight — the same defect `--base` and `--branch`
+    # already carry provenance labels for.
+    assert "asserted by whoever assembled this prompt, not\nobserved here" in out.stdout
+    # The cockpit posts each verdict line on the PR verbatim, and the doctrine reads
+    # "confirmed" as a specific word ('"confirmed" means both are confirmed'). So the
+    # vocabulary is part of the contract between the lens and the record, not phrasing:
+    # renaming it silently leaves the doctrine describing words no prompt asks for.
+    # Named by this test's neighbours and pinned by nothing until now — swapping it for
+    # `yes`/`no` passed the whole file.
+    assert "`confirmed` or `disputed`" in out.stdout
+
+
+def test_the_carry_forward_section_tells_the_lens_what_it_is_not(repo):
+    """No check over free prose can tell a draw from a coverage note, so the boundary
+    is stated to the only party that can check it. Without this the misuse is
+    invisible to the lens; with it, author framing arriving here is a finding."""
+    base, head = _revs(repo)
+    out = _run(
+        repo, "--lens", "adversarial", "--head", head, "--base", base,
+        "--carry-forward", "Rounds 1-2 covered the refusal paths.",
+    )
+    assert out.returncode == 0, out.stderr
+    assert "report that as a finding" in out.stdout
+    assert "**No framing**" in out.stdout
+
+    without = _run(repo, "--lens", "adversarial", "--head", head, "--base", base)
+    assert "report that as a finding" not in without.stdout
+
+
 def test_the_verification_command_is_never_guessed(repo):
     """No config key holds it, so an unset command must be omitted, not invented."""
     base, head = _revs(repo)
@@ -553,7 +626,11 @@ def test_an_empty_base_override_is_refused_not_silently_remote_resolved(repo):
 
 
 @pytest.mark.parametrize(
-    "flag", ["--branch", "--base", "--base-branch", "--scratch", "--carry-forward", "--verify-command"]
+    "flag",
+    [
+        "--branch", "--base", "--base-branch", "--scratch", "--carry-forward",
+        "--delta-draws", "--verify-command",
+    ],
 )
 def test_every_optional_override_refuses_an_empty_value(repo, flag):
     """Three rounds each found this in a DIFFERENT flag, because each was fixed as
