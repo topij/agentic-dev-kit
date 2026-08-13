@@ -544,7 +544,12 @@ report with **one verdict line per draw**. That prompt is assembled by
 `--carry-forward` renders under a heading about what prior rounds *covered*,
 so a draw typed there is framing a full panel is not entitled to hand a lens —
 which is how full panels came to carry their author's draws before the flags
-were separated. **A full panel is run with no `--delta-draws` at all.**
+were separated. **Run a full panel with no `--delta-draws` at all** — and read
+that as a rule for whoever assembles the prompt, not as a guarantee the engine
+enforces. It cannot know which pass it is being run for, so the flag passed on
+a full panel still renders the draws: separating the channels removed the way
+this happened by default, and closed nothing against doing it on purpose, which
+is `#32`'s self-reporting gap arriving in one more place.
 **Every verdict line is posted on
 the PR by the cockpit, verbatim — both lenses' pairs, in the dual form —
 before any `fallback:delta` receipt is recorded** — quoting them all is what

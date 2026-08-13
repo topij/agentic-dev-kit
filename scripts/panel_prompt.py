@@ -332,9 +332,10 @@ def render(
     verify_command: str | None,
     base_from_remote: bool,
     branch_from_checkout: bool = True,
-    # Defaulted, unlike its neighbours, and the direction is what earns it: a caller
-    # that forgets this parameter emits a FULL-panel prompt carrying no draws, which
-    # is the safe render. No omission here can silently add author framing.
+    # Defaulted, and the direction is what earns the default: a caller that forgets
+    # this parameter emits a FULL-panel prompt carrying no draws, which is the safe
+    # render. No omission here can silently add author framing — passing the flag on
+    # a full panel still can, which nothing here is able to detect (see the render).
     delta_draws: str | None = None,
 ) -> str:
     # An unconfigured runtime legitimately means "inherit the cockpit's compute"
@@ -385,7 +386,8 @@ def render(
     # names this flag beside the rule — the two are found together.
     draws = (
         "\n## The author's stated draws — dispute them\n\n"
-        "This is a **delta pass**. What follows is the author's own classification of\n"
+        "This is a **delta pass** — asserted by whoever assembled this prompt, not\n"
+        "observed here. What follows is the author's own classification of\n"
         "this change, handed to you because disputing it is your first duty here. It is\n"
         "the one anchoring this panel accepts on purpose, and it is confined to a delta\n"
         "pass: a full panel's prompt carries no draw at all.\n\n"

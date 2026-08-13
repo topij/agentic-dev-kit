@@ -352,6 +352,11 @@ def test_delta_draws_reach_the_lens_with_the_duty_to_dispute_them(repo):
     assert "The author's stated draws — dispute them" in out.stdout
     assert "one verdict line per draw" in out.stdout
     assert "disputing it is your first duty" in out.stdout
+    # Nothing here can observe which pass it is being run for, so "this is a delta
+    # pass" is the caller's assertion. Rendering it unqualified would give an
+    # assertion a measurement's weight — the same defect `--base` and `--branch`
+    # already carry provenance labels for.
+    assert "asserted by whoever assembled this prompt, not\nobserved here" in out.stdout
 
 
 def test_the_carry_forward_section_tells_the_lens_what_it_is_not(repo):
