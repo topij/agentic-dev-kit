@@ -42,6 +42,30 @@ starts.
 
 ---
 
+## #453 — 2026-08-13
+
+- **BREAKING (gate semantics)** — the #428 guard is now split across **two** files
+  that must be taken **together**: `<engine-dir>/conftest.py` (new, kit-owned and
+  tracked in `kit-manifest.json`, so `/upgrade` Step 3 lists it) carries the
+  detection half, and `<engine-dir>/tests/conftest.py` keeps the prevention
+  fixture. **Taking only the second silently leaves you with no detection** —
+  nothing fails to tell you so. Not filed as `ADDED`, whose meaning in this file
+  is "new surface you may adopt or ignore": ignoring this one degrades a guard.
+- **BREAKING (gate semantics)** — with both files in place, a pytest run's exit
+  code now flips on a write into the real `<repo>/state/` for **every** collected
+  directory rather than only `<engine-dir>/tests`. **A run of
+  `<engine-dir>/lib/state_paths/tests` alone can now fail** with `REGRESSION
+  (#428)` where it previously passed. If your vendored suite writes there
+  deliberately, sandbox it via `$DEVKIT_STATE_ROOT` before upgrading.
+- **BREAKING (gate semantics)** — **any pytest run whose CWD is a test directory
+  itself no longer carries the guard**, whatever arguments it is given: `cd
+  <engine-dir>/tests && pytest`, `… && pytest test_x.py` and `… && pytest .` are
+  all silent on a leak, because pytest resolves rootdir — and with it confcutdir —
+  from the cwd, cutting off every conftest above. Invoke the test directories **by
+  path, from the repo root or the engine root**, as the Makefile does.
+
+---
+
 ## #445 — 2026-08-13
 
 - **ADDED (engine CLI surface)** — `panel_prompt.py --delta-draws <text>`, for a

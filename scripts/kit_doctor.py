@@ -203,6 +203,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # exits 2 rather than guessing — a hard failure at panel time, which is the
     # worst moment for one.
     ("scripts/panel_prompt.py", "engine"),
+    ("scripts/conftest.py", "engine"),
     ("scripts/lib/kitconfig.py", "engine"),
     ("scripts/lib/atomic_write.py", "engine"),
     ("scripts/lib/devmodel_config.py", "engine"),
