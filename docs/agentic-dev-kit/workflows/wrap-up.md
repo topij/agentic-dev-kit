@@ -208,11 +208,19 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    directly.** Commit as `chore: update handoff — [one-line summary of session work]`
    (stage `<friction-log>` too if you added an inbox entry this session, and
    `<handoff-history>` if the archive sweep ran). If you're already on the
-   session's feature branch, this is just another commit on that branch's PR. If
-   you're on the protected branch (e.g. a planning-only session), branch first
-   (`chore/update-handoff-<date>`) before committing, then push and open a PR. Either
-   way, once there's nothing left to push, **mark the PR ready** so it gets reviewed,
-   and run the watch-and-fix loop (`pr-watch`) to merge — per your project's
+   session's feature branch, this is just another commit on that branch's PR —
+   **unless that PR already carries a current-head independent-review receipt**
+   (per `pr-watch`); a push there would move the head and invalidate it,
+   re-opening the full review obligation for a diff that is entirely the
+   handoff update ([`#435`](https://github.com/topij/agentic-dev-kit/issues/435)).
+   In that case, or if you're on the protected branch (e.g. a planning-only
+   session), branch the handoff off the **protected branch**, not off the
+   session's feature branch — branching from the feature branch would carry
+   its already-reviewed commits into the new PR too, defeating the point of
+   keeping the handoff separate. Branch first (`chore/update-handoff-<date>`)
+   before committing, then push and open a PR. Either way, once there's
+   nothing left to push, **mark the PR ready** so it gets reviewed, and run
+   the watch-and-fix loop (`pr-watch`) to merge — per your project's
    branching convention.
 
    **Keep tracker identifiers out of the title and body unless this PR is really

@@ -57,7 +57,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "c37d9d283396e852aa3306caabdba7a55286ec2511b754ebc9c17ef410f7e0d3"
+      "sha256": "a0e1928450e951fe104023000c5bf62631b5233387da2f4a99e044d930847370"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
