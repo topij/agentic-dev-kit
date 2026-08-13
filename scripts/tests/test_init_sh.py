@@ -4128,6 +4128,66 @@ def _changelog_awk_program() -> str:
     return match.group(1)
 
 
+def _changelog_awk_field_selector(program: str) -> int:
+    """The 1-based field index the awk program compares against `"#" pr`.
+
+    Taken from the program text, not hardcoded, for the same reason
+    `_changelog_awk_program` reads the awk from the document rather than
+    holding a copy: an edit to the selector must be picked up here, not
+    silently missed.
+
+    Two guards on top of the bare regex match, both filed as #439:
+
+    - `pr\\b` requires a word boundary after `pr`, so a variable named
+      `prnum` cannot match as though it were `pr`. Not independently
+      reachable today — `_changelog_awk_program` locates the block via
+      `awk -v pr="$pr"`, so a rename fails one step earlier — but it is
+      the class of edit this function exists to catch.
+    - `field >= 1` rejects a `$0` comparison. awk's `$0` is the whole
+      record, not a positional field, so a document edited from `$2` to
+      `$0` would resolve to `field = 0`. Without this guard, Python's
+      negative indexing makes `fields[0 - 1]` == `fields[-1]` valid — it
+      silently wraps to the last whitespace token and reports a
+      wrong-but-plausible field number instead of rejecting the input.
+    """
+    selector = re.search(r'\$(\d+)\s*==\s*"#"\s*pr\b', program)
+    assert selector, f"no `$N == \"#\" pr` comparison found in the awk:\n{program}"
+    field = int(selector.group(1))
+    assert field >= 1, (
+        f"selector resolved to field {field}, but awk fields are 1-based "
+        "and $0 is the whole record, not a field — indexing fields[-1] "
+        f"for this would silently wrap to the last token.\nprogram:\n{program}"
+    )
+    return field
+
+
+def test_changelog_awk_field_selector_rejects_whole_record_comparison() -> None:
+    """`$0 == "#" pr` must fail loudly, not silently resolve to the last field (#439).
+
+    awk's `$0` is the whole record. If the document's selector were ever
+    edited from `$2` to `$0`, the un-guarded code computed `field = 0` and
+    then indexed `fields[field - 1]` — `fields[-1]` is valid Python that
+    wraps to the last whitespace token, reporting a wrong-but-plausible
+    field instead of rejecting the input.
+    """
+    program = '/^## /{p = ($0 == "#" pr)} p'
+    with pytest.raises(AssertionError, match="awk fields are 1-based"):
+        _changelog_awk_field_selector(program)
+
+
+def test_changelog_awk_field_selector_requires_word_boundary_after_pr() -> None:
+    """The selector must not match a `prnum`-style variable as though it were `pr` (#439).
+
+    Without a word boundary after `pr`, the regex matches `pr` as a
+    substring of any longer identifier, so a document edited to compare
+    against a variable named e.g. `prnum` would be silently accepted as a
+    valid `pr` comparison instead of being rejected as unrecognized.
+    """
+    program = '/^## /{p = ($2 == "#" prnum)} p'
+    with pytest.raises(AssertionError, match=r"no `\$N"):
+        _changelog_awk_field_selector(program)
+
+
 @pytest.mark.kit_repo_only(
     "docs/agentic-dev-kit/workflows/upgrade.md", "CHANGELOG.md"
 )
@@ -4155,9 +4215,7 @@ def test_real_changelog_headings_match_the_extraction_pattern() -> None:
     # here would restore the duplication this test was just rewritten to remove,
     # one level down: an edit changing the selector would make this assertion
     # blame the heading for a change made to the extraction.
-    selector = re.search(r'\$(\d+)\s*==\s*"#"\s*pr', program)
-    assert selector, f"no `$N == \"#\" pr` comparison found in the awk:\n{program}"
-    field = int(selector.group(1))
+    field = _changelog_awk_field_selector(program)
 
     for heading in headings:
         fields = heading.split()
