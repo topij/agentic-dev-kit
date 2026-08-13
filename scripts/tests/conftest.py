@@ -152,61 +152,119 @@ def _real_state_snapshot() -> dict[str, str]:
     return snapshot
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _real_state_root_is_never_written_by_the_suite():
+# The baseline half of the #428 guard, taken HERE — at conftest import — and
+# never re-taken. Its partner is `pytest_sessionfinish` below.
+#
+# WHY IMPORT TIME AND NOT `pytest_sessionstart` (#433 asked for sessionstart).
+# `pytest_sessionstart` is not a historic hook, so only a plugin already
+# registered when it fires receives it. A conftest is registered that early
+# only when its own directory is an INITIAL command-line argument. `make test`
+# passes `scripts/tests` explicitly, so it would fire there — but a bare
+# `pytest` from the repo root loads this file during collection instead, and
+# then `pytest_sessionstart` never arrives while `pytest_sessionfinish` still
+# does, leaving the comparison with no baseline at all. Measured on pytest
+# 9.1.1 with a two-directory probe carrying both hooks:
+#
+#     pytest <probe>/sub -q   -> "sessionstart FIRED", "sessionfinish FIRED"
+#     pytest <probe>     -q   -> "sessionfinish FIRED"   (no sessionstart)
+#
+# Import is the one moment that exists in every invocation shape, and it is
+# always before the first test body runs, because pytest completes collection
+# (`pytest_collection`) before it enters the run loop (`pytest_runtestloop`) —
+# so a conftest reached only during collection is still imported before
+# anything executes.
+#
+# It is deliberately not ALSO refreshed in `pytest_sessionstart`: a baseline
+# re-taken later can only absorb writes made in between, which is the exact
+# defect #433 is about. Earliest wins, once.
+_STATE_BASELINE = _real_state_snapshot()
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """Regression pin for #428 — load-bearing, not decorative.
 
-    Session-scoped and autouse rather than a single ``test_...`` function so
-    no test selection within this directory can deselect it: its finalizer
-    (the code after ``yield``) runs once, at the end of the session.
-
-    WHAT IT DOES NOT COVER, because a session fixture's scope is not the
-    session's. This conftest binds only to tests collected under
+    A session hook rather than the session-scoped autouse fixture this
+    replaces (#433). That fixture's reach was narrower than "the session" in
+    two compounding ways: this conftest binds only to tests collected under
     ``scripts/tests/``, and pytest instantiates a session-scoped fixture
-    lazily — on the first test that requests it. `make test` runs
-    ``pytest scripts/lib/state_paths/tests scripts/tests``, so the FIRST
-    directory has already run to completion before the snapshot below is
-    taken, and a write into the real ``state/`` from there lands in the
-    baseline rather than being caught by it. Confirmed with
-    ``pytest <one test from each dir> --setup-show``, which puts
-    ``SETUP S _real_state_root_is_never_written_by_the_suite`` after the
-    state_paths test has already reported.
-
-    That gap is not currently reachable — ``test_state_paths.py`` has its own
-    ``_clear_env`` autouse fixture that clears every state-root env var and
-    chdirs into a ``tmp_path`` — and closing it properly means moving the
-    snapshot into a session hook, which is a mechanism this pin does not need
-    in order to do its own job. #433 holds that.
+    lazily, on the first test that REQUESTS it. `make test` runs ``pytest
+    scripts/lib/state_paths/tests scripts/tests``, so the first directory had
+    already run to completion before the baseline was taken, and a write into
+    the real ``state/`` originating there was absorbed into the baseline
+    instead of caught by it. Hooks have no such lazy step: this one fires once
+    per session, for the whole session, and `_STATE_BASELINE` above is taken
+    before any test runs at all — so the guard now covers every test in the
+    run, ``scripts/lib/state_paths/tests`` included.
 
     Without this, the next engine that computes a state/cache/whatever path
     as an import-time module constant (`pr_watch.py`'s own mistake, #428)
     reopens the hole ``_hermetic_state_root`` closes — silently, the moment
     some test exercises it without an individual, easy-to-forget
-    ``monkeypatch.setattr``. This fixture is what turns that into a loud
-    local failure instead of fixture data quietly sitting in this repo's
-    live merge-gate evidence store.
+    ``monkeypatch.setattr``. This is what turns that into a loud local failure
+    instead of fixture data quietly sitting in this repo's live merge-gate
+    evidence store, where a fabricated review receipt is indistinguishable
+    from a real one by the time the merge gate reads it.
 
-    A finalizer assertion failure surfaces as a teardown ERROR on whichever
-    test last tears this fixture down (pytest's normal reporting for a
-    session fixture), not as a distinct ``FAILED`` line — but it still turns
-    the run red and the exit code non-zero, which is what `make test`
-    depends on to catch this.
+    HOW IT FAILS, AND WHY NOT BY RAISING. The two obvious forms were measured
+    on pytest 9.1.1 rather than reasoned about, and both are worse than what
+    is written here:
+
+      - `assert` / `raise`. `wrap_session` calls this hook from inside its
+        own ``finally``, outside every ``except`` it has, so the exception
+        escapes ``python -m pytest`` entirely: 62 lines of runpy/pluggy
+        traceback, no test summary of any kind, and the actual message on the
+        last line. It reads as pytest having crashed, not as a guard firing.
+      - ``pytest.exit(msg, returncode=1)``. Caught cleanly by `wrap_session`
+        and it does set the exit code — but it unwinds through the terminal
+        reporter's OWN ``pytest_sessionfinish`` wrapper before that wrapper
+        can print, so the whole FAILURES section and short summary are
+        suppressed. Measured with a deliberately failing test alongside: the
+        run printed ``.F`` and one ``Exit:`` line, and the real failure was
+        never reported. A guard that hides other failures is worse than the
+        leak it catches.
+
+    So: set the two attributes the reporter and `wrap_session` already read.
+    ``session.exitstatus`` is returned by `wrap_session` AFTER its ``finally``
+    completes, so assigning it here is what turns the process red;
+    ``session.shouldfail`` is printed by the terminal reporter as a red
+    ``!!!!`` banner in the last position before the stats line, which is the
+    only tail-most slot a plugin can reach (``pytest_terminal_summary`` runs
+    earlier). Normal reporting is left completely intact, verified the same
+    way — a real failure alongside the guard still prints its FAILURES
+    section and its ``FAILED`` line.
+
+    The one residual: on an otherwise all-passing run the final stats line
+    still reads ``N passed``, because nothing here fabricates a test report to
+    make it say otherwise. The red banner directly above it and the non-zero
+    exit are what carry the verdict — `make test` stops with ``Error 1``.
     """
-    before = _real_state_snapshot()
-    yield
     after = _real_state_snapshot()
-    if after == before:
+    if after == _STATE_BASELINE:
         return
     changed = sorted(
-        rel for rel in set(before) | set(after) if before.get(rel) != after.get(rel)
+        rel
+        for rel in set(_STATE_BASELINE) | set(after)
+        if _STATE_BASELINE.get(rel) != after.get(rel)
     )
-    assert after == before, (
-        "REGRESSION (#428): the test suite wrote into the real "
-        f"{REPO_ROOT / 'state'} directory during this run instead of staying "
-        "inside the per-test $DEVKIT_STATE_ROOT sandbox that "
-        "_hermetic_state_root (this conftest) sets. Changed paths: "
-        f"{changed}"
+    # Two lengths on purpose. The banner goes through `write_sep`, which pads
+    # to the terminal width, so the changed-path list — unbounded, one entry
+    # per leaked file — stays out of it and goes in the section body instead.
+    summary = f"REGRESSION (#428): the suite wrote into the real {REPO_ROOT / 'state'}"
+    detail = (
+        f"{summary} during this run instead of staying inside the per-test "
+        "$DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (this conftest) "
+        f"sets. Changed paths: {changed}"
     )
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        reporter.write_sep("=", "REAL state/ WAS WRITTEN (#428)", red=True, bold=True)
+        reporter.write_line(detail)
+    else:
+        # `-p no:terminal`, or any other run with the reporter unregistered.
+        # The verdict must survive the message having nowhere to go.
+        print(detail, file=sys.stderr)
+    session.shouldfail = summary
+    session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 def require_kit_paths(*paths: str) -> None:
