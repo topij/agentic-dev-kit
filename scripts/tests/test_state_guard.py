@@ -43,6 +43,7 @@ each entry is one of the invocation shapes #448 is about, and the
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -96,7 +97,7 @@ def _shapes(engine_rel: str) -> dict[str, list[str]]:
 
 _SHAPES = _shapes(_LAYOUTS["flat"])
 
-# What the planted test does to the real `state/`. All three are leaks the guard
+# What the planted test does to the real `state/`. All five are leaks the guard
 # claims to catch, and each is caught by a DIFFERENT property of
 # `_real_state_snapshot`, so each pins a branch the others leave free:
 #
@@ -113,19 +114,28 @@ _SHAPES = _shapes(_LAYOUTS["flat"])
 #              state/pr-watch/1.json and 4242.json with fixture data". Replacing
 #              `_hash_file(path)` with a constant fails exactly these cases and
 #              no others, and survived the suite entirely before they existed.
+#   symlink    a DANGLING link appears in a directory that already existed →
+#              the `symlink -> <target>`-valued entries, tested before
+#              `is_dir`/`is_file` because both FOLLOW a link and answer False
+#              for a broken one, which is how this kind passed every snapshot
+#              before #457 closed it (#456). The parent is seeded into the
+#              baseline so the link is the run's ONLY change — otherwise these
+#              cases would merely re-pin the `dir` branch.
+#   bare-root  `state/` itself appears, childless → the `./` root entry.
+#              `rglob("*")` yields descendants only, never the root it is
+#              called on, so before #457 this compared `{}` against `{}`.
 #
-# These three are not a partition of everything the guard could miss. Two known
-# leaks pass all of them, both inherited from before this file and both tracked
-# rather than fixed here — a dangling symlink (#456), which `is_dir()` and
-# `is_file()` each answer False for because both follow the link, and the
-# creation of a bare, childless `state/` itself (#457), which `rglob("*")` never
-# enumerates because it yields descendants only. Read the list as three branches
-# pinned, never as full coverage.
+# Five branches pinned is not a partition of everything the guard could miss.
+# Read `_real_state_snapshot`'s docstring for what the traversal still cannot
+# see, and the module docstring's observation-window section for the classes no
+# traversal fix reaches (a leak already in the baseline; a write undone before
+# session end — both dispositioned on #457). Read the list as branches pinned,
+# never as full coverage.
 #
 # Absolute pass counts are deliberately not recorded here: the figure was wrong
 # twice in consecutive review rounds as tests were added beside it. Run
 # `make mutation-test` and read which tests failed.
-_LEAK_KINDS = ("file", "dir", "overwrite")
+_LEAK_KINDS = ("file", "dir", "overwrite", "symlink", "bare-root")
 
 # Seeded into the throwaway `state/` before pytest starts, so it is part of the
 # baseline the guard takes at conftest import, and overwritten by the planted
@@ -175,6 +185,19 @@ def _build_tree(
             f"    d = Path({str(root)!r}) / 'state' / 'brand-new-engine'\n"
             "    d.mkdir(parents=True, exist_ok=True)\n"
         )
+    elif leak_kind == "symlink":
+        # The parent is created BEFORE pytest starts so it sits in the
+        # baseline and the dangling link is the run's only change — see
+        # `_LEAK_KINDS` for why that seeding is load-bearing.
+        (root / "state" / "pr-watch").mkdir(parents=True, exist_ok=True)
+        leak_stmt = (
+            "    import os\n"
+            f"    d = Path({str(root)!r}) / 'state' / 'pr-watch'\n"
+            "    os.symlink('/nonexistent/receipt/does/not/exist.json', d / '2222.json')\n"
+        )
+    elif leak_kind == "bare-root":
+        # The one write `rglob` can never yield: the root itself, childless.
+        leak_stmt = f"    (Path({str(root)!r}) / 'state').mkdir()\n"
     else:
         # Seeded BEFORE pytest starts, so the baseline holds its original hash;
         # the planted test then changes the bytes at a path that already existed.
@@ -196,6 +219,11 @@ _LEAK_PATHS = {
     "file": ("state/pr-watch/9999.json", "9999.json"),
     "dir": ("state/brand-new-engine", "brand-new-engine/"),
     "overwrite": ("state/pr-watch/1.json", "pr-watch/1.json"),
+    "symlink": ("state/pr-watch/2222.json", "pr-watch/2222.json"),
+    # The whole rendered list, not a fragment: `./` alone is a substring of
+    # too much other output to discriminate, and asserting the full list also
+    # pins that the root entry is the run's ONLY change.
+    "bare-root": ("state", "['./']"),
 }
 
 
@@ -206,7 +234,8 @@ def _leaked_path(root: Path, leak_kind: str) -> Path:
 def _leak_landed(root: Path, leak_kind: str) -> bool:
     """Whether the planted test's write actually happened.
 
-    Existence is the test for the two add-shaped kinds and is NOT for
+    Existence is the test for the add-shaped kinds — every kind without its
+    own branch below — and is NOT for
     ``overwrite``, whose path exists either way — there the question is whether
     the bytes changed. Getting this wrong would make the `overwrite` case pass
     against a guard that never fired, which is the failure this whole file
@@ -215,6 +244,11 @@ def _leak_landed(root: Path, leak_kind: str) -> bool:
     path = _leaked_path(root, leak_kind)
     if leak_kind == "overwrite":
         return path.is_file() and path.read_text() == _OVERWRITTEN
+    if leak_kind == "symlink":
+        # `exists()` FOLLOWS the link and answers False for the dangling one
+        # planted here — the guard's own old blind spot restated as a harness
+        # bug. `is_symlink()` answers for the link itself.
+        return path.is_symlink()
     return path.exists()
 
 
@@ -258,6 +292,15 @@ def _assert_guard_fired(
     assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
     named = _LEAK_PATHS[leak_kind][1]
     assert named in combined, f"the guard fired but did not name the changed path:\n{combined}"
+    # The `!`-wrapped tail line is printed by the terminal reporter ONLY when
+    # `session.shouldfail` is set — the guard's docstring claims that line, and
+    # dropping the assignment used to survive all of this file (#457's
+    # "surviving mutant"). Shape measured under `-q` on pytest 9.1.1:
+    # `! REGRESSION (#428): the suite wrote into the real .../state !`.
+    assert re.search(rf"^!+ {re.escape(_SUMMARY)}.*!+$", combined, re.MULTILINE), (
+        "no `!`-wrapped tail banner — `session.shouldfail` is the only thing "
+        f"that prints one, so the attribute is no longer being set:\n{combined}"
+    )
 
 
 # (shape, which directory leaks). Written out rather than crossed with `_SHAPES`,
@@ -285,9 +328,10 @@ def test_guard_catches_a_write_into_real_state(
     """A leak anywhere in the collected set turns the run red, in every shape.
 
     ``state-paths-only`` is #448 exactly: before the guard moved to the engine
-    root, that row exited 0 with the write sitting on disk. The ``dir`` kind is
-    the branch that catches an engine which creates its state directory and
-    writes no file — see ``_LEAK_KINDS``.
+    root, that row exited 0 with the write sitting on disk. Every kind in
+    ``_LEAK_KINDS`` rides this same cross — ``file``, ``dir``, ``overwrite``,
+    ``symlink``, ``bare-root`` — and what each one pins is that table's
+    comment, not repeated here.
     """
     _build_tree(tmp_path, leak_in=leak_in, leak_kind=leak_kind)
     result = _run_pytest(tmp_path, _SHAPES[shape])
@@ -322,6 +366,198 @@ def test_guard_reaches_every_layout_and_working_directory(
 
     result = _run_pytest(tmp_path, args, cwd=cwd)
     _assert_guard_fired(result, tmp_path, "file")
+
+
+def test_a_live_symlink_retarget_to_equal_bytes_is_caught(tmp_path: Path) -> None:
+    """The branch ORDER is load-bearing, and only a LIVE link can pin it.
+
+    Every other symlink case in this file uses a dangling target — and a
+    dangling link lands in the `@` branch even if `is_symlink()` is tested
+    LAST, because `is_dir()`/`is_file()` follow the link and answer False for
+    a broken one. So reordering the checks — reintroducing exactly the
+    historical bug `_real_state_snapshot`'s docstring describes, a live link
+    recorded as its target's kind — survived every dangling-target test, as
+    both lenses of #459's round-1 panel measured independently. This is the
+    kill for that mutant: two real files with IDENTICAL bytes, a link moved
+    from one to the other. Under the correct ordering the recorded
+    `os.readlink` value changes; under the reordered mutant the link is
+    hashed THROUGH, and identical bytes make the retarget invisible. Equal
+    content is the essential ingredient — differing content would let the
+    mutant pass on the hash difference alone.
+    """
+    _build_tree(tmp_path, leak_in=None)
+    store = tmp_path / "state" / "pr-watch"
+    store.mkdir(parents=True)
+    (store / "a.json").write_text('{"receipt": "identical bytes"}')
+    (store / "b.json").write_text('{"receipt": "identical bytes"}')
+    link = store / "live.json"
+    os.symlink(store / "a.json", link)
+    (tmp_path / "scripts" / "tests" / "test_live_retarget_probe.py").write_text(
+        "import os\n"
+        "from pathlib import Path\n"
+        "def test_retargets_a_live_state_symlink():\n"
+        f"    link = Path({str(link)!r})\n"
+        "    os.unlink(link)\n"
+        f"    os.symlink({str(store / 'b.json')!r}, link)\n"
+    )
+
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+
+    assert os.readlink(link) == str(store / "b.json"), (
+        "the planted test did not retarget the link, so this run proves nothing"
+    )
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, f"a live-target retarget was not caught:\n{combined}"
+    assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
+    assert "pr-watch/live.json" in combined, (
+        f"the guard fired but did not name the retargeted link:\n{combined}"
+    )
+
+
+def test_a_special_file_appearing_is_caught(tmp_path: Path) -> None:
+    """A fifo appearing under `state/` turns the run red — the `<special>` pin.
+
+    The `else` branch recording non-link/dir/file entries had no test at all:
+    both lenses of #459's round-1 panel mutated it to a silent skip — the
+    pre-#459 behaviour — and the whole suite stayed green while the CHANGELOG
+    promised the case. The parent is seeded into the baseline so the fifo is
+    the run's only change. Appearance is what this pins; a special file
+    REPLACED at a stable path compares `<special>` == `<special>` and is
+    documented as outside the snapshot's sight, not covered here.
+    """
+    _build_tree(tmp_path, leak_in=None)
+    (tmp_path / "state" / "pr-watch").mkdir(parents=True)
+    (tmp_path / "scripts" / "tests" / "test_fifo_probe.py").write_text(
+        "import os\n"
+        "from pathlib import Path\n"
+        "def test_writes_a_fifo_into_real_state():\n"
+        f"    os.mkfifo(Path({str(tmp_path)!r}) / 'state' / 'pr-watch' / 'node')\n"
+    )
+
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+
+    assert (tmp_path / "state" / "pr-watch" / "node").exists(), (
+        "the planted test did not create the fifo, so this run proves nothing"
+    )
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, f"a fifo appearing was not caught:\n{combined}"
+    assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
+    assert "pr-watch/node" in combined, (
+        f"the guard fired but did not name the fifo:\n{combined}"
+    )
+
+
+def test_a_symlink_beside_an_at_suffixed_file_is_caught(tmp_path: Path) -> None:
+    """A real file named `<name>@` must not mask a new symlink `<name>`.
+
+    #459's round-3 adversarial lens demonstrated this live against the
+    earlier key scheme, which recorded a link under `f"{relative}@"`: `@` is
+    a legal filename character, so a baseline file literally named `leak@`
+    occupied the link's key, sorted order put the file's hash over the
+    link's entry, and a brand-new symlink `leak` compared equal — an
+    invisible write into the real `state/`. The fix moved the kind marker
+    into the VALUE (`symlink -> <target>`), leaving every entry keyed by its
+    own path; this is the kill for any return to a kind-marking key suffix.
+    """
+    _build_tree(tmp_path, leak_in=None)
+    store = tmp_path / "state" / "pr-watch"
+    store.mkdir(parents=True)
+    (store / "leak@").write_text('{"an ordinary file whose name ends in @": true}')
+    (tmp_path / "scripts" / "tests" / "test_collision_probe.py").write_text(
+        "import os\n"
+        "from pathlib import Path\n"
+        "def test_symlinks_beside_the_at_file():\n"
+        f"    os.symlink('/nonexistent/target-a', Path({str(store / 'leak')!r}))\n"
+    )
+
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+
+    assert (store / "leak").is_symlink(), (
+        "the planted test did not create the link, so this run proves nothing"
+    )
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, (
+        f"a new symlink beside a `<name>@` file was not caught:\n{combined}"
+    )
+    assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
+    assert "pr-watch/leak" in combined, (
+        f"the guard fired but did not name the masked link:\n{combined}"
+    )
+
+
+def test_a_deleted_symlink_is_caught(tmp_path: Path) -> None:
+    """A symlink DELETED from the baseline turns the run red.
+
+    The CHANGELOG's #459 entry claims created, retargeted, *or deleted*; the
+    sibling tests pin the first two, and deletion is genuinely new to #459 —
+    before it a link had no snapshot entry, so there was nothing to
+    disappear. What this pins is the comparison's SYMMETRIC direction: the
+    changed-key walk unions baseline and after, so a key present only in the
+    baseline is a change, and no other test exercises that direction. Raised
+    by #459's round-2 adversarial lens as the one claim with no test behind
+    it.
+    """
+    _build_tree(tmp_path, leak_in=None)
+    store = tmp_path / "state" / "pr-watch"
+    store.mkdir(parents=True)
+    link = store / "receipt.json"
+    os.symlink("/nonexistent/target-a", link)
+    (tmp_path / "scripts" / "tests" / "test_unlink_probe.py").write_text(
+        "import os\n"
+        "from pathlib import Path\n"
+        "def test_deletes_a_state_symlink():\n"
+        f"    os.unlink(Path({str(link)!r}))\n"
+    )
+
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+
+    assert not os.path.lexists(link), (
+        "the planted test did not delete the link, so this run proves nothing"
+    )
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, f"a symlink deletion was not caught:\n{combined}"
+    assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
+    assert "pr-watch/receipt.json" in combined, (
+        f"the guard fired but did not name the deleted link:\n{combined}"
+    )
+
+
+def test_a_retargeted_symlink_is_caught(tmp_path: Path) -> None:
+    """A symlink whose TARGET moves while its path stays is a change.
+
+    The `symlink` rows in `_LEAK_KINDS` pin only that a link APPEARS. This
+    pins the value half: the snapshot records `os.readlink`, so two states
+    differing only in where an existing link points compare unequal. A
+    `<symlink>` sentinel value would pass every appearance case and read a
+    retarget as no change — the second blind spot #456 names, and the
+    mutation this test exists to kill. Both targets here are dangling, so the
+    branch-ORDER property is deliberately not this test's subject —
+    `test_a_live_symlink_retarget_to_equal_bytes_is_caught` carries that one.
+    """
+    _build_tree(tmp_path, leak_in=None)
+    link = tmp_path / "state" / "pr-watch" / "receipt.json"
+    link.parent.mkdir(parents=True)
+    os.symlink("/nonexistent/target-a", link)
+    (tmp_path / "scripts" / "tests" / "test_retarget_probe.py").write_text(
+        "import os\n"
+        "from pathlib import Path\n"
+        "def test_retargets_an_existing_state_symlink():\n"
+        f"    link = Path({str(link)!r})\n"
+        "    os.unlink(link)\n"
+        "    os.symlink('/nonexistent/target-b', link)\n"
+    )
+
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+
+    assert os.readlink(link) == "/nonexistent/target-b", (
+        "the planted test did not retarget the link, so this run proves nothing"
+    )
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, f"a retarget was not caught:\n{combined}"
+    assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
+    assert "pr-watch/receipt.json" in combined, (
+        f"the guard fired but did not name the retargeted link:\n{combined}"
+    )
 
 
 @pytest.mark.parametrize("shape", list(_SHAPES), ids=list(_SHAPES))

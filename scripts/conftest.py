@@ -35,7 +35,50 @@ Makefile's own shape), and for a bare `pytest .` at the repo root — in the kit
 flat layout and in a nested ``scripts/devkit/`` adopter layout, invoked from the
 repo root or from inside the engine directory.
 
-THE ONE RESIDUAL, stated because the paragraph above reads as total coverage.
+WHAT THIS GUARD IS — a tripwire against ACCIDENTAL regressions, the kind the
+first paragraph describes: an engine resolving its state path at import time
+and leaving a write behind. It is not a defence against a deliberate
+adversary, and cannot be: anyone who can pass arbitrary pytest flags
+(``--confcutdir=<engine-dir>/tests`` cuts this file off from an otherwise
+sanctioned invocation) or plant ``os._exit()`` in a test (no session finish,
+no comparison — equally true of SIGKILL and OOM) can just as easily edit this
+conftest. Both routes are dispositioned out of scope on #457. The fabricated-
+receipt language above says why the STORE is worth guarding, not that this
+guard resists fraud.
+
+WHAT IT OBSERVES — the real ``state/`` at TWO INSTANTS: conftest import and
+``pytest_sessionfinish``. The bracket is deliberate, not a shortcut, because
+``state/`` is a LIVE store: `pr_watch.py` persists into it on every poll, in
+ordinary cockpit operation, between and even during test sessions. Only a
+change ACROSS THIS SESSION is evidence of a suite defect; any wider window
+reads legitimate operation as a leak. Structurally outside its sight,
+therefore — the classes, not an enumeration of their members (#457):
+
+  - Anything ALREADY PRESENT at import. A previous run's uncleaned leak is in
+    the baseline and reported never again — by then it is indistinguishable
+    from legitimate store content to any mechanism that does not track
+    provenance, which is also why there is no cross-run baseline: one would
+    flag every legitimate `pr_watch` write made between sessions. The banner
+    says to clean up immediately, because the next run cannot say anything.
+  - Anything NETTING TO ZERO between the instants. A write undone before
+    session end leaves no persisted receipt for the merge gate to ever read,
+    so the harm the guard exists for did not occur. Watching the interval
+    instead — per-test snapshots, write audits — would flag a legitimate
+    concurrent writer (a backgrounded `pr_watch.py` poll does exactly this
+    during long suites) and trades a fail-closed limitation for a fail-open
+    mechanism, the harm `safety-critical-changes.md` rule 3 names.
+  - Anything written AFTER the second instant (#460). `pytest_sessionfinish`
+    runs before interpreter shutdown, so an ``atexit`` callback registered by
+    a test, a surviving non-daemon thread, or a child process that outlives
+    the session writes after the comparison has already passed — a green
+    run, exit 0, and the write on disk once the process is gone.
+    Demonstrated live by #459's round-4 adversarial lens, and pre-existing:
+    the bracket has never extended past this hook. Unlike the flag-and-signal
+    routes below, this needs no unusual privilege and no visible abnormality,
+    so it is tracked as a mechanism decision on #460 rather than disposed as
+    adversary-only.
+
+THE REACH RESIDUAL, separate from the observation window above.
 **Any run whose CWD is a test directory itself loses the guard** — the boundary
 is the working directory, not the argument. An earlier version of this paragraph
 said "with no argument", which undersold it; measured, all three of these are
@@ -65,8 +108,11 @@ broad one. **The trade is deliberate and the cost is not zero.** What it buys is
 #448 was actually found, and which no placement beside the tests could ever
 cover. The sanctioned invocations all name their directories by path: the
 Makefile passes both from the repo root, and `adopt.md`/`upgrade.md` tell
-adopters to run ``<engine-dir>/tests``. Narrowing the residual further is
-tracked separately rather than solved here.
+adopters to run ``<engine-dir>/tests``. Unlike the flag-and-signal routes
+above, this family IS in the threat model — ``cd tests && pytest -k thing``
+is ordinary iteration, not adversarial — so closing it is #455, kept its own
+change because a second registration point on a load-bearing guard is a new
+mechanism, not a fix.
 
 WHY THE ROOT RESOLUTION BELOW IS SELF-CONTAINED, and must stay that way:
 
@@ -85,6 +131,7 @@ WHY THE ROOT RESOLUTION BELOW IS SELF-CONTAINED, and must stay that way:
 from __future__ import annotations
 
 import hashlib
+import os
 import sys
 from pathlib import Path
 
@@ -115,7 +162,10 @@ def _hash_file(path: Path) -> str:
 
 
 def _real_state_snapshot() -> dict[str, str]:
-    """``{relpath: sha256}`` for every entry under the REAL ``<repo>/state/``.
+    """``{relpath: recorded kind}`` for every entry under the REAL ``<repo>/state/``.
+
+    The recorded kind is a content hash for a regular file, ``<dir>``,
+    ``symlink -> <target>``, or ``<special>`` — the branches below.
 
     Deliberately independent of ``$DEVKIT_STATE_ROOT`` and of
     ``_hermetic_state_root``: this reads straight off disk at ``REPO_ROOT /
@@ -132,27 +182,64 @@ def _real_state_snapshot() -> dict[str, str]:
     next engine to acquire this bug would land in the blind spot rather than
     trip the guard.
 
-    TWO THINGS THIS TRAVERSAL STILL CANNOT SEE, said here because the paragraph
-    above reads as though directories are now fully covered. Both predate this
-    file and are tracked (#457, #456) rather than fixed here:
+    EVERY ENTRY THE WALK YIELDS IS RECORDED AS SOMETHING (#457, #456).
+    Symlinks are tested FIRST, because ``is_dir()`` and ``is_file()`` both
+    FOLLOW a link: a dangling one used to answer False to both and land in
+    neither snapshot (#456), and a live one was recorded as its target's kind,
+    so a retarget between two existing files read as no change. A link is
+    recorded at its own path with the value ``symlink -> <target path>`` —
+    never the target's content, which would miss a retarget to equal bytes,
+    block forever on a fifo, and hash a whole tree for a link into a large
+    directory; the link itself is the leak. (The kind marker is in the value
+    because a key suffix collides — see the comment on the branch below.)
+    Anything that is none of link/dir/file — a fifo, a socket, a device
+    node — is recorded as ``<special>`` and never read. The root's own
+    presence is an entry too (``./``): ``rglob("*")`` yields descendants
+    only, so a run that did just ``state.mkdir()`` and wrote nothing below
+    it used to compare ``{}`` against ``{}`` (#457).
 
-      - ``state/`` ITSELF. ``rglob("*")`` enumerates descendants, never the root
-        it is called on, so a run that does only ``state.mkdir()`` and writes
-        nothing below it compares ``{}`` against ``{}``. The one real precedent,
-        `pr_watch.py`, always nests a level below and so is caught.
-      - A DANGLING SYMLINK. ``is_dir()`` and ``is_file()`` both follow the link
-        and both answer False for a broken one, so it lands in neither snapshot.
+    Still outside the traversal's sight — the known shapes, stated without
+    claiming to be the last:
+
+      - ``state/`` ITSELF BEING A SYMLINK, which the ``is_dir()`` at the top
+        of this function follows silently. Nothing in the kit creates one.
+      - REPLACEMENT AT A STABLE PATH, for any kind recorded as a CONSTANT. A
+        directory or special file deleted and recreated at the same path
+        between the two instants compares ``<dir>`` == ``<dir>`` or
+        ``<special>`` == ``<special>`` and reads as no change — only files
+        (content hash) and symlinks (target path) carry a value that can
+        differ. This predates #459 for directories and arrives with the
+        ``<special>`` branch for the rest; #459's round-1 adversarial lens
+        demonstrated it live with a fifo recreated at its baseline path.
+
+    And what any traversal records is one instant; what the guard can
+    conclude from comparing two of them is bounded by the module docstring's
+    observation-window section, a different mechanism with its own blind
+    spots.
     """
     state_dir = REPO_ROOT / "state"
     if not state_dir.is_dir():
         return {}
-    snapshot: dict[str, str] = {}
+    snapshot: dict[str, str] = {"./": "<dir>"}
     for path in sorted(state_dir.rglob("*")):
         relative = str(path.relative_to(state_dir))
-        if path.is_dir():
+        if path.is_symlink():
+            # The KIND marker lives in the VALUE, never in a key suffix. `@`
+            # is a legal filename character, so a `{relative}@` key collided
+            # with a real file literally named `<name>@` — sorted order put
+            # the file's hash over the link's entry, and a brand-new symlink
+            # beside such a file was invisible (demonstrated live by #459's
+            # round-3 adversarial lens). `/` is the one character POSIX
+            # forbids in a filename, which is why the directory keys below
+            # and the `./` root entry cannot collide with anything; every
+            # other kind records at its own path, one entry per path.
+            snapshot[relative] = f"symlink -> {os.readlink(path)}"
+        elif path.is_dir():
             snapshot[f"{relative}/"] = "<dir>"
         elif path.is_file():
             snapshot[relative] = _hash_file(path)
+        else:
+            snapshot[relative] = "<special>"
     return snapshot
 
 
@@ -252,7 +339,9 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     detail = (
         f"{summary} during this run instead of staying inside the per-test "
         "$DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) "
-        f"sets. Changed paths: {changed}"
+        f"sets. Changed paths: {changed}. Clean these up NOW: this report is "
+        "one-shot — a leak still on disk at the next run's conftest import is "
+        "absorbed into that run's baseline and never reported again (#457)."
     )
     reporter = session.config.pluginmanager.get_plugin("terminalreporter")
     if reporter is not None:

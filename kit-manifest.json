@@ -101,7 +101,7 @@
     },
     "scripts/conftest.py": {
       "role": "engine",
-      "sha256": "b0f69c8be3593e1ea1064564fbafa124cdf12906ccfe73399086e5259e60b9f8"
+      "sha256": "d2a8abce285a9736d18d4104e2459a27f8c570ced9b7c2cd5d021aca0b58eab6"
     },
     "scripts/dev_session.sh": {
       "role": "engine",
@@ -117,7 +117,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "544ac020bf221d3f3b706e5dcde2fa0f490df5bab561f72442b64c66f3174a5a"
+      "sha256": "3950fc0a741941d7ec8456a5866e64dd90f759e30d67f277077634d1f48b97b3"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [

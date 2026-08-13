@@ -42,6 +42,20 @@ starts.
 
 ---
 
+## #459 — 2026-08-13
+
+- **BREAKING (gate semantics)** — the #428 guard's snapshot now records a kind
+  for every entry the walk yields under `state/`: a symlink at its own path
+  with a `symlink -> <target path>` value, the root's own presence as `./`,
+  and any entry that is none of link/dir/file as `<special>`. A pytest run's
+  exit code now flips on writes that previously passed silently — a symlink
+  created, retargeted, or deleted under the real `state/`; a bare childless
+  `state/` created by the run; a fifo or socket appearing. This widens what
+  the snapshot sees, not everything the guard can conclude — the known
+  residuals stay documented in `<engine-dir>/conftest.py`'s own docstrings.
+  If your suite deliberately makes such entries, sandbox it via
+  `$DEVKIT_STATE_ROOT` before taking the new `<engine-dir>/conftest.py`.
+
 ## #453 — 2026-08-13
 
 - **BREAKING (gate semantics)** — the #428 guard is now split across **two** files

@@ -1602,7 +1602,7 @@ def test_record_install_refuses_to_overwrite_a_release_manifest(tmp_path, capsys
 def test_the_refusal_does_not_depend_on_required_by_existing(tmp_path, capsys):
     """The guard's first version needed a `required_by` edge to recognise a
     release manifest — but that is an emergent fact about today's import graph
-    (5 of 32 files have a dependent), not something `generate_manifest`
+    (most files have no dependent), not something `generate_manifest`
     guarantees. Stripping those keys — which a kit losing its last shared
     library would do on its own — made the guard silently stop firing and
     reproduced the original destructive overwrite at exit 0 (panel, adversarial
