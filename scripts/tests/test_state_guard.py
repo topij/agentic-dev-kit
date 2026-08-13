@@ -79,16 +79,33 @@ def _shapes(engine_rel: str) -> dict[str, list[str]]:
 
 _SHAPES = _shapes(_LAYOUTS["flat"])
 
-# What the planted test does to the real `state/`. Both are leaks the guard
-# claims to catch, and they exercise DIFFERENT branches of `_real_state_snapshot`:
-# `file` is caught by the file-hash entries, `dir` only by the trailing-slash
-# directory entries. The directory branch is the one that catches the next engine
-# to acquire #428's bug, since `pr_watch.py`'s first act on that path is
-# `STATE_DIR.mkdir(parents=True, exist_ok=True)` — an engine that creates its
-# directory and writes no file in the same run is invisible to a files-only
-# snapshot. Measured: with the snapshot reduced to files only, every file-leak
-# case here still passes and only the `dir` cases fail.
-_LEAK_KINDS = ("file", "dir")
+# What the planted test does to the real `state/`. All three are leaks the guard
+# claims to catch, and each is caught by a DIFFERENT property of
+# `_real_state_snapshot`, so each pins a branch the others leave free:
+#
+#   file       a new path appears  → the file-hash entries
+#   dir        a new directory appears and no file is written → the
+#              trailing-slash directory entries. This is the branch that catches
+#              the next engine to acquire #428's bug, since `pr_watch.py`'s first
+#              act on that path is `STATE_DIR.mkdir(parents=True,
+#              exist_ok=True)`. Measured: reduce the snapshot to files only and
+#              exactly the `dir` cases fail.
+#   overwrite  an EXISTING file's bytes change while its path stays → the
+#              CONTENT-sensitivity of `_hash_file`. This is the shape #428
+#              actually happened as: "an ordinary run overwrote this repo's own
+#              state/pr-watch/1.json and 4242.json with fixture data". A snapshot
+#              that recorded mere presence would miss it entirely, and every
+#              add-shaped case above would still pass — measured: replace
+#              `_hash_file(path)` with a constant and the full suite reports
+#              1208 passed, 1 deselected, exit 0, a clean survivor.
+_LEAK_KINDS = ("file", "dir", "overwrite")
+
+# Seeded into the throwaway `state/` before pytest starts, so it is part of the
+# baseline the guard takes at conftest import, and overwritten by the planted
+# test. The two must differ in content while sharing a path — that difference is
+# the whole of what the `overwrite` kind detects.
+_SEEDED = '{"seeded": true}'
+_OVERWRITTEN = '{"fixture": "overwrote the real receipt"}'
 
 
 def _build_tree(
@@ -117,11 +134,20 @@ def _build_tree(
             "    d.mkdir(parents=True, exist_ok=True)\n"
             "    (d / '9999.json').write_text('{}')\n"
         )
-    else:
+    elif leak_kind == "dir":
         # No file written at all — exactly `pr_watch.py`'s import-time mkdir.
         leak_stmt = (
             f"    d = Path({str(root)!r}) / 'state' / 'brand-new-engine'\n"
             "    d.mkdir(parents=True, exist_ok=True)\n"
+        )
+    else:
+        # Seeded BEFORE pytest starts, so the baseline holds its original hash;
+        # the planted test then changes the bytes at a path that already existed.
+        seeded = root / "state" / "pr-watch" / "1.json"
+        seeded.parent.mkdir(parents=True, exist_ok=True)
+        seeded.write_text(_SEEDED)
+        leak_stmt = (
+            f"    p = Path({str(seeded)!r})\n    p.write_text({_OVERWRITTEN!r})\n"
         )
     leak_body = "from pathlib import Path\ndef test_writes_into_real_state():\n" + leak_stmt
     inert_body = "def test_inert():\n    assert True\n"
@@ -131,12 +157,30 @@ def _build_tree(
         (directory / f"test_{name}_probe.py").write_text(body)
 
 
+_LEAK_PATHS = {
+    "file": ("state/pr-watch/9999.json", "9999.json"),
+    "dir": ("state/brand-new-engine", "brand-new-engine/"),
+    "overwrite": ("state/pr-watch/1.json", "pr-watch/1.json"),
+}
+
+
 def _leaked_path(root: Path, leak_kind: str) -> Path:
-    return (
-        root / "state" / "pr-watch" / "9999.json"
-        if leak_kind == "file"
-        else root / "state" / "brand-new-engine"
-    )
+    return root / _LEAK_PATHS[leak_kind][0]
+
+
+def _leak_landed(root: Path, leak_kind: str) -> bool:
+    """Whether the planted test's write actually happened.
+
+    Existence is the test for the two add-shaped kinds and is NOT for
+    ``overwrite``, whose path exists either way — there the question is whether
+    the bytes changed. Getting this wrong would make the `overwrite` case pass
+    against a guard that never fired, which is the failure this whole file
+    exists to make impossible.
+    """
+    path = _leaked_path(root, leak_kind)
+    if leak_kind == "overwrite":
+        return path.is_file() and path.read_text() == _OVERWRITTEN
+    return path.exists()
 
 
 def _run_pytest(
@@ -163,9 +207,10 @@ def _run_pytest(
 
 
 def _assert_guard_fired(
-    result: subprocess.CompletedProcess[str], leaked: Path, names: str
+    result: subprocess.CompletedProcess[str], root: Path, leak_kind: str
 ) -> None:
-    if not leaked.exists():
+    leaked = _leaked_path(root, leak_kind)
+    if not _leak_landed(root, leak_kind):
         pytest.fail(
             f"the planted test did not write {leaked}, so this run proves nothing "
             f"about the guard.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
@@ -176,7 +221,8 @@ def _assert_guard_fired(
     )
     combined = result.stdout + result.stderr
     assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
-    assert names in combined, f"the guard fired but did not name the changed path:\n{combined}"
+    named = _LEAK_PATHS[leak_kind][1]
+    assert named in combined, f"the guard fired but did not name the changed path:\n{combined}"
 
 
 # (shape, which directory leaks). Written out rather than crossed with `_SHAPES`,
@@ -210,11 +256,7 @@ def test_guard_catches_a_write_into_real_state(
     """
     _build_tree(tmp_path, leak_in=leak_in, leak_kind=leak_kind)
     result = _run_pytest(tmp_path, _SHAPES[shape])
-    _assert_guard_fired(
-        result,
-        _leaked_path(tmp_path, leak_kind),
-        "9999.json" if leak_kind == "file" else "brand-new-engine/",
-    )
+    _assert_guard_fired(result, tmp_path, leak_kind)
 
 
 @pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
@@ -244,7 +286,7 @@ def test_guard_reaches_every_layout_and_working_directory(
         args, cwd = ["lib/state_paths/tests"], tmp_path / engine_rel
 
     result = _run_pytest(tmp_path, args, cwd=cwd)
-    _assert_guard_fired(result, _leaked_path(tmp_path, "file"), "9999.json")
+    _assert_guard_fired(result, tmp_path, "file")
 
 
 @pytest.mark.parametrize("shape", list(_SHAPES), ids=list(_SHAPES))

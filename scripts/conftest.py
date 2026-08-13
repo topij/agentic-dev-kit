@@ -36,14 +36,32 @@ flat layout and in a nested ``scripts/devkit/`` adopter layout, invoked from the
 repo root or from inside the engine directory.
 
 THE ONE RESIDUAL, stated because the paragraph above reads as total coverage.
-`cd <engine-dir>/tests && pytest` does NOT carry the guard: with no argument,
-pytest's confcutdir becomes the cwd and no ancestor conftest is loaded. That
-shape did carry it while the guard lived in that directory, so this placement
-trades a narrow shape for a broad one. It is not a sanctioned invocation — the
-Makefile names both directories from the repo root, and `adopt.md`/`upgrade.md`
-tell adopters to run ``<engine-dir>/tests`` — whereas the shape this buys is
-exactly what an agent reaches for while iterating on ``state_paths``, which is
-where #448 was found.
+**Any run whose CWD is a test directory itself loses the guard** — the boundary
+is the working directory, not the argument. An earlier version of this paragraph
+said "with no argument", which undersold it; measured, all three of these are
+silent on a write into the real ``state/``:
+
+    cd <engine-dir>/tests && pytest                  # rc=0, no banner
+    cd <engine-dir>/tests && pytest test_pr_watch.py # rc=0, no banner
+    cd <engine-dir>/tests && pytest .                # rc=0, no banner
+
+while both of these fire correctly:
+
+    cd <engine-dir> && pytest tests                  # rc=1, banner
+    pytest <engine-dir>/tests                        # rc=1, banner
+
+pytest resolves its rootdir — and with it confcutdir — from the cwd and the
+arguments together, so standing inside the directory cuts off every conftest
+above it however the run is spelled. That whole family carried the guard while
+it lived in that directory, so this placement trades a real and ordinary shape
+(``cd <engine-dir>/tests && pytest test_x.py -k thing`` while iterating) for a
+broad one. **The trade is deliberate and the cost is not zero.** What it buys is
+`pytest <engine-dir>/lib/state_paths/tests` from the repo root — which is where
+#448 was actually found, and which no placement beside the tests could ever
+cover. The sanctioned invocations all name their directories by path: the
+Makefile passes both from the repo root, and `adopt.md`/`upgrade.md` tell
+adopters to run ``<engine-dir>/tests``. Narrowing the residual further is
+tracked separately rather than solved here.
 
 WHY THE ROOT RESOLUTION BELOW IS SELF-CONTAINED, and must stay that way:
 
