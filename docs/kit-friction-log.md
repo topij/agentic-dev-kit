@@ -49,7 +49,6 @@ Proposed fix: say so where the guard's failure is explained — a run that fails
 running. Related: `#457`, which collects what the guard cannot see; this is the opposite
 direction, what it sees that is not the suite's doing.
 
-
 **`parallel-headless.md` requires an `env` map that the runtime the kit ships an adapter
 for cannot supply.** Severity **M**. The contract makes the descriptor's `env` field
 mandatory for an unattended lane and says a fan-out tool that cannot replace the spawned

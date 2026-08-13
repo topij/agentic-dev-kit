@@ -55,11 +55,14 @@ together. Merged as `175bda0`; `make test` at the kit root on the merged tip is 
   permanently outside what it can see. A resolution that keeps the two-instant design
   should say so instead of enumerating; one that watches the interval closes every route
   that nets to zero across them.
-- **A count beside a list went stale within one round, in the file that teaches this.**
-  I wrote "TWO THINGS THIS TRAVERSAL STILL CANNOT SEE" and the next round found a third.
-  `fallback-review-panel.md` records that exact lesson — enumerate, never count — from
-  getting a consumer count wrong twice. Dropping volatile figures from the record is not
-  a style preference; it is the repair that keeps working.
+- **Every count I wrote about my own work was wrong or went stale, including in this
+  block.** Its first draft tallied rounds run, defects found, lens runs, and open routes
+  on a ticket still growing; `wrap-up.md`'s own rule caught them before the commit. An
+  earlier attempt to illustrate the same lesson was itself inaccurate — I claimed a
+  "TWO THINGS THIS TRAVERSAL CANNOT SEE" count had gone stale, when the later finding was
+  a blind spot in the *comparison of two instants*, not in the traversal's enumeration, so
+  that count still stands. `fallback-review-panel.md` teaches this as enumerate-never-count;
+  what this session adds is that the reflex extends to the sentence explaining the reflex.
 - **The panel's own attestation cannot catch a shared-`.git` write.** A lens fetched into
   the linked worktree it was handed; `git status` was clean before and after, because a
   ref write touches no working-tree byte. Self-reporting was the only detection route,
