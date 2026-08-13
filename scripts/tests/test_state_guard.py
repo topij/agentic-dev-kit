@@ -55,14 +55,17 @@ pytestmark = pytest.mark.skipif(
     reason=f"the engine-root conftest carrying the #428 guard is not vendored here: {ENGINE_CONFTEST}",
 )
 
-# Every sanctioned invocation shape, as (id, pytest arguments). `make test`
-# passes both directories; an agent iterating on one subsystem passes one.
-_SHAPES = [
-    ("both-dirs", ["scripts/lib/state_paths/tests", "scripts/tests"]),
-    ("tests-only", ["scripts/tests"]),
-    ("state-paths-only", ["scripts/lib/state_paths/tests"]),
-    ("repo-root", ["."]),
-]
+# Every sanctioned invocation shape, keyed by id. `make test` passes both
+# directories; an agent iterating on one subsystem passes one. Keyed rather than
+# a positional list because `_LEAK_CASES` below selects from it: an index would
+# let a reordering here silently change which shape each leak case exercises,
+# and every test would still pass.
+_SHAPES = {
+    "both-dirs": ["scripts/lib/state_paths/tests", "scripts/tests"],
+    "tests-only": ["scripts/tests"],
+    "state-paths-only": ["scripts/lib/state_paths/tests"],
+    "repo-root": ["."],
+}
 
 
 def _build_tree(root: Path, *, leak_in: str | None) -> None:
@@ -121,28 +124,26 @@ def _run_pytest(root: Path, args: list[str]) -> subprocess.CompletedProcess[str]
 # that pairing would assert the guard stayed silent about a write that never
 # happened — a passing test measuring nothing.
 _LEAK_CASES = [
-    ("both-dirs-leak-in-tests", _SHAPES[0][1], "tests"),
-    ("both-dirs-leak-in-state-paths", _SHAPES[0][1], "state_paths"),
-    ("tests-only", _SHAPES[1][1], "tests"),
-    ("state-paths-only", _SHAPES[2][1], "state_paths"),
-    ("repo-root-leak-in-tests", _SHAPES[3][1], "tests"),
-    ("repo-root-leak-in-state-paths", _SHAPES[3][1], "state_paths"),
+    ("both-dirs", "tests"),
+    ("both-dirs", "state_paths"),
+    ("tests-only", "tests"),
+    ("state-paths-only", "state_paths"),
+    ("repo-root", "tests"),
+    ("repo-root", "state_paths"),
 ]
 
 
 @pytest.mark.parametrize(
-    ("shape", "args", "leak_in"), _LEAK_CASES, ids=[c[0] for c in _LEAK_CASES]
+    ("shape", "leak_in"), _LEAK_CASES, ids=[f"{s}-leak-in-{d}" for s, d in _LEAK_CASES]
 )
-def test_guard_catches_a_write_into_real_state(
-    tmp_path: Path, shape: str, args: list[str], leak_in: str
-) -> None:
+def test_guard_catches_a_write_into_real_state(tmp_path: Path, shape: str, leak_in: str) -> None:
     """A leak anywhere in the collected set turns the run red, in every shape.
 
     ``state-paths-only`` is #448 exactly: before the guard moved to the engine
     root, that row exited 0 with the write sitting on disk.
     """
     _build_tree(tmp_path, leak_in=leak_in)
-    result = _run_pytest(tmp_path, args)
+    result = _run_pytest(tmp_path, _SHAPES[shape])
 
     leaked = tmp_path / "state" / "pr-watch" / "9999.json"
     if not leaked.exists():
@@ -162,8 +163,8 @@ def test_guard_catches_a_write_into_real_state(
     )
 
 
-@pytest.mark.parametrize(("shape", "args"), _SHAPES, ids=[s for s, _ in _SHAPES])
-def test_guard_is_silent_when_nothing_writes(tmp_path: Path, shape: str, args: list[str]) -> None:
+@pytest.mark.parametrize("shape", list(_SHAPES), ids=list(_SHAPES))
+def test_guard_is_silent_when_nothing_writes(tmp_path: Path, shape: str) -> None:
     """The negative control: no leak, no banner, exit 0.
 
     Without this, a guard that failed EVERY run would satisfy the tests above
@@ -171,7 +172,7 @@ def test_guard_is_silent_when_nothing_writes(tmp_path: Path, shape: str, args: l
     cannot see.
     """
     _build_tree(tmp_path, leak_in=None)
-    result = _run_pytest(tmp_path, args)
+    result = _run_pytest(tmp_path, _SHAPES[shape])
 
     combined = result.stdout + result.stderr
     assert result.returncode == 0, f"a clean run was failed by the guard:\n{combined}"
