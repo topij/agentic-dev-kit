@@ -174,15 +174,16 @@ def _real_state_snapshot() -> dict[str, str]:
     FOLLOW a link: a dangling one used to answer False to both and land in
     neither snapshot (#456), and a live one was recorded as its target's kind,
     so a retarget between two existing files read as no change. A link is
-    recorded under a trailing-``@`` key as its TARGET PATH — never the
-    target's content, which would miss a retarget to equal bytes, block
-    forever on a fifo, and hash a whole tree for a link into a large
-    directory; the link itself is the leak. Anything that is none of
-    link/dir/file — a fifo, a socket, a device node — is recorded as
-    ``<special>`` and never read. The root's own presence is an entry too
-    (``./``): ``rglob("*")`` yields descendants only, so a run that did just
-    ``state.mkdir()`` and wrote nothing below it used to compare ``{}``
-    against ``{}`` (#457).
+    recorded at its own path with the value ``symlink -> <target path>`` —
+    never the target's content, which would miss a retarget to equal bytes,
+    block forever on a fifo, and hash a whole tree for a link into a large
+    directory; the link itself is the leak. (The kind marker is in the value
+    because a key suffix collides — see the comment on the branch below.)
+    Anything that is none of link/dir/file — a fifo, a socket, a device
+    node — is recorded as ``<special>`` and never read. The root's own
+    presence is an entry too (``./``): ``rglob("*")`` yields descendants
+    only, so a run that did just ``state.mkdir()`` and wrote nothing below
+    it used to compare ``{}`` against ``{}`` (#457).
 
     Still outside the traversal's sight — the known shapes, stated without
     claiming to be the last:
@@ -210,7 +211,16 @@ def _real_state_snapshot() -> dict[str, str]:
     for path in sorted(state_dir.rglob("*")):
         relative = str(path.relative_to(state_dir))
         if path.is_symlink():
-            snapshot[f"{relative}@"] = os.readlink(path)
+            # The KIND marker lives in the VALUE, never in a key suffix. `@`
+            # is a legal filename character, so a `{relative}@` key collided
+            # with a real file literally named `<name>@` — sorted order put
+            # the file's hash over the link's entry, and a brand-new symlink
+            # beside such a file was invisible (demonstrated live by #459's
+            # round-3 adversarial lens). `/` is the one character POSIX
+            # forbids in a filename, which is why the directory keys below
+            # and the `./` root entry cannot collide with anything; every
+            # other kind records at its own path, one entry per path.
+            snapshot[relative] = f"symlink -> {os.readlink(path)}"
         elif path.is_dir():
             snapshot[f"{relative}/"] = "<dir>"
         elif path.is_file():

@@ -45,9 +45,9 @@ starts.
 ## #459 — 2026-08-13
 
 - **BREAKING (gate semantics)** — the #428 guard's snapshot enumeration is now
-  exhaustive over `state/` entries: a symlink is recorded by its TARGET PATH
-  under a trailing-`@` key, the root's own presence as `./`, and any entry that
-  is none of link/dir/file as `<special>`. A pytest run's exit code now flips
+  exhaustive over `state/` entries: a symlink is recorded at its own path with
+  a `symlink -> <target path>` value, the root's own presence as `./`, and any
+  entry that is none of link/dir/file as `<special>`. A pytest run's exit code now flips
   on writes that previously passed silently — a symlink created, retargeted, or
   deleted under the real `state/`; a bare childless `state/` created by the
   run; a fifo or socket appearing. If your suite deliberately makes such

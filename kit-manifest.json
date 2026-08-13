@@ -101,7 +101,7 @@
     },
     "scripts/conftest.py": {
       "role": "engine",
-      "sha256": "fb06439ad4917d32f4c23acd6eab4d5e17d6557cda1213ec1e03c6ff66da7848"
+      "sha256": "88e78cfd25868cb4ec32a530f76c89bd330861dc242b21c6b6f1971095ad2f6d"
     },
     "scripts/dev_session.sh": {
       "role": "engine",

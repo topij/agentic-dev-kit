@@ -115,12 +115,12 @@ _SHAPES = _shapes(_LAYOUTS["flat"])
 #              `_hash_file(path)` with a constant fails exactly these cases and
 #              no others, and survived the suite entirely before they existed.
 #   symlink    a DANGLING link appears in a directory that already existed →
-#              the trailing-`@` link entries, tested before `is_dir`/`is_file`
-#              because both FOLLOW a link and answer False for a broken one,
-#              which is how this kind passed every snapshot before #457 closed
-#              it (#456). The parent is seeded into the baseline so the link is
-#              the run's ONLY change — otherwise these cases would merely
-#              re-pin the `dir` branch.
+#              the `symlink -> <target>`-valued entries, tested before
+#              `is_dir`/`is_file` because both FOLLOW a link and answer False
+#              for a broken one, which is how this kind passed every snapshot
+#              before #457 closed it (#456). The parent is seeded into the
+#              baseline so the link is the run's ONLY change — otherwise these
+#              cases would merely re-pin the `dir` branch.
 #   bare-root  `state/` itself appears, childless → the `./` root entry.
 #              `rglob("*")` yields descendants only, never the root it is
 #              called on, so before #457 this compared `{}` against `{}`.
@@ -219,7 +219,7 @@ _LEAK_PATHS = {
     "file": ("state/pr-watch/9999.json", "9999.json"),
     "dir": ("state/brand-new-engine", "brand-new-engine/"),
     "overwrite": ("state/pr-watch/1.json", "pr-watch/1.json"),
-    "symlink": ("state/pr-watch/2222.json", "pr-watch/2222.json@"),
+    "symlink": ("state/pr-watch/2222.json", "pr-watch/2222.json"),
     # The whole rendered list, not a fragment: `./` alone is a substring of
     # too much other output to discriminate, and asserting the full list also
     # pins that the root entry is the run's ONLY change.
@@ -408,7 +408,7 @@ def test_a_live_symlink_retarget_to_equal_bytes_is_caught(tmp_path: Path) -> Non
     combined = result.stdout + result.stderr
     assert result.returncode != 0, f"a live-target retarget was not caught:\n{combined}"
     assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
-    assert "pr-watch/live.json@" in combined, (
+    assert "pr-watch/live.json" in combined, (
         f"the guard fired but did not name the retargeted link:\n{combined}"
     )
 
@@ -446,6 +446,44 @@ def test_a_special_file_appearing_is_caught(tmp_path: Path) -> None:
     )
 
 
+def test_a_symlink_beside_an_at_suffixed_file_is_caught(tmp_path: Path) -> None:
+    """A real file named `<name>@` must not mask a new symlink `<name>`.
+
+    #459's round-3 adversarial lens demonstrated this live against the
+    earlier key scheme, which recorded a link under `f"{relative}@"`: `@` is
+    a legal filename character, so a baseline file literally named `leak@`
+    occupied the link's key, sorted order put the file's hash over the
+    link's entry, and a brand-new symlink `leak` compared equal — an
+    invisible write into the real `state/`. The fix moved the kind marker
+    into the VALUE (`symlink -> <target>`), leaving every entry keyed by its
+    own path; this is the kill for any return to a kind-marking key suffix.
+    """
+    _build_tree(tmp_path, leak_in=None)
+    store = tmp_path / "state" / "pr-watch"
+    store.mkdir(parents=True)
+    (store / "leak@").write_text('{"an ordinary file whose name ends in @": true}')
+    (tmp_path / "scripts" / "tests" / "test_collision_probe.py").write_text(
+        "import os\n"
+        "from pathlib import Path\n"
+        "def test_symlinks_beside_the_at_file():\n"
+        f"    os.symlink('/nonexistent/target-a', Path({str(store / 'leak')!r}))\n"
+    )
+
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+
+    assert (store / "leak").is_symlink(), (
+        "the planted test did not create the link, so this run proves nothing"
+    )
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, (
+        f"a new symlink beside a `<name>@` file was not caught:\n{combined}"
+    )
+    assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
+    assert "pr-watch/leak" in combined, (
+        f"the guard fired but did not name the masked link:\n{combined}"
+    )
+
+
 def test_a_deleted_symlink_is_caught(tmp_path: Path) -> None:
     """A symlink DELETED from the baseline turns the run red.
 
@@ -478,7 +516,7 @@ def test_a_deleted_symlink_is_caught(tmp_path: Path) -> None:
     combined = result.stdout + result.stderr
     assert result.returncode != 0, f"a symlink deletion was not caught:\n{combined}"
     assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
-    assert "pr-watch/receipt.json@" in combined, (
+    assert "pr-watch/receipt.json" in combined, (
         f"the guard fired but did not name the deleted link:\n{combined}"
     )
 
@@ -516,7 +554,7 @@ def test_a_retargeted_symlink_is_caught(tmp_path: Path) -> None:
     combined = result.stdout + result.stderr
     assert result.returncode != 0, f"a retarget was not caught:\n{combined}"
     assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
-    assert "pr-watch/receipt.json@" in combined, (
+    assert "pr-watch/receipt.json" in combined, (
         f"the guard fired but did not name the retargeted link:\n{combined}"
     )
 
