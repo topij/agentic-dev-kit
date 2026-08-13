@@ -446,6 +446,43 @@ def test_a_special_file_appearing_is_caught(tmp_path: Path) -> None:
     )
 
 
+def test_a_deleted_symlink_is_caught(tmp_path: Path) -> None:
+    """A symlink DELETED from the baseline turns the run red.
+
+    The CHANGELOG's #459 entry claims created, retargeted, *or deleted*; the
+    sibling tests pin the first two, and deletion is genuinely new to #459 —
+    before it a link had no snapshot entry, so there was nothing to
+    disappear. What this pins is the comparison's SYMMETRIC direction: the
+    changed-key walk unions baseline and after, so a key present only in the
+    baseline is a change, and no other test exercises that direction. Raised
+    by #459's round-2 adversarial lens as the one claim with no test behind
+    it.
+    """
+    _build_tree(tmp_path, leak_in=None)
+    store = tmp_path / "state" / "pr-watch"
+    store.mkdir(parents=True)
+    link = store / "receipt.json"
+    os.symlink("/nonexistent/target-a", link)
+    (tmp_path / "scripts" / "tests" / "test_unlink_probe.py").write_text(
+        "import os\n"
+        "from pathlib import Path\n"
+        "def test_deletes_a_state_symlink():\n"
+        f"    os.unlink(Path({str(link)!r}))\n"
+    )
+
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+
+    assert not os.path.lexists(link), (
+        "the planted test did not delete the link, so this run proves nothing"
+    )
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, f"a symlink deletion was not caught:\n{combined}"
+    assert _BANNER in combined, f"no #428 banner in output:\n{combined}"
+    assert "pr-watch/receipt.json@" in combined, (
+        f"the guard fired but did not name the deleted link:\n{combined}"
+    )
+
+
 def test_a_retargeted_symlink_is_caught(tmp_path: Path) -> None:
     """A symlink whose TARGET moves while its path stays is a change.
 
