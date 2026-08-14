@@ -20,9 +20,9 @@ Last updated: 2026-08-14 — `#470` merged; filed `#463`–`#469`.
 
 **Theme —** the friction-log graduation the previous block's `▶ Next:` named, run in
 the workflow's LLM-only mode on the operator's bulk approval — "Slack proposals
-reviewed. lgtm". Filed `#463`–`#469`, an occurrence comment on `#450`, the inbox swept
-byte-exact against the frozen digest, merged on `#470` (`b7f8d4f`) with CodeRabbit's
-own clean review. The friction log is under its budget again, so the session-start
+reviewed. lgtm". Filed `#463`–`#469`, posted an occurrence comment on `#450`, swept the inbox
+byte-exact against the frozen digest, and merged the sweep on `#470` (`b7f8d4f`) with
+CodeRabbit's own clean review. The friction log is under its budget again, so the session-start
 tripwire quiets.
 
 - **`#463` is the batch's center of mass** — the disposition-carrying gap, filed with
@@ -32,7 +32,7 @@ tripwire quiets.
   the shell execute every backticked fragment, corrupting the `#450` comment — exit 0,
   caught only by reading the posted body back. Repaired in place (`-F body=@file`, per
   `#122`), re-verified fragment by fragment, occurrence recorded on `#251`.
-- Both of the morning's merges (`#470`, and `#462` the night before) landed on the
+- The morning's merge (`#470`) and the prior night's (`#462`) both landed on the
   bot's own clean review with no recordable receipt — `#350`'s vocabulary gap, its
   occurrence already on that issue.
 
