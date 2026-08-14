@@ -14,10 +14,35 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-13 — `#459` merged, closing `#456` and `#457`. Filed this
-session: `#460`, `#461`.
+Last updated: 2026-08-14 — `#470` merged; filed `#463`–`#469`.
 
-## Latest session — 2026-08-13 (the #457 ruling: two instants kept, six rounds to hold one guard)
+## Latest session — 2026-08-14 (the approved sweep, executed)
+
+**Theme —** the friction-log graduation the previous block's `▶ Next:` named, run in
+the workflow's LLM-only mode on the operator's bulk approval — "Slack proposals
+reviewed. lgtm". Filed `#463`–`#469`, an occurrence comment on `#450`, the inbox swept
+byte-exact against the frozen digest, merged on `#470` (`b7f8d4f`) with CodeRabbit's
+own clean review. The friction log is under its budget again, so the session-start
+tripwire quiets.
+
+- **`#463` is the batch's center of mass** — the disposition-carrying gap, filed with
+  its occurrences enumerated, including `#459` round 5's live demonstration that a
+  restated disposition is framing plus a second copy going stale.
+- **`#251` recurred inside the batch's own writes:** a double-quoted comment body let
+  the shell execute every backticked fragment, corrupting the `#450` comment — exit 0,
+  caught only by reading the posted body back. Repaired in place (`-F body=@file`, per
+  `#122`), re-verified fragment by fragment, occurrence recorded on `#251`.
+- Both of the morning's merges (`#470`, and `#462` the night before) landed on the
+  bot's own clean review with no recordable receipt — `#350`'s vocabulary gap, its
+  occurrence already on that issue.
+
+▶ Next: several threads, none blocking — open with `session-start`. The operator-held
+decisions are `#372` (review-quota posture, now carrying `#459`'s six-panel data
+point) and `#460` (the bracket question); `#455` is the clean self-contained build.
+
+______________________________________________________________________
+
+## Session — 2026-08-13 (the #457 ruling: two instants kept, six rounds to hold one guard)
 
 **Theme —** `#457` ruled and shipped (`#459`, squash `7ef068c`): the `#428` guard keeps
 comparing two instants, because `state/` is a live store `pr_watch.py` writes between
