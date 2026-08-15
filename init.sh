@@ -538,11 +538,15 @@ migrate_kit_schema() {
   ensure_review_key noise_markers '  # Read by pr_watch.py. These used to be literals inside the engine, which meant
   # adopting required EDITING the engine — and an edited engine can never be
   # replaced by a kit update (Principle #10).
+  #
+  # Matched against a comment body with NO author check, so an entry here also
+  # discards a HUMAN comment quoting the text. Prefer a structural marker (an
+  # HTML comment the bot emits) over bot prose. Kit issue #468 retired the
+  # count-phrased entry that used to sit here: it had never matched anything.
   noise_markers:
     - "<!-- this is an auto-generated comment: summarize by coderabbit"
     - "<!-- this is an auto-generated comment: review in progress"
     - "<!-- walkthrough_start -->"
-    - "actionable comments posted: 0"
     - "<!-- linear-linkback -->"' || true
 
   ensure_review_key unavailable_markers '  unavailable_markers:
