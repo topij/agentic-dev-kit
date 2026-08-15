@@ -85,7 +85,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "4e2b2569443309182d99d3fdddfe93d14a14d7ea38f621641c7c27755598b15d"
+      "sha256": "03df08a379de638b4511bf409016a7077172308d2cc25602c40b3d31e1007a33"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -179,7 +179,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "2f30e034543c02c87e6d63f14566a78a5bcb55070c4279f61806dde270739641"
+      "sha256": "e4d68854b50834db5d7aaacd8f693ccb994552cb449d7d93a422c53e81bb200c"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
