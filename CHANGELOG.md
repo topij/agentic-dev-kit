@@ -42,6 +42,21 @@ starts.
 
 ---
 
+## #475 — 2026-08-15
+
+- **CHANGED (engine CLI surface)** — `kit_doctor.py --generate-manifest`'s
+  `wrote <path> (...)` status line now prints to **stderr** instead of
+  stdout. The tool always wrote `kit-manifest.json` itself, through its own
+  descriptor; redirecting stdout to that same default path
+  (`kit_doctor.py --generate-manifest > kit-manifest.json`) used to make the
+  status line land on the redirect's own descriptor and overwrite the file's
+  opening bytes with itself — a silently corrupted manifest, exit 0 (#464).
+  If you were capturing that status line from stdout, read it from stderr
+  instead; if you were relying on the `>` redirect to produce the file at
+  all, stop — the tool writes it regardless of any redirect, and the
+  redirect was the corruption vector, not a valid way to select the output
+  path.
+
 ## #459 — 2026-08-13
 
 - **BREAKING (gate semantics)** — the #428 guard's snapshot now records a kind
