@@ -214,8 +214,13 @@ shared handoff — an aggregate "everything's done" is not evidence a specific l
 shipped:
 
 ```bash
-scripts/reconcile_sessions.sh <scope-1> <scope-2> …   # merged / parked / open, per lane
+scripts/reconcile_sessions.sh <scope-1> <scope-2> …   # merged / held / parked / open
 ```
+
+`held` is an operator-class lane whose PR is already merge-ready (green, review-clean,
+receipt bound to head): the batch cannot advance it, only your merge decision can. It
+exits **4** when every lane is merged or held — distinct from 0, because a held lane
+has not landed.
 
 **Merge an eligible self-merge lane** through the safety wrapper. It reads the
 persisted class and branch, resolves the open PR, re-polls `pr-watch`, and merges only
