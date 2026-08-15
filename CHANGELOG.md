@@ -47,8 +47,14 @@ starts.
 - **CHANGED (gate semantics)** — `mergeable` no longer requires a `--record-review`
   receipt in every case. It is now satisfied by current-head independent-review
   **evidence** from either of two routes: a receipt bound to the head (unchanged), or a
-  configured `review.bots` entry whose own review covers that exact head. **If you
-  record a receipt on a PR your review bot already reviewed, stop — you no longer need
+  configured `review.bots` entry whose own review covers that exact head **and carries a
+  standing verdict** — `APPROVED` or `COMMENTED`. A review that is `DISMISSED`,
+  `PENDING`, `CHANGES_REQUESTED`, or in any state this engine does not recognize is
+  **not** evidence, and leaves the receipt requirement standing. Note especially the
+  `CHANGES_REQUESTED` case if you relied on the separate `reviewDecision` blocker to
+  cover it: that field reports the PR's aggregate decision over *required* reviewers, so
+  it reads `""` while a non-required bot is asking for changes. **If you record a receipt
+  on a PR your review bot already reviewed, stop — you no longer need
   to, and every available `<source>` literal names a fallback pass that did not run.**
   A repo with `review.bots: []` is unaffected: with no configured bot there is no
   coverage route, and the receipt stays the only way through. Nothing is loosened for
@@ -65,6 +71,12 @@ starts.
   receipt-describing keys — `source`, `lenses`, `override`, `bot_signal` — are
   unchanged and stay receipt-only, so they are `null`/`[]` on the coverage route.
   `#350`.
+- **ADDED (report shape)** — each `review_bots.coverage[]` entry gains a **`state`** key:
+  the upper-cased GitHub review state of that bot's last review, or `""` when the payload
+  carried none. **If you assert on the exact shape of a coverage entry, add it.** Coverage
+  is still reported for a non-qualifying state — the advisory display shows which commit
+  the bot last looked at regardless — so `state` is the only way to tell a reported entry
+  from a gating one. `#350`.
 - **ADDED (report shape)** — the poll render gains two lines. A coverage-route report
   prints `review evidence: the configured review bot reviewed this head (<bots>) — no
   receipt needed` in place of the receipt line; a receipt-route report that *also* has

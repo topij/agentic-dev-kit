@@ -767,8 +767,12 @@ cmd_merge() {
     report="$(GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" \
         uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist)" \
         || _die "pr-watch failed for PR #$pr"
-    # Gate on `mergeable`: converged AND no deterministic merge blocker AND a
-    # review receipt bound to this head. The report's `done` is an unchanged
+    # Gate on `mergeable`: converged AND no deterministic merge blocker AND
+    # independent-review evidence bound to this head — either a recorded receipt
+    # or a configured bot's own review of it (#350). Which route answered sits in
+    # `review_evidence.route`; this gate reads neither, by the same rule that
+    # keeps it reading `mergeable` rather than re-deriving it.
+    # The report's `done` is an unchanged
     # alias of `mergeable`, and every pre-split pr_watch emitted `done` with this
     # same merge-authorization meaning — so either key is safe against a kit
     # version skew, and `mergeable` additionally fails CLOSED when absent. Read

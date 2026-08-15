@@ -3298,8 +3298,17 @@ Summary only.
 # --------------------------------------------------------------------------- #
 
 
-def _review(login: str, sha: str, at: str) -> dict:
-    return {"author": {"login": login}, "commit": {"oid": sha}, "submittedAt": at}
+def _review(login: str, sha: str, at: str, state: str = "COMMENTED") -> dict:
+    # `COMMENTED` by default because that is what the configured bot's reviews
+    # actually carry on this repo — including its clean ones, verified against
+    # PR #484's live review list. A default of `APPROVED` would make the suite
+    # exercise a state the real reviewer rarely emits.
+    return {
+        "author": {"login": login},
+        "commit": {"oid": sha},
+        "submittedAt": at,
+        "state": state,
+    }
 
 
 def test_a_bot_whose_last_review_predates_the_head_is_surfaced() -> None:
@@ -3414,6 +3423,68 @@ def test_coverage_of_a_different_sha_never_reaches_the_gate() -> None:
     )
 
 
+def test_only_a_standing_verdict_is_evidence_not_merely_a_review_at_the_head() -> None:
+    """Found by the adversarial lens on `#484`, extended by two more the author
+    measured. The gate accepted a review that was attributed to the bot and
+    bound to the head and NOT a standing verdict.
+
+    Each excluded state is a different way that can happen:
+
+    - ``DISMISSED`` — a maintainer said explicitly that this review does not
+      count. `_rest_review_decision` already honours dismissal for the
+      `CHANGES_REQUESTED` blocker, so accepting it here made the gate disagree
+      with its own sibling one function away.
+    - ``PENDING`` — never submitted. A draft, not a verdict.
+    - ``CHANGES_REQUESTED`` — an unresolved objection, and **not** caught by the
+      separate `reviewDecision` blocker: that field reports the PR's aggregate
+      decision over REQUIRED reviewers, and a bot is typically not one, so it
+      reads `""` while the bot is asking for changes. Asserted below with
+      `reviewDecision` empty precisely because that is the reachable case.
+    - an unknown or missing state — GitHub may add one tomorrow, and a gate that
+      accepts what it does not recognize is not a gate.
+    """
+    pr_watch = _load_pr_watch()
+
+    for state in ("APPROVED", "COMMENTED"):
+        view = _green_view(
+            reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z", state)]
+        )
+        report = pr_watch.build_report(view, [], set(), **_settled(view))
+        assert report["review_evidence"]["route"] == "bot-coverage", state
+        assert report["mergeable"] is True, state
+
+    for state in ("DISMISSED", "PENDING", "CHANGES_REQUESTED", "", "SOME_FUTURE_STATE"):
+        view = _green_view(
+            reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z", state)]
+        )
+        # `reviewDecision` stays empty, which is the reachable shape for a bot:
+        # if the aggregate decision covered this, the gate would already refuse
+        # for a different reason and the test would prove nothing.
+        assert view["reviewDecision"] == ""
+        report = pr_watch.build_report(view, [], set(), **_settled(view))
+
+        assert report["review_evidence"]["valid"] is False, state
+        assert report["review_evidence"]["route"] is None, state
+        assert report["review_evidence"]["bots"] == [], state
+        assert report["mergeable"] is False, state
+        assert (
+            "independent review evidence is missing for current head"
+            in report["merge_blockers"]
+        ), state
+
+    # A review with NO state key at all — the shape a `gh` too old to emit it,
+    # or a REST payload shaped differently, would produce. Fails closed.
+    stateless = _review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")
+    stateless.pop("state")
+    view = _green_view(reviews=[stateless])
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+    assert report["review_evidence"]["valid"] is False
+    # …and it is still REPORTED as coverage, because the advisory display is not
+    # the gate: a reader should still see which commit the bot last looked at.
+    assert report["review_bots"]["coverage"][0]["covers_head"] is True
+    assert report["review_bots"]["coverage"][0]["state"] == ""
+
+
 def test_an_inconsistent_coverage_entry_is_refused_by_the_sha_recheck() -> None:
     """Pins the redundant `sha == head` check in `qualifying_bot_coverage`.
 
@@ -3441,6 +3512,7 @@ def test_an_inconsistent_coverage_entry_is_refused_by_the_sha_recheck() -> None:
                 "sha": "0ldc0de",
                 "covers_head": True,  # disagrees with `sha`
                 "submitted_at": "2026-07-25T12:00:00Z",
+                "state": "COMMENTED",  # qualifying, so `sha` is what is tested
             }
         ],
     }

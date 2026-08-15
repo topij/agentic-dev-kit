@@ -2440,12 +2440,20 @@ def bot_review_coverage(
         # to raise. Unusable timestamps must sort to the BOTTOM, exactly like
         # the missing ones below.
         submitted = _coerce_review_timestamp(raw)
+        # The review's own verdict, carried so the merge gate can refuse the
+        # ones that are not evidence (see `qualifying_bot_coverage`). Normalized
+        # to an upper-case string; a missing or non-string value becomes `""`,
+        # which no allowlist matches — the fail-closed direction, and the same
+        # under-reporting bias the rest of this function takes.
+        state = raw.get("state")
+        state = state.strip().upper() if isinstance(state, str) else ""
         if bot not in latest or submitted >= latest[bot]["submitted_at"]:
             latest[bot] = {
                 "bot": bot,
                 "sha": sha,
                 "submitted_at": submitted,
                 "covers_head": sha == head,
+                "state": state,
             }
     return sorted(latest.values(), key=lambda e: e["submitted_at"], reverse=True)
 
@@ -2701,7 +2709,9 @@ def summarize_review_bots(
         # here rather than passed in, so every caller gets it: as a parameter it
         # arrived EMPTY on the `record_review` path, where "no data" and "every
         # bot is current" were indistinguishable — on the one path whose whole
-        # subject is what a receipt covers. Reported, never gating.
+        # subject is what a receipt covers. Reported — and, since #350, GATING:
+        # `qualifying_bot_coverage` reads this to satisfy the merge gate's
+        # independent-review requirement without a receipt.
         "coverage": bot_review_coverage(reviews or [], head, bots=bots),
         "unavailable": unavailable,
         "pending": pending,
@@ -2715,6 +2725,35 @@ def summarize_review_bots(
             if bot in {entry["bot"] for entry in pending}
         },
     }
+
+
+# Review states that are EVIDENCE of a completed, standing review. An
+# allowlist, never a denylist, for the reason every identity rule in this file
+# is an allowlist: an unrecognized value must fail closed, and GitHub is free to
+# add a state tomorrow that this file has never heard of.
+#
+# Each exclusion is a case the merge gate was measured to accept before this
+# existed (#484's adversarial panel round, plus two the author found extending
+# it), and each is one where a merge would rest on something that is not a
+# standing verdict:
+#
+#   DISMISSED         a maintainer said explicitly "this review does not count".
+#                     `_rest_review_decision` already honours dismissal for the
+#                     CHANGES_REQUESTED blocker; the gate must not disagree with
+#                     it one function away.
+#   PENDING           not submitted. There is no verdict yet, only a draft.
+#   CHANGES_REQUESTED an unresolved objection, and NOT reliably covered by the
+#                     separate `reviewDecision` blocker: that field reports the
+#                     PR's aggregate decision over REQUIRED reviewers, and a bot
+#                     is typically not one, so it reads `""` while the bot is
+#                     asking for changes. Measured, not assumed.
+#
+# APPROVED and COMMENTED both qualify. COMMENTED is not a weaker signal here —
+# it is the state CodeRabbit's own reviews actually carry on this repo,
+# including its clean ones (verified against PR #484's live review list), so
+# excluding it would leave the coverage route dead for the reviewer it was
+# written for.
+_EVIDENTIAL_REVIEW_STATES = frozenset({"APPROVED", "COMMENTED"})
 
 
 def qualifying_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
@@ -2762,6 +2801,11 @@ def qualifying_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
       ``head``. The redundancy is deliberate: ``covers_head`` is derived, and a
       merge gate should re-check the identity it is about to authorize against
       rather than trust a boolean computed elsewhere in the call.
+    - a ``state`` in :data:`_EVIDENTIAL_REVIEW_STATES`. **That a review exists
+      at the head is not the same as a standing verdict** — a dismissed, still-
+      pending, or changes-requesting review is all three of "attributed to the
+      bot", "bound to this head", and "not evidence". The gate accepted all
+      three before this check existed.
 
     Deliberately does NOT re-check what already blocks on its own path, because
     a second copy of a rule is a second thing to go stale: a *pending* bot
@@ -2784,6 +2828,7 @@ def qualifying_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
         for entry in review_bots.get("coverage") or []
         if entry.get("covers_head") is True
         and entry.get("sha") == head
+        and entry.get("state") in _EVIDENTIAL_REVIEW_STATES
         and entry.get("bot")
     }
     return sorted(qualifying)
