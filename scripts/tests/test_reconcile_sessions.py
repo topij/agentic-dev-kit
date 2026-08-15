@@ -1,29 +1,33 @@
 """`reconcile_sessions.sh`'s lane classification — with `held` as the subject.
 
 Why this file exists at all: the reconciler had no test module before #465, and
-#465 adds a fourth terminal state plus a new exit code to it. A new state with
-no failing case behind it is the pattern #417 and #447 are filed about, so every
+#465 adds a fourth state — `held`, terminal, alongside `merged` and `parked`;
+`open` is the one that is not — plus a new exit code. A new state with no
+failing case behind it is the pattern #417 and #447 are filed about, so every
 assertion here is written to die under a specific mutation of the branch it
 covers: `_held_check`'s three outcomes (held / not held / could not tell), the
 branch → session-dir resolution (identity AND its ambiguity refusal), the
-environment the probe is handed, the tally composition, and the three-way exit.
+environment the probe is handed, how often the forge repo is resolved, the tally
+composition, and the three-way exit.
 
-Two items on that list are there because the review panel put them there. The
-first version of this file pinned the rest and let two resolution mutants
-through — one lens made the lookup ignore its argument, the other made two
-session dirs claiming one branch resolve by glob order; both survived all 19
-tests then present. A later round found the probe's forge-repo pin unasserted.
-The tests named for those mutants say so in place.
+Three items on that list are there because review put them there. The first
+version of this file pinned the rest and let two resolution mutants through —
+one lens made the lookup ignore its argument, the other made two session dirs
+claiming one branch resolve by glob order; both survived all 19 tests then
+present. A later round found the probe's forge-repo pin unasserted, and the one
+after that found its single-resolution claim untrue and unmeasured. The tests
+named for those mutants say so in place.
 
 **Everything runs the real script.** `gh`, `uv` and the session directory are
 faked, but `reconcile_sessions.sh` itself is executed unmodified through `bash`,
 against a real git repository with a real remote — so the classification, the
-tally line and the exit code are observed, never reconstructed. The `uv` stub
-also RECORDS its argv, `$DEVKIT_STATE_ROOT` and `$GH_REPO`, which is what pins
-the properties of the probe that no output could show: that it reads the LANE's
-state sandbox rather than the caller's, that it is aimed at the repository the
-run already resolved, and that it passes `--no-persist` so reconciling never
-mutates a lane's seen-set, settle baseline or receipt.
+tally line and the exit code are observed, never reconstructed. Both stubs
+RECORD what they were called with — the `uv` one its argv, `$DEVKIT_STATE_ROOT`
+and `$GH_REPO`; the `gh` one its whole argv — which is what pins the properties
+no output could show: that the probe reads the LANE's state sandbox rather than
+the caller's, that it is aimed at the repository the run already resolved, that
+that repository is resolved once per run, and that it passes `--no-persist` so
+reconciling never mutates a lane's seen-set, settle baseline or receipt.
 """
 
 from __future__ import annotations
@@ -65,6 +69,7 @@ vcs:
 # the forge. Branch names contain `/`, which cannot be a filename component, so
 # the fixture file is keyed on the slash-flattened name.
 _FAKE_GH = """#!/bin/sh
+printf '%s\\n' "$*" >> "$GH_ARGV_LOG"
 if [ "$1" = "repo" ] && [ "$2" = "view" ]; then
   printf '%s\\n' "${GH_FAKE_NWO:-}"
   exit 0
@@ -84,7 +89,11 @@ if [ -f "$f" ]; then cat "$f"; else printf '[]\\n'; fi
 # report for that PR — or exits non-zero when there is none, which is how the
 # "probe could not run" path is reached without having to uninstall anything.
 _FAKE_UV = """#!/bin/sh
-printf '%s\\t%s\\t%s\\n' "${DEVKIT_STATE_ROOT:-<unset>}" "${GH_REPO:-<unset>}" "$*" \
+# `${VAR-default}`, NOT `${VAR:-default}`: the colon form returns the default for
+# an empty string too, so it cannot tell "GH_REPO was never exported" from
+# "GH_REPO was exported empty" — which is exactly the distinction one of these
+# tests exists to pin. Two round-3 lenses found that independently.
+printf '%s\\t%s\\t%s\\n' "${DEVKIT_STATE_ROOT-<unset>}" "${GH_REPO-<unset>}" "$*" \
   >> "$UV_ARGV_LOG"
 for a in "$@"; do
   case "$a" in
@@ -140,6 +149,8 @@ class Harness:
         self.uv_reports.mkdir()
         self.uv_argv_log = tmp_path / "uv-argv.log"
         self.uv_argv_log.write_text("", encoding="utf-8")
+        self.gh_argv_log = tmp_path / "gh-argv.log"
+        self.gh_argv_log.write_text("", encoding="utf-8")
 
         self.bin = tmp_path / "fake-bin"
         self.bin.mkdir()
@@ -195,6 +206,7 @@ class Harness:
             "GH_FAKE_NWO": nwo,
             "UV_REPORTS": str(self.uv_reports),
             "UV_ARGV_LOG": str(self.uv_argv_log),
+            "GH_ARGV_LOG": str(self.gh_argv_log),
         }
         # The runner's own ambient GH_REPO must not decide what these tests see.
         env.pop("GH_REPO", None)
@@ -206,6 +218,13 @@ class Harness:
             check=False,
             capture_output=True,
             text=True,
+        )
+
+    def gh_repo_view_calls(self) -> int:
+        return sum(
+            1
+            for line in self.gh_argv_log.read_text(encoding="utf-8").splitlines()
+            if line.startswith("repo view")
         )
 
     def uv_calls(self) -> list[tuple[str, str, str]]:
@@ -438,10 +457,33 @@ def test_a_relative_sessions_dir_still_yields_an_absolute_state_root(
     assert os.path.realpath(state_root) == os.path.realpath(session / "state")
 
 
+def test_the_forge_repo_is_resolved_once_per_run_not_once_per_lane(
+    harness: Harness,
+) -> None:
+    """Round 3 — the correctness lens and the review bot found this one from
+    opposite ends. `nwo="$(_repo_nwo)"` evaluated the memo in a COMMAND
+    SUBSTITUTION, i.e. a subshell, so the flag it set died with that subshell and
+    every operator lane paid another `gh repo view` round trip behind its own
+    timeout. The code said "resolved once" and did not do it. Counting the calls
+    is the only way that claim is worth anything."""
+    for scope, pr in (("alpha", 550), ("beta", 551)):
+        harness.branch(f"lane/{scope}")
+        harness.pr(f"lane/{scope}", pr, "OPEN")
+        harness.session(scope, f"lane/{scope}", "operator")
+        harness.watch_report(pr, mergeable=True)
+
+    result = harness.run("alpha", "beta")
+
+    assert result.returncode == 4
+    assert len(harness.uv_calls()) == 2, "both lanes must actually be probed"
+    assert harness.gh_repo_view_calls() == 1
+
+
 def test_an_unresolvable_repo_leaves_the_probe_unpinned(harness: Harness) -> None:
     """No gh, no auth, no network: resolution yields nothing, and the probe runs
-    exactly as it did before the pin rather than being handed an empty `GH_REPO`
-    that `gh` would have to interpret."""
+    exactly as it did before the pin rather than being handed an EMPTY `GH_REPO`
+    that `gh` would have to interpret — a distinction the stub can only make
+    because it records `${GH_REPO-…}` and not `${GH_REPO:-…}`."""
     harness.branch("lane/omega")
     harness.pr("lane/omega", 541, "OPEN")
     harness.session("omega", "lane/omega", "operator")

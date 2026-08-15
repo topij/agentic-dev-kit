@@ -129,15 +129,18 @@ batch runs; full behavior (piped output, `--max-iters`, per-call timeouts) is in
 ### 5 · Reconcile, then merge — `reconcile_sessions.sh`
 
 Before the cockpit writes anything to the shared handoff, drive **every** launched lane
-to a terminal state — **merged**, **held**, **parked-with-reason**, or **still-open** —
-with `scripts/reconcile_sessions.sh`. An aggregate "everything's done" is *not* evidence a
+to a terminal state — **merged**, **held**, or **parked-with-reason** — with
+`scripts/reconcile_sessions.sh`. (**still-open** is the fourth result and the one that
+is *not* terminal: it means reconciliation is unfinished, and it alone keeps the batch
+un-closeable.) An aggregate "everything's done" is *not* evidence a
 specific lane actually shipped; reconcile per lane. Then review and merge each per its
 pre-assigned merge class: a self-merge lane goes through the deterministic wrapper
 (re-polls CI/review/merge readiness at act time and refuses missing or operator
 metadata); an operator lane is merged only after explicit cockpit sign-off. **held** is
 that second kind, seen from the reconciler: an operator lane whose PR is already
 merge-ready, so the batch has nothing left to do and the sign-off is the only thing
-outstanding. It exits 4 rather than 0 — a held lane has not shipped. The exact
+outstanding. Exit **4** is reached only when no lane is open or parked and at least one
+is held; an all-merged batch still exits **0**, because a held lane has not shipped. The exact
 `pr-watch` / `merge` / `rm` command sequence lives in
 [`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#finishing-a-session)
 and [`parallel-howto.md`](parallel-howto.md#use-case-5--wind-a-session-down) — this doc

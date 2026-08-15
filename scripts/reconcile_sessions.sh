@@ -11,8 +11,10 @@
 # by ANY mechanism — dev_session.sh sessions, background-Agent worktrees,
 # headless lanes, or bare branches — not just dev_session.sh session metadata.
 #
-# For every launched lane it resolves a terminal state from the PR record
-# (which survives branch deletion) plus the local branch:
+# For every launched lane it resolves a state from the PR record (which survives
+# branch deletion) plus the local branch. Three of the four are TERMINAL —
+# merged, held, parked; `open` is the one that says reconciliation is not
+# finished, which is why it, alone, keeps the batch un-closeable:
 #   • merged  — a merged PR exists for the branch              → counts toward M
 #   • held    — an OPERATOR-class lane whose open PR is        → counts toward H
 #               merge-ready: green, review-clean, and carrying
@@ -245,15 +247,18 @@ _session_dir_for_branch() {
 # at. Resolving through `_gh` means this IS whatever `gh pr list` resolved,
 # ambient override included — the point is that both agree, not which one wins.
 # Empty (no gh, no auth, no network) leaves the probe exactly as it was.
+# Sets $REPO_NWO rather than printing it, and callers run it as a plain command:
+# `nwo="$(_repo_nwo)"` would evaluate the body in a SUBSHELL, so the memo flag it
+# sets would die with that subshell and every lane would pay another `gh repo
+# view`. `_held_check` runs in the current shell, so a global assignment there
+# survives — which is what makes "resolved once" true rather than merely stated.
 REPO_NWO=""
 REPO_NWO_RESOLVED=0
-_repo_nwo() {
-    if [[ "$REPO_NWO_RESOLVED" -eq 0 ]]; then
-        REPO_NWO_RESOLVED=1
-        REPO_NWO="$(_gh repo view --json nameWithOwner --jq .nameWithOwner)"
-        REPO_NWO="${REPO_NWO%%$'\n'*}"
-    fi
-    printf '%s' "$REPO_NWO"
+_resolve_repo_nwo() {
+    [[ "$REPO_NWO_RESOLVED" -eq 0 ]] || return 0
+    REPO_NWO_RESOLVED=1
+    REPO_NWO="$(_gh repo view --json nameWithOwner --jq .nameWithOwner)"
+    REPO_NWO="${REPO_NWO%%$'\n'*}"
 }
 
 # _held_check <branch> <pr> — is this open PR's lane HELD for the operator?
@@ -284,7 +289,7 @@ _repo_nwo() {
 #    never mutate a lane's seen-set, settle baseline or receipt.
 _held_check() {
     local branch="$1" pr="$2"
-    local session_dir merge_class to report nwo
+    local session_dir merge_class to report
     local probe_env
 
     session_dir="$(_session_dir_for_branch "$branch")"
@@ -300,9 +305,9 @@ _held_check() {
     # all of them mean the one thing: the probe did not run, so rc 2 and the
     # caller's stderr note.
     to="$(_timeout_prefix 60)"
-    nwo="$(_repo_nwo)"
+    _resolve_repo_nwo
     probe_env=(env "DEVKIT_STATE_ROOT=$session_dir/state")
-    [[ -n "$nwo" ]] && probe_env+=("GH_REPO=$nwo")
+    [[ -n "$REPO_NWO" ]] && probe_env+=("GH_REPO=$REPO_NWO")
     # shellcheck disable=SC2086
     report="$("${probe_env[@]}" \
         $to uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist 2>/dev/null)" || return 2

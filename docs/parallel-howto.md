@@ -218,9 +218,13 @@ scripts/reconcile_sessions.sh <scope-1> <scope-2> …   # merged / held / parked
 ```
 
 `held` is an operator-class lane whose PR is already merge-ready (green, review-clean,
-receipt bound to head): the batch cannot advance it, only your merge decision can. It
-exits **4** when every lane is merged or held — distinct from 0, because a held lane
-has not landed.
+receipt bound to head): the batch cannot advance it, only your merge decision can.
+
+Three of those four are terminal — `merged`, `held`, `parked`. `open` is not: it says
+reconciliation is unfinished, and it alone keeps the batch un-closeable. Exit codes
+follow: **0** only when every lane merged; **4** when no lane is open or parked and at
+least one is held (distinct from 0, because a held lane has not landed); **3**
+otherwise, i.e. whenever any lane is open or parked.
 
 **Merge an eligible self-merge lane** through the safety wrapper. It reads the
 persisted class and branch, resolves the open PR, re-polls `pr-watch`, and merges only
