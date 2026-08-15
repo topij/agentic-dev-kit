@@ -61,7 +61,9 @@ starts.
   `<engine-dir>/pr_watch.py` (via `uv run`, `--json --no-persist`, with
   `$DEVKIT_STATE_ROOT` pointed at the lane's own sandbox and `$GH_REPO` pinned to the
   repository the run resolved through `gh`) once per operator-class open lane, plus one
-  `gh repo view` **per run** (not per lane) for that resolution. It writes nothing.
+  `gh repo view` to resolve that repository — **once per run when it succeeds**, and
+  retried on the next such lane when it does not, so a transient failure cannot cost
+  the rest of the batch its `held`. It writes nothing.
   Where `uv` or the engine is absent, where the probe fails or times out, **or where
   that `gh repo view` cannot identify the repository**, the lane reports `open` as
   before and the reason is named on **stderr** — **if you capture stderr, expect that

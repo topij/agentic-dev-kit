@@ -233,8 +233,10 @@ _session_dir_for_branch() {
     printf '%s' "$found"
 }
 
-# The forge repo this run is talking to, resolved ONCE and lazily (only a run
-# that reaches the probe pays for it), then pinned onto the probe.
+# The forge repo this run is talking to, resolved lazily (only a run that reaches
+# the probe pays for it) and then pinned onto the probe. Resolved ONCE per run
+# when it succeeds — but see the memo note below for the case where it does not,
+# because "once" is the property that keeps drifting out of true here.
 #
 # `_gh` inherits the caller's cwd and any ambient $GH_REPO; pr_watch.py pins its
 # own subprocess cwd to ITS $REPO_ROOT and separately honours $GH_REPO. Those two
@@ -265,21 +267,33 @@ _session_dir_for_branch() {
 # `nwo="$(_repo_nwo)"` would evaluate the body in a SUBSHELL, so the memo it sets
 # would die with that subshell and every lane would pay another `gh repo view`.
 # `_held_check` runs in the current shell, so a global assignment there survives
-# — which is what makes "resolved once" true rather than merely stated.
+# — which is what makes the memo real rather than merely stated.
 #
 # CACHES ONLY SUCCESS, and the emptiness of $REPO_NWO is itself the memo. A
 # separate "already tried" flag, set on failure too, made one transient blip
 # poison the WHOLE batch: a review lens executed it — `repo view` failing on its
 # first call only, `gh pr list` succeeding throughout — and both operator lanes
 # lost `held` for the rest of the run, including the one whose own call would
-# have succeeded. A persistent failure now costs at most one `gh repo view` per
-# operator-class open lane, which is the same order as the `gh pr list` each of
-# those lanes already makes, and each is behind the same short timeout.
+# have succeeded. So the run makes ONE `gh repo view` when it succeeds, and up to
+# one per operator-class open lane when it keeps failing — the same order as the
+# `gh pr list` each of those lanes already makes, each behind the same short
+# timeout. Say it that way wherever it is said: this cardinality was written down
+# as a flat "once per run" and two consecutive review rounds found that stale.
+#
+# What counts as a resolution is the SHAPE, not merely a non-empty reply. `_gh`
+# swallows exit status by design, so a garbage-but-non-empty stdout would be
+# cached as a permanent success and would silently defeat the retry above for the
+# rest of the run — a review lens executed exactly that with a `repo view` that
+# printed a single space. `gh` itself accepts only `[HOST/]OWNER/REPO`, so a value
+# that cannot be one is not a resolution and must not end the retries.
 REPO_NWO=""
 _resolve_repo_nwo() {
     [[ -z "$REPO_NWO" ]] || return 0
     REPO_NWO="$(_gh repo view --json nameWithOwner --jq .nameWithOwner)"
     REPO_NWO="${REPO_NWO%%$'\n'*}"
+    if [[ "$REPO_NWO" != */* || "$REPO_NWO" == *[[:space:]]* ]]; then
+        REPO_NWO=""
+    fi
 }
 
 # _held_check <branch> <pr> — is this open PR's lane HELD for the operator?

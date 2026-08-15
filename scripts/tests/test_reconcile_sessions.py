@@ -488,6 +488,29 @@ def test_the_forge_repo_is_resolved_once_per_run_not_once_per_lane(
     assert harness.gh_repo_view_calls() == 1
 
 
+def test_a_malformed_repo_reply_is_not_taken_as_a_resolution(harness: Harness) -> None:
+    """Round 6. `_gh` swallows exit status by design, so "resolved" was defined as
+    "non-empty reply" — and a lens executed a `gh repo view` that printed a single
+    space, watched it cached as a permanent success, and watched the retry the
+    previous round added stop happening for the rest of the run. `gh` accepts only
+    `[HOST/]OWNER/REPO`; a value that cannot be one is not a resolution."""
+    for scope, pr in (("m1", 570), ("m2", 571)):
+        harness.branch(f"lane/{scope}")
+        harness.pr(f"lane/{scope}", pr, "OPEN")
+        harness.session(scope, f"lane/{scope}", "operator")
+        harness.watch_report(pr, mergeable=True)
+
+    result = harness.run("m1", "m2", nwo=" ")
+
+    assert _status_of(result.stdout, "m1") == "open"
+    assert _status_of(result.stdout, "m2") == "open"
+    assert harness.uv_calls() == [], "a malformed repo must never be probed"
+    # And it must not have ended the retries either — that is what caching a
+    # garbage value would silently have done.
+    assert harness.gh_repo_view_calls() == 2
+    assert result.returncode == 3
+
+
 def test_an_unresolvable_repo_refuses_to_classify_rather_than_probing(
     harness: Harness,
 ) -> None:
