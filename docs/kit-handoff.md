@@ -14,9 +14,75 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-15 — filed `#472`.
+Last updated: 2026-08-15 — the five-lane batch merged.
 
-## Latest session — 2026-08-15 (an external field report, read against the kit's own batch record)
+## Latest session — 2026-08-15 (five lanes, and the reviewer breaking the fix's own mechanism in three of them)
+
+**Theme —** the second autonomous batch through `parallel-headless.md`, and the first
+to reconcile closed. Lanes were clustered on disjoint source footprints and every one
+of them landed. What the panels found inside the lanes' own work, and where the
+*tickets* were wrong, are the parts worth carrying.
+
+- **Merged:** `#474` (`#399`'s residual — `adopt.md`'s second-tree Step 0), `#476`
+  (`#469` — the fresh-path rule surfaced early in the lens prompt), `#477` (`#468` —
+  the dead `noise_markers` entry retired), `#475` (`#464` — `kit_doctor`'s status line
+  off stdout), `#478` (`#465` — a `held` terminal state, exit code `4`).
+  `scripts/reconcile_sessions.sh` over the five launched scopes prints
+  `launched 5, merged 5, parked 0` (exit 0); `make test` at the kit root on the merged
+  tip `af26133` is green.
+- **Lanes whose own fix was broken by their own reviewer, each by execution rather than
+  reading:** `#475`'s move-to-stderr left `2>&1` reopening the splice
+  unchanged; `#474`'s `cd "$REPO" || exit 1` did not guard its named threat, because
+  `cd ""` exits 0 and the `|| exit 1` never fires; `#478`'s repo pin failed open to an
+  ambient `$GH_REPO`, letting a lane report `held` off a probe against an unrelated
+  repository.
+- **Two tickets were wrong in the direction only implementation surfaces, and both
+  lanes declined the prescribed route.** `#464`'s "refuse when stdout is not a tty"
+  would have silenced the tool for an agent caller, whose stdio is never a tty with no
+  redirect in sight — `(st_dev, st_ino)` aliasing shipped instead. `#468`'s implied
+  repair — add the bot's current clean-verdict wording as a marker — would have
+  silently discarded the operator's own review record on `#43`, because `is_noise()`
+  matches bodies with no author check; the dead marker was retired instead.
+- **Filed:** `#479` (the lane contract prescribes `dev_session.sh pr-watch <scope>`,
+  which cannot run from inside a lane worktree — two lanes hit it independently and
+  worked around it two different ways), `#480` (`upgrade.md`'s two-tree hardening is
+  fail-open, and it is the file `AGENTS.md` holds up as the hardened one), `#481`
+  (`kit-manifest.json` is a derived index, so two kit-touching lanes are never disjoint
+  by `parallel.md`'s test).
+
+**Learned**
+
+- **My own filing overstated its subject and this batch disproved it within the hour.**
+  `#481` claimed every PR after the first needs a rebase-and-regenerate; three
+  consecutive manifest-touching merges landed clean, because the file is one path per
+  line and disjoint entries auto-merge. A lane then measured a fresh derivation
+  byte-identical to git's auto-merge. The correction sits beneath the claim rather than
+  replacing it. The real serialization was `CHANGELOG.md`, which the plan *had* named.
+- **An overclaim I relayed into a lane brief was caught downstream by that lane's own
+  panel.** `#469`'s body says every round of `#459`'s panel hit an `rm -rf` refusal; the
+  round records show one. I copied it from the ticket into the brief, and the
+  correctness lens re-derived it and narrowed it everywhere it had propagated —
+  including that lane's PR body. `#54`'s subject travelling ticket → cockpit → lane.
+- **The lane contract's idle-stall rule did not bind.** A lane backgrounded a poller and
+  yielded the turn, against a rule forbidding exactly that, prepended verbatim to its
+  prompt. Putting the rule *in the prompt* is `parallel-headless.md`'s stated fix for
+  this failure mode; here it was not sufficient.
+- **Every merge in this batch rests on a fallback-panel receipt, not a bot review.**
+  CodeRabbit was rate-limited on every lane. `#372` has no sharper evidence than a whole
+  batch paying for it.
+- **`#466` bit the launch again**: the runtime's delegation tool takes no environment, so
+  `DEVKIT_REFUSE_UNSANDBOXED_STATE=1` reached no lane. Isolation held on the on-disk
+  marker — verified at launch (cockpit exports no `DEVKIT_*`, five distinct sandbox
+  roots) and after (no batch PR's state landed in the cockpit's `state/pr-watch/`).
+
+▶ Next: rule on `#372` — the review-bot quota posture. Every lane in this batch paid a
+full panel and the review loop dominated its cost; `#478`'s PR carries the round records
+if you want the shape of the worst case. The decision is the operator's alone. `#465`'s
+shipped exit-code shape and `#460` are the other open rulings.
+
+______________________________________________________________________
+
+## Session — 2026-08-15 (an external field report, read against the kit's own batch record)
 
 **Theme —** an operator-supplied field report (Boris Cherny's dozen daily maintenance
 routines — crash fuzzer, dup unifier, dead-code remover — producing mergeable PRs at
@@ -263,73 +329,6 @@ are the parts worth carrying.
 ▶ Next: **rule on `#444` and `#445`** — both are green with dual-lens receipts and cannot
 merge without you. Read `#444`'s deviation from `#433`'s prescribed direction first; it is
 the one judgement the batch could not make for itself.
-
-______________________________________________________________________
-
-## Session — 2026-08-12 (the changelog an adopter reads, and a loop that kept finding my own fixes)
-
-**Theme —** `#430`: `/upgrade` said *which* file to take and nothing said what taking it
-would change. Shipped on `#437`. The mechanism is small; what the review found inside my
-own work, round after round, is the part worth carrying.
-
-- **`#430` closed** (`#437`, `9833e95`). Split deliberately, and the split is the design
-  decision: `CHANGELOG.md` at the root records **observable**
-  changes only; the *reading* half went into `upgrade.md` Step 1, where
-  `baseline_kit_commit` is already in hand; the *authoring* half went into `AGENTS.md`,
-  because only kit authors write entries and that rule must not ship to adopters.
-- **`CHANGELOG.md` is deliberately outside `KIT_OWNED` and the manifest.** Adopters read
-  the kit's copy in the clone Step 0 already makes; installing one would create another
-  file that drifts and reports `differs` forever. Entries are keyed by the **PR that made
-  the change**, not by the commit an adopter happened to land on — `#430`'s own sketch
-  keyed the backfill to a wrap-up commit that changed no code.
-- **`#432` landed**, closing the thread the previous block left waiting on an operator
-  merge.
-- **Filed:** `#438` (nothing enforces the new rule; every cheap proxy for "is this
-  observable" fails in the expensive direction — a signature check misses `#190`/`#39`,
-  whose signature never changed), `#439` (the unreachable test-helper gaps, whose
-  filing is what ended the review loop). Occurrence comment on `#243`.
-
-**Learned**
-
-- **"Verified against the code" covered the behaviour and not the symbols.** I stated it
-  on the PR; a lens then found the entry named a function that exists nowhere, and another
-  quoted a `merge_blockers` value that is only ever a prefix. The behaviour claims were
-  right, which is what made the rest look established. `#54`'s own subject, recorded there.
-- **Each fix round carried the next defect, including into a test written to close the
-  previous round's finding.** One round's correction introduced a false claim about the
-  lines it was correcting; a later round's coverage fix hardcoded a copy of the thing
-  under test, so mutating the document left the test green. `safety-critical-changes.md`
-  rule 3's subject, with the loop's own transcript on `#437` as the evidence.
-- **A claim repaired twice was deleted rather than corrected a third time.** The quoted
-  git error text was wrong for every real input — `baseline_kit_commit` is a full sha and
-  git words that case differently from an abbreviated one. The exit codes are what the
-  guard keys on, so the quotation went. `fallback-review-panel.md`'s "keep the record
-  small", applied rather than cited.
-- **The lenses split on a finding and agreed on every fact beneath it** — one called a
-  looser check a regression, the other tried to construct a false pass, could not, and
-  reported clean. Fixed rather than adjudicated, because the repair removed the *reason*
-  the looser form existed.
-- **The stopping rule was stated on the PR before the last round's results were read.**
-  Every bound on that loop is settable by the author of the change under review, so
-  pre-committing is the only defence against choosing the cheaper answer afterwards. The
-  loop ended on blast radius, not on findings running out.
-- **The bot reviewed the first head and was rate-limited on every one after**, again, and
-  the panel carried the rest. `#372` is the posture decision this keeps costing, and this
-  session is the sharpest evidence for it and for `#420`.
-
-**Open, and owned by nothing yet**
-
-- **`#429`, `#431`** — the remainder of the cs-toolkit upstream set, untouched. The
-  previous block called `#430` the one the others are downstream of; neither issue body
-  records that dependency, so treat the ordering as a judgement to re-make rather than a
-  blocker that has now cleared.
-- **`#438`, `#439`** as filed. `#438` is the enforcement half `#437` deliberately left out.
-- **`#433`, `#434`** untouched; `#434` still needs `#273` accounted for or it is half a fix.
-- Nothing in the blocks below moved this session.
-
-▶ Next: **`#429`** — `#134`'s defect surviving in `test_pr_watch.py`, the one file `#40`
-certifies as portable. Read its body for the downstream fix already applied and offered
-upstream, rather than starting from the title.
 
 ______________________________________________________________________
 
