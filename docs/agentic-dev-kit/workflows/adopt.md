@@ -53,7 +53,7 @@ Run these probes and record the answers — they drive the plan:
 
 - **Living plan?** `ls ROADMAP.md PLAN.md docs/plan.md docs/handoff.md handoff.md 2>/dev/null`. If one exists, the repo already practices Principle #1 — you'll point the kit at it, not add a second plan.
 - **Skill collisions?** Inspect `.claude/commands/` and `.agents/skills/`. Which of the kit's workflows already exist for either runtime? Keep the adopter's implementation and install only the missing adapters.
-- **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* — read `seed_doc`'s call sites, at `"$KIT/init.sh"` and not via `cd "$KIT"` first (Step 0), for the list (four for the narrative paths, two for the entry points) rather than a line number; the two ranges cited here were stale within a release of being written. **All four narrative docs ship pre-marked** with `devkit-template: unrendered`, so a repo that took the `cp -r` quickstart has four marker-carrying files before it has any of its own; verified on the shipped copies of all four:
+- **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* — read `seed_doc`'s call sites for the list (four for the narrative paths, two for the entry points) rather than a line number; the two ranges cited here were stale within a release of being written. Read them at the absolute path `"$KIT/init.sh"`. **Do not `cd "$KIT"` to get there** — Step 0 above names the hazard of a `cd` into the kit checkout outliving the command that made it; this file read is exactly the kind of "just quickly look" step that invites it. **All four narrative docs ship pre-marked** with `devkit-template: unrendered`, so a repo that took the `cp -r` quickstart has four marker-carrying files before it has any of its own; verified on the shipped copies of all four:
 
   **Read line 1 of each of the six yourself and report the state.** Do not run a shell
   snippet for this — the predicate belongs to `init.sh` (`_seedable`), and every attempt to
@@ -160,13 +160,29 @@ Everything from here mutates the repo, so re-assert `$REPO` before the first wri
 per **Working across two trees** in [`AGENTS.md`](../../../AGENTS.md):
 
 ```bash
-cd "$REPO" || exit 1
+cd "${REPO:?REPO is not set — re-run Step 0}" || exit 1
 git checkout -b chore/adopt-agentic-dev-kit
 ```
 
-The paths below are stated relative to `$REPO` (destination) and `$KIT` (source),
-both bound in Step 0 — resolve every one against those roots rather than `pwd`. For
-each piece, **copy only if the target doesn't already exist**:
+Write it as `${REPO:?...}`, not bare `"$REPO"`. A bare `cd "$REPO"` with `$REPO` unset
+or emptied — the exact case this guard exists for, a shell that never ran Step 0, or
+ran it in a session that didn't survive to here — returns exit **0** and silently
+leaves you wherever you already were; `cd ""` is a no-op success, not a failure, so
+`|| exit 1` never fires (confirmed in both `bash` and `zsh`). `${REPO:?msg}` fails the
+parameter expansion itself, before `cd` ever runs, so the guard actually stops the
+branch checkout — and everything mutating after it — from landing wherever the shell
+happens to be, instead of only stopping it when `$REPO` names a path that doesn't exist.
+
+Every `$KIT` reference from here on carries the same failure mode and the same fix —
+see Step 3b and Step 4 below, where it recurs on commands run later, possibly in a
+different session than the one that bound it.
+
+The paths below are named relative to `$REPO`, the destination bound in Step 0 —
+resolve each one there rather than against `pwd`. Where a bullet also names a kit-side
+source path, that is relative to `$KIT`; not every bullet has one — "Engine scripts"
+below names only a destination convention (`scripts/devkit/`), because the kit itself
+ships no matching source path to anchor. For each piece, **copy only if the target
+doesn't already exist**:
 
 - **Shared workflows** → `docs/agentic-dev-kit/workflows/`.
 - **Runtime adapters** → `.claude/commands/` and `.agents/skills/` (skip any target that collides with an existing workflow).
@@ -188,8 +204,19 @@ and ask the operator.
 **Once every copy above is done, and before the Step 3c handoff:**
 
 ```bash
-uv run <engines-dir>/kit_doctor.py --record-install --from-kit "$KIT"
+uv run <engines-dir>/kit_doctor.py --record-install --from-kit "${KIT:?KIT is not set — re-run Step 0}"
 ```
+
+**`${KIT:?...}`, not bare `"$KIT"`, and this is not decoration.** Measured: with `$KIT`
+unset or empty, `--from-kit ""` does not error — `argparse`'s `Path("")` resolves to `.`,
+the current directory, and `kit_doctor.py` happily writes a baseline stamped with *this
+repo's own* `git HEAD` as if it were the kit's, with no warning. That is worse than a
+crash: it is a confidently wrong record, in the one field every later `/upgrade` trusts
+to say what this adoption came from. `${KIT:?msg}` fails the expansion itself, before
+`uv run` is invoked, so an empty or unset `$KIT` stops the write instead of mis-recording
+it. This step is exactly the "different session, different day" case the variable is
+most likely to have gone missing in, since it runs after every copy in Step 3 — bind
+`$KIT` again from Step 0 if this fails.
 
 Order matters for every manifest-tracked path: `docs/templates/` **and `init.sh`** (tracked
 since `#362`) must be copied *before* this runs, or the baseline records them as not
@@ -398,8 +425,13 @@ Two things to warn them about, both measured, because neither is obvious from th
 - `kit_doctor`: run it **against `$KIT`'s manifest**, not bare:
 
   ```sh
-  uv run <engines-dir>/kit_doctor.py --manifest "$KIT/kit-manifest.json"
+  uv run <engines-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run Step 0}/kit-manifest.json"
   ```
+
+  Guarded the same way as Step 3b's `--from-kit`, for the same reason and for
+  consistency — an empty `$KIT` here would resolve to the literal path
+  `/kit-manifest.json` and fail anyway, but as an unrelated-looking "no such file"
+  rather than a message that names the actual cause.
 
   Bare, it compares this repo against the baseline Step 3b just wrote from these same
   files, so every recorded file matches *by construction* and the check establishes
@@ -421,18 +453,25 @@ Two things to warn them about, both measured, because neither is obvious from th
   unreconciled-path signal, not a second failure.
 
   **It does not clear itself.** Reconcile each path Step 3b named on stderr with the
-  operator, re-run `--record-install --from-kit "$KIT"`, then re-run `kit_doctor`
-  and confirm the `intact` line appears. Leaving it means the adoption carries no declared
-  scope at all, so every later `/upgrade` re-asks about every absent file — the
-  conversation the declared set exists to end.
+  operator, re-run Step 3b's `--record-install --from-kit` command above, then re-run
+  `kit_doctor` and confirm the `intact` line appears. Leaving it means the adoption
+  carries no declared scope at all, so every later `/upgrade` re-asks about every
+  absent file — the conversation the declared set exists to end.
 
   **Then check the `baseline:` line by comparing the sha it prints**, not merely that it
   is present. It reports what the baseline *claims*, so a leftover baseline from an
   earlier attempt prints a real-looking line naming the wrong commit:
 
   ```sh
-  git -C "$KIT" rev-parse HEAD    # the baseline: line shows its first 12 chars
+  git -C "${KIT:?KIT is not set — re-run Step 0}" rev-parse HEAD    # the baseline: line shows its first 12 chars
   ```
+
+  Guarded for the same reason as the two commands above: `git -C ""` is not an error —
+  git treats an empty `-C` argument as no `-C` at all and silently runs in whatever
+  directory the shell is already in, printing *this repo's own* HEAD as if it were the
+  kit's. That is the one failure this specific check exists to catch (a baseline naming
+  the wrong commit), so an unguarded `$KIT` here can defeat the very check it is part
+  of, and agree with a wrong Step 3b baseline instead of catching it.
 
   `baseline: none recorded` means Step 3b's `--record-install` did not run at all.
 - Confirm the repo's CI/lint scope **skips** the kit files (or add a kit-dir exclude if lint is repo-wide).
