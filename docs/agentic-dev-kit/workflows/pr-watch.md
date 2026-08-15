@@ -240,6 +240,28 @@ Self-pace on a bounded cadence — don't busy-wait:
 
 - **Converged** — `converged: true` (green + clean). Report and finish. This is the
   goal of the loop. State `mergeable` too: convergence is not merge clearance.
+  - **If the current head has no review coverage, request a review here.** Read
+    `review_bots.coverage`: an entry whose `covers_head` is false — or no entry at
+    all — means nothing has reviewed the diff that is about to merge. Convergence
+    is the moment the merge head stops moving, so it is the moment to spend one
+    review on it: request at the current head, then poll on.
+
+    **State the condition as coverage, not as configuration**, because two
+    different causes land here and only the observable one catches both. A repo
+    that has turned off incremental auto-review (to stop spending a bounded review
+    budget on fix rounds — see
+    [`../fallback-review-panel.md`](../fallback-review-panel.md), *Before you
+    accept the outage as fixed*) has a reviewer that saw the head the PR opened at
+    and nothing since. A bot that is merely *behind* reports a completed review
+    bound to a stale head, which reads green at a glance. Coverage reports both;
+    the config setting reports only the first.
+
+    Nothing in `pr_watch.py` performs the request — it observes only. And note
+    what this bullet does **not** say: it does not tell you to `--record-review`
+    the bot's own verdict. That receipt vocabulary describes fallback passes, and
+    whether a bot's own clean review can be honestly recorded at all is open
+    (`#350`). This is also not a change to `converged`, which stays green + clean
+    and deliberately is not merge clearance.
 - **Stuck / needs a decision** — a check fails for a reason you can't resolve (a
   flaky-infra failure that won't clear on re-run; an external dependency; a finding
   that needs an operator product/design call). Stop, report the specific blocker, and

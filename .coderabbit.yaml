@@ -1,0 +1,49 @@
+# CodeRabbit configuration for THIS repository.
+#
+# NOT A KIT ARTIFACT. This configures the review bot on the kit's own workspace,
+# the same way `.github/workflows/test.yml` configures the kit's own CI. It is
+# deliberately absent from `KIT_OWNED` in scripts/kit_doctor.py, so it is never
+# manifest-tracked and never reaches an adopter through /adopt or /upgrade. An
+# adopter running a different reviewer — or none at all (`review.bots: []`, which
+# the engines handle as a first-class case) — is unaffected by every line here.
+#
+# WHY IT EXISTS (#372, ruled 2026-08-15). CodeRabbit's OSS tier grants 1-10 PR
+# reviews per hour, scaled by repo stars; this repo has 0, which puts it at the
+# floor of that band. Its own record corroborates the position: #375 was reviewed
+# at 06:16:27 and #377 was rate-limited at 06:43:56, 27 minutes later.
+#
+# Against a budget of roughly one review an hour, `auto_incremental_review`
+# defaults to TRUE and every push spends a unit — and this repo's workflow pushes
+# a new head per fix round. The 2026-08-15 five-lane batch landed 27 commits in
+# ~25 distinct pushes across 6 PRs (commit timestamps clustered at a 3-minute
+# threshold; GitHub does not report push events directly, so the push count is an
+# estimate and the commit count is not). That is ~4.2 units per PR. The bot was
+# rate-limited on 5 of those 6, and the fallback panel carried every merge.
+#
+# So the quota was never the whole story. Most of it was being spent re-reviewing
+# fix rounds the bot had itself prescribed, while the first pass over the whole
+# diff — the review actually worth having — went unfunded.
+#
+# THE TRADE, stated because it is real and not free. Automatic incremental review
+# also supplies *accidental* retries: it is how the bot recovered mid-PR on #475
+# and #476 after being rate-limited at open. Those retries are given up here. They
+# were worth less than they look, because they land at arbitrary heads — #478 is
+# the case where the check read `Review completed` while bound to a head four
+# commits stale, and two re-requests at the real head were skipped.
+#
+# They are replaced deliberately rather than dropped: when the pr-watch loop has
+# converged, request the review at the head that will actually merge. See the
+# `Converged` stop condition in docs/agentic-dev-kit/workflows/pr-watch.md. That
+# step is doctrine today, not mechanism — pr_watch.py has no request path — which
+# is the known weakness of this posture and the reason #372 stays open pending a
+# re-measurement over the next batch.
+reviews:
+  auto_review:
+    # Keep the automatic first pass when a PR opens. Stated explicitly even
+    # though it is the default: the entire finding behind this file is that an
+    # unexamined default was mistaken for a property of the tier for four
+    # sessions, so the settings that matter here are written down rather than
+    # inherited.
+    enabled: true
+    # Never re-spend a unit on a fix round. This is the one behavioural change.
+    auto_incremental_review: false
