@@ -2548,13 +2548,14 @@ def main(argv: list[str] | None = None) -> int:
         # panel's adversarial lens reviewing that first fix. `_stream_aliases_path`
         # answers the narrower, correct question — does stderr's current
         # descriptor point at the exact file just written — and suppresses ONLY
-        # then, rather than gating on `isatty()`, which is `True` for this
+        # then, rather than gating on `isatty()`, which is `False` for this
         # module's actual majority caller (an agent's captured, non-tty stdio)
-        # even with no redirect anywhere near the target: that broader check
-        # would silence every one of these lines for nearly every real
-        # invocation to close a hazard that only exists on the exact colliding
-        # file. See that function's docstring for the mechanism and the
-        # rejected alternative in full.
+        # even with no redirect anywhere near the target — the SAME value it
+        # has for the genuine collision, so it cannot tell the two apart: that
+        # broader check would silence every one of these lines for nearly every
+        # real invocation to close a hazard that only exists on the exact
+        # colliding file. See that function's docstring for the mechanism and
+        # the rejected alternative in full.
         if not _stream_aliases_path(sys.stderr, baseline_path):
             print(
                 f"wrote {baseline_path} ({len(baseline['files'])} installed files, "
@@ -2634,10 +2635,11 @@ def main(argv: list[str] | None = None) -> int:
         # `JSONDecodeError: Expecting value: line 1 column 1 (char 0)` #464 was
         # filed about. `_stream_aliases_path` closes the actual hazard —
         # whether stderr's current descriptor is the exact file just written —
-        # rather than gating on `isatty()`, which is `True` for this module's
+        # rather than gating on `isatty()`, which is `False` for this module's
         # real majority caller (an agent's captured, non-tty stdio) even absent
-        # any redirect; see that function's docstring for why the broader check
-        # was rejected.
+        # any redirect — the SAME value as the genuine collision, so it cannot
+        # tell the two apart; see that function's docstring for why the
+        # broader check was rejected.
         if not _stream_aliases_path(sys.stderr, manifest_path):
             print(
                 f"wrote {manifest_path} ({len(manifest['files'])} files, kit_version={version})",
