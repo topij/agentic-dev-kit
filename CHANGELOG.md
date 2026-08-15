@@ -42,6 +42,55 @@ starts.
 
 ---
 
+## #484 — 2026-08-15
+
+- **CHANGED (gate semantics)** — `mergeable` no longer requires a `--record-review`
+  receipt in every case. It is now satisfied by current-head independent-review
+  **evidence** from either of two routes: a receipt bound to the head (unchanged), or a
+  configured `review.bots` entry whose own review covers that exact head **and carries a
+  standing verdict** — `APPROVED` or `COMMENTED`. A review that is `DISMISSED`,
+  `PENDING`, `CHANGES_REQUESTED`, or in any state this engine does not recognize is
+  **not** evidence, and leaves the receipt requirement standing. Note especially the
+  `CHANGES_REQUESTED` case if you relied on the separate `reviewDecision` blocker to
+  cover it — **it covers it on one transport and not the other.** Under `gh`, that field
+  is GitHub's own and reflects required-reviewer rules, so it can read `""` while a
+  non-required bot asks for changes; on the REST fallback, `pr_watch`'s own
+  `_rest_review_decision` aggregates every reviewer regardless, so the blocker does fire.
+  The evidence rule above holds on both, which is why it does not defer to that blocker. **If you record a receipt
+  on a PR your review bot already reviewed, stop — you no longer need
+  to, and every available `<source>` literal names a fallback pass that did not run.**
+  A repo with `review.bots: []` is unaffected: with no configured bot there is no
+  coverage route, and the receipt stays the only way through. Nothing is loosened for
+  a PR the bot has *not* reviewed at the current head — an unusable commit SHA on the
+  review, a verdict that arrived only as a comment (`#44`), or a failed bot-state read
+  all yield no evidence and leave the receipt requirement standing. A pending bot's
+  grace blocker and an unacknowledged outage notice keep their existing authority.
+  **`CHANGES_REQUESTED` is not claimed to** — a recorded receipt has always been able
+  to authorize a merge over a bot's standing objection, because `--record-review`
+  refuses only on a bot's *pending check row*, never on its submitted verdict. That is
+  unchanged by this release and is why the new route excludes the state outright rather
+  than deferring to that blocker. `#350`.
+- **CHANGED (report shape)** — `review_evidence` grew two keys. **`route`** is
+  `"receipt"`, `"bot-coverage"`, or `null`, and names which route satisfied the gate
+  (`"receipt"` wins when both hold). **`bots`** is the sorted list of configured bots
+  whose coverage qualified, and is populated even when `route` is `"receipt"`. **If
+  you assert on the exact shape of `review_evidence`, add both keys.** The
+  receipt-describing keys — `source`, `lenses`, `override`, `bot_signal` — are
+  unchanged and stay receipt-only, so they are `null`/`[]` on the coverage route.
+  `#350`.
+- **ADDED (report shape)** — each `review_bots.coverage[]` entry gains a **`state`** key:
+  the upper-cased GitHub review state of that bot's last review, or `""` when the payload
+  carried none. **If you assert on the exact shape of a coverage entry, add it.** Coverage
+  is still reported for a non-qualifying state — the advisory display shows which commit
+  the bot last looked at regardless — so `state` is the only way to tell a reported entry
+  from a gating one. `#350`.
+- **ADDED (report shape)** — the poll render gains two lines. A coverage-route report
+  prints `review evidence: the configured review bot reviewed this head (<bots>) — no
+  receipt needed` in place of the receipt line; a receipt-route report that *also* has
+  coverage gains an indented `+ the configured review bot also reviewed this head
+  (<bots>)` beneath its existing line. **If you match the render against a fixed set of
+  shapes, add these.** `#350`.
+
 ## #478 — 2026-08-15
 
 - **BREAKING (engine CLI surface)** — `<engine-dir>/reconcile_sessions.sh` gained a

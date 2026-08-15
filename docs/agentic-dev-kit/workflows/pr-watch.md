@@ -41,12 +41,32 @@ Repeat until the report says **converged**:
    - **`converged`** — "is there more for me to fix?" Green, nothing new, not
      settling. This is what ends *this* loop.
    - **`mergeable`** — "is this authorized to merge?" `converged` **plus** no
-     `merge_blockers[]` **plus** an independent-review receipt bound to the current
+     `merge_blockers[]` **plus** independent-review evidence bound to the current
      head. This is what `dev_session.sh merge` re-checks.
 
-   A PR can be `converged` and not `mergeable` — most commonly because no review
-   receipt has been recorded yet. That is the normal, expected state at the end of
-   the loop, not a failure.
+   **Independent-review evidence has two routes, and `review_evidence.route` says
+   which one answered** (`#350`):
+
+   - **`receipt`** — a `--record-review` receipt bound to this head. Self-reported:
+     the agent writes both the source and the lens names, and nothing binds either
+     to a review that happened, which is why the render labels it a claim.
+   - **`bot-coverage`** — a configured review bot's *own* review of this exact head,
+     read from review objects the forge attributes to that bot's identity, with
+     `review_evidence.bots` naming which. Nothing is recorded and nothing needs to
+     be: this route exists because the receipt vocabulary describes only fallback
+     passes, so a bot-reviewed head used to have no honest receipt at all and the
+     gate was unreachable exactly when review had gone well.
+
+   The coverage route is deliberately narrow, and everything it cannot see falls
+   back to the receipt requirement rather than opening the gate: a review whose
+   commit SHA is unusable, a verdict that arrived only as a comment (`#44`), or a
+   bot-state read that failed all yield no evidence. A *pending* bot still blocks on
+   its own grace window, and an unacknowledged outage notice still blocks
+   `converged`.
+
+   A PR can be `converged` and not `mergeable` — most commonly because neither route
+   is satisfied yet. That is the normal, expected state at the end of the loop, not a
+   failure.
 
    The other routine reason is a `merge_blockers[]` entry reading
    **`check rollup has not settled for current head`**. The merge gate waits for
@@ -157,8 +177,14 @@ Repeat until the report says **converged**:
    prior poll (nothing pending) acks nothing and says so (`note` in the output) —
    always poll-and-read first.
 
-1. **Record the independent pass:** run `--record-review <source> --head <polled-sha>`
-   only after the configured bot, human, or fallback reviewer has completed and all
+1. **Record the independent pass — when there is one to record.** If
+   `review_evidence.route` is already `bot-coverage`, the configured bot reviewed
+   this exact head and **nothing should be recorded**: the gate is satisfied, and
+   every available `<source>` literal names a fallback pass that did not run
+   (`#350`). Recording one there is a false receipt, not a formality.
+
+   Otherwise run `--record-review <source> --head <polled-sha>`
+   only after the human or fallback reviewer has completed and all
    findings are resolved. `<polled-sha>` is the `head` field from the exact poll whose
    diff was reviewed. Recording fails if the PR head changed in the meantime. The
    receipt is persisted with that exact `headRefOid`; any later push invalidates it and
@@ -259,9 +285,11 @@ Self-pace on a bounded cadence — don't busy-wait:
     Nothing in `pr_watch.py` performs the request — it observes only. And note
     what this bullet does **not** say: it does not tell you to `--record-review`
     the bot's own verdict. That receipt vocabulary describes fallback passes, and
-    whether a bot's own clean review can be honestly recorded at all is open
-    (`#350`). This is also not a change to `converged`, which stays green + clean
-    and deliberately is not merge clearance.
+    a bot-reviewed head needs no receipt — its coverage *is* the evidence
+    (`#350`, resolved by the `bot-coverage` route above). Recording one there
+    asserts a fallback pass that did not run. This is also not a change to
+    `converged`, which stays green + clean and deliberately is not merge
+    clearance.
 - **Stuck / needs a decision** — a check fails for a reason you can't resolve (a
   flaky-infra failure that won't clear on re-run; an external dependency; a finding
   that needs an operator product/design call). Stop, report the specific blocker, and
@@ -281,9 +309,12 @@ Self-pace on a bounded cadence — don't busy-wait:
 - Known auto-noise from your review bots (walkthrough / "no actionable comments"
   summaries) is filtered out by the engine. Reviewer-unavailable notices are
   deliberately *not* noise: they surface as new comments and so block `converged`;
-  acknowledging one clears `converged` but still leaves the current-head
+  acknowledging one clears `converged` but ordinarily still leaves the current-head
   review-evidence blocker on `mergeable` until the panel runs and records its
-  receipt.
+  receipt. Ordinarily, not always: an outage announced *after* the configured bot
+  already reviewed this exact head leaves qualifying coverage behind it, so the
+  evidence blocker is already satisfied and there is nothing for a panel to add.
+  Read `review_evidence.route` rather than inferring from the outage.
 - **A bot's outage is detected on both trusted surfaces, and a queued bot is not a
   finished one.** `review.unavailable_markers` are matched against comments
   authored by the exact normalized login of a configured `review.bots` entry
@@ -444,9 +475,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   non-informational check before it can report green. Leave it `true` unless the repo
   genuinely has no CI — with no checks and `require_ci: true`, `converged` can never flip
   and `dev_session.sh merge` will always refuse. Setting it `false` does **not**
-  weaken the review gate: `mergeable` still requires a current-head
-  independent-review receipt, which then becomes the only quality gate — so set it
-  deliberately.
+  weaken the review gate: `mergeable` still requires current-head
+  independent-review **evidence** by either route above, which then becomes the only
+  quality gate — so set it deliberately. Note how the two settings compose:
+  `require_ci: false` on a repo with `review.bots: []` leaves the receipt as the single
+  gate, since the coverage route needs a configured bot to exist.
 - This is interactive-only. A scheduled job that opens its own PRs should be excluded
   from this loop by your cron/CI runner's env signal (any of `DEVKIT_CI_ENV_VARS`,
   default `JOB_NAME,CI,GITHUB_ACTIONS,GITLAB_CI,BUILDKITE`), so an automated open

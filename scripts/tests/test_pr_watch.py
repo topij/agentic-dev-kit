@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -667,11 +668,16 @@ def test_review_receipt_must_match_current_head() -> None:
     assert missing["mergeable"] is False
     assert stale["mergeable"] is False
     assert current["mergeable"] is True
+    # Exact-equality on purpose: this is the payload `dev_session.sh merge` and
+    # any other consumer reads, so a key appearing or vanishing should break a
+    # test rather than surprise an adopter. `route`/`bots` arrived with #350.
     assert current["review_evidence"] == {
         "lenses": [],
         "override": None,
         "bot_signal": None,
         "valid": True,
+        "route": "receipt",
+        "bots": [],
         "source": "fallback:codex",
         "head": "abc123",
     }
@@ -3292,8 +3298,17 @@ Summary only.
 # --------------------------------------------------------------------------- #
 
 
-def _review(login: str, sha: str, at: str) -> dict:
-    return {"author": {"login": login}, "commit": {"oid": sha}, "submittedAt": at}
+def _review(login: str, sha: str, at: str, state: str = "COMMENTED") -> dict:
+    # `COMMENTED` by default because that is what the configured bot's reviews
+    # actually carry on this repo — including its clean ones, verified against
+    # PR #484's live review list. A default of `APPROVED` would make the suite
+    # exercise a state the real reviewer rarely emits.
+    return {
+        "author": {"login": login},
+        "commit": {"oid": sha},
+        "submittedAt": at,
+        "state": state,
+    }
 
 
 def test_a_bot_whose_last_review_predates_the_head_is_surfaced() -> None:
@@ -3321,11 +3336,16 @@ def test_a_bot_whose_last_review_predates_the_head_is_surfaced() -> None:
     assert current[0]["covers_head"] is True
 
 
-def test_review_coverage_is_reported_and_never_gates() -> None:
+def test_review_coverage_behind_the_head_does_not_gate() -> None:
     """Deliberately the cheap half of #27. Invalidating a receipt when the diff
     changes *shape* is the faithful fix, but it risks becoming a wedge on a repo
     whose bot is permanently unavailable — so this only makes the gap visible at
     merge time instead of reconstructible from the PR thread afterwards.
+
+    This test was named ``..._and_never_gates`` until #350 direction 1, when
+    coverage AT the head became one of the merge gate's two evidence routes.
+    What it actually pins is unchanged and still true: coverage *behind* the
+    head gates nothing, and the merge here rides on the receipt alone.
     """
     pr_watch = _load_pr_watch()
     view = _green_view(
@@ -3346,6 +3366,393 @@ def test_review_coverage_is_reported_and_never_gates() -> None:
     # …and the merge gate is untouched by it.
     assert report["mergeable"] is True
     assert report["merge_blockers"] == []
+
+
+def test_bot_coverage_at_the_head_is_evidence_with_no_receipt() -> None:
+    """#350 direction 1, and the whole point of it.
+
+    Before this, `mergeable` required a `--record-review` receipt whose entire
+    vocabulary names FALLBACK passes. When the configured bot itself reviewed
+    the head there was no literal that described what happened, so an honest
+    agent recorded nothing and the gate was unreachable — wedged precisely when
+    review had gone well, and hardest on an autonomous lane, whose
+    `dev_session.sh merge` reads `mergeable` and nothing else.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+
+    assert report["review_evidence"]["valid"] is True
+    assert report["review_evidence"]["route"] == "bot-coverage"
+    assert report["review_evidence"]["bots"] == ["coderabbit"]
+    assert report["mergeable"] is True
+    assert report["merge_blockers"] == []
+    # The receipt-describing keys stay receipt-only, so nothing about this
+    # report can be misread as a recorded pass that never ran.
+    assert report["review_evidence"]["source"] is None
+    assert report["review_evidence"]["lenses"] == []
+    # And the render says which reviewer the merge rests on, rather than
+    # printing "no lenses recorded" at a real review.
+    rendered = pr_watch.render(report)
+    assert "coderabbit" in rendered
+    assert "no lenses recorded" not in rendered
+
+
+def test_coverage_of_a_different_sha_never_reaches_the_gate() -> None:
+    """`covers_head` is DERIVED, so the gate re-checks the identity it is about
+    to authorize against rather than trusting a boolean computed elsewhere in
+    the call. A coverage entry naming another commit is not evidence for this
+    one, however that entry came to exist."""
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")]
+    )
+
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+
+    assert report["review_evidence"]["valid"] is False
+    assert report["review_evidence"]["route"] is None
+    assert report["review_evidence"]["bots"] == []
+    assert report["mergeable"] is False
+    assert (
+        "independent review evidence is missing for current head"
+        in report["merge_blockers"]
+    )
+
+
+def test_only_a_standing_verdict_is_evidence_not_merely_a_review_at_the_head() -> None:
+    """Found by the adversarial lens on `#484`, extended by two more the author
+    measured. The gate accepted a review that was attributed to the bot and
+    bound to the head and NOT a standing verdict.
+
+    Each excluded state is a different way that can happen:
+
+    - ``DISMISSED`` — a maintainer said explicitly that this review does not
+      count. `_rest_review_decision` already honours dismissal for the
+      `CHANGES_REQUESTED` blocker, so accepting it here made the gate disagree
+      with its own sibling one function away.
+    - ``PENDING`` — never submitted. A draft, not a verdict.
+    - ``CHANGES_REQUESTED`` — an unresolved objection, not caught by the separate
+      `reviewDecision` blocker **on the `gh` transport**, where that field is
+      GitHub's own and reflects required-reviewer rules that a bot is typically
+      outside. On the REST fallback the blocker does fire, because
+      `_rest_review_decision` aggregates every reviewer with no such notion. The
+      evidence rule has to hold on both, so it does not defer to that blocker.
+      Exercised below with `reviewDecision` empty, which is the `gh`-shaped case
+      — and note what that pins and what it does not: `_green_view` sets that
+      field independently of its `reviews` list, so this fixes the INPUT the gate
+      sees rather than demonstrating how GitHub would populate it.
+    - an unknown or missing state — GitHub may add one tomorrow, and a gate that
+      accepts what it does not recognize is not a gate.
+    """
+    pr_watch = _load_pr_watch()
+
+    for state in ("APPROVED", "COMMENTED"):
+        view = _green_view(
+            reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z", state)]
+        )
+        report = pr_watch.build_report(view, [], set(), **_settled(view))
+        assert report["review_evidence"]["route"] == "bot-coverage", state
+        assert report["mergeable"] is True, state
+
+    for state in ("DISMISSED", "PENDING", "CHANGES_REQUESTED", "", "SOME_FUTURE_STATE"):
+        view = _green_view(
+            reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z", state)]
+        )
+        # `reviewDecision` stays empty — the `gh`-shaped case for a non-required
+        # bot reviewer. Asserted to document the fixture, NOT as evidence about
+        # GitHub: `_green_view` sets this field independently of `reviews`, so it
+        # pins what the gate is handed, not how the forge would fill it in.
+        assert view["reviewDecision"] == ""
+        report = pr_watch.build_report(view, [], set(), **_settled(view))
+
+        assert report["review_evidence"]["valid"] is False, state
+        assert report["review_evidence"]["route"] is None, state
+        assert report["review_evidence"]["bots"] == [], state
+        assert report["mergeable"] is False, state
+        assert (
+            "independent review evidence is missing for current head"
+            in report["merge_blockers"]
+        ), state
+
+    # A review with NO state key at all — the shape a `gh` too old to emit it,
+    # or a REST payload shaped differently, would produce. Fails closed.
+    stateless = _review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")
+    stateless.pop("state")
+    view = _green_view(reviews=[stateless])
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+    assert report["review_evidence"]["valid"] is False
+    # …and it is still REPORTED as coverage, because the advisory display is not
+    # the gate: a reader should still see which commit the bot last looked at.
+    assert report["review_bots"]["coverage"][0]["covers_head"] is True
+    assert report["review_bots"]["coverage"][0]["state"] == ""
+
+
+def test_an_inconsistent_coverage_entry_is_refused_by_the_sha_recheck() -> None:
+    """Pins the redundant `sha == head` check in `qualifying_bot_coverage`.
+
+    Written as a direct unit call because the inconsistency is NOT reachable
+    through `bot_review_coverage` today: that function derives `covers_head` as
+    `sha == head`, so the two can never disagree, and an end-to-end test of a
+    different sha is rejected by the `covers_head` check before the sha check is
+    consulted. Deleting the sha check therefore passes the whole end-to-end
+    suite — verified by mutation — which is precisely the unpinned-guard shape
+    of #447.
+
+    The guard is kept rather than removed because it defends the merge gate
+    against a FUTURE `bot_review_coverage` that computes `covers_head` from
+    something other than sha identity (a range, a merge-base, a normalized
+    short sha). This test is what makes that defence real instead of decorative:
+    it fails if the recheck is dropped, and it documents what the recheck is
+    for so a later reader does not delete it as obviously redundant.
+    """
+    pr_watch = _load_pr_watch()
+    inconsistent = {
+        "signal": "ok",
+        "coverage": [
+            {
+                "bot": "coderabbit",
+                "sha": "0ldc0de",
+                "covers_head": True,  # disagrees with `sha`
+                "submitted_at": "2026-07-25T12:00:00Z",
+                "state": "COMMENTED",  # qualifying, so `sha` is what is tested
+            }
+        ],
+    }
+
+    assert pr_watch.qualifying_bot_coverage(inconsistent, "abc123") == []
+    # …and the same entry qualifies once the two agree, so the test is pinning
+    # the recheck rather than a blanket refusal.
+    consistent = {
+        "signal": "ok",
+        "coverage": [dict(inconsistent["coverage"][0], sha="abc123")],
+    }
+    assert pr_watch.qualifying_bot_coverage(consistent, "abc123") == ["coderabbit"]
+
+    # THE MIRROR DIRECTION, and it was unpinned until a lens mutation-tested it:
+    # dropping the `covers_head is True` clause while keeping `sha == head`
+    # survived the whole suite. Both halves of an `and` need their own failing
+    # case, or half the guard is decorative — #447's shape, one clause over from
+    # where the neighbouring docstring already warns about it.
+    disagreeing_the_other_way = {
+        "signal": "ok",
+        "coverage": [dict(consistent["coverage"][0], covers_head=False)],
+    }
+    assert pr_watch.qualifying_bot_coverage(disagreeing_the_other_way, "abc123") == []
+    # A missing `covers_head` is refused too — `is True`, not truthiness, so the
+    # absent case cannot pass by being merely non-falsy.
+    absent = {"signal": "ok", "coverage": [dict(consistent["coverage"][0])]}
+    absent["coverage"][0].pop("covers_head")
+    assert pr_watch.qualifying_bot_coverage(absent, "abc123") == []
+
+
+def test_a_lookalike_login_cannot_manufacture_merge_evidence() -> None:
+    """The trust boundary direction 1 now rests on, pinned at the gate.
+
+    On a public repo any account may open a PR and review it. Coverage matching
+    is ANCHORED (`_match_bot(..., anchored=True)`: exact normalized login, its
+    `[bot]` form, or an explicitly enumerated alias) — the rule #95 established
+    for author-controlled input, precisely so a lookalike cannot speak for the
+    reviewer.
+
+    That was already true, and was already load-bearing for comment authorship.
+    #350 makes it load-bearing for the MERGE GATE too, so it gets a test that
+    fails at the gate rather than only at the matcher: a substring impostor must
+    not be able to authorize its own merge.
+    """
+    pr_watch = _load_pr_watch()
+    for impostor in ("coderabbitai-impostor", "not-coderabbit", "coderabbit-shim"):
+        view = _green_view(
+            reviews=[_review(impostor, "abc123", "2026-07-25T12:00:00Z")]
+        )
+        report = pr_watch.build_report(view, [], set(), **_settled(view))
+
+        assert report["review_bots"]["coverage"] == [], impostor
+        assert report["review_evidence"]["valid"] is False, impostor
+        assert report["review_evidence"]["bots"] == [], impostor
+        assert report["mergeable"] is False, impostor
+
+    # …and the real identity, plus its conventional `[bot]` spelling, do qualify —
+    # so this pins anchoring, not a blanket refusal.
+    for genuine in ("coderabbitai", "coderabbitai[bot]"):
+        view = _green_view(
+            reviews=[_review(genuine, "abc123", "2026-07-25T12:00:00Z")]
+        )
+        report = pr_watch.build_report(view, [], set(), **_settled(view))
+        assert report["review_evidence"]["route"] == "bot-coverage", genuine
+        assert report["mergeable"] is True, genuine
+
+
+def test_an_unreadable_bot_signal_never_opens_the_gate() -> None:
+    """The fail-closed case, and the one worth being loudest about.
+
+    On `signal == "unavailable"` the bot-state read FAILED, so both of
+    `summarize_review_bots`'s guards are already off. A failed read must not
+    also be allowed to authorize a merge — that is the shape of #23, where a
+    rate-limited bot read as a clean one, arriving at the gate that decides a PR
+    is safe to merge.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails([], "unavailable"),
+        **_settled(view),
+    )
+
+    # The review objects say the head WAS reviewed, and the gate still refuses,
+    # because the state that would qualify it could not be read.
+    assert report["review_bots"]["signal"] == "unavailable"
+    assert report["review_evidence"]["valid"] is False
+    assert report["review_evidence"]["route"] is None
+    assert report["mergeable"] is False
+
+
+def test_with_no_configured_bots_the_receipt_is_the_only_route(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An adopter running `review.bots: []` is unaffected by direction 1: there
+    is no reviewer whose coverage could stand in, so the receipt requirement is
+    exactly what it was, and the fallback panel is simply their reviewer."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_REVIEW_BOTS", ())
+    view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+
+    without = pr_watch.build_report(view, [], set(), **_settled(view))
+    assert without["review_bots"]["signal"] == "skipped"
+    assert without["review_evidence"]["valid"] is False
+    assert without["mergeable"] is False
+
+    with_receipt = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:panel"},
+        **_settled(view),
+    )
+    assert with_receipt["review_evidence"]["route"] == "receipt"
+    assert with_receipt["mergeable"] is True
+
+
+def test_the_receipt_is_labelled_when_both_routes_hold() -> None:
+    """`route` names the claim someone actively MADE, but the coverage is the
+    sturdier of the two and is not hidden by that precedence — a reader weighing
+    a one-lens receipt deserves to know the bot saw this exact head too."""
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={
+            "head": "abc123",
+            "source": "fallback:panel",
+            "lenses": ["adversarial"],
+        },
+        **_settled(view),
+    )
+
+    assert report["review_evidence"]["route"] == "receipt"
+    assert report["review_evidence"]["source"] == "fallback:panel"
+    assert report["review_evidence"]["bots"] == ["coderabbit"]
+    rendered = pr_watch.render(report)
+    assert "ONE lens claimed" in rendered  # the receipt caveat still fires
+    assert "also reviewed this head" in rendered
+
+
+def test_a_pending_bot_still_blocks_a_merge_its_coverage_would_allow() -> None:
+    """Direction 1 can only ever ADD evidence to a PR that is otherwise already
+    clear. It deliberately does not re-check what blocks on its own path — a
+    second copy of a rule is a second thing to go stale — so #19's grace window
+    keeps its authority over a bot that has coverage AND a pending check."""
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        check_details=[
+            {"name": "CodeRabbit", "status": "IN_PROGRESS", "conclusion": ""}
+        ],
+        **_settled(view),
+    )
+
+    # The evidence route is satisfied…
+    assert report["review_evidence"]["route"] == "bot-coverage"
+    # …and the merge is still refused, by the pending bot's own blocker.
+    assert report["mergeable"] is False
+    assert any("has not reported yet" in b for b in report["merge_blockers"])
+
+
+def test_the_merge_wrapper_reads_a_coverage_route_report_as_mergeable() -> None:
+    """`safety-critical-changes.md` rule 4, applied to a merge gate.
+
+    Unit tests on `decide_mergeable` are insufficient by that rule: the thing
+    that actually authorizes a merge is `dev_session.sh merge`, which shells out
+    to `pr_watch.py --json` and tests the parsed value with an IDENTITY check
+    (`d.get("mergeable") is True`). A truthy non-bool would fail that check
+    closed but confusingly, and nothing at the Python level would notice —
+    `decide_mergeable`'s own docstring names this hazard.
+
+    So this exercises the real path: the report is serialized exactly as
+    `--json` emits it, and the extraction is READ OUT OF `dev_session.sh` rather
+    than restated here, so a change to the wrapper's parsing cannot drift away
+    from this test silently.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+    assert report["review_evidence"]["route"] == "bot-coverage"
+
+    wrapper = (REPO_ROOT / "scripts" / "dev_session.sh").read_text()
+    # Selected by CONTENT, not position: `dev_session.sh` embeds several
+    # `python3 -c` blocks and the merge gate's is not the first. Indexing them
+    # would silently re-point this test at another block the day one is added
+    # above it — which is how a gate test starts asserting about `nameWithOwner`.
+    blocks = [
+        block
+        for block in re.findall(r"python3 -c '\n(import json, sys\n.*?)'", wrapper, re.S)
+        if "mergeable" in block
+    ]
+    assert len(blocks) == 1, (
+        "expected exactly one merge-gate extraction in dev_session.sh, "
+        f"found {len(blocks)} — re-point this test"
+    )
+
+    proc = subprocess.run(
+        [sys.executable, "-c", blocks[0]],
+        input=json.dumps(report),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    mergeable, validated_pr, validated_base, validated_head = proc.stdout.rstrip(
+        "\n"
+    ).split("\t")
+
+    # The literal the wrapper compares against, and the identity check behind it.
+    assert mergeable == "true"
+    assert validated_pr == "7"
+    assert validated_base == "trunk"
+    assert validated_head == "abc123"
 
 
 def test_coverage_tolerates_a_missing_or_malformed_commit_field() -> None:
