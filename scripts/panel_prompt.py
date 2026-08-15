@@ -354,6 +354,23 @@ def render(
         else "- **No worktree was provided.** Obtain the revision into a copy you made; "
         "do not write into any tree you were handed.\n"
     )
+    # #469: the doctrine's Scratch namespace item (quoted in full below) already told a
+    # lens to reach its own mutation-test copy by a fresh path, never rm -rf — and every
+    # round of #459's panel still had a lens hit the sandbox's rm -rf refusal first. The
+    # wording was never wrong; the carrier was. A lens meets the refusal before it reaches
+    # item 9 of a 13-item contract quoted at the end of this prompt, so the operative
+    # sentence is repeated here too, right where a lens is already thinking about a copy
+    # of its own. This is a restatement, not a duplicate rule: it says nothing the item
+    # below does not, so nothing here can drift out of agreement with the doctrine's own
+    # wording without both copies being read side by side and noticed — the same bet the
+    # "do not write into any tree you were handed" line above already makes for item 7.
+    tree += (
+        "- **If you also make a scratch copy of your own** (for mutation testing, say),"
+        " reach it by a **fresh path**, namespaced by lens and revision — never by"
+        " removing and recreating one. A sandbox refusing `rm -rf` is refusing the wrong"
+        " route, not blocking you: the fresh path was already correct. The **Scratch"
+        " namespace** item in the contract below has the full reasoning.\n"
+    )
     pr_line = "" if pr is None else f"- **PR:** #{pr}\n"
     # The scope sentence is the half that could not be enforced. Nothing can inspect
     # free prose and tell "rounds 1-3 covered the guards" from "I judge this record

@@ -200,6 +200,14 @@ author re-reading their own diff. **Cite them by name, never by number.**
    file changes underneath you, rule out a colliding lens, then treat it as a
    finding: `#136` exists *because* a lens reported it, and a change that writes
    into the tree looks identical.
+
+   The wording above was already right and lenses still hit the refusal first —
+   every round of `#459`'s panel had one — because a lens meets the `rm -rf`
+   refusal before it reads this far into a 13-item contract quoted at the very
+   end of its prompt. The gap was carrier, not wording (`#469`), so
+   `panel_prompt.py` now also states the fresh-path rule once, early, beside the
+   tree it hands each lens — ahead of the full contract below, not instead of
+   it.
 10. **Right revision.** Assume the worktree points at the wrong ref. A lens that
     does not check would review an empty diff and report all-clear — the worst
     failure available to a review mechanism, and reason enough on its own.
