@@ -66,14 +66,19 @@ starts.
 
 - **CHANGED (engine CLI surface)** — `kit_doctor.py`'s two writing flags,
   `--generate-manifest` and `--record-install`, print their `wrote <path>
-  (...)` status line to **stderr**, and now suppress it entirely when
-  stderr's current descriptor is the exact file just written — the case a
-  stderr-only move does not cover, e.g. `> kit-manifest.json 2>&1` or `&>
-  kit-manifest.json` (#464). Read the status line from stderr, not stdout.
-  Do not redirect stdout to select the output path, and do not merge stderr
-  onto it either — pass `--manifest` / `--baseline` for a non-default one;
-  the tool writes its target file itself regardless of any redirect, and
-  prints nothing if your redirect happens to alias it.
+  (...)` status line to **stderr**, and now suppress it — along with any
+  secondary note or warning printed in the same run, e.g.
+  `--generate-manifest`'s "listed file(s) absent from this checkout"
+  warning — when stderr's current descriptor is the exact file just
+  written. That covers the case a stderr-only move does not, e.g. `>
+  kit-manifest.json 2>&1` or `&> kit-manifest.json` (#464). Read this
+  output from stderr, not stdout. Do not redirect stdout to select the
+  output path, and do not merge stderr onto it either — pass `--manifest` /
+  `--baseline` for a non-default one; the tool writes its target file
+  itself regardless of any redirect, and prints nothing if your redirect
+  happens to alias it — including a warning about absent files, so do not
+  rely on stderr's absence to mean nothing is missing under such a
+  redirect.
 
 ## #459 — 2026-08-13
 

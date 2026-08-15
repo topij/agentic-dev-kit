@@ -864,7 +864,16 @@ def test_a_shell_redirect_to_the_default_output_path_does_not_splice_the_manifes
     that fd, which an in-process `capsys` run does not have. Before the fix
     this reproduced with `json.load` raising `JSONDecodeError: Expecting
     value: line 1 column 1 (char 0)` on the result — the status line had
-    overwritten the opening brace."""
+    overwritten the opening brace.
+
+    Also the ONE test in this file where stderr is redirected (via
+    `subprocess.PIPE`) but does NOT alias `manifest_path` — `stdout=` is the
+    only thing bound to it here — so this is the case `_stream_aliases_path`
+    must NOT suppress. The round-4 full-panel correctness lens found that
+    nothing asserted on `result.stderr` anywhere in this file, so a mutant
+    that always suppresses (equivalent to an inverted `if not
+    _stream_aliases_path(...)`) passed the entire suite undetected — this
+    assertion is the kill for that mutant."""
     root = _fake_repo(tmp_path)
     manifest_path = root / kit_doctor.MANIFEST_NAME
     script = ENGINE_DIR / "kit_doctor.py"
@@ -880,6 +889,7 @@ def test_a_shell_redirect_to_the_default_output_path_does_not_splice_the_manifes
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["kit_version"] == 2
     assert "check_doc_budget.py" in json.dumps(manifest["files"])
+    assert f"wrote {manifest_path}" in result.stderr
 
 
 def test_a_merged_stream_redirect_does_not_splice_the_manifest(tmp_path):
@@ -1563,7 +1573,12 @@ def test_a_shell_redirect_does_not_splice_the_record_install_baseline(tmp_path):
     tool defaults to (`root/kit-manifest.json`, no `--baseline` override) —
     the literal collision. Before this fix this reproduced with `json.load`
     raising the same `JSONDecodeError: Expecting value: line 1 column 1
-    (char 0)` `--generate-manifest` did."""
+    (char 0)` `--generate-manifest` did.
+
+    Same dual purpose as its sibling: stderr here is piped but does NOT
+    alias `baseline_path`, so this is also the "must still print" case —
+    see that test's docstring for why the assertion on `result.stderr`
+    matters (round-4 full-panel correctness lens)."""
     root = _fake_repo(tmp_path)
     _write(root / "scripts" / "check_doc_budget.py", "installed")
     baseline_path = root / kit_doctor.MANIFEST_NAME
@@ -1579,6 +1594,7 @@ def test_a_shell_redirect_does_not_splice_the_record_install_baseline(tmp_path):
     assert result.returncode == 0
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
     assert "scripts/check_doc_budget.py" in baseline["files"]
+    assert f"wrote {baseline_path}" in result.stderr
 
 
 def test_a_merged_stream_redirect_does_not_splice_the_record_install_baseline(tmp_path):

@@ -2349,16 +2349,19 @@ def _stream_aliases_path(stream: object, path: Path) -> bool:
     a stream this module had already "fixed".
 
     Checking `stream.isatty()` instead — the ticket's own second proposed route, refuse
-    when stdout is not a tty — was tried first and rejected: it is `True` for a shell
-    redirect (correctly), but it is ALSO `True` for this module's actual majority
-    caller. `/adopt` and `/upgrade` run these flags agent-driven, and an agent's
-    stdout/stderr are captured by its harness, never a tty, even with no redirect
-    anywhere near the target file. Gating on `isatty()` would have silenced the status
-    line for nearly every real invocation to close a hazard that only exists when a
-    stream aliases the exact file just written — trading a rare, avoidable corruption
-    for a near-universal loss of feedback. This function asks the narrower, precise
-    question instead: a pipe, a genuine tty, or a redirect to any OTHER file all compare
-    unequal here and print normally; only the exact colliding file suppresses.
+    when stdout is not a tty — was tried first and rejected. Measured, not assumed:
+    `isatty()` is `False` for a shell redirect to a file — correctly, that is the
+    collision case — but it is ALSO `False` for this module's actual majority caller,
+    with no redirect anywhere near the target file. `/adopt` and `/upgrade` run these
+    flags agent-driven, and an agent's stdout/stderr are captured by its harness (a pipe,
+    same as `subprocess.PIPE`), never a tty, whether or not anything downstream redirects
+    to the same file. The two cases this fix needs to TELL APART — "aliases the file just
+    written" and "captured but harmless" — collapse to the identical `False` under
+    `isatty()`, so gating on it cannot distinguish them: it would have silenced the
+    status line for nearly every real invocation to close a hazard that only exists in
+    one of the two. This function asks the narrower, precise question instead: a pipe, a
+    genuine tty, or a redirect to any OTHER file all compare unequal here and print
+    normally; only the exact colliding file suppresses.
 
     Degrades to ``False`` — print anyway — on any failure to inspect either side:
     ``stream.fileno()`` raises ``io.UnsupportedOperation`` (a subclass of both
