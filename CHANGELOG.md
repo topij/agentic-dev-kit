@@ -45,22 +45,12 @@ starts.
 ## #475 — 2026-08-15
 
 - **CHANGED (engine CLI surface)** — `kit_doctor.py`'s two writing flags,
-  `--generate-manifest` and `--record-install`, both had a `wrote <path>
-  (...)` status line on **stdout** right after writing their target file
-  (`kit-manifest.json` by default, for both) through its own descriptor.
-  Redirecting stdout to that same default path — `kit_doctor.py
-  --generate-manifest > kit-manifest.json`, or the `--record-install`
-  equivalent `/adopt` and `/upgrade` actually run — made the status line
-  land on the redirect's own descriptor and overwrite the file's opening
-  bytes with itself: a silently corrupted manifest or baseline, exit 0
-  (#464; the `--record-install` half of this was found by the fallback
-  review panel while reviewing the `--generate-manifest` fix, reproduced
-  live with the identical symptom). Both status lines now print to
-  **stderr**. If you were capturing either line from stdout, read it from
-  stderr instead; if you were relying on a `>` redirect to produce the file
-  at all, stop — the tool writes it regardless of any redirect, and the
-  redirect was the corruption vector, not a valid way to select the output
-  path.
+  `--generate-manifest` and `--record-install`, now print their `wrote
+  <path> (...)` status lines to **stderr** instead of stdout (#464). If you
+  were capturing either line from stdout, read it from stderr instead. Do
+  not redirect stdout to select the output path — pass `--manifest` /
+  `--baseline` for a non-default one; the tool writes its target file
+  itself regardless of any redirect.
 
 ## #459 — 2026-08-13
 
