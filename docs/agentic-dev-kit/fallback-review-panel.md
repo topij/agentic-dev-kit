@@ -17,6 +17,36 @@ are for reading order only and may change (`#167`). Every citation on the kit's
 narrative logs still carry older numeric citations — records, not instructions —
 and some of them no longer resolve to the item they name.
 
+## Before you accept the outage as fixed
+
+An outage this file can substitute for is not always one you have to have. A
+reviewer's coverage is partly a **configuration you chose** — what triggers it,
+what it re-reviews, whether it runs at all on a given branch — and each of those
+settings spends whatever budget the reviewer has. Read that configuration before
+concluding the reviewer cannot serve this repo, and especially before a recurring
+shortfall hardens into a standing panel habit.
+
+Everything else in this file, and everything in `review.*` beside it, is
+**detection and substitution**: `unavailable_markers`, the pending grace, the
+identity trust rules, the lens contract. None of it asks whether the reviewer was
+configured to be available in the first place. A shortfall that is really an
+unexamined default will otherwise recur forever, with a panel paid each time it
+does.
+
+The kit's own repo is the worked example. It ran four sessions and five recorded
+occurrences of a rate-limited reviewer — filing tickets, building outage
+detection, paying full panels — before anyone read the bot's configuration. There
+was none: it had always run on stock defaults, one of which re-reviews on every
+push, against a workflow that pushes a new head per fix round. Most of a
+one-review-per-hour budget was going to re-reviews of fix rounds while first
+passes went unfunded (`#372`).
+
+Two things this does **not** say. It is not a claim that a configured reviewer
+makes the panel redundant — this repo's measurements run the other way, and the
+bot and the panel keep finding disjoint defects. And it reduces to nothing when
+`review.bots` is empty: with no reviewer to configure there is no trigger to
+check, and the panel is simply your reviewer rather than a fallback for one.
+
 ## Why a panel and not a command
 
 `review.fallback_commands.<runtime>` runs the runtime's own review command — in

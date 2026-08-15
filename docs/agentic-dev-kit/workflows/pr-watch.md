@@ -240,6 +240,17 @@ Self-pace on a bounded cadence — don't busy-wait:
 
 - **Converged** — `converged: true` (green + clean). Report and finish. This is the
   goal of the loop. State `mergeable` too: convergence is not merge clearance.
+  - **If your reviewer does not auto-review every push, request it here.** A repo
+    that has turned off incremental auto-review (to stop spending a bounded review
+    budget on fix rounds — see
+    [`../fallback-review-panel.md`](../fallback-review-panel.md), *Before you
+    accept the outage as fixed*) has a reviewer that saw the head the PR opened
+    at, and nothing since. Convergence is the moment the merge head stops moving,
+    so it is the moment to spend one review on it: request one at the current head
+    and poll on. Without that, the receipt binds to a head the reviewer never
+    read — the same shape as a bot whose review is silently behind the head, which
+    `coverage` exists to surface. Nothing in `pr_watch.py` performs this request;
+    it observes only.
 - **Stuck / needs a decision** — a check fails for a reason you can't resolve (a
   flaky-infra failure that won't clear on re-run; an external dependency; a finding
   that needs an operator product/design call). Stop, report the specific blocker, and
