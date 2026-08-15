@@ -187,21 +187,37 @@ _index_sessions() {
     done
 }
 
-# _session_dir_for_branch <branch> — the indexed session dir, or "" if none.
+# _session_dir_for_branch <branch> — the indexed session dir, or "" if the
+# branch has no session OR more than one session claims it.
+#
+# The scan is exhaustive rather than first-match. `dev_session.sh new` refuses a
+# branch that already exists, so two sessions recording one branch takes a
+# `new`/`new` race or a dir left behind out of band — but when it happens,
+# first-match makes the verdict depend on the order the shell globbed
+# `$SESSIONS_DIR/*/`: the same lane reads `operator` from one dir and `self`
+# from the other, and the probe reads the wrong lane's receipt. Refusing an
+# ambiguous key keeps the answer deterministic and on the safe side (no session
+# ⇒ never `held`), and says so once instead of resolving it silently.
+#
 # Counted `while` rather than `for i in "${!SESS_BR[@]}"`: under `set -u`,
 # bash 3.2 (the macOS default, and what `check-syntax` runs) errors on the
 # index expansion of an EMPTY array, which is the common case here.
 _session_dir_for_branch() {
-    local branch="$1" i=0 n
+    local branch="$1" i=0 n found=""
     n="${#SESS_BR[@]}"
     while [[ "$i" -lt "$n" ]]; do
         if [[ "${SESS_BR[$i]}" == "$branch" ]]; then
-            printf '%s' "${SESS_DIR[$i]}"
-            return 0
+            if [[ -n "$found" ]]; then
+                echo "⚠ two sessions record branch '$branch' ($found, ${SESS_DIR[$i]}) —" >&2
+                echo "  its merge class is ambiguous, so it is never classified as held." >&2
+                printf ''
+                return 0
+            fi
+            found="${SESS_DIR[$i]}"
         fi
         i=$((i + 1))
     done
-    printf ''
+    printf '%s' "$found"
 }
 
 # _held_check <branch> <pr> — is this open PR's lane HELD for the operator?
@@ -240,15 +256,16 @@ _held_check() {
     merge_class="$(cat "$session_dir/merge_class")"
     [[ "$merge_class" == "operator" ]] || return 1
 
-    # No `command -v uv` / `-f pr_watch.py` pre-checks: both would be equivalent
-    # mutants. An absent `uv`, an absent engine, a timeout and a transport
-    # failure all leave the invocation below non-zero, and all four mean the same
-    # thing here — the probe did not run, so rc 2 and the caller's stderr note.
+    # No `command -v uv` / `-f pr_watch.py` pre-check, and no empty-`$report`
+    # check either: all three would be equivalent mutants. An absent `uv`, an
+    # absent engine, a timeout, a transport failure and an empty reply all end at
+    # the same place — a non-zero invocation, or a parse below that raises — and
+    # all of them mean the one thing: the probe did not run, so rc 2 and the
+    # caller's stderr note.
     to="$(_timeout_prefix 60)"
     # shellcheck disable=SC2086
     report="$(DEVKIT_STATE_ROOT="$session_dir/state" \
         $to uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist 2>/dev/null)" || return 2
-    [[ -n "$report" ]] || return 2
 
     # `mergeable` is the precise name and fails CLOSED when absent; `done` is its
     # unchanged legacy alias. `converged` must NEVER be read here — it is true on

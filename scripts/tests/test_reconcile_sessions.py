@@ -4,8 +4,15 @@ Why this file exists at all: the reconciler had no test module before #465, and
 #465 adds a fourth terminal state plus a new exit code to it. A new state with
 no failing case behind it is the pattern #417 and #447 are filed about, so every
 assertion here is written to die under a specific mutation of the branch it
-covers (the four `_held_check` returns, the tally composition, and the three-way
-exit).
+covers: the four `_held_check` returns, the branch → session-dir resolution
+(identity AND its ambiguity refusal), the tally composition, and the three-way
+exit.
+
+The resolution half of that list is here because the review panel put it there.
+The first version of this file pinned everything else and let two resolution
+mutants through — one lens made the lookup ignore its argument, the other made
+two session dirs claiming one branch resolve by glob order; both survived all 19
+tests. The tests named for those mutants say so in place.
 
 **Everything runs the real script.** `gh`, `uv` and the session directory are
 faked, but `reconcile_sessions.sh` itself is executed unmodified through `bash`,
@@ -386,6 +393,85 @@ def test_a_lane_reached_by_branch_name_still_resolves_its_session(harness: Harne
 
     assert _status_of(result.stdout, "feat/custom-name") == "held"
     assert result.returncode == 4
+
+
+def test_the_index_matches_on_branch_identity_not_on_position(harness: Harness) -> None:
+    """The panel's correctness lens killed the first version of this file with a
+    mutant no test caught: make `_session_dir_for_branch` ignore its argument and
+    return the first indexed session. Every other multi-session test here survives
+    it, because the `uv` stub answers by PR number and never notices it was handed
+    the wrong sandbox. So this one pins identity BOTH ways, with two sessions whose
+    merge classes disagree and whose glob order is fixed by their names.
+
+    `aaa` sorts first, so first-match resolves everything to it."""
+    harness.branch("lane/aaa")
+    harness.pr("lane/aaa", 530, "OPEN")
+    aaa = harness.session("aaa", "lane/aaa", "operator")
+    harness.watch_report(530, mergeable=True)
+
+    harness.branch("lane/zzz")
+    harness.pr("lane/zzz", 531, "OPEN")
+    harness.session("zzz", "lane/zzz", "self")
+    harness.watch_report(531, mergeable=True)
+
+    # The self-class lane must NOT borrow the operator class of the first entry.
+    only_zzz = harness.run("zzz")
+    assert _status_of(only_zzz.stdout, "zzz") == "open"
+    assert harness.uv_calls() == []
+
+    # And the operator lane must be probed against ITS OWN sandbox, which is what
+    # dies if resolution ever answers with a different session's directory.
+    only_aaa = harness.run("aaa")
+    assert _status_of(only_aaa.stdout, "aaa") == "held"
+    assert [state_root for state_root, _ in harness.uv_calls()] == [str(aaa / "state")]
+
+
+def test_the_index_matches_on_branch_identity_in_the_other_direction(
+    harness: Harness,
+) -> None:
+    """The mirror of the test above, with the classes swapped, so a mutant that
+    resolves to the LAST match rather than the first dies too."""
+    harness.branch("lane/aaa")
+    harness.pr("lane/aaa", 532, "OPEN")
+    harness.session("aaa", "lane/aaa", "self")
+    harness.watch_report(532, mergeable=True)
+
+    harness.branch("lane/zzz")
+    harness.pr("lane/zzz", 533, "OPEN")
+    zzz = harness.session("zzz", "lane/zzz", "operator")
+    harness.watch_report(533, mergeable=True)
+
+    result = harness.run("aaa", "zzz")
+
+    assert _status_of(result.stdout, "aaa") == "open"
+    assert _status_of(result.stdout, "zzz") == "held"
+    assert [state_root for state_root, _ in harness.uv_calls()] == [str(zzz / "state")]
+    assert result.returncode == 3
+
+
+def test_two_sessions_claiming_one_branch_are_refused_not_ranked(harness: Harness) -> None:
+    """The panel's adversarial lens executed this: with two session dirs recording
+    the same branch, first-match made `held` vs `open` depend on nothing but the
+    alphabetical order of the directory names — swapping only the merge-class
+    values flipped the verdict and the exit code. Ambiguity is now refused in both
+    arrangements, which is what makes the outcome independent of that order."""
+    harness.branch("lane/dup")
+    harness.pr("lane/dup", 534, "OPEN")
+    harness.watch_report(534, mergeable=True)
+
+    for first, second in (("operator", "self"), ("self", "operator")):
+        shutil.rmtree(harness.sessions, ignore_errors=True)
+        harness.sessions.mkdir()
+        harness.uv_argv_log.write_text("", encoding="utf-8")
+        harness.session("aaa_old", "lane/dup", first)
+        harness.session("zzz_new", "lane/dup", second)
+
+        result = harness.run("lane/dup")
+
+        assert _status_of(result.stdout, "lane/dup") == "open", (first, second)
+        assert result.returncode == 3, (first, second)
+        assert "two sessions record branch 'lane/dup'" in result.stderr
+        assert harness.uv_calls() == [], "an ambiguous branch must not be probed"
 
 
 def test_a_pre_metadata_session_resolves_through_the_prefix(harness: Harness) -> None:
