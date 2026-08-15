@@ -11,10 +11,18 @@
 # by ANY mechanism — dev_session.sh sessions, background-Agent worktrees,
 # headless lanes, or bare branches — not just dev_session.sh session metadata.
 #
-# For every launched lane it resolves a terminal state from the PR record
-# (which survives branch deletion) plus the local branch:
+# For every launched lane it resolves a state from the PR record (which survives
+# branch deletion) plus the local branch. Three of the four are TERMINAL —
+# merged, held, parked; `open` is the one that says reconciliation is not
+# finished, which is why it, alone, keeps the batch un-closeable:
 #   • merged  — a merged PR exists for the branch              → counts toward M
-#   • open    — a PR is still open (CI/review in flight)       → batch not closeable
+#   • held    — an OPERATOR-class lane whose open PR is        → counts toward H
+#               merge-ready: green, review-clean, and carrying
+#               an independent-review receipt bound to the
+#               current head. The lane is finished; only the
+#               operator's merge decision is missing, so the
+#               batch itself can no longer advance it.
+#   • open    — a PR is still open with work left on it        → batch not closeable
 #   • parked  — no merged PR; sub-reason surfaced so a dead    → counts toward K
 #               lane can never hide behind the aggregate:
 #                 · PR closed unmerged
@@ -23,7 +31,9 @@
 #                 · no PR, branch absent (verify it ran)
 #
 # Emits a table + the "launched N, merged M, parked K" tally the wrap-up step
-# prints before writing its block.
+# prints before writing its block. A `held H` term is appended to that tally
+# only when at least one lane is held, so a batch with none prints the line it
+# has always printed.
 #
 # Usage:
 #   scripts/reconcile_sessions.sh <scope|branch> [...] [--prefix <configured>] [--base <configured>]
@@ -42,8 +52,11 @@
 # Explicit args/--match stay authoritative for wrap-up; discovery is a convenience
 # (a torn-down lane drops out of both session dirs and the worktree list).
 #
-# Exit: 0 = every launched lane merged; 3 = at least one open or parked (review
-# each before writing the block); 64 = usage error.
+# Exit: 0 = every launched lane merged; 4 = every launched lane merged or held,
+# at least one held (nothing left for the batch — the operator owes a merge
+# decision); 3 = at least one lane open or parked (review each before writing
+# the block); 64 = usage error. 0 still means MERGED and nothing else — see the
+# rationale at the return statements.
 
 set -euo pipefail
 
@@ -77,19 +90,23 @@ _die() {
     exit 64
 }
 
-# Best-effort `gh` with a short timeout so reconciliation never hangs on a slow
-# network — same idiom as dev_session.sh's list. A timeout/auth failure yields an
+# Timeout prefix (possibly empty) so no probe here can hang the wrap-up on a
+# slow network — same idiom as dev_session.sh's list. Factored out because the
+# `held` probe needs the same guard with a longer budget than a single `gh` call.
+_timeout_prefix() {
+    if command -v timeout >/dev/null 2>&1; then
+        echo "timeout $1"
+    elif command -v gtimeout >/dev/null 2>&1; then
+        echo "gtimeout $1"
+    fi
+}
+
+# Best-effort `gh` with a short timeout. A timeout/auth failure yields an
 # empty string, which classifies as "no PR" (conservative: leans toward flagging
 # a scope as parked rather than silently asserting it merged).
 _gh() {
     local to
-    if command -v timeout >/dev/null 2>&1; then
-        to="timeout 10"
-    elif command -v gtimeout >/dev/null 2>&1; then
-        to="gtimeout 10"
-    else
-        to=""
-    fi
+    to="$(_timeout_prefix 10)"
     # shellcheck disable=SC2086
     $to gh "$@" 2>/dev/null || true
 }
@@ -144,6 +161,218 @@ _branch_reason() {
     fi
 }
 
+# Branch → session-dir index (parallel arrays; bash 3.2 has no associative
+# arrays and the rest of this file already uses that idiom).
+#
+# Lanes are keyed on BRANCH, but the two artifacts `held` needs — the persisted
+# merge class and the lane's pr-watch state sandbox — are keyed on SCOPE, i.e.
+# on the session directory `dev_session.sh new` created. Indexing every session
+# dir by the branch it recorded makes those reachable no matter how the lane
+# surfaced (explicit scope, --match glob, worktree, session dir), and matches
+# the branch dev_session.sh's own `rm`/`pr-watch`/`merge` resolve.
+SESS_BR=()
+SESS_DIR=()
+
+# _index_sessions <prefix> — populate the branch → session-dir index. Same
+# branch resolution as the discovery pass below: the recorded `branch` file
+# wins, else the default-namespace reconstruction for a pre-metadata session.
+#
+# Dirs are stored ABSOLUTE (`cd … && pwd -P`, the same normalization
+# dev_session.sh applies before writing a headless lane's state-root marker).
+# $SESSIONS_DIR is absolute by default but $DEVKIT_SESSIONS_DIR may not be, and
+# pr_watch.py treats a RELATIVE $DEVKIT_STATE_ROOT as "ignore this and use
+# <repo>/state" rather than as an error — deliberately, so its loop never
+# crashes. The probe below would then read the MAIN checkout's per-PR file,
+# which can hold real unrelated history for the same PR number, and no failure
+# would be visible anywhere. Absolute here closes that off at the source.
+_index_sessions() {
+    local prefix="$1" d scope sbr abs
+    [[ -d "$SESSIONS_DIR" ]] || return 0
+    for d in "$SESSIONS_DIR"/*/; do
+        [[ -d "$d" ]] || continue
+        scope="$(basename "$d")"
+        if [[ -s "${d}branch" ]]; then sbr="$(cat "${d}branch")"; else sbr="${prefix}/${scope}"; fi
+        [[ -n "$sbr" ]] || continue
+        abs="$(cd "$d" 2>/dev/null && pwd -P)" || abs=""
+        [[ -n "$abs" ]] || abs="${d%/}"
+        SESS_BR+=("$sbr")
+        SESS_DIR+=("$abs")
+    done
+}
+
+# _session_dir_for_branch <branch> — the indexed session dir, or "" if the
+# branch has no session OR more than one session claims it.
+#
+# The scan is exhaustive rather than first-match. `dev_session.sh new` refuses a
+# branch that already exists, so two sessions recording one branch takes a
+# `new`/`new` race or a dir left behind out of band — but when it happens,
+# first-match makes the verdict depend on the order the shell globbed
+# `$SESSIONS_DIR/*/`: the same lane reads `operator` from one dir and `self`
+# from the other, and the probe reads the wrong lane's receipt. Refusing an
+# ambiguous key keeps the answer deterministic and on the safe side (no session
+# ⇒ never `held`), and says so once instead of resolving it silently.
+#
+# Counted `while` rather than `for i in "${!SESS_BR[@]}"`: under `set -u`,
+# bash 3.2 (the macOS default, and what `check-syntax` runs) errors on the
+# index expansion of an EMPTY array, which is the common case here.
+_session_dir_for_branch() {
+    local branch="$1" i=0 n found=""
+    n="${#SESS_BR[@]}"
+    while [[ "$i" -lt "$n" ]]; do
+        if [[ "${SESS_BR[$i]}" == "$branch" ]]; then
+            if [[ -n "$found" ]]; then
+                echo "⚠ two sessions record branch '$branch' ($found, ${SESS_DIR[$i]}) —" >&2
+                echo "  its merge class is ambiguous, so it is never classified as held." >&2
+                printf ''
+                return 0
+            fi
+            found="${SESS_DIR[$i]}"
+        fi
+        i=$((i + 1))
+    done
+    printf '%s' "$found"
+}
+
+# The forge repo this run is talking to, resolved lazily (only a run that reaches
+# the probe pays for it) and then pinned onto the probe. Resolved ONCE per run
+# when it succeeds — but see the memo note below for the case where it does not,
+# because "once" is the property that keeps drifting out of true here.
+#
+# `_gh` inherits the caller's cwd and any ambient $GH_REPO; pr_watch.py pins its
+# own subprocess cwd to ITS $REPO_ROOT and separately honours $GH_REPO. Those two
+# resolutions can differ — a reconcile run started outside the repo, or a shell
+# with GH_REPO exported for another repo, which this repo's own "Working across
+# two trees" note says operators do routinely. The PR number would then come from
+# one repository and the merge-readiness verdict from another. Mostly that fails
+# safe (no such PR → rc 2 → `open`); the case that does not is a same-numbered
+# green PR in the other repo, which would report `held` about a PR nobody looked
+# at. Resolving through `_gh` means this IS whatever `gh pr list` resolved,
+# ambient override included — the point is that both agree, not which one wins.
+#
+# Resolving is therefore a PRECONDITION of the probe, not an optimisation of it.
+# An earlier version simply omitted the pin when resolution failed, and that
+# reopened the hazard from the other side: `env` only ADDS to the environment, so
+# an unpinned probe inherits whatever $GH_REPO the operator's shell already had —
+# and unlike the case above, nothing then agrees with anything. Executed by a
+# review lens: with resolution failing and a stale ambient $GH_REPO, a lane
+# reported `held` on a probe that ran against an unrelated repository, with no
+# warning anywhere, because rc 0 from the wrong repo is indistinguishable from rc
+# 0 from the right one. Unresolvable is now a refusal (rc 2 → `open`, named on
+# stderr). In a `gh` outage that costs nothing — `gh pr list` shares the failure,
+# so those lanes are already classifying as parked — but a TRANSIENT failure of
+# this one call is a different case, which is why the memo below caches only
+# success.
+#
+# Sets $REPO_NWO rather than printing it, and callers run it as a plain command:
+# `nwo="$(_repo_nwo)"` would evaluate the body in a SUBSHELL, so the memo it sets
+# would die with that subshell and every lane would pay another `gh repo view`.
+# `_held_check` runs in the current shell, so a global assignment there survives
+# — which is what makes the memo real rather than merely stated.
+#
+# CACHES ONLY SUCCESS, and the emptiness of $REPO_NWO is itself the memo. A
+# separate "already tried" flag, set on failure too, made one transient blip
+# poison the WHOLE batch: a review lens executed it — `repo view` failing on its
+# first call only, `gh pr list` succeeding throughout — and both operator lanes
+# lost `held` for the rest of the run, including the one whose own call would
+# have succeeded. So the run makes ONE `gh repo view` when it succeeds, and up to
+# one per operator-class open lane when it keeps failing — the same order as the
+# `gh pr list` each of those lanes already makes, each behind the same short
+# timeout. Say it that way wherever it is said: this cardinality was written down
+# as a flat "once per run" and two consecutive review rounds found that stale.
+#
+# What counts as a resolution is the SHAPE, not merely a non-empty reply. `_gh`
+# swallows exit status by design, so a garbage-but-non-empty stdout would be
+# cached as a permanent success and would silently defeat the retry above for the
+# rest of the run — a review lens executed exactly that with a `repo view` that
+# printed a single space, and the round after it got in with `/`, `acme/` and
+# `a/b/c` past a check that only asked for "contains a slash, contains no space".
+#
+# So the test is EXACT, not a heuristic: `gh repo view --json nameWithOwner`
+# returns `OWNER/REPO` and nothing else, so anything that is not two non-empty
+# whitespace-free segments is not a resolution and must not end the retries.
+# Reject-first ordering, because every near-miss shape has to fall into a reject
+# arm rather than out of an accept arm's edge.
+REPO_NWO=""
+_resolve_repo_nwo() {
+    [[ -z "$REPO_NWO" ]] || return 0
+    REPO_NWO="$(_gh repo view --json nameWithOwner --jq .nameWithOwner)"
+    REPO_NWO="${REPO_NWO%%$'\n'*}"
+    case "$REPO_NWO" in
+        ""|/*|*/|*/*/*|*[[:space:]]*) REPO_NWO="" ;;
+        */*) : ;;
+        *) REPO_NWO="" ;;
+    esac
+}
+
+# _held_check <branch> <pr> — is this open PR's lane HELD for the operator?
+#
+#   0 — held: operator-class lane, and the PR is merge-ready
+#   1 — not held (lane is genuinely still open)
+#   2 — could not be determined; caller reports `open` and says why
+#
+# Two pieces of evidence, both already on disk or already reachable:
+#
+# 1. The PERSISTED merge class (`<session>/merge_class`, written by
+#    `dev_session.sh new`). Note the asymmetry with dev_session.sh's `merge`,
+#    which defaults a MISSING merge class to `operator`: there, defaulting to
+#    operator REFUSES an autonomous merge, so it fails safe. Here, defaulting
+#    to operator would WIDEN `held` and let an unknown lane claim a terminal
+#    state, so absent metadata must mean "not held". Same value, opposite
+#    default, because the safe direction is opposite.
+#
+# 2. `mergeable` from a non-persisting pr_watch poll against the lane's own
+#    state sandbox — the engine's own predicate for "green, review-clean, and
+#    carrying an independent-review receipt bound to the current head". Read,
+#    never re-derived: a rollup verdict recomputed here would be a second copy
+#    of a contract that can drift from the engine's (the same reason
+#    dev_session.sh's merge gate reads the flag instead of rebuilding it), and
+#    unacked review findings are not visible in `gh pr list` output at all — so
+#    a locally-derived "looks green" would call a lane with open findings
+#    finished. `--no-persist` keeps this probe read-only: reconciliation must
+#    never mutate a lane's seen-set, settle baseline or receipt.
+_held_check() {
+    local branch="$1" pr="$2"
+    local session_dir merge_class to report
+    local probe_env
+
+    session_dir="$(_session_dir_for_branch "$branch")"
+    [[ -n "$session_dir" ]] || return 1
+    [[ -s "$session_dir/merge_class" ]] || return 1
+    merge_class="$(cat "$session_dir/merge_class")"
+    [[ "$merge_class" == "operator" ]] || return 1
+
+    # No `command -v uv` / `-f pr_watch.py` pre-check, and no empty-`$report`
+    # check either: all three would be equivalent mutants. An absent `uv`, an
+    # absent engine, a timeout, a transport failure and an empty reply all end at
+    # the same place — a non-zero invocation, or a parse below that raises — and
+    # all of them mean the one thing: the probe did not run, so rc 2 and the
+    # caller's stderr note. An unresolvable forge repo joins them, but needs its
+    # own line because it is the one that would otherwise SUCCEED, against the
+    # wrong repository.
+    to="$(_timeout_prefix 60)"
+    _resolve_repo_nwo
+    [[ -n "$REPO_NWO" ]] || return 2
+    probe_env=(env "DEVKIT_STATE_ROOT=$session_dir/state" "GH_REPO=$REPO_NWO")
+    # shellcheck disable=SC2086
+    report="$("${probe_env[@]}" \
+        $to uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist 2>/dev/null)" || return 2
+
+    # `mergeable` is the precise name and fails CLOSED when absent; `done` is its
+    # unchanged legacy alias. `converged` must NEVER be read here — it is true on
+    # a green, comment-clean PR carrying no review receipt.
+    printf '%s' "$report" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(2)
+if not isinstance(d, dict):
+    sys.exit(2)
+sys.exit(0 if d.get("mergeable") is True else 1)
+' || return $?
+    return 0
+}
+
 # Lane set, deduped by resolved branch (a branch can surface from more than one
 # source — an explicit scope, a --match glob, a git worktree, a session dir).
 # Display label + branch are parallel arrays; LANE_SEEN is a space-delimited set
@@ -178,6 +407,11 @@ cmd_reconcile() {
             *) scopes+=("$1"); shift ;;
         esac
     done
+
+    # Index the session dirs up front — `held` needs each lane's merge class and
+    # state sandbox regardless of which of the four selection paths surfaced it,
+    # and the reconstruction fallback needs the resolved `--prefix`.
+    _index_sessions "$prefix"
 
     # 1) Explicit scope/branch args (authoritative for wrap-up). A token with '/'
     #    is a full branch as-is; otherwise it's a scope → <prefix>/<scope>.
@@ -247,8 +481,9 @@ cmd_reconcile() {
     printf '%-28s %-8s %-6s %s\n' "----------------------------" "--------" "------" "------"
 
     local launched="${#LANE_BR[@]}"
-    local merged=0 open=0 parked=0 parked_notes=""
+    local merged=0 open=0 parked=0 held=0 parked_notes="" held_notes="" unknown_notes=""
     local i disp branch pr_json classified state rest num title status detail pr_disp reason
+    local held_rc
 
     for i in "${!LANE_BR[@]}"; do
         disp="${LANE_DISP[$i]}"
@@ -270,7 +505,22 @@ cmd_reconcile() {
             MERGED)
                 merged=$((merged + 1)); status="merged"; pr_disp="#$num"; detail="$title" ;;
             OPEN)
-                open=$((open + 1)); status="open"; pr_disp="#$num"; detail="in flight — $title" ;;
+                pr_disp="#$num"
+                held_rc=0
+                _held_check "$branch" "$num" || held_rc=$?
+                if [[ "$held_rc" -eq 0 ]]; then
+                    held=$((held + 1)); status="held"
+                    detail="awaiting operator merge — $title"
+                    held_notes="${held_notes}  • ${disp}: PR #${num} — ${title}"$'\n'
+                else
+                    open=$((open + 1)); status="open"; detail="in flight — $title"
+                    # rc 1 is the ordinary "not held" answer and must stay silent.
+                    # Anything else means the probe could not run (no uv, no
+                    # pr_watch.py, timeout, transport failure) — the lane is
+                    # reported `open` either way, but a probe that never ran must
+                    # not be indistinguishable from one that ran and said no.
+                    [[ "$held_rc" -eq 1 ]] || unknown_notes="${unknown_notes}  • ${disp}: PR #${num}"$'\n'
+                fi ;;
             CLOSED)
                 parked=$((parked + 1)); status="parked"; pr_disp="#$num"
                 detail="PR closed unmerged — $title"
@@ -286,26 +536,71 @@ cmd_reconcile() {
     done
 
     echo
+    # `held H` and `open O` are appended only when non-zero, so a batch with
+    # neither prints the exact line it always has. `held` sits before `open`:
+    # both are unmerged, and the held ones are the ones nobody is still working.
+    local tally
+    tally="$(printf 'launched %d, merged %d, parked %d' "$launched" "$merged" "$parked")"
+    [[ "$held" -gt 0 ]] && tally="${tally}$(printf ', held %d' "$held")"
+    [[ "$open" -gt 0 ]] && tally="${tally}$(printf ', open %d' "$open")"
+    printf '%s\n' "$tally"
     if [[ "$open" -gt 0 ]]; then
-        printf 'launched %d, merged %d, parked %d, open %d\n' "$launched" "$merged" "$parked" "$open"
         echo "⚠ ${open} lane(s) still OPEN — batch not fully closed; finish or park before writing the block."
-    else
-        printf 'launched %d, merged %d, parked %d\n' "$launched" "$merged" "$parked"
+    fi
+    if [[ -n "$held_notes" ]]; then
+        echo "→ held for operator sign-off — green, review-clean, receipt bound to head."
+        echo "  Nothing left for the batch; merge or park each, and name it in the block:"
+        printf '%s' "$held_notes"
     fi
     if [[ -n "$parked_notes" ]]; then
         echo "⚠ parked — name each in the wrap-up block (never fold into \"all shipped\"):"
         printf '%s' "$parked_notes"
     fi
+    if [[ -n "$unknown_notes" ]]; then
+        {
+            # The parenthetical is an enumeration of the rc-2 causes, so it has to
+            # grow with them — a cause missing from it reads to the operator as
+            # "not my case". "repo unidentified" earns its own item rather than
+            # folding into "probe failed": there the probe is never invoked at all.
+            echo "⚠ could not evaluate for 'held' (no uv / no pr_watch.py /"
+            echo "  repo unidentified, so the probe was not run / probe failed) —"
+            echo "  reported OPEN, which may understate them:"
+            printf '%s' "$unknown_notes"
+        } >&2
+    fi
 
-    # Exit 0 only when every launched lane merged (open == parked == 0); else 3
-    # so a caller/the skill treats "not all landed" as a stop-and-account signal.
+    # Exit 0 only when every launched lane MERGED. Deliberately not widened to
+    # "merged or held", even though `all merged or held` is where a correctly-run
+    # autonomous batch lands: 0 is read — by this file's own header, by
+    # workflows/parallel.md, and by anyone who writes `&& echo all shipped` — as
+    # the claim that the work is IN the protected branch. A held lane is not; the
+    # operator can still decline it, and the degenerate all-operator batch would
+    # exit 0 having merged nothing at all. That is precisely the aggregate that
+    # papers over a lane, which is why this script exists.
+    #
+    # So `held` gets its OWN code instead of borrowing either neighbour. 4 means
+    # "every lane is terminal and none is dead, but the operator owes a merge
+    # decision" — the answer to "is the BATCH done?", kept separate from 0's
+    # answer to "did everything LAND?". A caller that only ever asked `rc == 0`
+    # is unaffected; one that stops on any non-zero is unaffected; only a caller
+    # matching 3 exactly needs to learn 4, and that is the adopter-visible half
+    # of this change.
+    #
+    # Precedence: open or parked outranks held. A parked lane still needs naming
+    # and an open one still needs finishing, so neither may hide behind a batch
+    # that is otherwise handed to the operator.
     [[ "$merged" -eq "$launched" ]] && return 0
+    [[ "$open" -eq 0 && "$parked" -eq 0 && "$held" -gt 0 ]] && return 4
     return 3
 }
 
 case "${1:-}" in
     -h|--help|help)
-        sed -n '2,45p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+        # Every comment line from 2 until the first non-comment line, derived
+        # rather than a hardcoded end line. The hardcoded one had already drifted
+        # behind the header and was truncating it mid-sentence, and every edit
+        # that grows the header silently truncates more.
+        awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"
         exit 0
         ;;
 esac

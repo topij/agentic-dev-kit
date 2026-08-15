@@ -241,7 +241,8 @@ sessions never touch them (the kickoff says so). Each session's handoff rides it
 **PR body** — the one channel that's committed, reviewed, and visible across
 worktrees (dev-session `state/` sandboxes are isolated by design, so a session's
 worktree scratch is invisible to the cockpit). When the batch is closed — every PR
-merged or consciously parked — run the joint wrap-up **from this cockpit session**:
+merged, consciously parked, or **held** for an operator merge decision — run the joint
+wrap-up **from this cockpit session**:
 
 1. **Reconcile every launched scope to a terminal state first — before reading any
    narrative or writing any block.** An aggregate "all merged" is *not* evidence a
@@ -258,15 +259,22 @@ merged or consciously parked — run the joint wrap-up **from this cockpit sessi
    <prefix>/<scope> --state all`) and classifies the newest one itself, rather than
    asking the forge only for merged ones: a stale merged PR would otherwise mask the
    in-flight PR that is the lane's actual state. It resolves
-   **merged**, or marks it **parked** with the reason (`EMPTY — 0 commits, never
-   started`, `PR closed unmerged`, `N commit(s), no PR opened`) or **open** (still in
-   flight), then prints the `launched N, merged M, parked K` tally — exit 3 if any
-   scope is open or parked, 0 only when all merged. **Do not write the wrap-up block
-   until every launched scope is merged or consciously parked.** A scope that
-   reconciles to **open** means the batch isn't closeable — finish or park it first. A
-   scope that reconciles to **parked** gets named as parked in the block, never folded
-   into "all shipped". (Pass the scopes explicitly — `rm` removes session dirs, so a
-   scope already torn down won't auto-discover; the cockpit knows the launched set.)
+   **merged**; **held** (an operator-class lane whose open PR is already merge-ready —
+   green, review-clean, receipt bound to head — so only your merge decision is
+   missing); **parked** with the reason (`EMPTY — 0 commits, never started`, `PR closed
+   unmerged`, `N commit(s), no PR opened`); or **open** (still in flight). It then
+   prints the `launched N, merged M, parked K` tally, which grows a `held H` term when
+   any scope is held — exit 3 if any scope is open or parked, **4** if every scope is
+   merged or held with at least one held, 0 only when all merged. **Do not write the
+   wrap-up block until every launched scope is merged, consciously parked, or held.** A
+   scope that reconciles to **open** means the batch isn't closeable — finish or park it
+   first. A scope that reconciles to **parked** gets named as parked in the block, never
+   folded into "all shipped"; a scope that reconciles to **held** gets named as awaiting
+   your merge, with its PR number — it has NOT shipped either. (Pass the scopes
+   explicitly — `rm` removes session dirs, so a scope already torn down won't
+   auto-discover; the cockpit knows the launched set. `held` needs the session dir: a
+   torn-down lane has no persisted merge class or state sandbox left to read, and falls
+   back to `open`.)
 
    The reconciler is **mechanism-agnostic** — it keys on branch / PR head ref, so it
    also covers batches *not* launched via `parallel` (a background sub-agent fan-out,
@@ -280,12 +288,14 @@ merged or consciously parked — run the joint wrap-up **from this cockpit sessi
    worktree`s (deduped by branch), so a background-sub-agent worktree gets the same
    `launched/merged/parked` net that catches a dead session.
 
-1. Read each **merged** PR's narrative: `gh pr view <n> --json title,body` per merged
-   batch PR (parked scopes have no landed narrative to read).
+1. Read each **merged** and **held** PR's narrative: `gh pr view <n> --json title,body`
+   per merged or held batch PR (parked scopes have no landed narrative to read; a held
+   one has a finished PR body and is exactly what you need in order to rule on it).
 
 1. Write **one** "Latest session" block for the whole batch via `wrap-up` — open
-   with the `launched N, merged M, parked K` line, then PRs landed, collisions
-   avoided, and each parked scope with its reason. Not one block per session.
+   with the tally line, then PRs landed, collisions avoided, each parked scope with
+   its reason, and each held scope with its PR number and what it is waiting on. Not
+   one block per session.
 
 1. Open it as its own `chore: update handoff` PR (this checkout sits on the protected
    branch, so the handoff edit goes through a branch + PR like everything else;
