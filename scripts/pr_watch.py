@@ -233,12 +233,18 @@ STATE_DIR = _STATE_ROOT / "pr-watch"
 
 # Keep this list tight — over-filtering would hide a real review. Defaults target
 # a GitHub + CodeRabbit + Bugbot setup.
+#
+# `is_noise` matches these against the body ALONE, with no author check, so an
+# entry here silences the text wherever it appears — including in a human's
+# comment quoting the bot. Structural markers (the HTML comments a bot writes into
+# its own container) carry that property safely; the bot's *prose* does not, which
+# is why the clean-verdict sentence "No actionable comments were generated in the
+# recent review." is deliberately absent. `#468`.
 _DEFAULT_NOISE_MARKERS = (
     "bugbot needs on-demand usage enabled",  # Cursor billing notice
     "<!-- this is an auto-generated comment: summarize by coderabbit",  # walkthrough
     "<!-- this is an auto-generated comment: review in progress",  # CodeRabbit "processing…" placeholder
     "<!-- walkthrough_start -->",
-    "actionable comments posted: 0",  # CodeRabbit "nothing to change" review
     "review skipped",  # CodeRabbit draft-detected / skip notices
     "<!-- linear-linkback -->",  # a tracker's auto issue-mirror comment (not a finding)
 )

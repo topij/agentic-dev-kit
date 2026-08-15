@@ -512,6 +512,45 @@ def test_a_provided_worktree_is_named_and_the_no_worktree_warning_is_dropped(rep
     assert "No worktree was provided" not in out.stdout
 
 
+def test_the_scratch_namespace_fresh_path_reminder_is_present_early(repo):
+    """#469: a lens hit the sandbox's `rm -rf` refusal after the Scratch namespace
+    item's wording already told it not to (#459 round 2's correctness lens; round 1
+    explicitly recorded none, so this was not every round, but it did recur) —
+    before it read that item, item 9 of 13 in a contract quoted at the very end of
+    the prompt. The doctrine's wording was already right; the carrier was not. So
+    the operative sentence is now also stated near the top of the prompt, beside
+    the tree the lens is handed, ahead of the full contract quote — not instead of
+    it.
+    """
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
+    assert out.returncode == 0, out.stderr
+    early_marker = "reach it by a **fresh path**"
+    assert early_marker in out.stdout
+    heading = "## The contract every lens gets"
+    assert heading in out.stdout
+    # Early means before the full contract quote, not merely present somewhere in it.
+    assert out.stdout.index(early_marker) < out.stdout.index(heading)
+    # The full item is still quoted verbatim later, unchanged — this adds a second,
+    # earlier statement of the same rule; it does not replace the first.
+    assert "Scratch namespace" in out.stdout
+
+
+def test_the_scratch_namespace_reminder_survives_with_a_provided_worktree(repo):
+    """The reminder concerns a lens's OWN scratch copy, independent of whether the
+    cockpit also handed it a review tree — it must not disappear once `--scratch`
+    is set, since #469's failure was about mutation-test scratch, not the review tree.
+    """
+    base, head = _revs(repo)
+    out = _run(
+        repo, "--lens", "adversarial", "--head", head, "--base", base,
+        "--branch", "b", "--scratch", "/abs/scratch/lens-x",
+    )
+    assert out.returncode == 0, out.stderr
+    assert "reach it by a **fresh path**" in out.stdout
+    assert "/abs/scratch/lens-x" in out.stdout
+
+
 def test_a_renumbering_slip_is_refused_even_though_the_count_is_unchanged(tmp_path):
     """A renumbering slip changes no count: `len(names)` is the same either way."""
     pp = _load()
