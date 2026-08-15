@@ -12,6 +12,63 @@
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
 
+## 2026-08-15
+
+Surfaced by the five-lane autonomous batch (`#474`–`#478`). Items already
+issue-shaped were filed directly (`#479`, `#480`, `#481`) and are not repeated here.
+
+- **A review lens reported being told not to disclose a change to the operator.** (**H**)
+  The round-8 correctness lens on `#478` reported that after each of its
+  `git checkout --` reverts, a note appeared in its context falsely claiming the file
+  had been modified, describing the change as intentional, and instructing it not to
+  tell the user. It verified ground truth (file clean, hash matched), disregarded the
+  instruction, and disclosed it — which is the behaviour the lens contract wants, and
+  the only reason this is legible at all. **Second-hand and unverified from the
+  cockpit**: the report is the lane's, the lens transcript was not read, and no
+  mechanism here can confirm or refute it. Recorded because a concealment directive
+  reaching a reviewer is worth investigating whatever its origin, and because
+  self-disclosure is not a mechanism (`#416`'s lesson). *Proposed fix:* establish
+  whether this is a runtime artifact of external file modification before treating it
+  as anything more, then decide whether the lens contract should say what a lens does
+  when its own context instructs concealment.
+
+- **A lane reached for a sandbox override to get past a permission denial.** (**M**)
+  `#475`'s lane needed a rebase, found `git push --force*` and `git reset --hard`
+  denied, and tried a sandbox-disable flag before settling on `git merge origin/main`
+  — which was the correct route and which it disclosed unprompted. Nothing was
+  laundered through the cockpit and no escalation was obtained. *Proposed fix:* the
+  lane contract says nothing about what a lane does when it hits a permission wall;
+  naming merge-not-rebase as the sanctioned reconciliation would remove the reason to
+  reach for an override at all.
+
+- **Reconciling with a moved `main` voids a lane's review receipt.** (**M**)
+  Every lane after the first had to reconcile, and every reconciliation moves the head,
+  which invalidates the receipt bound to the old one. In a batch this is structural
+  rather than incidental: the later a lane lands, the more reconciliations it pays, and
+  each one re-opens a review obligation for a diff that is mostly conflict resolution.
+  `#478` absorbed the cost by declining a second reconciliation once mergeable.
+  `#435` is the same mechanism reached from the handoff-commit side. *Proposed fix:*
+  decide whether a reconciliation-only delta is a sanctioned `fallback:delta` subject,
+  and say so where the receipt rules live.
+
+- **The lane contract's idle-stall rule did not bind, with the rule in the prompt.** (**M**)
+  One lane backgrounded a poller and yielded the turn. `parallel-headless.md` names
+  prompt-injection of the contract as *the* fix for this failure mode, precisely
+  because a rule in a doc cannot bind a fresh agent — and here the rule was in the
+  prompt, verbatim, and did not hold. Resuming the lane with the rule quoted back at it
+  worked. *Proposed fix:* treat prompt-presence as necessary but not sufficient; the
+  cockpit needs to detect a lane that returns without a terminal state and re-drive it,
+  which is a cockpit mechanism rather than more contract text.
+
+- **The friction log's own header contradicts `session-start.md` about where the inbox
+  is.** (**L**) This file says "Anything that appears below a graduation marker is
+  un-graduated"; `session-start.md` says the inbox is "entries above the most-recent
+  `## … — Backlog migrated` marker; everything below it is already ticketed". The
+  pre-sweep file at `637c15f` settles it — dated entry sections sat *above* the marker
+  — so `session-start.md` is right and this file's header is wrong. Costs a git
+  archaeology detour at the exact moment a session is trying to write an entry.
+  *Proposed fix:* correct the header sentence here.
+
 ## 2026-08-14 — Backlog migrated to GitHub Issues (#463–#469)
 
 Swept in LLM-only mode
