@@ -2488,9 +2488,21 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: cannot write baseline {baseline_path}: {exc}", file=sys.stderr)
             return 2
         origin = kit_commit[:12] if kit_commit else "unrecorded"
+        # stderr, not stdout — same reason as the `--generate-manifest` status
+        # line below (#464). `baseline_path` defaults to the same
+        # `root/kit-manifest.json` this flag just wrote in full through its own
+        # descriptor above; `--record-install --from-kit <kit> >
+        # kit-manifest.json` is exactly as "obvious" an invocation as the one
+        # #464 was filed about, and reproduces the identical splice — found by
+        # the fallback panel's adversarial lens reviewing the `--generate-manifest`
+        # fix, live: `JSONDecodeError: Expecting value: line 1 column 1 (char 0)`
+        # on the redirected result. Fixing only the sibling branch would have
+        # left this one — the flag every `/adopt` and `/upgrade` actually
+        # runs — silently exposed to the same hazard.
         print(
             f"wrote {baseline_path} ({len(baseline['files'])} installed files, "
-            f"kit_version={version}, kit_commit={origin})"
+            f"kit_version={version}, kit_commit={origin})",
+            file=sys.stderr,
         )
         if unverified:
             print(

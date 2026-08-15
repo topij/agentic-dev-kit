@@ -1509,6 +1509,48 @@ def test_record_install_without_a_kit_still_splits_drift(tmp_path, capsys):
     assert [f.state for f in report.drifted] == ["stale"]
 
 
+def test_record_install_status_line_stays_off_stdout(tmp_path, capsys):
+    """The sibling of `test_generate_manifest_status_line_stays_off_stdout`.
+    `--record-install`'s default baseline path is the SAME `kit-manifest.json`
+    `--generate-manifest` defaults to, and its own `wrote ...` line had the
+    identical unfixed shape — found live by the fallback panel's adversarial
+    lens while reviewing #464's `--generate-manifest` fix: `--record-install
+    --from-kit <kit> > kit-manifest.json` reproduced the exact same splice,
+    unfixed, in the very flag every `/adopt` and `/upgrade` actually runs."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "installed")
+    code = kit_doctor.main(["--record-install", "--root", str(root)])
+    assert code == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert f"wrote {root / kit_doctor.MANIFEST_NAME}" in captured.err
+
+
+def test_a_shell_redirect_does_not_splice_the_record_install_baseline(tmp_path):
+    """The `--record-install` counterpart to
+    `test_a_shell_redirect_to_the_default_output_path_does_not_splice_the_manifest`:
+    a real subprocess, `stdout` bound to an open handle on the same path the
+    tool defaults to (`root/kit-manifest.json`, no `--baseline` override) —
+    the literal collision. Before this fix this reproduced with `json.load`
+    raising the same `JSONDecodeError: Expecting value: line 1 column 1
+    (char 0)` `--generate-manifest` did."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "installed")
+    baseline_path = root / kit_doctor.MANIFEST_NAME
+    script = ENGINE_DIR / "kit_doctor.py"
+    with baseline_path.open("w", encoding="utf-8") as redirected_stdout:
+        result = subprocess.run(
+            [sys.executable, str(script), "--record-install", "--root", str(root)],
+            stdout=redirected_stdout,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    assert result.returncode == 0
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    assert "scripts/check_doc_budget.py" in baseline["files"]
+
+
 def test_an_unreadable_baseline_degrades_instead_of_aborting(tmp_path, capsys):
     """A read-only diagnostic must not withhold the whole report because a
     supplementary file is malformed — but the degrade has to be visible."""
