@@ -52,8 +52,11 @@ starts.
   `PENDING`, `CHANGES_REQUESTED`, or in any state this engine does not recognize is
   **not** evidence, and leaves the receipt requirement standing. Note especially the
   `CHANGES_REQUESTED` case if you relied on the separate `reviewDecision` blocker to
-  cover it: that field reports the PR's aggregate decision over *required* reviewers, so
-  it reads `""` while a non-required bot is asking for changes. **If you record a receipt
+  cover it — **it covers it on one transport and not the other.** Under `gh`, that field
+  is GitHub's own and reflects required-reviewer rules, so it can read `""` while a
+  non-required bot asks for changes; on the REST fallback, `pr_watch`'s own
+  `_rest_review_decision` aggregates every reviewer regardless, so the blocker does fire.
+  The evidence rule above holds on both, which is why it does not defer to that blocker. **If you record a receipt
   on a PR your review bot already reviewed, stop — you no longer need
   to, and every available `<source>` literal names a fallback pass that did not run.**
   A repo with `review.bots: []` is unaffected: with no configured bot there is no

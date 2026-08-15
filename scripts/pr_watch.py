@@ -2742,11 +2742,20 @@ def summarize_review_bots(
 #                     CHANGES_REQUESTED blocker; the gate must not disagree with
 #                     it one function away.
 #   PENDING           not submitted. There is no verdict yet, only a draft.
-#   CHANGES_REQUESTED an unresolved objection, and NOT reliably covered by the
-#                     separate `reviewDecision` blocker: that field reports the
-#                     PR's aggregate decision over REQUIRED reviewers, and a bot
-#                     is typically not one, so it reads `""` while the bot is
-#                     asking for changes. Measured, not assumed.
+#   CHANGES_REQUESTED an unresolved objection, and not reliably covered by the
+#                     separate `reviewDecision` blocker — reliably meaning
+#                     ACROSS TRANSPORTS, which is the whole of the argument:
+#                     on the REST path `_rest_review_decision` aggregates every
+#                     reviewer's latest verdict with no required-reviewer
+#                     notion (its own docstring says so), so a bot's
+#                     CHANGES_REQUESTED DOES raise that blocker there. On the
+#                     `gh` path the field is GitHub's own, which does reflect
+#                     required-reviewer rules, and a bot is typically not a
+#                     required reviewer. A guard that holds on one transport
+#                     and not the other is not a guard, so this list does not
+#                     lean on it either way. Measured on the `gh` shape: with
+#                     `reviewDecision: ""`, the gate returned mergeable with no
+#                     blockers at all.
 #
 # APPROVED and COMMENTED both qualify. COMMENTED is not a weaker signal here —
 # it is the state CodeRabbit's own reviews actually carry on this repo,

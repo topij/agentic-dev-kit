@@ -3435,11 +3435,16 @@ def test_only_a_standing_verdict_is_evidence_not_merely_a_review_at_the_head() -
       `CHANGES_REQUESTED` blocker, so accepting it here made the gate disagree
       with its own sibling one function away.
     - ``PENDING`` — never submitted. A draft, not a verdict.
-    - ``CHANGES_REQUESTED`` — an unresolved objection, and **not** caught by the
-      separate `reviewDecision` blocker: that field reports the PR's aggregate
-      decision over REQUIRED reviewers, and a bot is typically not one, so it
-      reads `""` while the bot is asking for changes. Asserted below with
-      `reviewDecision` empty precisely because that is the reachable case.
+    - ``CHANGES_REQUESTED`` — an unresolved objection, not caught by the separate
+      `reviewDecision` blocker **on the `gh` transport**, where that field is
+      GitHub's own and reflects required-reviewer rules that a bot is typically
+      outside. On the REST fallback the blocker does fire, because
+      `_rest_review_decision` aggregates every reviewer with no such notion. The
+      evidence rule has to hold on both, so it does not defer to that blocker.
+      Exercised below with `reviewDecision` empty, which is the `gh`-shaped case
+      — and note what that pins and what it does not: `_green_view` sets that
+      field independently of its `reviews` list, so this fixes the INPUT the gate
+      sees rather than demonstrating how GitHub would populate it.
     - an unknown or missing state — GitHub may add one tomorrow, and a gate that
       accepts what it does not recognize is not a gate.
     """
@@ -3457,9 +3462,10 @@ def test_only_a_standing_verdict_is_evidence_not_merely_a_review_at_the_head() -
         view = _green_view(
             reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z", state)]
         )
-        # `reviewDecision` stays empty, which is the reachable shape for a bot:
-        # if the aggregate decision covered this, the gate would already refuse
-        # for a different reason and the test would prove nothing.
+        # `reviewDecision` stays empty — the `gh`-shaped case for a non-required
+        # bot reviewer. Asserted to document the fixture, NOT as evidence about
+        # GitHub: `_green_view` sets this field independently of `reviews`, so it
+        # pins what the gate is handed, not how the forge would fill it in.
         assert view["reviewDecision"] == ""
         report = pr_watch.build_report(view, [], set(), **_settled(view))
 
