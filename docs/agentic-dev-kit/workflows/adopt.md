@@ -207,16 +207,27 @@ and ask the operator.
 uv run <engines-dir>/kit_doctor.py --record-install --from-kit "${KIT:?KIT is not set — re-run Step 0}"
 ```
 
-**`${KIT:?...}`, not bare `"$KIT"`, and this is not decoration.** Measured: with `$KIT`
-unset or empty, `--from-kit ""` does not error — `argparse`'s `Path("")` resolves to `.`,
-the current directory, and `kit_doctor.py` happily writes a baseline stamped with *this
-repo's own* `git HEAD` as if it were the kit's, with no warning. That is worse than a
-crash: it is a confidently wrong record, in the one field every later `/upgrade` trusts
-to say what this adoption came from. `${KIT:?msg}` fails the expansion itself, before
-`uv run` is invoked, so an empty or unset `$KIT` stops the write instead of mis-recording
-it. This step is exactly the "different session, different day" case the variable is
-most likely to have gone missing in, since it runs after every copy in Step 3 — bind
-`$KIT` again from Step 0 if this fails.
+**`${KIT:?...}`, not bare `"$KIT"`, and this is not decoration — though the unguarded
+failure is not the single crash it first looks like; it is two different failures
+depending on when you hit it.** `--record-install` reads `<from_kit>/kit-manifest.json`
+as its *source* whenever `--from-kit` is given at all, and refuses if that read fails —
+it does not fall back to recording everything. On a genuine first adoption, where
+`$REPO/kit-manifest.json` does not exist yet (this command is what creates it),
+`--from-kit ""` actually **fails loudly**: `Path("").resolve()` is the current
+directory, so it looks there for `kit-manifest.json`, finds nothing, and exits 2 with
+`cannot read kit-manifest.json: No such file or directory` — a real failure, but a
+**confusing** one that reads as a missing kit checkout, not an unset variable. The
+dangerous branch is the one Step 4 below sends you back to on purpose ("re-run Step 3b's
+`--record-install --from-kit` command above"): by then `$REPO/kit-manifest.json`
+already exists from the first successful run, so `Path("").resolve()` silently finds
+*that* file — this repo's own baseline — and treats it as the kit's, rewriting it
+stamped with **this repo's own** `git HEAD` as `kit_commit`, with no warning. Measured
+both ways, reproduced end to end each time. `${KIT:?msg}` fails the parameter expansion
+itself, before `uv run` is even invoked, so an empty or unset `$KIT` fails **closed** in
+both branches, instead of failing confusingly in one and silently wrong in the other.
+This step is exactly the "different session, different day" case the variable is most
+likely to have gone missing in, since it runs after every copy in Step 3 — bind `$KIT`
+again from Step 0 if this fails.
 
 Order matters for every manifest-tracked path: `docs/templates/` **and `init.sh`** (tracked
 since `#362`) must be copied *before* this runs, or the baseline records them as not
