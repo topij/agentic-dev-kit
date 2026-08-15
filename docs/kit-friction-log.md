@@ -12,6 +12,54 @@
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
 
+## 2026-08-16
+
+Surfaced by the two-ruling session (`#483`, `#484`). Items already issue-shaped were
+filed directly (`#485`, `#486`) and are not repeated here.
+
+- **`make test` piped to `tail` reports the pipe's exit status, not `make`'s — unless the
+  shell has `pipefail` set, which it does not by default.** (**M**)
+  Every verification this session ran as `make test 2>&1 | tail -N`, which in a default
+  shell returns *tail's* status — so a `make: *** Error 1` was reported to the agent as
+  `exited with code 0`. It surfaced only because the failing thing printed to stdout;
+  a failure that only set the exit code would have been invisible. The condition matters
+  because it is also the fix: `set -o pipefail` makes the same pipeline honest. `AGENTS.md` makes
+  `make test` the verification command and says a claim must name the command and its
+  actual result, but nothing says how to read the result without losing it.
+  *Proposed fix:* have `AGENTS.md` show the invocation that preserves the status
+  (`set -o pipefail` plus `${PIPESTATUS[0]}`, or no pipe at all), since the natural
+  agent reflex — pipe to `tail` to keep output small — is exactly what discards it.
+
+- **A `pr-watch` poll and `make test` in the same session false-positive the `#428`
+  guard.** (**M**) The suite writes only inside its sandbox, but a concurrent poll
+  writes `state/pr-watch/<PR#>.json` legitimately, and the guard compares two disk
+  instants without knowing which process wrote. It then instructs "Clean these up NOW",
+  which here would have deleted the live watch state of an open PR mid-review —
+  discarding its acknowledged-comment set and restarting the bot-pending grace clock.
+  Both halves are things the kit tells an agent to do continuously: `AGENTS.md` makes
+  `make test` the verification command and the PR-follow-through policy makes a watch
+  loop mandatory after opening a PR. Occurrence recorded on `#467`. *Proposed fix:* is
+  `#467`'s, but the remediation wording deserves its own look — "clean these up" is
+  right for a leak and destructive for this.
+
+- **The two-tree `cd` rule caught the cockpit, in read-only work.** (**L**) Verifying a
+  finding against the branch's base needed a second clone; the `cd` into it outlived its
+  command, and a later `grep` reported this session's own changes missing from two files.
+  `AGENTS.md` predicts exactly this and says it "does not look like a wrong directory; it
+  looks like the tool or the filesystem misbehaving" — which is how it read. The rule's
+  own remedy is "assert `pwd` **before the first write** of a sequence"; this was a read
+  sequence with no write in it, so the rule as written did not obviously apply.
+  *Proposed fix:* extend the assert-`pwd` line to cover a read sequence whose output you
+  are going to believe, not only a write sequence.
+
+- **A panel round's cost is invisible until it is spent.** (**L**) `#484` took four
+  dual-lens rounds; the decision to run each one is made from doctrine (blast radius,
+  and whether the delta contains behaviour) with no view of what the previous rounds
+  cost. That is the right *rule*, and it leaves the operator's `#372` posture question
+  with no per-PR figure to reason about. *Proposed fix:* nothing yet — recording it
+  because `#372` is being held open for re-measurement and this is the shape of the
+  number that measurement will want.
+
 ## 2026-08-15
 
 Surfaced by the five-lane autonomous batch (`#474`–`#478`). Items already
