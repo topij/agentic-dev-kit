@@ -10,13 +10,14 @@ branch → session-dir resolution (identity AND its ambiguity refusal), the
 environment the probe is handed, how often the forge repo is resolved, the tally
 composition, and the three-way exit.
 
-Three items on that list are there because review put them there. The first
-version of this file pinned the rest and let two resolution mutants through —
-one lens made the lookup ignore its argument, the other made two session dirs
-claiming one branch resolve by glob order; both survived all 19 tests then
-present. A later round found the probe's forge-repo pin unasserted, and the one
-after that found its single-resolution claim untrue and unmeasured. The tests
-named for those mutants say so in place.
+Most of that list is there because review put it there. The first version of
+this file pinned the rest and let two resolution mutants through — one lens made
+the lookup ignore its argument, the other made two session dirs claiming one
+branch resolve by glob order; both survived all 19 tests then present. Later
+rounds found the probe's forge-repo pin unasserted, then its single-resolution
+claim untrue and unmeasured, then the pin failing OPEN to an ambient `$GH_REPO`
+when resolution itself failed. Each test says in place which mutant it exists
+for.
 
 **Everything runs the real script.** `gh`, `uv` and the session directory are
 faked, but `reconcile_sessions.sh` itself is executed unmodified through `bash`,
@@ -479,20 +480,48 @@ def test_the_forge_repo_is_resolved_once_per_run_not_once_per_lane(
     assert harness.gh_repo_view_calls() == 1
 
 
-def test_an_unresolvable_repo_leaves_the_probe_unpinned(harness: Harness) -> None:
-    """No gh, no auth, no network: resolution yields nothing, and the probe runs
-    exactly as it did before the pin rather than being handed an EMPTY `GH_REPO`
-    that `gh` would have to interpret — a distinction the stub can only make
-    because it records `${GH_REPO-…}` and not `${GH_REPO:-…}`."""
+def test_an_unresolvable_repo_refuses_to_classify_rather_than_probing(
+    harness: Harness,
+) -> None:
+    """Round 4's HIGH, and the reason resolution is a precondition rather than an
+    optimisation. The first version simply omitted the pin when `gh repo view`
+    failed — but `env` only ADDS to the environment, so the probe then inherited
+    whatever `$GH_REPO` the operator's shell already had. The lens executed that:
+    resolution failing plus a stale ambient `$GH_REPO` produced `held` on a probe
+    that ran against an unrelated repository, silently, because rc 0 from the
+    wrong repo looks exactly like rc 0 from the right one.
+
+    So an unresolvable repo must not probe at all. It is rc 2 — reported `open`,
+    named on stderr — never a lane classified from a repository nobody
+    identified."""
     harness.branch("lane/omega")
     harness.pr("lane/omega", 541, "OPEN")
     harness.session("omega", "lane/omega", "operator")
     harness.watch_report(541, mergeable=True)
 
-    result = harness.run("omega", nwo="")
+    result = harness.run("omega", nwo="", GH_REPO="someone-else/unrelated")
 
-    assert result.returncode == 4
-    assert [gh_repo for _root, gh_repo, _argv in harness.uv_calls()] == ["<unset>"]
+    assert _status_of(result.stdout, "omega") == "open"
+    assert result.returncode == 3
+    assert harness.uv_calls() == [], "an unidentified repo must never be probed"
+    assert "could not evaluate for 'held'" in result.stderr
+
+
+def test_the_forge_repo_is_not_resolved_when_no_lane_reaches_the_probe(
+    harness: Harness,
+) -> None:
+    """Round 4's LOW: resolution is lazy, sits behind the merge-class gate, and
+    nothing pinned that. A lens moved the call in front of the gate and all 26
+    tests stayed green — so a batch of `self`-class lanes would silently start
+    paying a `gh repo view` round trip it never needs."""
+    harness.branch("lane/sigma2")
+    harness.pr("lane/sigma2", 543, "OPEN")
+    harness.session("sigma2", "lane/sigma2", "self")
+
+    result = harness.run("sigma2")
+
+    assert _status_of(result.stdout, "sigma2") == "open"
+    assert harness.gh_repo_view_calls() == 0
 
 
 def test_a_lane_reached_by_branch_name_still_resolves_its_session(harness: Harness) -> None:

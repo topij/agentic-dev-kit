@@ -246,7 +246,19 @@ _session_dir_for_branch() {
 # green PR in the other repo, which would report `held` about a PR nobody looked
 # at. Resolving through `_gh` means this IS whatever `gh pr list` resolved,
 # ambient override included — the point is that both agree, not which one wins.
-# Empty (no gh, no auth, no network) leaves the probe exactly as it was.
+#
+# Resolving is therefore a PRECONDITION of the probe, not an optimisation of it.
+# An earlier version simply omitted the pin when resolution failed, and that
+# reopened the hazard from the other side: `env` only ADDS to the environment, so
+# an unpinned probe inherits whatever $GH_REPO the operator's shell already had —
+# and unlike the case above, nothing then agrees with anything. Executed by a
+# review lens: with resolution failing and a stale ambient $GH_REPO, a lane
+# reported `held` on a probe that ran against an unrelated repository, with no
+# warning anywhere, because rc 0 from the wrong repo is indistinguishable from rc
+# 0 from the right one. Unresolvable is now a refusal (rc 2 → `open`, named on
+# stderr), which costs nothing real: `gh pr list` shares the failure, so those
+# lanes are already classifying as parked.
+#
 # Sets $REPO_NWO rather than printing it, and callers run it as a plain command:
 # `nwo="$(_repo_nwo)"` would evaluate the body in a SUBSHELL, so the memo flag it
 # sets would die with that subshell and every lane would pay another `gh repo
@@ -303,11 +315,13 @@ _held_check() {
     # absent engine, a timeout, a transport failure and an empty reply all end at
     # the same place — a non-zero invocation, or a parse below that raises — and
     # all of them mean the one thing: the probe did not run, so rc 2 and the
-    # caller's stderr note.
+    # caller's stderr note. An unresolvable forge repo joins them, but needs its
+    # own line because it is the one that would otherwise SUCCEED, against the
+    # wrong repository.
     to="$(_timeout_prefix 60)"
     _resolve_repo_nwo
-    probe_env=(env "DEVKIT_STATE_ROOT=$session_dir/state")
-    [[ -n "$REPO_NWO" ]] && probe_env+=("GH_REPO=$REPO_NWO")
+    [[ -n "$REPO_NWO" ]] || return 2
+    probe_env=(env "DEVKIT_STATE_ROOT=$session_dir/state" "GH_REPO=$REPO_NWO")
     # shellcheck disable=SC2086
     report="$("${probe_env[@]}" \
         $to uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist 2>/dev/null)" || return 2
@@ -547,10 +561,9 @@ cmd_reconcile() {
 case "${1:-}" in
     -h|--help|help)
         # Every comment line from 2 until the first non-comment line, derived
-        # rather than a hardcoded end line. The previous `sed -n '2,45p'` had
-        # already fallen one line short of the header and cut the Exit sentence
-        # mid-clause; growing the header here would have hidden this change's
-        # own exit-code contract from `--help` the same silent way.
+        # rather than a hardcoded end line. The hardcoded one had already drifted
+        # behind the header and was truncating it mid-sentence, and every edit
+        # that grows the header silently truncates more.
         awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"
         exit 0
         ;;
