@@ -172,6 +172,7 @@ import argparse
 import ast
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -2330,6 +2331,52 @@ def render(report: Report) -> str:
     return "\n".join(lines)
 
 
+def _stream_aliases_path(stream: object, path: Path) -> bool:
+    """True when ``stream``'s current file descriptor is the SAME underlying file as
+    ``path`` — same device, same inode, checked with ``os.fstat``/``Path.stat``, not by
+    comparing path strings (a relative spelling from the shell's redirect and an
+    absolute one this module built can name the same file, and a string compare would
+    miss that).
+
+    This is the narrow, correct question, and #464's own fix — a plain ``file=sys.stderr``
+    — answered a broader, wrong one: "did this land on stdout". A `2>&1`/`&>` shell
+    redirect merges stderr onto the SAME descriptor stdout was already pointed at, so a
+    status line moved to stderr still corrupts the file it just wrote, at the identical
+    offset-0 mechanism the docstring above describes for stdout. Found live by the
+    fallback panel's adversarial lens reviewing that fix, with the merged-stream form of
+    the same reproduction command each call site below documents — same
+    `JSONDecodeError: Expecting value: line 1 column 1 (char 0)` #464 was filed about, on
+    a stream this module had already "fixed".
+
+    Checking `stream.isatty()` instead — the ticket's own second proposed route, refuse
+    when stdout is not a tty — was tried first and rejected: it is `True` for a shell
+    redirect (correctly), but it is ALSO `True` for this module's actual majority
+    caller. `/adopt` and `/upgrade` run these flags agent-driven, and an agent's
+    stdout/stderr are captured by its harness, never a tty, even with no redirect
+    anywhere near the target file. Gating on `isatty()` would have silenced the status
+    line for nearly every real invocation to close a hazard that only exists when a
+    stream aliases the exact file just written — trading a rare, avoidable corruption
+    for a near-universal loss of feedback. This function asks the narrower, precise
+    question instead: a pipe, a genuine tty, or a redirect to any OTHER file all compare
+    unequal here and print normally; only the exact colliding file suppresses.
+
+    Degrades to ``False`` — print anyway — on any failure to inspect either side:
+    ``stream.fileno()`` raises ``io.UnsupportedOperation`` (a subclass of both
+    ``OSError`` and ``ValueError``, so both are caught without importing `io` for it) on
+    a stream with no real descriptor, e.g. a test harness's in-memory replacement, and
+    `path.stat()` can raise `OSError` if the path vanished between the write above and
+    this check. Either failure means the question could not be answered, and staying
+    silent over an unrelated inspection failure would be a worse defect than printing
+    when we did not need to.
+    """
+    try:
+        stream_stat = os.fstat(stream.fileno())
+        path_stat = path.stat()
+    except (OSError, ValueError):
+        return False
+    return (stream_stat.st_dev, stream_stat.st_ino) == (path_stat.st_dev, path_stat.st_ino)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Report kit installation drift.")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
@@ -2488,40 +2535,47 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: cannot write baseline {baseline_path}: {exc}", file=sys.stderr)
             return 2
         origin = kit_commit[:12] if kit_commit else "unrecorded"
-        # stderr, not stdout — same reason as the `--generate-manifest` status
-        # line below (#464). `baseline_path` defaults to the same
-        # `root/kit-manifest.json` this flag just wrote in full through its own
-        # descriptor above; `--record-install --from-kit <kit> >
-        # kit-manifest.json` is exactly as "obvious" an invocation as the one
-        # #464 was filed about, and reproduces the identical splice — found by
-        # the fallback panel's adversarial lens reviewing the `--generate-manifest`
-        # fix, live: `JSONDecodeError: Expecting value: line 1 column 1 (char 0)`
-        # on the redirected result. Fixing only the sibling branch would have
-        # left this one — the flag every `/adopt` and `/upgrade` actually
-        # runs — silently exposed to the same hazard.
-        print(
-            f"wrote {baseline_path} ({len(baseline['files'])} installed files, "
-            f"kit_version={version}, kit_commit={origin})",
-            file=sys.stderr,
-        )
-        if unverified:
+        # Every status/note line below is stderr, not stdout (#464) — but stderr
+        # alone is not the guarantee it looks like. `baseline_path` defaults to
+        # the same `root/kit-manifest.json` this flag just wrote in full through
+        # its own descriptor above, and `--record-install --from-kit <kit> >
+        # kit-manifest.json 2>&1` (or `&>`) — merging stderr onto the SAME
+        # descriptor as the redirect — reproduces the identical splice the
+        # plain-stdout form was filed about (#464), found live by the fallback
+        # panel's adversarial lens reviewing that first fix. `_stream_aliases_path`
+        # answers the narrower, correct question — does stderr's current
+        # descriptor point at the exact file just written — and suppresses ONLY
+        # then, rather than gating on `isatty()`, which is `True` for this
+        # module's actual majority caller (an agent's captured, non-tty stdio)
+        # even with no redirect anywhere near the target: that broader check
+        # would silence every one of these lines for nearly every real
+        # invocation to close a hazard that only exists on the exact colliding
+        # file. See that function's docstring for the mechanism and the
+        # rejected alternative in full.
+        if not _stream_aliases_path(sys.stderr, baseline_path):
             print(
-                f"note: {len(unverified)} kit-owned path(s) present here do NOT match "
-                f"{args.from_kit}, so they were left OUT of the baseline rather than "
-                "recorded as installed from it — a file this kit did not put there must "
-                "never be reported STALE and replaced. Refresh or reconcile each, then "
-                "re-run:",
+                f"wrote {baseline_path} ({len(baseline['files'])} installed files, "
+                f"kit_version={version}, kit_commit={origin})",
                 file=sys.stderr,
             )
-            for path in unverified:
-                print(f"  · {path}", file=sys.stderr)
-        if kit_commit is None:
-            print(
-                "note: no --from-kit given, so install provenance is unrecorded. Drift is "
-                "still split into stale vs locally-edited (that uses the hashes, not the "
-                "commit); only the 'how far behind upstream' question needs it.",
-                file=sys.stderr,
-            )
+            if unverified:
+                print(
+                    f"note: {len(unverified)} kit-owned path(s) present here do NOT match "
+                    f"{args.from_kit}, so they were left OUT of the baseline rather than "
+                    "recorded as installed from it — a file this kit did not put there must "
+                    "never be reported STALE and replaced. Refresh or reconcile each, then "
+                    "re-run:",
+                    file=sys.stderr,
+                )
+                for path in unverified:
+                    print(f"  · {path}", file=sys.stderr)
+            if kit_commit is None:
+                print(
+                    "note: no --from-kit given, so install provenance is unrecorded. Drift is "
+                    "still split into stale vs locally-edited (that uses the hashes, not the "
+                    "commit); only the 'how far behind upstream' question needs it.",
+                    file=sys.stderr,
+                )
         # Non-zero when the record is PARTIAL. The baseline was written, so this
         # is not a failure to write — it is "I did not record everything you
         # have", and a caller that reads only the status code would otherwise
@@ -2564,31 +2618,35 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
         holes = [p for p, e in manifest["files"].items() if e["sha256"] is None]
-        # stderr, not stdout (#464): `manifest_path` already carries the JSON —
-        # written above, through its own descriptor — so this line is status,
-        # not the artifact. The obvious invocation is
-        # `kit_doctor.py --generate-manifest > kit-manifest.json`, and on stdout
-        # this line lands on the SHELL's redirect descriptor, which the shell
-        # opened (and truncated) before exec and which still sits at offset 0.
-        # That write landed at offset 0 of the very file just written in full
-        # above, overwriting its opening bytes with this status line while the
-        # JSON tail survived underneath — a spliced, invalid manifest, exit 0,
-        # and a diff where only the first hunk looks wrong. Reproduced on this
-        # tree with `uv run scripts/kit_doctor.py --generate-manifest >
-        # kit-manifest.json`: `json.load` then raised
-        # `JSONDecodeError: Expecting value: line 1 column 1 (char 0)`. Moving
-        # this print to stderr means a redirect captures nothing, so the two
-        # writers stop competing for the same descriptor.
-        print(
-            f"wrote {manifest_path} ({len(manifest['files'])} files, kit_version={version})",
-            file=sys.stderr,
-        )
-        if holes:
+        # `manifest_path` already carries the JSON — written above, through its
+        # own descriptor — so everything below is status, not the artifact.
+        # stderr rather than stdout is necessary but not sufficient (#464): the
+        # obvious invocation is `kit_doctor.py --generate-manifest >
+        # kit-manifest.json`, and moving this print alone off stdout closes
+        # exactly that shape — but `... > kit-manifest.json 2>&1` (or `&>`)
+        # merges stderr onto the SAME descriptor the redirect opened, and the
+        # identical offset-0 splice recurs on a stream this module had already
+        # "fixed": reproduced live by the fallback panel's adversarial lens
+        # reviewing that first fix, `json.load` raising the identical
+        # `JSONDecodeError: Expecting value: line 1 column 1 (char 0)` #464 was
+        # filed about. `_stream_aliases_path` closes the actual hazard —
+        # whether stderr's current descriptor is the exact file just written —
+        # rather than gating on `isatty()`, which is `True` for this module's
+        # real majority caller (an agent's captured, non-tty stdio) even absent
+        # any redirect; see that function's docstring for why the broader check
+        # was rejected.
+        if not _stream_aliases_path(sys.stderr, manifest_path):
             print(
-                f"warning: {len(holes)} listed file(s) absent from this checkout:", file=sys.stderr
+                f"wrote {manifest_path} ({len(manifest['files'])} files, kit_version={version})",
+                file=sys.stderr,
             )
-            for h in holes:
-                print(f"  · {h}", file=sys.stderr)
+            if holes:
+                print(
+                    f"warning: {len(holes)} listed file(s) absent from this checkout:",
+                    file=sys.stderr,
+                )
+                for h in holes:
+                    print(f"  · {h}", file=sys.stderr)
         return 0
 
     if not manifest_path.is_file():

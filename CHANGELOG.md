@@ -65,12 +65,15 @@ starts.
 ## #475 — 2026-08-15
 
 - **CHANGED (engine CLI surface)** — `kit_doctor.py`'s two writing flags,
-  `--generate-manifest` and `--record-install`, now print their `wrote
-  <path> (...)` status lines to **stderr** instead of stdout (#464). If you
-  were capturing either line from stdout, read it from stderr instead. Do
-  not redirect stdout to select the output path — pass `--manifest` /
-  `--baseline` for a non-default one; the tool writes its target file
-  itself regardless of any redirect.
+  `--generate-manifest` and `--record-install`, print their `wrote <path>
+  (...)` status line to **stderr**, and now suppress it entirely when
+  stderr's current descriptor is the exact file just written — the case a
+  stderr-only move does not cover, e.g. `> kit-manifest.json 2>&1` or `&>
+  kit-manifest.json` (#464). Read the status line from stderr, not stdout.
+  Do not redirect stdout to select the output path, and do not merge stderr
+  onto it either — pass `--manifest` / `--baseline` for a non-default one;
+  the tool writes its target file itself regardless of any redirect, and
+  prints nothing if your redirect happens to alias it.
 
 ## #459 — 2026-08-13
 

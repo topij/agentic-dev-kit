@@ -882,6 +882,35 @@ def test_a_shell_redirect_to_the_default_output_path_does_not_splice_the_manifes
     assert "check_doc_budget.py" in json.dumps(manifest["files"])
 
 
+def test_a_merged_stream_redirect_does_not_splice_the_manifest(tmp_path):
+    """The gap the fallback panel's adversarial lens found reviewing the fix
+    above: routing the status line to stderr alone closes `>
+    kit-manifest.json`, but `> kit-manifest.json 2>&1` (or `&>`) merges
+    stderr onto the SAME descriptor the redirect opened, and the identical
+    splice recurs on a stream this module had already "fixed" — reproduced
+    live with `JSONDecodeError: Expecting value: line 1 column 1 (char 0)`,
+    the exact #464 symptom, on a head that had already fixed the plain-stdout
+    case. `stderr=subprocess.STDOUT` is the Python equivalent of the shell's
+    `2>&1`: it tells the child to write its stderr to the same file object
+    already bound to `stdout=`, which is this test's `manifest_path` handle —
+    the real fd-level collision, not a simulation of it."""
+    root = _fake_repo(tmp_path)
+    manifest_path = root / kit_doctor.MANIFEST_NAME
+    script = ENGINE_DIR / "kit_doctor.py"
+    with manifest_path.open("w", encoding="utf-8") as redirected_stdout:
+        result = subprocess.run(
+            [sys.executable, str(script), "--generate-manifest", "--root", str(root)],
+            stdout=redirected_stdout,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+    assert result.returncode == 0
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["kit_version"] == 2
+    assert "check_doc_budget.py" in json.dumps(manifest["files"])
+
+
 def test_remap_tolerates_a_trailing_slash():
     assert (
         kit_doctor._remap("scripts/pr_watch.py", "scripts/devkit/") == "scripts/devkit/pr_watch.py"
@@ -1513,10 +1542,11 @@ def test_record_install_status_line_stays_off_stdout(tmp_path, capsys):
     """The sibling of `test_generate_manifest_status_line_stays_off_stdout`.
     `--record-install`'s default baseline path is the SAME `kit-manifest.json`
     `--generate-manifest` defaults to, and its own `wrote ...` line had the
-    identical unfixed shape — found live by the fallback panel's adversarial
-    lens while reviewing #464's `--generate-manifest` fix: `--record-install
-    --from-kit <kit> > kit-manifest.json` reproduced the exact same splice,
-    unfixed, in the very flag every `/adopt` and `/upgrade` actually runs."""
+    identical unfixed shape — found live by both the fallback panel's
+    adversarial and correctness lenses, independently, while reviewing
+    #464's `--generate-manifest` fix: `--record-install --from-kit <kit> >
+    kit-manifest.json` reproduced the exact same splice, unfixed, in the
+    very flag every `/adopt` and `/upgrade` actually runs."""
     root = _fake_repo(tmp_path)
     _write(root / "scripts" / "check_doc_budget.py", "installed")
     code = kit_doctor.main(["--record-install", "--root", str(root)])
@@ -1543,6 +1573,31 @@ def test_a_shell_redirect_does_not_splice_the_record_install_baseline(tmp_path):
             [sys.executable, str(script), "--record-install", "--root", str(root)],
             stdout=redirected_stdout,
             stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    assert result.returncode == 0
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    assert "scripts/check_doc_budget.py" in baseline["files"]
+
+
+def test_a_merged_stream_redirect_does_not_splice_the_record_install_baseline(tmp_path):
+    """The `--record-install` counterpart to
+    `test_a_merged_stream_redirect_does_not_splice_the_manifest`: `stdout`
+    bound to `baseline_path`, `stderr=subprocess.STDOUT` merging the child's
+    stderr onto that same handle — the real fd-level equivalent of `>
+    kit-manifest.json 2>&1`. Before the alias check this reproduced the same
+    `JSONDecodeError: Expecting value: line 1 column 1 (char 0)` on a head
+    that had already fixed the plain-stdout case."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "installed")
+    baseline_path = root / kit_doctor.MANIFEST_NAME
+    script = ENGINE_DIR / "kit_doctor.py"
+    with baseline_path.open("w", encoding="utf-8") as redirected_stdout:
+        result = subprocess.run(
+            [sys.executable, str(script), "--record-install", "--root", str(root)],
+            stdout=redirected_stdout,
+            stderr=subprocess.STDOUT,
             text=True,
             check=False,
         )
