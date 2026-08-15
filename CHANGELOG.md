@@ -42,6 +42,36 @@ starts.
 
 ---
 
+## #484 — 2026-08-15
+
+- **CHANGED (gate semantics)** — `mergeable` no longer requires a `--record-review`
+  receipt in every case. It is now satisfied by current-head independent-review
+  **evidence** from either of two routes: a receipt bound to the head (unchanged), or a
+  configured `review.bots` entry whose own review covers that exact head. **If you
+  record a receipt on a PR your review bot already reviewed, stop — you no longer need
+  to, and every available `<source>` literal names a fallback pass that did not run.**
+  A repo with `review.bots: []` is unaffected: with no configured bot there is no
+  coverage route, and the receipt stays the only way through. Nothing is loosened for
+  a PR the bot has *not* reviewed at the current head — an unusable commit SHA on the
+  review, a verdict that arrived only as a comment (`#44`), or a failed bot-state read
+  all yield no evidence and leave the receipt requirement standing. A pending bot's
+  grace blocker, an unacknowledged outage notice, and `CHANGES_REQUESTED` all keep
+  their existing authority. `#350`.
+- **CHANGED (report shape)** — `review_evidence` grew two keys. **`route`** is
+  `"receipt"`, `"bot-coverage"`, or `null`, and names which route satisfied the gate
+  (`"receipt"` wins when both hold). **`bots`** is the sorted list of configured bots
+  whose coverage qualified, and is populated even when `route` is `"receipt"`. **If
+  you assert on the exact shape of `review_evidence`, add both keys.** The
+  receipt-describing keys — `source`, `lenses`, `override`, `bot_signal` — are
+  unchanged and stay receipt-only, so they are `null`/`[]` on the coverage route.
+  `#350`.
+- **ADDED (report shape)** — the poll render gains two lines. A coverage-route report
+  prints `review evidence: the configured review bot reviewed this head (<bots>) — no
+  receipt needed` in place of the receipt line; a receipt-route report that *also* has
+  coverage gains an indented `+ the configured review bot also reviewed this head
+  (<bots>)` beneath its existing line. **If you match the render against a fixed set of
+  shapes, add these.** `#350`.
+
 ## #478 — 2026-08-15
 
 - **BREAKING (engine CLI surface)** — `<engine-dir>/reconcile_sessions.sh` gained a
