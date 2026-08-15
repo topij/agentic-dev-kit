@@ -256,19 +256,28 @@ _session_dir_for_branch() {
 # reported `held` on a probe that ran against an unrelated repository, with no
 # warning anywhere, because rc 0 from the wrong repo is indistinguishable from rc
 # 0 from the right one. Unresolvable is now a refusal (rc 2 → `open`, named on
-# stderr), which costs nothing real: `gh pr list` shares the failure, so those
-# lanes are already classifying as parked.
+# stderr). In a `gh` outage that costs nothing — `gh pr list` shares the failure,
+# so those lanes are already classifying as parked — but a TRANSIENT failure of
+# this one call is a different case, which is why the memo below caches only
+# success.
 #
 # Sets $REPO_NWO rather than printing it, and callers run it as a plain command:
-# `nwo="$(_repo_nwo)"` would evaluate the body in a SUBSHELL, so the memo flag it
-# sets would die with that subshell and every lane would pay another `gh repo
-# view`. `_held_check` runs in the current shell, so a global assignment there
-# survives — which is what makes "resolved once" true rather than merely stated.
+# `nwo="$(_repo_nwo)"` would evaluate the body in a SUBSHELL, so the memo it sets
+# would die with that subshell and every lane would pay another `gh repo view`.
+# `_held_check` runs in the current shell, so a global assignment there survives
+# — which is what makes "resolved once" true rather than merely stated.
+#
+# CACHES ONLY SUCCESS, and the emptiness of $REPO_NWO is itself the memo. A
+# separate "already tried" flag, set on failure too, made one transient blip
+# poison the WHOLE batch: a review lens executed it — `repo view` failing on its
+# first call only, `gh pr list` succeeding throughout — and both operator lanes
+# lost `held` for the rest of the run, including the one whose own call would
+# have succeeded. A persistent failure now costs at most one `gh repo view` per
+# operator-class open lane, which is the same order as the `gh pr list` each of
+# those lanes already makes, and each is behind the same short timeout.
 REPO_NWO=""
-REPO_NWO_RESOLVED=0
 _resolve_repo_nwo() {
-    [[ "$REPO_NWO_RESOLVED" -eq 0 ]] || return 0
-    REPO_NWO_RESOLVED=1
+    [[ -z "$REPO_NWO" ]] || return 0
     REPO_NWO="$(_gh repo view --json nameWithOwner --jq .nameWithOwner)"
     REPO_NWO="${REPO_NWO%%$'\n'*}"
 }
@@ -527,7 +536,12 @@ cmd_reconcile() {
     fi
     if [[ -n "$unknown_notes" ]]; then
         {
-            echo "⚠ could not evaluate for 'held' (no uv / no pr_watch.py / probe failed) —"
+            # The parenthetical is an enumeration of the rc-2 causes, so it has to
+            # grow with them — a cause missing from it reads to the operator as
+            # "not my case". "repo unidentified" earns its own item rather than
+            # folding into "probe failed": there the probe is never invoked at all.
+            echo "⚠ could not evaluate for 'held' (no uv / no pr_watch.py /"
+            echo "  repo unidentified, so the probe was not run / probe failed) —"
             echo "  reported OPEN, which may understate them:"
             printf '%s' "$unknown_notes"
         } >&2

@@ -72,6 +72,14 @@ vcs:
 _FAKE_GH = """#!/bin/sh
 printf '%s\\n' "$*" >> "$GH_ARGV_LOG"
 if [ "$1" = "repo" ] && [ "$2" = "view" ]; then
+  # $GH_NWO_FAIL_FIRST failures before the first success, so a TRANSIENT blip on
+  # this one call can be told apart from a `gh` outage.
+  n=0
+  [ -f "$GH_ARGV_LOG.nwofail" ] && n=$(cat "$GH_ARGV_LOG.nwofail")
+  if [ "$n" -lt "${GH_NWO_FAIL_FIRST:-0}" ]; then
+    printf '%s\\n' "$((n + 1))" > "$GH_ARGV_LOG.nwofail"
+    exit 1
+  fi
   printf '%s\\n' "${GH_FAKE_NWO:-}"
   exit 0
 fi
@@ -505,6 +513,33 @@ def test_an_unresolvable_repo_refuses_to_classify_rather_than_probing(
     assert result.returncode == 3
     assert harness.uv_calls() == [], "an unidentified repo must never be probed"
     assert "could not evaluate for 'held'" in result.stderr
+    # The note's parenthetical enumerates the rc-2 causes. This one is not "probe
+    # failed" — the probe was never invoked — so it has to be named there, or an
+    # operator debugging exactly this reads the note as somebody else's case.
+    assert "repo unidentified, so the probe was not run" in result.stderr
+
+
+def test_a_transient_repo_resolution_failure_does_not_poison_the_batch(
+    harness: Harness,
+) -> None:
+    """Round 5's regression. The memo used to record "already tried" on failure
+    too, so one blip on `gh repo view` cost every remaining lane its `held` for
+    the rest of the run — a lens executed exactly that, with `gh pr list`
+    succeeding throughout, and watched a second lane whose own call would have
+    worked report `open`. Only success is cached now."""
+    for scope, pr in (("aa", 560), ("zz", 561)):
+        harness.branch(f"lane/{scope}")
+        harness.pr(f"lane/{scope}", pr, "OPEN")
+        harness.session(scope, f"lane/{scope}", "operator")
+        harness.watch_report(pr, mergeable=True)
+
+    result = harness.run("aa", "zz", GH_NWO_FAIL_FIRST="1")
+
+    # The lane that hit the blip refuses, as it must; the next one recovers.
+    assert _status_of(result.stdout, "aa") == "open"
+    assert _status_of(result.stdout, "zz") == "held"
+    assert harness.gh_repo_view_calls() == 2, "a failed resolution must be retried"
+    assert result.returncode == 3
 
 
 def test_the_forge_repo_is_not_resolved_when_no_lane_reaches_the_probe(
