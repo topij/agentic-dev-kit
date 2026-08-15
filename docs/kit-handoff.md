@@ -14,9 +14,43 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-14 — `#470` merged; filed `#463`–`#469`.
+Last updated: 2026-08-15 — filed `#472`.
 
-## Latest session — 2026-08-14 (the approved sweep, executed)
+## Latest session — 2026-08-15 (an external field report, read against the kit's own batch record)
+
+**Theme —** an operator-supplied field report (Boris Cherny's dozen daily maintenance
+routines — crash fuzzer, dup unifier, dead-code remover — producing mergeable PRs at
+scale) assessed against what the kit already carries. Most of it exists here in some
+form — the tuning loop as `post-merge-systemize`'s pattern threshold, watch-to-green
+as `pr-watch`, autonomous PR production as `parallel-headless` — so the genuinely
+missing layer was filed rather than built.
+
+- **Filed: `#472`** — the kit has no workflow kind for a *standing mandate* (a narrow,
+  recurring, self-terminating maintenance routine). The ticket carries the full phased
+  plan: the contract doc first, a mutation-sentinel worked instance second (the
+  `#447`/`#417` class), the scheduling binding deliberately last so the contract is
+  hand-runnable before it recurs unattended. The admission rule is the load-bearing
+  decision — only mechanically-verifiable, self-merge-class change classes qualify —
+  and it is where the external report and the 2026-08-13 overnight batch agree from
+  opposite ends.
+- What was considered and deliberately not taken is recorded on the ticket, not here
+  (per-incident tuning, chat as a reporting surface, app-shaped routines for a repo
+  with no app).
+- `#251`'s discipline applied to the filing: body posted via `--body-file`, read back
+  with `gh issue view --json body`, and diffed against the draft at the kit root —
+  the extraction's own trailing newline was the only difference.
+- **The wrap-up's own validation caught a stale relay in the just-filed ticket:** its
+  body claimed `#447` open, relayed from the 2026-08-13 batch block rather than the
+  live tracker — `#447` closed that same day with the `#453` work. Repaired on `#472`
+  (its edit history carries the correction) before this commit existed to record it.
+
+▶ Next: `#472` Phase 1 — the contract doc
+(`docs/agentic-dev-kit/workflows/routines.md`). The operator-held decisions `#372`
+and `#460` still stand ahead of it if ruling is preferred over building.
+
+______________________________________________________________________
+
+## Session — 2026-08-14 (the approved sweep, executed)
 
 **Theme —** the friction-log graduation the previous block's `▶ Next:` named, run in
 the workflow's LLM-only mode on the operator's bulk approval — "Slack proposals
@@ -296,74 +330,6 @@ own work, round after round, is the part worth carrying.
 ▶ Next: **`#429`** — `#134`'s defect surviving in `test_pr_watch.py`, the one file `#40`
 certifies as portable. Read its body for the downstream fix already applied and offered
 upstream, rather than starting from the title.
-
-______________________________________________________________________
-
-## Session — 2026-08-12 (the adopter refresh's first upstream fix, and a boundary I drew wrong)
-
-**Theme —** `#428`, the sharpest of the four issues the cs-toolkit refresh filed against the
-kit. The fix is small; what the review found in it, round after round, is the part worth
-carrying.
-
-- **The cs-toolkit refresh is done** — the thread this handoff carried as outstanding since
-  2026-08-10. It went `40eef8b` → `0c73bdf` clean: `kit_doctor` 0 differ, config migration
-  byte-identical, 6 of 6 declines preserved. Filed upstream: `#428`, `#429`, `#430`, `#431`,
-  plus an occurrence comment on `#40`. **Its field report exists only as a chat artifact**,
-  which is `#423`'s own shape — a URL is a pointer for one reader, not provenance. The
-  findings above are the durable half.
-- **`#428` fixed on `#432`** — the kit's own `make test` was overwriting `state/pr-watch/1.json`
-  and `4242.json`, and `1.json` is a real PR's record slot. Two layers: an autouse fixture
-  binding a per-test state root, and a session-scoped pin that fails the run if the real
-  `state/` changes. Receipt `fallback:panel` at `752d9fe`, both lenses.
-  **Not merged — operator-merge under the ruling below.**
-- **Filed:** `#433` (the pin's snapshot is taken after the first test directory has already
-  run — the conftest is directory-scoped and a session fixture instantiates lazily),
-  `#434` (`safety-critical-changes.md`'s glob does not reach the guard, with the breadth
-  decided as `scripts/tests/conftest.py` only), `#435` (wrap-up step 8 sends the handoff
-  commit to the session branch, which voids that PR's review receipt — hit while wrapping
-  up this session, worked around by branching off `main`). Occurrence comments on `#54`,
-  `#182`, `#209`.
-
-**Learned**
-
-- **The isolation command I wrote failed open.** `DEVKIT_STATE_ROOT=$(mktemp -d) pytest …`
-  sets the empty string when `mktemp` fails, and `_resolve_state_root` reads empty as *no
-  override* — so it would have redirected the suite into live `state/` exactly when the
-  isolation failed, which is worse than not having the line, because the command reads as
-  protected. CodeRabbit found it. The two-step `tmp="$(mktemp -d)" && …` gates the run on
-  the assignment.
-- **I drew the safety-critical boundary wrong, and a lens overturned it.** My reasoning was
-  that the globs name `dev_session.sh` and `pr_watch.py` and the diff touches neither —
-  literally true. But the glob's own frontmatter says `pr_watch.py` was added because the
-  rule must match where the decision is *made*; a fabricated receipt is indistinguishable
-  from a real one by the time the gate reads it, so the defence has to be upstream. The
-  operator upheld the dispute. **The resolution is the operator's own comment on `#432`**,
-  because the doctrine excludes a relayed account from the party that drew the boundary —
-  which was me.
-- **Four of the defects the loop caught were introduced while fixing the previous round.**
-  A deleted referent left a dangling pronoun; a corrected claim described an empty set as a
-  population. That is `safety-critical-changes.md` rule 3's own subject, and it is why
-  `#433` and `#434` were filed rather than built into a fix round.
-- **A figure that crosses an agent boundary arrives with its provenance collapsed.** Two
-  numbers I relayed from a delegated report into the PR body named commands that did not
-  produce them — and naming a command is what made them look established. Recorded on `#54`;
-  it sharpens that issue rather than restating it.
-- **A lens returned a placeholder instead of a report** and would have counted as a passing
-  lens to anything tallying rather than reading. Caught only because the output was visibly
-  not a report. `#182`.
-
-**Open, and owned by nothing yet**
-
-- **`#432`** is `mergeable` and unmerged. Operator-merge; do not self-merge it.
-- **`#429`, `#430`, `#431`** — the rest of the cs-toolkit refresh's upstream findings,
-  untouched. `#430` is the one three of the others are downstream of.
-- **`#433`, `#434`** as filed. `#434` needs `#273` accounted for or it is half a fix —
-  `.claude/rules/` binds one runtime.
-- Nothing in the 2026-08-11 block's open list below moved this session.
-
-▶ Next: **merge `#432`** (operator-merge, receipt `fallback:panel` at `752d9fe`), then
-`#430` — the adopter-facing signal for an upgrade that changes observable engine behaviour,
-which `#429` and the `#431` decline-labour both trace back to.
 
 ______________________________________________________________________
 
