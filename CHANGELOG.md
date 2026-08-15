@@ -42,6 +42,28 @@ starts.
 
 ---
 
+## #478 — 2026-08-15
+
+- **BREAKING (engine CLI surface)** — `<engine-dir>/reconcile_sessions.sh` gained a
+  fourth lane state, **`held`**, and a fourth exit code, **`4`**. A scope is `held`
+  when its persisted merge class is `operator` (`<sessions-dir>/<scope>/merge_class`)
+  and its open PR is merge-ready by `pr_watch.py`'s own `mergeable`. Exit `4` means
+  every launched lane is merged or held with at least one held; exit `0` still means
+  every lane **merged**, unchanged, and open or parked still outranks held at exit `3`.
+  **If you branch on this script's exit code, add `4`.** A caller that only tests
+  `== 0`, or that stops on any non-zero, needs no change; a caller that matches `3`
+  exactly will now fall through when a lane is held. `#465`.
+- **CHANGED (report shape)** — the tally line grows a `, held H` term, placed after
+  `parked K` and before the existing conditional `, open O`. It is emitted **only**
+  when `H > 0`, so a batch with no held lane prints `launched N, merged M, parked K`
+  exactly as before. **If you parse that line, accept the optional term.** `#465`.
+- **CHANGED (engine CLI surface)** — reconciling now invokes
+  `<engine-dir>/pr_watch.py` (via `uv run`, `--json --no-persist`, with
+  `$DEVKIT_STATE_ROOT` pointed at the lane's own sandbox) once per operator-class open
+  lane. It writes nothing. Where `uv` or the engine is absent, or the probe fails or
+  times out, the lane reports `open` as before and the reason is named on **stderr** —
+  **if you capture stderr, expect that block.** `#465`.
+
 ## #459 — 2026-08-13
 
 - **BREAKING (gate semantics)** — the #428 guard's snapshot now records a kind
