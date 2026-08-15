@@ -3068,6 +3068,140 @@ def test_the_default_loader_pins_but_the_opt_out_does_not() -> None:
     assert defaults.noise_markers != unpinned._NOISE_MARKERS
 
 
+# --------------------------------------------------------------------------- #
+# noise markers vs. the wording a bot actually emits (issue #468)
+# --------------------------------------------------------------------------- #
+#
+# The three bodies below are CAPTURED, not invented — each is the opening of a
+# real comment on this repo, quoted verbatim and truncated. That is the whole
+# point: the marker these tests replaced was pinned by a hand-written string no
+# bot had ever produced, so the pin held while the marker matched nothing.
+#
+# Read `docs/kit-friction-log-archive.md` (2026-08-13) and #468 for the finding.
+
+# CodeRabbit's clean verdict, from its summary comment on PR #462 (2026-08-13).
+# Truncated after the verdict sentence; the real comment continues into a
+# walkthrough section that carries `<!-- walkthrough_start -->` as well. Stopping
+# short of it is deliberate — the summary comment is emitted WITHOUT a walkthrough
+# often enough (PRs #443, #444, #445, #451, #459 among others) that the opening
+# marker is the one doing the filtering in those cases, and this fixture asserts
+# against that weaker case rather than the doubly-marked one.
+CLEAN_VERDICT_COMMENT = (
+    "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n"
+    "<!-- review_stack_entry_start -->\n\n"
+    "[![Review Change Stack](https://storage.googleapis.com/coderabbit_public_assets"
+    "/review-stack-in-coderabbit-ui.svg)](https://app.coderabbit.ai/change-stack"
+    "/topij/agentic-dev-kit/pull/462)\n\n"
+    "<!-- review_stack_entry_end -->\n"
+    "<!-- recent_review_start -->\n\n"
+    "No actionable comments were generated in the recent review. 🎉\n"
+)
+
+# The operator's own review-record comment on PR #43 (2026-07-26), which quotes
+# CodeRabbit's clean verdict as evidence. No configured marker matches it, and
+# none may: it is a human explaining why the review receipt reads `coderabbit`
+# rather than `fallback:panel`, i.e. exactly the kind of comment the gate exists
+# to make someone acknowledge.
+HUMAN_COMMENT_QUOTING_THE_CLEAN_VERDICT = (
+    "## Review record\n\n"
+    "**CodeRabbit reviewed this and found nothing** — plan Pro Plus, profile "
+    "CHILL, `Configuration used: defaults`:\n\n"
+    "> No actionable comments were generated in the recent review. 🎉\n\n"
+    "## Why the receipt says `coderabbit` and not `fallback:panel`\n\n"
+    "**No panel ran on this PR.** The receipt names the review that actually "
+    "happened.\n"
+)
+
+# CodeRabbit's review submission when it DOES have findings, from PR #411. This
+# is the only surface and the only shape in which "Actionable comments posted:"
+# has ever appeared on this repo — always with a count of one or more.
+REVIEW_WITH_FINDINGS = (
+    "**Actionable comments posted: 5**\n\n"
+    "<details>\n"
+    "<summary>🤖 Prompt for all review comments with AI agents</summary>\n"
+)
+
+
+# Each of the three below runs twice: once against the ENGINE defaults (the
+# kit-owned literals an adopter without the key falls back to) and once against
+# whatever `config/dev-model.yaml` this checkout ships. Both are real answers to
+# "would the live loop filter this?", and #468 was a drift between exactly those
+# two copies of the same list.
+@pytest.mark.parametrize("source", ["engine-defaults", "shipped-config"])
+def test_the_clean_verdict_is_filtered_by_a_structural_marker(source: str) -> None:
+    """A clean CodeRabbit review must not block the loop as an unacknowledged
+    comment — and the marker that filters it must be the container's HTML
+    marker, not the verdict sentence.
+
+    WHAT THIS DOES NOT CATCH, stated plainly: the fixture is frozen at
+    CodeRabbit's 2026-08 output. If the bot renames
+    `<!-- This is an auto-generated comment: summarize by coderabbit.ai -->`
+    tomorrow, this test keeps passing against the stale copy and the live loop
+    starts surfacing clean reviews as findings. Nothing in this repo can detect
+    that; only re-reading the forge can, which is what #468 did by hand. What the
+    test DOES catch is the reverse direction — a change to the marker list that
+    stops filtering the wording we have actually observed.
+    """
+    pr_watch = _load_pr_watch(pin_defaults=source == "engine-defaults")
+    if source == "shipped-config" and not pr_watch._NOISE_MARKERS:
+        pytest.skip(
+            "ambient config empties noise_markers — a supported adopter state "
+            "(`_load_review_config` documents it) in which nothing is filtered"
+        )
+
+    assert pr_watch.is_noise(CLEAN_VERDICT_COMMENT) is True
+    # ...and specifically because of the container marker. Deleting the verdict
+    # sentence must not change the verdict.
+    without_the_sentence = CLEAN_VERDICT_COMMENT.replace(
+        "No actionable comments were generated in the recent review. 🎉\n", ""
+    )
+    assert without_the_sentence != CLEAN_VERDICT_COMMENT
+    assert pr_watch.is_noise(without_the_sentence) is True
+
+
+@pytest.mark.parametrize("source", ["engine-defaults", "shipped-config"])
+def test_a_human_quoting_the_clean_verdict_is_not_noise(source: str) -> None:
+    """The tripwire against the tempting fix for #468.
+
+    `is_noise` matches the BODY with no author check, so adding CodeRabbit's
+    verdict sentence to `noise_markers` — the obvious repair for a drifted
+    marker — would also discard the comment below, which is a human's review
+    record quoting that sentence. On this repo that comment is not hypothetical:
+    it is PR #43, the one place the phrase has ever appeared outside a bot
+    comment, and it carried the reasoning behind a hand-recorded review receipt.
+
+    Be clear about why this passes TODAY: trivially, because no configured marker
+    appears anywhere in the body. Its job is to start failing the day someone
+    adds the sentence — a change that would otherwise look green and would let
+    `converged` flip past an unacknowledged human comment. That is the fail-open
+    direction, so it gets a test even though it asserts a negative.
+    """
+    pr_watch = _load_pr_watch(pin_defaults=source == "engine-defaults")
+
+    assert pr_watch.is_noise(HUMAN_COMMENT_QUOTING_THE_CLEAN_VERDICT) is False
+    assert (
+        pr_watch.is_noise(HUMAN_COMMENT_QUOTING_THE_CLEAN_VERDICT, author="topij")
+        is False
+    )
+
+
+@pytest.mark.parametrize("source", ["engine-defaults", "shipped-config"])
+def test_a_review_carrying_findings_is_never_noise(source: str) -> None:
+    """The other tempting repair, and the more dangerous one.
+
+    Broadening the retired marker to the prefix `"actionable comments posted:"`
+    would match every CodeRabbit review that HAS findings — the body below and
+    the inline comments it introduces — and silently drop the entire review out
+    of `new_comments`. A gate that filters real findings is worse than one that
+    filters nothing, so pin it from both sides: the count-phrased review body
+    must stay visible whatever else the marker list does.
+    """
+    pr_watch = _load_pr_watch(pin_defaults=source == "engine-defaults")
+
+    assert pr_watch.is_noise(REVIEW_WITH_FINDINGS) is False
+    assert pr_watch.is_noise(REVIEW_WITH_FINDINGS, author="coderabbitai") is False
+
+
 def test_shipped_config_preserves_the_engine_defaults_behavior() -> None:
     """This repo's own config/dev-model.yaml must classify exactly as the
     literals it replaced — the behavior-preservation argument for BUG 3.
@@ -3100,7 +3234,12 @@ def test_shipped_config_preserves_the_engine_defaults_behavior() -> None:
         "<!-- walkthrough_start -->\nSummary only.\n"
     )
     assert pr_watch.is_noise(walkthrough) is True
-    assert pr_watch.is_noise("Actionable comments posted: 0") is True
+    # This line used to read `is_noise("Actionable comments posted: 0") is True`.
+    # It was green from the day it was written while the marker behind it matched
+    # nothing on any real comment (#468): the string was invented here, so the
+    # assertion proved the config still listed the marker, not that any bot ever
+    # emitted it. A captured body is the falsifiable form of the same claim.
+    assert pr_watch.is_noise(CLEAN_VERDICT_COMMENT) is True
     # Unavailability notices: surfaced, never noise (either list, either case).
     for body in (
         "Bugbot needs on-demand usage enabled",

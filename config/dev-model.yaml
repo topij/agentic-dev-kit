@@ -228,12 +228,22 @@ review:
   #
   # Comment bodies matching any of these are auto-noise, not findings to act on.
   # Matched case-insensitively as substrings. Keep the list tight — over-filtering
-  # hides a real review.
+  # hides a real review. `is_noise()` does NOT check the author, so every entry
+  # here also discards a HUMAN comment that happens to contain the text: prefer a
+  # structural marker (an HTML comment the bot emits) over the bot's prose.
+  #
+  # `"actionable comments posted: 0"` used to sit here and was retired under
+  # #468. A sweep of every comment body on every PR this repo has ever had found
+  # it matched nothing, ever: CodeRabbit writes "Actionable comments posted: N"
+  # only on the review-submission surface and only when N >= 1, and delivers the
+  # zero case as a sentence inside the summary comment instead. That sentence is
+  # deliberately NOT added in its place — see
+  # `test_a_human_quoting_the_clean_verdict_is_not_noise` in
+  # scripts/tests/test_pr_watch.py, which is the tripwire against re-adding it.
   noise_markers:
     - "<!-- this is an auto-generated comment: summarize by coderabbit"
     - "<!-- this is an auto-generated comment: review in progress"
     - "<!-- walkthrough_start -->"
-    - "actionable comments posted: 0"
     - "<!-- linear-linkback -->"
   # Text signalling the reviewer could not run — a blocked bot is an action
   # signal (run the configured fallback), never a silent review waiver. Matched

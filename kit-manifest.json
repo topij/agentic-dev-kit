@@ -25,7 +25,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "831025a882dc2b469ce4b881f3c447931daa600c78cb5e59e57573c802fa14cb"
+      "sha256": "b3a0318428ce72fc375030b0f55561b134981778c1b0770fdb844a566edc94fd"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -33,7 +33,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "128d861e1dc38af9b1dc0073f954a6739214e09604d413c50c7d09425ecd378b"
+      "sha256": "cdfe937ae58d582fe0d145b42318369f75482881736059341efaf14cb788c768"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -85,7 +85,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "4e2b2569443309182d99d3fdddfe93d14a14d7ea38f621641c7c27755598b15d"
+      "sha256": "03df08a379de638b4511bf409016a7077172308d2cc25602c40b3d31e1007a33"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -175,11 +175,11 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "c291e746385af9ad415c5491fa1f7150c34af09d7a9f9b29987ad8c3c08134a2"
+      "sha256": "2a22b1179281993e0a5d371ce47c239596cee7670e3e09362d781a1bba61bba5"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "2f30e034543c02c87e6d63f14566a78a5bcb55070c4279f61806dde270739641"
+      "sha256": "e4d68854b50834db5d7aaacd8f693ccb994552cb449d7d93a422c53e81bb200c"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
