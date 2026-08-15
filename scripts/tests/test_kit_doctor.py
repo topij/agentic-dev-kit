@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -826,6 +827,59 @@ def test_generate_manifest_refuses_an_unreadable_version(tmp_path, capsys):
     assert code == 2
     assert not manifest_path.exists()
     assert "refusing to stamp" in capsys.readouterr().err
+
+
+def test_generate_manifest_status_line_stays_off_stdout(tmp_path, capsys):
+    """#464: the obvious invocation is `kit_doctor.py --generate-manifest >
+    kit-manifest.json`. `manifest_path.write_text` puts the real JSON on disk
+    through its own descriptor, unaffected by the redirect — so a `wrote ...`
+    status line printed to STDOUT was the only thing that could go wrong, and
+    it did: on the shell's redirect descriptor, still sitting at offset 0, it
+    overwrote the opening bytes of the file just written in full, splicing the
+    status message onto the tail of the JSON underneath. The fix is to keep
+    this line off stdout entirely, so a redirect captures nothing and the two
+    writers never compete for the same descriptor. See
+    `test_a_shell_redirect_to_the_default_output_path_does_not_splice_the_manifest`
+    below for the real OS-level reproduction this unit test cannot exercise —
+    `capsys` intercepts the `sys.stdout` object, not the file descriptor a
+    shell redirect rebinds."""
+    root = _fake_repo(tmp_path)
+    manifest_path = tmp_path / "kit-manifest.json"
+    code = kit_doctor.main(
+        ["--generate-manifest", "--root", str(root), "--manifest", str(manifest_path)]
+    )
+    assert code == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert f"wrote {manifest_path}" in captured.err
+    assert json.loads(manifest_path.read_text(encoding="utf-8"))["kit_version"] == 2
+
+
+def test_a_shell_redirect_to_the_default_output_path_does_not_splice_the_manifest(tmp_path):
+    """The literal reproduction from #464: `kit_doctor.py --generate-manifest >
+    kit-manifest.json`, with NO `--manifest` flag, so the redirect target and
+    the tool's own write both name `<root>/kit-manifest.json` — the exact
+    collision the bug depended on. The shell opens (and truncates) that path
+    for its own fd 1 before exec; a real subprocess is what gives this test
+    that fd, which an in-process `capsys` run does not have. Before the fix
+    this reproduced with `json.load` raising `JSONDecodeError: Expecting
+    value: line 1 column 1 (char 0)` on the result — the status line had
+    overwritten the opening brace."""
+    root = _fake_repo(tmp_path)
+    manifest_path = root / kit_doctor.MANIFEST_NAME
+    script = ENGINE_DIR / "kit_doctor.py"
+    with manifest_path.open("w", encoding="utf-8") as redirected_stdout:
+        result = subprocess.run(
+            [sys.executable, str(script), "--generate-manifest", "--root", str(root)],
+            stdout=redirected_stdout,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    assert result.returncode == 0
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["kit_version"] == 2
+    assert "check_doc_budget.py" in json.dumps(manifest["files"])
 
 
 def test_remap_tolerates_a_trailing_slash():

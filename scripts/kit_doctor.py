@@ -2552,7 +2552,25 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
         holes = [p for p, e in manifest["files"].items() if e["sha256"] is None]
-        print(f"wrote {manifest_path} ({len(manifest['files'])} files, kit_version={version})")
+        # stderr, not stdout (#464): `manifest_path` already carries the JSON —
+        # written above, through its own descriptor — so this line is status,
+        # not the artifact. The obvious invocation is
+        # `kit_doctor.py --generate-manifest > kit-manifest.json`, and on stdout
+        # this line lands on the SHELL's redirect descriptor, which the shell
+        # opened (and truncated) before exec and which still sits at offset 0.
+        # That write landed at offset 0 of the very file just written in full
+        # above, overwriting its opening bytes with this status line while the
+        # JSON tail survived underneath — a spliced, invalid manifest, exit 0,
+        # and a diff where only the first hunk looks wrong. Reproduced on this
+        # tree with `uv run scripts/kit_doctor.py --generate-manifest >
+        # kit-manifest.json`: `json.load` then raised
+        # `JSONDecodeError: Expecting value: line 1 column 1 (char 0)`. Moving
+        # this print to stderr means a redirect captures nothing, so the two
+        # writers stop competing for the same descriptor.
+        print(
+            f"wrote {manifest_path} ({len(manifest['files'])} files, kit_version={version})",
+            file=sys.stderr,
+        )
         if holes:
             print(
                 f"warning: {len(holes)} listed file(s) absent from this checkout:", file=sys.stderr
