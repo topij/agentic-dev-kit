@@ -285,9 +285,11 @@ Self-pace on a bounded cadence — don't busy-wait:
     Nothing in `pr_watch.py` performs the request — it observes only. And note
     what this bullet does **not** say: it does not tell you to `--record-review`
     the bot's own verdict. That receipt vocabulary describes fallback passes, and
-    whether a bot's own clean review can be honestly recorded at all is open
-    (`#350`). This is also not a change to `converged`, which stays green + clean
-    and deliberately is not merge clearance.
+    a bot-reviewed head needs no receipt — its coverage *is* the evidence
+    (`#350`, resolved by the `bot-coverage` route above). Recording one there
+    asserts a fallback pass that did not run. This is also not a change to
+    `converged`, which stays green + clean and deliberately is not merge
+    clearance.
 - **Stuck / needs a decision** — a check fails for a reason you can't resolve (a
   flaky-infra failure that won't clear on re-run; an external dependency; a finding
   that needs an operator product/design call). Stop, report the specific blocker, and
@@ -307,9 +309,12 @@ Self-pace on a bounded cadence — don't busy-wait:
 - Known auto-noise from your review bots (walkthrough / "no actionable comments"
   summaries) is filtered out by the engine. Reviewer-unavailable notices are
   deliberately *not* noise: they surface as new comments and so block `converged`;
-  acknowledging one clears `converged` but still leaves the current-head
+  acknowledging one clears `converged` but ordinarily still leaves the current-head
   review-evidence blocker on `mergeable` until the panel runs and records its
-  receipt.
+  receipt. Ordinarily, not always: an outage announced *after* the configured bot
+  already reviewed this exact head leaves qualifying coverage behind it, so the
+  evidence blocker is already satisfied and there is nothing for a panel to add.
+  Read `review_evidence.route` rather than inferring from the outage.
 - **A bot's outage is detected on both trusted surfaces, and a queued bot is not a
   finished one.** `review.unavailable_markers` are matched against comments
   authored by the exact normalized login of a configured `review.bots` entry
@@ -470,9 +475,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   non-informational check before it can report green. Leave it `true` unless the repo
   genuinely has no CI — with no checks and `require_ci: true`, `converged` can never flip
   and `dev_session.sh merge` will always refuse. Setting it `false` does **not**
-  weaken the review gate: `mergeable` still requires a current-head
-  independent-review receipt, which then becomes the only quality gate — so set it
-  deliberately.
+  weaken the review gate: `mergeable` still requires current-head
+  independent-review **evidence** by either route above, which then becomes the only
+  quality gate — so set it deliberately. Note how the two settings compose:
+  `require_ci: false` on a repo with `review.bots: []` leaves the receipt as the single
+  gate, since the coverage route needs a configured bot to exist.
 - This is interactive-only. A scheduled job that opens its own PRs should be excluded
   from this loop by your cron/CI runner's env signal (any of `DEVKIT_CI_ENV_VARS`,
   default `JOB_NAME,CI,GITHUB_ACTIONS,GITLAB_CI,BUILDKITE`), so an automated open
