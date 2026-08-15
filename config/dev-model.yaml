@@ -318,9 +318,12 @@ review:
   # pr_watch will report green. True is the safe default: it stops an autonomous
   # merge on a PR whose CI never ran. Set false for a repo with no CI at all —
   # otherwise pr-watch can never converge and `dev_session.sh merge` always
-  # refuses. With false, `mergeable` still requires a current-head review receipt
-  # (it always does) — that receipt becomes the only quality gate, so set this
-  # deliberately.
+  # refuses. With false, `mergeable` still requires current-head independent-review
+  # EVIDENCE — either a recorded receipt or a configured bot's own review of that
+  # head (#350) — and that evidence becomes the only quality gate, so set this
+  # deliberately. Note what the two settings compose into: `require_ci: false` on a
+  # repo with `bots: []` leaves the receipt as the single gate, since the
+  # bot-coverage route needs a configured bot to exist.
   require_ci: true
 
 notify:

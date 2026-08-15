@@ -1964,9 +1964,11 @@ def summarize_checks(rollup: list[dict], *, require_ci: bool | None = None) -> d
       ``dev_session.sh merge`` always refuses.
 
     ``False`` does not remove the quality gate: :func:`decide_mergeable`
-    separately requires an independent-review receipt bound to the *current*
-    head, so on a CI-less repo that receipt becomes the only gate — which is why
-    the flag is opt-in per repo rather than inferred from an empty rollup.
+    separately requires current-head independent-review evidence — either a
+    ``--record-review`` receipt or a configured bot's own review of that head
+    (:func:`qualifying_bot_coverage`) — so on a CI-less repo that evidence
+    becomes the only gate, which is why the flag is opt-in per repo rather than
+    inferred from an empty rollup.
     """
     if require_ci is None:
         require_ci = _REQUIRE_CI
@@ -2375,11 +2377,20 @@ def bot_review_coverage(
     5. That happened on #22 (a fail-open rework the primary reviewer never saw)
     and again, smaller, on #25.
 
-    This does not gate anything. It makes the gap *visible at merge time*
-    instead of reconstructible only by reading the PR thread afterwards —
-    deliberately the cheap half of issue #27, because the expensive half
-    (invalidating a receipt when the diff changes shape) risks becoming a wedge
-    on a repo whose bot is permanently unavailable.
+    Written as observation only, and no longer that: since #350 this output is
+    read by :func:`qualifying_bot_coverage`, which lets a bot's own review of
+    the current head satisfy the merge gate with no receipt. It still makes the
+    gap *visible at merge time* instead of reconstructible only by reading the
+    PR thread afterwards — deliberately the cheap half of issue #27, because the
+    expensive half (invalidating a receipt when the diff changes shape) risks
+    becoming a wedge on a repo whose bot is permanently unavailable.
+
+    **The under-reporting bias below is now load-bearing.** It was a reporting
+    preference when nothing gated on it; it is the reason the gate fails closed
+    now. A change that made this function report coverage it is less sure of —
+    inferring a SHA, treating a comment-shaped verdict as a review (#44) — would
+    not merely over-report a warning, it would authorize merges. Widen what
+    counts as coverage only with that in view.
 
     Returns one entry per bot with at least one review carrying a usable commit
     SHA, newest first: ``{bot, sha, submitted_at, covers_head}``. A bot whose
@@ -2706,6 +2717,78 @@ def summarize_review_bots(
     }
 
 
+def qualifying_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
+    """Configured bots whose OWN review covers ``head`` well enough to gate on.
+
+    The second route to :func:`decide_mergeable`'s independent-review
+    requirement, beside a ``--record-review`` receipt (issue #350, direction 1).
+
+    **Why a second route exists at all.** The receipt vocabulary is three
+    literals and every one names a *fallback* pass. When the configured bot
+    itself reviewed the head, recording any of them asserts a pass that did not
+    run — so the honest agent recorded nothing and ``mergeable`` was
+    unreachable. That wedged the merge gate precisely when review had gone
+    *well*, and it wedged it hardest on an autonomous lane, whose
+    ``dev_session.sh merge`` reads ``mergeable`` and nothing else.
+
+    **Why this route is safe where a fourth receipt literal would not have
+    been.** Every receipt is SELF-REPORTED: the agent that wants the merge
+    writes it, and nothing binds it to a review that happened. A ``bot:<name>``
+    literal would have put that assertion on the merge gate's critical path,
+    which is the fabricated-receipt threat the #428 state guard exists to catch.
+    What this function reads instead is not a claim by the agent — it is
+    :func:`bot_review_coverage` over review objects GitHub attributes to the
+    bot's own identity.
+
+    **It fails closed by construction, and that is a property inherited rather
+    than added.** :func:`bot_review_coverage` already under-reports on purpose
+    (a bot whose reviews carry no usable commit SHA is indistinguishable there
+    from one that never reviewed). Under-reporting is the correct bias for a
+    gate: anything the coverage read cannot see yields no entry here, hence no
+    evidence, hence the receipt requirement stands exactly as it did before.
+    Issue #44 — a clean review that arrives only as a comment, invisible to
+    coverage — is therefore a case this route simply does not cover, never one
+    it gets wrong. **Do not "improve" the coverage read by trading that bias for
+    completeness**; the gate now rests on it.
+
+    Requires ALL of:
+
+    - a real ``head`` to bind to;
+    - ``signal == "ok"`` — the bot-state read actually ran. On ``"unavailable"``
+      both of :func:`summarize_review_bots`'s guards are already off and the
+      read FAILED, so it must not also open the gate; on ``"skipped"`` no bots
+      are configured and this route does not exist.
+    - a coverage entry with ``covers_head`` true **and** a ``sha`` equal to
+      ``head``. The redundancy is deliberate: ``covers_head`` is derived, and a
+      merge gate should re-check the identity it is about to authorize against
+      rather than trust a boolean computed elsewhere in the call.
+
+    Deliberately does NOT re-check what already blocks on its own path, because
+    a second copy of a rule is a second thing to go stale: a *pending* bot
+    contributes its own ``merge_blockers`` entry (issue #19's grace window), an
+    unacknowledged outage comment blocks ``converged``, and
+    ``CHANGES_REQUESTED`` is its own blocker. :func:`decide_mergeable` requires
+    ``converged`` and an empty blocker list regardless of this function, so this
+    route can only ever *add* evidence to a PR that is otherwise already clear.
+
+    Returns the sorted distinct bot names whose coverage qualifies — a list
+    rather than a bool so the report can name them and a reader can tell which
+    reviewer the merge actually rests on.
+    """
+    if not head:
+        return []
+    if review_bots.get("signal") != "ok":
+        return []
+    qualifying = {
+        entry.get("bot")
+        for entry in review_bots.get("coverage") or []
+        if entry.get("covers_head") is True
+        and entry.get("sha") == head
+        and entry.get("bot")
+    }
+    return sorted(qualifying)
+
+
 def decide_converged(
     checks: dict,
     new_items: list[dict],
@@ -2750,8 +2833,15 @@ def decide_mergeable(
 
     Strictly stronger than :func:`decide_converged`: a PR must first have nothing
     left to act on, and additionally carry no deterministic merge blocker (draft,
-    non-open, blocked merge state, changes requested) and an independent-review
-    receipt bound to the *current* head.
+    non-open, blocked merge state, changes requested) and independent-review
+    evidence bound to the *current* head.
+
+    ``review_evidence`` here is the caller's already-resolved boolean, and it has
+    **two** routes behind it (#350): a ``--record-review`` receipt, or a
+    configured review bot's own review of that head
+    (:func:`qualifying_bot_coverage`). This function does not care which — the
+    resolution is :func:`build_report`'s, and the report says which route
+    answered so a reader is never left to infer it.
 
     This is what an autonomous self-merge gates on (``dev_session.sh merge``).
 
@@ -3227,16 +3317,22 @@ def build_report(
     - ``all_seen_keys`` — the persistence set ``--mark-seen`` writes: BOTH the
       id key AND the content key of every current comment, so a later re-post
       under a new id stays handled.
-    - ``review_evidence`` — whether a persisted independent-review receipt is
-      bound to this exact head SHA.
+    - ``review_evidence`` — whether current-head independent-review evidence
+      exists, by either route (#350): a persisted receipt bound to this exact
+      head SHA, or a configured bot's own review of it. ``route`` names which
+      (``receipt`` / ``bot-coverage`` / null) and ``bots`` names the covering
+      bots; the receipt-describing keys (``source``, ``lenses``, ``override``,
+      ``bot_signal``) stay receipt-only and are empty on the coverage route.
     - ``review_bots`` — :func:`summarize_review_bots`: each configured review
       bot resolved to *unavailable* (an outage announced on either the comment
       or the check-description surface — an action signal, never a blocker) or
       *pending* (a verdict still coming, which blocks the merge gate until it
       ages past the grace window). Also carries ``coverage`` (which commit each
       bot's last review saw) and ``signal`` (whether that state could be read at
-      all) — both reported, neither gating. Advisory to ``converged`` by
-      construction.
+      all). Advisory to ``converged`` by construction — but **no longer
+      non-gating**: since #350 those two fields are what
+      :func:`qualifying_bot_coverage` reads to satisfy the merge gate's
+      independent-review requirement without a receipt.
     - ``merge_blockers`` — deterministic reasons the PR is not currently safe to
       merge (draft, blocked/unknown merge state, requested changes, non-open PR,
       missing current-head review evidence, or a configured review bot whose own
@@ -3386,8 +3482,27 @@ def build_report(
     receipt_head = (
         review_receipt.get("head") if isinstance(review_receipt, dict) else None
     )
+    receipt_valid = bool(head) and receipt_head == head
+    # The second route to the same requirement (#350, direction 1). See
+    # `qualifying_bot_coverage` for why reading the bot's own review objects is
+    # safe where a fourth self-reported receipt literal would not have been, and
+    # why every case it cannot see degrades to the receipt requirement rather
+    # than opening the gate.
+    coverage_bots = qualifying_bot_coverage(review_bots, head)
     review_evidence = {
-        "valid": bool(head) and receipt_head == head,
+        "valid": receipt_valid or bool(coverage_bots),
+        # WHICH route satisfied the gate. Without this a coverage-backed merge
+        # and a receipt-backed one are indistinguishable in the audit trail,
+        # which is the distinction #350 is about — so it is reported, not
+        # inferred from `source` being null. `receipt` wins the label when both
+        # hold: it is the claim someone actively made, and `bots` below still
+        # names the coverage, so nothing is hidden by the precedence.
+        "route": (
+            "receipt" if receipt_valid else ("bot-coverage" if coverage_bots else None)
+        ),
+        # Populated whenever coverage qualifies, INCLUDING when a receipt also
+        # exists — a reader deciding whether to trust a merge wants both facts.
+        "bots": coverage_bots,
         "source": (
             review_receipt.get("source")
             if isinstance(review_receipt, dict) and receipt_head == head
@@ -3646,7 +3761,21 @@ def render(report: dict) -> str:
     # a label and hope. A relabelled one-lens receipt now reads as one lens
     # regardless of what it is called.
     evidence = report.get("review_evidence") or {}
-    if evidence.get("valid"):
+    if evidence.get("valid") and evidence.get("route") == "bot-coverage":
+        # The one kind of review evidence this engine did NOT take on trust: it
+        # comes from review objects the forge attributes to the bot's own
+        # identity, not from a label an agent typed. Rendered on its own branch
+        # because every caveat in the receipt branch below — lens counts, an
+        # override, an unreadable bot state — is a property of a RECEIPT. Run
+        # through that branch, a real bot review would print "no lenses
+        # recorded", reading as a deficiency rather than as different (and
+        # harder to forge) evidence.
+        who = ", ".join(_flat(bot) for bot in evidence.get("bots") or [])
+        lines.append(
+            f"  review evidence: the configured review bot reviewed this head ({who})"
+            " — no receipt needed"
+        )
+    elif evidence.get("valid"):
         # SELF-REPORTED, and labelled as such. Whoever ran `--record-review`
         # wrote both the source and the lens names in one invocation, with
         # nothing binding either to a review that happened — so this engine
@@ -3667,6 +3796,15 @@ def render(report: dict) -> str:
         else:
             detail = "no lenses recorded"
         lines.append(f"  review evidence: {source} — {detail}")
+        # Both routes hold. `route` says `receipt` because that is the claim
+        # someone actively made, but the coverage is the sturdier of the two and
+        # a reader weighing a one-lens receipt deserves to know the bot also saw
+        # this exact head.
+        if evidence.get("bots"):
+            lines.append(
+                "    + the configured review bot also reviewed this head "
+                f"({', '.join(_flat(bot) for bot in evidence['bots'])})"
+            )
         # The same argument that moved `lenses` to the poll render applies to
         # its siblings: a caveat printed only on the stdout of the
         # `--record-review` call the agent itself made is not visible at the

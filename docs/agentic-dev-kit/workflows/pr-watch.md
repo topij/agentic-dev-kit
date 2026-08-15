@@ -41,12 +41,32 @@ Repeat until the report says **converged**:
    - **`converged`** — "is there more for me to fix?" Green, nothing new, not
      settling. This is what ends *this* loop.
    - **`mergeable`** — "is this authorized to merge?" `converged` **plus** no
-     `merge_blockers[]` **plus** an independent-review receipt bound to the current
+     `merge_blockers[]` **plus** independent-review evidence bound to the current
      head. This is what `dev_session.sh merge` re-checks.
 
-   A PR can be `converged` and not `mergeable` — most commonly because no review
-   receipt has been recorded yet. That is the normal, expected state at the end of
-   the loop, not a failure.
+   **Independent-review evidence has two routes, and `review_evidence.route` says
+   which one answered** (`#350`):
+
+   - **`receipt`** — a `--record-review` receipt bound to this head. Self-reported:
+     the agent writes both the source and the lens names, and nothing binds either
+     to a review that happened, which is why the render labels it a claim.
+   - **`bot-coverage`** — a configured review bot's *own* review of this exact head,
+     read from review objects the forge attributes to that bot's identity, with
+     `review_evidence.bots` naming which. Nothing is recorded and nothing needs to
+     be: this route exists because the receipt vocabulary describes only fallback
+     passes, so a bot-reviewed head used to have no honest receipt at all and the
+     gate was unreachable exactly when review had gone well.
+
+   The coverage route is deliberately narrow, and everything it cannot see falls
+   back to the receipt requirement rather than opening the gate: a review whose
+   commit SHA is unusable, a verdict that arrived only as a comment (`#44`), or a
+   bot-state read that failed all yield no evidence. A *pending* bot still blocks on
+   its own grace window, and an unacknowledged outage notice still blocks
+   `converged`.
+
+   A PR can be `converged` and not `mergeable` — most commonly because neither route
+   is satisfied yet. That is the normal, expected state at the end of the loop, not a
+   failure.
 
    The other routine reason is a `merge_blockers[]` entry reading
    **`check rollup has not settled for current head`**. The merge gate waits for
@@ -157,8 +177,14 @@ Repeat until the report says **converged**:
    prior poll (nothing pending) acks nothing and says so (`note` in the output) —
    always poll-and-read first.
 
-1. **Record the independent pass:** run `--record-review <source> --head <polled-sha>`
-   only after the configured bot, human, or fallback reviewer has completed and all
+1. **Record the independent pass — when there is one to record.** If
+   `review_evidence.route` is already `bot-coverage`, the configured bot reviewed
+   this exact head and **nothing should be recorded**: the gate is satisfied, and
+   every available `<source>` literal names a fallback pass that did not run
+   (`#350`). Recording one there is a false receipt, not a formality.
+
+   Otherwise run `--record-review <source> --head <polled-sha>`
+   only after the human or fallback reviewer has completed and all
    findings are resolved. `<polled-sha>` is the `head` field from the exact poll whose
    diff was reviewed. Recording fails if the PR head changed in the meantime. The
    receipt is persisted with that exact `headRefOid`; any later push invalidates it and
