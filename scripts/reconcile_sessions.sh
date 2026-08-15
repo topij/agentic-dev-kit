@@ -284,16 +284,24 @@ _session_dir_for_branch() {
 # swallows exit status by design, so a garbage-but-non-empty stdout would be
 # cached as a permanent success and would silently defeat the retry above for the
 # rest of the run — a review lens executed exactly that with a `repo view` that
-# printed a single space. `gh` itself accepts only `[HOST/]OWNER/REPO`, so a value
-# that cannot be one is not a resolution and must not end the retries.
+# printed a single space, and the round after it got in with `/`, `acme/` and
+# `a/b/c` past a check that only asked for "contains a slash, contains no space".
+#
+# So the test is EXACT, not a heuristic: `gh repo view --json nameWithOwner`
+# returns `OWNER/REPO` and nothing else, so anything that is not two non-empty
+# whitespace-free segments is not a resolution and must not end the retries.
+# Reject-first ordering, because every near-miss shape has to fall into a reject
+# arm rather than out of an accept arm's edge.
 REPO_NWO=""
 _resolve_repo_nwo() {
     [[ -z "$REPO_NWO" ]] || return 0
     REPO_NWO="$(_gh repo view --json nameWithOwner --jq .nameWithOwner)"
     REPO_NWO="${REPO_NWO%%$'\n'*}"
-    if [[ "$REPO_NWO" != */* || "$REPO_NWO" == *[[:space:]]* ]]; then
-        REPO_NWO=""
-    fi
+    case "$REPO_NWO" in
+        ""|/*|*/|*/*/*|*[[:space:]]*) REPO_NWO="" ;;
+        */*) : ;;
+        *) REPO_NWO="" ;;
+    esac
 }
 
 # _held_check <branch> <pr> — is this open PR's lane HELD for the operator?

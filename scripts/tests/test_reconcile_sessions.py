@@ -488,26 +488,47 @@ def test_the_forge_repo_is_resolved_once_per_run_not_once_per_lane(
     assert harness.gh_repo_view_calls() == 1
 
 
-def test_a_malformed_repo_reply_is_not_taken_as_a_resolution(harness: Harness) -> None:
-    """Round 6. `_gh` swallows exit status by design, so "resolved" was defined as
-    "non-empty reply" — and a lens executed a `gh repo view` that printed a single
-    space, watched it cached as a permanent success, and watched the retry the
-    previous round added stop happening for the rest of the run. `gh` accepts only
-    `[HOST/]OWNER/REPO`; a value that cannot be one is not a resolution."""
+@pytest.mark.parametrize(
+    "reply",
+    [
+        pytest.param(" ", id="a-single-space"),
+        pytest.param("", id="empty"),
+        pytest.param("/", id="both-segments-empty"),
+        pytest.param("acme/", id="empty-repo-segment"),
+        pytest.param("/widgets", id="empty-owner-segment"),
+        pytest.param("a/b/c", id="three-segments"),
+        pytest.param("acme/wid gets", id="whitespace-inside-a-segment"),
+        pytest.param("acmewidgets", id="no-separator"),
+    ],
+)
+def test_a_malformed_repo_reply_is_not_taken_as_a_resolution(
+    harness: Harness, reply: str
+) -> None:
+    """Rounds 6 and 7, and the reason this check is exact rather than a heuristic.
+
+    `_gh` swallows exit status by design, so "resolved" was first defined as
+    "non-empty reply" — a lens executed a `gh repo view` printing a single space,
+    watched it cached as a permanent success, and watched the previous round's
+    retry stop happening. The replacement asked only "has a slash, has no space",
+    and the NEXT round got `/`, `acme/` and `a/b/c` straight past it — with the
+    same consequence, reached by a false-positive success instead of a poisoned
+    failure. `gh repo view --json nameWithOwner` returns `OWNER/REPO` and nothing
+    else, so every one of these is a non-resolution.
+
+    Two lanes, so the assertion covers the part that made the defect matter: a
+    non-resolution must also leave the retry alive for the next lane."""
     for scope, pr in (("m1", 570), ("m2", 571)):
         harness.branch(f"lane/{scope}")
         harness.pr(f"lane/{scope}", pr, "OPEN")
         harness.session(scope, f"lane/{scope}", "operator")
         harness.watch_report(pr, mergeable=True)
 
-    result = harness.run("m1", "m2", nwo=" ")
+    result = harness.run("m1", "m2", nwo=reply)
 
     assert _status_of(result.stdout, "m1") == "open"
     assert _status_of(result.stdout, "m2") == "open"
     assert harness.uv_calls() == [], "a malformed repo must never be probed"
-    # And it must not have ended the retries either — that is what caching a
-    # garbage value would silently have done.
-    assert harness.gh_repo_view_calls() == 2
+    assert harness.gh_repo_view_calls() == 2, "a non-resolution must not end retries"
     assert result.returncode == 3
 
 
