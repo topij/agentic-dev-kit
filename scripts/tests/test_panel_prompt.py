@@ -513,12 +513,14 @@ def test_a_provided_worktree_is_named_and_the_no_worktree_warning_is_dropped(rep
 
 
 def test_the_scratch_namespace_fresh_path_reminder_is_present_early(repo):
-    """#469: every round of #459's panel had a lens hit the sandbox's `rm -rf`
-    refusal before it read the Scratch namespace item — item 9 of 13 in a contract
-    quoted at the very end of the prompt. The doctrine's wording was already right;
-    the carrier was not. So the operative sentence is now also stated near the top
-    of the prompt, beside the tree the lens is handed, ahead of the full contract
-    quote — not instead of it.
+    """#469: a lens hit the sandbox's `rm -rf` refusal after the Scratch namespace
+    item's wording already told it not to (#459 round 2's correctness lens; round 1
+    explicitly recorded none, so this was not every round, but it did recur) —
+    before it read that item, item 9 of 13 in a contract quoted at the very end of
+    the prompt. The doctrine's wording was already right; the carrier was not. So
+    the operative sentence is now also stated near the top of the prompt, beside
+    the tree the lens is handed, ahead of the full contract quote — not instead of
+    it.
     """
     base, head = _revs(repo)
     out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
