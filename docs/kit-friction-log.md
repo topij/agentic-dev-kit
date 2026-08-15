@@ -17,11 +17,13 @@
 Surfaced by the two-ruling session (`#483`, `#484`). Items already issue-shaped were
 filed directly (`#485`, `#486`) and are not repeated here.
 
-- **`make test` piped to `tail` reports the pipe's exit status, not `make`'s.** (**M**)
-  Every verification this session ran as `make test 2>&1 | tail -N`, which returns
-  *tail's* status — so a `make: *** Error 1` was reported to the agent as
+- **`make test` piped to `tail` reports the pipe's exit status, not `make`'s — unless the
+  shell has `pipefail` set, which it does not by default.** (**M**)
+  Every verification this session ran as `make test 2>&1 | tail -N`, which in a default
+  shell returns *tail's* status — so a `make: *** Error 1` was reported to the agent as
   `exited with code 0`. It surfaced only because the failing thing printed to stdout;
-  a failure that only set the exit code would have been invisible. `AGENTS.md` makes
+  a failure that only set the exit code would have been invisible. The condition matters
+  because it is also the fix: `set -o pipefail` makes the same pipeline honest. `AGENTS.md` makes
   `make test` the verification command and says a claim must name the command and its
   actual result, but nothing says how to read the result without losing it.
   *Proposed fix:* have `AGENTS.md` show the invocation that preserves the status
