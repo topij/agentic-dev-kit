@@ -64,8 +64,12 @@ starts.
   a PR the bot has *not* reviewed at the current head — an unusable commit SHA on the
   review, a verdict that arrived only as a comment (`#44`), or a failed bot-state read
   all yield no evidence and leave the receipt requirement standing. A pending bot's
-  grace blocker, an unacknowledged outage notice, and `CHANGES_REQUESTED` all keep
-  their existing authority. `#350`.
+  grace blocker and an unacknowledged outage notice keep their existing authority.
+  **`CHANGES_REQUESTED` is not claimed to** — a recorded receipt has always been able
+  to authorize a merge over a bot's standing objection, because `--record-review`
+  refuses only on a bot's *pending check row*, never on its submitted verdict. That is
+  unchanged by this release and is why the new route excludes the state outright rather
+  than deferring to that blocker. `#350`.
 - **CHANGED (report shape)** — `review_evidence` grew two keys. **`route`** is
   `"receipt"`, `"bot-coverage"`, or `null`, and names which route satisfied the gate
   (`"receipt"` wins when both hold). **`bots`** is the sorted list of configured bots

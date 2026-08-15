@@ -3532,6 +3532,22 @@ def test_an_inconsistent_coverage_entry_is_refused_by_the_sha_recheck() -> None:
     }
     assert pr_watch.qualifying_bot_coverage(consistent, "abc123") == ["coderabbit"]
 
+    # THE MIRROR DIRECTION, and it was unpinned until a lens mutation-tested it:
+    # dropping the `covers_head is True` clause while keeping `sha == head`
+    # survived the whole suite. Both halves of an `and` need their own failing
+    # case, or half the guard is decorative — #447's shape, one clause over from
+    # where the neighbouring docstring already warns about it.
+    disagreeing_the_other_way = {
+        "signal": "ok",
+        "coverage": [dict(consistent["coverage"][0], covers_head=False)],
+    }
+    assert pr_watch.qualifying_bot_coverage(disagreeing_the_other_way, "abc123") == []
+    # A missing `covers_head` is refused too — `is True`, not truthiness, so the
+    # absent case cannot pass by being merely non-falsy.
+    absent = {"signal": "ok", "coverage": [dict(consistent["coverage"][0])]}
+    absent["coverage"][0].pop("covers_head")
+    assert pr_watch.qualifying_bot_coverage(absent, "abc123") == []
+
 
 def test_a_lookalike_login_cannot_manufacture_merge_evidence() -> None:
     """The trust boundary direction 1 now rests on, pinned at the gate.

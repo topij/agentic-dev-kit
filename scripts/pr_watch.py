@@ -2818,11 +2818,23 @@ def qualifying_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
 
     Deliberately does NOT re-check what already blocks on its own path, because
     a second copy of a rule is a second thing to go stale: a *pending* bot
-    contributes its own ``merge_blockers`` entry (issue #19's grace window), an
-    unacknowledged outage comment blocks ``converged``, and
-    ``CHANGES_REQUESTED`` is its own blocker. :func:`decide_mergeable` requires
-    ``converged`` and an empty blocker list regardless of this function, so this
-    route can only ever *add* evidence to a PR that is otherwise already clear.
+    contributes its own ``merge_blockers`` entry (issue #19's grace window) and
+    an unacknowledged outage comment blocks ``converged``.
+    :func:`decide_mergeable` requires ``converged`` and an empty blocker list
+    regardless of this function, so THIS route can only ever *add* evidence to a
+    PR that is otherwise already clear.
+
+    **Read that last sentence as scoped to this route, because the receipt route
+    beside it does not share the property.** A bot's live ``CHANGES_REQUESTED``
+    on the current head does not stop :func:`record_review` — its only refusal
+    reads the bot's *check-row pending state*, never the submitted verdict — and
+    the aggregate ``review_decision`` blocker does not catch it either on the
+    ``gh`` transport, which is the only transport ``--record-review`` runs on.
+    So a receipt can authorize a merge over a standing objection. That is
+    pre-existing and unchanged here (reproduced at this branch's base), and it
+    is precisely why ``CHANGES_REQUESTED`` is excluded from
+    :data:`_EVIDENTIAL_REVIEW_STATES` rather than delegated to that blocker:
+    delegating would have inherited the hole.
 
     Returns the sorted distinct bot names whose coverage qualifies — a list
     rather than a bool so the report can name them and a reader can tell which
