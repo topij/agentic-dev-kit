@@ -42,6 +42,26 @@ starts.
 
 ---
 
+## #477 — 2026-08-15
+
+- **BREAKING (gate semantics)** — `"actionable comments posted: 0"` is gone from
+  the engine's `_DEFAULT_NOISE_MARKERS`. A comment body whose only match was that
+  string is no longer filtered: it surfaces in `new_comments` and holds
+  `converged` false until acknowledged. The direction is fail-closed — this can
+  only make the gate stricter — but it is a flip. **If your review bot really does
+  emit that wording, put it back in your own `review.noise_markers`**; on this
+  repo it had never matched a single comment on any PR.
+- **CHANGED (config keys)** — `review.noise_markers` ships one entry shorter, and
+  `init.sh` no longer seeds the retired entry into a *fresh* `dev-model.yaml`. An
+  existing config is left alone (`ensure_review_key` only adds absent keys), so
+  **delete the line from your own config by hand** if you want the new default.
+  While you are there, re-check the rest of your list against what your bot
+  actually posts today — a marker that matches nothing reports nothing.
+  **Do not replace it with CodeRabbit's clean-verdict sentence.** `is_noise`
+  matches the body with no author check, so that entry would also discard a human
+  comment quoting the bot; `scripts/tests/test_pr_watch.py` now fails if you add
+  it.
+
 ## #459 — 2026-08-13
 
 - **BREAKING (gate semantics)** — the #428 guard's snapshot now records a kind
