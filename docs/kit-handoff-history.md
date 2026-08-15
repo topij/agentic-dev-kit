@@ -4,6 +4,72 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-12 (the adopter refresh's first upstream fix, and a boundary I drew wrong)
+
+**Theme —** `#428`, the sharpest of the four issues the cs-toolkit refresh filed against the
+kit. The fix is small; what the review found in it, round after round, is the part worth
+carrying.
+
+- **The cs-toolkit refresh is done** — the thread this handoff carried as outstanding since
+  2026-08-10. It went `40eef8b` → `0c73bdf` clean: `kit_doctor` 0 differ, config migration
+  byte-identical, 6 of 6 declines preserved. Filed upstream: `#428`, `#429`, `#430`, `#431`,
+  plus an occurrence comment on `#40`. **Its field report exists only as a chat artifact**,
+  which is `#423`'s own shape — a URL is a pointer for one reader, not provenance. The
+  findings above are the durable half.
+- **`#428` fixed on `#432`** — the kit's own `make test` was overwriting `state/pr-watch/1.json`
+  and `4242.json`, and `1.json` is a real PR's record slot. Two layers: an autouse fixture
+  binding a per-test state root, and a session-scoped pin that fails the run if the real
+  `state/` changes. Receipt `fallback:panel` at `752d9fe`, both lenses.
+  **Not merged — operator-merge under the ruling below.**
+- **Filed:** `#433` (the pin's snapshot is taken after the first test directory has already
+  run — the conftest is directory-scoped and a session fixture instantiates lazily),
+  `#434` (`safety-critical-changes.md`'s glob does not reach the guard, with the breadth
+  decided as `scripts/tests/conftest.py` only), `#435` (wrap-up step 8 sends the handoff
+  commit to the session branch, which voids that PR's review receipt — hit while wrapping
+  up this session, worked around by branching off `main`). Occurrence comments on `#54`,
+  `#182`, `#209`.
+
+**Learned**
+
+- **The isolation command I wrote failed open.** `DEVKIT_STATE_ROOT=$(mktemp -d) pytest …`
+  sets the empty string when `mktemp` fails, and `_resolve_state_root` reads empty as *no
+  override* — so it would have redirected the suite into live `state/` exactly when the
+  isolation failed, which is worse than not having the line, because the command reads as
+  protected. CodeRabbit found it. The two-step `tmp="$(mktemp -d)" && …` gates the run on
+  the assignment.
+- **I drew the safety-critical boundary wrong, and a lens overturned it.** My reasoning was
+  that the globs name `dev_session.sh` and `pr_watch.py` and the diff touches neither —
+  literally true. But the glob's own frontmatter says `pr_watch.py` was added because the
+  rule must match where the decision is *made*; a fabricated receipt is indistinguishable
+  from a real one by the time the gate reads it, so the defence has to be upstream. The
+  operator upheld the dispute. **The resolution is the operator's own comment on `#432`**,
+  because the doctrine excludes a relayed account from the party that drew the boundary —
+  which was me.
+- **Four of the defects the loop caught were introduced while fixing the previous round.**
+  A deleted referent left a dangling pronoun; a corrected claim described an empty set as a
+  population. That is `safety-critical-changes.md` rule 3's own subject, and it is why
+  `#433` and `#434` were filed rather than built into a fix round.
+- **A figure that crosses an agent boundary arrives with its provenance collapsed.** Two
+  numbers I relayed from a delegated report into the PR body named commands that did not
+  produce them — and naming a command is what made them look established. Recorded on `#54`;
+  it sharpens that issue rather than restating it.
+- **A lens returned a placeholder instead of a report** and would have counted as a passing
+  lens to anything tallying rather than reading. Caught only because the output was visibly
+  not a report. `#182`.
+
+**Open, and owned by nothing yet**
+
+- **`#432`** is `mergeable` and unmerged. Operator-merge; do not self-merge it.
+- **`#429`, `#430`, `#431`** — the rest of the cs-toolkit refresh's upstream findings,
+  untouched. `#430` is the one three of the others are downstream of.
+- **`#433`, `#434`** as filed. `#434` needs `#273` accounted for or it is half a fix —
+  `.claude/rules/` binds one runtime.
+- Nothing in the 2026-08-11 block's open list below moved this session.
+
+▶ Next: **merge `#432`** (operator-merge, receipt `fallback:panel` at `752d9fe`), then
+`#430` — the adopter-facing signal for an upgrade that changes observable engine behaviour,
+which `#429` and the `#431` decline-labour both trace back to.
+
 ## Session — 2026-08-11 (the sweep, and a record claim that could not be repaired)
 
 **Theme —** a routine graduation sweep. The routing went clean; every defect the review found
