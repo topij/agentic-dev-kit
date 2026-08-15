@@ -19,12 +19,17 @@ and some of them no longer resolve to the item they name.
 
 ## Before you accept the outage as fixed
 
-An outage this file can substitute for is not always one you have to have. A
-reviewer's coverage is partly a **configuration you chose** — what triggers it,
-what it re-reviews, whether it runs at all on a given branch — and each of those
-settings spends whatever budget the reviewer has. Read that configuration before
-concluding the reviewer cannot serve this repo, and especially before a recurring
-shortfall hardens into a standing panel habit.
+**A reviewer's coverage is partly a configuration you chose** — what triggers it,
+what it re-reviews, whether it runs at all on a given branch — and every one of
+those settings spends whatever budget the reviewer has. So a shortfall that keeps
+recurring may be a setting rather than a limit: the reviewer is not failing to
+serve this repo, it is serving it in the way it was configured to. Read that
+configuration before a recurring shortfall hardens into a standing panel habit.
+
+**This changes nothing about the outage in front of you.** A reviewer that is
+down is never a review waiver, and the panel still runs — that rule is not
+weakened by anything in this section. What is in question here is only whether
+you keep paying for the *same* outage next week.
 
 Everything else in this file, and everything in `review.*` beside it, is
 **detection and substitution**: `unavailable_markers`, the pending grace, the
