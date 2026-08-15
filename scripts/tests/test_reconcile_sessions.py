@@ -397,10 +397,18 @@ def test_an_ordinary_not_held_answer_is_silent(harness: Harness) -> None:
 
 
 def test_the_probe_reads_the_lanes_own_sandbox_and_never_persists(harness: Harness) -> None:
-    """Two properties no output could show. The receipt and seen-set live in the
-    LANE's sandbox, so a probe against the caller's state root would answer for
-    the wrong lane; and reconciliation is a report, so it must not write a
-    settle baseline or consume a pending seen-set on the way past."""
+    """Two properties of the invocation that no output could show: the state root
+    it is handed, and the flags it carries.
+
+    The receipt and seen-set live in the LANE's sandbox, so a probe against the
+    caller's state root would answer for the wrong lane. And reconciliation is a
+    report, so it must ask for no persistence — a settle baseline written or a
+    pending seen-set consumed on the way past would be a mutation of lane state.
+
+    Precisely, because a round-8 lens found the earlier wording overclaiming:
+    this asserts that `--no-persist` is PASSED. That `pr_watch.py` honours it is
+    that engine's contract and is tested in `test_pr_watch.py`; nothing here
+    could establish it, since the probe is stubbed."""
     harness.branch("lane/theta")
     harness.pr("lane/theta", 509, "OPEN")
     session = harness.session("theta", "lane/theta", "operator")
@@ -778,6 +786,11 @@ def test_held_and_open_both_appear_with_held_first(harness: Harness) -> None:
 
     result = harness.run("mu", "nu")
 
+    # The row label as well as the tally: a round-8 lens mutated `status="held"`
+    # to `status="open"` while leaving the counter alone, and this test — the one
+    # named for the distinction — passed. The tally and the row can disagree.
+    assert _status_of(result.stdout, "mu") == "held"
+    assert _status_of(result.stdout, "nu") == "open"
     assert _tally(result.stdout) == "launched 2, merged 0, parked 0, held 1, open 1"
     assert result.returncode == 3
 
@@ -826,6 +839,8 @@ def test_an_open_lane_outranks_a_held_one(harness: Harness) -> None:
 
     result = harness.run("rho", "sigma")
 
+    assert _status_of(result.stdout, "rho") == "held"
+    assert _status_of(result.stdout, "sigma") == "open"
     assert result.returncode == 3
     assert "still OPEN" in result.stdout
 
