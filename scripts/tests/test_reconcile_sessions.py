@@ -4,24 +4,26 @@ Why this file exists at all: the reconciler had no test module before #465, and
 #465 adds a fourth terminal state plus a new exit code to it. A new state with
 no failing case behind it is the pattern #417 and #447 are filed about, so every
 assertion here is written to die under a specific mutation of the branch it
-covers: the four `_held_check` returns, the branch → session-dir resolution
-(identity AND its ambiguity refusal), the tally composition, and the three-way
-exit.
+covers: `_held_check`'s three outcomes (held / not held / could not tell), the
+branch → session-dir resolution (identity AND its ambiguity refusal), the
+environment the probe is handed, the tally composition, and the three-way exit.
 
-The resolution half of that list is here because the review panel put it there.
-The first version of this file pinned everything else and let two resolution
-mutants through — one lens made the lookup ignore its argument, the other made
-two session dirs claiming one branch resolve by glob order; both survived all 19
-tests. The tests named for those mutants say so in place.
+Two items on that list are there because the review panel put them there. The
+first version of this file pinned the rest and let two resolution mutants
+through — one lens made the lookup ignore its argument, the other made two
+session dirs claiming one branch resolve by glob order; both survived all 19
+tests then present. A later round found the probe's forge-repo pin unasserted.
+The tests named for those mutants say so in place.
 
 **Everything runs the real script.** `gh`, `uv` and the session directory are
 faked, but `reconcile_sessions.sh` itself is executed unmodified through `bash`,
 against a real git repository with a real remote — so the classification, the
 tally line and the exit code are observed, never reconstructed. The `uv` stub
-also RECORDS its argv and `$DEVKIT_STATE_ROOT`, which is what pins the two
-properties of the probe that no output could show: that it reads the LANE's
-state sandbox rather than the caller's, and that it passes `--no-persist` so
-reconciling never mutates a lane's seen-set, settle baseline or receipt.
+also RECORDS its argv, `$DEVKIT_STATE_ROOT` and `$GH_REPO`, which is what pins
+the properties of the probe that no output could show: that it reads the LANE's
+state sandbox rather than the caller's, that it is aimed at the repository the
+run already resolved, and that it passes `--no-persist` so reconciling never
+mutates a lane's seen-set, settle baseline or receipt.
 """
 
 from __future__ import annotations
@@ -63,6 +65,10 @@ vcs:
 # the forge. Branch names contain `/`, which cannot be a filename component, so
 # the fixture file is keyed on the slash-flattened name.
 _FAKE_GH = """#!/bin/sh
+if [ "$1" = "repo" ] && [ "$2" = "view" ]; then
+  printf '%s\\n' "${GH_FAKE_NWO:-}"
+  exit 0
+fi
 head=""
 prev=""
 for a in "$@"; do
@@ -78,7 +84,8 @@ if [ -f "$f" ]; then cat "$f"; else printf '[]\\n'; fi
 # report for that PR — or exits non-zero when there is none, which is how the
 # "probe could not run" path is reached without having to uninstall anything.
 _FAKE_UV = """#!/bin/sh
-printf '%s\\t%s\\n' "${DEVKIT_STATE_ROOT:-<unset>}" "$*" >> "$UV_ARGV_LOG"
+printf '%s\\t%s\\t%s\\n' "${DEVKIT_STATE_ROOT:-<unset>}" "${GH_REPO:-<unset>}" "$*" \
+  >> "$UV_ARGV_LOG"
 for a in "$@"; do
   case "$a" in
     ''|*[!0-9]*) ;;
@@ -179,15 +186,19 @@ class Harness:
 
     # ------------------------------------------------------------------ runner
 
-    def run(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run(self, *args: str, nwo: str = "acme/widgets", **extra: str) -> subprocess.CompletedProcess[str]:
         env = {
             **os.environ,
             "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
             "DEVKIT_SESSIONS_DIR": str(self.sessions),
             "GH_PRS": str(self.gh_prs),
+            "GH_FAKE_NWO": nwo,
             "UV_REPORTS": str(self.uv_reports),
             "UV_ARGV_LOG": str(self.uv_argv_log),
         }
+        # The runner's own ambient GH_REPO must not decide what these tests see.
+        env.pop("GH_REPO", None)
+        env.update(extra)
         return subprocess.run(
             ["bash", str(self.engine_dir / "reconcile_sessions.sh"), *args],
             cwd=self.repo,
@@ -197,9 +208,10 @@ class Harness:
             text=True,
         )
 
-    def uv_calls(self) -> list[tuple[str, str]]:
+    def uv_calls(self) -> list[tuple[str, str, str]]:
+        """One (state_root, gh_repo, argv) triple per recorded probe."""
         lines = self.uv_argv_log.read_text(encoding="utf-8").splitlines()
-        return [(line.split("\t", 1)[0], line.split("\t", 1)[1]) for line in lines if line]
+        return [tuple(line.split("\t", 2)) for line in lines if line]  # type: ignore[misc]
 
 
 @pytest.fixture
@@ -370,13 +382,75 @@ def test_the_probe_reads_the_lanes_own_sandbox_and_never_persists(harness: Harne
 
     assert result.returncode == 4
     assert len(harness.uv_calls()) == 1
-    state_root, argv = harness.uv_calls()[0]
-    assert state_root == str(session / "state")
+    state_root, _gh_repo, argv = harness.uv_calls()[0]
+    assert os.path.realpath(state_root) == os.path.realpath(session / "state")
+    assert os.path.isabs(state_root)
     assert "--no-persist" in argv
     assert "--json" in argv
     assert " 509 " in f" {argv} "
     assert argv.split()[0] == "run"
     assert argv.split()[1].endswith("pr_watch.py")
+
+
+def test_the_probe_is_pinned_to_the_repo_the_run_already_resolved(harness: Harness) -> None:
+    """The panel's adversarial lens, round 2. `gh pr list` resolves the forge repo
+    from the caller's cwd and any ambient `$GH_REPO`; `pr_watch.py` pins its own
+    cwd to the repo root and separately honours `$GH_REPO`. Unpinned, the PR
+    number can come from one repository and the merge-readiness verdict from
+    another — and a same-numbered green PR elsewhere would report `held` about a
+    PR nobody looked at. The probe must carry the repo this run already
+    resolved."""
+    harness.branch("lane/psi")
+    harness.pr("lane/psi", 540, "OPEN")
+    harness.session("psi", "lane/psi", "operator")
+    harness.watch_report(540, mergeable=True)
+
+    # An ambient GH_REPO for some OTHER repo is exactly the hazard. Whatever the
+    # run resolves through `gh` is what the probe must be handed — the property
+    # is that the two agree, not which one wins.
+    result = harness.run("psi", nwo="acme/widgets", GH_REPO="someone/else")
+
+    assert result.returncode == 4
+    assert [gh_repo for _root, gh_repo, _argv in harness.uv_calls()] == ["acme/widgets"]
+
+
+def test_a_relative_sessions_dir_still_yields_an_absolute_state_root(
+    harness: Harness,
+) -> None:
+    """Also the panel's adversarial lens, round 2. `pr_watch.py` treats a RELATIVE
+    `$DEVKIT_STATE_ROOT` as "ignore this, use `<repo>/state`" rather than as an
+    error — deliberately, so its loop never crashes. A relative
+    `$DEVKIT_SESSIONS_DIR` would therefore silently aim the probe at the MAIN
+    checkout's per-PR file, which can hold real unrelated history for the same PR
+    number, with no failure visible anywhere. The index normalizes instead."""
+    harness.branch("lane/chi")
+    harness.pr("lane/chi", 542, "OPEN")
+    session = harness.session("chi", "lane/chi", "operator")
+    harness.watch_report(542, mergeable=True)
+
+    relative = os.path.relpath(harness.sessions, harness.repo)
+    assert not os.path.isabs(relative)
+    result = harness.run("chi", DEVKIT_SESSIONS_DIR=relative)
+
+    assert result.returncode == 4
+    state_root, _nwo, _argv = harness.uv_calls()[0]
+    assert os.path.isabs(state_root), state_root
+    assert os.path.realpath(state_root) == os.path.realpath(session / "state")
+
+
+def test_an_unresolvable_repo_leaves_the_probe_unpinned(harness: Harness) -> None:
+    """No gh, no auth, no network: resolution yields nothing, and the probe runs
+    exactly as it did before the pin rather than being handed an empty `GH_REPO`
+    that `gh` would have to interpret."""
+    harness.branch("lane/omega")
+    harness.pr("lane/omega", 541, "OPEN")
+    harness.session("omega", "lane/omega", "operator")
+    harness.watch_report(541, mergeable=True)
+
+    result = harness.run("omega", nwo="")
+
+    assert result.returncode == 4
+    assert [gh_repo for _root, gh_repo, _argv in harness.uv_calls()] == ["<unset>"]
 
 
 def test_a_lane_reached_by_branch_name_still_resolves_its_session(harness: Harness) -> None:
@@ -423,14 +497,22 @@ def test_the_index_matches_on_branch_identity_not_on_position(harness: Harness) 
     # dies if resolution ever answers with a different session's directory.
     only_aaa = harness.run("aaa")
     assert _status_of(only_aaa.stdout, "aaa") == "held"
-    assert [state_root for state_root, _ in harness.uv_calls()] == [str(aaa / "state")]
+    assert [os.path.realpath(r) for r, _n, _a in harness.uv_calls()] == [
+        os.path.realpath(aaa / "state")
+    ]
 
 
 def test_the_index_matches_on_branch_identity_in_the_other_direction(
     harness: Harness,
 ) -> None:
-    """The mirror of the test above, with the classes swapped, so a mutant that
-    resolves to the LAST match rather than the first dies too."""
+    """The mirror of the test above, with the classes swapped and both lanes
+    queried in ONE invocation — the arrangement the real wrap-up uses, where the
+    index is consulted twice against a shared roster rather than once.
+
+    A round-2 lens checked whether this test is what kills a resolve-to-the-LAST
+    match mutant and found the test above already does; the docstring here used
+    to claim otherwise, and no longer does. What it adds is the multi-lane
+    invocation and the opposite class arrangement, not a mutant of its own."""
     harness.branch("lane/aaa")
     harness.pr("lane/aaa", 532, "OPEN")
     harness.session("aaa", "lane/aaa", "self")
@@ -445,7 +527,9 @@ def test_the_index_matches_on_branch_identity_in_the_other_direction(
 
     assert _status_of(result.stdout, "aaa") == "open"
     assert _status_of(result.stdout, "zzz") == "held"
-    assert [state_root for state_root, _ in harness.uv_calls()] == [str(zzz / "state")]
+    assert [os.path.realpath(r) for r, _n, _a in harness.uv_calls()] == [
+        os.path.realpath(zzz / "state")
+    ]
     assert result.returncode == 3
 
 

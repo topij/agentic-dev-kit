@@ -174,16 +174,27 @@ SESS_DIR=()
 # _index_sessions <prefix> — populate the branch → session-dir index. Same
 # branch resolution as the discovery pass below: the recorded `branch` file
 # wins, else the default-namespace reconstruction for a pre-metadata session.
+#
+# Dirs are stored ABSOLUTE (`cd … && pwd -P`, the same normalization
+# dev_session.sh applies before writing a headless lane's state-root marker).
+# $SESSIONS_DIR is absolute by default but $DEVKIT_SESSIONS_DIR may not be, and
+# pr_watch.py treats a RELATIVE $DEVKIT_STATE_ROOT as "ignore this and use
+# <repo>/state" rather than as an error — deliberately, so its loop never
+# crashes. The probe below would then read the MAIN checkout's per-PR file,
+# which can hold real unrelated history for the same PR number, and no failure
+# would be visible anywhere. Absolute here closes that off at the source.
 _index_sessions() {
-    local prefix="$1" d scope sbr
+    local prefix="$1" d scope sbr abs
     [[ -d "$SESSIONS_DIR" ]] || return 0
     for d in "$SESSIONS_DIR"/*/; do
         [[ -d "$d" ]] || continue
         scope="$(basename "$d")"
         if [[ -s "${d}branch" ]]; then sbr="$(cat "${d}branch")"; else sbr="${prefix}/${scope}"; fi
         [[ -n "$sbr" ]] || continue
+        abs="$(cd "$d" 2>/dev/null && pwd -P)" || abs=""
+        [[ -n "$abs" ]] || abs="${d%/}"
         SESS_BR+=("$sbr")
-        SESS_DIR+=("${d%/}")
+        SESS_DIR+=("$abs")
     done
 }
 
@@ -220,6 +231,31 @@ _session_dir_for_branch() {
     printf '%s' "$found"
 }
 
+# The forge repo this run is talking to, resolved ONCE and lazily (only a run
+# that reaches the probe pays for it), then pinned onto the probe.
+#
+# `_gh` inherits the caller's cwd and any ambient $GH_REPO; pr_watch.py pins its
+# own subprocess cwd to ITS $REPO_ROOT and separately honours $GH_REPO. Those two
+# resolutions can differ — a reconcile run started outside the repo, or a shell
+# with GH_REPO exported for another repo, which this repo's own "Working across
+# two trees" note says operators do routinely. The PR number would then come from
+# one repository and the merge-readiness verdict from another. Mostly that fails
+# safe (no such PR → rc 2 → `open`); the case that does not is a same-numbered
+# green PR in the other repo, which would report `held` about a PR nobody looked
+# at. Resolving through `_gh` means this IS whatever `gh pr list` resolved,
+# ambient override included — the point is that both agree, not which one wins.
+# Empty (no gh, no auth, no network) leaves the probe exactly as it was.
+REPO_NWO=""
+REPO_NWO_RESOLVED=0
+_repo_nwo() {
+    if [[ "$REPO_NWO_RESOLVED" -eq 0 ]]; then
+        REPO_NWO_RESOLVED=1
+        REPO_NWO="$(_gh repo view --json nameWithOwner --jq .nameWithOwner)"
+        REPO_NWO="${REPO_NWO%%$'\n'*}"
+    fi
+    printf '%s' "$REPO_NWO"
+}
+
 # _held_check <branch> <pr> — is this open PR's lane HELD for the operator?
 #
 #   0 — held: operator-class lane, and the PR is merge-ready
@@ -248,7 +284,8 @@ _session_dir_for_branch() {
 #    never mutate a lane's seen-set, settle baseline or receipt.
 _held_check() {
     local branch="$1" pr="$2"
-    local session_dir merge_class to report
+    local session_dir merge_class to report nwo
+    local probe_env
 
     session_dir="$(_session_dir_for_branch "$branch")"
     [[ -n "$session_dir" ]] || return 1
@@ -263,8 +300,11 @@ _held_check() {
     # all of them mean the one thing: the probe did not run, so rc 2 and the
     # caller's stderr note.
     to="$(_timeout_prefix 60)"
+    nwo="$(_repo_nwo)"
+    probe_env=(env "DEVKIT_STATE_ROOT=$session_dir/state")
+    [[ -n "$nwo" ]] && probe_env+=("GH_REPO=$nwo")
     # shellcheck disable=SC2086
-    report="$(DEVKIT_STATE_ROOT="$session_dir/state" \
+    report="$("${probe_env[@]}" \
         $to uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist 2>/dev/null)" || return 2
 
     # `mergeable` is the precise name and fails CLOSED when absent; `done` is its
