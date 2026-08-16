@@ -2753,9 +2753,14 @@ def summarize_review_bots(
 #                     required-reviewer rules, and a bot is typically not a
 #                     required reviewer. A guard that holds on one transport
 #                     and not the other is not a guard, so this list does not
-#                     lean on it either way. Measured on the `gh` shape: with
-#                     `reviewDecision: ""`, the gate returned mergeable with no
-#                     blockers at all.
+#                     lean on it either way. Measured on the `gh` shape at the
+#                     time of #484: with `reviewDecision: ""`, the gate returned
+#                     mergeable with no blockers at all. Re-measuring that today
+#                     gives a different answer, and the exclusion is not why —
+#                     `objecting_bot_coverage` now raises a blocker of its own
+#                     for this state (#485). The dating matters: the figure is
+#                     kept as the observation that motivated the exclusion, not
+#                     as a claim about current behaviour.
 #
 # APPROVED and COMMENTED both qualify. COMMENTED is not a weaker signal here —
 # it is the state CodeRabbit's own reviews actually carry on this repo,
@@ -2830,11 +2835,18 @@ def qualifying_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
     reads the bot's *check-row pending state*, never the submitted verdict — and
     the aggregate ``review_decision`` blocker does not catch it either on the
     ``gh`` transport, which is the only transport ``--record-review`` runs on.
-    So a receipt can authorize a merge over a standing objection. That is
-    pre-existing and unchanged here (reproduced at this branch's base), and it
-    is precisely why ``CHANGES_REQUESTED`` is excluded from
+    A receipt could therefore authorize a merge over a standing objection, which
+    is why ``CHANGES_REQUESTED`` is excluded from
     :data:`_EVIDENTIAL_REVIEW_STATES` rather than delegated to that blocker:
     delegating would have inherited the hole.
+
+    **That receipt hole was #485 and is now closed** —
+    :func:`objecting_bot_coverage` raises its own ``merge_blockers`` entry from
+    the same coverage read, which no receipt satisfies. The exclusion above still
+    stands on its own reasoning and is NOT now redundant: it keeps this route
+    from *supplying* evidence, while that blocker independently *refuses* the
+    merge. Two mechanisms, because the two questions differ — and because a guard
+    that delegates is a guard that fails when its delegate's conditions change.
 
     Returns the sorted distinct bot names whose coverage qualifies — a list
     rather than a bool so the report can name them and a reader can tell which
@@ -3483,8 +3495,11 @@ def build_report(
       independent-review requirement without a receipt.
     - ``merge_blockers`` — deterministic reasons the PR is not currently safe to
       merge (draft, blocked/unknown merge state, requested changes, non-open PR,
-      missing current-head review evidence, or a configured review bot whose own
-      verdict has not landed yet).
+      missing current-head review evidence, a configured review bot whose own
+      verdict has not landed yet, or a configured review bot whose own review of
+      the current head is ``CHANGES_REQUESTED`` — see
+      :func:`objecting_bot_coverage`, and note that no receipt satisfies that
+      one).
     - ``converged`` — :func:`decide_converged`: all checks green, no fresh
       comments, and not ``settling``. The **watch-loop** predicate: "is there
       more to fix?" A converged PR is NOT necessarily safe to merge.
