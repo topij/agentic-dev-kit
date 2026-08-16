@@ -14,14 +14,22 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-16 — the merge gate's receipt hole closed; the quota posture measured.
+Last updated: 2026-08-16 — the merge gate's receipt route closed, an upstream bypass left open; the quota posture measured.
 
-## Latest session — 2026-08-16 (the receipt hole closed, and a posture whose two halves compete for one unit)
+## Latest session — 2026-08-16 (the receipt route closed, an upstream bypass left open, and a posture whose halves compete for one unit)
 
 **Theme —** `#485` shipped (`#488`, squash `5449947`) — the hole the previous block called
 the sharpest of its new tickets. Worth carrying: why direction 2 beat direction 1, what the
 panel found underneath the fix, and a `#372` measurement that refuted its own first reading
 within the hour.
+
+**What is and is not closed**, because the two are one function apart and the distinction
+governs whether the gate can be relied on: `#485`'s **receipt route** is closed — no
+receipt satisfies the new blocker. `#489` is a **separate, pre-existing bypass upstream of
+it**: an unparseable `submittedAt` makes the coverage read pick the wrong review, so the
+objection never becomes the latest state and the blocker never fires. Untouched by `#488`,
+verified byte-identical to `main`, and open. Nothing here should be read as "a standing
+objection can now always stop a merge."
 
 - **`#485` ruled direction 2, and shipped.** `build_report` raises its own
   `merge_blockers` entry from the configured bot's latest review state at the head
