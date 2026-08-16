@@ -12,6 +12,25 @@
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
 
+## 2026-08-16 (second session)
+
+Surfaced by the `#485` session (`#488`). Items already issue-shaped were filed directly
+(`#489`, `#490`, `#491`) and are not repeated here.
+
+- **The `pipefail` entry below proposes a bash-ism that fails silently in this repo's
+  shell.** (**M**) That entry's proposed fix is `set -o pipefail` plus `${PIPESTATUS[0]}`.
+  This session's shell is **zsh**, where the array is spelled `pipestatus` and is
+  1-indexed — so `${PIPESTATUS[0]}` expands to the empty string and
+  `echo "MAKE_EXIT=${PIPESTATUS[0]}"` printed `MAKE_EXIT=` with no digit in it. A remedy
+  for "the exit status was silently discarded" that itself silently discards the exit
+  status is worse than the pipe it replaces, because it reads as a verification. What
+  actually worked was `set -o pipefail` alone — the failing run surfaced as
+  `make: *** [test] Error 1` — with a plain `$?` read after the pipeline.
+  *Proposed fix:* correct the proposal in the entry below **before it graduates**, to
+  `set -o pipefail` plus `$?` (portable across both shells), or `${pipestatus[1]}` if the
+  per-stage status is genuinely needed. Worth noting the entry was written in a session
+  whose own shell was zsh, so the proposal was never exercised.
+
 ## 2026-08-16
 
 Surfaced by the two-ruling session (`#483`, `#484`). Items already issue-shaped were

@@ -14,9 +14,73 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-16 — two operator rulings, both shipped.
+Last updated: 2026-08-16 — the merge gate's receipt route closed, an upstream bypass left open; the quota posture measured.
 
-## Latest session — 2026-08-16 (the two held rulings, and a fail-open the panel found in the fix for one of them)
+## Latest session — 2026-08-16 (the receipt route closed, an upstream bypass left open, and a posture whose halves compete for one unit)
+
+**Theme —** `#485` shipped (`#488`, squash `5449947`) — the hole the previous block called
+the sharpest of its new tickets. Worth carrying: why direction 2 beat direction 1, what the
+panel found underneath the fix, and a `#372` measurement that refuted its own first reading
+within the hour.
+
+**What is and is not closed**, because the two are one function apart and the distinction
+governs whether the gate can be relied on: `#485`'s **receipt route** is closed — no
+receipt satisfies the new blocker. `#489` is a **separate, pre-existing bypass upstream of
+it**: an unparseable `submittedAt` makes the coverage read pick the wrong review, so the
+objection never becomes the latest state and the blocker never fires. Untouched by `#488`,
+verified byte-identical to `main`, and open. Nothing here should be read as "a standing
+objection can now always stop a merge."
+
+- **`#485` ruled direction 2, and shipped.** `build_report` raises its own
+  `merge_blockers` entry from the configured bot's latest review state at the head
+  (`objecting_bot_coverage`); no receipt satisfies it. **Direction 1 — refuse inside
+  `record_review` — was declined on ordering**, and that is the transferable half: a
+  record-time refusal catches only the objection-first sequence, while the realistic one is
+  a receipt taken *while the bot is rate-limited*, then the bot recovering and objecting at
+  that same head, by which point `record_review` has returned. Merge-time evaluation catches
+  both and the no-receipt case besides. No override flag — the head binding is the release
+  valve. `#486` folded in, because that PR writes a **second copy** of the
+  `covers_head is True` clause pair and a pinned copy beside an unpinned one is how `#447`
+  spreads.
+- **Filed from the panel:** `#489` (an unparseable `submittedAt` outranks every real
+  timestamp — disarms the new blocker *and* forges `#350`'s evidence route; pre-existing,
+  verified byte-identical to `main`), `#490` (a no-op commit clears a standing objection),
+  `#491` (`unavailable_markers` conflates an outage with a bot configured not to review this
+  head, and prescribes the panel for both). `#485` and `#486` closed by hand.
+- **`#372` now has the measurement it was held open for**, on the ticket rather than
+  restated here — including which direction the reading changed under.
+- **Correcting the block below, which lists `#465` as a standing operator ruling:** its
+  work shipped the day before that block was written (`#478`). `#465` and `#350` are both
+  shipped-and-still-open — no closing keyword was written, by the discipline, and nothing
+  retired them. Left open here rather than closed on my own judgement: I verified the
+  shipping commit for each, not their acceptance criteria.
+
+**Learned**
+
+- **The `#372` correction is the decision-grade part.** My first comment framed the gap as
+  "`pr_watch.py` has no request path", implying a mechanism closes it. I then performed the
+  request by hand and the quota refused it. `auto_review` at open and the Converged
+  re-request **compete for the same hourly unit**, so automating the request changes *when*
+  the refusal arrives, not *whether*. The correction sits beneath the claim on the issue.
+- **`#490` is a composition, not a defect in either half.** The head binding is what makes
+  the blocker unwedgeable; the receipt is self-reported by design. Each is justified alone;
+  together they leave a no-op commit as a clearance path. Neither ticket that argued for
+  its half could have found it.
+- **The panel's attestation earned its keep separately from its findings.** The correctness
+  lens *executed* the REST-vs-`gh` transport claim I had written from reading — it held —
+  and both lenses excluded `driftcheck` from their mutation runs, the false-kill trap this
+  kit documents.
+- **My own prose overclaimed twice, both caught before anyone else read them.** A test
+  docstring claimed to pin an *ordering* that `build_report` cannot observe, since it reads
+  final state; and the `#372` comment above. `#422`'s subject, twice in one session.
+
+▶ Next: rule on `#372` — it now carries the measurement it was held open for, and the
+reading changed mid-session. `#491`'s direction depends on which way it goes, and `#490`'s
+only complete fix is blocked on it. `#460` is the other standing operator ruling.
+
+______________________________________________________________________
+
+## Session — 2026-08-16 (the two held rulings, and a fail-open the panel found in the fix for one of them)
 
 **Theme —** the operator ruled on `#372` and `#350`, the two decisions the previous
 block named as owned by nobody, and both shipped the same session. The parts worth
