@@ -91,6 +91,18 @@ Repeat until the report says **converged**:
    blocks `converged`, so it cannot stall this loop — only the merge that
    follows it.
 
+   A third routine blocker reads **`configured review bot requested changes on
+   current head: <bot>`** (`#485`). The configured reviewer has an unresolved
+   objection to *this exact commit*, and **no receipt disposes of it** — a receipt is
+   self-reported by the agent seeking the merge, so it cannot answer for another
+   reviewer. It never blocks `converged`, so the loop still ends normally.
+
+   **Clear it the ordinary way: address the findings and push.** That moves the head,
+   leaves the objection covering an older commit, and the blocker clears on the next
+   poll — there is deliberately no override flag. A maintainer dismissing the review
+   on the forge clears it too. It is bound to the head precisely so that fixing the
+   thing the reviewer asked for is what resolves it.
+
    `done` also appears in the report. It is a **legacy alias for `mergeable`**, kept
    so that an older `dev_session.sh` still gates on merge authorization. Prefer
    `converged` / `mergeable`; never assume `done` means "the loop finished."

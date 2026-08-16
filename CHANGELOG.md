@@ -42,6 +42,37 @@ starts.
 
 ---
 
+## #488 — 2026-08-16
+
+- **BREAKING (gate semantics)** — `mergeable` (and its `done` alias) is now **false**
+  while a configured `review.bots` entry's own latest review of the **current head**
+  is `CHANGES_REQUESTED`, and a `--record-review` receipt no longer overrides that.
+  A PR your review bot has asked for changes on will stop reporting mergeable even
+  with a valid current-head receipt, so an autonomous `dev_session.sh merge` that
+  previously fired on such a PR will now refuse. **To clear it, address the findings
+  and push** — the blocker is bound to the head, so a new commit leaves the objection
+  covering an older one and it clears on the next poll; a review dismissed on the
+  forge clears it too. There is **no override flag**:
+  `--allow-pending-bot-review` covers a *silent* bot and does not apply. Only
+  `CHANGES_REQUESTED` blocks — `PENDING`, `DISMISSED`, an empty state, and any state
+  this engine does not recognize raise no blocker, so a PR whose bot review carries
+  one of those is unaffected. A repo with `review.bots: []` is unaffected entirely.
+  **This supersedes the `CHANGES_REQUESTED` caveat in `#484` below**, which recorded
+  that a receipt could authorize a merge over a standing objection and that `#484`
+  left it that way. `#485`.
+- **CHANGED (report shape)** — `merge_blockers[]` may contain a new entry,
+  `configured review bot requested changes on current head: <bot>` (comma-separated
+  when several). Anything matching on the exact blocker set must expect it. On the
+  REST backend this fires **alongside** the existing
+  `review decision is CHANGES_REQUESTED`, because `_rest_review_decision` aggregates
+  every reviewer; under `gh` it is usually the only one of the two, which is what
+  made `#485` reachable. `#485`.
+- **ADDED (return shape)** — `objecting_bot_coverage(review_bots, head)` is public
+  beside `qualifying_bot_coverage`, returning the sorted configured bots with a
+  standing objection to `head`. Unlike its sibling it does **not** require
+  `review_bots["signal"] == "ok"`: the objection is read from `pr view` review
+  objects, not from the check read that `signal` describes. `#485`.
+
 ## #484 — 2026-08-15
 
 - **CHANGED (gate semantics)** — `mergeable` no longer requires a `--record-review`

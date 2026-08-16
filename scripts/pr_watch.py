@@ -2753,9 +2753,14 @@ def summarize_review_bots(
 #                     required-reviewer rules, and a bot is typically not a
 #                     required reviewer. A guard that holds on one transport
 #                     and not the other is not a guard, so this list does not
-#                     lean on it either way. Measured on the `gh` shape: with
-#                     `reviewDecision: ""`, the gate returned mergeable with no
-#                     blockers at all.
+#                     lean on it either way. Measured on the `gh` shape at the
+#                     time of #484: with `reviewDecision: ""`, the gate returned
+#                     mergeable with no blockers at all. Re-measuring that today
+#                     gives a different answer, and the exclusion is not why —
+#                     `objecting_bot_coverage` now raises a blocker of its own
+#                     for this state (#485). The dating matters: the figure is
+#                     kept as the observation that motivated the exclusion, not
+#                     as a claim about current behaviour.
 #
 # APPROVED and COMMENTED both qualify. COMMENTED is not a weaker signal here —
 # it is the state CodeRabbit's own reviews actually carry on this repo,
@@ -2830,11 +2835,18 @@ def qualifying_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
     reads the bot's *check-row pending state*, never the submitted verdict — and
     the aggregate ``review_decision`` blocker does not catch it either on the
     ``gh`` transport, which is the only transport ``--record-review`` runs on.
-    So a receipt can authorize a merge over a standing objection. That is
-    pre-existing and unchanged here (reproduced at this branch's base), and it
-    is precisely why ``CHANGES_REQUESTED`` is excluded from
+    A receipt could therefore authorize a merge over a standing objection, which
+    is why ``CHANGES_REQUESTED`` is excluded from
     :data:`_EVIDENTIAL_REVIEW_STATES` rather than delegated to that blocker:
     delegating would have inherited the hole.
+
+    **That receipt hole was #485 and is now closed** —
+    :func:`objecting_bot_coverage` raises its own ``merge_blockers`` entry from
+    the same coverage read, which no receipt satisfies. The exclusion above still
+    stands on its own reasoning and is NOT now redundant: it keeps this route
+    from *supplying* evidence, while that blocker independently *refuses* the
+    merge. Two mechanisms, because the two questions differ — and because a guard
+    that delegates is a guard that fails when its delegate's conditions change.
 
     Returns the sorted distinct bot names whose coverage qualifies — a list
     rather than a bool so the report can name them and a reader can tell which
@@ -2853,6 +2865,88 @@ def qualifying_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
         and entry.get("bot")
     }
     return sorted(qualifying)
+
+
+# Review states that are a STANDING OBJECTION at the head — the mirror of
+# :data:`_EVIDENTIAL_REVIEW_STATES`, and deliberately not its complement.
+#
+# Note the two sets are built the opposite way round, which looks like an
+# inconsistency and is the point: they fail closed in opposite directions, so
+# they must. Evidence is an ALLOWLIST because an unrecognized state must not
+# open the gate. An objection is an explicit SET because an unrecognized state
+# must not *close* it — "everything that is not evidence" would raise a blocker
+# for `PENDING` (a draft the bot has not submitted) and for `""` (a `gh` too old
+# to emit the field, or a REST payload shaped differently), neither of which is
+# anyone objecting. That blocker would never clear without a push, which is the
+# wedge this engine's design refuses. Do not "harmonize" these two definitions.
+#
+# KNOWN BOUND, in the fail-open direction: a future GitHub objection state this
+# set has never heard of raises no blocker. It would also not be evidence, so
+# the *coverage* route still refuses it — but a receipt would carry the merge,
+# which is exactly the #485 shape one state over. `CHANGES_REQUESTED` is the
+# only objection state GitHub defines today; add to this set rather than
+# inverting it.
+_OBJECTING_REVIEW_STATES = frozenset({"CHANGES_REQUESTED"})
+
+
+def objecting_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
+    """Configured bots with a standing objection to ``head`` itself (issue #485).
+
+    The gate's refusal side, and the reason it is a separate read from
+    :func:`qualifying_bot_coverage` rather than one more excluded state there:
+    that function decides whether a bot's review can *supply* the
+    independent-review requirement, so everything it declines merely falls back
+    to needing a receipt. A receipt is exactly what #485 showed does not
+    dispose of an objection. A bot saying "changes requested" has to raise its
+    own ``merge_blockers`` entry, which no receipt can satisfy, or it is not a
+    refusal at all.
+
+    **Why this lives at the gate and not in :func:`record_review`.** Refusing to
+    *record* a receipt over a live objection closes only the ordering where the
+    objection arrives first. The realistic sequence is the other one — the bot is
+    rate-limited, a fallback panel runs, a receipt is taken, and the bot then
+    recovers and objects at that same head. The receipt is already written and
+    still binds, so a record-time refusal never runs. Evaluating the objection at
+    merge time catches both orderings, and covers the no-receipt case besides.
+
+    **It cannot wedge, and that is a property of the head binding rather than an
+    escape hatch.** The blocker is bound to ``head``, so the ordinary remediation
+    — push a fix — moves the head, leaves the objection covering an older commit,
+    and clears it. A maintainer dismissing the review (``DISMISSED``) clears it
+    too. Both leave a real audit trail on the forge, which is why this ships with
+    no override flag: ``--allow-pending-bot-review`` exists because a *silent*
+    bot can genuinely never arrive, whereas an objection is a reviewer who has
+    already spoken and can unsay it the same way.
+
+    **Deliberately does NOT gate on** ``signal == "ok"``, where its sibling does.
+    That asymmetry is the fail-closed direction on each side: ``signal``
+    describes the CHECK read (:func:`fetch_check_details`), while the coverage
+    this reads comes from the ``pr view`` review objects, which are present
+    whether or not that read succeeded. Declining to raise a blocker because a
+    *different* read failed is the fail-open. ``"skipped"`` needs no special case
+    — with no bots configured :func:`bot_review_coverage` matches nothing and the
+    coverage list is empty on its own.
+
+    Returns the sorted distinct bot names, so the blocker can say who objected
+    rather than leaving a reader to open the PR to find out.
+    """
+    if not head:
+        return []
+    objecting = {
+        entry.get("bot")
+        for entry in review_bots.get("coverage") or []
+        # `covers_head is True` AND `sha == head`: identity, not truthiness, and
+        # the same deliberate redundancy `qualifying_bot_coverage` carries. A
+        # gate should re-check the identity it is about to act on rather than
+        # trust a boolean computed elsewhere in the call — and here the cost of a
+        # derived `covers_head` going wrong is a blocker that outlives the commit
+        # it objected to, i.e. the wedge.
+        if entry.get("covers_head") is True
+        and entry.get("sha") == head
+        and entry.get("state") in _OBJECTING_REVIEW_STATES
+        and entry.get("bot")
+    }
+    return sorted(objecting)
 
 
 def decide_converged(
@@ -3401,8 +3495,11 @@ def build_report(
       independent-review requirement without a receipt.
     - ``merge_blockers`` — deterministic reasons the PR is not currently safe to
       merge (draft, blocked/unknown merge state, requested changes, non-open PR,
-      missing current-head review evidence, or a configured review bot whose own
-      verdict has not landed yet).
+      missing current-head review evidence, a configured review bot whose own
+      verdict has not landed yet, or a configured review bot whose own review of
+      the current head is ``CHANGES_REQUESTED`` — see
+      :func:`objecting_bot_coverage`, and note that no receipt satisfies that
+      one).
     - ``converged`` — :func:`decide_converged`: all checks green, no fresh
       comments, and not ``settling``. The **watch-loop** predicate: "is there
       more to fix?" A converged PR is NOT necessarily safe to merge.
@@ -3555,6 +3652,11 @@ def build_report(
     # why every case it cannot see degrades to the receipt requirement rather
     # than opening the gate.
     coverage_bots = qualifying_bot_coverage(review_bots, head)
+    # The refusal side of the same read (#485). Resolved here beside the evidence
+    # routes because it OUTRANKS both: a receipt is self-reported, and a standing
+    # objection from the configured reviewer is not something the agent seeking
+    # the merge gets to answer for itself.
+    objecting_bots = objecting_bot_coverage(review_bots, head)
     review_evidence = {
         "valid": receipt_valid or bool(coverage_bots),
         # WHICH route satisfied the gate. Without this a coverage-backed merge
@@ -3621,6 +3723,19 @@ def build_report(
         merge_blockers.append(f"merge state is {merge_state}")
     if review_decision == "CHANGES_REQUESTED":
         merge_blockers.append("review decision is CHANGES_REQUESTED")
+    if objecting_bots:
+        # Worded to name the bot, and kept DISTINCT from the aggregate blocker
+        # above rather than folded into it. On the REST transport both fire for
+        # the same objection (`_rest_review_decision` aggregates every reviewer
+        # with no required-reviewer notion), and that duplication is worth its
+        # line: two mechanisms agreeing reads differently from one speaking. On
+        # the `gh` transport — the only one `--record-review` runs on, which is
+        # what made #485 reachable — the aggregate is empty and this is the sole
+        # blocker.
+        merge_blockers.append(
+            "configured review bot requested changes on current head: "
+            + ", ".join(objecting_bots)
+        )
     if not review_evidence["valid"]:
         merge_blockers.append("independent review evidence is missing for current head")
     if not rollup_settled:
