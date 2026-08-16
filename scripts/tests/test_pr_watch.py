@@ -3643,11 +3643,14 @@ def test_a_bot_objection_clears_by_pushing_a_fix_rather_than_wedging() -> None:
     this engine's design refuses, and would have forced an escape hatch on the
     merge gate to compensate.
 
-    Also pins the ORDERING that a record-time refusal would miss (#485 direction
-    1): here the receipt is taken first and the objection arrives afterwards at
-    that same head, which is the realistic sequence — a fallback panel runs
-    *because* the bot was unavailable, then the bot recovers. `record_review` has
-    already returned by then, so only a merge-time evaluation catches it.
+    The first half is also the state the ordering a record-time refusal would
+    miss (#485 direction 1) resolves to: a receipt taken while the bot was
+    rate-limited, then the bot recovering and objecting at that same head. Note
+    what this does and does NOT establish — `build_report` reads the final state
+    and has no view of arrival order, so no test here can replay the sequence.
+    What it pins is that the gate's answer does not DEPEND on the ordering, which
+    is the property that makes a merge-time check cover both and a record-time
+    one cover only the objection-first case.
     """
     pr_watch = _load_pr_watch()
 
