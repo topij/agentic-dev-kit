@@ -3542,11 +3542,290 @@ def test_an_inconsistent_coverage_entry_is_refused_by_the_sha_recheck() -> None:
         "coverage": [dict(consistent["coverage"][0], covers_head=False)],
     }
     assert pr_watch.qualifying_bot_coverage(disagreeing_the_other_way, "abc123") == []
-    # A missing `covers_head` is refused too — `is True`, not truthiness, so the
-    # absent case cannot pass by being merely non-falsy.
+    # A missing `covers_head` is refused too. Note what this case does and does
+    # NOT pin (#486): `None` is falsy, so it is refused under plain truthiness as
+    # well, and an earlier comment here credited the refusal to `is True` — naming
+    # a property as the reason for a result that holds either way, which is
+    # exactly what would let someone weaken the guard believing it was covered.
     absent = {"signal": "ok", "coverage": [dict(consistent["coverage"][0])]}
     absent["coverage"][0].pop("covers_head")
     assert pr_watch.qualifying_bot_coverage(absent, "abc123") == []
+
+    # THIS is the case that pins `is True` rather than truthiness, and nothing in
+    # the suite carried it before (#486): a value that is truthy but not `True`.
+    # Mutating the guard to `if entry.get("covers_head"):` left every case above
+    # green — verified by mutation — so the identity check was unpinned in the
+    # same #447 shape as the clause beside it.
+    #
+    # Not reachable through `bot_review_coverage` today, whose `sha == head` is
+    # always a real `bool`; the guard is forward-defence against a future writer
+    # that computes the field from something else, and this is what makes that
+    # defence testable instead of decorative.
+    for truthy_not_true in (1, "yes", {"covered": True}):
+        surrogate = {
+            "signal": "ok",
+            "coverage": [dict(consistent["coverage"][0], covers_head=truthy_not_true)],
+        }
+        assert pr_watch.qualifying_bot_coverage(surrogate, "abc123") == [], (
+            truthy_not_true
+        )
+
+
+def test_a_receipt_cannot_authorize_a_merge_over_a_standing_bot_objection() -> None:
+    """Issue #485, reproduced as filed and then closed.
+
+    Found by the adversarial lens on `#484`'s round-3 panel and confirmed
+    PRE-EXISTING there — the same probe against that branch's base gave the same
+    result — so it was filed rather than fixed in that PR.
+
+    The shape: a configured bot's live `CHANGES_REQUESTED` on the exact current
+    head, with a `fallback:panel` receipt also at that head. Before this guard
+    the gate returned `mergeable: True` with an EMPTY blocker list, and the
+    receipt carried none of the engine's "this is less than it looks" markers —
+    no `override`, no `bot_signal`, no `bots_behind_head`. It read completely
+    clean. `dev_session.sh merge` reads `mergeable` and nothing else, so this was
+    reachable on the real autonomous-merge path, not only in the JSON report.
+
+    `reviewDecision` stays empty throughout: that is the `gh` shape for a
+    non-required bot reviewer, and `gh` is the only transport `--record-review`
+    runs on (`require_gh_backend`). So the aggregate blocker cannot be what
+    catches this.
+    """
+    pr_watch = _load_pr_watch()
+    receipt = {"head": "abc123", "source": "fallback:panel"}
+    view = _green_view(
+        reviews=[
+            _review("coderabbitai", "abc123", "2026-07-25T12:00:00Z", "CHANGES_REQUESTED")
+        ]
+    )
+    assert view["reviewDecision"] == ""  # documents the fixture; see the docstring
+
+    report = pr_watch.build_report(
+        view, [], set(), review_receipt=receipt, **_settled(view)
+    )
+
+    assert report["mergeable"] is False
+    assert report["done"] is False  # the legacy alias tightens in lockstep
+    assert (
+        "configured review bot requested changes on current head: coderabbit"
+        in report["merge_blockers"]
+    )
+    # The receipt itself is still VALID and still says so — the objection
+    # outranks it rather than invalidating it. Reporting it as missing evidence
+    # would misdescribe why the merge is refused.
+    assert report["review_evidence"]["valid"] is True
+    assert report["review_evidence"]["route"] == "receipt"
+
+    # The no-receipt case was already refused by `qualifying_bot_coverage`, but
+    # for the WRONG REASON — "evidence is missing" rather than "the reviewer
+    # objected". Both blockers now stand, so the report names the objection
+    # whether or not a receipt exists.
+    no_receipt = pr_watch.build_report(view, [], set(), **_settled(view))
+    assert no_receipt["mergeable"] is False
+    assert (
+        "configured review bot requested changes on current head: coderabbit"
+        in no_receipt["merge_blockers"]
+    )
+    assert (
+        "independent review evidence is missing for current head"
+        in no_receipt["merge_blockers"]
+    )
+
+
+def test_a_bot_objection_clears_by_pushing_a_fix_rather_than_wedging() -> None:
+    """The anti-wedge property of #485's blocker, which is the whole reason it
+    can ship without an override flag.
+
+    The blocker is bound to `head`. The ordinary remediation for "changes
+    requested" is to push the fix — which moves the head, leaves the objection
+    covering an older commit, and clears the blocker with no flag, no dismissal,
+    and no special case. A blocker that did NOT clear this way would be the wedge
+    this engine's design refuses, and would have forced an escape hatch on the
+    merge gate to compensate.
+
+    Also pins the ORDERING that a record-time refusal would miss (#485 direction
+    1): here the receipt is taken first and the objection arrives afterwards at
+    that same head, which is the realistic sequence — a fallback panel runs
+    *because* the bot was unavailable, then the bot recovers. `record_review` has
+    already returned by then, so only a merge-time evaluation catches it.
+    """
+    pr_watch = _load_pr_watch()
+
+    # The bot objected at `abc123`, and the receipt was taken there too.
+    objection = _review(
+        "coderabbitai", "abc123", "2026-07-25T12:00:00Z", "CHANGES_REQUESTED"
+    )
+    blocked = _green_view(reviews=[objection])
+    report = pr_watch.build_report(
+        blocked,
+        [],
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:panel"},
+        **_settled(blocked),
+    )
+    assert report["mergeable"] is False
+
+    # Push the fix: the head moves, and a fresh receipt is taken against it. The
+    # objection now covers an older commit, so it no longer speaks for this one.
+    pushed = _green_view(headRefOid="d3adb33f", reviews=[objection])
+    after = pr_watch.build_report(
+        pushed,
+        [],
+        set(),
+        review_receipt={"head": "d3adb33f", "source": "fallback:panel"},
+        **_settled(pushed),
+    )
+    assert after["mergeable"] is True
+    assert after["merge_blockers"] == []
+    # …and the stale objection is still REPORTED as coverage of the older commit,
+    # so nothing is hidden by the blocker clearing.
+    assert after["review_bots"]["coverage"][0]["covers_head"] is False
+    assert after["review_bots"]["coverage"][0]["sha"] == "abc123"
+
+
+def test_only_a_real_objection_blocks_not_every_non_evidential_state() -> None:
+    """The set of objecting states is explicit, NOT the complement of the
+    evidential one — and this is what pins that they are built differently.
+
+    `_EVIDENTIAL_REVIEW_STATES` is an allowlist so an unknown state cannot open
+    the gate. `_OBJECTING_REVIEW_STATES` is an explicit set so an unknown state
+    cannot *close* it. Inverting the second into "everything that is not
+    evidence" would raise a permanent blocker for `PENDING` (a draft the bot has
+    not submitted), for `""` (a `gh` too old to emit the field), and for any
+    state GitHub adds later — none of which is anyone objecting, and none of
+    which clears without a push.
+
+    So each state below is checked for the ABSENCE of the objection blocker
+    while a valid receipt carries the merge. `DISMISSED` is the case that matters
+    most: it is how a maintainer retracts an objection, and a gate that kept
+    blocking after a dismissal would disagree with `_rest_review_decision`, which
+    already honours dismissal one function away.
+    """
+    pr_watch = _load_pr_watch()
+
+    for state in ("DISMISSED", "PENDING", "", "SOME_FUTURE_STATE"):
+        view = _green_view(
+            reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z", state)]
+        )
+        report = pr_watch.build_report(
+            view,
+            [],
+            set(),
+            review_receipt={"head": "abc123", "source": "fallback:panel"},
+            **_settled(view),
+        )
+        assert not [
+            b for b in report["merge_blockers"] if "requested changes" in b
+        ], state
+        # None of these is evidence either — the receipt is what carries the
+        # merge here, which is the pre-#485 behaviour left deliberately intact.
+        assert report["review_evidence"]["route"] == "receipt", state
+        assert report["mergeable"] is True, state
+
+    # A review with no `state` key at all, the shape an older `gh` would emit.
+    stateless = _review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")
+    stateless.pop("state")
+    view = _green_view(reviews=[stateless])
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:panel"},
+        **_settled(view),
+    )
+    assert report["mergeable"] is True
+    assert report["merge_blockers"] == []
+
+
+def test_the_objection_read_pins_both_clauses_and_ignores_a_failed_check_read() -> None:
+    """Direct unit calls on `objecting_bot_coverage`, for the three properties an
+    end-to-end test cannot reach.
+
+    1. The `covers_head is True` / `sha == head` pair, both clauses. Same #447
+       shape as its sibling: `bot_review_coverage` derives one from the other, so
+       neither clause can fail end-to-end and dropping either survives the rest
+       of the suite. A truthy-non-`True` value is what distinguishes identity
+       from truthiness (#486, pinned for this copy at the moment it is written
+       rather than left for a later ticket).
+
+    2. That the blocker does NOT gate on `signal`, where `qualifying_bot_coverage`
+       does. The asymmetry is deliberate and fails closed on each side: `signal`
+       describes the CHECK read, while this coverage comes from the `pr view`
+       review objects, which are there whether or not that read succeeded.
+       Declining to raise a blocker because a different read failed is the
+       fail-open — so an `unavailable` signal must still block.
+
+    3. That a lookalike login cannot manufacture an objection either. The
+       matching is `bot_review_coverage`'s anchored one, so this is inherited
+       rather than added — but the gate now has a second reason to care: a false
+       objection is a denial-of-merge, the mirror of #350's false evidence.
+    """
+    pr_watch = _load_pr_watch()
+    objection = {
+        "bot": "coderabbit",
+        "sha": "abc123",
+        "covers_head": True,
+        "submitted_at": "2026-07-25T12:00:00Z",
+        "state": "CHANGES_REQUESTED",
+    }
+
+    assert pr_watch.objecting_bot_coverage(
+        {"signal": "ok", "coverage": [objection]}, "abc123"
+    ) == ["coderabbit"]
+
+    # Clause 1a — `sha` disagrees with the head being authorized.
+    assert (
+        pr_watch.objecting_bot_coverage(
+            {"signal": "ok", "coverage": [dict(objection, sha="0ldc0de")]}, "abc123"
+        )
+        == []
+    )
+    # Clause 1b — `covers_head` false, and the truthy-non-`True` values that
+    # separate `is True` from a bare truthiness test.
+    for bad in (False, 1, "yes", {"covered": True}):
+        assert (
+            pr_watch.objecting_bot_coverage(
+                {"signal": "ok", "coverage": [dict(objection, covers_head=bad)]},
+                "abc123",
+            )
+            == []
+        ), bad
+    absent = {"signal": "ok", "coverage": [dict(objection)]}
+    absent["coverage"][0].pop("covers_head")
+    assert pr_watch.objecting_bot_coverage(absent, "abc123") == []
+
+    # 2 — a failed or skipped CHECK read does not suppress the objection.
+    for signal in ("unavailable", "skipped", "ok"):
+        assert pr_watch.objecting_bot_coverage(
+            {"signal": signal, "coverage": [objection]}, "abc123"
+        ) == ["coderabbit"], signal
+
+    # …and with no head to bind to there is nothing to object to.
+    assert pr_watch.objecting_bot_coverage({"signal": "ok", "coverage": [objection]}, "") == []
+    assert (
+        pr_watch.objecting_bot_coverage({"signal": "ok", "coverage": [objection]}, None)
+        == []
+    )
+
+    # 3 — end-to-end, an impostor's CHANGES_REQUESTED reaches neither the
+    # coverage list nor the blocker.
+    view = _green_view(
+        reviews=[
+            _review(
+                "coderabbit-shim", "abc123", "2026-07-25T12:00:00Z", "CHANGES_REQUESTED"
+            )
+        ]
+    )
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:panel"},
+        **_settled(view),
+    )
+    assert report["review_bots"]["coverage"] == []
+    assert report["merge_blockers"] == []
+    assert report["mergeable"] is True
 
 
 def test_a_lookalike_login_cannot_manufacture_merge_evidence() -> None:
