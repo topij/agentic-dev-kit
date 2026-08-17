@@ -294,6 +294,28 @@ Self-pace on a bounded cadence — don't busy-wait:
     bound to a stale head, which reads green at a glance. Coverage reports both;
     the config setting reports only the first.
 
+    **How much rides on this request depends on a setting it deliberately does
+    not read.** Where automatic review at PR-open is left on, this tops up a
+    reviewer that has already seen the opening diff, and skipping it costs
+    coverage of the delta. Where a repo has moved its whole review budget here —
+    automatic review at open turned *off*, so the one review it can afford lands
+    on the head that merges — this request **is** the PR's review, and skipping
+    it leaves the diff unreviewed by anyone. Prefer the reviewer's
+    *complete*-review command over its incremental one in that case: an
+    incremental request is defined against a previous review, which is precisely
+    what that configuration arranges not to have.
+
+    **A refused request is an expected outcome, not an error.** The request is
+    itself a review request and spends from the same bounded budget, so it can
+    arrive to find nothing left. The refusal surfaces through the ordinary
+    unavailable path above and routes to the fallback panel — the correct
+    disposition, since it means the merging head has no independent review and
+    something must supply one. Where the budget merely needs time to refill,
+    waiting and re-requesting is the cheaper answer under the
+    no-auto-review-at-open configuration, because no unit was spent at open and
+    the PR is therefore still owed one. Neither is a licence to retry in a loop
+    against a quota.
+
     Nothing in `pr_watch.py` performs the request — it observes only. And note
     what this bullet does **not** say: it does not tell you to `--record-review`
     the bot's own verdict. That receipt vocabulary describes fallback passes, and
