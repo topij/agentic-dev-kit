@@ -253,6 +253,14 @@ _DEFAULT_NOISE_MARKERS = (
 # carries a generic walkthrough/noise marker. Surfacing it is what triggers the
 # configured independent fallback; hiding it would turn a down reviewer into a
 # silent review waiver.
+# Comment text announcing a review that COMPLETED (#44). Reported only — see
+# `bot_comment_verdicts` for why this may never reach the merge gate, and
+# `review.comment_verdict_markers` in config/dev-model.yaml for the full account.
+_DEFAULT_COMMENT_VERDICT_MARKERS = (
+    "no actionable comments were generated",
+    "actionable comments posted:",
+)
+
 _DEFAULT_REVIEW_UNAVAILABLE_MARKERS = (
     "bugbot needs on-demand usage enabled",
     "review limit reached",
@@ -359,6 +367,7 @@ class ReviewConfig(NamedTuple):
 
     noise_markers: tuple[str, ...]
     unavailable_markers: tuple[str, ...]
+    comment_verdict_markers: tuple[str, ...]
     informational_checks: frozenset[str]
     require_ci: bool
     bots: tuple[str, ...]
@@ -443,6 +452,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
     defaults = ReviewConfig(
         noise_markers=_DEFAULT_NOISE_MARKERS,
         unavailable_markers=_DEFAULT_REVIEW_UNAVAILABLE_MARKERS,
+        comment_verdict_markers=_DEFAULT_COMMENT_VERDICT_MARKERS,
         informational_checks=frozenset(_DEFAULT_INFORMATIONAL_CHECK_NAMES),
         require_ci=_DEFAULT_REQUIRE_CI,
         bots=_DEFAULT_REVIEW_BOTS,
@@ -460,6 +470,11 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
             config,
             "review.unavailable_markers",
             list(_DEFAULT_REVIEW_UNAVAILABLE_MARKERS),
+        )
+        verdict_markers = get_str_list(
+            config,
+            "review.comment_verdict_markers",
+            list(_DEFAULT_COMMENT_VERDICT_MARKERS),
         )
         informational = get_str_list(
             config,
@@ -543,6 +558,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
     return ReviewConfig(
         noise_markers=tuple(marker.lower() for marker in noise),
         unavailable_markers=tuple(marker.lower() for marker in unavailable),
+        comment_verdict_markers=tuple(marker.lower() for marker in verdict_markers),
         informational_checks=frozenset(
             name.strip().lower() for name in informational if name.strip()
         ),
@@ -558,6 +574,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
 _REVIEW_CONFIG = _load_review_config()
 _NOISE_MARKERS = _REVIEW_CONFIG.noise_markers
 _REVIEW_UNAVAILABLE_MARKERS = _REVIEW_CONFIG.unavailable_markers
+_COMMENT_VERDICT_MARKERS = _REVIEW_CONFIG.comment_verdict_markers
 _INFORMATIONAL_CHECK_NAMES = _REVIEW_CONFIG.informational_checks
 _REQUIRE_CI = _REVIEW_CONFIG.require_ci
 _REVIEW_BOTS = _REVIEW_CONFIG.bots
@@ -2501,6 +2518,94 @@ def _reduce_latest_bot_reviews(
     return sorted(latest.values(), key=lambda e: e["submitted_at"], reverse=True)
 
 
+def bot_comment_verdicts(
+    comments: list[dict],
+    head: str | None,
+    *,
+    bots: tuple[str, ...] | None = None,
+) -> list[dict]:
+    """Configured bots that announced a COMPLETED review of ``head`` in a comment.
+
+    **Reported, never evidence.** This is the whole of the #44 ruling
+    (2026-08-17): a comment-borne verdict is surfaced so a reader can see that
+    the reviewer did run, and the receipt stays the act that authorizes the
+    merge. Nothing here reaches :func:`qualifying_bot_coverage`,
+    ``review_evidence``, or ``merge_blockers``.
+
+    That division is the point rather than a limitation. #44 asks for the other
+    thing — parse the comment into ``coverage`` so the gate clears itself — and
+    :func:`bot_review_coverage`'s docstring is the standing argument against it,
+    naming this exact change as one that would not merely over-report a warning
+    but *authorize merges*. (Paraphrased; read it there rather than trusting the
+    summary.) Keying the gate on prose
+    means an upstream wording change silently decides merges. Keying a *report*
+    on prose means an upstream wording change silently drops a line, and the
+    receipt requirement — which was already there — catches it.
+
+    **The problem it reports.** Some reviewers deliver a clean verdict as an
+    issue comment and create no review object, so ``coverage`` sees nothing and
+    a reviewed PR is indistinguishable from an unreviewed one. Measured on this
+    repo (#168): whether a review object exists tracks whether the review *found
+    anything* — so the clean pass is exactly the one the gate cannot see. Do not
+    reach for "explicitly re-request it and you will get a review object": that
+    heuristic held on #87 and failed on #498, where an explicit
+    ``@coderabbitai full review`` returned a comment-only verdict.
+
+    **A conjunction, and every term earns its place:**
+
+    1. the author is a configured bot, matched ANCHORED — a comment author is
+       not the repo's to control, so a lookalike login must not be able to
+       announce that the reviewer passed;
+    2. the body matches a ``comment_verdict_markers`` entry — the review
+       completed;
+    3. the body matches NO ``unavailable_markers`` entry — on #263 a
+       rate-limited bot posted a comment naming the commit range it *would have*
+       reviewed, so terms 1, 2 and 4 without this one manufacture a verdict for
+       a review that never ran;
+    4. the body contains ``head`` itself, as a full 40-character SHA.
+
+    **Term 4 is a containment test rather than a parse, deliberately.** The SHA
+    sits in an English sentence the bot composes, and two wordings have already
+    been observed ("changed between X and Y", "changed from the base of the PR
+    and between X and Y"). Matching the sentence would make this depend on
+    which one it used; asking whether the head appears at all does not, and it
+    answers the only question worth asking here. The cost is that this cannot
+    report a verdict for an *older* head — that case reads as no verdict, which
+    is the direction that fails toward silence.
+
+    Returns ``[{bot, sha}]``, sorted by bot. ``sha`` is always ``head`` by
+    construction — carried anyway because it is the value a reader pastes into
+    ``--record-review --head``, and a report field that makes the next command
+    obvious is worth one redundant key.
+    """
+    if not head:
+        return []
+    bots = _REVIEW_BOTS if bots is None else bots
+    found: dict[str, dict] = {}
+    for comment in comments or []:
+        if not isinstance(comment, dict):
+            continue
+        bot = _match_bot(_author(comment), bots, anchored=True)
+        if not bot:
+            continue
+        body = comment.get("body")
+        if not isinstance(body, str):
+            continue
+        low = body.lower()
+        if not any(marker in low for marker in _COMMENT_VERDICT_MARKERS):
+            continue
+        # Term 3. Read from the body directly rather than from the comment's
+        # precomputed `review_unavailable_reason`: that field is author-scoped
+        # for its own purposes, and this is a refusal, so it must not depend on
+        # an upstream trust decision made for a different question.
+        if any(marker in low for marker in _REVIEW_UNAVAILABLE_MARKERS):
+            continue
+        if head.lower() not in low:
+            continue
+        found[bot] = {"bot": bot, "sha": head}
+    return [found[bot] for bot in sorted(found)]
+
+
 def summarize_review_bots(
     check_details: list[dict],
     comments: list[dict],
@@ -2764,6 +2869,11 @@ def summarize_review_bots(
         # where a bot's latest review carries no verdict, which is precisely the
         # case that used to be invisible.
         "objections": bot_head_objections(reviews or [], head, bots=bots),
+        # Comment-borne clean verdicts for this head (#44). REPORTED ONLY — no
+        # gate reads this, by ruling. See `bot_comment_verdicts`. Empty on the
+        # `record_review` path, which passes no comments; that path does not
+        # read this field either.
+        "comment_verdicts": bot_comment_verdicts(comments or [], head, bots=bots),
         "unavailable": unavailable,
         "pending": pending,
         "blockers": blockers,
@@ -4018,6 +4128,23 @@ def render(report: dict) -> str:
                 "would not stand for its review of this design; re-request it, or "
                 "say so explicitly"
             )
+    # #44, reported so the reader is not left inferring it from two empty lists.
+    # Fires only where it is informative: the bot announced a completed review of
+    # THIS head in a comment, and its review objects do not cover this head — the
+    # state where `coverage: []` and `unavailable: []` together look exactly like
+    # "nobody reviewed" and actually mean "reviewed, on a surface the gate cannot
+    # read". Says what to do, because the remedy is not guessable from the fact.
+    covered = {e["bot"] for e in bots.get("coverage") or [] if e.get("covers_head")}
+    for entry in bots.get("comment_verdicts") or []:
+        if entry["bot"] in covered:
+            continue
+        lines.append(
+            f"  ⓘ review reported: {entry['bot']} announced a completed review of "
+            f"{entry['sha'][:7]} in a COMMENT, creating no review object — so the "
+            "merge gate cannot see it and this is not evidence. If that verdict is "
+            "what you are merging on, record it: --record-review "
+            f"\"{entry['bot']}:comment-verdict\" --head {entry['sha']}"
+        )
     for entry in bots.get("unavailable") or []:
         # `.get`, not indexing: only the check surface carries the #95 trust
         # fields, and a comment-surface entry legitimately has neither. Indexing

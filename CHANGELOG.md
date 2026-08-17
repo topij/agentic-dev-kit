@@ -42,6 +42,29 @@ starts.
 
 ---
 
+## #500 — 2026-08-17
+
+- **`review_bots` grew a `comment_verdicts` key** (report shape) — configured bots
+  that announced a *completed* review of the current head in a **comment**, creating
+  no review object (`#44`). Entries are `{bot, sha}`. **Reported only: no gate reads
+  it.** `mergeable`, `review_evidence` and `merge_blockers` are unchanged, by ruling —
+  keying a merge gate on a reviewer's prose would let an upstream wording change
+  decide merges. If you parse `review_bots`, this is additive.
+- **`config/dev-model.yaml` gained `review.comment_verdict_markers`** — comment text
+  announcing a completed review, matched case-insensitively as substrings. Defaults to
+  `["no actionable comments were generated", "actionable comments posted:"]`. The
+  installer only adds absent keys, so **an existing config keeps working unchanged**
+  and inherits these defaults; set it only if your reviewer words its verdict
+  differently. A marker matching nothing costs you the report line and nothing else.
+- **New poll line `ⓘ review reported:`** on that state, naming the sha and the
+  `--record-review "<bot>:comment-verdict" --head <sha>` command. If you scrape poll
+  output, this is a new line; it is informational and never blocks.
+- Receipt source **`<bot>:comment-verdict`** is now a named literal for that case,
+  recorded with **no `--lenses`**. Deliberately outside the `fallback:` namespace —
+  those stand for a substitute pass, and this stands for the real reviewer on a
+  surface the gate cannot read. Sources are free-form, so nothing rejects the old
+  spelling; the name is for the audit trail.
+
 ## #499 — 2026-08-17
 
 - **BREAKING (gate semantics)** — the `#488` objection blocker is now read from each
