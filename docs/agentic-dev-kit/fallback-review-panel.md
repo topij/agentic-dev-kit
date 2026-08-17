@@ -52,6 +52,34 @@ bot and the panel keep finding disjoint defects. And it reduces to nothing when
 `review.bots` is empty: with no reviewer to configure there is no trigger to
 check, and the panel is simply your reviewer rather than a fallback for one.
 
+## When the reviewer answered and the gate cannot see it
+
+Distinct from an outage, and it does **not** call for a panel by itself. Some
+reviewers deliver a *clean* verdict as an ordinary comment and create no review
+object, so the merge gate — which reads review objects — sees nothing, and a
+reviewed head is indistinguishable from an unreviewed one. The engine reports
+what it can tell apart as `review_bots.comment_verdicts` and an
+`ⓘ review reported:` line.
+
+The symptom to design against is not "the bot is silent". It is **"the bot
+answered clearly and the gate cannot see it"** — and the two look nothing alike
+to a reader while looking identical to the gate.
+
+When that verdict is what a merge rests on, record it with a source that says
+exactly that — `<bot>:comment-verdict`, e.g. `coderabbit:comment-verdict` — and
+**no `--lenses`**, because no lens ran. It is not a `fallback:*` literal and must
+never be recorded as one: those stand for a substitute pass, and claiming one
+here would assert a review that did not happen, which is the one thing a receipt
+must never do.
+
+Two things this does not license. It is **not** a way to skip the panel when the
+reviewer genuinely did not review — the conjunction behind the report exists
+because a rate-limited bot once named the very range it *would have* covered, and
+a rule keyed on that alone would have invented evidence. And the report is
+deliberately not evidence: keying a merge gate on a reviewer's prose means an
+upstream wording change silently decides merges, so the receipt stays the act
+that authorizes.
+
 ## Why a panel and not a command
 
 `review.fallback_commands.<runtime>` runs the runtime's own review command — in

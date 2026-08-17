@@ -52,6 +52,7 @@ def _pin_engine_defaults(module: ModuleType) -> None:
     module._REVIEW_CONFIG = defaults
     module._NOISE_MARKERS = defaults.noise_markers
     module._REVIEW_UNAVAILABLE_MARKERS = defaults.unavailable_markers
+    module._COMMENT_VERDICT_MARKERS = defaults.comment_verdict_markers
     module._INFORMATIONAL_CHECK_NAMES = defaults.informational_checks
     module._REQUIRE_CI = defaults.require_ci
     module._REVIEW_BOTS = defaults.bots
@@ -2864,6 +2865,7 @@ def test_missing_config_falls_back_to_defaults_silently(
     assert resolved == (
         pr_watch._DEFAULT_NOISE_MARKERS,
         pr_watch._DEFAULT_REVIEW_UNAVAILABLE_MARKERS,
+        pr_watch._DEFAULT_COMMENT_VERDICT_MARKERS,
         frozenset(pr_watch._DEFAULT_INFORMATIONAL_CHECK_NAMES),
         True,
         pr_watch._DEFAULT_REVIEW_BOTS,
@@ -3007,6 +3009,7 @@ def test_every_config_derived_global_is_pinned() -> None:
     pinned_globals = {
         "_NOISE_MARKERS": (("zzz-sentinel-noise",), "noise_markers"),
         "_REVIEW_UNAVAILABLE_MARKERS": (("zzz-sentinel-unavail",), "unavailable_markers"),
+        "_COMMENT_VERDICT_MARKERS": (("zzz-sentinel-verdict",), "comment_verdict_markers"),
         "_INFORMATIONAL_CHECK_NAMES": (frozenset({"zzz-sentinel-check"}), "informational_checks"),
         "_REQUIRE_CI": ("zzz-sentinel-require-ci", "require_ci"),
         "_REVIEW_BOTS": (("zzz-sentinel-bot",), "bots"),
@@ -3727,6 +3730,132 @@ def test_a_bots_own_later_non_verdict_review_cannot_clear_its_objection() -> Non
     assert report["review_bots"]["coverage"][0]["state"] == "COMMENTED"
     assert report["review_bots"]["objections"][0]["state"] == "CHANGES_REQUESTED"
     assert report["review_evidence"]["route"] == "bot-coverage"
+
+
+def test_a_comment_borne_verdict_is_reported_and_never_becomes_evidence() -> None:
+    """Issue #44, ruled 2026-08-17: report it, never gate on it.
+
+    A reviewer that delivers a clean verdict as an issue comment creates no
+    review object, so `coverage` is empty and a reviewed PR looks exactly like an
+    unreviewed one. This surfaces that as `comment_verdicts` — and the assertion
+    that matters most is the NEGATIVE one: `mergeable` stays false and
+    `review_evidence` stays invalid. If a future change wires this into the
+    gate, the prose match starts deciding merges, which `bot_review_coverage`'s
+    docstring is the standing argument against.
+    """
+    pr_watch = _load_pr_watch()
+    head = "abc123"
+    verdict = {
+        "author": {"login": "coderabbitai"},
+        "body": (
+            "**Actionable comments posted: 0**\n\n"
+            "No actionable comments were generated in the recent review.\n\n"
+            f"Reviewing files that changed between 0ldbase and {head}."
+        ),
+    }
+    view = _green_view(comments=[verdict])
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+
+    assert report["review_bots"]["comment_verdicts"] == [
+        {"bot": "coderabbit", "sha": head}
+    ]
+    # The whole ruling, in three lines.
+    assert report["review_evidence"]["valid"] is False
+    assert report["review_evidence"]["route"] is None
+    assert report["mergeable"] is False
+    assert (
+        "independent review evidence is missing for current head"
+        in report["merge_blockers"]
+    )
+
+
+def test_a_rate_limited_bot_naming_the_range_it_would_have_reviewed_is_not_a_verdict() -> None:
+    """The #263 fail-open, which is why the read is a conjunction.
+
+    A rate-limited CodeRabbit posted ONE comment carrying both "Review limit
+    reached … we couldn't start this review" and the `Reviewing files that
+    changed between <base> and <head>` line — the range it *would have* covered.
+    `GET /pulls/263/reviews` was empty; no review happened. A rule keyed on the
+    SHA and a completion marker without the unavailable term would manufacture a
+    verdict there, which is worse than reporting nothing.
+
+    Also pins the other two terms, neither of which has a failing case otherwise:
+    a lookalike login cannot announce that the reviewer passed, and a comment
+    that never names this head is not about this head.
+    """
+    pr_watch = _load_pr_watch()
+    head = "abc123"
+
+    rate_limited = {
+        "author": {"login": "coderabbitai"},
+        "body": (
+            "**Review limit reached**\n\n"
+            "@topij, you've reached your PR review limit, so we couldn't start "
+            "this review.\n\n"
+            "Actionable comments posted: 0\n"
+            f"Reviewing files that changed between 0ldbase and {head}."
+        ),
+    }
+    assert pr_watch.bot_comment_verdicts([rate_limited], head) == []
+
+    clean_body = (
+        f"No actionable comments were generated in the recent review. {head}"
+    )
+    # A lookalike login — the anchored match, same reason `bot_review_coverage`
+    # anchors: a comment author is not the repo's to control.
+    assert (
+        pr_watch.bot_comment_verdicts(
+            [{"author": {"login": "xcoderabbit"}, "body": clean_body}], head
+        )
+        == []
+    )
+    # A verdict that never names this head. The containment test is what makes
+    # this fail toward silence rather than toward a wrong sha.
+    assert (
+        pr_watch.bot_comment_verdicts(
+            [
+                {
+                    "author": {"login": "coderabbitai"},
+                    "body": "No actionable comments were generated in the recent review.",
+                }
+            ],
+            head,
+        )
+        == []
+    )
+    # A bot comment that names this head but announces no completed review.
+    # This is the term the other refusals do NOT reach: each of them fails on a
+    # different clause, so without this case dropping the completion check
+    # entirely passed the whole suite — every comment a bot ever posts about
+    # this head would have become a verdict, including a walkthrough or a
+    # progress note. Found by mutation, not by reading.
+    assert (
+        pr_watch.bot_comment_verdicts(
+            [
+                {
+                    "author": {"login": "coderabbitai"},
+                    "body": f"Walkthrough\n\nReviewing files that changed between 0ldbase and {head}.",
+                }
+            ],
+            head,
+        )
+        == []
+    )
+    # …and the positive control, so the refusals above are readable as
+    # refusals rather than as a function that never returns anything.
+    assert pr_watch.bot_comment_verdicts(
+        [{"author": {"login": "coderabbitai"}, "body": clean_body}], head
+    ) == [{"bot": "coderabbit", "sha": head}]
+    # No head to bind to, and a non-configured bot.
+    assert pr_watch.bot_comment_verdicts([{"author": {"login": "coderabbitai"}, "body": clean_body}], "") == []
+    assert (
+        pr_watch.bot_comment_verdicts(
+            [{"author": {"login": "coderabbitai"}, "body": clean_body}],
+            head,
+            bots=("otherbot",),
+        )
+        == []
+    )
 
 
 def test_a_bot_objection_clears_by_pushing_a_fix_rather_than_wedging() -> None:

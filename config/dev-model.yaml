@@ -178,6 +178,16 @@ review:
   # under safety-critical-changes.md; `--lenses` records which form ran).
   # The last two are literals the recording agent writes on the receipt, not
   # config keys — never set receipt_source to either.
+  #
+  # A FOURTH literal exists and is not a fallback pass at all:
+  # `<bot>:comment-verdict` (#44), for a reviewer that announced a clean review
+  # in a comment and created no review object, so the gate cannot see it. It
+  # takes no `--lenses` because no lens ran, and it is deliberately outside the
+  # `fallback:` namespace — those stand for a substitute review, and this one
+  # stands for the real reviewer on a surface the gate cannot read. Also never a
+  # receipt_source. See `comment_verdict_markers` below and the
+  # "When the reviewer answered and the gate cannot see it" section of
+  # docs/agentic-dev-kit/fallback-review-panel.md.
   fallback_panel:
     receipt_source: "fallback:panel"   # never the same as a single-lens receipt
     # Compute for each panel lens, keyed by runtime — the same per-runtime shape
@@ -264,6 +274,36 @@ review:
     - "couldn't start this review"
     - "review skipped"
     - "no review credits"
+  # Text in a configured bot's COMMENT that announces a COMPLETED review (#44).
+  #
+  # Some reviewers deliver a clean verdict as an issue comment and create no
+  # review object, so `review_bots.coverage` — which reads review objects — sees
+  # nothing, and a PR that WAS independently reviewed is indistinguishable from
+  # one that never was. Measured on this repo: whether a review object exists
+  # tracks whether the review found anything, so the clean pass is exactly the
+  # one the merge gate cannot see.
+  #
+  # What these markers do is REPORT that, as `review_bots.comment_verdicts`.
+  # They do NOT satisfy the merge gate. That is the ruling on #44 (2026-08-17)
+  # and the reason this key is safe to key on prose at all: the failure of a
+  # marker that stops matching is a missing report line, never an authorized
+  # merge. `bot_review_coverage`'s docstring is the standing argument for why
+  # the other direction is not available — treating a comment-shaped verdict as
+  # coverage would authorize merges on a prose match.
+  #
+  # Matched case-insensitively as substrings, and ONLY as one term of a
+  # conjunction (see `bot_comment_verdicts`): the comment must also carry the
+  # current head's full SHA and must NOT match any `unavailable_markers` entry.
+  # That last term is not decoration — on #263 a rate-limited bot posted a
+  # comment naming the commit range it WOULD have reviewed, so a rule keyed on
+  # the SHA alone would have manufactured evidence for a review that never ran.
+  #
+  # `actionable comments posted:` is deliberately open-ended — it matches
+  # `N >= 1` too. A review that found things is still a review that happened,
+  # and its findings arrive through `new_comments` regardless.
+  comment_verdict_markers:
+    - "no actionable comments were generated"
+    - "actionable comments posted:"
   # Status checks that are advisory only and must never block `converged` — this
   # is the anti-wedge property: a review bot's check can sit PENDING forever after
   # a trivial follow-up commit, and the watch loop must still be able to finish.

@@ -332,6 +332,22 @@ Self-pace on a bounded cadence — don't busy-wait:
     the PR is therefore still owed one. Neither is a licence to retry in a loop
     against a quota.
 
+    **A reviewer can answer clearly and still leave the gate unsatisfied**, and
+    that state is reported rather than left to be inferred. Some reviewers
+    deliver a *clean* verdict as an ordinary comment and create no review
+    object — so `review_bots.coverage` is empty, `review_bots.unavailable` is
+    empty, and the two together look exactly like "nobody reviewed". Where the
+    engine can tell the difference it says so, as
+    `review_bots.comment_verdicts` and an `ⓘ review reported:` line naming the
+    sha.
+
+    **That is a report, not evidence** — deliberately, because the alternative
+    is a merge gate keyed on the reviewer's prose. So the disposition is yours:
+    if that verdict is what you are merging on, record it as a receipt whose
+    source says what it stands for — `<bot>:comment-verdict`, with **no
+    `--lenses`**, since no fallback pass ran. If it is not, run the panel. What
+    is not available is treating the missing coverage as a review waiver.
+
     Nothing in `pr_watch.py` performs the request — it observes only. And note
     what this bullet does **not** say: it does not tell you to `--record-review`
     the bot's own verdict. That receipt vocabulary describes fallback passes, and
