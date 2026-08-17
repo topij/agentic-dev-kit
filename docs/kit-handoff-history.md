@@ -4,6 +4,62 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-13 (one guard, and the reviewer finding my own claims)
+
+**Theme —** `#453`: the `#428` state guard, which keeps fabricated review receipts out of
+`state/pr-watch/`. `#447` (nothing pinned it) and `#448` (it was absent when a run
+collected only `lib/state_paths/tests`) were one mechanism's two symptoms and shipped
+together. Merged as `175bda0`; `make test` at the kit root on the merged tip is green.
+
+- **The placement `#448` did not consider.** That ticket weighed a repo-root conftest
+  (reaches no adopter) against a second conftest beside `state_paths` (a copy to drift)
+  and called neither right. The **engine root** has neither objection: pytest loads
+  conftests from rootdir down, so one file there covers every test directory under it,
+  and it sits inside what an adopter vendors. Only the detection half moved —
+  `_hermetic_state_root` stays beside the tests because `lib/state_paths/tests` drives
+  `$DEVKIT_STATE_ROOT` as its subject and asserts on the unset case.
+- **The review kept finding defects in my own work, and the ones that mattered were
+  claims I had written and defended.** I argued in the PR body that manifest-tracking the
+  new file would cascade through `kit_doctor`, as the reason to defer it;
+  measured, it was clean, and the file had been invisible to `/upgrade` — `#422`'s shape,
+  committed by me. I documented the `cd`-into-tests residual as the no-argument form when
+  the boundary is the working directory. I quoted `make test` as running
+  `pytest lib/state_paths/tests tests`, having dropped both `scripts/` prefixes while
+  moving text that claims to quote the command.
+- **CodeRabbit's quota returned mid-PR and it found things the panel had not** — one
+  with a better fix than mine (`_require_no_ancestor_marker`, already this
+  repo's convention). Its outage is why the panel ran at all; `#372` is still the open
+  question about that posture.
+- **Filed:** `#455` (the guard is lost for any run whose cwd is a test directory),
+  `#456` (a dangling symlink is invisible to the snapshot), `#457` (further routes past it,
+  plus `session.shouldfail` unpinned). Occurrences recorded on `#40` and `#416`.
+
+**Learned**
+
+- **`#457`'s routes share one root, which is worth more than the tickets.** The
+  guard observes **two instants** — disk at conftest import, disk at session end — and
+  not the interval between them, so anything netting to zero across those instants is
+  permanently outside what it can see. A resolution that keeps the two-instant design
+  should say so instead of enumerating; one that watches the interval closes every route
+  that nets to zero across them.
+- **Every count I wrote about my own work was wrong or went stale, including in this
+  block.** Its first draft tallied rounds run, defects found, lens runs, and open routes
+  on a ticket still growing; `wrap-up.md`'s own rule caught them before the commit. An
+  earlier attempt to illustrate the same lesson was itself inaccurate — I claimed a
+  "TWO THINGS THIS TRAVERSAL CANNOT SEE" count had gone stale, when the later finding was
+  a blind spot in the *comparison of two instants*, not in the traversal's enumeration, so
+  that count still stands. `fallback-review-panel.md` teaches this as enumerate-never-count;
+  what this session adds is that the reflex extends to the sentence explaining the reflex.
+- **The panel's own attestation cannot catch a shared-`.git` write.** A lens fetched into
+  the linked worktree it was handed; `git status` was clean before and after, because a
+  ref write touches no working-tree byte. Self-reporting was the only detection route,
+  and that is not a mechanism (`#416`).
+
+▶ Next: **`#457`** — decide whether the `#428` guard should keep observing two instants
+or watch the interval. That one choice disposes of every route that nets to zero across
+the two instants, and tells you what `#455` and `#456` are worth; taking them as separate
+tickets is the more expensive reading.
+
 ## Session — 2026-08-13 (five lanes overnight, and the reviewer catching the author each time)
 
 **Theme —** the first autonomous batch run through `parallel-headless.md`. The mechanism

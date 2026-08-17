@@ -14,9 +14,63 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-16 — the merge gate's receipt route closed, an upstream bypass left open; the quota posture measured.
+Last updated: 2026-08-17 — the quota posture ruled and the two `#44`-adjacent gate reads settled; a test-coverage pattern reached its third occurrence.
 
-## Latest session — 2026-08-16 (the receipt route closed, an upstream bypass left open, and a posture whose halves compete for one unit)
+## Latest session — 2026-08-17 (three rulings shipped, and the defect that would have reached an adopter was a heading)
+
+**Theme —** the operator ruled on `#372` and on `#44`, and `#494` — the fail-open the
+previous session's ticket sweep had just filed against `#488` — was closed between them.
+Shipped: `#372` (`#498`, squash `9f912e5`), `#494` (`#499`, `fa8d490`), `#44` (`#500`,
+`4276654`). All three issues stay open; no closing keyword was written and nothing
+verified their acceptance criteria.
+
+- **`#372` ruled: convergence-only.** `auto_review.enabled: false`, so the one hourly
+  unit is spent at the head that merges rather than the head that opens. The measurement
+  that decided it is on the ticket: on `#488` the auto pass at open and the Converged
+  re-request **competed for the same unit**, so automating the request would change *when*
+  the refusal arrives, not *whether*. Paying was declined by the operator on cost, which
+  discharges the conditional deferral the 2026-08-15 ruling had left standing. What it
+  does **not** solve is stated in `.coderabbit.yaml` rather than here: it reallocates the
+  unit, it does not create more, so batches and a session's second PR still fall to the
+  panel.
+- **`#44` ruled: report it, never gate on it.** `review_bots.comment_verdicts` surfaces a
+  comment-borne clean verdict; no gate reads it. Direction (a) — parse it into `coverage`
+  so the gate self-clears — was declined because the failure modes are not symmetric:
+  keying the *gate* on a reviewer's prose lets an upstream wording change decide merges,
+  while keying a *report* on it lets a line go missing. `bot_review_coverage`'s docstring
+  was already the standing argument, and is cited rather than restated.
+- **`#494` closed by giving the objection its own read** over verdict states only.
+  Directions 2 and 3 were declined on the ticket. The two reductions are one
+  parameterized walk, not two copies — `#447` (closed, but the record) is why.
+
+**Learned**
+
+- **Three rulings' worth of panel found no gate defect; the thing that would have reached
+  an adopter was a CHANGELOG heading.** `#499`'s entry was headed with the *issue* number,
+  and `upgrade.md` Step 3 extracts by *PR* number — so a `BREAKING (gate semantics)` entry
+  would have been invisible to the documented upgrade path (`#430`'s failure, on the file
+  written to prevent it). Found because a lens **ran** the extraction rather than reading
+  the file. Nothing in CI checks this correspondence.
+- **`#447`'s shape recurred three times in one session**, each time found by mutation and
+  never by reading: a new field added beside pinned siblings inherits exactly the gaps the
+  siblings had already closed (`#499`'s objections scoping; `#500`'s config key and its
+  render line). Logged to the inbox as a candidate rule rather than a ticket, because the
+  third occurrence is what makes it a pattern.
+- **Every fix round in this session produced a prose imprecision the next round found.**
+  That is the doctrine's own claim observed under its own procedure, and it is the
+  argument for the log-don't-fix carve-out — the cost of a round is another round's worth
+  of new prose to get wrong.
+- **A trigger heuristic `#44` had relied on since 2026-07-27 is falsified:** an explicit
+  review request does *not* reliably produce a review object. Recorded on the ticket with
+  the observation, and it retires "just re-request it" as operational advice.
+
+▶ Next: rule on `#460` — the last standing operator ruling, untouched today; `#489` is the
+sharpest unclosed gate read (an unparseable `submittedAt` still outranks every real
+timestamp, so a standing objection cannot yet be fully relied on even after `#494`).
+
+______________________________________________________________________
+
+## Session — 2026-08-16 (the receipt route closed, an upstream bypass left open, and a posture whose halves compete for one unit)
 
 **Theme —** `#485` shipped (`#488`, squash `5449947`) — the hole the previous block called
 the sharpest of its new tickets. Worth carrying: why direction 2 beat direction 1, what the
@@ -321,64 +375,6 @@ stated as classes in the module docstring instead of an enumeration that kept gr
 
 ▶ Next: run the `triage-friction-log` workflow — the inbox has been over budget since
 session start (the tripwire fires on it) and gained an entry this session.
-
-______________________________________________________________________
-
-## Session — 2026-08-13 (one guard, and the reviewer finding my own claims)
-
-**Theme —** `#453`: the `#428` state guard, which keeps fabricated review receipts out of
-`state/pr-watch/`. `#447` (nothing pinned it) and `#448` (it was absent when a run
-collected only `lib/state_paths/tests`) were one mechanism's two symptoms and shipped
-together. Merged as `175bda0`; `make test` at the kit root on the merged tip is green.
-
-- **The placement `#448` did not consider.** That ticket weighed a repo-root conftest
-  (reaches no adopter) against a second conftest beside `state_paths` (a copy to drift)
-  and called neither right. The **engine root** has neither objection: pytest loads
-  conftests from rootdir down, so one file there covers every test directory under it,
-  and it sits inside what an adopter vendors. Only the detection half moved —
-  `_hermetic_state_root` stays beside the tests because `lib/state_paths/tests` drives
-  `$DEVKIT_STATE_ROOT` as its subject and asserts on the unset case.
-- **The review kept finding defects in my own work, and the ones that mattered were
-  claims I had written and defended.** I argued in the PR body that manifest-tracking the
-  new file would cascade through `kit_doctor`, as the reason to defer it;
-  measured, it was clean, and the file had been invisible to `/upgrade` — `#422`'s shape,
-  committed by me. I documented the `cd`-into-tests residual as the no-argument form when
-  the boundary is the working directory. I quoted `make test` as running
-  `pytest lib/state_paths/tests tests`, having dropped both `scripts/` prefixes while
-  moving text that claims to quote the command.
-- **CodeRabbit's quota returned mid-PR and it found things the panel had not** — one
-  with a better fix than mine (`_require_no_ancestor_marker`, already this
-  repo's convention). Its outage is why the panel ran at all; `#372` is still the open
-  question about that posture.
-- **Filed:** `#455` (the guard is lost for any run whose cwd is a test directory),
-  `#456` (a dangling symlink is invisible to the snapshot), `#457` (further routes past it,
-  plus `session.shouldfail` unpinned). Occurrences recorded on `#40` and `#416`.
-
-**Learned**
-
-- **`#457`'s routes share one root, which is worth more than the tickets.** The
-  guard observes **two instants** — disk at conftest import, disk at session end — and
-  not the interval between them, so anything netting to zero across those instants is
-  permanently outside what it can see. A resolution that keeps the two-instant design
-  should say so instead of enumerating; one that watches the interval closes every route
-  that nets to zero across them.
-- **Every count I wrote about my own work was wrong or went stale, including in this
-  block.** Its first draft tallied rounds run, defects found, lens runs, and open routes
-  on a ticket still growing; `wrap-up.md`'s own rule caught them before the commit. An
-  earlier attempt to illustrate the same lesson was itself inaccurate — I claimed a
-  "TWO THINGS THIS TRAVERSAL CANNOT SEE" count had gone stale, when the later finding was
-  a blind spot in the *comparison of two instants*, not in the traversal's enumeration, so
-  that count still stands. `fallback-review-panel.md` teaches this as enumerate-never-count;
-  what this session adds is that the reflex extends to the sentence explaining the reflex.
-- **The panel's own attestation cannot catch a shared-`.git` write.** A lens fetched into
-  the linked worktree it was handed; `git status` was clean before and after, because a
-  ref write touches no working-tree byte. Self-reporting was the only detection route,
-  and that is not a mechanism (`#416`).
-
-▶ Next: **`#457`** — decide whether the `#428` guard should keep observing two instants
-or watch the interval. That one choice disposes of every route that nets to zero across
-the two instants, and tells you what `#455` and `#456` are worth; taking them as separate
-tickets is the more expensive reading.
 
 ______________________________________________________________________
 

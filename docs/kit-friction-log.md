@@ -12,6 +12,55 @@
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
 
+## 2026-08-17
+
+Surfaced by the three-ruling session (`#498`, `#499`, `#500`). Items already issue-shaped
+were filed on their own tickets and are not repeated here.
+
+- **A new field added beside a pinned sibling inherits exactly the gaps the sibling had
+  already closed — three occurrences this session, none found by reading.** (**H**)
+  Each was found by mutating the new code and watching the whole suite pass: `#499`'s
+  `objections` field had no `bots=` scoping test, where `coverage` has one *whose own
+  docstring says that threading "was correct and pinned by nothing"*; `#500`'s
+  `comment_verdict_markers` had no positive config-parse test, where every sibling
+  `ReviewConfig` field has one; `#500`'s render line had none at all, where every other
+  render line in the engine has an exact-text containment test. In all three the sibling's
+  test existed, was one line away, and did not generalise. `#447` is the closed record of
+  this shape and `_reduce_latest_bot_reviews`'s docstring cites it — which did not stop
+  the author of that docstring producing two more instances in the same session.
+  *Proposed fix:* a rule — **a new field beside a pinned one inherits its tests, or the PR
+  says why not** — and the mechanical form of it, which is that the sibling's test is the
+  place to add the assertion rather than a new test beside it. Both `#499` and `#500`
+  ended up extending the sibling's test; doing that first would have closed all three.
+  Worth weighing against `safety-critical-changes.md` rule 3 ("a fix round addresses only
+  what the review found") — this is a rule about *authoring*, not about fix rounds, so it
+  should not license building beyond a finding.
+
+- **Nothing checks that a CHANGELOG entry's heading matches the PR that carries it, and
+  the failure is silent on exactly the entries that matter most.** (**H**) `#499`'s entry
+  was headed with the issue number; `upgrade.md` Step 3 extracts with
+  `awk -v pr="$pr" '/^## /{p = ($2 == "#" pr)} p'`, which returned nothing for the PR
+  number and the whole entry for the issue number. A `BREAKING (gate semantics)` entry
+  would have reached adopters as silence — `#430`'s exact failure, on the file whose
+  header says it exists to prevent it. Found only because a review lens *ran* the
+  extraction; every other pass, including the author's, read the file and saw a
+  plausible-looking heading. *Proposed fix:* a test that, for the entry at the top of
+  `CHANGELOG.md`, asserts the heading number is not one of the issue numbers referenced in
+  that entry's own body — or, more directly, a `pr-watch`/wrap-up step that runs the
+  extraction for the live PR number and fails when it comes back empty. The check is
+  cheap and mechanical; the current safeguard is that somebody remembers a convention.
+
+- **The panel's cost is now measurable per-PR, and the shape is what `#372` wanted.**
+  (**L**) Two PRs took panels this session: `#499` ran four rounds (two full, one delta,
+  one full) before its findings decayed to prose, and `#500` ran two. Rounds do not decay
+  monotonically — `#499`'s round 3, a delta pass over record prose, produced that
+  session's only HIGH. The transferable figure is not a round count but a stopping shape:
+  in both PRs the last round reported no functional defect *and* its remaining items were
+  comment wording, which is the doctrine's stated criterion and was reached at different
+  round counts for changes with different blast radii. *Proposed fix:* nothing yet —
+  recording it because `#372` was held open partly for a per-PR panel figure, and this is
+  the first session to produce two comparable ones.
+
 ## 2026-08-16 (second session)
 
 Surfaced by the `#485` session (`#488`). Items already issue-shaped were filed directly
