@@ -50,6 +50,24 @@ were filed on their own tickets and are not repeated here.
   extraction for the live PR number and fails when it comes back empty. The check is
   cheap and mechanical; the current safeguard is that somebody remembers a convention.
 
+- **The closing-keyword rule is verified with a proximity grep, and a proximity grep
+  cannot verify it.** (**M**) `AGENTS.md` bans a closing keyword adjacent to an issue
+  number on any surface. The natural check is a regex with a distance bound, and both a
+  review lens and I used one this session — the lens's `.{0,20}` reported **zero matches**
+  across all three of this session's PR bodies, while `#499`'s body in fact opens
+  *"Closes the third clearance route out of `#488`'s merge blocker"*. The keyword and the
+  number are 35 characters apart, so the bound hid it; my own earlier `[^.]{0,30}` would
+  have hidden it too. Widening the bound then produces false positives, because
+  `Closes the test gap … #494` is harmless and `Closes #494` is not, and no distance
+  distinguishes them. The other lens found it by **reading**.
+  *Proposed fix:* verify with the forge's own parser instead —
+  `gh api graphql … pullRequest(number:N){closingIssuesReferences(first:10){nodes{number}}}`
+  returns exactly what GitHub will act on, which is the property the rule is actually
+  about. A grep is a drafting aid; `closingIssuesReferences` is the check. Worth stating
+  in `AGENTS.md` beside the rule, since the rule currently names a prohibition with no
+  way to confirm compliance. (Both instances found this session were confirmed harmless
+  by that query returning `[]` — the point is that the grep could not have told us.)
+
 - **The panel's cost is now measurable per-PR, and the shape is what `#372` wanted.**
   (**L**) Two PRs took panels this session: `#499` ran four rounds (two full, one delta,
   one full) before its findings decayed to prose, and `#500` ran two. Rounds do not decay

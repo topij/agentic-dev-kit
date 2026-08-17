@@ -24,24 +24,32 @@ Shipped: `#372` (`#498`, squash `9f912e5`), `#494` (`#499`, `fa8d490`), `#44` (`
 `4276654`). All three issues stay open; no closing keyword was written and nothing
 verified their acceptance criteria.
 
-- **`#372` ruled: convergence-only.** `auto_review.enabled: false`, so the one hourly
-  unit is spent at the head that merges rather than the head that opens. The measurement
-  that decided it is on the ticket: on `#488` the auto pass at open and the Converged
-  re-request **competed for the same unit**, so automating the request would change *when*
-  the refusal arrives, not *whether*. Paying was declined by the operator on cost, which
-  discharges the conditional deferral the 2026-08-15 ruling had left standing. What it
-  does **not** solve is stated in `.coderabbit.yaml` rather than here: it reallocates the
-  unit, it does not create more, so batches and a session's second PR still fall to the
-  panel.
+- **`#372` ruled: convergence-only — and the first PR that tested it failed.**
+  `auto_review.enabled: false`, so the one hourly unit is spent at the head that merges
+  rather than the head that opens. The measurement that decided it is on the ticket: on
+  `#488` the auto pass at open and the Converged re-request **competed for the same
+  unit**. Paying was declined by the operator on cost, which discharges the conditional
+  deferral the 2026-08-15 ruling had left standing.
+
+  **Do not read this as a working posture.** `#501` — this wrap-up's own PR, and the
+  first the ruling actually governs — made three explicit requests at its converged head
+  and got `Review failed` from all three, with no review object and no coverage. That
+  puts ruling 2 in question on the one ground that matters: it moved the whole review
+  budget onto a request path that then did not run. Ruling 1
+  (`auto_incremental_review: false`) is untouched and still measured. The account, the
+  three options it leaves, and why I did not re-rule on one PR are on `#372`; the next PR
+  opened against this `main` is the second data point.
 - **`#44` ruled: report it, never gate on it.** `review_bots.comment_verdicts` surfaces a
   comment-borne clean verdict; no gate reads it. Direction (a) — parse it into `coverage`
   so the gate self-clears — was declined because the failure modes are not symmetric:
   keying the *gate* on a reviewer's prose lets an upstream wording change decide merges,
   while keying a *report* on it lets a line go missing. `bot_review_coverage`'s docstring
   was already the standing argument, and is cited rather than restated.
-- **`#494` closed by giving the objection its own read** over verdict states only.
-  Directions 2 and 3 were declined on the ticket. The two reductions are one
-  parameterized walk, not two copies — `#447` (closed, but the record) is why.
+- **`#494`'s fail-open shipped a fix: the objection now has its own read** over verdict
+  states only. Directions 2 and 3 were declined on the ticket. The two reductions are one
+  parameterized walk, not two copies — `#447` (the record for that shape) is why.
+  Worded this way deliberately: "`#494` closed by …" reads on a skim as the *ticket*
+  being closed, which it is not.
 
 **Learned**
 
@@ -64,9 +72,11 @@ verified their acceptance criteria.
   review request does *not* reliably produce a review object. Recorded on the ticket with
   the observation, and it retires "just re-request it" as operational advice.
 
-▶ Next: rule on `#460` — the last standing operator ruling, untouched today; `#489` is the
-sharpest unclosed gate read (an unparseable `submittedAt` still outranks every real
-timestamp, so a standing objection cannot yet be fully relied on even after `#494`).
+▶ Next: open the next PR and watch what its converged-head review request does — that is
+`#372`'s second data point and it decides whether ruling 2 stands, gets reverted, or is
+renamed to "the panel is the reviewer". Behind it: `#460` (the last standing operator
+ruling, untouched today) and `#489` (an unparseable `submittedAt` still outranks every
+real timestamp, so a standing objection cannot yet be fully relied on even after `#494`).
 
 ______________________________________________________________________
 
