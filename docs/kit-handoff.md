@@ -343,58 +343,6 @@ point) and `#460` (the bracket question); `#455` is the clean self-contained bui
 
 ______________________________________________________________________
 
-## Session — 2026-08-13 (the #457 ruling: two instants kept, six rounds to hold one guard)
-
-**Theme —** `#457` ruled and shipped (`#459`, squash `7ef068c`): the `#428` guard keeps
-comparing two instants, because `state/` is a live store `pr_watch.py` writes between
-and during sessions — only a change across the session is evidence, and what persists
-at session end is all the merge gate can ever read. Within that design the traversal
-became total (a symlink records by target as a value at its own path, the root's own
-presence records, `<special>` covers the rest); the comparison's blind spots are now
-stated as classes in the module docstring instead of an enumeration that kept growing.
-`make test` at the kit root on the merged tip `7ef068c` is green.
-
-- **Merged with a `fallback:panel` receipt at `417d3a1`, both lenses, after six full
-  dual-lens rounds** — CodeRabbit was rate-limited on every head, again. Round records
-  and every disposition are comments on `#459`; the loop ended in the doctrine's second
-  terminal state, a round whose one finding was disposed without a commit. Occurrence
-  recorded on `#372`, which this keeps costing.
-- **The round that mattered: a lens broke my fix's own mechanism.** The `@`-suffix
-  symlink key was a design choice I weighed and dismissed as unlikely to collide;
-  round 3's adversarial lens demonstrated a real file named `<name>@` masking a
-  brand-new symlink, end-to-end with a control. The kind marker moved into the value
-  (`symlink -> <target>`), where no legal filename can collide. "Unlikely" is not a
-  property of a mechanism.
-- **Filed:** `#460` (an `atexit` callback writes after the second instant with a green
-  run — the bracket's mechanism decision), `#461` (an unreadable file under `state/`
-  crashes conftest import — fail-closed, undocumented). `#455` stays open: the cwd
-  reach gap is in the threat model, and its fix is a second registration point on a
-  load-bearing guard — its own PR, never a fix-round patch.
-- Occurrences recorded on `#416` (a lens fetched inside its handed linked worktree
-  again, self-disclosed; the `ls-remote` route is noted on the issue) and `#457` (the
-  "stale by four" repair itself went stale — logged, then swept along with the two
-  surviving `5 of 32` copies the round-5 adversarial lens found).
-
-**Learned**
-
-- **I published a commit sha before the commit existed.** A round comment named the
-  fix commit by a sha no command had produced; the real sha differed. Corrected on the
-  one surface it reached, with the correction left visible rather than silent —
-  `#422`'s subject arriving inside a review record.
-- **`--carry-forward` leaks framing, measured from the receiving end.** Round 5's
-  prompt restated dispositions and a risk label; the lens flagged both under
-  No framing, declined to defer, and re-derived the restated figure independently —
-  finding it staler than the prompt claimed. Coverage-only carry-forward from round 6
-  on; the friction entry carries the shape.
-- **Severity fell monotonically and the loop's terminal states were reachable as
-  written** — the last three rounds found nothing in the mechanism itself, and the
-  close-out was a filed issue, not another fix round.
-
-▶ Next: run the `triage-friction-log` workflow — the inbox has been over budget since
-session start (the tripwire fires on it) and gained an entry this session.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Active open items from them are folded into the "Open for next session" lists above.
 
