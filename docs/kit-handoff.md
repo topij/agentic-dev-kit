@@ -41,10 +41,12 @@ verified their acceptance criteria.
   point.
 
   **The evidence is stated as the empty review list on purpose.** The bot's own status
-  comments rewrite themselves in place — one on `#501` was edited three times across the
-  afternoon, and three successive readings of it produced three different accounts of
-  what happened, two of which reached this file or that ticket before being corrected.
-  Any tally read off that surface is a claim about when you looked. The absent review
+  comments rewrite themselves in place, and successive readings of one comment on `#501`
+  gave different accounts of what had happened — two of which reached this file or that
+  ticket before being corrected. **How many times it was rewritten is not knowable**:
+  `updated_at` exposes only the most recent edit, so any count is a floor, and the count
+  I first wrote here was wrong before the commit landed. That is the point rather than an
+  aside — a tally off that surface is a claim about when you looked. The absent review
   object is not.
 - **`#44` ruled: report it, never gate on it.** `review_bots.comment_verdicts` surfaces a
   comment-borne clean verdict; no gate reads it. Direction (a) — parse it into `coverage`

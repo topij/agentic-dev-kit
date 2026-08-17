@@ -70,14 +70,19 @@ were filed on their own tickets and are not repeated here.
 
 - **A review bot's status comment is a mutable surface, and every claim read off it has
   been wrong at least once.** (**M**) CodeRabbit edits its status comments **in place**:
-  one comment on `#501` carried `created_at 14:05:07` with `updated_at` moving to
-  `14:08:03` and later `15:33:38`. Three readings of that same comment id produced three
-  different accounts — "review skipped", "review failed", and "I will run a full review" —
-  and two of those readings reached a record (this file's session block and a `#372`
-  comment) before being corrected. A review lens then read it a fourth time and its
-  account differed from all of them, which is how the error was caught rather than
-  compounded. The `#44` thread already documents this edit-in-place behaviour; knowing
-  that did not prevent three occurrences in one afternoon.
+  one comment on `#501` carried `created_at 14:05:07` and was observed at `updated_at`
+  values of `14:08:03`, `15:33:38` and `15:49:28`. Readings of that same comment id
+  produced different accounts — "review skipped", "review failed", "I will run a full
+  review" — and two of them reached a record (this file's session block and a `#372`
+  comment) before being corrected. A review lens read it again and its account differed
+  from all of them, which is how the error was caught rather than compounded.
+
+  **`updated_at` exposes only the latest edit, so the number of rewrites is not
+  observable at all** — any count is a floor. A correction written for this entry stated
+  a count and was already wrong when the next fetch came back. The `#44` thread has
+  documented this bot's edit-in-place behaviour since 2026-07-27; knowing it did not
+  prevent the same error three times in one afternoon, the third time inside the sentence
+  warning against it.
   *Proposed fix:* record the **structural** consequence, never the narrated one. "No
   review object exists for this head" is `gh pr view N --json reviews` returning empty —
   stable, re-checkable, and the thing the merge gate actually reads. "The bot said X"
