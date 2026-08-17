@@ -3014,10 +3014,13 @@ def objecting_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
     escape hatch.** The blocker is bound to ``head``, so the ordinary remediation
     — push a fix — moves the head, leaves the objection covering an older commit,
     and clears it. A maintainer dismissing the review (``DISMISSED``) clears it
-    too. Both leave a real audit trail on the forge, which is why this ships with
-    no override flag: ``--allow-pending-bot-review`` exists because a *silent*
-    bot can genuinely never arrive, whereas an objection is a reviewer who has
-    already spoken and can unsay it the same way.
+    too, and so does the reviewer's own ``APPROVED`` at this same head — that
+    last one being a reviewer withdrawing its objection rather than an author
+    routing around it. **All three**, which is why this ships with no override
+    flag: each records the objection's *resolution* on the forge, and
+    ``--allow-pending-bot-review`` exists because a *silent* bot can genuinely
+    never arrive, whereas an objection is a reviewer who has already spoken and
+    can unsay it the same way.
 
     **Deliberately does NOT gate on** ``signal == "ok"``, where its sibling does.
     That asymmetry is the fail-closed direction on each side: ``signal``
