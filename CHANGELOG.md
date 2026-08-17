@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## #494 — 2026-08-17
+## #499 — 2026-08-17
 
 - **BREAKING (gate semantics)** — the `#488` objection blocker is now read from each
   configured bot's latest **verdict** (`APPROVED` / `CHANGES_REQUESTED` /
@@ -53,8 +53,9 @@ starts.
   commit pushed, nothing dismissed, and no forge audit trail. **If you rely on that
   behaviour, you were relying on a fail-open**; the routes out are unchanged, and are
   now exactly three — address the findings and push, dismiss the review on the forge,
-  or have the reviewer re-review this same head and approve. All three record the
-  objection's *resolution* on the forge; the follow-up `COMMENTED` recorded only that
+  or have the reviewer re-review this same head and approve. Each of the three leaves
+  the forge showing why the objection no longer applies — a superseding commit, a
+  dismissal, or a later approving verdict. The follow-up `COMMENTED` showed only that
   a review happened, which nothing reads as a clearance.
   Nothing to do on upgrade unless a PR of yours is currently merging through the old
   path, which will now correctly refuse. Pinned by

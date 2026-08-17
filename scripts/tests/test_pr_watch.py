@@ -4329,7 +4329,17 @@ def test_only_a_blocking_pending_bot_silences_the_coverage_warning() -> None:
 def test_coverage_honours_a_non_default_review_bots_list() -> None:
     """`bots=bots` threading was correct and pinned by nothing — dropping it
     passed the whole suite, because every other test uses the default list where
-    scoped and unscoped are identical."""
+    scoped and unscoped are identical.
+
+    **Covers `objections` as well as `coverage`, and that is the point** (#494).
+    This test pinned only `coverage` when it was written, so the identical
+    threading on the `objections` field added beside it was again correct and
+    pinned by nothing: mutating it to `bots=None` passed all 250 tests. That is
+    the `#447` shape the `_reduce_latest_bot_reviews` docstring names — a pinned
+    copy of a reduction beside an unpinned one — recurring in the field whose
+    read is the merge gate's refusal side. Assert on both, or the next field
+    added here inherits the same gap.
+    """
     pr_watch = _load_pr_watch()
     reviews = [
         _review("otherbot", "0ldc0de", "2026-07-25T12:00:00Z"),
@@ -4342,11 +4352,38 @@ def test_coverage_honours_a_non_default_review_bots_list() -> None:
 
     assert [e["bot"] for e in scoped["coverage"]] == ["otherbot"]
     assert scoped["coverage"][0]["covers_head"] is False
-    # …and a repo with no bots configured gets no coverage at all.
+
+    # The `objections` half needs its own fixture rather than reusing the one
+    # above, and the reason is the property under test one layer down: `_review`
+    # defaults to `COMMENTED`, which is not a verdict, so the reviews above
+    # produce an EMPTY objections list whatever `bots` is — scoped and unscoped
+    # alike. Asserting on that would have looked like a scoping pin while
+    # actually pinning the verdict filter, and would have passed with the
+    # threading dropped.
+    verdicts = [
+        _review("otherbot", "0ldc0de", "2026-07-25T12:00:00Z", "CHANGES_REQUESTED"),
+        _review("coderabbitai", "abc123", "2026-07-25T13:00:00Z", "CHANGES_REQUESTED"),
+    ]
+    scoped_verdicts = pr_watch.summarize_review_bots(
+        [], [], now=NOW, bots=("otherbot",), reviews=verdicts, head="abc123"
+    )
+    assert [e["bot"] for e in scoped_verdicts["objections"]] == ["otherbot"]
+    assert scoped_verdicts["objections"][0]["covers_head"] is False
+
+    # …and a repo with no bots configured gets neither list populated. The
+    # objections half matters most: an unconfigured bot's stray
+    # CHANGES_REQUESTED reaching this list is a denial-of-merge, the mirror of
+    # #350's false evidence.
     assert (
         pr_watch.summarize_review_bots(
             [], [], now=NOW, bots=(), reviews=reviews, head="abc123"
         )["coverage"]
+        == []
+    )
+    assert (
+        pr_watch.summarize_review_bots(
+            [], [], now=NOW, bots=(), reviews=verdicts, head="abc123"
+        )["objections"]
         == []
     )
 

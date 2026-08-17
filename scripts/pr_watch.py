@@ -3017,7 +3017,8 @@ def objecting_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
     too, and so does the reviewer's own ``APPROVED`` at this same head — that
     last one being a reviewer withdrawing its objection rather than an author
     routing around it. **All three**, which is why this ships with no override
-    flag: each records the objection's *resolution* on the forge, and
+    flag: each leaves the forge showing why the objection no longer applies — a
+    superseding commit, a dismissal, or a later approving verdict — and
     ``--allow-pending-bot-review`` exists because a *silent* bot can genuinely
     never arrive, whereas an objection is a reviewer who has already spoken and
     can unsay it the same way.

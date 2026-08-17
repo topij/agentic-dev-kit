@@ -179,7 +179,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "18336668a30d9788820abbbbc8b2850a3129e74dd96ca9bb0ba5edfeed96cccf"
+      "sha256": "c9c3251559a0868e9e1defa4cea77d099e9c62fb08a5424f9957e8a0baf80911"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
