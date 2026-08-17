@@ -42,6 +42,38 @@ starts.
 
 ---
 
+## #499 — 2026-08-17
+
+- **BREAKING (gate semantics)** — the `#488` objection blocker is now read from each
+  configured bot's latest **verdict** (`APPROVED` / `CHANGES_REQUESTED` /
+  `DISMISSED`) rather than from its latest **review of any kind**. A bot's own
+  follow-up `COMMENTED` or `PENDING` review at the same head no longer clears its
+  standing `CHANGES_REQUESTED` — previously it did, *and* then supplied the
+  independent-review evidence, taking a PR from two merge blockers to zero with no
+  commit pushed, nothing dismissed, and no forge audit trail. **If you rely on that
+  behaviour, you were relying on a fail-open**; the routes out are unchanged, and are
+  now exactly three — address the findings and push, dismiss the review on the forge,
+  or have the reviewer re-review this same head and approve. Each of the three leaves
+  the forge showing why the objection no longer applies — a superseding commit, a
+  dismissal, or a later approving verdict. The follow-up `COMMENTED` showed only that
+  a review happened, which nothing reads as a clearance.
+  Nothing to do on upgrade unless a PR of yours is currently merging through the old
+  path, which will now correctly refuse. Pinned by
+  `test_a_bots_own_later_non_verdict_review_cannot_clear_its_objection` and
+  `test_the_objection_read_pins_both_clauses_and_ignores_a_failed_check_read` in
+  `scripts/tests/test_pr_watch.py`.
+- **`review_bots` grew an `objections` key** (report shape) — the verdict-only
+  reduction over the same review list that `coverage` reduces newest-wins. Same entry
+  shape as `coverage` (`{bot, sha, submitted_at, covers_head, state}`). If you parse
+  `review_bots`, this is additive. **If you compute an objection yourself from
+  `review_bots.coverage`, move it to `objections`** — `coverage` deliberately still
+  reports the newest review whatever it says, because a bot's ordinary *clean* review
+  is `COMMENTED` and `#350`'s evidence route depends on that.
+- **Corrects the wording of the `#488` entry below**, which says "own latest review of
+  the **current head** is `CHANGES_REQUESTED`". Read strictly that described the
+  defect, not the intent. It should read *latest verdict*; the entry is left as
+  written rather than edited so the record stays honest about what shipped.
+
 ## #488 — 2026-08-16
 
 - **BREAKING (gate semantics)** — `mergeable` (and its `done` alias) is now **false**

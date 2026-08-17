@@ -2407,13 +2407,50 @@ def bot_review_coverage(
     direction that matters: an undated review sitting at the head would
     otherwise set ``covers_head`` and suppress the warning.
     """
+    return _reduce_latest_bot_reviews(reviews, head, bots)
+
+
+def _reduce_latest_bot_reviews(
+    reviews: list[dict],
+    head: str | None,
+    bots: tuple[str, ...] | None,
+    *,
+    states: frozenset[str] | None = None,
+) -> list[dict]:
+    """Each configured bot's latest review, as the coverage entry shape.
+
+    The shared core of :func:`bot_review_coverage` and
+    :func:`bot_head_objections`. They ask different questions of the same review
+    list and differ in exactly one parameter, so they are one walk rather than
+    two: ``#447`` is this repo's standing account of what happens when a pinned
+    copy of a reduction sits beside an unpinned one, and the extraction is here
+    so that ``#494``'s fix cannot drift away from the read it corrects.
+
+    ``states`` is the displacement policy, and it is the whole difference:
+
+    - ``None`` — every review participates, so the newest one wins whatever it
+      says. That is "which commit did this bot last *look at*", which is what
+      coverage reports and what ``#350``'s evidence route needs: a clean review
+      is ordinarily ``COMMENTED``, and a rule that let it be outranked would
+      leave the ordinary clean review unable to supply evidence.
+    - a state set — only those states may displace an earlier entry. That is
+      "what is this bot's latest *verdict*", where a non-verdict submission must
+      not be able to erase one (``#494``).
+
+    Neither is a safe default for the other question, which is why this takes no
+    default: coverage answered the verdict question for one release and a bot's
+    own follow-up ``COMMENTED`` at the same head silently cleared its standing
+    objection.
+    """
     if bots is None:
         bots = _REVIEW_BOTS
     latest: dict[str, dict] = {}
     for raw in reviews or []:
         # Anchored: a comment author is not the repo's to control, so a
         # lookalike login (`xcoderabbit`) must not be able to claim that the
-        # reviewer covered this head.
+        # reviewer covered this head — nor, since #494 routes the objection read
+        # through here too, manufacture an objection, which is the same defect
+        # pointed the other way (a denial-of-merge).
         bot = _match_bot(_author(raw), bots, anchored=True)
         if not bot:
             continue
@@ -2447,6 +2484,12 @@ def bot_review_coverage(
         # under-reporting bias the rest of this function takes.
         state = raw.get("state")
         state = state.strip().upper() if isinstance(state, str) else ""
+        # The displacement policy, applied BEFORE the recency compare so a
+        # skipped review cannot win on its timestamp. `continue`, not a
+        # fall-through: a non-participating review must leave any earlier entry
+        # exactly as it stood.
+        if states is not None and state not in states:
+            continue
         if bot not in latest or submitted >= latest[bot]["submitted_at"]:
             latest[bot] = {
                 "bot": bot,
@@ -2713,6 +2756,14 @@ def summarize_review_bots(
         # `qualifying_bot_coverage` reads this to satisfy the merge gate's
         # independent-review requirement without a receipt.
         "coverage": bot_review_coverage(reviews or [], head, bots=bots),
+        # The verdict-only reduction over the SAME reviews, read by
+        # `objecting_bot_coverage` (#494). Computed here for the reason coverage
+        # is — so the `record_review` path gets it too — and reported rather than
+        # kept internal, because the merge gate's refusal side should be as
+        # inspectable in `--json` as its evidence side. The two lists differ only
+        # where a bot's latest review carries no verdict, which is precisely the
+        # case that used to be invisible.
+        "objections": bot_head_objections(reviews or [], head, bots=bots),
         "unavailable": unavailable,
         "pending": pending,
         "blockers": blockers,
@@ -2888,6 +2939,56 @@ def qualifying_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
 # inverting it.
 _OBJECTING_REVIEW_STATES = frozenset({"CHANGES_REQUESTED"})
 
+# Review states that CARRY A VERDICT, and so may displace a bot's earlier one
+# when it reviews the same head again (#494). An ALLOWLIST, deliberately, rather
+# than a denylist of `COMMENTED`/`PENDING`: an unrecognized state — a new one
+# GitHub adds, a typo'd fixture, a transport that spells them differently — must
+# not be able to clear a standing objection. A denylist grants displacement to
+# everything it does not name, which is the fail-open direction on this gate.
+#
+# Same membership as the allowlist inside `_rest_review_decision`, and same
+# reasoning; kept as its own name because the two are read by different gates
+# and coupling them would make one's tightening silently retune the other.
+_VERDICT_REVIEW_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "DISMISSED"})
+
+
+def bot_head_objections(
+    reviews: list[dict],
+    head: str | None,
+    *,
+    bots: tuple[str, ...] | None = None,
+) -> list[dict]:
+    """Each configured bot's latest VERDICT, in the coverage entry shape (#494).
+
+    The sibling of :func:`bot_review_coverage`, and the reason the objection read
+    is no longer computed from it. Coverage reduces to one entry per bot,
+    newest-wins **regardless of state**, because its question is which commit the
+    bot last looked at. Asking the objection question of that answer meant a
+    bot's own follow-up ``COMMENTED`` at the same head did not merely outrank its
+    earlier ``CHANGES_REQUESTED`` — it removed it from the structure the blocker
+    was computed from. Two blockers became zero with no commit pushed, no head
+    change, and nothing dismissed on the forge; and because ``COMMENTED`` is in
+    :data:`_EVIDENTIAL_REVIEW_STATES`, that same review then *supplied* the
+    independent-review evidence.
+
+    That was a regression against the pre-#484 world on one path: merging over a
+    standing objection previously took a deliberate ``--record-review``, and had
+    become something an ordinary follow-up review did by itself, with no human
+    act and no forge audit trail — while #488's stated contract offers only two
+    routes out, fixing the finding or a maintainer dismissal, both of which leave
+    one.
+
+    Only :data:`_VERDICT_REVIEW_STATES` participate, so a non-verdict submission
+    leaves an earlier verdict standing. Every other release valve is unchanged
+    and still reachable, which is what keeps this from wedging: an ``APPROVED``
+    at the same head displaces the objection, a ``DISMISSED`` does (dismissal
+    rewrites the review's own state), and pushing a fix moves the head so the
+    objection covers an older commit.
+    """
+    return _reduce_latest_bot_reviews(
+        reviews, head, bots, states=_VERDICT_REVIEW_STATES
+    )
+
 
 def objecting_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
     """Configured bots with a standing objection to ``head`` itself (issue #485).
@@ -2913,10 +3014,14 @@ def objecting_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
     escape hatch.** The blocker is bound to ``head``, so the ordinary remediation
     — push a fix — moves the head, leaves the objection covering an older commit,
     and clears it. A maintainer dismissing the review (``DISMISSED``) clears it
-    too. Both leave a real audit trail on the forge, which is why this ships with
-    no override flag: ``--allow-pending-bot-review`` exists because a *silent*
-    bot can genuinely never arrive, whereas an objection is a reviewer who has
-    already spoken and can unsay it the same way.
+    too, and so does the reviewer's own ``APPROVED`` at this same head — that
+    last one being a reviewer withdrawing its objection rather than an author
+    routing around it. **All three**, which is why this ships with no override
+    flag: each leaves the forge showing why the objection no longer applies — a
+    superseding commit, a dismissal, or a later approving verdict — and
+    ``--allow-pending-bot-review`` exists because a *silent* bot can genuinely
+    never arrive, whereas an objection is a reviewer who has already spoken and
+    can unsay it the same way.
 
     **Deliberately does NOT gate on** ``signal == "ok"``, where its sibling does.
     That asymmetry is the fail-closed direction on each side: ``signal``
@@ -2934,7 +3039,12 @@ def objecting_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
         return []
     objecting = {
         entry.get("bot")
-        for entry in review_bots.get("coverage") or []
+        # `objections`, NOT `coverage` (#494). Coverage is newest-wins over every
+        # state, so a bot's own later non-verdict review at this same head
+        # deleted its objection from the list before this ever read it. Same
+        # entry shape, so every clause below is unchanged — the fix is which
+        # reduction the clauses are applied to.
+        for entry in review_bots.get("objections") or []
         # `covers_head is True` AND `sha == head`: identity, not truthiness, and
         # the same deliberate redundancy `qualifying_bot_coverage` carries. A
         # gate should re-check the identity it is about to act on rather than
@@ -3488,16 +3598,20 @@ def build_report(
       or the check-description surface — an action signal, never a blocker) or
       *pending* (a verdict still coming, which blocks the merge gate until it
       ages past the grace window). Also carries ``coverage`` (which commit each
-      bot's last review saw) and ``signal`` (whether that state could be read at
-      all). Advisory to ``converged`` by construction — but **no longer
-      non-gating**: since #350 those two fields are what
-      :func:`qualifying_bot_coverage` reads to satisfy the merge gate's
-      independent-review requirement without a receipt.
+      bot's last review saw), ``objections`` (the same reduction over verdict
+      states only, so a non-verdict review cannot displace one — #494), and
+      ``signal`` (whether that state could be read at all). Advisory to
+      ``converged`` by construction — but **no longer non-gating**: since #350
+      ``coverage`` and ``signal`` are what :func:`qualifying_bot_coverage` reads
+      to satisfy the merge gate's independent-review requirement without a
+      receipt, and ``objections`` is what :func:`objecting_bot_coverage` reads to
+      refuse it.
     - ``merge_blockers`` — deterministic reasons the PR is not currently safe to
       merge (draft, blocked/unknown merge state, requested changes, non-open PR,
       missing current-head review evidence, a configured review bot whose own
-      verdict has not landed yet, or a configured review bot whose own review of
-      the current head is ``CHANGES_REQUESTED`` — see
+      verdict has not landed yet, or a configured review bot whose latest
+      *verdict* at the current head is ``CHANGES_REQUESTED`` — latest verdict
+      rather than latest review, which is #494's correction — see
       :func:`objecting_bot_coverage`, and note that no receipt satisfies that
       one).
     - ``converged`` — :func:`decide_converged`: all checks green, no fresh

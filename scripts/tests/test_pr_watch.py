@@ -3632,6 +3632,103 @@ def test_a_receipt_cannot_authorize_a_merge_over_a_standing_bot_objection() -> N
     )
 
 
+def test_a_bots_own_later_non_verdict_review_cannot_clear_its_objection() -> None:
+    """Issue #494 — the third clearance route, which was neither fix nor dismissal.
+
+    Found by an adversarial fallback-panel lens during an adopter `/upgrade`, then
+    reproduced at the cockpit before being acted on.
+
+    The shape the suite had never built: **two reviews from one bot at one head.**
+    Every other `objecting_bot_coverage` / `qualifying_bot_coverage` test builds a
+    single coverage entry or a single review, so the displacement path was
+    asserted in prose and pinned by nothing.
+
+    What it did. `bot_review_coverage` reduces to one entry per bot,
+    latest-timestamp-wins *regardless of state*, and the objection read was
+    computed from that survivor — so an ordinary follow-up `COMMENTED` at the same
+    head did not outrank the earlier `CHANGES_REQUESTED`, it removed it from the
+    structure the blocker was computed from. Two blockers became zero. Worse, since
+    `COMMENTED` is evidential, that same review then *supplied* the
+    independent-review evidence, so the gate went from refusing twice to
+    authorizing.
+
+    Why it mattered more than the state it replaced: #488 ships with no override
+    flag, justified by its only two escape routes — push a fix, or have a
+    maintainer dismiss — both leaving a forge audit trail. This third route leaves
+    none, requires no human act, and the bot walks into it by itself. It was also a
+    regression against the pre-#484 world on that path, where merging over a
+    standing objection took a deliberate `--record-review`.
+    """
+    pr_watch = _load_pr_watch()
+    objection = _review(
+        "coderabbitai", "abc123", "2026-07-25T12:00:00Z", "CHANGES_REQUESTED"
+    )
+
+    # The bypass, as filed: same bot, same head, later timestamp, no verdict.
+    view = _green_view(
+        reviews=[
+            objection,
+            _review("coderabbitai", "abc123", "2026-07-25T12:30:00Z", "COMMENTED"),
+        ]
+    )
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+
+    assert report["mergeable"] is False
+    assert (
+        "configured review bot requested changes on current head: coderabbit"
+        in report["merge_blockers"]
+    )
+    # `PENDING` is the other non-verdict state, and an unrecognized one stands in
+    # for anything GitHub adds later — the reason `_VERDICT_REVIEW_STATES` is an
+    # allowlist rather than a denylist of the two states known today.
+    for benign in ("PENDING", "COMMENTED", "", "WAT"):
+        moved = _green_view(
+            reviews=[
+                objection,
+                _review("coderabbitai", "abc123", "2026-07-25T12:30:00Z", benign),
+            ]
+        )
+        assert pr_watch.objecting_bot_coverage(
+            pr_watch.build_report(moved, [], set(), **_settled(moved))["review_bots"],
+            "abc123",
+        ) == ["coderabbit"], benign
+
+    # The release valves that MUST still clear it, or the fix is a wedge. Both
+    # leave the forge audit trail #488's no-override-flag argument rests on.
+    #
+    # They clear the OBJECTION identically and land differently, which is the
+    # distinction worth pinning rather than smoothing over: `APPROVED` is also
+    # evidence, `DISMISSED` is deliberately not (it is absent from
+    # `_EVIDENTIAL_REVIEW_STATES`), so a dismissal withdraws the refusal without
+    # supplying a review. That leaves the ordinary receipt requirement standing,
+    # which is the correct outcome and not a residue of this fix.
+    for verdict, still_blocked in (("APPROVED", False), ("DISMISSED", True)):
+        cleared = _green_view(
+            reviews=[
+                objection,
+                _review("coderabbitai", "abc123", "2026-07-25T12:30:00Z", verdict),
+            ]
+        )
+        cleared_report = pr_watch.build_report(cleared, [], set(), **_settled(cleared))
+        assert (
+            "configured review bot requested changes on current head: coderabbit"
+            not in cleared_report["merge_blockers"]
+        ), verdict
+        assert cleared_report["mergeable"] is not still_blocked, verdict
+        assert (
+            "independent review evidence is missing for current head"
+            in cleared_report["merge_blockers"]
+        ) is still_blocked, verdict
+
+    # And the evidence route is untouched: a bot's ordinary clean review is
+    # `COMMENTED`, so a rule that let a verdict outrank it *for coverage* would
+    # have broken #350 in its commonest shape. `coverage` still reports the
+    # newest review whatever it says; only `objections` filters.
+    assert report["review_bots"]["coverage"][0]["state"] == "COMMENTED"
+    assert report["review_bots"]["objections"][0]["state"] == "CHANGES_REQUESTED"
+    assert report["review_evidence"]["route"] == "bot-coverage"
+
+
 def test_a_bot_objection_clears_by_pushing_a_fix_rather_than_wedging() -> None:
     """The anti-wedge property of #485's blocker, which is the whole reason it
     can ship without an override flag.
@@ -3759,9 +3856,14 @@ def test_the_objection_read_pins_both_clauses_and_ignores_a_failed_check_read() 
        fail-open — so an `unavailable` signal must still block.
 
     3. That a lookalike login cannot manufacture an objection either. The
-       matching is `bot_review_coverage`'s anchored one, so this is inherited
-       rather than added — but the gate now has a second reason to care: a false
-       objection is a denial-of-merge, the mirror of #350's false evidence.
+       matching is `_reduce_latest_bot_reviews`'s anchored one, so this is
+       inherited rather than added — but the gate now has a second reason to
+       care: a false objection is a denial-of-merge, the mirror of #350's false
+       evidence.
+
+    Reads `review_bots["objections"]`, not `["coverage"]` (#494). The clause
+    structure below is byte-for-byte the property set it pinned against coverage;
+    only the reduction it is applied to changed, which is exactly the fix.
     """
     pr_watch = _load_pr_watch()
     objection = {
@@ -3773,13 +3875,13 @@ def test_the_objection_read_pins_both_clauses_and_ignores_a_failed_check_read() 
     }
 
     assert pr_watch.objecting_bot_coverage(
-        {"signal": "ok", "coverage": [objection]}, "abc123"
+        {"signal": "ok", "objections": [objection]}, "abc123"
     ) == ["coderabbit"]
 
     # Clause 1a — `sha` disagrees with the head being authorized.
     assert (
         pr_watch.objecting_bot_coverage(
-            {"signal": "ok", "coverage": [dict(objection, sha="0ldc0de")]}, "abc123"
+            {"signal": "ok", "objections": [dict(objection, sha="0ldc0de")]}, "abc123"
         )
         == []
     )
@@ -3788,25 +3890,25 @@ def test_the_objection_read_pins_both_clauses_and_ignores_a_failed_check_read() 
     for bad in (False, 1, "yes", {"covered": True}):
         assert (
             pr_watch.objecting_bot_coverage(
-                {"signal": "ok", "coverage": [dict(objection, covers_head=bad)]},
+                {"signal": "ok", "objections": [dict(objection, covers_head=bad)]},
                 "abc123",
             )
             == []
         ), bad
-    absent = {"signal": "ok", "coverage": [dict(objection)]}
-    absent["coverage"][0].pop("covers_head")
+    absent = {"signal": "ok", "objections": [dict(objection)]}
+    absent["objections"][0].pop("covers_head")
     assert pr_watch.objecting_bot_coverage(absent, "abc123") == []
 
     # 2 — a failed or skipped CHECK read does not suppress the objection.
     for signal in ("unavailable", "skipped", "ok"):
         assert pr_watch.objecting_bot_coverage(
-            {"signal": signal, "coverage": [objection]}, "abc123"
+            {"signal": signal, "objections": [objection]}, "abc123"
         ) == ["coderabbit"], signal
 
     # …and with no head to bind to there is nothing to object to.
-    assert pr_watch.objecting_bot_coverage({"signal": "ok", "coverage": [objection]}, "") == []
+    assert pr_watch.objecting_bot_coverage({"signal": "ok", "objections": [objection]}, "") == []
     assert (
-        pr_watch.objecting_bot_coverage({"signal": "ok", "coverage": [objection]}, None)
+        pr_watch.objecting_bot_coverage({"signal": "ok", "objections": [objection]}, None)
         == []
     )
 
@@ -4227,7 +4329,17 @@ def test_only_a_blocking_pending_bot_silences_the_coverage_warning() -> None:
 def test_coverage_honours_a_non_default_review_bots_list() -> None:
     """`bots=bots` threading was correct and pinned by nothing — dropping it
     passed the whole suite, because every other test uses the default list where
-    scoped and unscoped are identical."""
+    scoped and unscoped are identical.
+
+    **Covers `objections` as well as `coverage`, and that is the point** (#494).
+    This test pinned only `coverage` when it was written, so the identical
+    threading on the `objections` field added beside it was again correct and
+    pinned by nothing: mutating it to `bots=None` passed all 250 tests. That is
+    the `#447` shape the `_reduce_latest_bot_reviews` docstring names — a pinned
+    copy of a reduction beside an unpinned one — recurring in the field whose
+    read is the merge gate's refusal side. Assert on both, or the next field
+    added here inherits the same gap.
+    """
     pr_watch = _load_pr_watch()
     reviews = [
         _review("otherbot", "0ldc0de", "2026-07-25T12:00:00Z"),
@@ -4240,11 +4352,38 @@ def test_coverage_honours_a_non_default_review_bots_list() -> None:
 
     assert [e["bot"] for e in scoped["coverage"]] == ["otherbot"]
     assert scoped["coverage"][0]["covers_head"] is False
-    # …and a repo with no bots configured gets no coverage at all.
+
+    # The `objections` half needs its own fixture rather than reusing the one
+    # above, and the reason is the property under test one layer down: `_review`
+    # defaults to `COMMENTED`, which is not a verdict, so the reviews above
+    # produce an EMPTY objections list whatever `bots` is — scoped and unscoped
+    # alike. Asserting on that would have looked like a scoping pin while
+    # actually pinning the verdict filter, and would have passed with the
+    # threading dropped.
+    verdicts = [
+        _review("otherbot", "0ldc0de", "2026-07-25T12:00:00Z", "CHANGES_REQUESTED"),
+        _review("coderabbitai", "abc123", "2026-07-25T13:00:00Z", "CHANGES_REQUESTED"),
+    ]
+    scoped_verdicts = pr_watch.summarize_review_bots(
+        [], [], now=NOW, bots=("otherbot",), reviews=verdicts, head="abc123"
+    )
+    assert [e["bot"] for e in scoped_verdicts["objections"]] == ["otherbot"]
+    assert scoped_verdicts["objections"][0]["covers_head"] is False
+
+    # …and a repo with no bots configured gets neither list populated. The
+    # objections half matters most: an unconfigured bot's stray
+    # CHANGES_REQUESTED reaching this list is a denial-of-merge, the mirror of
+    # #350's false evidence.
     assert (
         pr_watch.summarize_review_bots(
             [], [], now=NOW, bots=(), reviews=reviews, head="abc123"
         )["coverage"]
+        == []
+    )
+    assert (
+        pr_watch.summarize_review_bots(
+            [], [], now=NOW, bots=(), reviews=verdicts, head="abc123"
+        )["objections"]
         == []
     )
 
