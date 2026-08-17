@@ -3594,16 +3594,20 @@ def build_report(
       or the check-description surface — an action signal, never a blocker) or
       *pending* (a verdict still coming, which blocks the merge gate until it
       ages past the grace window). Also carries ``coverage`` (which commit each
-      bot's last review saw) and ``signal`` (whether that state could be read at
-      all). Advisory to ``converged`` by construction — but **no longer
-      non-gating**: since #350 those two fields are what
-      :func:`qualifying_bot_coverage` reads to satisfy the merge gate's
-      independent-review requirement without a receipt.
+      bot's last review saw), ``objections`` (the same reduction over verdict
+      states only, so a non-verdict review cannot displace one — #494), and
+      ``signal`` (whether that state could be read at all). Advisory to
+      ``converged`` by construction — but **no longer non-gating**: since #350
+      ``coverage`` and ``signal`` are what :func:`qualifying_bot_coverage` reads
+      to satisfy the merge gate's independent-review requirement without a
+      receipt, and ``objections`` is what :func:`objecting_bot_coverage` reads to
+      refuse it.
     - ``merge_blockers`` — deterministic reasons the PR is not currently safe to
       merge (draft, blocked/unknown merge state, requested changes, non-open PR,
       missing current-head review evidence, a configured review bot whose own
-      verdict has not landed yet, or a configured review bot whose own review of
-      the current head is ``CHANGES_REQUESTED`` — see
+      verdict has not landed yet, or a configured review bot whose latest
+      *verdict* at the current head is ``CHANGES_REQUESTED`` — latest verdict
+      rather than latest review, which is #494's correction — see
       :func:`objecting_bot_coverage`, and note that no receipt satisfies that
       one).
     - ``converged`` — :func:`decide_converged`: all checks green, no fresh

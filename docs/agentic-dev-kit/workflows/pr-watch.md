@@ -103,14 +103,19 @@ Repeat until the report says **converged**:
    on the forge clears it too. It is bound to the head precisely so that fixing the
    thing the reviewer asked for is what resolves it.
 
-   **Those two are the whole list, and that is now a property rather than a
-   description** (`#494`). The objection is read from each bot's latest
+   **A third route exists and is legitimate: the reviewer itself re-reviewing
+   this same head and approving.** No push, no dismissal — the bot changed its
+   mind, which is a reviewer withdrawing an objection rather than an author
+   getting around one, and it leaves a forge audit trail like the other two.
+
+   **What is now a property rather than a description** (`#494`) is that those
+   three are the *only* routes. The objection is read from each bot's latest
    *verdict* — `APPROVED`, `CHANGES_REQUESTED`, `DISMISSED` — so the same bot
    posting a `COMMENTED` or `PENDING` review afterwards, at the same head, leaves
    it standing. It used to clear it: the read was taken from the bot's latest
    review of any kind, which meant an ordinary follow-up review erased the
    objection *and* then supplied the independent-review evidence, needing no
-   commit, no dismissal, and no human act. If you are wondering why your
+   commit, no dismissal, and no act by anyone. If you are wondering why your
    reviewer's own later comment did not unblock the merge, that is the reason,
    and it is deliberate.
 

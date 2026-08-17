@@ -51,8 +51,10 @@ starts.
   standing `CHANGES_REQUESTED` — previously it did, *and* then supplied the
   independent-review evidence, taking a PR from two merge blockers to zero with no
   commit pushed, nothing dismissed, and no forge audit trail. **If you rely on that
-  behaviour, you were relying on a fail-open**; the routes out are unchanged and are
-  now exhaustive — address the findings and push, or dismiss the review on the forge.
+  behaviour, you were relying on a fail-open**; the routes out are unchanged, and are
+  now exactly three — address the findings and push, dismiss the review on the forge,
+  or have the reviewer re-review this same head and approve. All three leave a forge
+  audit trail, which is what a follow-up `COMMENTED` did not.
   Nothing to do on upgrade unless a PR of yours is currently merging through the old
   path, which will now correctly refuse. Pinned by
   `test_a_bots_own_later_non_verdict_review_cannot_clear_its_objection` and
