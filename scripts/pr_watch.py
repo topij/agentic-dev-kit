@@ -2534,9 +2534,10 @@ def bot_comment_verdicts(
 
     That division is the point rather than a limitation. #44 asks for the other
     thing — parse the comment into ``coverage`` so the gate clears itself — and
-    :func:`bot_review_coverage`'s docstring is the standing argument against it:
-    *"treating a comment-shaped verdict as a review (#44) would not merely
-    over-report a warning, it would authorize merges."* Keying the gate on prose
+    :func:`bot_review_coverage`'s docstring is the standing argument against it,
+    naming this exact change as one that would not merely over-report a warning
+    but *authorize merges*. (Paraphrased; read it there rather than trusting the
+    summary.) Keying the gate on prose
     means an upstream wording change silently decides merges. Keying a *report*
     on prose means an upstream wording change silently drops a line, and the
     receipt requirement — which was already there — catches it.

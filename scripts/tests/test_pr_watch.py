@@ -2746,6 +2746,8 @@ ADOPTER_CONFIG = """review:
     - "NOTHING TO REPORT"
   unavailable_markers:
     - "OtherBot Is Out Of Credits"
+  comment_verdict_markers:
+    - "OtherBot Found Nothing"
   informational_checks: [OtherBot, " Advisory "]
   require_ci: false
   bot_pending_grace_minutes: 30
@@ -2773,6 +2775,7 @@ def test_review_knowledge_is_read_from_config_not_engine_literals(
         "nothing to report",
     )
     assert resolved.unavailable_markers == ("otherbot is out of credits",)
+    assert resolved.comment_verdict_markers == ("otherbot found nothing",)
     assert resolved.informational_checks == frozenset({"otherbot", "advisory"})
     assert resolved.require_ci is False
     assert resolved.bots == ("otherbot",)
@@ -3759,7 +3762,7 @@ def test_a_comment_borne_verdict_is_reported_and_never_becomes_evidence() -> Non
     assert report["review_bots"]["comment_verdicts"] == [
         {"bot": "coderabbit", "sha": head}
     ]
-    # The whole ruling, in three lines.
+    # The whole ruling: reported above, and gating on nothing below.
     assert report["review_evidence"]["valid"] is False
     assert report["review_evidence"]["route"] is None
     assert report["mergeable"] is False
@@ -3767,6 +3770,33 @@ def test_a_comment_borne_verdict_is_reported_and_never_becomes_evidence() -> Non
         "independent review evidence is missing for current head"
         in report["merge_blockers"]
     )
+
+    # The line a human actually reads — this feature's entire user-visible
+    # output, and the reason it exists at all. Asserted on `render`, not just on
+    # the report dict: deleting the whole render block passed all 252 tests,
+    # which made "the operator is told" a claim the suite did not check. It also
+    # pins the remedy text, because a report that names the state without naming
+    # the next command is the half of this that is not useful.
+    rendered = pr_watch.render(report)
+    assert "review reported" in rendered
+    assert head[:7] in rendered
+    assert 'coderabbit:comment-verdict' in rendered
+
+    # …and the suppression branch: once the bot's own review OBJECT covers this
+    # head, the comment adds nothing and the line would be noise on every poll.
+    # Its own case, because an inverted `covered` check still passes everything
+    # above.
+    with_object = _green_view(
+        comments=[verdict],
+        reviews=[_review("coderabbitai", head, "2026-07-25T12:00:00Z")],
+    )
+    covered_report = pr_watch.build_report(
+        with_object, [], set(), **_settled(with_object)
+    )
+    assert covered_report["review_bots"]["comment_verdicts"] == [
+        {"bot": "coderabbit", "sha": head}
+    ]
+    assert "review reported" not in pr_watch.render(covered_report)
 
 
 def test_a_rate_limited_bot_naming_the_range_it_would_have_reviewed_is_not_a_verdict() -> None:
