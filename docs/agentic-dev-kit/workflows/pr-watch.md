@@ -103,6 +103,17 @@ Repeat until the report says **converged**:
    on the forge clears it too. It is bound to the head precisely so that fixing the
    thing the reviewer asked for is what resolves it.
 
+   **Those two are the whole list, and that is now a property rather than a
+   description** (`#494`). The objection is read from each bot's latest
+   *verdict* — `APPROVED`, `CHANGES_REQUESTED`, `DISMISSED` — so the same bot
+   posting a `COMMENTED` or `PENDING` review afterwards, at the same head, leaves
+   it standing. It used to clear it: the read was taken from the bot's latest
+   review of any kind, which meant an ordinary follow-up review erased the
+   objection *and* then supplied the independent-review evidence, needing no
+   commit, no dismissal, and no human act. If you are wondering why your
+   reviewer's own later comment did not unblock the merge, that is the reason,
+   and it is deliberate.
+
    `done` also appears in the report. It is a **legacy alias for `mergeable`**, kept
    so that an older `dev_session.sh` still gates on merge authorization. Prefer
    `converged` / `mergeable`; never assume `done` means "the loop finished."
