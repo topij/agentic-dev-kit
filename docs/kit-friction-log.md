@@ -68,6 +68,23 @@ were filed on their own tickets and are not repeated here.
   way to confirm compliance. (Both instances found this session were confirmed harmless
   by that query returning `[]` — the point is that the grep could not have told us.)
 
+- **A review bot's status comment is a mutable surface, and every claim read off it has
+  been wrong at least once.** (**M**) CodeRabbit edits its status comments **in place**:
+  one comment on `#501` carried `created_at 14:05:07` with `updated_at` moving to
+  `14:08:03` and later `15:33:38`. Three readings of that same comment id produced three
+  different accounts — "review skipped", "review failed", and "I will run a full review" —
+  and two of those readings reached a record (this file's session block and a `#372`
+  comment) before being corrected. A review lens then read it a fourth time and its
+  account differed from all of them, which is how the error was caught rather than
+  compounded. The `#44` thread already documents this edit-in-place behaviour; knowing
+  that did not prevent three occurrences in one afternoon.
+  *Proposed fix:* record the **structural** consequence, never the narrated one. "No
+  review object exists for this head" is `gh pr view N --json reviews` returning empty —
+  stable, re-checkable, and the thing the merge gate actually reads. "The bot said X"
+  and any count of what it said are claims about when you looked. The general rule, worth
+  stating wherever the kit tells an agent to read a bot surface: **on a surface the author
+  does not control, cite the state the forge stores, not the prose the vendor renders.**
+
 - **The panel's cost is now measurable per-PR, and the shape is what `#372` wanted.**
   (**L**) Two PRs took panels this session: `#499` ran four rounds (two full, one delta,
   one full) before its findings decayed to prose, and `#500` ran two. Rounds do not decay

@@ -32,13 +32,20 @@ verified their acceptance criteria.
   deferral the 2026-08-15 ruling had left standing.
 
   **Do not read this as a working posture.** `#501` — this wrap-up's own PR, and the
-  first the ruling actually governs — made three explicit requests at its converged head
-  and got `Review failed` from all three, with no review object and no coverage. That
-  puts ruling 2 in question on the one ground that matters: it moved the whole review
-  budget onto a request path that then did not run. Ruling 1
-  (`auto_incremental_review: false`) is untouched and still measured. The account, the
-  three options it leaves, and why I did not re-rule on one PR are on `#372`; the next PR
-  opened against this `main` is the second data point.
+  first the ruling actually governs — requested review at its converged head and
+  **`gh pr view 501 --json reviews` stayed empty**: no review object, no coverage, no
+  verdict. That puts ruling 2 in question on the one ground that matters: it moved the
+  whole review budget onto a request path that then did not deliver. Ruling 1
+  (`auto_incremental_review: false`) is untouched and still measured. The account and the
+  options it leaves are on `#372`; the next PR against this `main` is the second data
+  point.
+
+  **The evidence is stated as the empty review list on purpose.** The bot's own status
+  comments rewrite themselves in place — one on `#501` was edited three times across the
+  afternoon, and three successive readings of it produced three different accounts of
+  what happened, two of which reached this file or that ticket before being corrected.
+  Any tally read off that surface is a claim about when you looked. The absent review
+  object is not.
 - **`#44` ruled: report it, never gate on it.** `review_bots.comment_verdicts` surfaces a
   comment-borne clean verdict; no gate reads it. Direction (a) — parse it into `coverage`
   so the gate self-clears — was declined because the failure modes are not symmetric:
