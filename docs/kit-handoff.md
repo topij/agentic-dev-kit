@@ -14,14 +14,16 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-18 — the friction-log inbox graduated again, and the sweep's own PR exposed a review-request step the loop never got to run.
+Last updated: 2026-08-18 — the friction-log inbox graduated, a review-request step the loop never got to run, and `#372`'s real data point.
 
-## Latest session — 2026-08-18 (a triage sweep, a panel that found two real things, and `#372`'s second data point still missing)
+## Latest session — 2026-08-18 (a triage sweep, an overclaim the wrap-up's own panel caught, and `#372`'s data point at last)
 
 **Theme —** ran `triage-friction-log` on the inbox that had rebuilt since `#470`'s
 2026-08-14 sweep, filed the batch, and ran `pr-watch` on the resulting PR. CodeRabbit
-never actually reviewed it — the first live PR since `#498`'s ruling 2, and evidence
-that ruling's own mechanism may not be reachable through the loop as written.
+never reviewed `#516` — the same `reviews: []`, no-request shape `#499` and `#500`
+already showed the day `#498` landed, not a first occurrence as this block's own
+first draft claimed (caught by this PR's own fallback panel before it reached
+`main`).
 
 - **Triaged the friction log: filed `#506`–`#515` and occurrence comments on `#372`,
   `#467`, `#435`, merged `#516`** (squash `3f25620`). Engine still not vendored
@@ -53,19 +55,31 @@ that ruling's own mechanism may not be reachable through the loop as written.
   `08-05`) that `wrap-up` step 5 parks what the routing doctrine already says to file.
   The operator asked about this live; no new ticket needed, `#310` already names the
   fix — undecided whether to implement it or just add the occurrence.
-- **`#516` was the "later PR" `#372` was held open for, and it still didn't produce
-  a data point.** `#501` (2026-08-17) made two explicit requests and both came back
-  `reviews: []` — inconclusive, cause unclassified, and the ticket's own last comment
-  says a later PR is needed before ruling further. `#516` was that later PR and never
-  attempted the request at all, because `#518`'s mechanism preempted it before
-  convergence. The gap moved from "the request fails" to "the request never runs."
+- **`#516`'s non-attempt is at least the third instance, not the first.** This
+  block's own first draft claimed `#516` was the first live PR since `#498`'s ruling 2
+  to go unreviewed — wrong, caught by this PR's own fallback panel: `#499` and `#500`
+  (2026-08-17, same day as `#498`) already merged with `reviews: []` and no request
+  ever posted. `#501`, later that same day, is the only prior PR to have actually
+  attempted the explicit request — twice, both empty, cause unclassified — and its
+  ticket comment says a later PR is needed before ruling further.
+- **`#372` finally has a real data point, from this PR's own convergence.** An
+  explicit `@coderabbitai full review` on `#519` produced a genuine completed review
+  — clean verdict, full walkthrough, "0 remain after this review" — but delivered
+  entirely as comments, `reviews: []` stayed empty, and `review_bots.comment_verdicts`
+  correctly picked it up. So the request mechanism itself works when actually
+  attempted; what it produces is a comment-verdict, not review coverage, so
+  `mergeable`'s bot-coverage route still isn't satisfied by it. That is a different,
+  narrower gap than `#501`'s "cause unclassified" — recorded here rather than assumed
+  identical.
 
-▶ Next: on the next PR, after the fallback panel runs (it will — the check-surface
-condition is now permanent under `auto_review.enabled: false`), explicitly request a
-CodeRabbit review at the converged head per `#518` and record what comes back —
-`#372` needs a PR where the request is actually attempted, which neither `#501` nor
-`#516` fully was. Behind it: whether to act on `#310` (occurrence comment vs.
-implementing its routing fix — operator hasn't decided).
+▶ Next: `#372`'s posture question can now be answered with a real mechanism, not a
+guess — the explicit request works but yields a comment-verdict, never a review
+object, under this repo's config. Whether that's enough to close `#372` (record via
+`coderabbit:comment-verdict` per `pr-watch.md`, no panel needed) or the ruling should
+change is the operator's call. `#518` still stands: the loop needs to actually reach
+the request step before this can happen automatically. Behind it: whether to act on
+`#310` (occurrence comment vs. implementing its routing fix — operator hasn't
+decided).
 
 ______________________________________________________________________
 
