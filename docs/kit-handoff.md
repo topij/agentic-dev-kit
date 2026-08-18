@@ -62,23 +62,29 @@ first draft claimed (caught by this PR's own fallback panel before it reached
   ever posted. `#501`, later that same day, is the only prior PR to have actually
   attempted the explicit request — twice, both empty, cause unclassified — and its
   ticket comment says a later PR is needed before ruling further.
-- **`#372` finally has a real data point, from this PR's own convergence.** An
+- **`#372` has a data point, and it is stranger than "the request works."** An
   explicit `@coderabbitai full review` on `#519` produced a genuine completed review
-  — clean verdict, full walkthrough, "0 remain after this review" — but delivered
-  entirely as comments, `reviews: []` stayed empty, and `review_bots.comment_verdicts`
-  correctly picked it up. So the request mechanism itself works when actually
-  attempted; what it produces is a comment-verdict, not review coverage, so
-  `mergeable`'s bot-coverage route still isn't satisfied by it. That is a different,
-  narrower gap than `#501`'s "cause unclassified" — recorded here rather than assumed
-  identical.
+  — clean verdict, full walkthrough, "0 remain after this review". First read
+  against `review_bots.comment_verdicts` showed it picked up; re-checked live before
+  this line was written, and it does not — the one comment carrying that verdict is
+  the *same* comment CodeRabbit posted at PR-open with the "review skipped, auto
+  reviews disabled" notice, edited in place to append the walkthrough **without
+  removing the skip text**, so the comment now matches an `unavailable_markers` entry
+  and disqualifies itself. Structurally, right now: `reviews: []` and
+  `comment_verdicts: []` both — this PR currently has no detectable independent
+  review at all, despite CodeRabbit having genuinely produced one. The mutable-comment
+  problem this file already named on `2026-08-17` just defeated its own documented
+  workaround, live, in this PR.
 
-▶ Next: `#372`'s posture question can now be answered with a real mechanism, not a
-guess — the explicit request works but yields a comment-verdict, never a review
-object, under this repo's config. Whether that's enough to close `#372` (record via
-`coderabbit:comment-verdict` per `pr-watch.md`, no panel needed) or the ruling should
-change is the operator's call. `#518` still stands: the loop needs to actually reach
-the request step before this can happen automatically. Behind it: whether to act on
-`#310` (occurrence comment vs. implementing its routing fix — operator hasn't
+▶ Next: `#372` needs this written up properly — the explicit request *can* produce a
+real review, but neither of this repo's two detection routes (`reviews[]`,
+`comment_verdicts`) reliably see it once the vendor's in-place edit adds the skip
+notice back onto the same comment. Whether that argues for a third detection route,
+a different bot config, or accepting the fallback panel as the standing reviewer is
+the operator's call — not pre-empted here. `#518` still stands separately: the loop
+needs to actually reach the request step before any of this happens automatically.
+Behind it: whether to act on `#310` (occurrence comment vs. implementing its
+routing fix — operator hasn't
 decided).
 
 ______________________________________________________________________
