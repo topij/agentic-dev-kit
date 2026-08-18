@@ -4,6 +4,112 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-13 (the #457 ruling: two instants kept, six rounds to hold one guard)
+
+**Theme —** `#457` ruled and shipped (`#459`, squash `7ef068c`): the `#428` guard keeps
+comparing two instants, because `state/` is a live store `pr_watch.py` writes between
+and during sessions — only a change across the session is evidence, and what persists
+at session end is all the merge gate can ever read. Within that design the traversal
+became total (a symlink records by target as a value at its own path, the root's own
+presence records, `<special>` covers the rest); the comparison's blind spots are now
+stated as classes in the module docstring instead of an enumeration that kept growing.
+`make test` at the kit root on the merged tip `7ef068c` is green.
+
+- **Merged with a `fallback:panel` receipt at `417d3a1`, both lenses, after six full
+  dual-lens rounds** — CodeRabbit was rate-limited on every head, again. Round records
+  and every disposition are comments on `#459`; the loop ended in the doctrine's second
+  terminal state, a round whose one finding was disposed without a commit. Occurrence
+  recorded on `#372`, which this keeps costing.
+- **The round that mattered: a lens broke my fix's own mechanism.** The `@`-suffix
+  symlink key was a design choice I weighed and dismissed as unlikely to collide;
+  round 3's adversarial lens demonstrated a real file named `<name>@` masking a
+  brand-new symlink, end-to-end with a control. The kind marker moved into the value
+  (`symlink -> <target>`), where no legal filename can collide. "Unlikely" is not a
+  property of a mechanism.
+- **Filed:** `#460` (an `atexit` callback writes after the second instant with a green
+  run — the bracket's mechanism decision), `#461` (an unreadable file under `state/`
+  crashes conftest import — fail-closed, undocumented). `#455` stays open: the cwd
+  reach gap is in the threat model, and its fix is a second registration point on a
+  load-bearing guard — its own PR, never a fix-round patch.
+- Occurrences recorded on `#416` (a lens fetched inside its handed linked worktree
+  again, self-disclosed; the `ls-remote` route is noted on the issue) and `#457` (the
+  "stale by four" repair itself went stale — logged, then swept along with the two
+  surviving `5 of 32` copies the round-5 adversarial lens found).
+
+**Learned**
+
+- **I published a commit sha before the commit existed.** A round comment named the
+  fix commit by a sha no command had produced; the real sha differed. Corrected on the
+  one surface it reached, with the correction left visible rather than silent —
+  `#422`'s subject arriving inside a review record.
+- **`--carry-forward` leaks framing, measured from the receiving end.** Round 5's
+  prompt restated dispositions and a risk label; the lens flagged both under
+  No framing, declined to defer, and re-derived the restated figure independently —
+  finding it staler than the prompt claimed. Coverage-only carry-forward from round 6
+  on; the friction entry carries the shape.
+- **Severity fell monotonically and the loop's terminal states were reachable as
+  written** — the last three rounds found nothing in the mechanism itself, and the
+  close-out was a filed issue, not another fix round.
+
+▶ Next: run the `triage-friction-log` workflow — the inbox has been over budget since
+session start (the tripwire fires on it) and gained an entry this session.
+
+## Session — 2026-08-13 (one guard, and the reviewer finding my own claims)
+
+**Theme —** `#453`: the `#428` state guard, which keeps fabricated review receipts out of
+`state/pr-watch/`. `#447` (nothing pinned it) and `#448` (it was absent when a run
+collected only `lib/state_paths/tests`) were one mechanism's two symptoms and shipped
+together. Merged as `175bda0`; `make test` at the kit root on the merged tip is green.
+
+- **The placement `#448` did not consider.** That ticket weighed a repo-root conftest
+  (reaches no adopter) against a second conftest beside `state_paths` (a copy to drift)
+  and called neither right. The **engine root** has neither objection: pytest loads
+  conftests from rootdir down, so one file there covers every test directory under it,
+  and it sits inside what an adopter vendors. Only the detection half moved —
+  `_hermetic_state_root` stays beside the tests because `lib/state_paths/tests` drives
+  `$DEVKIT_STATE_ROOT` as its subject and asserts on the unset case.
+- **The review kept finding defects in my own work, and the ones that mattered were
+  claims I had written and defended.** I argued in the PR body that manifest-tracking the
+  new file would cascade through `kit_doctor`, as the reason to defer it;
+  measured, it was clean, and the file had been invisible to `/upgrade` — `#422`'s shape,
+  committed by me. I documented the `cd`-into-tests residual as the no-argument form when
+  the boundary is the working directory. I quoted `make test` as running
+  `pytest lib/state_paths/tests tests`, having dropped both `scripts/` prefixes while
+  moving text that claims to quote the command.
+- **CodeRabbit's quota returned mid-PR and it found things the panel had not** — one
+  with a better fix than mine (`_require_no_ancestor_marker`, already this
+  repo's convention). Its outage is why the panel ran at all; `#372` is still the open
+  question about that posture.
+- **Filed:** `#455` (the guard is lost for any run whose cwd is a test directory),
+  `#456` (a dangling symlink is invisible to the snapshot), `#457` (further routes past it,
+  plus `session.shouldfail` unpinned). Occurrences recorded on `#40` and `#416`.
+
+**Learned**
+
+- **`#457`'s routes share one root, which is worth more than the tickets.** The
+  guard observes **two instants** — disk at conftest import, disk at session end — and
+  not the interval between them, so anything netting to zero across those instants is
+  permanently outside what it can see. A resolution that keeps the two-instant design
+  should say so instead of enumerating; one that watches the interval closes every route
+  that nets to zero across them.
+- **Every count I wrote about my own work was wrong or went stale, including in this
+  block.** Its first draft tallied rounds run, defects found, lens runs, and open routes
+  on a ticket still growing; `wrap-up.md`'s own rule caught them before the commit. An
+  earlier attempt to illustrate the same lesson was itself inaccurate — I claimed a
+  "TWO THINGS THIS TRAVERSAL CANNOT SEE" count had gone stale, when the later finding was
+  a blind spot in the *comparison of two instants*, not in the traversal's enumeration, so
+  that count still stands. `fallback-review-panel.md` teaches this as enumerate-never-count;
+  what this session adds is that the reflex extends to the sentence explaining the reflex.
+- **The panel's own attestation cannot catch a shared-`.git` write.** A lens fetched into
+  the linked worktree it was handed; `git status` was clean before and after, because a
+  ref write touches no working-tree byte. Self-reporting was the only detection route,
+  and that is not a mechanism (`#416`).
+
+▶ Next: **`#457`** — decide whether the `#428` guard should keep observing two instants
+or watch the interval. That one choice disposes of every route that nets to zero across
+the two instants, and tells you what `#455` and `#456` are worth; taking them as separate
+tickets is the more expensive reading.
+
 ## Session — 2026-08-13 (five lanes overnight, and the reviewer catching the author each time)
 
 **Theme —** the first autonomous batch run through `parallel-headless.md`. The mechanism
