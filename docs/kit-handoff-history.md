@@ -4,6 +4,30 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-14 (the approved sweep, executed)
+
+**Theme —** the friction-log graduation the previous block's `▶ Next:` named, run in
+the workflow's LLM-only mode on the operator's bulk approval — "Slack proposals
+reviewed. lgtm". Filed `#463`–`#469`, posted an occurrence comment on `#450`, swept the inbox
+byte-exact against the frozen digest, and merged the sweep on `#470` (`b7f8d4f`) with
+CodeRabbit's own clean review. The friction log is under its budget again, so the session-start
+tripwire quiets.
+
+- **`#463` is the batch's center of mass** — the disposition-carrying gap, filed with
+  its occurrences enumerated, including `#459` round 5's live demonstration that a
+  restated disposition is framing plus a second copy going stale.
+- **`#251` recurred inside the batch's own writes:** a double-quoted comment body let
+  the shell execute every backticked fragment, corrupting the `#450` comment — exit 0,
+  caught only by reading the posted body back. Repaired in place (`-F body=@file`, per
+  `#122`), re-verified fragment by fragment, occurrence recorded on `#251`.
+- The morning's merge (`#470`) and the prior night's (`#462`) both landed on the
+  bot's own clean review with no recordable receipt — `#350`'s vocabulary gap, its
+  occurrence already on that issue.
+
+▶ Next: several threads, none blocking — open with `session-start`. The operator-held
+decisions are `#372` (review-quota posture, now carrying `#459`'s six-panel data
+point) and `#460` (the bracket question); `#455` is the clean self-contained build.
+
 ## Session — 2026-08-13 (the #457 ruling: two instants kept, six rounds to hold one guard)
 
 **Theme —** `#457` ruled and shipped (`#459`, squash `7ef068c`): the `#428` guard keeps

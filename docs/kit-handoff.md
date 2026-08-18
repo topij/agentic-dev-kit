@@ -14,9 +14,62 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-17 — the quota posture ruled and the two `#44`-adjacent gate reads settled; a test-coverage pattern reached its third occurrence.
+Last updated: 2026-08-18 — the friction-log inbox graduated again, and the sweep's own PR exposed a review-request step the loop never got to run.
 
-## Latest session — 2026-08-17 (three rulings shipped, and the defect that would have reached an adopter was a heading)
+## Latest session — 2026-08-18 (a triage sweep, a panel that found two real things, and `#372`'s second data point still missing)
+
+**Theme —** ran `triage-friction-log` on the inbox that had rebuilt since `#470`'s
+2026-08-14 sweep, filed the batch, and ran `pr-watch` on the resulting PR. CodeRabbit
+never actually reviewed it — the first live PR since `#498`'s ruling 2, and evidence
+that ruling's own mechanism may not be reachable through the loop as written.
+
+- **Triaged the friction log: filed `#506`–`#515` and occurrence comments on `#372`,
+  `#467`, `#435`, merged `#516`** (squash `3f25620`). Engine still not vendored
+  (`#6`); run by hand against the workflow's prose. Approval was a Slack "lgtm"
+  bulk-approve.
+- **The fallback panel (adversarial + correctness) found two real things and disposed
+  of both without touching `#516`'s diff.** `#508`'s body had dropped its source
+  entry's safety caveat when condensed from the friction log — fixed directly via
+  `gh issue edit` (a tracker-side edit costs no review round). The marker's own
+  "fifteen accounted for" arithmetic reads as off-by-one on a literal skim (it is
+  correct: 11 entries via issues + 4 via three comments) — logged rather than fixed,
+  filed as `#517`.
+- **`#516` merged with no CodeRabbit review object at all** (`gh pr view 516 --json
+  reviews` → `[]`). The check-surface-unavailable rule fired on the very first poll —
+  `auto_review.enabled: false` posts the skip notice at PR-open now, every time — and
+  the panel satisfied `mergeable` before convergence, so the Converged step's own
+  "request a review" bullet was never revisited. Filed as `#518`: that bullet is
+  unconditional on `review_bots.coverage`, but reads, once a panel receipt already
+  exists, like something already handled.
+- **A hand-splice mistake in the archive sweep** (consumed the previous sweep's own
+  section heading, orphaning its intro paragraph) was caught only by diffing the
+  archive's pre-existing content against `origin/main` before committing — no damage
+  landed. Occurrence recorded on `#6`.
+
+**Learned**
+
+- **All 15 friction-log entries this round were already issue-shaped — zero needed
+  the inbox's waiting-room function.** Fresh evidence for `#310`'s claim (open since
+  `08-05`) that `wrap-up` step 5 parks what the routing doctrine already says to file.
+  The operator asked about this live; no new ticket needed, `#310` already names the
+  fix — undecided whether to implement it or just add the occurrence.
+- **`#516` was the "later PR" `#372` was held open for, and it still didn't produce
+  a data point.** `#501` (2026-08-17) made two explicit requests and both came back
+  `reviews: []` — inconclusive, cause unclassified, and the ticket's own last comment
+  says a later PR is needed before ruling further. `#516` was that later PR and never
+  attempted the request at all, because `#518`'s mechanism preempted it before
+  convergence. The gap moved from "the request fails" to "the request never runs."
+
+▶ Next: on the next PR, after the fallback panel runs (it will — the check-surface
+condition is now permanent under `auto_review.enabled: false`), explicitly request a
+CodeRabbit review at the converged head per `#518` and record what comes back —
+`#372` needs a PR where the request is actually attempted, which neither `#501` nor
+`#516` fully was. Behind it: whether to act on `#310` (occurrence comment vs.
+implementing its routing fix — operator hasn't decided).
+
+______________________________________________________________________
+
+## Session — 2026-08-17 (three rulings shipped, and the defect that would have reached an adopter was a heading)
 
 **Theme —** the operator ruled on `#372` and on `#44`, and `#494` — the fail-open the
 previous session's ticket sweep had just filed against `#488` — was closed between them.
@@ -316,32 +369,6 @@ missing layer was filed rather than built.
 ▶ Next: `#472` Phase 1 — the contract doc
 (`docs/agentic-dev-kit/workflows/routines.md`). The operator-held decisions `#372`
 and `#460` still stand ahead of it if ruling is preferred over building.
-
-______________________________________________________________________
-
-## Session — 2026-08-14 (the approved sweep, executed)
-
-**Theme —** the friction-log graduation the previous block's `▶ Next:` named, run in
-the workflow's LLM-only mode on the operator's bulk approval — "Slack proposals
-reviewed. lgtm". Filed `#463`–`#469`, posted an occurrence comment on `#450`, swept the inbox
-byte-exact against the frozen digest, and merged the sweep on `#470` (`b7f8d4f`) with
-CodeRabbit's own clean review. The friction log is under its budget again, so the session-start
-tripwire quiets.
-
-- **`#463` is the batch's center of mass** — the disposition-carrying gap, filed with
-  its occurrences enumerated, including `#459` round 5's live demonstration that a
-  restated disposition is framing plus a second copy going stale.
-- **`#251` recurred inside the batch's own writes:** a double-quoted comment body let
-  the shell execute every backticked fragment, corrupting the `#450` comment — exit 0,
-  caught only by reading the posted body back. Repaired in place (`-F body=@file`, per
-  `#122`), re-verified fragment by fragment, occurrence recorded on `#251`.
-- The morning's merge (`#470`) and the prior night's (`#462`) both landed on the
-  bot's own clean review with no recordable receipt — `#350`'s vocabulary gap, its
-  occurrence already on that issue.
-
-▶ Next: several threads, none blocking — open with `session-start`. The operator-held
-decisions are `#372` (review-quota posture, now carrying `#459`'s six-panel data
-point) and `#460` (the bracket question); `#455` is the clean self-contained build.
 
 ______________________________________________________________________
 
