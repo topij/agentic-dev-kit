@@ -12,6 +12,44 @@
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
 
+## 2026-08-19
+
+- **A merge-gate predicate was used to answer a reportorial question, and the bias
+  inverted.** Severity **H**. `#520`'s new `⚠ review owed` line read
+  `qualifying_bot_coverage` to decide whether anyone had reviewed the head. That function
+  under-reports *deliberately* — its own docstring keeps the bias in the safe direction —
+  because it feeds a **gate**, where under-reporting refuses a merge and is harmless. Used
+  in a **report**, the same bias asserts that nobody reviewed the diff. Both panel lenses
+  found it independently, in two distinct reachable states (a bot's `CHANGES_REQUESTED` on
+  the head; a failed check read alongside a real `APPROVED` review). Proposed fix: a rule
+  that a gate predicate and a report predicate are different functions even when they read
+  the same field — the gate answers "may I merge on this", the report answers "what is
+  true" — and that reusing one for the other inverts its safe direction. Candidate for
+  doctrine rather than a ticket: `#520` fixed the instance, and the general shape is what
+  is worth keeping.
+
+- **The panel ran from hand-written prompts for three of four rounds, losing
+  `panel_prompt.py`'s guarantees — including a diffstat it computes correctly.** Severity
+  **M**. `panel_prompt.py` assembled round 1. Rounds 2–4 were hand-written to carry
+  round-specific framing (delta boundary, the author's stated draws) that the engine has
+  flags for but that were easier to write inline. One consequence surfaced immediately: the
+  round-2 prompt quoted a diffstat computed over the wrong range — the previous round's
+  delta, labelled as the full base diff — which the adversarial lens recomputed, caught,
+  and reported rather than trusting. Nothing was harmed, because **Right revision** exists
+  for exactly this. But the failure is silent when the lens does not check, and the engine
+  would not have made it. Proposed fix: either use `--carry-forward` / `--delta-draws`
+  (which exist for the delta pass) rather than hand-writing, or have `panel_prompt.py`
+  refuse to accept a diffstat it did not compute.
+
+- **`gh pr checks --json state` reports `IN_PROGRESS`, never `PENDING`.** Severity **L**. A
+  watch loop breaking on `[ "$s" != "PENDING" ]` exits on its first poll and reads as
+  "CI finished" — the plain `gh pr checks` text output says `pending`, so the JSON field's
+  vocabulary is not the one the human-facing surface trains you to expect. Cost here was
+  one wasted loop, caught because the printed check row contradicted the loop's own
+  conclusion. Terminal states observed: `SUCCESS`, `FAILURE`, `ERROR`, `CANCELLED`.
+  Proposed fix: worth a line wherever the kit documents polling `gh` directly, since
+  `pr_watch.py` insulates you from it and therefore never teaches it.
+
 ## 2026-08-18 — Backlog migrated to GitHub Issues (#506–#515)
 
 Swept in LLM-only mode
