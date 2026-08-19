@@ -3932,7 +3932,77 @@ def test_a_converged_head_with_no_reviewer_coverage_says_the_review_is_owed(
     assert "review reported" in pr_watch.render(acked)
     assert "review owed" not in pr_watch.render(acked)
 
-    # Suppression 4 — no reviewer configured. `signal: skipped` means there is
+    # Suppression 4 — a bot MID-REVIEW. A verdict is coming; "request one now"
+    # would spend a second unit on a review already in flight.
+    reviewing_view = _green_view()
+    reviewing = pr_watch.build_report(
+        reviewing_view,
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails(
+            [
+                _bot_check(
+                    state="PENDING", bucket="pending", startedAt=_minutes_ago(2)
+                )
+            ],
+            "ok",
+        ),
+        now=NOW,
+        **_settled(reviewing_view, now=NOW),
+    )
+    assert [e for e in reviewing["review_bots"]["pending"] if e["blocking"]]
+    assert "review owed" not in pr_watch.render(reviewing)
+
+    # Suppression 5 — the review-bot READ failed. The hedge line above already
+    # says reviewer state could not be read this poll; an absolute underneath it
+    # retracts that hedge instead of qualifying it.
+    unread_view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T11:30:00Z", "APPROVED")]
+    )
+    unread = pr_watch.build_report(
+        unread_view,
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails([], "unavailable"),
+        **_settled(unread_view),
+    )
+    assert unread["review_bots"]["signal"] == "unavailable"
+    assert "could not be read" in pr_watch.render(unread)
+    assert "review owed" not in pr_watch.render(unread)
+
+    # Suppression 6 — a standing `CHANGES_REQUESTED` on this exact head. The
+    # reviewer plainly reviewed; `qualifying_bot_coverage` excludes this state
+    # DELIBERATELY, for the gate. Reading the gate predicate here made the line
+    # claim nobody had reviewed the diff, printed directly beside the engine's
+    # own `requested changes on current head` blocker — and prescribed
+    # requesting a review when addressing the objection is the next step.
+    objected_view = _green_view(
+        reviews=[
+            _review(
+                "coderabbitai", "abc123", "2026-07-25T11:30:00Z", "CHANGES_REQUESTED"
+            )
+        ]
+    )
+    objected = pr_watch.build_report(
+        objected_view, [], set(), **_settled(objected_view)
+    )
+    assert pr_watch.qualifying_bot_coverage(
+        objected["review_bots"], objected["head"]
+    ) == [], "the gate predicate still refuses it — that part is correct"
+    assert objected["review_bots"]["coverage"][0]["covers_head"] is True
+    assert "review owed" not in pr_watch.render(objected)
+
+    # …and the positive case that separates "nobody looked" from "the gate
+    # cannot vouch for it": a bot BEHIND the head genuinely has not reviewed
+    # this diff, so the line still fires.
+    behind_view = _green_view(
+        reviews=[_review("coderabbitai", "0ldsha", "2026-07-25T11:30:00Z", "APPROVED")]
+    )
+    behind = pr_watch.build_report(behind_view, [], set(), **_settled(behind_view))
+    assert behind["review_bots"]["coverage"][0]["covers_head"] is False
+    assert "review owed" in pr_watch.render(behind)
+
+    # Suppression 7 — no reviewer configured. `signal: skipped` means there is
     # nobody to ask, so the line would name an action that does not exist.
     monkeypatch.setattr(pr_watch, "_REVIEW_BOTS", ())
     unconfigured = pr_watch.build_report(view, [], set(), **_settled(view))

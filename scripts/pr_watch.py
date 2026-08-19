@@ -4169,6 +4169,35 @@ def render(report: dict) -> str:
     #     construction (term 4 of `bot_comment_verdicts`), so the reviewer
     #     demonstrably did look, and the line above already carries that state
     #     and its own remedy.
+    #   - Silent where a bot is mid-review (a BLOCKING pending entry). A verdict
+    #     is coming; telling you to request one spends a second unit on a review
+    #     already in flight. Same `reviewing` set the coverage warning above
+    #     computes, and for the same reason.
+    #   - Silent where the review-bot read FAILED (`signal: unavailable`). The
+    #     hedge printed above says reviewer state could not be read this poll;
+    #     an absolute about reviewer state underneath it would retract that
+    #     hedge rather than qualify it.
+    #
+    # **Read from `coverage`, not from `qualifying_bot_coverage`.** They answer
+    # different questions and only one of them is this line's. The gate
+    # predicate under-reports DELIBERATELY — its own docstring keeps the bias in
+    # the safe direction, so anything it cannot vouch for yields no entry — and a
+    # gate that under-reports refuses a merge, which is the harmless failure. A
+    # REPORT that inherits the same bias states that nobody reviewed the diff,
+    # which is the harmful one. Both false-claim states found on this PR's own
+    # review panel came from that single substitution:
+    #
+    #   - a bot's `CHANGES_REQUESTED` on this exact head is excluded from
+    #     `_EVIDENTIAL_REVIEW_STATES` on purpose, so the gate sees no evidence
+    #     while the reviewer plainly reviewed — and the line then prescribed
+    #     "request one now" beside a `requested changes on current head` blocker,
+    #     when addressing the objection is the actual next step;
+    #   - a failed check read disqualifies every entry for gate purposes, while
+    #     the reviews read that produced `coverage` succeeded independently.
+    #
+    # `covers_head` is the observable answer to "did a configured reviewer look
+    # at THIS diff", which is the only thing this line claims. It is the same
+    # field the coverage warning above reads, deliberately.
     #
     # It REPORTS; it gates nothing. A panel receipt still satisfies `mergeable`
     # and deliberately so — the panel is the sanctioned substitute, not a
@@ -4177,8 +4206,9 @@ def render(report: dict) -> str:
     # the repos whose reviewer cannot answer.
     if (
         report.get("converged")
-        and bots.get("signal") not in (None, "skipped")
-        and not qualifying_bot_coverage(bots, report.get("head"))
+        and bots.get("signal") not in (None, "skipped", "unavailable")
+        and not covered
+        and not reviewing
         and not bots.get("comment_verdicts")
     ):
         lines.append(
