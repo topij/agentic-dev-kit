@@ -42,6 +42,22 @@ starts.
 
 ---
 
+## #520 — 2026-08-19
+
+- **New poll line `⚠ review owed:`** (`#518`) — printed when the report is
+  `converged`, no configured bot's review covers the current head, no
+  `review_bots.comment_verdicts` entry exists, and `review_bots.signal` is not
+  `skipped`. **Informational: it blocks nothing.** `converged`, `mergeable`,
+  `review_evidence` and `merge_blockers` are unchanged, and a `fallback:panel`
+  receipt still authorizes the merge — the line still prints in that state, which is
+  the point of it. If you scrape poll output, this is a new line; if you parse the
+  JSON report, nothing changed — no key was added.
+- **`docs/agentic-dev-kit/workflows/pr-watch.md`: the `converged` loop step now
+  settles the coverage request before recording the receipt**, and states that an
+  already-true `mergeable` does not discharge it. If you have vendored or forked that
+  workflow, take this step; a loop running the old wording can reach merge with the
+  configured reviewer never asked. Engine behaviour does not depend on it.
+
 ## #500 — 2026-08-17
 
 - **`review_bots` grew a `comment_verdicts` key** (report shape) — configured bots
