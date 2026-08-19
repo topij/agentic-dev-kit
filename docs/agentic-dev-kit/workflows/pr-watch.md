@@ -138,9 +138,30 @@ Repeat until the report says **converged**:
    current-head evidence already exists, keep the outage visible but do not rerun
    the panel.
 
+   **What this records is a substitute review, not a request** (`#518`). The
+   receipt satisfies the merge gate and is meant to — the panel is the sanctioned
+   stand-in for a reviewer that cannot answer. What it must not stand in for is
+   having *asked*, which is owed at the converged head whether or not a receipt
+   already exists. Running the panel here is therefore never the reason to skip the
+   request below.
+
 1. **If `converged`:** stop the loop and report — PR #, the green check count, and
-   "no outstanding review findings." Then record the independent review (see below)
-   so the PR becomes `mergeable`; if `mergeable` is already true, say so.
+   "no outstanding review findings." **Then, before anything else, settle the
+   review request the Converged stop condition below owes:** read
+   `review_bots.coverage`, and if nothing covers this head, request a review at it
+   now. The poll says so itself — `⚠ review owed` — so this does not depend on
+   remembering to revisit a later section. Then record the independent review
+   (see below) so the PR becomes `mergeable`.
+
+   **A `mergeable` that is already true does not discharge that request** (`#518`).
+   The panel branch above can fire on the *first* poll — a reviewer configured not
+   to auto-review announces that at PR-open, so the check-surface condition is true
+   before CI has even settled — and its receipt can therefore make `mergeable` true
+   before the loop ever converges. The PR then reads as finished. On `#516` that is
+   exactly what happened: `gh pr view 516 --json reviews` returned `[]`, the
+   configured reviewer never saw the diff that merged, and every value in the report
+   was correct throughout. Report that `mergeable` was already true; do not read it
+   as the end of this step.
 
 1. **If checks are still `pending` and there are no new comments:** nothing to do yet
    — wait and re-poll (see Pacing). CI can take 20–30 min; that's expected, keep
@@ -348,7 +369,13 @@ Self-pace on a bounded cadence — don't busy-wait:
     `--lenses`**, since no fallback pass ran. If it is not, run the panel. What
     is not available is treating the missing coverage as a review waiver.
 
-    Nothing in `pr_watch.py` performs the request — it observes only. And note
+    Nothing in `pr_watch.py` performs the request — it observes only. It does,
+    however, **say when one is owed**: at convergence, with no configured bot
+    covering the head and no comment-borne verdict, the poll prints `⚠ review
+    owed`. That line is reported and gates nothing, deliberately — blocking there
+    would wedge the loop on exactly the repos whose reviewer cannot answer. Its job
+    is to make this bullet something you are *told about* rather than something you
+    must remember to come back to, which is the failure `#518` records. And note
     what this bullet does **not** say: it does not tell you to `--record-review`
     the bot's own verdict. That receipt vocabulary describes fallback passes, and
     a bot-reviewed head needs no receipt — its coverage *is* the evidence

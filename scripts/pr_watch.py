@@ -4145,6 +4145,49 @@ def render(report: dict) -> str:
             "what you are merging on, record it: --record-review "
             f"\"{entry['bot']}:comment-verdict\" --head {entry['sha']}"
         )
+    # #518 — the request the Converged step owes, said where it is owed.
+    #
+    # On #516 the check-surface panel branch fired on the first poll (a reviewer
+    # configured not to auto-review announces that immediately, so the branch is
+    # true from PR-open), its receipt made `mergeable` true before the loop had
+    # even converged, and the PR then read as finished. The Converged step's own
+    # "request a review" bullet is unconditional on coverage, but nothing brings
+    # you back to it once `mergeable` is already true — so it was never
+    # revisited and the configured reviewer never saw the diff at all
+    # (`gh pr view 516 --json reviews` -> `[]`). A report that only ever says
+    # what DID happen cannot show that; this says what has not.
+    #
+    # Deliberately narrow, because the way this line fails is by being ignored:
+    #
+    #   - Only at convergence. That is when the merge head stops moving and the
+    #     request becomes worth spending; on a moving head it would fire every
+    #     poll of the healthy window and train the reader to skim it, which is
+    #     the same trap the coverage warning above documents.
+    #   - Silent where no reviewer is configured (`signal: skipped`) — there is
+    #     nobody to ask, so the line would name no action.
+    #   - Silent where a comment-borne verdict exists. Those are current-head by
+    #     construction (term 4 of `bot_comment_verdicts`), so the reviewer
+    #     demonstrably did look, and the line above already carries that state
+    #     and its own remedy.
+    #
+    # It REPORTS; it gates nothing. A panel receipt still satisfies `mergeable`
+    # and deliberately so — the panel is the sanctioned substitute, not a
+    # defect. What a receipt must not do is stand in for having asked, which is
+    # the confusion #518 records. Blocking here would wedge the loop on exactly
+    # the repos whose reviewer cannot answer.
+    if (
+        report.get("converged")
+        and bots.get("signal") not in (None, "skipped")
+        and not qualifying_bot_coverage(bots, report.get("head"))
+        and not bots.get("comment_verdicts")
+    ):
+        lines.append(
+            "  ⚠ review owed: this head has converged and NO configured "
+            "reviewer has reviewed it — request one now, at this head, before "
+            "merging. A fallback-panel receipt satisfies the merge gate but is "
+            "not the reviewer having looked; if the request is refused or "
+            "cannot be made, that is the answer to record, not a step to skip"
+        )
     for entry in bots.get("unavailable") or []:
         # `.get`, not indexing: only the check surface carries the #95 trust
         # fields, and a comment-surface entry legitimately has neither. Indexing

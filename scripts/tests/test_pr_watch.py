@@ -202,6 +202,11 @@ def test_workflow_routes_check_only_review_outages_to_the_fallback_panel() -> No
     assert "another configured reviewer is still pending" in fallback_rule
     assert "`--record-review` would refuse" in fallback_rule
     assert "do not rerun the panel" in fallback_rule
+    # #518 — the branch's receipt is a substitute review and not a request, said
+    # inside the branch itself. Stated here because this is where an agent is
+    # standing when it decides the review question is settled.
+    assert "substitute review, not a request" in fallback_rule
+    assert "never the reason to skip the request" in fallback_rule
 
     comment_start = workflow.index("- **Reviewer unavailable**")
     comment_end = workflow.index("- **Real finding**", comment_start)
@@ -212,6 +217,43 @@ def test_workflow_routes_check_only_review_outages_to_the_fallback_panel() -> No
     assert "do not rerun the panel" in comment_rule
     assert "another reviewer is pending" in comment_rule
     assert "blocker must clear before the panel runs" in comment_rule
+
+
+def test_the_converged_step_settles_the_review_request_before_reading_mergeable() -> None:
+    """#518 — the exit ramp `#516` took out of the loop, closed in the prose.
+
+    The two review-bot-facing steps read as sequential and are independent. The
+    panel branch can fire on the first poll and make `mergeable` true before the
+    loop converges; the converged step then said "if `mergeable` is already true,
+    say so", which is a finish line. The Converged stop condition's request bullet
+    is unconditional on coverage, but nothing sent you back to it — so on `#516`
+    it was never revisited and the configured reviewer never saw the diff.
+
+    Pinned as prose because the fix is prose: the engine's `⚠ review owed` line
+    reports the state, and this step is what acts on it.
+    """
+    workflow = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
+    ).read_text(encoding="utf-8")
+
+    start = workflow.index("1. **If `converged`:**")
+    end = workflow.index("\n1. **If checks are still", start)
+    rule = " ".join(workflow[start:end].split())
+
+    # The request is settled BEFORE the receipt, not after it.
+    assert "before anything else, settle the review request" in rule
+    assert rule.index("settle the review request") < rule.index(
+        "record the independent review"
+    )
+    # Read from coverage, which is what the engine reports and what catches a
+    # bot that is merely behind as well as one that was never asked.
+    assert "read `review_bots.coverage`" in rule
+    assert "⚠ review owed" in rule
+    # And the specific misreading that produced #516.
+    assert "does not discharge that request" in rule
+    assert "do not read it as the end of this step" in rule
+
+
 
 
 def test_done_keeps_its_original_merge_authorization_semantics() -> None:
@@ -3797,6 +3839,105 @@ def test_a_comment_borne_verdict_is_reported_and_never_becomes_evidence() -> Non
         {"bot": "coderabbit", "sha": head}
     ]
     assert "review reported" not in pr_watch.render(covered_report)
+
+
+def test_a_converged_head_with_no_reviewer_coverage_says_the_review_is_owed(
+    monkeypatch,
+) -> None:
+    """#518 — the state `#516` merged in, on the surface that is actually read.
+
+    On `#516` the check-surface panel branch fired on the first poll, its
+    receipt made `mergeable` true before the loop had converged, and the
+    Converged step's unconditional "request a review" bullet was never
+    revisited: the PR merged with `gh pr view 516 --json reviews` returning
+    `[]`. Every value in that report was correct, which is the point — a report
+    says what happened, and nothing in it said the reviewer had never been
+    asked.
+
+    The assertion that matters most is the RECEIPT one. A valid `fallback:panel`
+    receipt satisfies `mergeable`, and silencing this line there would reproduce
+    `#516` exactly, one layer down: the substitute standing in for having asked.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view()
+
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+    assert report["converged"] is True
+    assert report["review_bots"]["coverage"] == []
+    assert "review owed" in pr_watch.render(report)
+
+    # #516's own state, and the reason the line exists at all.
+    receipt = {"head": "abc123", "source": "fallback:panel"}
+    with_receipt = pr_watch.build_report(
+        view, [], set(), review_receipt=receipt, **_settled(view)
+    )
+    assert with_receipt["mergeable"] is True, "the panel receipt still authorizes"
+    assert "review owed" in pr_watch.render(with_receipt)
+
+    # Suppression 1 — the bot's own review of this head. It looked.
+    covered_view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+    covered = pr_watch.build_report(
+        covered_view, [], set(), **_settled(covered_view)
+    )
+    assert "review owed" not in pr_watch.render(covered)
+
+    # Suppression 2 — a head that is still moving. Convergence is when the
+    # merge head stops moving and the request becomes worth spending; before it
+    # this would fire on every poll of the healthy window and be skimmed past,
+    # which is how a warning stops working.
+    failing = _green_view(
+        statusCheckRollup=[
+            {"name": "tests", "status": "COMPLETED", "conclusion": "FAILURE"}
+        ]
+    )
+    not_converged = pr_watch.build_report(failing, [], set(), **_settled(failing))
+    assert not_converged["converged"] is False
+    assert "review owed" not in pr_watch.render(not_converged)
+
+    # Suppression 3 — the reviewer answered in a COMMENT and created no review
+    # object (#44). It looked; the `ⓘ review reported:` line above already
+    # carries that state and its own remedy, and saying "nobody reviewed this"
+    # over the top of it would be false.
+    #
+    # The comment has to be ACKED for this report to converge at all — an
+    # unseen comment is un-clean by definition. That is not fixture ceremony:
+    # it is why this case cannot live in the comment-verdict test next door,
+    # whose reports are both unconverged and where an assertion about this line
+    # would pass no matter what the guard did.
+    verdict = {
+        "id": "IC_verdict",
+        "author": {"login": "coderabbitai"},
+        "body": (
+            "**Actionable comments posted: 0**\n\n"
+            "No actionable comments were generated in the recent review.\n\n"
+            "Reviewing files that changed between 0ldbase and abc123."
+        ),
+    }
+    verdict_view = _green_view(comments=[verdict])
+    unacked = pr_watch.build_report(
+        verdict_view, [], set(), **_settled(verdict_view)
+    )
+    acked = pr_watch.build_report(
+        verdict_view,
+        [],
+        set(unacked["all_comment_keys"]),
+        **_settled(verdict_view),
+    )
+    assert acked["converged"] is True
+    assert acked["review_bots"]["comment_verdicts"] == [
+        {"bot": "coderabbit", "sha": "abc123"}
+    ]
+    assert "review reported" in pr_watch.render(acked)
+    assert "review owed" not in pr_watch.render(acked)
+
+    # Suppression 4 — no reviewer configured. `signal: skipped` means there is
+    # nobody to ask, so the line would name an action that does not exist.
+    monkeypatch.setattr(pr_watch, "_REVIEW_BOTS", ())
+    unconfigured = pr_watch.build_report(view, [], set(), **_settled(view))
+    assert unconfigured["review_bots"]["signal"] == "skipped"
+    assert "review owed" not in pr_watch.render(unconfigured)
 
 
 def test_a_rate_limited_bot_naming_the_range_it_would_have_reviewed_is_not_a_verdict() -> None:
