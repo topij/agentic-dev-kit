@@ -4,6 +4,102 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-15 (five lanes, and the reviewer breaking the fix's own mechanism in three of them)
+
+**Theme —** the second autonomous batch through `parallel-headless.md`, and the first
+to reconcile closed. Lanes were clustered on disjoint source footprints and every one
+of them landed. What the panels found inside the lanes' own work, and where the
+*tickets* were wrong, are the parts worth carrying.
+
+- **Merged:** `#474` (`#399`'s residual — `adopt.md`'s second-tree Step 0), `#476`
+  (`#469` — the fresh-path rule surfaced early in the lens prompt), `#477` (`#468` —
+  the dead `noise_markers` entry retired), `#475` (`#464` — `kit_doctor`'s status line
+  off stdout), `#478` (`#465` — a `held` terminal state, exit code `4`).
+  `scripts/reconcile_sessions.sh` over the five launched scopes prints
+  `launched 5, merged 5, parked 0` (exit 0); `make test` at the kit root on the merged
+  tip `af26133` is green.
+- **Lanes whose own fix was broken by their own reviewer, each by execution rather than
+  reading:** `#475`'s move-to-stderr left `2>&1` reopening the splice
+  unchanged; `#474`'s `cd "$REPO" || exit 1` did not guard its named threat, because
+  `cd ""` exits 0 and the `|| exit 1` never fires; `#478`'s repo pin failed open to an
+  ambient `$GH_REPO`, letting a lane report `held` off a probe against an unrelated
+  repository.
+- **Two tickets were wrong in the direction only implementation surfaces, and both
+  lanes declined the prescribed route.** `#464`'s "refuse when stdout is not a tty"
+  would have silenced the tool for an agent caller, whose stdio is never a tty with no
+  redirect in sight — `(st_dev, st_ino)` aliasing shipped instead. `#468`'s implied
+  repair — add the bot's current clean-verdict wording as a marker — would have
+  silently discarded the operator's own review record on `#43`, because `is_noise()`
+  matches bodies with no author check; the dead marker was retired instead.
+- **Filed:** `#479` (the lane contract prescribes `dev_session.sh pr-watch <scope>`,
+  which cannot run from inside a lane worktree — two lanes hit it independently and
+  worked around it two different ways), `#480` (`upgrade.md`'s two-tree hardening is
+  fail-open, and it is the file `AGENTS.md` holds up as the hardened one), `#481`
+  (`kit-manifest.json` is a derived index, so two kit-touching lanes are never disjoint
+  by `parallel.md`'s test).
+
+**Learned**
+
+- **My own filing overstated its subject and this batch disproved it within the hour.**
+  `#481` claimed every PR after the first needs a rebase-and-regenerate; three
+  consecutive manifest-touching merges landed clean, because the file is one path per
+  line and disjoint entries auto-merge. A lane then measured a fresh derivation
+  byte-identical to git's auto-merge. The correction sits beneath the claim rather than
+  replacing it. The real serialization was `CHANGELOG.md`, which the plan *had* named.
+- **An overclaim I relayed into a lane brief was caught downstream by that lane's own
+  panel.** `#469`'s body says every round of `#459`'s panel hit an `rm -rf` refusal; the
+  round records show one. I copied it from the ticket into the brief, and the
+  correctness lens re-derived it and narrowed it everywhere it had propagated —
+  including that lane's PR body. `#54`'s subject travelling ticket → cockpit → lane.
+- **The lane contract's idle-stall rule did not bind.** A lane backgrounded a poller and
+  yielded the turn, against a rule forbidding exactly that, prepended verbatim to its
+  prompt. Putting the rule *in the prompt* is `parallel-headless.md`'s stated fix for
+  this failure mode; here it was not sufficient.
+- **Every merge in this batch rests on a fallback-panel receipt, not a bot review.**
+  CodeRabbit was rate-limited on every lane. `#372` has no sharper evidence than a whole
+  batch paying for it.
+- **`#466` bit the launch again**: the runtime's delegation tool takes no environment, so
+  `DEVKIT_REFUSE_UNSANDBOXED_STATE=1` reached no lane. Isolation held on the on-disk
+  marker — verified at launch (cockpit exports no `DEVKIT_*`, five distinct sandbox
+  roots) and after (no batch PR's state landed in the cockpit's `state/pr-watch/`).
+
+▶ Next: rule on `#372` — the review-bot quota posture. Every lane in this batch paid a
+full panel and the review loop dominated its cost; `#478`'s PR carries the round records
+if you want the shape of the worst case. The decision is the operator's alone. `#465`'s
+shipped exit-code shape and `#460` are the other open rulings.
+
+## Session — 2026-08-15 (an external field report, read against the kit's own batch record)
+
+**Theme —** an operator-supplied field report (Boris Cherny's dozen daily maintenance
+routines — crash fuzzer, dup unifier, dead-code remover — producing mergeable PRs at
+scale) assessed against what the kit already carries. Most of it exists here in some
+form — the tuning loop as `post-merge-systemize`'s pattern threshold, watch-to-green
+as `pr-watch`, autonomous PR production as `parallel-headless` — so the genuinely
+missing layer was filed rather than built.
+
+- **Filed: `#472`** — the kit has no workflow kind for a *standing mandate* (a narrow,
+  recurring, self-terminating maintenance routine). The ticket carries the full phased
+  plan: the contract doc first, a mutation-sentinel worked instance second (the
+  `#447`/`#417` class), the scheduling binding deliberately last so the contract is
+  hand-runnable before it recurs unattended. The admission rule is the load-bearing
+  decision — only mechanically-verifiable, self-merge-class change classes qualify —
+  and it is where the external report and the 2026-08-13 overnight batch agree from
+  opposite ends.
+- What was considered and deliberately not taken is recorded on the ticket, not here
+  (per-incident tuning, chat as a reporting surface, app-shaped routines for a repo
+  with no app).
+- `#251`'s discipline applied to the filing: body posted via `--body-file`, read back
+  with `gh issue view --json body`, and diffed against the draft at the kit root —
+  the extraction's own trailing newline was the only difference.
+- **The wrap-up's own validation caught a stale relay in the just-filed ticket:** its
+  body claimed `#447` open, relayed from the 2026-08-13 batch block rather than the
+  live tracker — `#447` closed that same day with the `#453` work. Repaired on `#472`
+  (its edit history carries the correction) before this commit existed to record it.
+
+▶ Next: `#472` Phase 1 — the contract doc
+(`docs/agentic-dev-kit/workflows/routines.md`). The operator-held decisions `#372`
+and `#460` still stand ahead of it if ruling is preferred over building.
+
 ## Session — 2026-08-14 (the approved sweep, executed)
 
 **Theme —** the friction-log graduation the previous block's `▶ Next:` named, run in
