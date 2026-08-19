@@ -55,6 +55,16 @@ starts.
   receipt still authorizes the merge — the line still prints in that state, which is
   the point of it. If you scrape poll output, this is a new line; if you parse the
   JSON report, nothing changed — no key was added.
+- **`review_bots.pending` entries grew `identity` and `trusted`** (report shape) —
+  the check creator GitHub records, and whether it is trusted to speak for that bot
+  (`#95`'s rule, the same two fields `review_bots.unavailable` already carries).
+  Additive: if you parse `review_bots`, nothing was removed or renamed.
+  **`blocking` deliberately does not read them and the merge gate is unchanged** — a
+  forged pending check still blocks, which is fail-closed, since it can only block the
+  PR that forged it and it ages out at `bot_pending_grace_minutes`. The new
+  `⚠ review owed` line is the first consumer that *does* require trust: a check name
+  is matched as a substring and is the PR's own to choose, so an untrusted row must
+  not be able to silence "nobody has reviewed this" on the PR that posted it.
 - **`docs/agentic-dev-kit/workflows/pr-watch.md`: the `converged` loop step now
   settles the coverage request before recording the receipt**, and states that an
   already-true `mergeable` does not discharge it. If you have vendored or forked that

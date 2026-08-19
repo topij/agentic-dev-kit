@@ -2823,6 +2823,24 @@ def summarize_review_bots(
                 "age_minutes": round(age, 1),
                 "blocking": False,
                 "cancelled_by": None,
+                # The same two fields the outage branch above records, from the
+                # same `detail`, for the same #95 reason — a check's NAME is
+                # matched as a SUBSTRING and is the PR's to choose, while its
+                # creator is not. Recorded on every pending entry so a consumer
+                # that must not trust a forged row can tell (#518's `review
+                # owed` line is the first).
+                #
+                # `blocking` deliberately does NOT read these. A forged pending
+                # check blocking the merge gate is fail-CLOSED — it can only
+                # block the PR that forged it, and it ages out at
+                # `grace_minutes`. Requiring trust there would turn a harmless
+                # self-inflicted delay into a route for suppressing a real
+                # reviewer's block, which is the wrong direction entirely.
+                "identity": str(detail.get("identity") or ""),
+                "trusted": _match_bot_identity(
+                    str(detail.get("identity") or ""), bots
+                )
+                == bot,
             }
         )
         exact_ages.append(age)
@@ -4212,8 +4230,34 @@ def render(report: dict) -> str:
     # defect. What a receipt must not do is stand in for having asked, which is
     # the confusion #518 records. Blocking here would wedge the loop on exactly
     # the repos whose reviewer cannot answer.
+    # Mid-review suppression needs a TRUSTED pending entry, which `reviewing`
+    # above is not. That set is keyed on `_match_bot` over a check NAME — a
+    # case-insensitive SUBSTRING match — and a same-repo PR's own workflow holds
+    # `checks: write`. So a check called `coderabbit-shim-status` joins
+    # `reviewing` for `coderabbit`, and silencing this line on it would let a PR
+    # suppress "nobody has reviewed this" for its own diff, for the grace
+    # window, in exactly the never-reviewed case #518 is about. `#95` already
+    # built the answer for the outage branch: the row's creator is not the PR's
+    # to choose.
+    #
+    # A missing or unresolvable `trusted` therefore counts as NOT trusted and
+    # the line FIRES. That direction costs a review request that may turn out to
+    # be redundant; the other direction costs the diff being merged unreviewed,
+    # which is the failure this whole line exists to prevent.
+    #
+    # `reviewing` itself is deliberately left alone. Its other consumer — the
+    # coverage-staleness warning above — has the same gap and predates this
+    # change, so widening the fix into it is a separate change with its own
+    # blast radius rather than a free ride on this one.
+    reviewing_trusted = {
+        e["bot"]
+        for e in bots.get("pending") or []
+        if e.get("blocking") and e.get("trusted")
+    }
     accounted = (
-        covered | reviewing | {e["bot"] for e in bots.get("comment_verdicts") or []}
+        covered
+        | reviewing_trusted
+        | {e["bot"] for e in bots.get("comment_verdicts") or []}
     )
     unreviewed = sorted(set(_REVIEW_BOTS) - accounted)
     # `signal == "ok"` positively, rather than excluding the states that are not
