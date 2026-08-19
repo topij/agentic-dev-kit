@@ -245,13 +245,26 @@ def test_the_converged_step_settles_the_review_request_before_reading_mergeable(
     assert rule.index("settle the review request") < rule.index(
         "record the independent review"
     )
-    # Read from coverage, which is what the engine reports and what catches a
-    # bot that is merely behind as well as one that was never asked.
-    assert "read `review_bots.coverage`" in rule
+    # Key off the PRINTED line, not a hand-rebuilt coverage check: the engine
+    # weighs three more things, so a condition re-derived from coverage alone
+    # asks for reviews it already knows are unnecessary.
     assert "⚠ review owed" in rule
+    assert "rather than re-deriving it from" in rule
     # And the specific misreading that produced #516.
     assert "does not discharge that request" in rule
     assert "do not read it as the end of this step" in rule
+
+    # The Converged stop condition's own paragraph describes the same line, and
+    # was pinned by nothing — so a future edit could drift it away from the
+    # engine silently. Its four terms are the engine's four.
+    stop = workflow[workflow.index("Nothing in `pr_watch.py` performs the request") :]
+    stop = " ".join(stop[: stop.index("And note")].split())
+    assert "name who owes it" in stop
+    assert "no review covering the head" in stop
+    assert "no comment-borne verdict" in stop
+    assert "no review in flight" in stop
+    assert "only when the reviewer read succeeded" in stop
+    assert "gates nothing" in stop
 
 
 
@@ -3864,7 +3877,11 @@ def test_a_converged_head_with_no_reviewer_coverage_says_the_review_is_owed(
     report = pr_watch.build_report(view, [], set(), **_settled(view))
     assert report["converged"] is True
     assert report["review_bots"]["coverage"] == []
-    assert "review owed" in pr_watch.render(report)
+    rendered = pr_watch.render(report)
+    assert "review owed" in rendered
+    # It names WHICH reviewer is owed. A reader who has to work that out is
+    # being handed the question rather than the answer.
+    assert "coderabbit has not reviewed it" in rendered
 
     # #516's own state, and the reason the line exists at all.
     receipt = {"head": "abc123", "source": "fallback:panel"}
@@ -4002,7 +4019,61 @@ def test_a_converged_head_with_no_reviewer_coverage_says_the_review_is_owed(
     assert behind["review_bots"]["coverage"][0]["covers_head"] is False
     assert "review owed" in pr_watch.render(behind)
 
-    # Suppression 7 — no reviewer configured. `signal: skipped` means there is
+    # Suppression 7 — the read failed AND nothing is known. This is the case
+    # that isolates the `signal` term: every other suppression here also has
+    # coverage, so `unreviewed` would empty first and the term would be pinned
+    # by nothing. (It survived a mutation sweep for exactly that reason.)
+    blind_view = _green_view()
+    blind = pr_watch.build_report(
+        blind_view,
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails([], "unavailable"),
+        **_settled(blind_view),
+    )
+    assert blind["review_bots"]["signal"] == "unavailable"
+    assert blind["review_bots"]["coverage"] == [], "nothing is known either way"
+    assert "could not be read" in pr_watch.render(blind)
+    assert "review owed" not in pr_watch.render(blind)
+
+    # Suppression 8 — TWO bots configured, one of which answered. A blanket
+    # "some verdict exists" test let the answering bot speak for the silent one,
+    # which is this line's own failure mode one bot over. The line must still
+    # fire, and must name the bot that was never asked.
+    monkeypatch.setattr(pr_watch, "_REVIEW_BOTS", ("coderabbit", "otherbot"))
+    two_bot_view = _green_view(
+        comments=[
+            {
+                "id": "IC_two_bot",
+                "author": {"login": "coderabbitai"},
+                "body": (
+                    "**Actionable comments posted: 0**\n\n"
+                    "No actionable comments were generated in the recent "
+                    "review.\n\nReviewing files that changed between 0ldbase "
+                    "and abc123."
+                ),
+            }
+        ]
+    )
+    two_bot_first = pr_watch.build_report(
+        two_bot_view, [], set(), **_settled(two_bot_view)
+    )
+    two_bot = pr_watch.build_report(
+        two_bot_view,
+        [],
+        set(two_bot_first["all_comment_keys"]),
+        **_settled(two_bot_view),
+    )
+    assert two_bot["converged"] is True
+    assert [e["bot"] for e in two_bot["review_bots"]["comment_verdicts"]] == [
+        "coderabbit"
+    ]
+    two_bot_rendered = pr_watch.render(two_bot)
+    assert "review owed" in two_bot_rendered
+    assert "otherbot has not reviewed it" in two_bot_rendered
+    assert "coderabbit has not" not in two_bot_rendered, "it answered; do not name it"
+
+    # Suppression 9 — no reviewer configured. `signal: skipped` means there is
     # nobody to ask, so the line would name an action that does not exist.
     monkeypatch.setattr(pr_watch, "_REVIEW_BOTS", ())
     unconfigured = pr_watch.build_report(view, [], set(), **_settled(view))

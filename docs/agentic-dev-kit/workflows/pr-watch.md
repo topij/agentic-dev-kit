@@ -147,11 +147,16 @@ Repeat until the report says **converged**:
 
 1. **If `converged`:** stop the loop and report — PR #, the green check count, and
    "no outstanding review findings." **Then, before anything else, settle the
-   review request the Converged stop condition below owes:** read
-   `review_bots.coverage`, and if nothing covers this head, request a review at it
-   now. The poll says so itself — `⚠ review owed` — so this does not depend on
-   remembering to revisit a later section. Then record the independent review
-   (see below) so the PR becomes `mergeable`.
+   review request the Converged stop condition below owes.** The poll answers
+   this for you: when it prints `⚠ review owed`, it names the configured
+   reviewers that have not reviewed this head — request one from each, at this
+   head, now. **Key off that line rather than re-deriving it from
+   `review_bots.coverage` alone.** Coverage is one of the four things the engine
+   weighs: it also suppresses the line for a reviewer that answered in a comment
+   (`#44`), for one whose review is still in flight, and whenever the reviewer
+   read itself failed — so a condition rebuilt from coverage by hand asks for
+   reviews the engine already knows are unnecessary. Then record the independent
+   review (see below) so the PR becomes `mergeable`.
 
    **A `mergeable` that is already true does not discharge that request** (`#518`).
    The panel branch above can fire on the *first* poll — a reviewer configured not
@@ -370,10 +375,12 @@ Self-pace on a bounded cadence — don't busy-wait:
     is not available is treating the missing coverage as a review waiver.
 
     Nothing in `pr_watch.py` performs the request — it observes only. It does,
-    however, **say when one is owed**: at convergence, with no configured bot
-    covering the head and no comment-borne verdict, the poll prints `⚠ review
-    owed`. That line is reported and gates nothing, deliberately — blocking there
-    would wedge the loop on exactly the repos whose reviewer cannot answer. Its job
+    however, **say when one is owed**, and name who owes it: at convergence,
+    for each configured bot with no review covering the head, no comment-borne
+    verdict, and no review in flight — and only when the reviewer read
+    succeeded — the poll prints `⚠ review owed` naming that bot. That line is
+    reported and gates nothing, deliberately — blocking there would wedge the
+    loop on exactly the repos whose reviewer cannot answer. Its job
     is to make this bullet something you are *told about* rather than something you
     must remember to come back to, which is the failure `#518` records. And note
     what this bullet does **not** say: it does not tell you to `--record-review`

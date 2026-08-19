@@ -4173,7 +4173,7 @@ def render(report: dict) -> str:
     #     is coming; telling you to request one spends a second unit on a review
     #     already in flight. Same `reviewing` set the coverage warning above
     #     computes, and for the same reason.
-    #   - Silent where the review-bot read FAILED (`signal: unavailable`). The
+    #   - Silent where the review-bot read FAILED (`signal` is not `ok`). The
     #     hedge printed above says reviewer state could not be read this poll;
     #     an absolute about reviewer state underneath it would retract that
     #     hedge rather than qualify it.
@@ -4184,14 +4184,14 @@ def render(report: dict) -> str:
     # the safe direction, so anything it cannot vouch for yields no entry — and a
     # gate that under-reports refuses a merge, which is the harmless failure. A
     # REPORT that inherits the same bias states that nobody reviewed the diff,
-    # which is the harmful one. Both false-claim states found on this PR's own
-    # review panel came from that single substitution:
+    # which is the harmful one. Both false-claim states this line shipped with
+    # in review came from that single substitution:
     #
     #   - a bot's `CHANGES_REQUESTED` on this exact head is excluded from
     #     `_EVIDENTIAL_REVIEW_STATES` on purpose, so the gate sees no evidence
     #     while the reviewer plainly reviewed — and the line then prescribed
-    #     "request one now" beside a `requested changes on current head` blocker,
-    #     when addressing the objection is the actual next step;
+    #     "request one now" beside a `requested changes on current head`
+    #     blocker, when addressing the objection is the actual next step;
     #   - a failed check read disqualifies every entry for gate purposes, while
     #     the reviews read that produced `coverage` succeeded independently.
     #
@@ -4199,24 +4199,36 @@ def render(report: dict) -> str:
     # at THIS diff", which is the only thing this line claims. It is the same
     # field the coverage warning above reads, deliberately.
     #
+    # **Per bot, not "has anyone answered".** A blanket "some verdict exists"
+    # test lets one reviewer's answer speak for a second, never-asked one — the
+    # same silence this line exists to break, one bot over. So each configured
+    # bot is accounted for individually, and the line NAMES the ones that are
+    # not: an unaccounted bot is the actionable fact, and a reader who has to
+    # work out which reviewer is owed is being handed the question, not the
+    # answer.
+    #
     # It REPORTS; it gates nothing. A panel receipt still satisfies `mergeable`
     # and deliberately so — the panel is the sanctioned substitute, not a
     # defect. What a receipt must not do is stand in for having asked, which is
     # the confusion #518 records. Blocking here would wedge the loop on exactly
     # the repos whose reviewer cannot answer.
-    if (
-        report.get("converged")
-        and bots.get("signal") not in (None, "skipped", "unavailable")
-        and not covered
-        and not reviewing
-        and not bots.get("comment_verdicts")
-    ):
+    accounted = (
+        covered | reviewing | {e["bot"] for e in bots.get("comment_verdicts") or []}
+    )
+    unreviewed = sorted(set(_REVIEW_BOTS) - accounted)
+    # `signal == "ok"` positively, rather than excluding the states that are not
+    # ok: a report with no `review_bots` at all reads as None here, and a claim
+    # this absolute is not one to make on a payload shape we did not recognise.
+    # It also subsumes the no-bots-configured case without a term of its own —
+    # `_REVIEW_BOTS` is empty there, so `unreviewed` is empty and nothing fires.
+    if report.get("converged") and bots.get("signal") == "ok" and unreviewed:
         lines.append(
-            "  ⚠ review owed: this head has converged and NO configured "
-            "reviewer has reviewed it — request one now, at this head, before "
-            "merging. A fallback-panel receipt satisfies the merge gate but is "
-            "not the reviewer having looked; if the request is refused or "
-            "cannot be made, that is the answer to record, not a step to skip"
+            "  ⚠ review owed: this head has converged and "
+            f"{', '.join(unreviewed)} {'has' if len(unreviewed) == 1 else 'have'} "
+            "not reviewed it — request one now, at this head, before merging. A "
+            "fallback-panel receipt satisfies the merge gate but is not the "
+            "reviewer having looked; if the request is refused or cannot be "
+            "made, that is the answer to record, not a step to skip"
         )
     for entry in bots.get("unavailable") or []:
         # `.get`, not indexing: only the check surface carries the #95 trust
