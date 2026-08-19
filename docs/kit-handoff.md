@@ -57,7 +57,7 @@ again in a second way after the first fix; the panel caught both before they rea
   satisfied the `bot-coverage` route with no receipt needed. Read it against the runs
   already on that ticket rather than on its own: `#501`, where the request produced
   nothing, and `#519`, where it produced a genuine review that no detection route could
-  see. What separates the three is unclassified, and the caution that ticket already
+  see. What separates them is unclassified, and the caution that ticket already
   carries about the detection routes is untouched by a run that happened to be detected.
   It did find a real defect the panel had missed, which is evidence against treating the
   panel as a standing replacement for the reviewer — one of the three postures `#372` is
