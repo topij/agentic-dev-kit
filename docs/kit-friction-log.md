@@ -20,12 +20,12 @@
   under-reports *deliberately* — its own docstring keeps the bias in the safe direction —
   because it feeds a **gate**, where under-reporting refuses a merge and is harmless. Used
   in a **report**, the same bias asserts that nobody reviewed the diff. Both panel lenses
-  found it independently, in two distinct reachable states (a bot's `CHANGES_REQUESTED` on
+  found it independently, in distinct reachable states (a bot's `CHANGES_REQUESTED` on
   the head; a failed check read alongside a real `APPROVED` review). Proposed fix: a rule
   that a gate predicate and a report predicate are different functions even when they read
   the same field — the gate answers "may I merge on this", the report answers "what is
   true" — and that reusing one for the other inverts its safe direction. Candidate for
-  doctrine rather than a ticket: `#520` fixed the instance, and the general shape is what
+  doctrine rather than a ticket: the instance is already handled in `#520`, and the shape is what
   is worth keeping.
 
 - **The panel ran from hand-written prompts for three of four rounds, losing

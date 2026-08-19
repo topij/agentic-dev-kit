@@ -14,9 +14,9 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-19 — the review-owed line shipped, a gate predicate used as a report predicate, and `#372`'s request finally delivering.
+Last updated: 2026-08-19 — the review-owed line shipped, a gate predicate used to answer a report's question, and a review request the gate could see.
 
-## Latest session — 2026-08-19 (a gate predicate used to answer a report's question, and the review request that delivered)
+## Latest session — 2026-08-19 (a gate predicate used to answer a report's question, and a review the gate could see)
 
 **Theme —** `#518` shipped (`#520`, squash `ab2bdad`): the converged head now names each
 configured reviewer that has not looked at it. The line's first cut was wrong, and wrong
@@ -32,9 +32,10 @@ again in a second way after the first fix; the panel caught both before they rea
 - **The defect worth carrying past this PR: a merge-gate predicate is not a report
   predicate.** The line read `qualifying_bot_coverage`, which under-reports *by design*
   because it feeds a gate, where under-reporting refuses a merge and is harmless. In a
-  report the same bias asserts nobody reviewed the diff — false in two reachable states,
-  both reproduced before acting. Both lenses found it independently. In the friction log as
-  a doctrine candidate; deliberately not a ticket, since `#520` fixed the instance and the
+  report the same bias asserts nobody reviewed the diff — false both where a bot had
+  objected on the head and where the check read had failed, each reproduced before
+  acting. Both lenses found it independently. In the friction log as
+  a doctrine candidate; deliberately not a ticket — the instance is already handled in `#520`, and the
   general shape is the part worth keeping.
 
 - **`#95`'s forgery, one namespace over.** The suppression trusted `_match_bot` over a check
@@ -51,13 +52,16 @@ again in a second way after the first fix; the panel caught both before they rea
 
 **Learned**
 
-- **`#372` has its second data point, and it delivered.** `@coderabbitai full review` at the
-  converged head produced a real review object and satisfied the `bot-coverage` route with
-  no receipt needed — unlike `#501`, where the same request left `reviews[]` empty. What
-  separates the two runs is unclassified, so this removes "the request path never delivers"
-  as a reading without explaining either one. It also found a real defect the panel rounds
-  had missed, which is evidence against treating the panel as a standing replacement for
-  the reviewer — one of the three postures `#372` is held open to decide.
+- **`#372`: the request at the converged head produced a review the gate could see.**
+  `@coderabbitai full review` at `#520`'s converged head produced a real review object and
+  satisfied the `bot-coverage` route with no receipt needed. Read it against the runs
+  already on that ticket rather than on its own: `#501`, where the request produced
+  nothing, and `#519`, where it produced a genuine review that no detection route could
+  see. What separates the three is unclassified, and the caution that ticket already
+  carries about the detection routes is untouched by a run that happened to be detected.
+  It did find a real defect the panel had missed, which is evidence against treating the
+  panel as a standing replacement for the reviewer — one of the three postures `#372` is
+  held open to decide.
 
 - **`#506`'s shape recurred in a variant its own remedy does not catch.** Separate terms of
   one `if` were pinned by nothing, each found only by mutation and none by reading — by
@@ -69,8 +73,8 @@ again in a second way after the first fix; the panel caught both before they rea
 
 - **The panel and the bot found disjoint defects, in both directions.** The lenses found the
   gate-predicate inversion and the forgery route; the bot then found a `CHANGELOG` sentence
-  that was true when written and made false by a later bullet in the same entry, which four
-  lens runs had read past. Neither substitutes for the other, which is what the panel
+  that was true when written and made false by a later bullet in the same entry, which the
+  panel had read past. Neither substitutes for the other, which is what the panel
   doctrine claims and what this session observed rather than assumed.
 
 ▶ Next: `#518` and `#372` both want field evidence, and the next PR against this `main` is
