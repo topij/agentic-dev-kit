@@ -138,9 +138,35 @@ Repeat until the report says **converged**:
    current-head evidence already exists, keep the outage visible but do not rerun
    the panel.
 
+   **What this records is a substitute review, not a request** (`#518`). The
+   receipt satisfies the merge gate and is meant to — the panel is the sanctioned
+   stand-in for a reviewer that cannot answer. What it must not stand in for is
+   having *asked*, which is owed at the converged head whether or not a receipt
+   already exists. Running the panel here is therefore never the reason to skip the
+   request below.
+
 1. **If `converged`:** stop the loop and report — PR #, the green check count, and
-   "no outstanding review findings." Then record the independent review (see below)
-   so the PR becomes `mergeable`; if `mergeable` is already true, say so.
+   "no outstanding review findings." **Then, before anything else, settle the
+   review request the Converged stop condition below owes.** The poll answers
+   this for you: when it prints `⚠ review owed`, it names the configured
+   reviewers that have not reviewed this head — request one from each, at this
+   head, now. **Key off that line rather than re-deriving it from
+   `review_bots.coverage` alone.** Coverage is one of the four things the engine
+   weighs: it also suppresses the line for a reviewer that answered in a comment
+   (`#44`), for one whose review is still in flight, and whenever the reviewer
+   read itself failed — so a condition rebuilt from coverage by hand asks for
+   reviews the engine already knows are unnecessary. Then record the independent
+   review (see below) so the PR becomes `mergeable`.
+
+   **A `mergeable` that is already true does not discharge that request** (`#518`).
+   The panel branch above can fire on the *first* poll — a reviewer configured not
+   to auto-review announces that at PR-open, so the check-surface condition is true
+   before CI has even settled — and its receipt can therefore make `mergeable` true
+   before the loop ever converges. The PR then reads as finished. On `#516` that is
+   exactly what happened: `gh pr view 516 --json reviews` returned `[]`, the
+   configured reviewer never saw the diff that merged, and every value in the report
+   was correct throughout. Report that `mergeable` was already true; do not read it
+   as the end of this step.
 
 1. **If checks are still `pending` and there are no new comments:** nothing to do yet
    — wait and re-poll (see Pacing). CI can take 20–30 min; that's expected, keep
@@ -348,7 +374,15 @@ Self-pace on a bounded cadence — don't busy-wait:
     `--lenses`**, since no fallback pass ran. If it is not, run the panel. What
     is not available is treating the missing coverage as a review waiver.
 
-    Nothing in `pr_watch.py` performs the request — it observes only. And note
+    Nothing in `pr_watch.py` performs the request — it observes only. It does,
+    however, **say when one is owed**, and name who owes it: at convergence,
+    for each configured bot with no review covering the head, no comment-borne
+    verdict, and no review in flight — and only when the reviewer read
+    succeeded — the poll prints `⚠ review owed` naming that bot. That line is
+    reported and gates nothing, deliberately — blocking there would wedge the
+    loop on exactly the repos whose reviewer cannot answer. Its job
+    is to make this bullet something you are *told about* rather than something you
+    must remember to come back to, which is the failure `#518` records. And note
     what this bullet does **not** say: it does not tell you to `--record-review`
     the bot's own verdict. That receipt vocabulary describes fallback passes, and
     a bot-reviewed head needs no receipt — its coverage *is* the evidence

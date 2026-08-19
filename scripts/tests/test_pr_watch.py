@@ -202,6 +202,11 @@ def test_workflow_routes_check_only_review_outages_to_the_fallback_panel() -> No
     assert "another configured reviewer is still pending" in fallback_rule
     assert "`--record-review` would refuse" in fallback_rule
     assert "do not rerun the panel" in fallback_rule
+    # #518 — the branch's receipt is a substitute review and not a request, said
+    # inside the branch itself. Stated here because this is where an agent is
+    # standing when it decides the review question is settled.
+    assert "substitute review, not a request" in fallback_rule
+    assert "never the reason to skip the request" in fallback_rule
 
     comment_start = workflow.index("- **Reviewer unavailable**")
     comment_end = workflow.index("- **Real finding**", comment_start)
@@ -212,6 +217,56 @@ def test_workflow_routes_check_only_review_outages_to_the_fallback_panel() -> No
     assert "do not rerun the panel" in comment_rule
     assert "another reviewer is pending" in comment_rule
     assert "blocker must clear before the panel runs" in comment_rule
+
+
+def test_the_converged_step_settles_the_review_request_before_reading_mergeable() -> None:
+    """#518 — the exit ramp `#516` took out of the loop, closed in the prose.
+
+    The two review-bot-facing steps read as sequential and are independent. The
+    panel branch can fire on the first poll and make `mergeable` true before the
+    loop converges; the converged step then said "if `mergeable` is already true,
+    say so", which is a finish line. The Converged stop condition's request bullet
+    is unconditional on coverage, but nothing sent you back to it — so on `#516`
+    it was never revisited and the configured reviewer never saw the diff.
+
+    Pinned as prose because the fix is prose: the engine's `⚠ review owed` line
+    reports the state, and this step is what acts on it.
+    """
+    workflow = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
+    ).read_text(encoding="utf-8")
+
+    start = workflow.index("1. **If `converged`:**")
+    end = workflow.index("\n1. **If checks are still", start)
+    rule = " ".join(workflow[start:end].split())
+
+    # The request is settled BEFORE the receipt, not after it.
+    assert "before anything else, settle the review request" in rule
+    assert rule.index("settle the review request") < rule.index(
+        "record the independent review"
+    )
+    # Key off the PRINTED line, not a hand-rebuilt coverage check: the engine
+    # weighs three more things, so a condition re-derived from coverage alone
+    # asks for reviews it already knows are unnecessary.
+    assert "⚠ review owed" in rule
+    assert "rather than re-deriving it from" in rule
+    # And the specific misreading that produced #516.
+    assert "does not discharge that request" in rule
+    assert "do not read it as the end of this step" in rule
+
+    # The Converged stop condition's own paragraph describes the same line, and
+    # was pinned by nothing — so a future edit could drift it away from the
+    # engine silently. Its four terms are the engine's four.
+    stop = workflow[workflow.index("Nothing in `pr_watch.py` performs the request") :]
+    stop = " ".join(stop[: stop.index("And note")].split())
+    assert "name who owes it" in stop
+    assert "no review covering the head" in stop
+    assert "no comment-borne verdict" in stop
+    assert "no review in flight" in stop
+    assert "only when the reviewer read succeeded" in stop
+    assert "gates nothing" in stop
+
+
 
 
 def test_done_keeps_its_original_merge_authorization_semantics() -> None:
@@ -3797,6 +3852,332 @@ def test_a_comment_borne_verdict_is_reported_and_never_becomes_evidence() -> Non
         {"bot": "coderabbit", "sha": head}
     ]
     assert "review reported" not in pr_watch.render(covered_report)
+
+
+def test_a_converged_head_with_no_reviewer_coverage_says_the_review_is_owed(
+    monkeypatch,
+) -> None:
+    """#518 — the state `#516` merged in, on the surface that is actually read.
+
+    On `#516` the check-surface panel branch fired on the first poll, its
+    receipt made `mergeable` true before the loop had converged, and the
+    Converged step's unconditional "request a review" bullet was never
+    revisited: the PR merged with `gh pr view 516 --json reviews` returning
+    `[]`. Every value in that report was correct, which is the point — a report
+    says what happened, and nothing in it said the reviewer had never been
+    asked.
+
+    The assertion that matters most is the RECEIPT one. A valid `fallback:panel`
+    receipt satisfies `mergeable`, and silencing this line there would reproduce
+    `#516` exactly, one layer down: the substitute standing in for having asked.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view()
+
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+    assert report["converged"] is True
+    assert report["review_bots"]["coverage"] == []
+    rendered = pr_watch.render(report)
+    assert "review owed" in rendered
+    # It names WHICH reviewer is owed. A reader who has to work that out is
+    # being handed the question rather than the answer.
+    assert "coderabbit has not reviewed it" in rendered
+
+    # #516's own state, and the reason the line exists at all.
+    receipt = {"head": "abc123", "source": "fallback:panel"}
+    with_receipt = pr_watch.build_report(
+        view, [], set(), review_receipt=receipt, **_settled(view)
+    )
+    assert with_receipt["mergeable"] is True, "the panel receipt still authorizes"
+    assert "review owed" in pr_watch.render(with_receipt)
+
+    # Suppression 1 — the bot's own review of this head. It looked.
+    covered_view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+    covered = pr_watch.build_report(
+        covered_view, [], set(), **_settled(covered_view)
+    )
+    assert "review owed" not in pr_watch.render(covered)
+
+    # Suppression 2 — a head that is still moving. Convergence is when the
+    # merge head stops moving and the request becomes worth spending; before it
+    # this would fire on every poll of the healthy window and be skimmed past,
+    # which is how a warning stops working.
+    failing = _green_view(
+        statusCheckRollup=[
+            {"name": "tests", "status": "COMPLETED", "conclusion": "FAILURE"}
+        ]
+    )
+    not_converged = pr_watch.build_report(failing, [], set(), **_settled(failing))
+    assert not_converged["converged"] is False
+    assert "review owed" not in pr_watch.render(not_converged)
+
+    # Suppression 3 — the reviewer answered in a COMMENT and created no review
+    # object (#44). It looked; the `ⓘ review reported:` line above already
+    # carries that state and its own remedy, and saying "nobody reviewed this"
+    # over the top of it would be false.
+    #
+    # The comment has to be ACKED for this report to converge at all — an
+    # unseen comment is un-clean by definition. That is not fixture ceremony:
+    # it is why this case cannot live in the comment-verdict test next door,
+    # whose reports are both unconverged and where an assertion about this line
+    # would pass no matter what the guard did.
+    verdict = {
+        "id": "IC_verdict",
+        "author": {"login": "coderabbitai"},
+        "body": (
+            "**Actionable comments posted: 0**\n\n"
+            "No actionable comments were generated in the recent review.\n\n"
+            "Reviewing files that changed between 0ldbase and abc123."
+        ),
+    }
+    verdict_view = _green_view(comments=[verdict])
+    unacked = pr_watch.build_report(
+        verdict_view, [], set(), **_settled(verdict_view)
+    )
+    acked = pr_watch.build_report(
+        verdict_view,
+        [],
+        set(unacked["all_comment_keys"]),
+        **_settled(verdict_view),
+    )
+    assert acked["converged"] is True
+    assert acked["review_bots"]["comment_verdicts"] == [
+        {"bot": "coderabbit", "sha": "abc123"}
+    ]
+    assert "review reported" in pr_watch.render(acked)
+    assert "review owed" not in pr_watch.render(acked)
+
+    # Suppression 4 — a bot MID-REVIEW. A verdict is coming; "request one now"
+    # would spend a second unit on a review already in flight.
+    reviewing_view = _green_view()
+    reviewing = pr_watch.build_report(
+        reviewing_view,
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails(
+            [
+                _bot_check(
+                    state="PENDING", bucket="pending", startedAt=_minutes_ago(2)
+                )
+            ],
+            "ok",
+        ),
+        now=NOW,
+        **_settled(reviewing_view, now=NOW),
+    )
+    assert [e for e in reviewing["review_bots"]["pending"] if e["blocking"]]
+    assert [e["trusted"] for e in reviewing["review_bots"]["pending"]] == [True]
+    assert "review owed" not in pr_watch.render(reviewing)
+
+    # …and the identity boundary on that suppression (#95, threaded here for
+    # #518). `reviewing` is keyed on `_match_bot` over a check NAME — a
+    # SUBSTRING match — and a same-repo PR's own workflow holds `checks: write`,
+    # so `coderabbit-shim-status` joins that set for `coderabbit`. Silencing
+    # this line on it would let a PR suppress "nobody has reviewed this" for its
+    # own diff, which is the never-reviewed case the line exists to catch.
+    forged_view = _green_view()
+    forged = pr_watch.build_report(
+        forged_view,
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails(
+            [
+                _bot_check(
+                    name="coderabbit-shim-status",
+                    state="PENDING",
+                    bucket="pending",
+                    startedAt=_minutes_ago(2),
+                    identity="github-actions[bot]",
+                )
+            ],
+            "ok",
+        ),
+        now=NOW,
+        **_settled(forged_view, now=NOW),
+    )
+    assert [e["trusted"] for e in forged["review_bots"]["pending"]] == [False]
+    # The gate is NOT what changed: a forged pending check still blocks, which
+    # is fail-closed — it can only block the PR that forged it, and it ages out.
+    assert [e["blocking"] for e in forged["review_bots"]["pending"]] == [True]
+    assert forged["mergeable"] is False
+    assert "review owed" in pr_watch.render(forged)
+
+    # A TRUSTED pending check that has AGED OUT is the engine saying this
+    # verdict is not coming — the reviewer-went-away case, and the one this
+    # line is most for. `blocking` is what carries that: without it in the
+    # suppression, an aged-out entry would silence exactly the state it
+    # diagnoses. (Same reason the coverage warning above reads `blocking`
+    # rather than mere presence.)
+    aged_view = _green_view()
+    aged = pr_watch.build_report(
+        aged_view,
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails(
+            [
+                _bot_check(
+                    state="PENDING",
+                    bucket="pending",
+                    startedAt=_minutes_ago(90),
+                )
+            ],
+            "ok",
+        ),
+        now=NOW,
+        **_settled(aged_view, now=NOW),
+    )
+    aged_entry = aged["review_bots"]["pending"][0]
+    assert aged_entry["trusted"] is True, "the real reviewer, just gone quiet"
+    assert aged_entry["blocking"] is False
+    assert aged_entry["cancelled_by"] == "grace"
+    assert "review owed" in pr_watch.render(aged)
+
+    # An unresolvable creator counts as untrusted and the line FIRES. That costs
+    # a request that may be redundant; the other direction costs the diff
+    # merging unreviewed, which is what this line is for.
+    blank_view = _green_view()
+    blank_id = pr_watch.build_report(
+        blank_view,
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails(
+            [
+                _bot_check(
+                    state="PENDING",
+                    bucket="pending",
+                    startedAt=_minutes_ago(2),
+                    identity="",
+                )
+            ],
+            "ok",
+        ),
+        now=NOW,
+        **_settled(blank_view, now=NOW),
+    )
+    assert "review owed" in pr_watch.render(blank_id)
+
+    # Suppression 5 — the review-bot READ failed. The hedge line above already
+    # says reviewer state could not be read this poll; an absolute underneath it
+    # retracts that hedge instead of qualifying it.
+    unread_view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T11:30:00Z", "APPROVED")]
+    )
+    unread = pr_watch.build_report(
+        unread_view,
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails([], "unavailable"),
+        **_settled(unread_view),
+    )
+    assert unread["review_bots"]["signal"] == "unavailable"
+    assert "could not be read" in pr_watch.render(unread)
+    assert "review owed" not in pr_watch.render(unread)
+
+    # Suppression 6 — a standing `CHANGES_REQUESTED` on this exact head. The
+    # reviewer plainly reviewed; `qualifying_bot_coverage` excludes this state
+    # DELIBERATELY, for the gate. Reading the gate predicate here made the line
+    # claim nobody had reviewed the diff, printed directly beside the engine's
+    # own `requested changes on current head` blocker — and prescribed
+    # requesting a review when addressing the objection is the next step.
+    objected_view = _green_view(
+        reviews=[
+            _review(
+                "coderabbitai", "abc123", "2026-07-25T11:30:00Z", "CHANGES_REQUESTED"
+            )
+        ]
+    )
+    objected = pr_watch.build_report(
+        objected_view, [], set(), **_settled(objected_view)
+    )
+    assert pr_watch.qualifying_bot_coverage(
+        objected["review_bots"], objected["head"]
+    ) == [], "the gate predicate still refuses it — that part is correct"
+    assert objected["review_bots"]["coverage"][0]["covers_head"] is True
+    assert "review owed" not in pr_watch.render(objected)
+
+    # …and the positive case that separates "nobody looked" from "the gate
+    # cannot vouch for it": a bot BEHIND the head genuinely has not reviewed
+    # this diff, so the line still fires.
+    behind_view = _green_view(
+        reviews=[_review("coderabbitai", "0ldsha", "2026-07-25T11:30:00Z", "APPROVED")]
+    )
+    behind = pr_watch.build_report(behind_view, [], set(), **_settled(behind_view))
+    assert behind["review_bots"]["coverage"][0]["covers_head"] is False
+    assert "review owed" in pr_watch.render(behind)
+
+    # Suppression 7 — the read failed AND nothing is known. This is the case
+    # that isolates the `signal` term: every other suppression here also has
+    # coverage, so `unreviewed` would empty first and the term would be pinned
+    # by nothing. (It survived a mutation sweep for exactly that reason.)
+    blind_view = _green_view()
+    blind = pr_watch.build_report(
+        blind_view,
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails([], "unavailable"),
+        **_settled(blind_view),
+    )
+    assert blind["review_bots"]["signal"] == "unavailable"
+    assert blind["review_bots"]["coverage"] == [], "nothing is known either way"
+    assert "could not be read" in pr_watch.render(blind)
+    assert "review owed" not in pr_watch.render(blind)
+
+    # Suppression 8 — TWO bots configured, one of which answered. A blanket
+    # "some verdict exists" test let the answering bot speak for the silent one,
+    # which is this line's own failure mode one bot over. The line must still
+    # fire, and must name the bot that was never asked.
+    monkeypatch.setattr(pr_watch, "_REVIEW_BOTS", ("coderabbit", "otherbot"))
+    two_bot_view = _green_view(
+        comments=[
+            {
+                "id": "IC_two_bot",
+                "author": {"login": "coderabbitai"},
+                "body": (
+                    "**Actionable comments posted: 0**\n\n"
+                    "No actionable comments were generated in the recent "
+                    "review.\n\nReviewing files that changed between 0ldbase "
+                    "and abc123."
+                ),
+            }
+        ]
+    )
+    two_bot_first = pr_watch.build_report(
+        two_bot_view, [], set(), **_settled(two_bot_view)
+    )
+    two_bot = pr_watch.build_report(
+        two_bot_view,
+        [],
+        set(two_bot_first["all_comment_keys"]),
+        **_settled(two_bot_view),
+    )
+    assert two_bot["converged"] is True
+    assert [e["bot"] for e in two_bot["review_bots"]["comment_verdicts"]] == [
+        "coderabbit"
+    ]
+    two_bot_rendered = pr_watch.render(two_bot)
+    assert "review owed" in two_bot_rendered
+    assert "otherbot has not reviewed it" in two_bot_rendered
+    assert "coderabbit has not" not in two_bot_rendered, "it answered; do not name it"
+
+    # TWO bots unaccounted at once — the list separator and the plural verb.
+    # Every case above reaches this line with exactly one name, so the join and
+    # the `has`/`have` branch were unexercised: collapsing both survived a
+    # mutation sweep. "Per bot" is the property this line is built on, and its
+    # coverage stopped one bot short of the case that shows it.
+    monkeypatch.setattr(pr_watch, "_REVIEW_BOTS", ("coderabbit", "otherbot"))
+    both_view = _green_view()
+    both = pr_watch.build_report(both_view, [], set(), **_settled(both_view))
+    both_rendered = pr_watch.render(both)
+    assert "coderabbit, otherbot have not reviewed it" in both_rendered
+
+    # Suppression 9 — no reviewer configured. `signal: skipped` means there is
+    # nobody to ask, so the line would name an action that does not exist.
+    monkeypatch.setattr(pr_watch, "_REVIEW_BOTS", ())
+    unconfigured = pr_watch.build_report(view, [], set(), **_settled(view))
+    assert unconfigured["review_bots"]["signal"] == "skipped"
+    assert "review owed" not in pr_watch.render(unconfigured)
 
 
 def test_a_rate_limited_bot_naming_the_range_it_would_have_reviewed_is_not_a_verdict() -> None:

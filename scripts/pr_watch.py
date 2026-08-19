@@ -2823,6 +2823,24 @@ def summarize_review_bots(
                 "age_minutes": round(age, 1),
                 "blocking": False,
                 "cancelled_by": None,
+                # The same two fields the outage branch above records, from the
+                # same `detail`, for the same #95 reason — a check's NAME is
+                # matched as a SUBSTRING and is the PR's to choose, while its
+                # creator is not. Recorded on every pending entry so a consumer
+                # that must not trust a forged row can tell (#518's `review
+                # owed` line is the first).
+                #
+                # `blocking` deliberately does NOT read these. A forged pending
+                # check blocking the merge gate is fail-CLOSED — it can only
+                # block the PR that forged it, and it ages out at
+                # `grace_minutes`. Requiring trust there would turn a harmless
+                # self-inflicted delay into a route for suppressing a real
+                # reviewer's block, which is the wrong direction entirely.
+                "identity": str(detail.get("identity") or ""),
+                "trusted": _match_bot_identity(
+                    str(detail.get("identity") or ""), bots
+                )
+                == bot,
             }
         )
         exact_ages.append(age)
@@ -4144,6 +4162,117 @@ def render(report: dict) -> str:
             "merge gate cannot see it and this is not evidence. If that verdict is "
             "what you are merging on, record it: --record-review "
             f"\"{entry['bot']}:comment-verdict\" --head {entry['sha']}"
+        )
+    # #518 — the request the Converged step owes, said where it is owed.
+    #
+    # On #516 the check-surface panel branch fired on the first poll (a reviewer
+    # configured not to auto-review announces that immediately, so the branch is
+    # true from PR-open), its receipt made `mergeable` true before the loop had
+    # even converged, and the PR then read as finished. The Converged step's own
+    # "request a review" bullet is unconditional on coverage, but nothing brings
+    # you back to it once `mergeable` is already true — so it was never
+    # revisited and the configured reviewer never saw the diff at all
+    # (`gh pr view 516 --json reviews` -> `[]`). A report that only ever says
+    # what DID happen cannot show that; this says what has not.
+    #
+    # Deliberately narrow, because the way this line fails is by being ignored:
+    #
+    #   - Only at convergence. That is when the merge head stops moving and the
+    #     request becomes worth spending; on a moving head it would fire every
+    #     poll of the healthy window and train the reader to skim it, which is
+    #     the same trap the coverage warning above documents.
+    #   - Silent where no reviewer is configured (`signal: skipped`) — there is
+    #     nobody to ask, so the line would name no action.
+    #   - Silent where a comment-borne verdict exists. Those are current-head by
+    #     construction (term 4 of `bot_comment_verdicts`), so the reviewer
+    #     demonstrably did look, and the line above already carries that state
+    #     and its own remedy.
+    #   - Silent where a bot is mid-review (a BLOCKING pending entry). A verdict
+    #     is coming; telling you to request one spends a second unit on a review
+    #     already in flight. Same `reviewing` set the coverage warning above
+    #     computes, and for the same reason.
+    #   - Silent where the review-bot read FAILED (`signal` is not `ok`). The
+    #     hedge printed above says reviewer state could not be read this poll;
+    #     an absolute about reviewer state underneath it would retract that
+    #     hedge rather than qualify it.
+    #
+    # **Read from `coverage`, not from `qualifying_bot_coverage`.** They answer
+    # different questions and only one of them is this line's. The gate
+    # predicate under-reports DELIBERATELY — its own docstring keeps the bias in
+    # the safe direction, so anything it cannot vouch for yields no entry — and a
+    # gate that under-reports refuses a merge, which is the harmless failure. A
+    # REPORT that inherits the same bias states that nobody reviewed the diff,
+    # which is the harmful one. Both false-claim states this line shipped with
+    # in review came from that single substitution:
+    #
+    #   - a bot's `CHANGES_REQUESTED` on this exact head is excluded from
+    #     `_EVIDENTIAL_REVIEW_STATES` on purpose, so the gate sees no evidence
+    #     while the reviewer plainly reviewed — and the line then prescribed
+    #     "request one now" beside a `requested changes on current head`
+    #     blocker, when addressing the objection is the actual next step;
+    #   - a failed check read disqualifies every entry for gate purposes, while
+    #     the reviews read that produced `coverage` succeeded independently.
+    #
+    # `covers_head` is the observable answer to "did a configured reviewer look
+    # at THIS diff", which is the only thing this line claims. It is the same
+    # field the coverage warning above reads, deliberately.
+    #
+    # **Per bot, not "has anyone answered".** A blanket "some verdict exists"
+    # test lets one reviewer's answer speak for a second, never-asked one — the
+    # same silence this line exists to break, one bot over. So each configured
+    # bot is accounted for individually, and the line NAMES the ones that are
+    # not: an unaccounted bot is the actionable fact, and a reader who has to
+    # work out which reviewer is owed is being handed the question, not the
+    # answer.
+    #
+    # It REPORTS; it gates nothing. A panel receipt still satisfies `mergeable`
+    # and deliberately so — the panel is the sanctioned substitute, not a
+    # defect. What a receipt must not do is stand in for having asked, which is
+    # the confusion #518 records. Blocking here would wedge the loop on exactly
+    # the repos whose reviewer cannot answer.
+    # Mid-review suppression needs a TRUSTED pending entry, which `reviewing`
+    # above is not. That set is keyed on `_match_bot` over a check NAME — a
+    # case-insensitive SUBSTRING match — and a same-repo PR's own workflow holds
+    # `checks: write`. So a check called `coderabbit-shim-status` joins
+    # `reviewing` for `coderabbit`, and silencing this line on it would let a PR
+    # suppress "nobody has reviewed this" for its own diff, for the grace
+    # window, in exactly the never-reviewed case #518 is about. `#95` already
+    # built the answer for the outage branch: the row's creator is not the PR's
+    # to choose.
+    #
+    # A missing or unresolvable `trusted` therefore counts as NOT trusted and
+    # the line FIRES. That direction costs a review request that may turn out to
+    # be redundant; the other direction costs the diff being merged unreviewed,
+    # which is the failure this whole line exists to prevent.
+    #
+    # `reviewing` itself is deliberately left alone. Its other consumer — the
+    # coverage-staleness warning above — has the same gap and predates this
+    # change, so widening the fix into it is a separate change with its own
+    # blast radius rather than a free ride on this one.
+    reviewing_trusted = {
+        e["bot"]
+        for e in bots.get("pending") or []
+        if e.get("blocking") and e.get("trusted")
+    }
+    accounted = (
+        covered
+        | reviewing_trusted
+        | {e["bot"] for e in bots.get("comment_verdicts") or []}
+    )
+    unreviewed = sorted(set(_REVIEW_BOTS) - accounted)
+    # `signal == "ok"` positively, rather than excluding the states that are not
+    # ok: a report with no `review_bots` at all reads as None here, and a claim
+    # this absolute is not one to make on a payload shape we did not recognise.
+    # It also subsumes the no-bots-configured case without a term of its own —
+    # `_REVIEW_BOTS` is empty there, so `unreviewed` is empty and nothing fires.
+    if report.get("converged") and bots.get("signal") == "ok" and unreviewed:
+        lines.append(
+            "  ⚠ review owed: this head has converged and "
+            f"{', '.join(unreviewed)} {'has' if len(unreviewed) == 1 else 'have'} "
+            "not reviewed it — request one now, at this head, before merging. A "
+            "fallback-panel receipt satisfies the merge gate but is not the "
+            "reviewer having looked; if the request is refused or cannot be "
+            "made, that is the answer to record, not a step to skip"
         )
     for entry in bots.get("unavailable") or []:
         # `.get`, not indexing: only the check surface carries the #95 trust
