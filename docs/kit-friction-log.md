@@ -37,9 +37,11 @@
   delta, labelled as the full base diff — which the adversarial lens recomputed, caught,
   and reported rather than trusting. Nothing was harmed, because **Right revision** exists
   for exactly this. But the failure is silent when the lens does not check, and the engine
-  would not have made it. Proposed fix: either use `--carry-forward` / `--delta-draws`
-  (which exist for the delta pass) rather than hand-writing, or have `panel_prompt.py`
-  refuse to accept a diffstat it did not compute.
+  would not have made it. Proposed fix: use the flags that exist for this —
+  `--carry-forward` for what prior rounds covered, and `--delta-draws`, delta-pass only,
+  for the author's stated draws. They are not interchangeable: `panel_prompt.py --help`
+  says carry-forward is "never the author's draws or risk assessment". Alternatively,
+  have `panel_prompt.py` refuse a diffstat it did not compute itself.
 
 - **`gh pr checks --json state` reports `IN_PROGRESS`, never `PENDING`.** Severity **L**. A
   watch loop breaking on `[ "$s" != "PENDING" ]` exits on its first poll and reads as
