@@ -53,8 +53,8 @@ starts.
   nothing.** `converged`, `mergeable`,
   `review_evidence` and `merge_blockers` are unchanged, and a `fallback:panel`
   receipt still authorizes the merge — the line still prints in that state, which is
-  the point of it. If you scrape poll output, this is a new line; if you parse the
-  JSON report, nothing changed — no key was added.
+  the point of it. If you scrape poll output, this is a new line; **this line itself
+  adds no JSON key** — the next bullet is the one that changes the report shape.
 - **`review_bots.pending` entries grew `identity` and `trusted`** (report shape) —
   the check creator GitHub records, and whether it is trusted to speak for that bot
   (`#95`'s rule, the same two fields `review_bots.unavailable` already carries).
