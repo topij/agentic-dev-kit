@@ -28,9 +28,9 @@
   doctrine rather than a ticket: the instance is already handled in `#520`, and the shape is what
   is worth keeping.
 
-- **The panel ran from hand-written prompts for three of four rounds, losing
+- **The panel ran from hand-written prompts after its first round, losing
   `panel_prompt.py`'s guarantees — including a diffstat it computes correctly.** Severity
-  **M**. `panel_prompt.py` assembled round 1. Rounds 2–4 were hand-written to carry
+  **M**. `panel_prompt.py` assembled the opening round; every round after it was hand-written, to carry
   round-specific framing (delta boundary, the author's stated draws) that the engine has
   flags for but that were easier to write inline. One consequence surfaced immediately: the
   round-2 prompt quoted a diffstat computed over the wrong range — the previous round's
