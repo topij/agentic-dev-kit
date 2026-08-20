@@ -27,7 +27,7 @@ the bot-coverage route, addresses `#495`), `#528` (pr-watch.md converged step ca
 ruling), `#527` (manifest tracks the kit's own test suite, addresses `#493`). All four
 issues stay open — nothing verified their acceptance criteria in the field.
 
-- **`#524` closed at the forge: ruleset `protect-main` is `active`** — PR required
+- **The gap `#524` names is shut at the forge: ruleset `protect-main` is `active`** — PR required
   (0 approvals), `toolkit` required and pinned to the GitHub Actions `integration_id`
   (`#95`'s identity rule applied to the forge gate), deletion + non-fast-forward kept, no
   bypass actors. Verified: `gh api repos/topij/agentic-dev-kit/rules/branches/main` lists
