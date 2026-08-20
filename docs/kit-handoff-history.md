@@ -4,6 +4,70 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-16 (the two held rulings, and a fail-open the panel found in the fix for one of them)
+
+**Theme —** the operator ruled on `#372` and `#350`, the two decisions the previous
+block named as owned by nobody, and both shipped the same session. The parts worth
+carrying are what the ruling on `#372` turned out to rest on, and what the panel found
+inside the fix for `#350`.
+
+- **`#372` ruled: reconfigure the trigger** (`#483`, squash `6484c1c`). The decision
+  turned on a fact none of the five recorded occurrences had established: **this repo
+  has never had a `.coderabbit.yaml`**, in the tree or anywhere in git history. Every
+  occurrence was measured against stock defaults, one of which re-reviews on every push
+  against a workflow that pushes a new head per fix round. `.coderabbit.yaml` is
+  repo-local — absent from `KIT_OWNED`, so it reaches no adopter; verified at the
+  destination rather than by reading the allowlist. The transferable half is a new
+  `fallback-review-panel.md` section: the kit had extensive machinery for *detecting* an
+  unavailable reviewer and none for asking whether it was configured to be available.
+  `#372` **stays open** — the improvement is a prediction until a batch measures it.
+- **`#350` ruled: direction 1, and shipped** (`#484`, squash `da5158c`). `mergeable`
+  now accepts a configured bot's own review of the current head as independent-review
+  evidence, alongside the receipt. Direction 2 (a `bot:<name>` literal) was declined on
+  the threat model: receipts are self-reported by the agent that wants the merge, so
+  that literal would have put the fabricated-receipt path `#428` exists to catch onto
+  the gate's critical path.
+- **Filed:** `#485` (a receipt authorizes a merge over a bot's live
+  `CHANGES_REQUESTED` — `record_review` refuses only on a pending check row, never on
+  the submitted verdict; reproduced at `#484`'s base, so it predates that work),
+  `#486` (the `covers_head is True` strictness is unpinned — truthiness passes the whole
+  suite). Occurrence recorded on `#467`.
+
+**Learned**
+
+- **The panel found a fail-open in the merge gate that nothing else did.** `#484`'s
+  first round showed the new route accepted *any* review object at the head, so
+  `DISMISSED`, `PENDING` and `CHANGES_REQUESTED` all authorized merges. CI, the suite,
+  a three-mutation harness of my own and CodeRabbit's one landed review had all passed it.
+- **The docstring's stated reason for not checking something was itself the defect.**
+  It gave "`CHANGES_REQUESTED` is its own blocker" as why that state needed no check;
+  `reviewDecision` reports *required* reviewers and a bot is typically not one, so the
+  blocker never fired. The correction was then itself overstated — it holds on `gh` and
+  not on the REST fallback — and a later round caught that too.
+- **Two verification habits failed before any code did.** `make test 2>&1 | tail` returns
+  *tail's* status, so every "exit 0" this session claimed before the correction was
+  reading the pass line, not the exit code. And a `cd` into a base-comparison clone
+  outlived its command, so a later grep ran in the wrong tree and reported this work's
+  own changes missing — `AGENTS.md` predicts that failure and says it mimics the tool
+  misbehaving, which is exactly how it read.
+- **A guard can be half-decorative.** `qualifying_bot_coverage` requires two clauses; only
+  one had a failing case behind it, and a lens found the other survived the suite. `#447`'s
+  shape, one clause over from where the neighbouring docstring warns about `#447`.
+
+**Open, and owned by nothing yet**
+
+- **`#350` needs closing or a note.** Its direction was ruled and the work merged, and no
+  closing keyword was written, so nothing retired it — the same state `#439` was left in
+  by the same discipline.
+- **`#485`** is the sharpest of the new tickets: it is a merge-gate hole in the *receipt*
+  path, found only because a lens was probing the new route's neighbour, and it predates
+  everything shipped here.
+- `#460` and `#465` are the operator-held rulings still standing.
+
+▶ Next: measure `#372`'s prediction — the first PR opened against this `main` is the
+first valid data point, since `#484` established that a `.coderabbit.yaml` does not govern
+the PR introducing it.
+
 ## Session — 2026-08-15 (five lanes, and the reviewer breaking the fix's own mechanism in three of them)
 
 **Theme —** the second autonomous batch through `parallel-headless.md`, and the first

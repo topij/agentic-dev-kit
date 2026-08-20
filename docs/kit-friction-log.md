@@ -12,6 +12,70 @@
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
 
+## 2026-08-20
+
+- **A figure was read off a workflow run that had not finished, and nothing in the reading
+  said so.** Severity **H**. A CI-cost measurement used
+  `gh api .../runs/<id>/jobs?per_page=100 --jq '.jobs[] | select(.conclusion != null) | ...'`
+  while the run was still in flight. (The filter is inside the `.jobs[]` iteration — at the
+  top level `.conclusion` is null on the wrapper object and `select` would emit nothing,
+  which is a different and louder failure.) It silently dropped the three unfinished jobs —
+  including the long pole —
+  and the remaining subset was reported as the run's totals: job count, wall clock and
+  runner-minutes all wrong, wall clock by roughly fourfold. It reached a commit message and
+  a PR body before a review lens re-derived it. The shape is exactly what
+  `settle_grace_minutes` exists for on the check rollup — a partial result is
+  indistinguishable from a complete one by inspection — but nothing carries that lesson to
+  the *runs* API, where the same agent hits it by hand. Proposed fix: a rule wherever the kit
+  reads a run or a rollup — assert the container reports `completed` **before** reading any
+  figure out of it, and treat a filter that drops rows as the thing that hides
+  incompleteness rather than as tidying.
+
+- **A delegated implementer stopped mid-task waiting for a background notification that no
+  one had arranged.** Severity **M**. Told to run the verification command and report the
+  result, the delegate backgrounded it, then ended its turn saying it would wait for a
+  monitor notification before branching and committing — so the task notification arrived
+  with no branch, no commit, and no verification, while its edits sat uncommitted on the
+  protected branch. It completed correctly when told plainly to run the command in the
+  foreground and not stop between steps. Proposed fix: delegation prompts for
+  implement-and-push work should state that the agent owns its own verification synchronously
+  and must not end its turn before the push, and should name branching as step one rather
+  than a later step — the ordering is what left the edits on `main`.
+
+- **A watch loop polled for a review by counting comments, so an acknowledgement that was
+  edited into the review itself read as silence.** Severity **H**. A hand-rolled loop watched
+  two PRs with `[.comments[]|select(.author.login=="coderabbitai")]|length`, breaking on a
+  new review object or a *new* comment. On `#525` the bot posted an acknowledgement at
+  `07:15:29Z` and then **updated that same comment in place** at `07:17:40Z` into a completed
+  clean review naming its range and reporting zero units left. The count never changed, no
+  review object was ever created, and the loop ran to its bound reporting nothing — so the
+  session recorded "requested, acknowledged, never delivered" for a PR that had in fact been
+  reviewed, and carried that into a wrap-up block and a ticket comment. The bot corrected it
+  on `#372` before the block was committed; the correctness lens caught that the block had
+  been written anyway. This is `#509`'s mutable-comment hazard with a specific new mechanism:
+  **any freshness check keyed on comment count or on "is there a new comment" is blind to
+  `updatedAt`.** Proposed fix: wherever the kit polls a bot's comment surface, compare
+  `updatedAt` and not just presence or count — `pr_watch` reads bodies and so is insulated,
+  which is precisely why a hand-rolled loop beside it is where this bites. Occurrence for
+  `#509`; the detection consequence is `#44`'s.
+
+- **A persisted `cd` sent a later read to the wrong repo, and the two-tree rule's remedy is
+  written for writes.** Severity **M**. A `cd` into the second repo persisted across
+  subsequent tool calls, so a later poll ran in the adopter rather than the kit; caught only
+  because `pwd` was asserted before the next write. `AGENTS.md`'s two-tree rule prescribes
+  exactly that assertion, so the rule worked — but it is stated for *writes*, and this was a
+  read whose output was about to be used as evidence of the wrong repo's state. Proposed fix:
+  extend the rule's remedy to any command whose *output* is used as evidence, not only writes;
+  `#511` already reports the read-sequence half and this is a second occurrence of it.
+  **And `pwd` is not sufficient on its own for a forge read** — `gh` resolves the repository
+  from the working directory, so a correct `pwd` still leaves the target implicit. Bind the
+  identity too: `scripts/reconcile_sessions.sh` already resolves `REPO_NWO` and exports
+  `GH_REPO` before collecting evidence, which is the pattern to generalise. Passing `--repo`
+  explicitly at the call site gives the same guarantee. `#246` is the occurrence behind this —
+  filed on a forge *write* reaching the wrong repository; the cwd-resolution mechanism it
+  describes is read/write-agnostic, which is why extending it to reads is proposed here rather
+  than claimed as already covered.
+
 ## 2026-08-19
 
 - **A merge-gate predicate was used to answer a reportorial question, and the bias
