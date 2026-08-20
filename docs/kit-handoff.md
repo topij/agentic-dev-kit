@@ -18,7 +18,7 @@ Last updated: 2026-08-20 — two merges across two repos, `main`'s own protectio
 
 ## Latest session — 2026-08-20 (the enforcement under the gate, and an author who was the unreliable narrator)
 
-**Theme —** cross-repo. `#525` shipped here (`#521`'s forgery route, squash `6201af6`); `ci-gate`
+**Theme —** cross-repo. `#525` shipped here (`#95`'s forgery route at `#521`'s site, squash `6201af6`); `ci-gate`
 shipped in the cs-toolkit adopter (`4e743dc3`). Both PRs' review rounds found real defects and
 **every one was in the record prose, not the mechanism** — the diffs came through clean and the
 narration did not.
@@ -37,11 +37,15 @@ narration did not.
   Tracked adopter-side; `CUS-1307` (nothing enforces `ci-gate.needs` stays complete) and
   `CUS-1308` (`always()` vs `!cancelled()` on a gate job) came out of its review.
 
-- **`#372` has a cause, not just data points.** The poll named it: `review rate limited`,
-  on both surfaces. The acknowledge-then-nothing shape — replies naming the exact commit,
-  then no review object — is a quota wall. Recorded on the ticket with what it does *not*
-  explain (`#519` and `#520` are untouched by it). `#498`'s ruling may not have taken
-  effect in practice; that is the thing to check before gathering more.
+- **`#372`: `#525` was reviewed, and this session's first account of it was wrong.** The
+  request at the converged head *completed* — as a comment-only clean review naming its
+  range (`6905aac` → `89939c0`) and reporting zero units remaining. The bot corrected the
+  record on the ticket before this block was written. What made it look like silence: the
+  acknowledgement comment was **mutated in place** into the review, and a poll that counts
+  comments cannot see an update — `#509`'s mutable-surface hazard, paid. `#525` is therefore
+  `#44`'s comment-only shape (a detection problem), and the adopter's `#2044` is the quota
+  one; they are not one cause. `#498`'s convergence-only ruling **did** take effect: the one
+  unit was spent on the merging head, which is what it was for.
 
 - **`#518` got its field evidence and the line works.** `⚠ review owed` fired unprompted at
   `#525`'s converged head and was acted on rather than merged past. `#522` reproduced in the
@@ -53,9 +57,10 @@ narration did not.
   through `AGENTS.md` gets the doctrine with no file list at all — `#243`/`#273`'s failure,
   live in an adopter. Bidirectional drift, so it needs a merge and not a copy.
 
-- **Verified:** `make test` at `/Users/topi/Coding/agentic-dev-kit` on the `#525` branch —
-  1307 passed, exit 0. `make check-root` at `/Users/topi/Coding/in-parallel/cs-toolkit` —
-  4707 passed, exit 0.
+- **Verified:** `make test` at `/Users/topi/Coding/agentic-dev-kit` on the `#525` branch,
+  and `make check-root` at `/Users/topi/Coding/in-parallel/cs-toolkit` — both passed, exit 0.
+  Counts deliberately not restated: the commands own them, and each PR's own record carries
+  the figure at the sha it was taken from.
 
 **Learned**
 
@@ -91,8 +96,9 @@ narration did not.
 
 ▶ Next: `#524` is the session's own unfinished business — the enable script is drafted and
 unapplied, and until it runs every ground rule about `main` here rests on agents obeying it.
-Behind it: `#372` now points at `#498`'s ruling rather than at more data-gathering, and `#310`
-is still the operator decision nobody has made.
+Behind it: `#44`/`#509` are where `#372`'s remaining weight sits now that the review turned
+out to have happened and the gate could not see it, and `#310` is still the operator decision
+nobody has made.
 
 ______________________________________________________________________
 

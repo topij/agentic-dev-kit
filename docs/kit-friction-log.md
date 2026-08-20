@@ -39,13 +39,30 @@
   and must not end its turn before the push, and should name branching as step one rather
   than a later step — the ordering is what left the edits on `main`.
 
-- **`git checkout -- <file>` and a persisted `cd` both bit in one session, and the two-tree
-  rule only covers one of them.** Severity **M**. A `cd` into the second repo persisted across
-  later tool calls, so a subsequent poll ran in the adopter rather than the kit; caught only
+- **A watch loop polled for a review by counting comments, so an acknowledgement that was
+  edited into the review itself read as silence.** Severity **H**. A hand-rolled loop watched
+  two PRs with `[.comments[]|select(.author.login=="coderabbitai")]|length`, breaking on a
+  new review object or a *new* comment. On `#525` the bot posted an acknowledgement at
+  `07:15:29Z` and then **updated that same comment in place** at `07:17:40Z` into a completed
+  clean review naming its range and reporting zero units left. The count never changed, no
+  review object was ever created, and the loop ran to its bound reporting nothing — so the
+  session recorded "requested, acknowledged, never delivered" for a PR that had in fact been
+  reviewed, and carried that into a wrap-up block and a ticket comment. The bot corrected it
+  on `#372` before the block was committed; the correctness lens caught that the block had
+  been written anyway. This is `#509`'s mutable-comment hazard with a specific new mechanism:
+  **any freshness check keyed on comment count or on "is there a new comment" is blind to
+  `updatedAt`.** Proposed fix: wherever the kit polls a bot's comment surface, compare
+  `updatedAt` and not just presence or count — `pr_watch` reads bodies and so is insulated,
+  which is precisely why a hand-rolled loop beside it is where this bites. Occurrence for
+  `#509`; the detection consequence is `#44`'s.
+
+- **A persisted `cd` sent a later read to the wrong repo, and the two-tree rule's remedy is
+  written for writes.** Severity **M**. A `cd` into the second repo persisted across
+  subsequent tool calls, so a later poll ran in the adopter rather than the kit; caught only
   because `pwd` was asserted before the next write. `AGENTS.md`'s two-tree rule prescribes
   exactly that assertion, so the rule worked — but it is stated for *writes*, and this was a
-  read that would have silently reported the wrong repo's state. Proposed fix: extend the
-  rule's remedy to any command whose *output* is used as evidence, not only writes;
+  read whose output was about to be used as evidence of the wrong repo's state. Proposed fix:
+  extend the rule's remedy to any command whose *output* is used as evidence, not only writes;
   `#511` already reports the read-sequence half and this is a second occurrence of it.
 
 ## 2026-08-19
