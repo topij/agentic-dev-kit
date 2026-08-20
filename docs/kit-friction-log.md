@@ -16,8 +16,11 @@
 
 - **A figure was read off a workflow run that had not finished, and nothing in the reading
   said so.** Severity **H**. A CI-cost measurement used
-  `gh api .../runs/<id>/jobs --jq 'select(.conclusion != null)'` while the run was still in
-  flight. The filter silently dropped the three unfinished jobs — including the long pole —
+  `gh api .../runs/<id>/jobs?per_page=100 --jq '.jobs[] | select(.conclusion != null) | ...'`
+  while the run was still in flight. (The filter is inside the `.jobs[]` iteration — at the
+  top level `.conclusion` is null on the wrapper object and `select` would emit nothing,
+  which is a different and louder failure.) It silently dropped the three unfinished jobs —
+  including the long pole —
   and the remaining subset was reported as the run's totals: job count, wall clock and
   runner-minutes all wrong, wall clock by roughly fourfold. It reached a commit message and
   a PR body before a review lens re-derived it. The shape is exactly what
@@ -64,6 +67,12 @@
   read whose output was about to be used as evidence of the wrong repo's state. Proposed fix:
   extend the rule's remedy to any command whose *output* is used as evidence, not only writes;
   `#511` already reports the read-sequence half and this is a second occurrence of it.
+  **And `pwd` is not sufficient on its own for a forge read** — `gh` resolves the repository
+  from the working directory, so a correct `pwd` still leaves the target implicit. Bind the
+  identity too: `scripts/reconcile_sessions.sh` already resolves `REPO_NWO` and exports
+  `GH_REPO` before collecting evidence, which is the pattern to generalise. Passing `--repo`
+  explicitly on every `gh` call is the same guarantee at the call site, and is what `#246`
+  was filed about.
 
 ## 2026-08-19
 
