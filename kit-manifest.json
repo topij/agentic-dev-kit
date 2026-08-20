@@ -101,7 +101,7 @@
     },
     "scripts/conftest.py": {
       "role": "engine",
-      "sha256": "d2a8abce285a9736d18d4104e2459a27f8c570ced9b7c2cd5d021aca0b58eab6"
+      "sha256": "c2076c72a633fdd2d4e9991cf07ae2dda6c1747a1fe865a34a7fea013bd574c4"
     },
     "scripts/dev_session.sh": {
       "role": "engine",
@@ -179,7 +179,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "1847bb7d4b5de262195280092576557ba2342f7902195acd0320e20d2db8db64"
+      "sha256": "c3ac659cd9699e033f51004555b3170571dc914537ab05644bf6d0fce50bc9be"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",

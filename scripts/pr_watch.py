@@ -3719,8 +3719,13 @@ def build_report(
       exists, by either route (#350): a persisted receipt bound to this exact
       head SHA, or a configured bot's own review of it. ``route`` names which
       (``receipt`` / ``bot-coverage`` / null) and ``bots`` names the covering
-      bots; the receipt-describing keys (``source``, ``lenses``, ``override``,
-      ``bot_signal``) stay receipt-only and are empty on the coverage route.
+      bots; the receipt-describing keys (``source``, ``head``, ``lenses``,
+      ``override``, ``bot_signal``) stay receipt-only and are ``null``/empty on
+      the coverage route — ``head`` in particular is the head the RECEIPT is
+      bound to, not necessarily the head the evidence covers (#495): on the
+      coverage route it is ``null`` rather than a possibly-stale sha sitting
+      beside ``valid: true``. The commit the evidence covers is the report's
+      own top-level ``head``.
     - ``review_bots`` — :func:`summarize_review_bots`: each configured review
       bot resolved to *unavailable* (an outage announced on either the comment
       or the check-description surface — an action signal, never a blocker) or
@@ -3918,7 +3923,18 @@ def build_report(
             if isinstance(review_receipt, dict) and receipt_head == head
             else None
         ),
-        "head": receipt_head,
+        # #495: was `receipt_head` unconditionally, so a STALE receipt sitting
+        # beside qualifying bot coverage reported a sha the coverage never
+        # touched, next to `valid: true` — before #484 that combination could
+        # not arise, because `valid` WAS `receipt_head == head`. Grouped with
+        # the other receipt-only keys below rather than repointed at "the head
+        # the coverage covers", because a reader already has that fact: it is
+        # the report's own top-level `head`.
+        "head": (
+            receipt_head
+            if isinstance(review_receipt, dict) and receipt_head == head
+            else None
+        ),
         # Carried into the report so the poll render can state what the receipt
         # stands for. Previously the one-lens warning printed exactly once — on
         # the stdout of the `--record-review` call the agent itself chose to
