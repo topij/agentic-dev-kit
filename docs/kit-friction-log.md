@@ -76,6 +76,33 @@
   describes is read/write-agnostic, which is why extending it to reads is proposed here rather
   than claimed as already covered.
 
+- **A ruling comment transcribed the evidence trail's latest occurrence layer, and that
+  layer was wrong.** Severity **H**. `#372`'s third ruling stated a detection mechanism and
+  a timing figure read off the trail's most recent occurrence comment; both were already
+  refuted by a correction sitting on the same trail, and both reached a doctrine PR before
+  `#528`'s adversarial lens executed `bot_comment_verdicts()` against the live history and
+  refuted them again. Proposed fix: a ruling that cites occurrences is written from the
+  trail's *corrections*, not its occurrences — or states mechanisms only from evidence the
+  author executed. The lens contract's "Execute, don't only read" already carries this for
+  reviewers; nothing carries it for the record's author.
+
+- **This morning's delegate-stall entry recurred with its proposed fix applied verbatim,
+  and the fix did not bind.** Severity **M**. Two of three delegates backgrounded
+  `make test` — which outruns the default tool timeout — and ended their turn to wait,
+  with "run in the FOREGROUND, do not background, do not end your turn" verbatim in their
+  briefs. Both complied after a follow-up message named a concrete 600000ms timeout for
+  the command. The stall is timeout-shaped, not obedience-shaped: the default timeout
+  forces the backgrounding, and no instruction overrides a mechanism (`#514`). Proposed
+  fix: delegation briefs for verification-owning work name the timeout value for the long
+  command up front — a parameter, not a plea.
+
+- **`#510`'s `make test | tail` pattern reproduced by the cockpit, in the session that
+  knows the ticket.** Severity **L**. `make test 2>&1 | tail -1` ran inside a `set -e`
+  chain ahead of a `git push`: `tail` exits 0 whatever the suite did, so the push proceeds
+  regardless. No harm — the printed summary line was read and green — but the guard was
+  the reader, not the shell. Occurrence for `#510`; its fix (pipefail, or read the exit
+  before piping) stands unchanged.
+
 ## 2026-08-19
 
 - **A merge-gate predicate was used to answer a reportorial question, and the bias
