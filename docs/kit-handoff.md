@@ -65,8 +65,8 @@ narration did not.
 **Learned**
 
 - **A measurement taken from a still-running workflow read as a finished one.** A CI-cost
-  figure was gathered with a `select(.conclusion != null)` filter while the run was in
-  flight; the filter silently dropped the unfinished jobs, including the long pole, and the
+  figure was gathered with a `.jobs[] | select(.conclusion != null)` filter while the run was
+  in flight; the filter silently dropped the unfinished jobs, including the long pole, and the
   partial set was reported as the total — into a commit message and a PR body, off by
   roughly fourfold. This is `settle_grace_minutes`' own failure mode committed by hand, one
   layer up: a count cannot tell you it is incomplete. Assert the run is `completed` before

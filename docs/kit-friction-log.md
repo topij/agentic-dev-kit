@@ -71,8 +71,10 @@
   from the working directory, so a correct `pwd` still leaves the target implicit. Bind the
   identity too: `scripts/reconcile_sessions.sh` already resolves `REPO_NWO` and exports
   `GH_REPO` before collecting evidence, which is the pattern to generalise. Passing `--repo`
-  explicitly on every `gh` call is the same guarantee at the call site, and is what `#246`
-  was filed about.
+  explicitly at the call site gives the same guarantee. `#246` is the occurrence behind this —
+  filed on a forge *write* reaching the wrong repository; the cwd-resolution mechanism it
+  describes is read/write-agnostic, which is why extending it to reads is proposed here rather
+  than claimed as already covered.
 
 ## 2026-08-19
 
