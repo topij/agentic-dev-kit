@@ -12,6 +12,42 @@
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
 
+## 2026-08-20
+
+- **A figure was read off a workflow run that had not finished, and nothing in the reading
+  said so.** Severity **H**. A CI-cost measurement used
+  `gh api .../runs/<id>/jobs --jq 'select(.conclusion != null)'` while the run was still in
+  flight. The filter silently dropped the three unfinished jobs — including the long pole —
+  and the remaining subset was reported as the run's totals: job count, wall clock and
+  runner-minutes all wrong, wall clock by roughly fourfold. It reached a commit message and
+  a PR body before a review lens re-derived it. The shape is exactly what
+  `settle_grace_minutes` exists for on the check rollup — a partial result is
+  indistinguishable from a complete one by inspection — but nothing carries that lesson to
+  the *runs* API, where the same agent hits it by hand. Proposed fix: a rule wherever the kit
+  reads a run or a rollup — assert the container reports `completed` **before** reading any
+  figure out of it, and treat a filter that drops rows as the thing that hides
+  incompleteness rather than as tidying.
+
+- **A delegated implementer stopped mid-task waiting for a background notification that no
+  one had arranged.** Severity **M**. Told to run the verification command and report the
+  result, the delegate backgrounded it, then ended its turn saying it would wait for a
+  monitor notification before branching and committing — so the task notification arrived
+  with no branch, no commit, and no verification, while its edits sat uncommitted on the
+  protected branch. It completed correctly when told plainly to run the command in the
+  foreground and not stop between steps. Proposed fix: delegation prompts for
+  implement-and-push work should state that the agent owns its own verification synchronously
+  and must not end its turn before the push, and should name branching as step one rather
+  than a later step — the ordering is what left the edits on `main`.
+
+- **`git checkout -- <file>` and a persisted `cd` both bit in one session, and the two-tree
+  rule only covers one of them.** Severity **M**. A `cd` into the second repo persisted across
+  later tool calls, so a subsequent poll ran in the adopter rather than the kit; caught only
+  because `pwd` was asserted before the next write. `AGENTS.md`'s two-tree rule prescribes
+  exactly that assertion, so the rule worked — but it is stated for *writes*, and this was a
+  read that would have silently reported the wrong repo's state. Proposed fix: extend the
+  rule's remedy to any command whose *output* is used as evidence, not only writes;
+  `#511` already reports the read-sequence half and this is a second occurrence of it.
+
 ## 2026-08-19
 
 - **A merge-gate predicate was used to answer a reportorial question, and the bias

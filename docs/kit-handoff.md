@@ -14,9 +14,89 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-19 — the review-owed line shipped, a gate predicate used to answer a report's question, and a review request the gate could see.
+Last updated: 2026-08-20 — two merges across two repos, `main`'s own protection found to be convention, and a session whose claims were what review kept catching.
 
-## Latest session — 2026-08-19 (a gate predicate used to answer a report's question, and a review the gate could see)
+## Latest session — 2026-08-20 (the enforcement under the gate, and an author who was the unreliable narrator)
+
+**Theme —** cross-repo. `#525` shipped here (`#521`'s forgery route, squash `6201af6`); `ci-gate`
+shipped in the cs-toolkit adopter (`4e743dc3`). Both PRs' review rounds found real defects and
+**every one was in the record prose, not the mechanism** — the diffs came through clean and the
+narration did not.
+
+- **`#524`: this repo's `main` is protected by convention only.** No classic protection
+  (404), `rules/branches/main` empty, the sole ruleset `dont-delete-main` left
+  `enforcement: disabled` since it was created. `scripts/hooks/pre-push` guards only
+  `dev/*` pushes touching the narrative files, so a direct push to `main` reaches its
+  `exit 0`. The kit ships the rule it does not enforce on itself. An enable script is
+  with the operator; **not applied** — the finding stands until it is.
+
+- **The adopter is better protected than the kit.** cs-toolkit's ruleset requires a PR
+  (0 approvals) but carries no `required_status_checks`. Closing that meant a `ci-gate`
+  aggregate job rather than a protection edit, because most of its checks are
+  matrix-generated and requiring those names wedges every PR the moment a package moves.
+  Tracked adopter-side; `CUS-1307` (nothing enforces `ci-gate.needs` stays complete) and
+  `CUS-1308` (`always()` vs `!cancelled()` on a gate job) came out of its review.
+
+- **`#372` has a cause, not just data points.** The poll named it: `review rate limited`,
+  on both surfaces. The acknowledge-then-nothing shape — replies naming the exact commit,
+  then no review object — is a quota wall. Recorded on the ticket with what it does *not*
+  explain (`#519` and `#520` are untouched by it). `#498`'s ruling may not have taken
+  effect in practice; that is the thing to check before gathering more.
+
+- **`#518` got its field evidence and the line works.** `⚠ review owed` fired unprompted at
+  `#525`'s converged head and was acted on rather than merged past. `#522` reproduced in the
+  same output — the `✅ DONE — green, reviewed` banner sits four lines above it.
+
+- **Filed this session: `#524`; `CUS-1307`, `CUS-1308`. Occurrence comments on `#372`,
+  and the cs-toolkit routing audit on `CUS-1306`.** That audit's finding: the `paths:` glob
+  binding the operator-merge rule exists only in `.claude/rules/`, so the runtime entering
+  through `AGENTS.md` gets the doctrine with no file list at all — `#243`/`#273`'s failure,
+  live in an adopter. Bidirectional drift, so it needs a merge and not a copy.
+
+- **Verified:** `make test` at `/Users/topi/Coding/agentic-dev-kit` on the `#525` branch —
+  1307 passed, exit 0. `make check-root` at `/Users/topi/Coding/in-parallel/cs-toolkit` —
+  4707 passed, exit 0.
+
+**Learned**
+
+- **A measurement taken from a still-running workflow read as a finished one.** A CI-cost
+  figure was gathered with a `select(.conclusion != null)` filter while the run was in
+  flight; the filter silently dropped the unfinished jobs, including the long pole, and the
+  partial set was reported as the total — into a commit message and a PR body, off by
+  roughly fourfold. This is `settle_grace_minutes`' own failure mode committed by hand, one
+  layer up: a count cannot tell you it is incomplete. Assert the run is `completed` before
+  reading any figure off it.
+
+- **The correction was wrong too, in the opposite direction.** The `if: always()` claim was
+  repaired once and still false — GitHub documents `always()` as running "even when
+  canceled", which is why its docs recommend `!cancelled()`. The delta pass caught it against
+  primary sources. The third version asserts only what holds either way. `fallback-review-panel.md`'s
+  "shorten, don't correct" is the rule that would have skipped two rounds.
+
+- **Both lenses found the same structural gap from opposite directions**, and neither found
+  it in the diff — the adversarial lens hunting a bypass, the correctness lens checking claims
+  against the tree, both landing on `ci-gate.needs` having no enforcement. Disjoint lenses
+  converging is the panel doctrine's claim; this is an instance of it.
+
+- **A delegated implementer left its work uncommitted on `main` and stalled awaiting a
+  notification that was never coming.** Nothing was pushed, so nothing was violated — the only
+  thing preventing a commit to `main` was the agent not getting that far, which is `#524`
+  demonstrating itself the same hour it was filed.
+
+- **A CHANGELOG placeholder cannot survive this repo's own suite.**
+  `test_real_changelog_headings_match_the_extraction_pattern` runs against the real file, so a
+  `#TBD` heading fails `make test` by construction. Any split where an implementer pushes and
+  the cockpit opens the PR hits this; the number has to be substituted before the suite can pass.
+  Related to `#507`.
+
+▶ Next: `#524` is the session's own unfinished business — the enable script is drafted and
+unapplied, and until it runs every ground rule about `main` here rests on agents obeying it.
+Behind it: `#372` now points at `#498`'s ruling rather than at more data-gathering, and `#310`
+is still the operator decision nobody has made.
+
+______________________________________________________________________
+
+## Session — 2026-08-19 (a gate predicate used to answer a report's question, and a review the gate could see)
 
 **Theme —** `#518` shipped (`#520`, squash `ab2bdad`): the converged head now names each
 configured reviewer that has not looked at it. The line's first cut was wrong, and wrong
@@ -293,72 +373,6 @@ objection can now always stop a merge."
 ▶ Next: rule on `#372` — it now carries the measurement it was held open for, and the
 reading changed mid-session. `#491`'s direction depends on which way it goes, and `#490`'s
 only complete fix is blocked on it. `#460` is the other standing operator ruling.
-
-______________________________________________________________________
-
-## Session — 2026-08-16 (the two held rulings, and a fail-open the panel found in the fix for one of them)
-
-**Theme —** the operator ruled on `#372` and `#350`, the two decisions the previous
-block named as owned by nobody, and both shipped the same session. The parts worth
-carrying are what the ruling on `#372` turned out to rest on, and what the panel found
-inside the fix for `#350`.
-
-- **`#372` ruled: reconfigure the trigger** (`#483`, squash `6484c1c`). The decision
-  turned on a fact none of the five recorded occurrences had established: **this repo
-  has never had a `.coderabbit.yaml`**, in the tree or anywhere in git history. Every
-  occurrence was measured against stock defaults, one of which re-reviews on every push
-  against a workflow that pushes a new head per fix round. `.coderabbit.yaml` is
-  repo-local — absent from `KIT_OWNED`, so it reaches no adopter; verified at the
-  destination rather than by reading the allowlist. The transferable half is a new
-  `fallback-review-panel.md` section: the kit had extensive machinery for *detecting* an
-  unavailable reviewer and none for asking whether it was configured to be available.
-  `#372` **stays open** — the improvement is a prediction until a batch measures it.
-- **`#350` ruled: direction 1, and shipped** (`#484`, squash `da5158c`). `mergeable`
-  now accepts a configured bot's own review of the current head as independent-review
-  evidence, alongside the receipt. Direction 2 (a `bot:<name>` literal) was declined on
-  the threat model: receipts are self-reported by the agent that wants the merge, so
-  that literal would have put the fabricated-receipt path `#428` exists to catch onto
-  the gate's critical path.
-- **Filed:** `#485` (a receipt authorizes a merge over a bot's live
-  `CHANGES_REQUESTED` — `record_review` refuses only on a pending check row, never on
-  the submitted verdict; reproduced at `#484`'s base, so it predates that work),
-  `#486` (the `covers_head is True` strictness is unpinned — truthiness passes the whole
-  suite). Occurrence recorded on `#467`.
-
-**Learned**
-
-- **The panel found a fail-open in the merge gate that nothing else did.** `#484`'s
-  first round showed the new route accepted *any* review object at the head, so
-  `DISMISSED`, `PENDING` and `CHANGES_REQUESTED` all authorized merges. CI, the suite,
-  a three-mutation harness of my own and CodeRabbit's one landed review had all passed it.
-- **The docstring's stated reason for not checking something was itself the defect.**
-  It gave "`CHANGES_REQUESTED` is its own blocker" as why that state needed no check;
-  `reviewDecision` reports *required* reviewers and a bot is typically not one, so the
-  blocker never fired. The correction was then itself overstated — it holds on `gh` and
-  not on the REST fallback — and a later round caught that too.
-- **Two verification habits failed before any code did.** `make test 2>&1 | tail` returns
-  *tail's* status, so every "exit 0" this session claimed before the correction was
-  reading the pass line, not the exit code. And a `cd` into a base-comparison clone
-  outlived its command, so a later grep ran in the wrong tree and reported this work's
-  own changes missing — `AGENTS.md` predicts that failure and says it mimics the tool
-  misbehaving, which is exactly how it read.
-- **A guard can be half-decorative.** `qualifying_bot_coverage` requires two clauses; only
-  one had a failing case behind it, and a lens found the other survived the suite. `#447`'s
-  shape, one clause over from where the neighbouring docstring warns about `#447`.
-
-**Open, and owned by nothing yet**
-
-- **`#350` needs closing or a note.** Its direction was ruled and the work merged, and no
-  closing keyword was written, so nothing retired it — the same state `#439` was left in
-  by the same discipline.
-- **`#485`** is the sharpest of the new tickets: it is a merge-gate hole in the *receipt*
-  path, found only because a lens was probing the new route's neighbour, and it predates
-  everything shipped here.
-- `#460` and `#465` are the operator-held rulings still standing.
-
-▶ Next: measure `#372`'s prediction — the first PR opened against this `main` is the
-first valid data point, since `#484` established that a `.coderabbit.yaml` does not govern
-the PR introducing it.
 
 ______________________________________________________________________
 
