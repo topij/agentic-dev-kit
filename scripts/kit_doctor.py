@@ -1152,6 +1152,17 @@ def _invocable_kit_scripts() -> set[str]:
     `✗ NO SUCH FILE` and exit 1 with nothing to tell them why (panel,
     adversarial lens). Anything under a `lib/` is imported, never invoked.
 
+    Role `test` is excluded for the same reason: a test module is collected and
+    run by pytest, never named in a hook registration. Left in, #493's 16
+    `scripts/tests/*.py` basenames (`conftest.py`, `test_kit_doctor.py`,
+    `_repo_layout.py`, …) leaked into this set, so an adopter's OWN unrelated
+    script sharing one of those names — `scripts/my_hooks/conftest.py`
+    registered in `.claude/settings.json`, say — was misjudged as a kit file:
+    classified `broken`, landed in `dead_registrations`, and flipped the exit
+    code 0->1 on an otherwise healthy install. That is exactly the class
+    `test_an_adopters_own_script_is_not_judged_as_a_kit_hook` closed for
+    library modules, reopened by the new role (panel, both lenses, #527).
+
     Defence in depth rather than the whole defence: the boundary check in
     `_match_word`'s basename comparison is what actually stops `env_paths.py`
     matching `paths.py`.
@@ -1160,7 +1171,7 @@ def _invocable_kit_scripts() -> set[str]:
     return {
         PurePosixPath(rel).name
         for rel, role in KIT_OWNED
-        if rel.endswith((".py", ".sh")) and "/lib/" not in rel and role != "template"
+        if rel.endswith((".py", ".sh")) and "/lib/" not in rel and role not in ("template", "test")
     }
 
 
