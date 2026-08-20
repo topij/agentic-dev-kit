@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## #TBD — 2026-08-20
+## #525 — 2026-08-20
 
 - **`⚠ review coverage:` staleness warning now requires a TRUSTED pending bot to
   suppress it** (`#521`), not merely a name-matching one. Previously the warning
