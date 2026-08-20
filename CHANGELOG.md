@@ -42,6 +42,23 @@ starts.
 
 ---
 
+## #527 — 2026-08-20
+
+- **`kit-manifest.json` now tracks the kit's own test suite** (`#493`): all 16
+  files under `scripts/tests/` and the 2 under `scripts/lib/state_paths/tests/`
+  are now in `KIT_OWNED`, under a new role, `"test"`. Previously a vendored
+  copy of the suite was invisible to `kit_doctor` — `0 differ` regardless of
+  how stale it was — which let a vendored `conftest.py` missing the
+  `_hermetic_state_root` fixture go undetected while its runs wrote into a
+  real `state/pr-watch/` tree. **If you never vendored the kit's tests**:
+  nothing to do — a fresh `kit_doctor` run now reports them `declined`
+  instead of not mentioning them at all, and the `declined` count in "✓ intact
+  for this adoption" grows by up to 18. **If you did vendor part or all of the
+  suite**: your next `kit_doctor` run will report real drift on those files
+  for the first time (previously silent), and `/upgrade` will refresh them
+  like any other kit-owned file. No report-shape change beyond the larger
+  `declined`/tracked population; no config key or CLI surface changed.
+
 ## #525 — 2026-08-20
 
 - **`⚠ review coverage:` staleness warning now requires a TRUSTED pending bot to
