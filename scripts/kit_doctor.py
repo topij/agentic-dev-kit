@@ -217,6 +217,41 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # refreshed every engine around it and left this one at whatever version
     # the adopter first installed, while reporting `0 differ, 0 unknown`.
     ("scripts/check_memory_budget.py", "engine"),
+    # The kit's own test suite (#493). Role `test` rather than `engine`: nothing
+    # here is imported by an engine at run time (`derive_dependencies` scans only
+    # `engine` and `hook` roles), and none of it should be probed by
+    # `_derive_engine_names` (`engine`-only, `scripts/` prefix) — these files
+    # verify the kit, they do not run as part of it. Tracking them at all is the
+    # point of #493: a vendored copy used to be invisible to `kit_doctor` —
+    # `KIT_OWNED` carried nothing under `scripts/tests/`, so a stale vendored
+    # `conftest.py` missing the `_hermetic_state_root` fixture reported
+    # `0 differ` while the suite it guarded wrote into a live `state/` — and
+    # `_remap` already handles the `scripts/` prefix uniformly regardless of
+    # role, so no new mechanism was needed, only these entries. Installable and
+    # declinable exactly like an engine: `--record-install` walks all of
+    # `KIT_OWNED` without filtering by role, so an adopter who does not vendor
+    # tests gets `declined`, not a silent gap.
+    ("scripts/tests/_repo_layout.py", "test"),
+    ("scripts/tests/conftest.py", "test"),
+    ("scripts/tests/test_check_memory_budget.py", "test"),
+    ("scripts/tests/test_ci_workflow.py", "test"),
+    ("scripts/tests/test_init_sh.py", "test"),
+    ("scripts/tests/test_kit_doctor.py", "test"),
+    ("scripts/tests/test_kit_repo_only.py", "test"),
+    ("scripts/tests/test_kitconfig.py", "test"),
+    ("scripts/tests/test_mutation_gate.py", "test"),
+    ("scripts/tests/test_panel_prompt.py", "test"),
+    ("scripts/tests/test_portability.py", "test"),
+    ("scripts/tests/test_pr_followup_hook.py", "test"),
+    ("scripts/tests/test_pr_watch.py", "test"),
+    ("scripts/tests/test_reconcile_sessions.py", "test"),
+    ("scripts/tests/test_repo_layout.py", "test"),
+    ("scripts/tests/test_state_guard.py", "test"),
+    # `state_paths` is a package with its own `tests/`, hashed the same way for
+    # the same reason: it sits under `scripts/lib/`, so `_remap` covers it
+    # uniformly with everything else — no boundary to draw here.
+    ("scripts/lib/state_paths/tests/__init__.py", "test"),
+    ("scripts/lib/state_paths/tests/test_state_paths.py", "test"),
     ("scripts/hooks/pre-push", "hook"),
     # Same omission as check_memory_budget.py, and the more consequential half:
     # this hook reads `review.fallback_panel.lens_compute` to render the
@@ -321,9 +356,13 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     #   - init.sh never writes to itself. It writes config/dev-model.yaml and
     #     renders docs/templates/. Pinned BEHAVIOURALLY by
     #     `test_init_sh.py::test_running_the_installer_does_not_modify_the_installer`
-    #     IN THE KIT REPO — `KIT_OWNED` tracks no tests, so that suite does not
-    #     travel to an adopter and this is not a guarantee where you are reading
-    #     it if you are reading it downstream (#386) —
+    #     IN THE KIT REPO — `KIT_OWNED` now tracks `scripts/tests/` (#493), so
+    #     this suite travels to an adopter who vendors it, and `kit_doctor`
+    #     reports drift on it the same as any other kit-owned file. It is
+    #     declinable like everything else `KIT_OWNED` lists, though: a repo that
+    #     declined the test directory has neither the file nor the guarantee
+    #     behind it, and `kit_doctor` reports that as `declined`, not silently
+    #     (#386 is the prior state this closed) —
     #     which runs the installer and compares its own bytes. (This line used to
     #     name `test_the_installer_is_not_self_modifying`, a regex over init.sh's
     #     source that the commit adding this entry deleted — two review lenses
@@ -359,8 +398,9 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     #     with `("init.sh", "engine")` substituted in a scratch copy, three tests
     #     fail — `test_the_installer_is_tracked`,
     #     `test_an_unedited_installer_behind_the_kit_reports_stale_not_locally_edited`,
-    #     and that one, at its slice assertion. `KIT_OWNED` ships no tests, so an
-    #     adopter reading this comment has none of them (#386).
+    #     and that one, at its slice assertion. `KIT_OWNED` now ships
+    #     `scripts/tests/` (#493), so an adopter who vendors it has all three —
+    #     declined, like any other test file, if they did not.
     #   - The `_TEXT_IMPORT_RE` dependency scan applies to `engine` and `hook`
     #     only. init.sh declares no non-stdlib dependency, so scanning it would
     #     manufacture edges out of a shell script's own prose.
@@ -493,9 +533,11 @@ def _derive_engine_names(kit_owned: tuple[tuple[str, str], ...]) -> tuple[str, .
     the two filters agree today. Adding an ``engine``-role entry outside the
     prefix is the case that would produce a garbage probe path, and nothing
     stops it — see ``test_engine_probe_names_cover_the_real_kit_owned_engines``
-    (in the KIT repo: ``KIT_OWNED`` tracks no tests, so an adopter has neither
-    that test nor any other behavioural cover for this module — #386), which is
-    what caught an attempt to give ``init.sh`` role ``engine``.
+    (in the KIT repo, and since #493 also in an adopter's tree that vendored
+    ``scripts/tests/`` — one that declined it has neither that test nor any
+    other behavioural cover for this module, reported as ``declined`` rather
+    than silently, which is the gap #386 named), which is what caught an
+    attempt to give ``init.sh`` role ``engine``.
 
     ``init.sh``'s ``detect_engines_dir()`` used to carry the identical triple —
     the write-side half of the same bug (issue #67); it now derives its probe

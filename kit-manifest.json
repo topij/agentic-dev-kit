@@ -25,7 +25,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "3e9a5ec03987c257a53821e84088c5986e304b33aac4c2ca6b437e48b0568991"
+      "sha256": "18b11cdbf1fe1f67919da4da95cb73f3c104ead3a81a2ae5573a712e4be8e30e"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -85,7 +85,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "03df08a379de638b4511bf409016a7077172308d2cc25602c40b3d31e1007a33"
+      "sha256": "ed50834403d5ec663987370955f6d233af2a8892246a7a051cbb454db8292825"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -117,7 +117,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "f0ae168cbec2260bfcc8dc19c1b42f29bbf88bee8481b50fa50f6388cce6e237"
+      "sha256": "ee7ceee877127edd50b379e850567b312b7d4b5286b1680f69899b6664e927f1"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
@@ -173,6 +173,14 @@
       "role": "engine",
       "sha256": "e39fca241d6fbf28596ed3954f28a55e65831181cedb02c7c15e372895bb5bd2"
     },
+    "scripts/lib/state_paths/tests/__init__.py": {
+      "role": "test",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "scripts/lib/state_paths/tests/test_state_paths.py": {
+      "role": "test",
+      "sha256": "b474703decdd2304d7460762fe5b5aa7fed9a81a9a422df61be0825b0c2ed88d"
+    },
     "scripts/panel_prompt.py": {
       "role": "engine",
       "sha256": "2a22b1179281993e0a5d371ce47c239596cee7670e3e09362d781a1bba61bba5"
@@ -184,6 +192,70 @@
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
       "sha256": "215591bc3bd4b933f4db74d359a5614b990da7dbdbb31805d3ec01b1dada1702"
+    },
+    "scripts/tests/_repo_layout.py": {
+      "role": "test",
+      "sha256": "5a0fe196b53829983d3c507c57bcad61a8be32ec44a3a7801f6d55c7a2ebad46"
+    },
+    "scripts/tests/conftest.py": {
+      "role": "test",
+      "sha256": "865f99b7188799f83100d44b78a5138383ac24239ec6807f8c33c92643c74aca"
+    },
+    "scripts/tests/test_check_memory_budget.py": {
+      "role": "test",
+      "sha256": "8ddd343a1d1ac2a583b0ad7fbbfd76f7a63016f5c7c1f8e8074002f70fe76b4b"
+    },
+    "scripts/tests/test_ci_workflow.py": {
+      "role": "test",
+      "sha256": "4a26b00a2ddae874a76cdb0d85b3c9e14a77d727d959e45543647e928368b5f3"
+    },
+    "scripts/tests/test_init_sh.py": {
+      "role": "test",
+      "sha256": "380a4181ebb68f92c2b267f901dfd4ebbdddbbcde19175ab2b471f2982c7e6c2"
+    },
+    "scripts/tests/test_kit_doctor.py": {
+      "role": "test",
+      "sha256": "1c8d1bb5a6b72477158d2dd078fcbcb9928268a8db64705ed904d7a6487e6ae4"
+    },
+    "scripts/tests/test_kit_repo_only.py": {
+      "role": "test",
+      "sha256": "e361de6f7c2de76a485307521556e16d185eadebf62907d09cd63d62dff75e4a"
+    },
+    "scripts/tests/test_kitconfig.py": {
+      "role": "test",
+      "sha256": "74be2e158d39ea83c45ffed2108acb77d98bde21384ead95185e7bada4af3278"
+    },
+    "scripts/tests/test_mutation_gate.py": {
+      "role": "test",
+      "sha256": "36f0ae3a031e7bd2e9ca6ece84668e37ff1b71ae2b665a2af08cfd8c7f06fa8b"
+    },
+    "scripts/tests/test_panel_prompt.py": {
+      "role": "test",
+      "sha256": "dbceba10f68911021c12fffc54445ab076c73dcb2ec727d6a2cb58865a455e44"
+    },
+    "scripts/tests/test_portability.py": {
+      "role": "test",
+      "sha256": "1fe7aa4bc73f88fdc579d215359464d29c0ee88f422b7046eda5d8dee479b848"
+    },
+    "scripts/tests/test_pr_followup_hook.py": {
+      "role": "test",
+      "sha256": "dc6d69cfa537ed494402fda2ee39a5e5b8add2440abea9b70c5ab8f58071cd33"
+    },
+    "scripts/tests/test_pr_watch.py": {
+      "role": "test",
+      "sha256": "671015ff684739051f26e6c71072f5e0dd89a8b096bf96f14edd6ccaf1e91108"
+    },
+    "scripts/tests/test_reconcile_sessions.py": {
+      "role": "test",
+      "sha256": "b9c3bef8e5a414a8a612af35374e2bdfeb0b1c486299322d30e53671218a3b7f"
+    },
+    "scripts/tests/test_repo_layout.py": {
+      "role": "test",
+      "sha256": "3560dba495462b51d85d68d12dc779616436671558f30553e244b7ffdc76f163"
+    },
+    "scripts/tests/test_state_guard.py": {
+      "role": "test",
+      "sha256": "274d41fb0913389afeb8c4213f3f402a41d524c957a2253e7fdd9bc341a6a55c"
     }
   },
   "kit_version": 2

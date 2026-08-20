@@ -562,6 +562,17 @@ def test_engine_probe_names_cover_the_real_kit_owned_engines():
     assert "lib/kitconfig.py" in kit_doctor._ENGINE_NAMES
     # The hook is not an engine and does not live under paths.engines as one.
     assert "hooks/pre-push" not in kit_doctor._ENGINE_NAMES
+    # Same for the test suite (#493): `scripts/tests/` sits under the prefix an
+    # adopter's `paths.engines` remaps, but role `test` is not role `engine`, so
+    # none of it should be swept into the engines-dir probe. A vendored test
+    # suite would otherwise make a sized-down install (kit_doctor.py + kitconfig
+    # only, no tests) look like it "contains no kit engine" is the wrong verdict
+    # for the WRONG reason — #59's bug reopened via the new role instead of the
+    # old hand-written list.
+    tests = [rel for rel, role in kit_doctor.KIT_OWNED if role == "test"]
+    assert tests, "KIT_OWNED lists no tests — #493 regressed"
+    for rel in tests:
+        assert rel[len(kit_doctor.KIT_ENGINE_PREFIX) + 1 :] not in kit_doctor._ENGINE_NAMES
 
 
 def test_sized_down_install_of_two_engines_is_not_reported_engineless(tmp_path):
