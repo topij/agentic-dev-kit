@@ -4132,11 +4132,33 @@ def render(report: dict) -> str:
     # engine saying "this verdict is not coming" — which is precisely the
     # reviewer-went-away case, so suppressing coverage there silenced the warning
     # in the one situation it was written for.
-    # `.get` here, direct indexing below: an entry missing `blocking` falls out
-    # of `reviewing` and the warning FIRES, which is the safe direction.
-    reviewing = {e["bot"] for e in bots.get("pending") or [] if e.get("blocking")}
+    # #521: deferring on mere PRESENCE in `pending` is forgeable. `pending`
+    # entries are matched by `_match_bot` over a check NAME — a case-insensitive
+    # SUBSTRING match — and a same-repo PR's own workflow holds `checks: write`.
+    # So a check named e.g. `coderabbit-shim-status` would join a name-only set
+    # for `coderabbit`, and silencing this warning on it would let a PR suppress
+    # "my last review is stale" about its OWN diff, for up to
+    # `bot_pending_grace_minutes`. `#95` already built the answer, threaded here
+    # by `#520` for its own `⚠ review owed` line: the row's creator identity is
+    # not the PR's to choose, so `_match_bot_identity` resolves it into
+    # `trusted` on every pending entry, and this line now reads that instead.
+    #
+    # `.get` throughout: an entry missing `blocking` or `trusted` — including one
+    # whose identity failed to resolve, which leaves `trusted` False — falls out
+    # of `reviewing_trusted` and the warning FIRES. That is the safe direction: a
+    # spurious staleness warning is cheap, a suppressed one is how a stale
+    # review reads as coverage.
+    #
+    # The gate is untouched by this. `blocking` still decides whether a pending
+    # check blocks a merge, unchanged and fail-closed as before — a forged
+    # pending check still blocks the PR that forged it, and still ages out.
+    reviewing_trusted = {
+        e["bot"]
+        for e in bots.get("pending") or []
+        if e.get("blocking") and e.get("trusted")
+    }
     for entry in bots.get("coverage") or []:
-        if not entry["covers_head"] and entry["bot"] not in reviewing:
+        if not entry["covers_head"] and entry["bot"] not in reviewing_trusted:
             # Direct indexing, not `.get`: bot_review_coverage always emits all
             # four keys, so a `.get` here would only imply a partial entry is
             # expected while the very next lookup would KeyError on one.
@@ -4189,8 +4211,8 @@ def render(report: dict) -> str:
     #     and its own remedy.
     #   - Silent where a bot is mid-review (a BLOCKING pending entry). A verdict
     #     is coming; telling you to request one spends a second unit on a review
-    #     already in flight. Same `reviewing` set the coverage warning above
-    #     computes, and for the same reason.
+    #     already in flight. Same `reviewing_trusted` set the coverage warning
+    #     above computes, and for the same reason.
     #   - Silent where the review-bot read FAILED (`signal` is not `ok`). The
     #     hedge printed above says reviewer state could not be read this poll;
     #     an absolute about reviewer state underneath it would retract that
@@ -4230,30 +4252,24 @@ def render(report: dict) -> str:
     # defect. What a receipt must not do is stand in for having asked, which is
     # the confusion #518 records. Blocking here would wedge the loop on exactly
     # the repos whose reviewer cannot answer.
-    # Mid-review suppression needs a TRUSTED pending entry, which `reviewing`
-    # above is not. That set is keyed on `_match_bot` over a check NAME — a
-    # case-insensitive SUBSTRING match — and a same-repo PR's own workflow holds
-    # `checks: write`. So a check called `coderabbit-shim-status` joins
-    # `reviewing` for `coderabbit`, and silencing this line on it would let a PR
-    # suppress "nobody has reviewed this" for its own diff, for the grace
-    # window, in exactly the never-reviewed case #518 is about. `#95` already
-    # built the answer for the outage branch: the row's creator is not the PR's
-    # to choose.
+    # Mid-review suppression needs a TRUSTED pending entry. That set is keyed on
+    # `_match_bot` over a check NAME — a case-insensitive SUBSTRING match — and
+    # a same-repo PR's own workflow holds `checks: write`. So a check called
+    # `coderabbit-shim-status` would join a name-only set for `coderabbit`, and
+    # silencing this line on it would let a PR suppress "nobody has reviewed
+    # this" for its own diff, for the grace window, in exactly the
+    # never-reviewed case #518 is about. `#95` already built the answer for the
+    # outage branch: the row's creator is not the PR's to choose.
     #
     # A missing or unresolvable `trusted` therefore counts as NOT trusted and
     # the line FIRES. That direction costs a review request that may turn out to
     # be redundant; the other direction costs the diff being merged unreviewed,
     # which is the failure this whole line exists to prevent.
     #
-    # `reviewing` itself is deliberately left alone. Its other consumer — the
-    # coverage-staleness warning above — has the same gap and predates this
-    # change, so widening the fix into it is a separate change with its own
-    # blast radius rather than a free ride on this one.
-    reviewing_trusted = {
-        e["bot"]
-        for e in bots.get("pending") or []
-        if e.get("blocking") and e.get("trusted")
-    }
+    # `reviewing_trusted` was computed once already, above the coverage warning
+    # — reused here rather than recomputed. It used to be `reviewing` there,
+    # keyed on name only; #521 closed that gap so both consumers of "a bot is
+    # mid-review" now agree on who counts.
     accounted = (
         covered
         | reviewing_trusted
