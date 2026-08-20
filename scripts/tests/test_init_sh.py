@@ -3174,15 +3174,20 @@ def _step2_refresh_block() -> str:
     """upgrade.md's Step 2 refresh block, as text.
 
     Anchored on the `cp` of `init.sh` that opens it, so a code block elsewhere in
-    the document cannot be picked up instead. The anchor tolerates both the bare
-    `/tmp/agentic-dev-kit` form and the `$KIT`-anchored one (#399) — pinning the
-    literal path here would make the cross-tree rewrite look like a missing block.
+    the document cannot be picked up instead. The anchor tolerates the bare
+    `/tmp/agentic-dev-kit` form, the bare `$KIT`-anchored one (#399), and the
+    guarded `${KIT:?...}` form (#496) — pinning the literal path here would make
+    a legitimate rewrite of any of those three look like a missing block.
     """
     doc = (
         REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
     ).read_text(encoding="utf-8")
     blocks = re.findall(r"```(?:bash|sh)\n(.*?)```", doc, re.DOTALL)
-    matching = [b for b in blocks if re.search(r"cp \"?(\$KIT|/tmp/agentic-dev-kit)", b)]
+    matching = [
+        b
+        for b in blocks
+        if re.search(r'cp "?(\$KIT|\$\{KIT:\?[^}]*\}|/tmp/agentic-dev-kit)', b)
+    ]
     assert len(matching) == 1, f"expected one Step 2 refresh block, found {len(matching)}"
     return matching[0]
 
@@ -3193,7 +3198,7 @@ def _upgrade_init_argv() -> list[str]:
     lines = [
         ln.strip()
         for ln in matching.splitlines()
-        if re.match(r'^\s*(\./|"\$REPO/)init\.sh\b', ln)
+        if re.match(r'^\s*(\./|"\$REPO/|"\$\{REPO:\?[^}]*\}/)init\.sh\b', ln)
     ]
     assert len(lines) == 1, f"expected one init.sh invocation, found {lines!r}"
     argv = shlex.split(lines[0].split("#")[0])
@@ -3285,7 +3290,10 @@ def _upgrade_template_copy_block() -> str:
         # the round-2 HIGH stayed invisible: whatever the extract removes, no
         # test can see. If Step 2 ever gains a second `cd`, this must fail
         # loudly rather than quietly review a block that is not what ships.
-        if not re.match(r'^\s*(cd "\$REPO"|cp "\$KIT/init\.sh"|chmod \+x)', line)
+        if not re.match(
+            r'^\s*(cd "\$REPO"|cp "(\$KIT|\$\{KIT:\?[^}]*\})/init\.sh"|chmod \+x)',
+            line,
+        )
     ]
     body = "\n".join(kept)
     # Asserted against the SHIPPED block, not the stripped one, and that is the
@@ -3331,7 +3339,7 @@ def _run_template_copy(
     # a fixture and tell us nothing about the guard.
     block = _upgrade_template_copy_block()
     stubbed = re.sub(
-        r'^(\s*)"\$REPO/init\.sh" --no-clobber\s*$',
+        r'^(\s*)"(?:\$REPO|\$\{REPO:\?[^}]*\})/init\.sh" --no-clobber\s*$',
         r'\1: > "$REPO/INIT_SH_RAN"',
         block,
         flags=re.M,
