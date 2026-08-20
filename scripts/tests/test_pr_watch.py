@@ -4866,6 +4866,111 @@ def test_only_a_blocking_pending_bot_silences_the_coverage_warning() -> None:
     )
 
 
+def test_a_forged_pending_check_does_not_silence_the_coverage_warning() -> None:
+    """#521. The deference used to key on mere PRESENCE in `pending`, which is
+    keyed on `_match_bot` over a check NAME — a case-insensitive SUBSTRING
+    match. A same-repo PR's own workflow holds `checks: write`, so a check
+    named `coderabbit-shim-status` joins that name-only set for `coderabbit`
+    and would have silenced "my last review is stale" about the PR's OWN
+    diff, for up to `bot_pending_grace_minutes`.
+
+    Everything here is identical to the "actively blocking, deferred" case in
+    `test_only_a_blocking_pending_bot_silences_the_coverage_warning` (a
+    name-matching, blocking, freshly-started pending check against a
+    behind-head review) except `identity`, which does not resolve to the bot
+    — so `trusted` alone must flip the outcome from silent to firing.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")]
+    )
+
+    forged = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        check_details=[
+            _bot_check(
+                name="coderabbit-shim-status",
+                state="PENDING",
+                bucket="pending",
+                startedAt=_minutes_ago(1),
+                identity="github-actions[bot]",
+            )
+        ],
+        now=NOW,
+    )
+    pending = forged["review_bots"]["pending"][0]
+    assert pending["bot"] == "coderabbit"
+    assert pending["trusted"] is False
+    # The gate is untouched by this issue: a forged pending check still
+    # BLOCKS — fail-closed, unchanged — it can only block the PR that forged
+    # it, and it still ages out.
+    assert pending["blocking"] is True
+
+    assert "review coverage" in pr_watch.render(forged)
+
+
+def test_a_genuinely_trusted_pending_bot_still_silences_the_coverage_warning() -> None:
+    """The other half of #521's fix: tightening trust must not make the
+    deference impossible to reach at all. A real reviewer's own pending check
+    — resolvable identity, actively blocking — must still suppress the
+    staleness warning about a review it is in the middle of redoing.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")]
+    )
+
+    trusted = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        check_details=[
+            _bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))
+        ],
+        now=NOW,
+    )
+    pending = trusted["review_bots"]["pending"][0]
+    assert pending["trusted"] is True
+    assert pending["blocking"] is True
+
+    assert "review coverage" not in pr_watch.render(trusted)
+
+
+def test_an_unresolvable_identity_does_not_silence_the_coverage_warning() -> None:
+    """A missing/unresolvable identity is the other untrusted shape (#95),
+    distinct from a forged one: no creator could be attributed at all, rather
+    than one attributed to someone else. Both must fail the same direction —
+    the warning FIRES — because a spurious staleness warning is cheap and a
+    suppressed one is how a stale review reads as coverage.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "0ldc0de", "2026-07-25T12:00:00Z")]
+    )
+
+    blank_identity = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        check_details=[
+            _bot_check(
+                state="PENDING",
+                bucket="pending",
+                startedAt=_minutes_ago(1),
+                identity="",
+            )
+        ],
+        now=NOW,
+    )
+    pending = blank_identity["review_bots"]["pending"][0]
+    assert pending["trusted"] is False
+    assert pending["blocking"] is True
+
+    assert "review coverage" in pr_watch.render(blank_identity)
+
+
 def test_coverage_honours_a_non_default_review_bots_list() -> None:
     """`bots=bots` threading was correct and pinned by nothing — dropping it
     passed the whole suite, because every other test uses the default list where

@@ -42,6 +42,24 @@ starts.
 
 ---
 
+## #525 — 2026-08-20
+
+- **`⚠ review coverage:` staleness warning now requires a TRUSTED pending bot to
+  suppress it** (`#521`), not merely a name-matching one. Previously the warning
+  ("this bot's last review was of an older commit") was silenced by ANY pending
+  entry for that bot, and `review_bots.pending` is matched by check **name** — a
+  case-insensitive substring — so a same-repo PR's own workflow (`checks: write`)
+  could post a check named e.g. `coderabbit-shim-status` and suppress the coverage
+  warning about its own diff, for up to `bot_pending_grace_minutes`. The line now
+  reads the same `identity`/`trusted` fields `#520` added to `review_bots.pending`
+  entries: a missing, forged, or unresolvable identity counts as untrusted, and the
+  warning FIRES. **No report-shape change** — `identity`/`trusted` already existed
+  on every `pending` entry. If you scrape poll output, expect this warning to fire
+  in more cases than before (specifically, wherever it used to be silenced by an
+  untrusted pending check) — that is the fix, not a regression. **The merge gate is
+  unchanged**: `blocking` still governs it, unchanged and fail-closed, exactly as
+  `#520` left it.
+
 ## #520 — 2026-08-19
 
 - **New poll line `⚠ review owed:`** (`#518`) — printed when the report is
