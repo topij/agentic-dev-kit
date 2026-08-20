@@ -328,9 +328,8 @@ Self-pace on a bounded cadence — don't busy-wait:
 
     **Poll on means poll on: never wait on the request's outcome.** An
     acknowledgement — even one naming the exact sha and what it will review — is
-    not evidence a review is coming: two were measured still silent at 19 and 45
-    minutes, and there is no interval after which the absence becomes informative
-    on its own (`#372`, the 2026-08-20 runs). Under `#372`'s standing ruling the
+    not evidence a review is coming, and no interval of silence is informative on
+    its own; `#372` holds the measured occurrences. Under its standing ruling the
     panel is the review of record: a bot review that arrives gate-visible spares
     the receipt via the `bot-coverage` route, and one that never arrives changes
     nothing about what the merge rests on.
@@ -385,14 +384,15 @@ Self-pace on a bounded cadence — don't busy-wait:
 
     **Before recording a converged-head `fallback:panel` receipt, re-read the
     bot's status comment once — the body, never the count** (`#372`'s ruling of
-    2026-08-20, item 4). Some reviewers deliver a completed review by *editing an
-    earlier comment in place* (`#509`), and the comment-verdict conjunction above
-    deliberately disqualifies a body that still carries stale skip text beside the
-    verdict — so both report lines can stay silent over a review that genuinely
-    happened, which is how `#525` merged on a panel receipt while a real clean
-    review of that exact head sat unseen. The merge was still correct; the record
-    was not. The one read is the detection route the engine deliberately does not
-    have: a genuinely delivered clean verdict of this head takes the
+    2026-08-20, item 4, as corrected there). Some reviewers deliver a completed
+    review by *editing an earlier comment in place* (`#509`), and each way that
+    edit goes unseen has eaten one real review: a poll keyed on comment count is
+    structurally blind to the edit (`#525` — the engine's own `ⓘ review reported:`
+    line would have fired had the engine been what polled), and a body that still
+    carries stale skip text beside the verdict is *deliberately* disqualified by
+    the comment-verdict conjunction above (`#519`), so the engine's report lines
+    stay silent over a review that genuinely happened. The one read covers both:
+    a genuinely delivered clean verdict of this head takes the
     `<bot>:comment-verdict` receipt per the paragraph above, and where the panel
     already carries the merge, note the bot's review on the PR rather than letting
     the record say it never happened.
