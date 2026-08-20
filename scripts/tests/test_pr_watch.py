@@ -3462,6 +3462,40 @@ def test_bot_coverage_at_the_head_is_evidence_with_no_receipt() -> None:
     assert "no lenses recorded" not in rendered
 
 
+def test_stale_receipt_beside_qualifying_bot_coverage_nulls_out_head() -> None:
+    """#495. Since #484 `valid` is no longer `receipt_head == head` — it is true
+    on either evidence route — but `head` was still populated unconditionally
+    from the receipt. So a STALE receipt sitting beside qualifying bot coverage
+    at the current head reported the stale sha next to `valid: true`, which
+    reads as "the evidence covers this commit" when it does not.
+
+    `_green_view` defaults `reviews: []`, so
+    `test_review_receipt_must_match_current_head`'s stale-receipt case never has
+    a coverage entry alongside it and cannot see this combination — this test
+    supplies a qualifying review to reach it.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={"head": "0ldc0de", "source": "fallback:codex"},
+        **_settled(view),
+    )
+
+    assert report["review_evidence"]["valid"] is True
+    assert report["review_evidence"]["route"] == "bot-coverage"
+    assert report["review_evidence"]["head"] is None
+    # The rest of the receipt-only keys stay null/empty on this route too.
+    assert report["review_evidence"]["source"] is None
+    assert report["review_evidence"]["lenses"] == []
+    assert report["mergeable"] is True
+
+
 def test_coverage_of_a_different_sha_never_reaches_the_gate() -> None:
     """`covers_head` is DERIVED, so the gate re-checks the identity it is about
     to authorize against rather than trusting a boolean computed elsewhere in

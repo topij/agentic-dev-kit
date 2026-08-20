@@ -343,13 +343,23 @@ def test_guard_catches_a_write_into_real_state(
 def test_guard_reaches_every_layout_and_working_directory(
     tmp_path: Path, layout: str, invoked_from: str
 ) -> None:
-    """The docstring's MEASURED REACH claim, pinned rather than only asserted.
+    """The docstring's MEASURED REACH claim, pinned rather than only asserted —
+    for the part of it this harness actually exercises.
 
     ``<engine-dir>/conftest.py`` states it fires in the kit's flat layout and in
     a nested ``scripts/devkit/`` adopter layout, invoked from the repo root or
     from inside the engine directory. Both lenses of #453's panel confirmed the
     claim is true and observed that nothing in the suite would notice if one of
-    those four cells broke. This is that pin.
+    those four cells broke. This is that pin — for an EXPLICIT sub-path
+    (``lib/state_paths/tests``) at each of the four (layout, cwd) cells.
+
+    NOT a pin of the docstring's separate bare-`pytest .`-at-the-repo-root
+    claim: ``invoked_from == "repo-root"`` below still points pytest at
+    ``state-paths-only``, never at ``.``, in either layout. #495 narrowed that
+    claim in the guard's own docstring after a real adopter's ``testpaths`` /
+    ``norecursedirs`` kept a bare ``pytest .`` out of a nested engine tree
+    entirely — a gap this test would not have caught, since it never invokes
+    that shape.
 
     ``state_paths`` is the leaking directory throughout: it is the one #448 was
     found in, and the one whose conftest coverage the placement depends on.
