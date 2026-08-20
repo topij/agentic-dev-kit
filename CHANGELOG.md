@@ -42,6 +42,18 @@ starts.
 
 ---
 
+## #530 — 2026-08-20
+
+- **`review_evidence.head` is now `null` on the `bot-coverage` route** (`#495`) —
+  it previously named the receipt's head unconditionally, so a STALE receipt
+  sitting beside qualifying bot coverage at the current head reported the stale
+  sha next to `valid: true`. `head` now joins the other receipt-only keys
+  (`source`, `lenses`, `override`, `bot_signal`): populated only when `route` is
+  `"receipt"`, `null` on `"bot-coverage"`. **If you read `review_evidence.head`
+  to learn which commit the evidence covers, read the report's own top-level
+  `head` instead** — that is what the evidence is always keyed to, on either
+  route.
+
 ## #525 — 2026-08-20
 
 - **`⚠ review coverage:` staleness warning now requires a TRUSTED pending bot to
