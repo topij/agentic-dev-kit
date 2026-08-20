@@ -42,6 +42,22 @@ starts.
 
 ---
 
+## #527 — 2026-08-20
+
+- **`kit-manifest.json` now tracks the kit's own test suite** (`#493`): all 16
+  files under `scripts/tests/` and the 2 under `scripts/lib/state_paths/tests/`
+  are now in `KIT_OWNED`, under a new role, `"test"`. Previously a vendored
+  copy of the suite was invisible to `kit_doctor` — `0 differ` regardless of
+  how stale it was — which let a vendored `conftest.py` missing the
+  `_hermetic_state_root` fixture go undetected while its runs wrote into a
+  real `state/pr-watch/` tree. **A pre-existing baseline** gets an
+  informational `new-upstream` block naming up to 18 files on every
+  `kit_doctor` run until you run `/upgrade` to accept or decline them; the
+  intact/not-intact verdict is unaffected. **If you already vendored part or
+  all of the suite**: your next `kit_doctor` run reports real drift on those
+  files for the first time (previously silent), and `/upgrade` refreshes them
+  like any other kit-owned file. No config key or CLI surface changed.
+
 ## #530 — 2026-08-20
 
 - **`review_evidence.head` is now `null` on the `bot-coverage` route** (`#495`) —

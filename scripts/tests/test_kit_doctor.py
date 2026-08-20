@@ -25,7 +25,7 @@ import json
 import re
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 from _repo_layout import engine_dir, find_repo_root
@@ -562,6 +562,17 @@ def test_engine_probe_names_cover_the_real_kit_owned_engines():
     assert "lib/kitconfig.py" in kit_doctor._ENGINE_NAMES
     # The hook is not an engine and does not live under paths.engines as one.
     assert "hooks/pre-push" not in kit_doctor._ENGINE_NAMES
+    # Same for the test suite (#493): `scripts/tests/` sits under the prefix an
+    # adopter's `paths.engines` remaps, but role `test` is not role `engine`, so
+    # none of it should be swept into the engines-dir probe. A vendored test
+    # suite would otherwise make a sized-down install (kit_doctor.py + kitconfig
+    # only, no tests) look like it "contains no kit engine" is the wrong verdict
+    # for the WRONG reason — #59's bug reopened via the new role instead of the
+    # old hand-written list.
+    tests = [rel for rel, role in kit_doctor.KIT_OWNED if role == "test"]
+    assert tests, "KIT_OWNED lists no tests — #493 regressed"
+    for rel in tests:
+        assert rel[len(kit_doctor.KIT_ENGINE_PREFIX) + 1 :] not in kit_doctor._ENGINE_NAMES
 
 
 def test_sized_down_install_of_two_engines_is_not_reported_engineless(tmp_path):
@@ -3511,6 +3522,36 @@ def test_only_invocable_scripts_are_candidates_for_a_registration_match(tmp_path
     assert {"pr_followup_hook.py", "check_doc_budget.py"} <= candidates
     for library in ("kitconfig.py", "paths.py", "resolver.py", "__init__.py"):
         assert library not in candidates, f"{library} is imported, not invoked"
+
+
+def test_role_test_basenames_are_not_candidates_for_a_registration_match():
+    """#527's regression, reproduced and pinned: adding `scripts/tests/` to
+    `KIT_OWNED` under role `test` (#493) leaked its 15 basenames unique to that
+    role straight into `_invocable_kit_scripts()`, because the filter only
+    excluded role `template`. A pytest module is collected and run by pytest,
+    never named in a hook registration — so an adopter's OWN unrelated script
+    sharing one of these names (`scripts/my_hooks/test_kit_doctor.py`, say)
+    would have been misjudged as a kit file: `broken`, in
+    `dead_registrations`, exit code 0->1 on an otherwise healthy install. This
+    is `test_an_adopters_own_script_is_not_judged_as_a_kit_hook`'s class,
+    reopened by the new role.
+
+    Deliberately NOT asserting `conftest.py` here: that basename is ALSO
+    contributed by `scripts/conftest.py` (role `engine`, tracked long before
+    #493), so it remains a candidate regardless of this fix — asserting its
+    absence would be a false pin.
+    """
+    candidates = kit_doctor._invocable_kit_scripts()
+    test_only_basenames = {
+        rel: PurePosixPath(rel).name
+        for rel, role in kit_doctor.KIT_OWNED
+        if role == "test" and "/lib/" not in rel
+    }
+    assert test_only_basenames, "no role-`test` KIT_OWNED entries — #493 regressed"
+    for rel, name in test_only_basenames.items():
+        if name == "conftest.py":
+            continue
+        assert name not in candidates, f"{rel}'s basename {name!r} leaked back into the candidate set"
 
 
 def test_an_unparseable_registration_file_makes_the_run_non_green(tmp_path, capsys, monkeypatch):

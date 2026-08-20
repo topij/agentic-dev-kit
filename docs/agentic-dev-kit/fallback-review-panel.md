@@ -208,8 +208,10 @@ author re-reading their own diff. **Cite them by name, never by number.**
 
    That marker is this repo's implementation, not a property of your repo. If you
    vendored these tests, check before relying on it: the marker and the conftest
-   that registers it live under the tests directory, which is **not** tracked by
-   `kit-manifest.json`, so an `/upgrade` will hand you this page without them.
+   that registers it live under the tests directory, which **is** tracked by
+   `kit-manifest.json` (#493) — but only for a repo that vendored it. An `/upgrade`
+   refreshes those files if you did; if you declined the test directory, you still
+   have neither the marker nor the conftest, and this page is all you get.
 
    **Check that the exclusion excluded something.** An `-m` expression naming a
    marker no test carries deselects nothing and warns about nothing — you get a

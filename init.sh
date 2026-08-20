@@ -740,9 +740,10 @@ TEMPLATE_MARKER="devkit-template: unrendered"
 # So the discriminator is a marker here too, and AGENTS.md stops being the one
 # target reached by ABSENCE. The kit may now ship both files; what it may not do
 # is ship them unmarked. `test_kit_own_entry_points_carry_the_marker` pins that —
-# in the KIT repo. `KIT_OWNED` tracks nothing under `scripts/tests/`, so that
-# test does not travel with this file: downstream, this reads as a guarantee and
-# is one only upstream (#386, both panel lenses on an adopter's PR).
+# in the KIT repo. `KIT_OWNED` now tracks `scripts/tests/` (#493), so this test
+# travels with this file to an adopter who vendored the suite; one who declined
+# it has neither the file nor the guarantee, reported as `declined` rather than
+# silently (#386, both panel lenses on an adopter's PR, is the state that closed).
 #
 # No apostrophe in the literal, deliberately: every marker here is matched from
 # shell, and this repo has already been bitten twice by a value that changed
@@ -1190,9 +1191,10 @@ register_pr_hook() {
   # verified and pinned: with `exec` the interpreter reports the shell's own PID,
   # without it a different one —
   # `test_the_codex_registration_execs_rather_than_forking_the_interpreter`
-  # asserts both directions — in the KIT repo, which is where that suite lives
-  # and stays: `KIT_OWNED` tracks no tests, so an adopter reading this comment
-  # has the claim without the guard behind it (#386).
+  # asserts both directions — in the KIT repo, and since #493 `KIT_OWNED` also
+  # tracks that suite (`scripts/tests/`), so an adopter who vendors it gets the
+  # guard behind this comment too; one who declined it is back to the claim
+  # alone, reported as `declined` rather than silently (#386 named the gap).
   #
   # WHY that is worth having here is an inference, and is marked as one because a
   # lens caught the previous wording asserting it as fact. The registration
