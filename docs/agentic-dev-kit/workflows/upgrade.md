@@ -148,7 +148,8 @@ was never in this history, so it routes you to the degraded path and you read a 
 answer as a complete one:
 
 ```bash
-git -C "$KIT" fetch --unshallow 2>/dev/null || git -C "$KIT" fetch --depth=1000
+git -C "${KIT:?KIT is not set — re-run Step 0}" fetch --unshallow 2>/dev/null ||
+  git -C "${KIT:?KIT is not set — re-run Step 0}" fetch --depth=1000
 ```
 
 Then resolve the baseline and the PRs that landed after it. A squash merge on the kit
@@ -167,22 +168,22 @@ goes stale the moment another commit lands — and count against `main`, since a
 branch's own commits have no PR number yet and would read as a fault:
 
 ```bash
-git -C "$KIT" log --format='%s' origin/main | grep -cvE '\(#[0-9]+\)$'
+git -C "${KIT:?KIT is not set — re-run Step 0}" log --format='%s' origin/main | grep -cvE '\(#[0-9]+\)$'
 ```
 
 So the count below is a tripwire rather than a formality — if it fires, the index is
 incomplete and the top of `CHANGELOG.md` is the fallback:
 
 ```bash
-BASELINE="$(uv run <engine-dir>/kit_doctor.py --manifest "$KIT/kit-manifest.json" --json \
+BASELINE="$(uv run <engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run Step 0}/kit-manifest.json" --json \
   | python3 -c 'import json,sys; print(json.load(sys.stdin).get("baseline_kit_commit") or "")')"
 echo "baseline=${BASELINE:-NONE}"
 if [ -z "$BASELINE" ] ||
-   ! git -C "$KIT" merge-base --is-ancestor "$BASELINE" HEAD 2>/dev/null; then
+   ! git -C "${KIT:?KIT is not set — re-run Step 0}" merge-base --is-ancestor "$BASELINE" HEAD 2>/dev/null; then
   echo "no usable install provenance — take the degraded path below"
 else
-  COUNT="$(git -C "$KIT" rev-list --count "$BASELINE..HEAD")"
-  SUBJECTS="$(git -C "$KIT" log --format='%s' "$BASELINE..HEAD")"
+  COUNT="$(git -C "${KIT:?KIT is not set — re-run Step 0}" rev-list --count "$BASELINE..HEAD")"
+  SUBJECTS="$(git -C "${KIT:?KIT is not set — re-run Step 0}" log --format='%s' "$BASELINE..HEAD")"
   if [ "$COUNT" -gt 0 ]; then
     INDEXED="$(printf '%s\n' "$SUBJECTS" | grep -cE '\(#[0-9]+\)$' || true)"
     UNINDEXED=$(( COUNT - INDEXED ))
@@ -190,7 +191,7 @@ else
    they are NOT indexed below — read CHANGELOG.md from the top as well"
     printf '%s\n' "$SUBJECTS" | grep -oE '\(#[0-9]+\)$' | tr -d '()#' |
       while read -r pr; do
-        awk -v pr="$pr" '/^## /{p = ($2 == "#" pr)} p' "$KIT/CHANGELOG.md"
+        awk -v pr="$pr" '/^## /{p = ($2 == "#" pr)} p' "${KIT:?KIT is not set — re-run Step 0}/CHANGELOG.md"
       done
   else
     echo "up to date — no commits between your baseline and the kit's HEAD"
@@ -267,11 +268,11 @@ Take the fetched kit's copy first:
 
 ```bash
 cd "$REPO" || exit 1                              # every write below lands here, not in $KIT
-cp "$KIT/init.sh" "$REPO/init.sh"
-chmod +x "$REPO/init.sh"                          # the kit ships it 100755; a copy can lose the bit
-mkdir -p "$REPO/docs/templates"
+cp "${KIT:?KIT is not set — re-run Step 0}/init.sh" "${REPO:?REPO is not set — re-run Step 0}/init.sh"
+chmod +x "${REPO:?REPO is not set — re-run Step 0}/init.sh"  # the kit ships it 100755; a copy can lose the bit
+mkdir -p "${REPO:?REPO is not set — re-run Step 0}/docs/templates"
 _gate_failed=0
-for _tmpl in "$KIT"/docs/templates/*.tmpl; do
+for _tmpl in "${KIT:?KIT is not set — re-run Step 0}"/docs/templates/*.tmpl; do
   _rel="docs/templates/$(basename "$_tmpl")"
   python3 -c 'import json,pathlib,sys
 b = pathlib.Path(sys.argv[1]) / "kit-manifest.json"
@@ -299,10 +300,10 @@ if not isinstance(declared, list) or not isinstance(files, dict):
           file=sys.stderr)
     sys.exit(2)                  # a baseline that cannot state its scope is not a licence
 sys.exit(0 if sys.argv[2] in declared else 1)' \
-    "$REPO" "$_rel" && _verdict=0 || _verdict=$?
+    "${REPO:?REPO is not set — re-run Step 0}" "$_rel" && _verdict=0 || _verdict=$?
   case "$_verdict" in
     0) echo "declined (recorded in not_installed) — not copied: $_rel" ;;
-    1) cp "$_tmpl" "$REPO/$_rel" ;;
+    1) cp "$_tmpl" "${REPO:?REPO is not set — re-run Step 0}/$_rel" ;;
     3) echo "no declared scope recorded — not copied: $_rel"; _partial=1 ;;
     *) echo "STOP: $REPO/kit-manifest.json is not a readable manifest, so the declared set is unknown. Copied nothing." >&2
        _gate_failed=1; break ;;
@@ -319,7 +320,7 @@ fi
 if [ "$_gate_failed" -ne 0 ]; then
   echo "Not running init.sh. Fix kit-manifest.json, then re-run this block." >&2
 else
-  "$REPO/init.sh" --no-clobber
+  "${REPO:?REPO is not set — re-run Step 0}/init.sh" --no-clobber
 fi
 ```
 

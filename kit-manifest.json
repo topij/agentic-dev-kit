@@ -45,7 +45,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "23847ae2a5226e0c4550a6f96550608eb7f6704834eacba0d549105059681a43"
+      "sha256": "9a48d7b692429232c62d2af14df2128e684bacffa7bc836d388d82172adadf40"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -53,7 +53,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "1a6f1defcd4decab9040090742e0b1dff260fef2bd2e46489da1b4c7bce2e69e"
+      "sha256": "8fbf2906228016660e1572618750e774c58b3423b34673a35cae7cb9cd2d61ba"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -101,7 +101,7 @@
     },
     "scripts/conftest.py": {
       "role": "engine",
-      "sha256": "d2a8abce285a9736d18d4104e2459a27f8c570ced9b7c2cd5d021aca0b58eab6"
+      "sha256": "c2076c72a633fdd2d4e9991cf07ae2dda6c1747a1fe865a34a7fea013bd574c4"
     },
     "scripts/dev_session.sh": {
       "role": "engine",
@@ -187,7 +187,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "1847bb7d4b5de262195280092576557ba2342f7902195acd0320e20d2db8db64"
+      "sha256": "c3ac659cd9699e033f51004555b3170571dc914537ab05644bf6d0fce50bc9be"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -211,7 +211,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "380a4181ebb68f92c2b267f901dfd4ebbdddbbcde19175ab2b471f2982c7e6c2"
+      "sha256": "977aaa81ed86800391fadae008b03f31794637be42e192f7c17af62343c59980"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -243,7 +243,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "671015ff684739051f26e6c71072f5e0dd89a8b096bf96f14edd6ccaf1e91108"
+      "sha256": "a12c1c17414bc27640e3d7835885c6e73fb1d0db27a66406cb3b16078c4256d0"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
@@ -255,7 +255,7 @@
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",
-      "sha256": "274d41fb0913389afeb8c4213f3f402a41d524c957a2253e7fdd9bc341a6a55c"
+      "sha256": "915aae52d1b6fe38be757589d836c0f1198b79a4e20ba2a438aa2ef6fbf04bd9"
     }
   },
   "kit_version": 2

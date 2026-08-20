@@ -28,12 +28,25 @@ nothing for them. A SECOND conftest under ``lib/state_paths/tests/`` is a second
 copy of a load-bearing guard, kept in step by nothing. The engine root is inside
 what an adopter vendors, and is one copy.
 
-MEASURED REACH, rather than reasoned from the loading rule (pytest 9.1.1). With
-the guard here, `pytest_sessionfinish` fires for `pytest <engine>/tests`, for
-`pytest <engine>/lib/state_paths/tests`, for both directories in one run (the
-Makefile's own shape), and for a bare `pytest .` at the repo root — in the kit's
-flat layout and in a nested ``scripts/devkit/`` adopter layout, invoked from the
-repo root or from inside the engine directory.
+MEASURED REACH, rather than reasoned from the loading rule (pytest 9.1.1).
+`pytest_sessionfinish` fires whenever pytest actually COLLECTS something inside
+this directory or below — `pytest <engine>/tests`, `pytest
+<engine>/lib/state_paths/tests`, both directories in one run (the Makefile's
+own shape), and a bare `pytest .` at the repo root in the kit's own flat
+layout, invoked from the repo root or from inside the engine directory (#495
+narrows this from an earlier, broader claim — see below).
+
+NOT GUARANTEED for a bare `pytest .` in a nested ``scripts/devkit/`` adopter
+layout (#495). Measured on a real adopter whose ``pyproject.toml`` carried
+``testpaths = ["tests"]`` and ``norecursedirs`` including ``scripts/devkit``:
+`pytest .` never entered the engine tree at all, so `pytest_sessionfinish`
+printed nothing here for it, for a bare `pytest --co` (4556 tests collected),
+or for the adopter's full root suite. It fired only for an explicit `pytest
+scripts/devkit/tests`. Not a defect in the guard — it does its job wherever
+pytest is actually pointed at the engine tree — but an adopter's OWN
+``testpaths`` / ``norecursedirs`` can keep a default run out of this directory
+entirely, and when that happens this guard does not run at all: no baseline,
+no comparison, no tripwire, for that invocation.
 
 WHAT THIS GUARD IS — a tripwire against ACCIDENTAL regressions, the kind the
 first paragraph describes: an engine resolving its state path at import time
