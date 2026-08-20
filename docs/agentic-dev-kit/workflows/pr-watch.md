@@ -326,6 +326,15 @@ Self-pace on a bounded cadence — don't busy-wait:
     is the moment the merge head stops moving, so it is the moment to spend one
     review on it: request at the current head, then poll on.
 
+    **Poll on means poll on: never wait on the request's outcome.** An
+    acknowledgement — even one naming the exact sha and what it will review — is
+    not evidence a review is coming: two were measured still silent at 19 and 45
+    minutes, and there is no interval after which the absence becomes informative
+    on its own (`#372`, the 2026-08-20 runs). Under `#372`'s standing ruling the
+    panel is the review of record: a bot review that arrives gate-visible spares
+    the receipt via the `bot-coverage` route, and one that never arrives changes
+    nothing about what the merge rests on.
+
     **State the condition as coverage, not as configuration**, because two
     different causes land here and only the observable one catches both. A repo
     that has turned off incremental auto-review (to stop spending a bounded review
@@ -373,6 +382,20 @@ Self-pace on a bounded cadence — don't busy-wait:
     source says what it stands for — `<bot>:comment-verdict`, with **no
     `--lenses`**, since no fallback pass ran. If it is not, run the panel. What
     is not available is treating the missing coverage as a review waiver.
+
+    **Before recording a converged-head `fallback:panel` receipt, re-read the
+    bot's status comment once — the body, never the count** (`#372`'s ruling of
+    2026-08-20, item 4). Some reviewers deliver a completed review by *editing an
+    earlier comment in place* (`#509`), and the comment-verdict conjunction above
+    deliberately disqualifies a body that still carries stale skip text beside the
+    verdict — so both report lines can stay silent over a review that genuinely
+    happened, which is how `#525` merged on a panel receipt while a real clean
+    review of that exact head sat unseen. The merge was still correct; the record
+    was not. The one read is the detection route the engine deliberately does not
+    have: a genuinely delivered clean verdict of this head takes the
+    `<bot>:comment-verdict` receipt per the paragraph above, and where the panel
+    already carries the merge, note the bot's review on the PR rather than letting
+    the record say it never happened.
 
     Nothing in `pr_watch.py` performs the request — it observes only. It does,
     however, **say when one is owed**, and name who owes it: at convergence,
