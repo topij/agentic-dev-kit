@@ -109,7 +109,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "bc1bac0e04b873930896084f8bcdcb5222ab0bde6e4beea269a378d9c2182b2d"
+      "sha256": "d5c8b02a1328591d9e432d5db8f3bc095375cbb5f7350b437e00a002fd2d0383"
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
@@ -239,7 +239,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "701c75d850b6fa599f49cb32f43825adf88300974282236ed64a08fda0cf68d0"
+      "sha256": "a02eb13076c93fc70bb5761cc1764f14151aa8f581eb829059e093e2e4b0cbfa"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

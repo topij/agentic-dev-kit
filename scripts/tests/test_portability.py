@@ -549,6 +549,130 @@ def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
         assert "pr merge" not in call_log.read_text(encoding="utf-8"), label
 
 
+def test_self_merge_refuses_a_report_whose_fields_carry_tabs(tmp_path: Path) -> None:
+    """The gate extraction is tab-joined and the shell splits it on tabs, so an
+    unscrubbed field SHIFTS every field after it (`#537`).
+
+    End-to-end rather than an assertion on the extraction's stdout, by
+    `safety-critical-changes.md` rule 4: the bypass is a collaboration between
+    the python emitter and bash `read`, and only the wrapper exercises both.
+    `read` with four names hands the last one the remainder of the line, and tab
+    is IFS whitespace so the emptied tail collapses away — which is how the
+    shifted fields come back looking exactly like a legitimate report.
+
+    Measured against the unscrubbed extraction, this exact report was
+    AUTHORIZED. `pr` carries `8<TAB>trunk<TAB>reviewed-head`, so `validated_pr`
+    read `8`, `validated_base` read `trunk` and matched the recorded base, and
+    `validated_head` read `reviewed-head` and was non-empty — while the report's
+    real base (`WRONG`) and real head (empty) were never examined at all, and
+    the merge ran with `--match-head-commit reviewed-head<TAB>WRONG`.
+    """
+    _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
+    _prepare_self_merge_session(sessions)
+    fake_bin, call_log, uv_log = _install_fake_merge_tools(tmp_path)
+
+    result = subprocess.run(
+        ["bash", str(engine_dir / "dev_session.sh"), "merge", "probe"],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "DEVKIT_SESSIONS_DIR": str(sessions),
+            "CALL_LOG": str(call_log),
+            "UV_LOG": str(uv_log),
+            "PR_JSON": json.dumps(
+                [
+                    {
+                        "number": 8,
+                        "baseRefName": "trunk",
+                        "headRefName": "lane/probe",
+                        "headRefOid": "reviewed-head",
+                        "headRepositoryOwner": {"login": "owner"},
+                    }
+                ]
+            ),
+            "REPORT_JSON": json.dumps(
+                {
+                    "pr": "8\ttrunk\treviewed-head",
+                    "base": "WRONG",
+                    "head": "",
+                    "done": True,
+                    "mergeable": True,
+                }
+            ),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    # The scrub turns the tabs into spaces, which no git ref and no PR number
+    # can contain — so the identity check fails CLOSED instead of shifting.
+    assert "not resolved PR #8" in result.stderr
+    assert "pr merge" not in call_log.read_text(encoding="utf-8")
+
+
+def test_lane_pr_resolution_refuses_metadata_whose_fields_carry_tabs(
+    tmp_path: Path,
+) -> None:
+    """The same field-shift, one step earlier — `_resolve_lane_pr` (`#537`).
+
+    This extraction tab-joins FIVE fields and the four checks that follow are
+    what keep a wrong-base PR, a wrong-branch PR, or a fork PR off the merge
+    path. The owner check reads the LAST name, which absorbs the remainder, so
+    a naive injection trips it — but emptying the four real fields makes the
+    tail collapse and all four checks pass on values read out of `number`.
+
+    The report served here is fully valid, so nothing downstream would refuse:
+    against the unscrubbed extraction this run merges.
+    """
+    _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
+    _prepare_self_merge_session(sessions)
+    fake_bin, call_log, uv_log = _install_fake_merge_tools(tmp_path)
+
+    result = subprocess.run(
+        ["bash", str(engine_dir / "dev_session.sh"), "merge", "probe"],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "DEVKIT_SESSIONS_DIR": str(sessions),
+            "CALL_LOG": str(call_log),
+            "UV_LOG": str(uv_log),
+            "PR_JSON": json.dumps(
+                [
+                    {
+                        "number": "8\ttrunk\tlane/probe\treviewed-head\towner",
+                        "baseRefName": "",
+                        "headRefName": "",
+                        "headRefOid": "",
+                        "headRepositoryOwner": {},
+                    }
+                ]
+            ),
+            "REPORT_JSON": json.dumps(
+                {
+                    "pr": 8,
+                    "base": "trunk",
+                    "head": "reviewed-head",
+                    "done": True,
+                    "mergeable": True,
+                }
+            ),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "not recorded base 'trunk'" in result.stderr
+    # Refused before pr-watch was ever polled, and before any merge call.
+    assert not uv_log.exists()
+    assert "pr merge" not in call_log.read_text(encoding="utf-8")
+
+
 def test_self_merge_pins_validated_head_so_push_race_is_refused(tmp_path: Path) -> None:
     repo, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
     session = _prepare_self_merge_session(sessions)
