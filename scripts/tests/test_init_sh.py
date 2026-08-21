@@ -3286,8 +3286,19 @@ def _upgrade_commands() -> list[str]:
     #
     # An inline span has no such declaration, so prose has to be told apart
     # from instruction, and a runner word is the marker. The list is
-    # deliberately wider than this document currently needs.
-    runners = ("uv run", "python3 ", "python ", "bash ", "sh ", "./")
+    # deliberately wider than this document currently needs — `uvx` and `make`
+    # are here because a lens showed an off-list runner makes an inline command
+    # invisible, and the cheapest honest answer to "which runners?" is more of
+    # them rather than a note explaining which ones do not count.
+    #
+    # This IS an enumeration, and enumerations are what four rounds of review
+    # kept breaking. It survives here only because the failure direction is
+    # different: an inline span is prose unless proven otherwise, so a missing
+    # runner word costs a missed command in ONE span, while the fence rule above
+    # — which had the same shape and much wider blast radius — was replaced
+    # outright. If an engine command ever needs to be prescribed inline with a
+    # runner not listed here, put it in a fence instead.
+    runners = ("uv run", "uvx ", "python3 ", "python ", "bash ", "sh ", "make ", "./")
     inline = [
         span
         for span in re.findall(r"`([^`]+)`", "".join(rest), re.DOTALL)
