@@ -42,6 +42,31 @@ starts.
 
 ---
 
+## #553 — 2026-08-21
+
+- **`triage-friction-log` is now a shared workflow at
+  `docs/agentic-dev-kit/workflows/triage-friction-log.md`, tracked in
+  `kit-manifest.json`** (`#243`). Its doctrine previously lived only in
+  `.claude/commands/triage-friction-log.md`, which no manifest entry covered,
+  so `/upgrade` never refreshed it and `kit_doctor` could not report it as
+  `differs` however stale it was. **If you installed that command at an earlier
+  kit version, your next `kit_doctor` run reports the new workflow as
+  `missing`** until you take it, and `/upgrade` will offer it like any other
+  kit-owned doc. **If you edited your copy of the Claude command**, your edits
+  are in a file that is now a thin pointer — move them into the shared doc or
+  they are lost on the next refresh. A new Codex binding ships at
+  `.agents/skills/triage-friction-log/`; ignore it if you do not run Codex.
+- **The workflow's paths are now resolved from `config/dev-model.yaml` instead
+  of hardcoded.** It named `docs/friction-log.md` and `scripts/<engine>.py`
+  literally; it now resolves `<friction-log>`, `<friction-log-archive>`,
+  `<engine-dir>`, `<state-dir>` and `<tracker>`. **If your `paths.friction_log`
+  or `paths.engines` is anything other than the kit default, this workflow
+  followed the wrong path before and follows yours now** — that is a behaviour
+  change, not only a wording one. No config key was added, removed, or
+  redefined; the keys it reads already existed.
+- No engine is vendored by this change and no report shape, gate semantic, or
+  CLI surface moved. `#6` still tracks the triage engine.
+
 ## #538 — 2026-08-21
 
 - **A pending review bot's `identity` is now resolved on a healthy poll, not
