@@ -129,6 +129,29 @@ undifferentiated `missing` where it does not. Plus four installation-level check
   — further down, or after other words inside a line-1 comment — is in use and is reported
   as such.
 
+**A `0 missing` (or a `missing`/`new-upstream` count that leaves a real file out) is
+not evidence there is nothing new — it is a property of what this run of `kit_doctor`
+knows how to look for, not of the kit.** `inspect()` walks the `KIT_OWNED` tuple
+compiled into the **running** script — your installed `<engine-dir>/kit_doctor.py` —
+and consults `--manifest` only to look up a hash for a path that tuple already names.
+A file the kit gained after your installed copy was built sits outside that tuple, so
+this first run does not count it, name it, or hint at it anywhere in the report. It is
+self-correcting: the same run reports `<engine-dir>/kit_doctor.py` itself as `differs`
+(or `STALE`), and taking that update in Step 3 is what makes the new file visible.
+**Take that engine update first, then re-run this command, before scoping anything
+from a first report.** `CHANGELOG.md`'s `#553` entry is a worked instance: the
+workflow doc it added was invisible to a pre-upgrade `kit_doctor` for this exact
+reason, and named nowhere until `kit_doctor.py` itself was refreshed.
+
+**The same blind spot applies one level up, to this very file.** `upgrade.md` is
+itself kit-owned (`kit-manifest.json`) and is only refreshed in Step 4 — so the copy
+that governed Step 0 and governs this step may itself predate a fix to the workflow
+(`#544` anchored every engine invocation here to `$REPO`; a repo upgrading from before
+it is still reading the unanchored prose). Diff
+`"$KIT/docs/agentic-dev-kit/workflows/upgrade.md"` against
+`"$REPO/docs/agentic-dev-kit/workflows/upgrade.md"` now, while this step is still
+read-only; if they differ, finish this upgrade following `$KIT`'s copy.
+
 **What `differs` splits into depends on whether this repo has a *trusted* baseline.** A
 baseline is `kit-manifest.json` here recording what *this repo installed*, written by
 `--record-install` at the end of Step 4. Trusted means it carries a `kit_commit` key —
@@ -521,12 +544,13 @@ omit entirely. Have those entries to hand before the first copy: they are what m
 red test afterwards an expected edit instead of an investigation (`#430`).
 
 **Install every `missing-required` file first, before any other copy in this step.**
-Those are the kit's own libraries — `lib/kitconfig.py` above all, which every Python
-engine imports — and refreshing a component on top of an absent one produces a broken
-install: `check_doc_budget.py` dies with `ModuleNotFoundError`, and `pr_watch.py` warns
-and silently falls back to built-in defaults, leaving the adopter's entire `review.*`
-config inert. `kit_doctor` derives this set from the Python import graph, so it is
-answering "what do *this* tree's installed components need", not a fixed list.
+Those are the kit's own libraries — `<engine-dir>/lib/kitconfig.py` above all, which
+every Python engine imports — and refreshing a component on top of an absent one
+produces a broken install: `<engine-dir>/check_doc_budget.py` dies with
+`ModuleNotFoundError`, and `<engine-dir>/pr_watch.py` warns and silently falls back to
+built-in defaults, leaving the adopter's entire `review.*` config inert. `kit_doctor`
+derives this set from the Python import graph, so it is answering "what do *this*
+tree's installed components need", not a fixed list.
 
 **Then re-run `kit_doctor` after installing anything.** The set is computed against the
 components present *when the report ran*: a file is `missing-required` only if something
@@ -572,8 +596,9 @@ that installed nothing still shows no `missing-required`.
   depends on these **by
   the graph `kit_doctor` derives**, which is what separates them from the bullet above.
   That graph covers **Python imports only** — it does not read shell `source`, so
-  `lib/repo_root.sh` (which `dev_session.sh` and `reconcile_sessions.sh` both source)
-  will appear here rather than above. It is a much better prior than the old blanket
+  `<engine-dir>/lib/repo_root.sh` (which `<engine-dir>/dev_session.sh` and
+  `<engine-dir>/reconcile_sessions.sh` both source) will appear here rather than
+  above. It is a much better prior than the old blanket
   "decide, don't assume", not a proof: if a piece you are declining is a library a
   shell component plausibly reaches for, check before dropping it.
 - **`STALE`** → replace it. The baseline proves it was never touched here, so the diff
@@ -654,7 +679,7 @@ uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/check_doc_budge
 ```
 
 **`DEVKIT_STATE_ROOT` is not optional here, and the `&&` is what makes it
-fail closed.** `pr_watch.py` computes its persistence root once, at import
+fail closed.** `<engine-dir>/pr_watch.py` computes its persistence root once, at import
 time — the only engine that reaches `state/` at all, and it resolves at
 import rather than per call, so an override has to be in the environment
 before the process starts. The resolution has three branches, not two:
