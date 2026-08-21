@@ -3270,15 +3270,21 @@ def test_every_upgrade_engine_invocation_is_repo_anchored():
     # `kitconfig.repo_root()`'s walk up from `Path(__file__)` — which is what
     # makes anchoring the script path sufficient everywhere else, and what makes
     # this the one flag that needs `$REPO` spelled out.
-    # A plain substring rule over the whole document, deliberately: the
-    # prescribed `--root` command WRAPS across two source lines, so a
-    # line-scoped regex is fragile in exactly the direction that lets the defect
-    # back in. The cost of the blunt rule is that the surrounding prose may not
-    # QUOTE the bad form even to explain it — the hazard note therefore says
-    # "passing `--root` a bare dot" instead. That is the trade: an illustration
-    # that cannot be copy-pasted into a shell, for a rule with no false
-    # negatives and nothing to tune.
-    assert "--root ." not in doc, (
+    # Over the WHITESPACE-NORMALIZED document. The prescribed `--root` command
+    # already wraps across two source lines, and a plain `"--root ." not in doc`
+    # check reads `--root\n.` as clean — so reverting the anchor while leaving
+    # the existing wrap in place, which is what any edit touching only the value
+    # does, slipped straight past. A review lens reproduced exactly that and the
+    # test passed. Normalizing first is what makes the rule see the command the
+    # way a reader (and a shell) does, and it was available all along: the
+    # earlier framing of "blunt substring vs. fragile regex" was a false choice
+    # that understated what the blunt form gave up.
+    #
+    # The remaining cost is real and unchanged: prose may not QUOTE the bad form
+    # even to explain it, which is why the hazard note says "passing `--root` a
+    # bare dot".
+    flat = re.sub(r"\s+", " ", doc)
+    assert "--root ." not in flat, (
         "upgrade.md contains `--root .`, which resolves against cwd rather than "
         "the repo root — pass \"${REPO:?...}\" instead. If this is prose "
         "explaining the hazard rather than a prescribed command, describe the "
