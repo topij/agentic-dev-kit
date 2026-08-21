@@ -3729,20 +3729,28 @@ def test_the_target_lines_noop_message_is_pinned(
     assert "nothing to move: 46 line(s) <= --target-lines 46." in capsys.readouterr().out
 
 
-def _is_os_path_join(node: ast.AST) -> bool:
-    """An `os.path.join` callee.
+def _is_join_callee(node: ast.AST) -> bool:
+    """Any `<something>.join` callee — the qualifier is NOT checked.
 
-    Requires the `.path` qualifier rather than matching any `.join`: the bare
-    form would also match `", ".join(...)`, and over-matching a method this
-    common is noise rather than the loud-direction failure the other helpers
-    accept.
+    This required `.path` for one round, on the reasoning that a bare `.join`
+    would also match `", ".join(...)`. A lens showed what that cost: `osp.join`
+    (`import os.path as osp`) and `path.join` (`from os import path`) both
+    slipped straight through, and those are ordinary spellings rather than
+    evasions.
+
+    The qualifier was never what made this safe — the ARGUMENTS are. The caller
+    requires the first argument to be `REPO_ROOT` and the next to be
+    `"scripts"`, and `str.join` takes exactly one argument, so a string join can
+    never present that shape. Checking the qualifier bought nothing and excluded
+    two common aliases, which is the enumeration mistake this file keeps making
+    in miniature.
+
+    A BARE `join(REPO_ROOT, "scripts")` — `from os.path import join` — is still
+    missed, and cannot be caught here: the callee is a plain name whose meaning
+    lives in an import statement. That is name-binding, the documented excluded
+    class.
     """
-    return (
-        isinstance(node, ast.Attribute)
-        and node.attr == "join"
-        and isinstance(node.value, ast.Attribute)
-        and node.value.attr == "path"
-    )
+    return isinstance(node, ast.Attribute) and node.attr == "join"
 
 
 def _is_path_constructor(node: ast.AST) -> bool:
@@ -3835,7 +3843,14 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
     - hoisting the segment (`SEG = "scripts"; REPO_ROOT / SEG`);
     - aliasing the constructor (`from pathlib import Path as PP;
       PP(REPO_ROOT, "scripts")`) — named here because a lens pointed out it
-      rides under the same umbrella and the umbrella did not mention it.
+      rides under the same umbrella and the umbrella did not mention it;
+    - importing the function directly (`from os.path import join;
+      join(REPO_ROOT, "scripts")`) — the callee is a plain name whose meaning
+      lives in an import statement. A lens found this one too, in the round
+      that added `os.path.join` recognition and called the class closed. That
+      is four times now that this list has been short by one, which is the
+      reason for the warning below rather than an argument that it is finally
+      complete.
 
     Closing any of them is out of proportion, and a naive attempt at the first
     immediately false-positives on a legitimate `root` fixture elsewhere in this
@@ -3852,6 +3867,13 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
     executes; this prose is a summary of it and has been the less reliable of
     the two. If you are about to add a spelling here, add a case there first
     and let it fail.
+
+    Note what that does and does not buy, since an earlier version of this
+    overstated it: pinning a limitation as a negative case means CLOSING it
+    fails that case, so nobody closes one silently. It does not tie this prose
+    to those cases — nothing checks that the two agree, and keeping them in
+    step is a human obligation, which is why the count above says how often it
+    has slipped rather than asserting it holds.
 
     `os.path.join(REPO_ROOT, "scripts")` is recognized too. It was previously
     excused on the argument that a stdlib join would be conspicuous in a
@@ -3886,12 +3908,15 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
         if isinstance(node.func, ast.Attribute) and node.func.attr == "joinpath":
             if not _is_repo_root(node.func.value):
                 continue
-        elif _is_os_path_join(node.func):
-            # Closed rather than excused. The previous version left this open on
-            # the argument that a stdlib join would "be conspicuous" in a
-            # pathlib-only suite — a social claim inside a mechanical guard, and
-            # `os` is already imported here for unrelated reasons. It costs the
-            # same one-hop inspection as the others.
+        elif _is_join_callee(node.func):
+            # `os.path.join(REPO_ROOT, "scripts")` and its attribute aliases.
+            # Closed rather than excused: the previous exclusion rested on a
+            # stdlib join being "conspicuous" in a pathlib-only suite, which is
+            # a social claim inside a mechanical guard.
+            #
+            # The root check below is what makes matching ANY `.join` safe, so
+            # do not "tighten" this by qualifying the callee — that was tried,
+            # and it silently excluded `osp.join` and `path.join`.
             if not (args and _is_repo_root(args[0])):
                 continue
             args = args[1:]
@@ -3937,7 +3962,21 @@ _GUARD_CASES = [
     ('root = REPO_ROOT\nx = root / "scripts"', False),
     ('SEG = "scripts"\nx = REPO_ROOT / SEG', False),
     ('from pathlib import Path as PP\nx = PP(REPO_ROOT, "scripts")', False),
+    ('from os.path import join\nx = join(REPO_ROOT, "scripts")', False),
     ('x = os.path.join(REPO_ROOT, "scripts")', True),
+    # Attribute aliases of the same call. A lens found both open while the
+    # matcher insisted on a `.path` qualifier.
+    ('import os.path as osp\nx = osp.join(REPO_ROOT, "scripts")', True),
+    ('from os import path\nx = path.join(REPO_ROOT, "scripts")', True),
+    # The argument shape is what keeps a bare `.join` match safe: `str.join`
+    # takes one argument and can never present (root, "scripts").
+    ('x = ", ".join(REPO_ROOT)', False),
+    # Pins `len(args) == 1` in the Path-wrapper rule: this is REPO_ROOT/other,
+    # which is not the engine dir, so `/ "scripts"` under it is not the defect.
+    ('x = Path(REPO_ROOT, "other") / "scripts"', False),
+    # Pins the root check in the join branch — without it, any join whose
+    # second argument is "scripts" would match.
+    ('x = os.path.join(tmp_path, "scripts")', False),
     # The wrapper on the SEGMENT rather than the root — a lens found these open
     # one round after the wrapped-root forms were closed.
     ('x = REPO_ROOT / Path("scripts")', True),
