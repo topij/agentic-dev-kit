@@ -3192,6 +3192,11 @@ def _step2_refresh_block() -> str:
     return matching[0]
 
 
+# `"${REPO:?…}"/<engine-dir>` — the only form that survives Step 0's guarantee
+# that `pwd` is somewhere INSIDE the repo rather than at its top.
+_ANCHORED_ENGINE_DIR = re.compile(r'"\$\{REPO:\?[^}]*\}"/<engine-dir>')
+
+
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
 def test_every_upgrade_engine_invocation_is_repo_anchored():
     """Kills: dropping the `$REPO` anchor from any `<engine-dir>` command in
@@ -3244,10 +3249,15 @@ def test_every_upgrade_engine_invocation_is_repo_anchored():
         # *mentions* of `<engine-dir>` ("Read `<engine-dir>` from
         # `paths.engines`") carry no `uv run` and are correctly ignored.
         if "uv run" in line and "<engine-dir>" in line
-        # The anchor must be the thing `<engine-dir>` hangs off, not merely
-        # present somewhere on the line — `--manifest "${KIT:?…}/…"` sits on
-        # several of these and must not satisfy the test.
-        and not re.search(r'"\$\{REPO:\?[^}]*\}"/<engine-dir>', line)
+        # COUNTED, not searched. The anchor must be the thing `<engine-dir>`
+        # hangs off — `--manifest "${KIT:?…}/…"` sits on several of these and
+        # must not satisfy the test — and EVERY occurrence on the line must
+        # carry it. A `re.search` here is existential, and Step 5's pytest line
+        # really does name `<engine-dir>` twice: a review lens stripped the
+        # anchor from the SECOND one and this test still passed, because the
+        # first one satisfied the search. That is the same defect this test
+        # exists to catch, surviving inside the test itself.
+        and len(_ANCHORED_ENGINE_DIR.findall(line)) != line.count("<engine-dir>")
     ]
     assert unanchored == [], (
         "upgrade.md invokes an engine by a path that is not $REPO-anchored; "
