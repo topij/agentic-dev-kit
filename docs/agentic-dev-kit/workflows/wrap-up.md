@@ -59,13 +59,48 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
      to what you can stand behind (`fallback-review-panel.md`, "Keep the
      record small").
 
-1. **Capture friction** — if this session surfaced any bug, friction, or idea specific
-   to a workflow (a skill, a cron/CI job, a pipeline), append a short entry to
-   `<friction-log>` under a dated `## YYYY-MM-DD`
-   heading: the observed issue, a severity (**H**/**M**/**L**), and a proposed fix.
-   This is the documented session-end practice — it captures learnings while fresh;
-   they later graduate to your tracker via the `triage-friction-log` workflow. Add to the inbox
-   only — don't graduate or sweep here. Skip if nothing workflow-specific came up.
+1. **Route this session's friction** — if this session surfaced a bug, friction, or
+   idea specific to a workflow (a skill, a cron/CI job, a pipeline), it goes to one of
+   two places. **Which one is decided by what you can already write down, not by how
+   bad it is.**
+
+   **File it in your tracker now** when the finding has all three of:
+
+   - a **reproduction** — what was done and what happened;
+   - a **named mechanism** — *why* it happened, in terms of a specific line, flag, or
+     ordering;
+   - a **proposed fix**.
+
+   Three parts means it is issue-shaped already, and a triage pass can add nothing to
+   it but latency. Record it in `<handoff>` the way step 3 records any filed work —
+   the enumeration, never a count beside it.
+
+   **Park it in `<friction-log>`** — a short entry under a dated `## YYYY-MM-DD`
+   heading carrying the observed issue, a severity (**H**/**M**/**L**), and whichever
+   of the three you do have — when either of these is true:
+
+   - **Any of the three is missing.** A real **H** you cannot yet explain —
+     *"something about the panel felt wrong and I cannot say what"* — belongs here
+     precisely *because* it has no mechanism. The inbox is where a finding waits to
+     become explicable, not where a complete one waits for a sweep.
+   - **The point is accumulation.** A single instance of a shape that is only worth
+     acting on if it recurs needs somewhere to pile up. Principle #2 routes a
+     **pattern** up into a rule, and a pattern is only visible once its instances
+     share a home; the tracker is not that home.
+
+   **Severity is not the test.** It is the most tempting one and it is the wrong one:
+   an **M** carrying all three parts is more actionable than an **H** carrying none
+   ([`#310`](https://github.com/topij/agentic-dev-kit/issues/310)).
+
+   Two consequences follow, and both look like the workflow misbehaving if you are
+   not expecting them. The inbox gets **smaller and less certain** — what stays in it
+   is the unexplained and the accumulating, so a parked entry can no longer be read
+   as a ticket-in-waiting. And `triage-friction-log`'s job narrows to graduating
+   patterns and sweeping stragglers, rather than being the main road to the tracker.
+
+   **Either way, don't graduate or sweep here** — a graduation marker and an archive
+   sweep are `triage-friction-log`'s writes and need tracker state this workflow does
+   not gather. Skip the step entirely if nothing workflow-specific came up.
 
 1. **Suggest a next-session starter** — if the session ends with a *clear* follow-up,
    hand the next session a running start:

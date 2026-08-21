@@ -4,10 +4,19 @@
 > recorded at session end. Single incidents route **down** to the tracker; a genuine
 > multi-occurrence **pattern** graduates **up** into a rule or skill change.
 >
-> **This repo's tracker is GitHub Issues on itself**, so most friction is filed directly as
-> issues rather than parked here — which is the routing Principle #2 prescribes, not a
-> neglected inbox. Anything that appears below a graduation marker is un-graduated: not yet
-> issue-shaped, or waiting for the next `triage-friction-log` sweep.
+> **What lands here is what is not yet issue-shaped.** A finding that already carries a
+> reproduction, a named mechanism and a proposed fix is filed straight to the tracker by
+> `wrap-up` step 5 rather than parked here — which is the routing Principle #2 prescribes,
+> not a neglected inbox. What stays is the remainder: findings still missing one of those
+> three, and single instances of a shape that only matters if it recurs.
+>
+> **The un-graduated entries are the dated sections above the most recent
+> `## … — Backlog migrated` marker.** New entries are appended at the *top*, and a sweep
+> moves the entries it graduates out to the archive entirely, leaving only its marker
+> behind — so "above the marker" is a consequence of how the file is written and swept,
+> not an invariant the file can enforce on its own. If you ever find a dated section
+> *below* a marker, it is an un-swept straggler and the next `triage-friction-log` run
+> owns it ([`#224`](https://github.com/topij/agentic-dev-kit/issues/224)).
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 

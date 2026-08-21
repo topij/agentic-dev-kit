@@ -171,17 +171,22 @@ and what's next…
 ▶ Next: add the reset-email template and the rate-limit guard.
 ```
 
-…and captures any friction you hit into `docs/friction-log.md`, while it's fresh:
+…and routes any friction you hit. Anything you can already explain — a
+reproduction, a named mechanism, *and* a fix — it files straight to your tracker,
+because a triage pass could add nothing to it. What you *can't* yet explain goes to
+`docs/friction-log.md` while it's fresh:
 
 ```markdown
 ## 2026-01-05 — inbox
 
-- **`init.sh` didn't detect an existing tracker config (severity: L).** Had to set
-  `tracker.linear.project_id` by hand. Fix: probe for a known config file first.
+- **`init.sh` skipped an existing tracker config (severity: L).** Second time this
+  week; it wrote a fresh `tracker.linear.project_id` over the one already there. No
+  idea what it keys on — a clean re-run didn't reproduce it. Next step: capture the
+  detection branch it takes when it does.
 ```
 
-Because the next `session-start` reads that handoff, the thread is never lost —
-and the friction entry is now queued for the flywheel.
+That one parks because it has no mechanism yet, not because it is minor. Because the
+next `session-start` reads both the handoff and the inbox, neither thread is lost.
 
 ## 6 · Turn the flywheel
 
@@ -195,6 +200,12 @@ On a cadence (weekly works well):
 Single incidents route **down** (to the tracker); repeated patterns route **up**
 (to a rule). That asymmetry is deliberate — it's what keeps your rule set small
 and your friction log honest instead of ratcheting every week.
+
+The down-route runs on two clocks, not one. `/wrap-up` takes it immediately for
+anything already issue-shaped; this pass takes it for what has since become
+explicable, and sweeps the rest. So an inbox that stays small is the system working,
+and one that fills with things you could have filed at session end means step 5 is
+being skipped — not that triage is overdue.
 
 > **Note:** these two skills ship as *doctrine* — the prose and routing rules are
 > here, but their deterministic engines — a tracker client, a notify channel, a
