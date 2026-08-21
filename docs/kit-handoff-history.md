@@ -4,6 +4,77 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-18 (a triage sweep, an overclaim the wrap-up's own panel caught, and `#372`'s data point at last)
+
+**Theme —** ran `triage-friction-log` on the inbox that had rebuilt since `#470`'s
+2026-08-14 sweep, filed the batch, and ran `pr-watch` on the resulting PR. CodeRabbit
+never reviewed `#516` — the same `reviews: []`, no-request shape `#499` and `#500`
+already showed the day `#498` landed, not a first occurrence as this block's own
+first draft claimed (caught by this PR's own fallback panel before it reached
+`main`).
+
+- **Triaged the friction log: filed `#506`–`#515` and occurrence comments on `#372`,
+  `#467`, `#435`, merged `#516`** (squash `3f25620`). Engine still not vendored
+  (`#6`); run by hand against the workflow's prose. Approval was a Slack "lgtm"
+  bulk-approve.
+- **The fallback panel (adversarial + correctness) found two real things and disposed
+  of both without touching `#516`'s diff.** `#508`'s body had dropped its source
+  entry's safety caveat when condensed from the friction log — fixed directly via
+  `gh issue edit` (a tracker-side edit costs no review round). The marker's own
+  "fifteen accounted for" arithmetic reads as off-by-one on a literal skim (it is
+  correct: 11 entries via issues + 4 via three comments) — logged rather than fixed,
+  filed as `#517`.
+- **`#516` merged with no CodeRabbit review object at all** (`gh pr view 516 --json
+  reviews` → `[]`). The check-surface-unavailable rule fired on the very first poll —
+  `auto_review.enabled: false` posts the skip notice at PR-open now, every time — and
+  the panel satisfied `mergeable` before convergence, so the Converged step's own
+  "request a review" bullet was never revisited. Filed as `#518`: that bullet is
+  unconditional on `review_bots.coverage`, but reads, once a panel receipt already
+  exists, like something already handled.
+- **A hand-splice mistake in the archive sweep** (consumed the previous sweep's own
+  section heading, orphaning its intro paragraph) was caught only by diffing the
+  archive's pre-existing content against `origin/main` before committing — no damage
+  landed. Occurrence recorded on `#6`.
+
+**Learned**
+
+- **All 15 friction-log entries this round were already issue-shaped — zero needed
+  the inbox's waiting-room function.** Fresh evidence for `#310`'s claim (open since
+  `08-05`) that `wrap-up` step 5 parks what the routing doctrine already says to file.
+  The operator asked about this live; no new ticket needed, `#310` already names the
+  fix — undecided whether to implement it or just add the occurrence.
+- **`#516`'s non-attempt is at least the third instance, not the first.** This
+  block's own first draft claimed `#516` was the first live PR since `#498`'s ruling 2
+  to go unreviewed — wrong, caught by this PR's own fallback panel: `#499` and `#500`
+  (2026-08-17, same day as `#498`) already merged with `reviews: []` and no request
+  ever posted. `#501`, later that same day, is the only prior PR to have actually
+  attempted the explicit request — twice, both empty, cause unclassified — and its
+  ticket comment says a later PR is needed before ruling further.
+- **`#372` has a data point, and it is stranger than "the request works."** An
+  explicit `@coderabbitai full review` on `#519` produced a genuine completed review
+  — clean verdict, full walkthrough, "0 remain after this review". First read
+  against `review_bots.comment_verdicts` showed it picked up; re-checked live before
+  this line was written, and it does not — the one comment carrying that verdict is
+  the *same* comment CodeRabbit posted at PR-open with the "review skipped, auto
+  reviews disabled" notice, edited in place to append the walkthrough **without
+  removing the skip text**, so the comment now matches an `unavailable_markers` entry
+  and disqualifies itself. Structurally, right now: `reviews: []` and
+  `comment_verdicts: []` both — this PR currently has no detectable independent
+  review at all, despite CodeRabbit having genuinely produced one. The mutable-comment
+  problem this file already named on `2026-08-17` just defeated its own documented
+  workaround, live, in this PR.
+
+▶ Next: `#372` needs this written up properly — the explicit request *can* produce a
+real review, but neither of this repo's two detection routes (`reviews[]`,
+`comment_verdicts`) reliably see it once the vendor's in-place edit adds the skip
+notice back onto the same comment. Whether that argues for a third detection route,
+a different bot config, or accepting the fallback panel as the standing reviewer is
+the operator's call — not pre-empted here. `#518` still stands separately: the loop
+needs to actually reach the request step before any of this happens automatically.
+Behind it: whether to act on `#310` (occurrence comment vs. implementing its
+routing fix — operator hasn't
+decided).
+
 ## Session — 2026-08-17 (three rulings shipped, and the defect that would have reached an adopter was a heading)
 
 **Theme —** the operator ruled on `#372` and on `#44`, and `#494` — the fail-open the
