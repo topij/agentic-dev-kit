@@ -254,8 +254,25 @@ _DEFAULT_NOISE_MARKERS = (
 # configured independent fallback; hiding it would turn a down reviewer into a
 # silent review waiver.
 # Comment text announcing a review that COMPLETED (#44). Reported only — see
-# `bot_comment_verdicts` for why this may never reach the merge gate, and
-# `review.comment_verdict_markers` in config/dev-model.yaml for the full account.
+# `bot_comment_verdicts` for why this may never reach the merge gate.
+#
+# `review.comment_verdict_markers` OVERRIDES this tuple when present, and in an
+# adopter it is ordinarily absent: `init.sh` seeds `noise_markers`,
+# `unavailable_markers`, `informational_checks` and `bots`, and deliberately not
+# this one. So the eight-line account of what these markers mean — including the
+# load-bearing note that `"actionable comments posted:"` matches N>=1, so a
+# review that FOUND things is reported as a comment verdict too — lives in the
+# KIT's `config/dev-model.yaml`, at that key. Read it there. A pointer to your
+# own config would dangle: `grep -c comment_verdict_markers config/dev-model.yaml`
+# returns 0 in any ordinary adopter (#536).
+#
+# **Not seeding it is the correct default, and seeding it would be a
+# regression** — which is worth stating because "the pointer dangles" invites
+# exactly that repair. An absent key means the adopter inherits this tuple, so a
+# kit release that corrects a marker reaches them by refreshing this engine. A
+# seeded copy freezes the list at adoption time and silently outranks every
+# later kit correction — an unversioned copy of a kit fact, in a file
+# `kit_doctor` does not compare because it is adopter-owned (#542).
 _DEFAULT_COMMENT_VERDICT_MARKERS = (
     "no actionable comments were generated",
     "actionable comments posted:",
@@ -2632,7 +2649,8 @@ def bot_comment_verdicts(
        rate-limited bot posted a comment naming the commit range it *would have*
        reviewed, so terms 1, 2 and 4 without this one manufacture a verdict for
        a review that never ran;
-    4. the body contains ``head`` itself, as a full 40-character SHA.
+    4. the body **contains** ``head`` — a case-insensitive substring test, and
+       nothing more than that. It is not a word-boundary match and not a parse.
 
     **Term 4 is a containment test rather than a parse, deliberately.** The SHA
     sits in an English sentence the bot composes, and two wordings have already
@@ -2642,6 +2660,28 @@ def bot_comment_verdicts(
     answers the only question worth asking here. The cost is that this cannot
     report a verdict for an *older* head — that case reads as no verdict, which
     is the direction that fails toward silence.
+
+    **What makes a bare substring test safe is the LENGTH of the needle, and
+    that is the CALLER's guarantee — nothing here checks it** (#536). This
+    paragraph used to say term 4 required "a full 40-character SHA", which
+    described the system and not this function: the test is
+    ``head.lower() not in low``, with no length, hex, or word-boundary
+    condition. The property does hold in production — the only call site that
+    passes comments hands it ``view["headRefOid"]`` — but it holds one level up,
+    and a docstring that claims a check the code does not make is how the next
+    caller learns the wrong contract.
+
+    Stated plainly instead: **pass a full object name.** An abbreviated head
+    matches any comment containing those few characters, manufacturing a verdict
+    for a review of some other commit — the same failure term 3 exists to
+    prevent, reached by a different route.
+
+    Enforcing it here was tried and withdrawn rather than shipped half-done: the
+    test fixtures use ``headRefOid: "abc123"`` and, in places, values that are
+    not object names at all, so any honest length test silences the
+    comment-verdict path across the suite. A guard calibrated to let a 6-character
+    fixture through would not be a guard. `#543` carries the fixture realism this
+    needs and the enforcement that becomes available once it lands.
 
     Returns ``[{bot, sha}]``, sorted by bot. ``sha`` is always ``head`` by
     construction — carried anyway because it is the value a reader pastes into
