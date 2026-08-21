@@ -87,12 +87,18 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    **Park the finding and say why whenever the filing route is unavailable**, which
    is more often than it looks:
 
-   - **No operator in the session** — a scheduled, looped, or otherwise unattended
-     wrap-up. Detect it the way the rest of the kit does rather than by feel: your
-     cron/CI runner's env signal, any of `DEVKIT_CI_ENV_VARS` (default
-     `JOB_NAME,CI,GITHUB_ACTIONS,GITLAB_CI,BUILDKITE`) — the same signal `pr-watch`
-     uses to keep an automated PR out of an unattended watch loop. A run that cannot
-     establish an operator is present does not have one. The inbox is the route that
+   - **No operator in the session** — a scheduled, looped, headless or otherwise
+     unattended wrap-up. **The test is fail-closed and it comes first: a run that
+     cannot positively establish an operator is present and answering does not have
+     one.** Silence is not consent; an ask that goes unanswered parks like a decline.
+
+     Your cron/CI runner's env signal — any of `DEVKIT_CI_ENV_VARS`, default
+     `JOB_NAME,CI,GITHUB_ACTIONS,GITLAB_CI,BUILDKITE` — settles the case where it is
+     set, and is the same signal `pr-watch` uses to keep an automated PR out of an
+     unattended watch loop. **Do not read it as the whole test.** It is oriented at
+     external runners, and this kit's own unattended paths have no reason to export
+     any of those names: a headless lane, a looped invocation, a scheduled agent. Not
+     tripping the signal is not evidence anyone is there. The inbox is the route that
      needs no permission.
    - **No tracker to file into** — `tracker.backend` is `none`, or a backend is named
      but unwired. `init.sh` offers `none` as a first-class answer, so this is an
@@ -225,8 +231,9 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
      blocks only* — `git show HEAD:<handoff>` — and paste them back into your
      copy. Do **not** `git checkout -- <handoff>`: that discards every
      uncommitted edit in the file, which at this point in the workflow is this
-     whole session's block, its `▶ Next:` line, and anything else you changed in
-     steps 3 and 5.
+     whole session's block, its `▶ Next:` line, and anything else the steps above
+     wrote there — the handoff update, any filing this session's friction routing
+     recorded, and the next-session starter.
 
    Do not continue to the commit step until the sweep reported success. Stage
    **both** files (`<handoff>` + `<handoff-history>`) into this commit. If
