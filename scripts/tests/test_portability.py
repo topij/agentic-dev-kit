@@ -563,9 +563,10 @@ def test_self_merge_refuses_a_report_whose_fields_carry_tabs(tmp_path: Path) -> 
     Measured against the unscrubbed extraction, this exact report was
     AUTHORIZED. `pr` carries `8<TAB>trunk<TAB>reviewed-head`, so `validated_pr`
     read `8`, `validated_base` read `trunk` and matched the recorded base, and
-    `validated_head` read `reviewed-head` and was non-empty — while the report's
-    real base (`WRONG`) and real head (empty) were never examined at all, and
-    the merge ran with `--match-head-commit reviewed-head<TAB>WRONG`.
+    `validated_head` read `reviewed-head<TAB>WRONG` — the last name absorbing
+    the remainder — which is non-empty and so passed its only check. The
+    report's real base (`WRONG`) and real head (empty) were never examined at
+    all, and the merge ran with `--match-head-commit reviewed-head<TAB>WRONG`.
     """
     _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
     _prepare_self_merge_session(sessions)
@@ -671,6 +672,92 @@ def test_lane_pr_resolution_refuses_metadata_whose_fields_carry_tabs(
     # Refused before pr-watch was ever polled, and before any merge call.
     assert not uv_log.exists()
     assert "pr merge" not in call_log.read_text(encoding="utf-8")
+
+
+def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
+    """Both scrubs claim a character CLASS; the two tests above pin one member.
+
+    Round 1 of the fallback review panel narrowed each scrub in an isolated
+    clone and watched the whole suite stay green — twice, in two different
+    directions, each time reopening a live authorization bypass:
+
+    - **`" "` -> `""`** (delete instead of replace). A base of `tr<TAB>unk` then
+      scrubs to `trunk` and MATCHES the recorded base — the fusion the scrubs'
+      own comments name as the reason for choosing a space — and the merge was
+      authorized. `make mutation-test` reported 1353 passed, 1 deselected.
+    - **the range narrowed to `ch == "\\t"`**, tab being the only character
+      anyone associates with `IFS=$'\\t' read`. A NUL then survives the scrub,
+      and bash `$(…)` command substitution DELETES an embedded NUL and fuses
+      the text around it, so `tr<NUL>unk` reaches the comparison as `trunk` and
+      the merge was authorized again. (A newline in the same position only
+      truncates the `read`, so it is not a fusion vector — NUL is.)
+
+    Neither mutant is reachable through `gh` today, and neither was a defect in
+    the shipped code: the point is that the property was *named* broadly and
+    *pinned* narrowly, which is how the class this change closes gets reopened
+    by a later simplification with CI green.
+
+    So the contract is pinned here directly, and over BOTH blocks rather than
+    one — the scrub body is duplicated at the two call sites and nothing else
+    forces them to be edited in lockstep. Read out of `dev_session.sh` so the
+    copies cannot drift away from this test or from each other.
+    """
+    wrapper = (ENGINE_DIR / "dev_session.sh").read_text(encoding="utf-8")
+    blocks = re.findall(r"python3 -c '\n(import json, sys\n.*?)'", wrapper, re.S)
+    # Selected by CONTENT, not position — the rule `test_pr_watch.py`'s
+    # merge-gate test states: indexing would silently re-point this test the day
+    # a block is added above one of these. The selector has to be a token that
+    # cannot appear in the OTHER block's prose, which `baseRefName` is not: the
+    # gate's comment names it, so selecting on it matched both blocks and this
+    # assertion caught it. `headRepositoryOwner` appears only as code.
+    gate = [block for block in blocks if "mergeable" in block]
+    meta = [block for block in blocks if "headRepositoryOwner" in block]
+    assert len(gate) == 1, f"expected one merge-gate extraction, found {len(gate)}"
+    assert len(meta) == 1, f"expected one lane-PR extraction, found {len(meta)}"
+
+    def gate_payload(value: str) -> str:
+        return json.dumps({"mergeable": True, "pr": 8, "base": value, "head": "h"})
+
+    def meta_payload(value: str) -> str:
+        return json.dumps(
+            [
+                {
+                    "number": 8,
+                    "baseRefName": value,
+                    "headRefName": "b",
+                    "headRefOid": "h",
+                    "headRepositoryOwner": {"login": "o"},
+                }
+            ]
+        )
+
+    def emitted(block: str, payload: str, field: int) -> str:
+        proc = subprocess.run(
+            [sys.executable, "-c", block],
+            input=payload,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return proc.stdout.rstrip("\n").split("\t")[field]
+
+    # `base` sits at index 2 of the gate's four fields, `baseRefName` at index 1
+    # of the lane-PR block's five.
+    sites = (
+        ("merge gate", gate[0], gate_payload, 2),
+        ("lane PR metadata", meta[0], meta_payload, 1),
+    )
+    for label, block, payload, field in sites:
+        for code in [*range(0x20), 0x7F]:
+            got = emitted(block, payload(f"tr{chr(code)}unk"), field)
+            assert got == "tr unk", (
+                f"{label}: chr({code}) emitted as {got!r} — 'trunk' means it was "
+                "DELETED and now fuses into the recorded base; anything else "
+                "means it was not scrubbed at all"
+            )
+        # The class stops there: a printable character is left alone, so a scrub
+        # that flattened everything would not pass here either.
+        assert emitted(block, payload("tr-unk"), field) == "tr-unk", label
 
 
 def test_self_merge_pins_validated_head_so_push_race_is_refused(tmp_path: Path) -> None:

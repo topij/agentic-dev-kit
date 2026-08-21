@@ -816,6 +816,12 @@ def f(v):
     # SPACE could collide with a reported one holding a tab. Unreachable: that
     # value must be a real git ref twice over (cmd_new fetches it, and the PR
     # baseRefName must equal it), and git ref names admit neither.
+    # Unreachable through gh today, exactly as the sibling scrub in
+    # _resolve_lane_pr says of itself -- these three fields are a PR number, a
+    # ref name and a commit sha, none of which admit a control character. So
+    # this is defence in depth on an AUTHORIZATION path (#537), not a live
+    # bypass. Said at BOTH sites deliberately: one candid copy beside one silent
+    # copy of the same fix reads as the silent one knowing something.
     # NB: no apostrophes in this block -- it lives inside python3 -c SINGLE
     # quotes, so one would terminate the string and break the extraction.
     return "".join(" " if ch < "\x20" or ch == "\x7f" else ch for ch in str(v))

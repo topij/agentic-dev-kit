@@ -109,7 +109,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "d5c8b02a1328591d9e432d5db8f3bc095375cbb5f7350b437e00a002fd2d0383"
+      "sha256": "e2b6b12592b079c505036bc7714d100c2d46b13ab8b301c40bf33c260da3a629"
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
@@ -239,7 +239,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "a02eb13076c93fc70bb5761cc1764f14151aa8f581eb829059e093e2e4b0cbfa"
+      "sha256": "51f21f4646dbc39b67b749c16b7eebdc978c824b5698d28c4c6733bae91266fe"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -247,7 +247,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "5af0a2dacf41d7ad6a1e64b5fc06c2fa0840966ddd2cc0eb3b2b455c8051a6ed"
+      "sha256": "b4ec799df7d3679db39f2be7b9907aec75b61ad111d162d47fdd103665421497"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
