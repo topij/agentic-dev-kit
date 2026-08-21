@@ -3192,6 +3192,265 @@ def _step2_refresh_block() -> str:
     return matching[0]
 
 
+# Every `<engine-dir>` in a prescribed command must hang off this. `$REPO` is
+# bound in Step 0; the `:?` form fails loudly on an unset or empty value rather
+# than silently building a path from nothing (#496). An absolute path rooted
+# anywhere else would also survive Step 0's pwd guarantee — requiring THIS
+# spelling is the fail-fast convention on top of that, not the guarantee itself.
+_ANCHORED_ENGINE_DIR = re.compile(r'"\$\{REPO:\?[^}]*\}"/<engine-dir>')
+# A `--root` argument, quoted or not, joined by a space or an `=`. argparse
+# takes `--root V` and `--root=V` identically, and the shell strips quotes, so
+# `.`, `"."`, `'.'` and `=.` are one value wearing four spellings.
+_ROOT_ARG = re.compile(r"--root(?:=|\s+)(\"[^\"]*\"|'[^']*'|\S+)")
+
+
+def _upgrade_commands(doc: str | None = None) -> list[str]:
+    """Every fenced shell block and every command-shaped inline span in
+    upgrade.md, whitespace-flattened.
+
+    A COMMAND, not a line, and this is the whole lesson of `#536`'s review. Three
+    successive versions of the guard below scanned lines and were each defeated
+    by a different way of splitting one command across two of them:
+
+    - the prescribed `--root` command wraps mid-argument inside its backticks;
+    - a shell line continuation puts `uv run` on one line and `<engine-dir>` on
+      the next, so a filter requiring both on one line stops SEEING it — not
+      missing the defect, but excluding the command from consideration;
+    - a fenced-block scan never saw a command prescribed in prose at all;
+    - a fence whose tag was not in a hardcoded pair vanished from both pools at
+      once;
+    - and a fence whose every line carried a `$ ` prompt filtered down to the
+      empty string, which passes vacuously — the same whole-block loss as the
+      tag gate, through the replacement for it.
+
+    Each fix patched the previous spelling and the next round found another.
+    Flattening first removes the whole class instead of the instance: the
+    continuation is joined, the wrap collapses, and inline spans and fenced
+    blocks are treated alike — because a reader and a shell treat them alike.
+
+    Prose is excluded by requiring `uv run`, not by fencing. A sentence *about*
+    `--root` carries no runner word and is correctly ignored — which is what
+    bought back something the previous design had spent: the hazard note quotes
+    `--root .` concretely again, instead of describing it as "a bare dot"
+    because a substring rule could not tell an example from an instruction.
+    """
+    if doc is None:
+        doc = (
+            REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+        ).read_text(encoding="utf-8")
+    # Shell continuations first — a trailing backslash joins two source lines
+    # into one command, and every later step must see it that way.
+    joined = doc.replace("\\\n", " ")
+
+    # Fenced blocks are consumed BEFORE inline spans, and removed as they go.
+    # Leaving them in place breaks inline extraction outright: a ``` run is
+    # three backticks, so a naive pair-matching scan swallows fence markers and
+    # every span after the first fence pairs against the wrong delimiter. The
+    # symptom is not an error — it is commands that quietly stop being
+    # extracted, which is a guard that passes because it looked at nothing.
+    # Caught exactly that way: the one `--root` command in this document was
+    # absent from the extraction while four mutations of it "passed".
+    chunks: list[str] = []
+    rest: list[str] = []
+    cursor = 0
+    for match in re.finditer(r"^(`{3,})(\w*)\n(.*?)^\1", joined, re.DOTALL | re.M):
+        rest.append(joined[cursor : match.start()])
+        cursor = match.end()
+        # EVERY fence, whole, whatever its tag and whatever its lines look
+        # like. There is no transcript heuristic here, and removing the one this
+        # had is the point.
+        #
+        # The history is worth carrying, because it is five variations on one
+        # mistake. The gate first keyed on the fence TAG (`in ("bash", "sh")`),
+        # and a lens showed an unusual tag made a whole block vanish. It then
+        # keyed on a `$ ` PROMPT per line, and a lens showed a fence whose lines
+        # ALL carry prompts filters to the empty string — which passes both
+        # assertions vacuously, losing the whole block again, by a new route.
+        # Each rule asked what a line LOOKED like; each was defeated by a shape
+        # nobody had pictured.
+        #
+        # So nothing is excluded. This document's one transcript survives on its
+        # own merits: it demonstrates the failure using a LITERAL `scripts/`
+        # path, not the `<engine-dir>` placeholder, and names no `--root`, so
+        # both assertions pass over it without needing to know it is an
+        # illustration. That is the rule an author needs, and it is enforced
+        # rather than described: an illustration must not use the placeholder or
+        # the flag. One that does is flagged — loudly, in CI, which is the
+        # direction a guard should fail when it cannot tell intent.
+        chunks.append(match.group(3))
+    rest.append(joined[cursor:])
+
+    # Inline spans need a runner word; fenced shell blocks do NOT, and the
+    # asymmetry is deliberate. A ```bash block IS a command by declaration —
+    # everything in it is prescribed — so filtering it further would let a
+    # future `python3 <engine-dir>/…` line escape merely by not saying
+    # `uv run`. Every invocation in this document happens to use `uv run`
+    # today, which is exactly the condition under which that hole stays
+    # invisible until someone adds the seventh command.
+    #
+    # An inline span has no such declaration, so prose has to be told apart
+    # from instruction, and a runner word is the marker. The list is
+    # deliberately wider than this document currently needs — `uvx` and `make`
+    # are here because a lens showed an off-list runner makes an inline command
+    # invisible, and the cheapest honest answer to "which runners?" is more of
+    # them rather than a note explaining which ones do not count.
+    #
+    # This IS an enumeration, and enumerations are what five rounds of review
+    # kept breaking. It survives here only because the failure direction is
+    # different: an inline span is prose unless proven otherwise, so a missing
+    # runner word costs a missed command in ONE span, while the fence rule above
+    # — which had the same shape and much wider blast radius — was replaced
+    # outright. If an engine command ever needs to be prescribed inline with a
+    # runner not listed here, put it in a fence instead.
+    #
+    # Be precise about how that miss presents, because I described it wrongly to
+    # a review panel: it is SILENT. Nothing reports that a span was skipped —
+    # the command simply never enters the pool. The loud failure is the other
+    # one, where an illustration using the placeholder gets flagged.
+    runners = ("uv run", "uvx ", "python3 ", "python ", "bash ", "sh ", "make ", "./")
+    inline = [
+        span
+        for span in re.findall(r"`([^`]+)`", "".join(rest), re.DOTALL)
+        if any(runner in span for runner in runners)
+    ]
+    return [re.sub(r"\s+", " ", chunk) for chunk in [*chunks, *inline]]
+
+
+# One synthetic document per failure shape this extractor has actually shipped,
+# each hiding the SAME unanchored command. `_upgrade_commands` must surface it
+# from every one of them.
+#
+# This exists because the permanent test below is pinned to the real
+# `upgrade.md`, which contains none of these shapes — so for six rounds the
+# suite could not tell the fixed extractor from any of the five broken ones. Two
+# lenses independently reintroduced round 4's tag gate and round 5's prompt
+# filter and watched `make test` stay green. Every one of those five regressions
+# was caught by a lens executing hostile input, never by CI.
+#
+# The document is the fixture, so the shapes stay pinned no matter what
+# `upgrade.md` is later edited to contain.
+#
+# WHICH SHAPES ACTUALLY DISCRIMINATE, measured rather than assumed — because a
+# fixture set that looks exhaustive and kills nothing is the failure this whole
+# test exists to end:
+#
+#   tag gate reintroduced      -> killed by the three tag shapes
+#   prompt filter reintroduced -> killed by the two prompted shapes
+#   inline extraction dropped  -> killed by "inline span in prose"
+#   fence run-length fixed at 3 -> NOT killed
+#   continuation joining removed -> NOT killed
+#
+# The last two are kept deliberately, and what they show is worth more than a
+# clean sweep would be. Under the truncating three-backtick regex the
+# four-backtick command is still surfaced — by the INLINE fallback, which
+# rescues it — so that fix is a correctness improvement rather than the only
+# thing standing between the guard and a miss. And with fences now taken whole,
+# a shell continuation is inside one chunk regardless, so joining continuations
+# no longer carries fenced content at all; it remains only for an inline span
+# that wraps. Both are defence in depth now. Do not delete either on the
+# strength of "no test fails" — that is exactly the reasoning that has to be
+# checked against what the code would do, not against the suite.
+_BAD = "uv run <engine-dir>/kit_doctor.py --manifest x"
+_EXTRACTION_SHAPES = {
+    "plain bash fence": "```bash\n" + _BAD + "\n```",
+    # Round 4: the gate keyed on the fence TAG.
+    "unusual tag": "```console\n" + _BAD + "\n```",
+    "capitalised tag": "```Bash\n" + _BAD + "\n```",
+    "untagged fence": "```\n" + _BAD + "\n```",
+    # Round 5: the gate keyed on a `$ ` PROMPT, per line, so a fence whose every
+    # line carried one filtered to the empty string.
+    "every line prompted": "```bash\n$ " + _BAD + "\n$ " + _BAD + "\n```",
+    "mixed prompt and output": "```bash\n$ " + _BAD + "\nsome output\n```",
+    # Round 3: a shell continuation split the runner from the placeholder.
+    "shell continuation": "```bash\nuv run \\\n  <engine-dir>/kit_doctor.py --manifest x\n```",
+    # Round 3: a command prescribed in prose, never inside a fence at all.
+    "inline span in prose": "Run this: `" + _BAD + "` and then continue.",
+    # Round 6: a four-backtick fence wrapping a markdown example truncated the
+    # non-greedy regex at the INNER closing run.
+    "four-backtick outer fence": "````markdown\n```text\nexample\n```\n" + _BAD + "\n````",
+}
+
+
+@pytest.mark.parametrize("shape", sorted(_EXTRACTION_SHAPES))
+def test_the_extractor_surfaces_a_command_from_every_shape_it_has_missed(shape):
+    """Pins the extractor itself, independently of what upgrade.md contains."""
+    commands = _upgrade_commands(_EXTRACTION_SHAPES[shape])
+    assert any("<engine-dir>" in command for command in commands), (
+        f"the {shape!r} shape hides an engine command from the guard entirely — "
+        f"extracted: {commands}"
+    )
+
+
+def test_prose_that_merely_mentions_the_placeholder_is_not_a_command():
+    """The other direction: without a runner word, an inline span is prose.
+
+    Keeps the shapes above from being satisfied by a rule that simply treats
+    every backtick span as a command, which would flag this document's own
+    explanatory text.
+    """
+    assert _upgrade_commands("Read `<engine-dir>` from `paths.engines`.") == []
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_every_upgrade_engine_invocation_is_repo_anchored():
+    """Kills: dropping the `$REPO` anchor from any engine command in upgrade.md
+    (#536).
+
+    Step 0 pins `pwd` to be somewhere INSIDE `$REPO`, not at its top, and
+    `paths.engines` is a path relative to the repo root — so a relative
+    invocation resolves against wherever the shell is. Six sites shipped that
+    way. Two failure shapes, and only one is loud:
+
+        $ uv run scripts/kit_doctor.py --manifest ...
+        error: Failed to spawn: `scripts/kit_doctor.py`
+
+        $ uv run "$KIT/scripts/kit_doctor.py" --root . --manifest ...
+        error: dev-model config not found: <subdir>/config/dev-model.yaml
+        hint: a repo with no config/dev-model.yaml predates the config surface
+              entirely — adopt it with the /adopt skill rather than upgrading.
+
+    The second sends the operator to Step 0's stop-and-adopt branch for a repo
+    that is fully adopted, and a wrong `pwd` is not in the differential that
+    error invites.
+
+    **Both assertions VALIDATE THE REQUIRED FORM rather than search for a known
+    bad one**, which is the design lesson of this test's own review history. The
+    search-for-bad-text version was defeated three times running, each time by a
+    spelling nobody had thought of — a wrap, a quote, an `=`, a continuation.
+    Asking "is every occurrence anchored?" has no such enumeration to be
+    incomplete: a value that is not the anchored form fails, whatever it looks
+    like. The count-based `<engine-dir>` check survived the round that killed
+    its substring sibling for exactly this reason, which is what the `--root`
+    check has now been rebuilt to match.
+    """
+    commands = _upgrade_commands()
+    assert commands, "no `uv run` commands found — the extraction broke, not the doc"
+
+    unanchored = [
+        cmd
+        for cmd in commands
+        if len(_ANCHORED_ENGINE_DIR.findall(cmd)) != cmd.count("<engine-dir>")
+    ]
+    assert unanchored == [], (
+        "upgrade.md invokes an engine by a path that is not $REPO-anchored; "
+        "Step 0 only pins pwd to be INSIDE the repo, so these resolve against "
+        f"the shell's cwd: {unanchored}"
+    )
+
+    bad_root = [
+        (cmd, value)
+        for cmd in commands
+        for value in _ROOT_ARG.findall(cmd)
+        if not re.fullmatch(r'\$\{REPO:\?[^}]*\}', value.strip("\"'"))
+    ]
+    assert bad_root == [], (
+        "upgrade.md passes `--root` something other than the $REPO anchor. It "
+        "is an explicit override that bypasses `kitconfig.repo_root()`'s walk "
+        "up from `Path(__file__)` — which is what makes anchoring the script "
+        f"path sufficient everywhere else: {bad_root}"
+    )
+
+
 def _upgrade_init_argv() -> list[str]:
     """The `init.sh …` line from upgrade.md Step 2, as argv beyond the script."""
     matching = _step2_refresh_block()

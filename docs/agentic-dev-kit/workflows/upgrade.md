@@ -77,15 +77,39 @@ When you verify a copy landed, **hash it at the destination** —
 shell is. In the first occurrence above, the destination hash is what would have
 revealed it, and `git status` is what concealed it.
 
+**This binds reads and invocations, not only writes** — which is why every
+`<engine-dir>/…` command below is spelled `"$REPO"/<engine-dir>/…` rather than
+relative. `paths.engines` is a path *relative to the repo root*, and Step 0 pins `pwd`
+to be somewhere **inside** `$REPO`, not at its top — so a relative invocation resolves
+against wherever the shell happens to be. Executed from `docs/` in this repo:
+
+```text
+$ uv run scripts/kit_doctor.py --manifest "$KIT/kit-manifest.json"
+error: Failed to spawn: `scripts/kit_doctor.py`
+```
+
+That one is loud. The `--root` form is not: `--root .` from a subdirectory reports
+`dev-model config not found: <subdir>/config/dev-model.yaml` and prescribes
+*"a repo with no config/dev-model.yaml predates the config surface entirely — adopt it
+with the /adopt skill rather than upgrading"* — sending you to Step 0's stop-and-adopt
+branch for a repo that is fully adopted. A wrong `pwd` is not in the differential that
+error invites you to consider.
+
+Anchoring the **script path** is sufficient here and no `cd` is needed: `kitconfig`'s
+`repo_root()` walks up from `Path(__file__)`, not from the working directory, so an
+engine reached by an absolute path finds its own repo root wherever you invoke it from.
+`--root` is the exception, because it is an explicit override that bypasses that walk —
+which is why it takes `"$REPO"` above rather than `.`.
+
 ## Step 1 — Diff the installation (read-only)
 
 ```bash
-uv run <engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
 ```
 
 Read `<engine-dir>` from `paths.engines`. If `kit_doctor.py` isn't installed yet, run the
-kit's copy against this repo: `uv run /tmp/agentic-dev-kit/scripts/kit_doctor.py --root .
---manifest /tmp/agentic-dev-kit/kit-manifest.json`.
+kit's copy against this repo: `uv run /tmp/agentic-dev-kit/scripts/kit_doctor.py --root
+"${REPO:?REPO is not set — re-run Step 0}" --manifest /tmp/agentic-dev-kit/kit-manifest.json`.
 
 The report gives you, per kit-owned file: `unchanged` / `differs` /
 `unknown-version` / `missing-required`, and — for an absent file — one of `declined` /
@@ -175,7 +199,7 @@ So the count below is a tripwire rather than a formality — if it fires, the in
 incomplete and the top of `CHANGELOG.md` is the fallback:
 
 ```bash
-BASELINE="$(uv run <engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run Step 0}/kit-manifest.json" --json \
+BASELINE="$(uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run Step 0}/kit-manifest.json" --json \
   | python3 -c 'import json,sys; print(json.load(sys.stdin).get("baseline_kit_commit") or "")')"
 echo "baseline=${BASELINE:-NONE}"
 if [ -z "$BASELINE" ] ||
@@ -596,7 +620,7 @@ entries are exactly where the risk is.
 `differs` unjudgeable for every adopter until now:**
 
 ```bash
-uv run <engine-dir>/kit_doctor.py --record-install --from-kit /tmp/agentic-dev-kit
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --record-install --from-kit /tmp/agentic-dev-kit
 ```
 
 This rewrites `kit-manifest.json` **here** to record what this repo now has installed —
@@ -624,9 +648,9 @@ Commit the rewritten `kit-manifest.json` with the rest of the upgrade.
 ## Step 5 — Verify
 
 ```bash
-uv run <engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
-tmp="$(mktemp -d)" && DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python -m pytest <engine-dir>/lib/state_paths/tests <engine-dir>/tests -q
-uv run <engine-dir>/check_doc_budget.py
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
+tmp="$(mktemp -d)" && DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python -m pytest "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/lib/state_paths/tests "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/tests -q
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/check_doc_budget.py
 ```
 
 **`DEVKIT_STATE_ROOT` is not optional here, and the `&&` is what makes it
