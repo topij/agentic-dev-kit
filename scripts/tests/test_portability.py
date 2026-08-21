@@ -3833,11 +3833,23 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
     `REPO_ROOT` reached as a bare name, as an attribute, or wrapped in a
     single-argument `Path(...)` — see :func:`_is_repo_root`, which resolves all
     three recursively — divided by `"scripts"`, or joined to it via
-    `.joinpath("scripts", …)` or `Path(<root>, "scripts", …)`.
+    `.joinpath("scripts", …)`, `Path(<root>, "scripts", …)`, or
+    `os.path.join(<root>, "scripts")` and its attribute aliases.
 
-    THREE forms are NOT recognized, and all three are name-binding — which is
-    the actual shape of the excluded class, dataflow being the consequence
-    rather than the definition:
+    The SEGMENT resolves the same way — see :func:`_is_scripts_segment`, the
+    mirror of `_is_repo_root`. `REPO_ROOT / Path("scripts")` is the defect too,
+    and an earlier version of this paragraph described only the root side while
+    the code already handled both.
+
+    The forms below are NOT recognized, and every one of them is name-binding —
+    which is the actual shape of the excluded class, dataflow being the
+    consequence rather than the definition.
+
+    **No count appears in this paragraph, deliberately.** It said "two", then
+    "three", and was already wrong again by the next round — the list grew in
+    the same commit that stated its size. A number here is a second fact to keep
+    true about a list that is right beside it, and it has never survived a
+    round. Count the bullets.
 
     - binding the constant (`root = REPO_ROOT; root / "scripts"`);
     - hoisting the segment (`SEG = "scripts"; REPO_ROOT / SEG`);
@@ -3892,15 +3904,17 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
             continue
         if _is_repo_root(node.left) and _is_scripts_segment(node.right):
             found.append(node.lineno)
-    # Two Call forms, both path-identical to the operator form above and both
-    # pathlib's own idiom, so a refactor reaches either without meaning to:
+    # The Call forms, each path-identical to the operator form above, and each
+    # found by a lens slipping past a narrower version of this function:
     #
     #   REPO_ROOT.joinpath("scripts", …)   — a method on the constant
     #   Path(REPO_ROOT, "scripts", …)      — the constructor's varargs
+    #   os.path.join(REPO_ROOT, "scripts") — and its attribute aliases
     #
-    # Lenses found each of them slipping past a narrower version of this
-    # function, one round apart. Neither needs dataflow, which is what
-    # distinguishes them from the two genuinely-excluded spellings below.
+    # None needs dataflow, which is what distinguishes them from the excluded
+    # spellings in the docstring above. (This comment said "Two Call forms"
+    # while the loop below handled three — added by the same commit that left
+    # the count alone. Hence no count.)
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, ast.Call):
             continue
@@ -3940,7 +3954,7 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
 # since has been mutation-provably dead: a lens disabled the attribute branch,
 # then the joinpath loop, then the rglob, and the suite stayed green each time.
 #
-# The NEGATIVE cases are the half worth having. Two of them are the documented
+# The NEGATIVE cases are the half worth having. Several are the documented
 # limitations, so if someone ever closes one, this fails and sends them to the
 # docstring that claims it is open — a limit nobody can quietly outgrow.
 _GUARD_CASES = [
