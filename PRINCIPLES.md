@@ -37,10 +37,12 @@ not blocks) rather than left to discipline alone.
 ## 2. Friction flywheel
 
 **Statement.** Every session that surfaces friction — a bug, an awkward workflow, a
-recurring annoyance — records it immediately in a lightweight inbox, at the moment
-it's fresh. On a regular cadence, that inbox is triaged: single incidents get
-filed as tracked work items or simply noted; patterns that recur across multiple
-occurrences graduate into a permanent rule, check, or process change.
+recurring annoyance — records it immediately, at the moment it's fresh, and routes it
+by how well it is understood. A finding the session can already explain goes straight
+to the tracker as a work item; one it cannot yet explain goes to a lightweight inbox.
+On a regular cadence that inbox is triaged: single incidents get filed as tracked work
+items or simply noted; patterns that recur across multiple occurrences graduate into a
+permanent rule, check, or process change.
 
 **Failure it prevents.** Friction that isn't captured the moment it's noticed is
 friction that's forgotten — the next session hits the same rough edge, or worse,

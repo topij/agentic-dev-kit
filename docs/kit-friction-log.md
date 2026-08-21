@@ -6,7 +6,7 @@
 >
 > **What lands here is what is not yet issue-shaped.** A finding that already carries a
 > reproduction, a named mechanism and a proposed fix is filed straight to the tracker by
-> `wrap-up` step 5 rather than parked here — which is the routing Principle #2 prescribes,
+> `wrap-up`'s friction-routing step rather than parked here — which is the routing Principle #2 prescribes,
 > not a neglected inbox. What stays is the remainder: findings still missing one of those
 > three, and single instances of a shape that only matters if it recurs.
 >

@@ -204,8 +204,8 @@ and your friction log honest instead of ratcheting every week.
 The down-route runs on two clocks, not one. `/wrap-up` takes it immediately for
 anything already issue-shaped; this pass takes it for what has since become
 explicable, and sweeps the rest. So an inbox that stays small is the system working,
-and one that fills with things you could have filed at session end means step 5 is
-being skipped — not that triage is overdue.
+and one that fills with things you could have filed at session end means `/wrap-up`'s
+friction-routing step is being skipped — not that triage is overdue.
 
 > **Note:** these two skills ship as *doctrine* — the prose and routing rules are
 > here, but their deterministic engines — a tracker client, a notify channel, a
