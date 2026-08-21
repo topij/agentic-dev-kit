@@ -143,18 +143,18 @@ from a first report.** `CHANGELOG.md`'s `#553` entry is a worked instance: the
 workflow doc it added was invisible to a pre-upgrade `kit_doctor` for this exact
 reason, and named nowhere until `kit_doctor.py` itself was refreshed.
 
-**A related risk sits one level up, in this very file — and it is timing, not the
-invisibility described above.** `upgrade.md` is itself kit-owned (`kit-manifest.json`,
-tracked in `KIT_OWNED` since `#337`, long before either paragraph on this page) — so,
-unlike a file the running `kit_doctor.py` has never heard of, an out-of-date copy of
-`upgrade.md` is not invisible: it correctly reports `differs`/`STALE` in the very run
-above, the same as any other tracked file. The gap is that this file is reconciled in
-**Step 4** ("Shared workflows … same state logic as engines"), while Steps 0–3 already
-ran on whatever copy sat on disk before you got there — so an out-of-date `upgrade.md`
-has already shaped what you just did, its own `differs` line in this report
-notwithstanding (`#544` anchored every engine invocation here to `$REPO`; a repo
-upgrading from before it ran Steps 0–3 against the unanchored prose). Confirm now,
-while this step is still read-only: diff
+**A related risk sits one level up, in this very file, and whether the run above even
+catches it depends on when your installed copy was built.** `upgrade.md` has been
+tracked in `KIT_OWNED` since `#337`. If your installed `<engine-dir>/kit_doctor.py`
+postdates that commit, an out-of-date `upgrade.md` is not invisible: the run above
+reports it `differs`/`STALE` like any other tracked file. If your installed copy
+predates `#337`, it is invisible for exactly the reason the paragraph above
+describes. **Either way, a report is not a fix.** Step 4 is where this file is
+actually refreshed, and Steps 2–3 run before Step 4 does — on whatever copy is on
+disk right now, whatever this run just reported about it (`#544` anchored every
+engine invocation here to `$REPO`; a repo upgrading from before it runs Steps 2–3
+against the unanchored prose regardless of what Step 1 said). Confirm now, while
+this step is still read-only: diff
 `"${KIT:?KIT is not set — re-run Step 0}/docs/agentic-dev-kit/workflows/upgrade.md"`
 against
 `"${REPO:?REPO is not set — re-run Step 0}/docs/agentic-dev-kit/workflows/upgrade.md"`;
