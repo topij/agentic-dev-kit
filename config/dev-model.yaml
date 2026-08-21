@@ -292,8 +292,12 @@ review:
   # coverage would authorize merges on a prose match.
   #
   # Matched case-insensitively as substrings, and ONLY as one term of a
-  # conjunction (see `bot_comment_verdicts`): the comment must also carry the
-  # current head's full SHA and must NOT match any `unavailable_markers` entry.
+  # conjunction (see `bot_comment_verdicts`): the comment must also CONTAIN the
+  # current head — a bare case-insensitive substring test, with no length, hex,
+  # or word-boundary condition — and must NOT match any `unavailable_markers`
+  # entry. This used to say "must carry the current head's full SHA", which
+  # described the caller rather than the check: every production caller passes
+  # `headRefOid`, but nothing in the matching logic verifies it (#536).
   # That last term is not decoration — on #263 a rate-limited bot posted a
   # comment naming the commit range it WOULD have reviewed, so a rule keyed on
   # the SHA alone would have manufactured evidence for a review that never ran.

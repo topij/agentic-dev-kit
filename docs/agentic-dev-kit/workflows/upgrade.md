@@ -88,7 +88,8 @@ $ uv run scripts/kit_doctor.py --manifest "$KIT/kit-manifest.json"
 error: Failed to spawn: `scripts/kit_doctor.py`
 ```
 
-That one is loud. The `--root` form is not: `--root .` from a subdirectory reports
+That one is loud. The `--root` form is not: passing `--root` a bare dot, from a
+subdirectory, reports
 `dev-model config not found: <subdir>/config/dev-model.yaml` and prescribes
 *"a repo with no config/dev-model.yaml predates the config surface entirely — adopt it
 with the /adopt skill rather than upgrading"* — sending you to Step 0's stop-and-adopt

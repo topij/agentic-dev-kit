@@ -3192,6 +3192,90 @@ def _step2_refresh_block() -> str:
     return matching[0]
 
 
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_every_upgrade_engine_invocation_is_repo_anchored():
+    """Kills: dropping the `$REPO` anchor from any `<engine-dir>` command in
+    upgrade.md (#536).
+
+    Step 0 pins `pwd` to be somewhere INSIDE `$REPO`, not at its top, and
+    `paths.engines` is a path relative to the repo root — so a relative
+    invocation resolves against wherever the shell is. Six sites shipped that
+    way. Two failure shapes, and only one is loud:
+
+        $ uv run scripts/kit_doctor.py --manifest ...
+        error: Failed to spawn: `scripts/kit_doctor.py`
+
+        $ uv run "$KIT/scripts/kit_doctor.py" --root . --manifest ...
+        error: dev-model config not found: <subdir>/config/dev-model.yaml
+        hint: a repo with no config/dev-model.yaml predates the config surface
+              entirely — adopt it with the /adopt skill rather than upgrading.
+
+    The second sends the operator to Step 0's stop-and-adopt branch for a repo
+    that is fully adopted, and a wrong `pwd` is not in the differential that
+    error invites.
+
+    **This test exists because the fix was pinned by nothing.** A review lens
+    reverted one anchored line to its pre-fix form and the entire suite still
+    passed — 1315 passed, 0 failed, with `driftcheck` deselected so it was not a
+    manifest false-kill. The nearest existing test extracts the very block whose
+    first line the fix changed and deliberately strips that line before running
+    the rest. So the guard against a hazard this repo has already lost two
+    sessions to (`#399`) could be removed silently.
+
+    Asserts over the DOCUMENT rather than a named block: the point is that no
+    invocation anywhere escapes the rule, and a block-scoped test would pass the
+    day someone adds a seventh site in a new step.
+    """
+    doc = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+    ).read_text(encoding="utf-8")
+    # The WHOLE document, not its fenced blocks. This test's own first cut
+    # scanned ```bash blocks and a mutation restoring `--root .` SURVIVED it:
+    # that command is prescribed in a prose paragraph with inline backticks, so
+    # a block-scoped scan never saw the one site whose failure is quiet. A
+    # command is a command wherever the document puts it.
+    lines = doc.splitlines()
+
+    unanchored = [
+        line.strip()
+        for line in lines
+        # A prescribed invocation, identified by `uv run` rather than by
+        # fencing, that reaches an engine through `<engine-dir>`. Prose
+        # *mentions* of `<engine-dir>` ("Read `<engine-dir>` from
+        # `paths.engines`") carry no `uv run` and are correctly ignored.
+        if "uv run" in line and "<engine-dir>" in line
+        # The anchor must be the thing `<engine-dir>` hangs off, not merely
+        # present somewhere on the line — `--manifest "${KIT:?…}/…"` sits on
+        # several of these and must not satisfy the test.
+        and not re.search(r'"\$\{REPO:\?[^}]*\}"/<engine-dir>', line)
+    ]
+    assert unanchored == [], (
+        "upgrade.md invokes an engine by a path that is not $REPO-anchored; "
+        "Step 0 only pins pwd to be INSIDE the repo, so these resolve against "
+        f"the shell's cwd: {unanchored}"
+    )
+
+    # `--root .` is the quiet half and carries no `<engine-dir>`, so the check
+    # above cannot see it. It is an explicit override that bypasses
+    # `kitconfig.repo_root()`'s walk up from `Path(__file__)` — which is what
+    # makes anchoring the script path sufficient everywhere else, and what makes
+    # this the one flag that needs `$REPO` spelled out.
+    # A plain substring rule over the whole document, deliberately: the
+    # prescribed `--root` command WRAPS across two source lines, so a
+    # line-scoped regex is fragile in exactly the direction that lets the defect
+    # back in. The cost of the blunt rule is that the surrounding prose may not
+    # QUOTE the bad form even to explain it — the hazard note therefore says
+    # "passing `--root` a bare dot" instead. That is the trade: an illustration
+    # that cannot be copy-pasted into a shell, for a rule with no false
+    # negatives and nothing to tune.
+    assert "--root ." not in doc, (
+        "upgrade.md contains `--root .`, which resolves against cwd rather than "
+        "the repo root — pass \"${REPO:?...}\" instead. If this is prose "
+        "explaining the hazard rather than a prescribed command, describe the "
+        "form rather than quoting it; this rule is deliberately blunt."
+    )
+
+
 def _upgrade_init_argv() -> list[str]:
     """The `init.sh …` line from upgrade.md Step 2, as argv beyond the script."""
     matching = _step2_refresh_block()
