@@ -3205,7 +3205,8 @@ _ROOT_ARG = re.compile(r"--root(?:=|\s+)(\"[^\"]*\"|'[^']*'|\S+)")
 
 
 def _upgrade_commands() -> list[str]:
-    """Every prescribed shell command in upgrade.md, whitespace-flattened.
+    """Every fenced shell block and every command-shaped inline span in
+    upgrade.md, whitespace-flattened.
 
     A COMMAND, not a line, and this is the whole lesson of `#536`'s review. Three
     successive versions of the guard below scanned lines and were each defeated
@@ -3216,8 +3217,11 @@ def _upgrade_commands() -> list[str]:
       the next, so a filter requiring both on one line stops SEEING it — not
       missing the defect, but excluding the command from consideration;
     - a fenced-block scan never saw a command prescribed in prose at all;
-    - and a fence whose tag was not in a hardcoded pair vanished from both
-      pools at once, which is the tag-vocabulary guess this no longer makes.
+    - a fence whose tag was not in a hardcoded pair vanished from both pools at
+      once;
+    - and a fence whose every line carried a `$ ` prompt filtered down to the
+      empty string, which passes vacuously — the same whole-block loss as the
+      tag gate, through the replacement for it.
 
     Each fix patched the previous spelling and the next round found another.
     Flattening first removes the whole class instead of the instance: the
@@ -3251,29 +3255,28 @@ def _upgrade_commands() -> list[str]:
     for match in re.finditer(r"```(\w*)\n(.*?)```", joined, re.DOTALL):
         rest.append(joined[cursor : match.start()])
         cursor = match.end()
-        # EVERY fence is prescribed, whatever its tag — and the tag is not the
-        # discriminator, a `$ ` prompt is.
+        # EVERY fence, whole, whatever its tag and whatever its lines look
+        # like. There is no transcript heuristic here, and removing the one this
+        # had is the point.
         #
-        # This gate used to read `if match.group(1) in ("bash", "sh")`, and a
-        # lens showed that a fence tagged `console`, tagged `Bash`, or left
-        # untagged then vanished ENTIRELY: not prescribed, and not returned to
-        # `rest` either, since its span had already been excised. The miss was
-        # total and silent, and ```console is not hypothetical — this repo's own
-        # docs already use it twice. Worse, it was a REGRESSION: the line-based
-        # version this replaced had no fence-awareness at all, so it caught a
-        # bad line wherever it sat, whatever the tag.
+        # The history is worth carrying, because it is five variations on one
+        # mistake. The gate first keyed on the fence TAG (`in ("bash", "sh")`),
+        # and a lens showed an unusual tag made a whole block vanish. It then
+        # keyed on a `$ ` PROMPT per line, and a lens showed a fence whose lines
+        # ALL carry prompts filters to the empty string — which passes both
+        # assertions vacuously, losing the whole block again, by a new route.
+        # Each rule asked what a line LOOKED like; each was defeated by a shape
+        # nobody had pictured.
         #
-        # Keying on the tag meant guessing an author's vocabulary. Keying on the
-        # prompt asks what the line IS: `$ ` marks what a user typed, shown to
-        # illustrate an outcome, and this document's one transcript uses it to
-        # display the very failure being guarded against. A prescribed command
-        # here never carries a prompt — verified across all thirteen fences.
-        body = "\n".join(
-            line
-            for line in match.group(2).splitlines()
-            if not line.strip().startswith("$ ")
-        )
-        chunks.append(body)
+        # So nothing is excluded. This document's one transcript survives on its
+        # own merits: it demonstrates the failure using a LITERAL `scripts/`
+        # path, not the `<engine-dir>` placeholder, and names no `--root`, so
+        # both assertions pass over it without needing to know it is an
+        # illustration. That is the rule an author needs, and it is enforced
+        # rather than described: an illustration must not use the placeholder or
+        # the flag. One that does is flagged — loudly, in CI, which is the
+        # direction a guard should fail when it cannot tell intent.
+        chunks.append(match.group(2))
     rest.append(joined[cursor:])
 
     # Inline spans need a runner word; fenced shell blocks do NOT, and the
