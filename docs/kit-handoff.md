@@ -14,7 +14,7 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-21 — the adopter's three issues worked to merge, and a review loop that kept finding its own guards rather than the change.
+Last updated: 2026-08-21 — the adopter's upgrade findings worked to merge, and a review loop that kept finding its own guards rather than the change.
 
 ## Latest session — 2026-08-21 (the adopter's findings, and a loop that reviewed its own guards)
 
@@ -35,12 +35,14 @@ stays open, since nothing verified their acceptance criteria in the field.
   life. `summarize_review_bots`' own docstring forbids exactly that ("a comment is a
   statement about the past"), one layer below where I broke it.
 
-- **After each PR's first round, no finding was in shipped behaviour.** Established by
-  diffing each branch's first commit against its head over the files adopters receive:
-  no prescribed `upgrade.md` command and no `ENGINE_DIR` substitution changed. Every
-  later commit touched a test file and the manifest. All the HIGHs were in guards, several
-  in the previous round's guard. Stopping was by blast radius, per the doctrine — not
-  because a round came back clean.
+- **On `#544` and `#545`, nothing executable changed after the first commit.** Diffed each
+  branch's first commit against its head: test files and the manifest, plus one
+  comment-only edit to `config/dev-model.yaml` (checked — no key or value moved). No
+  prescribed `upgrade.md` command and no `ENGINE_DIR` substitution changed. So on those two
+  the review turned inward — the HIGHs were in guards, several in the previous round's guard.
+  `#538` is the counterexample and the claim does not reach it: its `accounted` fix
+  (`d6e371d`, a later commit) changed an executable line. Stopping was by blast radius,
+  per the doctrine — not because a round came back clean.
 
 - **The reason that was possible is now closed on both.** Each guard was pinned only to
   the real tree, which holds none of the shapes it exists to catch, so the suite could not
