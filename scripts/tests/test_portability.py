@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import contextlib
 import importlib.util
 import json
@@ -1306,7 +1307,10 @@ def test_migration_never_corrupts_or_silently_drops_adopter_config(
     # kitconfig (what the engines actually use) must agree with PyYAML — the
     # reader exists so engines can drop the dependency, so a disagreement means
     # the migration produced a file the two halves of the kit read differently.
-    sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
+    # ENGINE_DIR, not `REPO_ROOT / "scripts"` (#534): this imports the reader
+    # THIS repo actually ships, which under a vendored `paths.engines` is not
+    # under `scripts/`.
+    sys.path.insert(0, str(ENGINE_DIR / "lib"))
     import kitconfig  # noqa: PLC0415
 
     if shape == "multiline_item":
@@ -3723,3 +3727,328 @@ def test_the_target_lines_noop_message_is_pinned(
 
     assert result == 0
     assert "nothing to move: 46 line(s) <= --target-lines 46." in capsys.readouterr().out
+
+
+def _is_join_callee(node: ast.AST) -> bool:
+    """Any `<something>.join` callee — the qualifier is NOT checked.
+
+    This required `.path` for one round, on the reasoning that a bare `.join`
+    would also match `", ".join(...)`. A lens showed what that cost: `osp.join`
+    (`import os.path as osp`) and `path.join` (`from os import path`) both
+    slipped straight through, and those are ordinary spellings rather than
+    evasions.
+
+    The qualifier was never what made this safe — the ARGUMENTS are. The caller
+    requires the first argument to be `REPO_ROOT` and the next to be
+    `"scripts"`, and `str.join` takes exactly one argument, so a string join can
+    never present that shape. Checking the qualifier bought nothing and excluded
+    two common aliases, which is the enumeration mistake this file keeps making
+    in miniature.
+
+    A BARE `join(REPO_ROOT, "scripts")` — `from os.path import join` — is still
+    missed, and cannot be caught here: the callee is a plain name whose meaning
+    lives in an import statement. That is name-binding, the documented excluded
+    class.
+    """
+    return isinstance(node, ast.Attribute) and node.attr == "join"
+
+
+def _is_path_constructor(node: ast.AST) -> bool:
+    """A `Path` callee — bare, or any qualification of it.
+
+    Name-only, like :func:`_is_repo_root`: `pathlib.Path` and `p.Path` both
+    match, and so would an unrelated `shutil.Path`. That over-matches in the
+    LOUD direction — a false positive names a file and a line in the assertion
+    message — which is the direction this whole guard is built to fail in.
+    """
+    if isinstance(node, ast.Name):
+        return node.id == "Path"
+    return isinstance(node, ast.Attribute) and node.attr == "Path"
+
+
+def _is_scripts_segment(node: ast.AST) -> bool:
+    """The literal ``"scripts"``, bare or wrapped in a single-argument `Path()`.
+
+    The mirror of :func:`_is_repo_root`, and it exists for the same reason one
+    round later: a lens closed the wrapped-ROOT forms and then found
+    `REPO_ROOT / Path("scripts")` still open — the wrapper had simply moved to
+    the other operand. Wrapping either side is a no-op on the resulting path, so
+    both sides have to resolve through it.
+    """
+    if isinstance(node, ast.Constant):
+        return node.value == "scripts"
+    if isinstance(node, ast.Call) and _is_path_constructor(node.func):
+        return len(node.args) == 1 and _is_scripts_segment(node.args[0])
+    return False
+
+
+def _is_repo_root(node: ast.AST) -> bool:
+    """`REPO_ROOT`, however it is reached.
+
+    Three ways, and the third is recursive:
+
+    - a bare name, `REPO_ROOT`;
+    - an attribute, `_repo_layout.REPO_ROOT` — the same constant one
+      qualification away, which a name-only guard would treat as a different
+      thing;
+    - wrapped in a single-argument `Path(...)`, because `Path(REPO_ROOT)` IS
+      `REPO_ROOT` — the constructor is a no-op on something already a Path, so
+      `Path(REPO_ROOT) / "scripts"` is the defect wearing a hat.
+
+    The recursion is what makes the third case general rather than one more
+    spelling: it composes with both other forms and with itself, so
+    `Path(pathlib.Path(mod.REPO_ROOT))` resolves too. A lens found the
+    unwrapped case open AFTER a previous round had closed
+    `Path(REPO_ROOT, "scripts")` and declared the class shut — the difference
+    being one argument, which is exactly the kind of distinction an enumeration
+    misses and a recursive definition does not.
+
+    Single-argument only: `Path(REPO_ROOT, "scripts")` is not "the repo root",
+    it is the repo root JOINED to something, and the scanner's Call branch
+    handles it there.
+    """
+    if isinstance(node, ast.Name):
+        return node.id == "REPO_ROOT"
+    if isinstance(node, ast.Attribute):
+        return node.attr == "REPO_ROOT"
+    if isinstance(node, ast.Call) and _is_path_constructor(node.func):
+        return len(node.args) == 1 and _is_repo_root(node.args[0])
+    return False
+
+
+def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
+    """Line numbers of live `REPO_ROOT / "scripts"` expressions in ``source``.
+
+    AST, not grep, and that is the whole point: this file, `test_pr_watch.py`,
+    `test_kit_doctor.py` and `test_kitconfig.py` all DISCUSS the bad idiom in
+    comments and docstrings explaining why it was removed. A textual scan would
+    have to be taught to ignore those, and the day it got that wrong the honest
+    fix would be to delete the explanation. Parsing sees only what executes.
+    (That list named `_repo_layout.py` until a lens checked it — that file
+    discusses the *different*, already-fixed `parents[2]` idiom and never
+    mentions this one. Re-derive with
+    `grep -ln 'REPO_ROOT / "scripts"' scripts/tests/*.py`.)
+
+    **What it recognizes, and a warning about this paragraph.** Recognized:
+    `REPO_ROOT` reached as a bare name, as an attribute, or wrapped in a
+    single-argument `Path(...)` — see :func:`_is_repo_root`, which resolves all
+    three recursively — divided by `"scripts"`, or joined to it via
+    `.joinpath("scripts", …)`, `Path(<root>, "scripts", …)`, or
+    `os.path.join(<root>, "scripts")` and its attribute aliases.
+
+    The SEGMENT resolves the same way — see :func:`_is_scripts_segment`, the
+    mirror of `_is_repo_root`. `REPO_ROOT / Path("scripts")` is the defect too,
+    and an earlier version of this paragraph described only the root side while
+    the code already handled both.
+
+    The forms below are NOT recognized, and every one of them is name-binding —
+    which is the actual shape of the excluded class, dataflow being the
+    consequence rather than the definition.
+
+    **No count appears in this paragraph, deliberately.** It said "two", then
+    "three", and was already wrong again by the next round — the list grew in
+    the same commit that stated its size. A number here is a second fact to keep
+    true about a list that is right beside it, and it has never survived a
+    round. Count the bullets.
+
+    - binding the constant (`root = REPO_ROOT; root / "scripts"`);
+    - hoisting the segment (`SEG = "scripts"; REPO_ROOT / SEG`);
+    - aliasing the constructor (`from pathlib import Path as PP;
+      PP(REPO_ROOT, "scripts")`) — named here because a lens pointed out it
+      rides under the same umbrella and the umbrella did not mention it;
+    - importing the function directly (`from os.path import join;
+      join(REPO_ROOT, "scripts")`) — the callee is a plain name whose meaning
+      lives in an import statement. A lens found this one too, in the round
+      that added `os.path.join` recognition and called the class closed. That
+      is four times now that this list has been short by one, which is the
+      reason for the warning below rather than an argument that it is finally
+      complete.
+
+    Closing any of them is out of proportion, and a naive attempt at the first
+    immediately false-positives on a legitimate `root` fixture elsewhere in this
+    suite.
+
+    **Do not read the paragraph above as a proof of completeness.** Three
+    consecutive review rounds each closed a no-dataflow gap here and each
+    declared the class shut — `.joinpath`, then `Path(root, "scripts")`, then
+    `Path(root) / "scripts"` — and the third was found by a lens that built the
+    real defect in a real file and watched the scan pass over it. The intended
+    line is "needs dataflow or not"; the demonstrated track record is that the
+    line has been drawn wrong every time it has been drawn. `_GUARD_CASES`
+    below is therefore the authority on what this recognizes, because it
+    executes; this prose is a summary of it and has been the less reliable of
+    the two. If you are about to add a spelling here, add a case there first
+    and let it fail.
+
+    Note what that does and does not buy, since an earlier version of this
+    overstated it: pinning a limitation as a negative case means CLOSING it
+    fails that case, so nobody closes one silently. It does not tie this prose
+    to those cases — nothing checks that the two agree, and keeping them in
+    step is a human obligation, which is why the count above says how often it
+    has slipped rather than asserting it holds.
+
+    `os.path.join(REPO_ROOT, "scripts")` is recognized too. It was previously
+    excused on the argument that a stdlib join would be conspicuous in a
+    pathlib-only suite — a social claim inside a mechanical guard, and `os` is
+    already imported in this file for unrelated reasons. It costs the same
+    one-hop inspection as the rest.
+
+    The guard is
+    deliberately anchored on `REPO_ROOT` rather than matching any `/ "scripts"`:
+    `tmp_path / "scripts"` is correct and common here, because the synthetic
+    trees these tests build stand in for an adopter on the kit's default layout.
+    """
+    found: list[int] = []
+    for node in ast.walk(ast.parse(source)):
+        if not (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)):
+            continue
+        if _is_repo_root(node.left) and _is_scripts_segment(node.right):
+            found.append(node.lineno)
+    # The Call forms, each path-identical to the operator form above, and each
+    # found by a lens slipping past a narrower version of this function:
+    #
+    #   REPO_ROOT.joinpath("scripts", …)   — a method on the constant
+    #   Path(REPO_ROOT, "scripts", …)      — the constructor's varargs
+    #   os.path.join(REPO_ROOT, "scripts") — and its attribute aliases
+    #
+    # None needs dataflow, which is what distinguishes them from the excluded
+    # spellings in the docstring above. (This comment said "Two Call forms"
+    # while the loop below handled three — added by the same commit that left
+    # the count alone. Hence no count.)
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        args = node.args
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "joinpath":
+            if not _is_repo_root(node.func.value):
+                continue
+        elif _is_join_callee(node.func):
+            # `os.path.join(REPO_ROOT, "scripts")` and its attribute aliases.
+            # Closed rather than excused: the previous exclusion rested on a
+            # stdlib join being "conspicuous" in a pathlib-only suite, which is
+            # a social claim inside a mechanical guard.
+            #
+            # The root check below is what makes matching ANY `.join` safe, so
+            # do not "tighten" this by qualifying the callee — that was tried,
+            # and it silently excluded `osp.join` and `path.join`.
+            if not (args and _is_repo_root(args[0])):
+                continue
+            args = args[1:]
+        elif _is_path_constructor(node.func):
+            # `Path(REPO_ROOT, "scripts")` — the root is the FIRST argument, so
+            # the segment to check is the second.
+            if not (args and _is_repo_root(args[0])):
+                continue
+            args = args[1:]
+        else:
+            continue
+        first = args[0] if args else None
+        if first is not None and _is_scripts_segment(first):
+            found.append(node.lineno)
+    return sorted(found)
+
+
+# (source, detected) — the guard's contract, pinned on synthetic input rather
+# than on whatever happens to be on disk. Round 1 swept the real offenders out,
+# so the scanning test below has nothing left to find and every widening added
+# since has been mutation-provably dead: a lens disabled the attribute branch,
+# then the joinpath loop, then the rglob, and the suite stayed green each time.
+#
+# The NEGATIVE cases are the half worth having. Several are the documented
+# limitations, so if someone ever closes one, this fails and sends them to the
+# docstring that claims it is open — a limit nobody can quietly outgrow.
+_GUARD_CASES = [
+    ('x = REPO_ROOT / "scripts" / "a.py"', True),
+    ('x = mod.REPO_ROOT / "scripts" / "a.py"', True),
+    ('x = REPO_ROOT.joinpath("scripts", "a.py")', True),
+    ('x = Path(REPO_ROOT, "scripts", "a.py")', True),
+    ('x = pathlib.Path(REPO_ROOT, "scripts")', True),
+    # `Path(REPO_ROOT)` IS `REPO_ROOT`; a lens found these open after a previous
+    # round had closed the two-argument form and called the class shut.
+    ('x = Path(REPO_ROOT) / "scripts"', True),
+    ('x = Path(REPO_ROOT).joinpath("scripts")', True),
+    ('x = pathlib.Path(mod.REPO_ROOT) / "scripts"', True),
+    # Correct and common here: these tests build synthetic trees standing in for
+    # an adopter on the kit's default layout.
+    ('x = tmp_path / "scripts" / "a.py"', False),
+    ('x = REPO_ROOT / "state"', False),
+    # Documented limitations. All three are name-binding.
+    ('root = REPO_ROOT\nx = root / "scripts"', False),
+    ('SEG = "scripts"\nx = REPO_ROOT / SEG', False),
+    ('from pathlib import Path as PP\nx = PP(REPO_ROOT, "scripts")', False),
+    ('from os.path import join\nx = join(REPO_ROOT, "scripts")', False),
+    ('x = os.path.join(REPO_ROOT, "scripts")', True),
+    # Attribute aliases of the same call. A lens found both open while the
+    # matcher insisted on a `.path` qualifier.
+    ('import os.path as osp\nx = osp.join(REPO_ROOT, "scripts")', True),
+    ('from os import path\nx = path.join(REPO_ROOT, "scripts")', True),
+    # The argument shape is what keeps a bare `.join` match safe: `str.join`
+    # takes one argument and can never present (root, "scripts").
+    ('x = ", ".join(REPO_ROOT)', False),
+    # Pins `len(args) == 1` in the Path-wrapper rule: this is REPO_ROOT/other,
+    # which is not the engine dir, so `/ "scripts"` under it is not the defect.
+    ('x = Path(REPO_ROOT, "other") / "scripts"', False),
+    # Pins the root check in the join branch — without it, any join whose
+    # second argument is "scripts" would match.
+    ('x = os.path.join(tmp_path, "scripts")', False),
+    # The wrapper on the SEGMENT rather than the root — a lens found these open
+    # one round after the wrapped-root forms were closed.
+    ('x = REPO_ROOT / Path("scripts")', True),
+    ('x = REPO_ROOT.joinpath(Path("scripts"), "a.py")', True),
+    # `.join` without the `.path` qualifier is an ordinary string method.
+    ('x = ", ".join(REPO_ROOT)', False),
+    # Prose is inert under a parser — the reason this is AST and not grep.
+    ('"""Do not write REPO_ROOT / \'scripts\' here."""', False),
+]
+
+
+@pytest.mark.parametrize(("source", "detected"), _GUARD_CASES)
+def test_the_engine_dir_guard_recognises_exactly_what_it_claims(source, detected):
+    """The guard's own behaviour, pinned independently of the tree it scans."""
+    assert bool(_repo_root_slash_scripts_nodes(source)) is detected
+
+
+def test_no_test_module_rebuilds_the_engine_dir_from_repo_root():
+    """#534 cause 3, pinned — because nothing else in this repo can pin it.
+
+    `ENGINE_DIR` and `REPO_ROOT / "scripts"` resolve to the SAME path in the
+    kit's own layout, so no test running here can distinguish the correct form
+    from the defective one by behaviour. A review lens on `#545` reverted all
+    three fixes and the whole suite stayed green — structurally, not by
+    accident. Until this test, the only thing that had ever caught this class
+    was a real adopter running a real vendored install (`#40`, `#134`, `#534`,
+    `#537`), which is a feedback loop measured in months.
+
+    So this pins the SHAPE rather than the behaviour. That is a weaker
+    guarantee and it is the one available: a test that cannot fail in the
+    layout it runs in has to assert about the source text instead of the
+    result.
+
+    Engine paths in a test module must come from `ENGINE_DIR` — which every one
+    of these modules already computes, either from `_repo_layout.engine_dir()`
+    or from its own `Path(__file__).resolve().parent.parent`. `REPO_ROOT` stays
+    correct for everything that is genuinely repo-relative and not engine-
+    relative: `docs/`, `.claude/`, `.agents/`, `kit-manifest.json`.
+    """
+    # rglob, so `lib/state_paths/tests/` is covered too — AGENTS.md counts it as
+    # part of the full suite, and a guard that stops at one test directory is a
+    # guard with a documented blind spot.
+    scanned = sorted(ENGINE_DIR.rglob("tests/*.py"))
+    # Pins the rglob itself. A lens reverted it to `glob` and nothing failed,
+    # because the directory it stops reaching holds no offender today — so the
+    # widening was live coverage that no test could tell had gone.
+    directories = {path.parent.relative_to(ENGINE_DIR).as_posix() for path in scanned}
+    assert directories == {"tests", "lib/state_paths/tests"}, (
+        f"the scan no longer covers both test directories: {sorted(directories)}"
+    )
+
+    offenders = {}
+    for path in scanned:
+        lines = _repo_root_slash_scripts_nodes(path.read_text(encoding="utf-8"))
+        if lines:
+            offenders[path.name] = lines
+    assert offenders == {}, (
+        "a test module builds an engine path as `REPO_ROOT / \"scripts\"`, which "
+        "is only correct while `paths.engines` is `scripts`. Use ENGINE_DIR. "
+        f"Offenders: {offenders}"
+    )

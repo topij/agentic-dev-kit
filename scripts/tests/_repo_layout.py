@@ -34,8 +34,14 @@ this module's, and it is *pinned* rather than merely described, by
 ``test_repo_layout.py::test_the_fallback_is_wrong_in_a_nested_layout_and_that_is_known``
 — which fails if ``#60``'s resolution lands without updating here.
 
-**Three modules still carry their own copy** — ``test_portability.py``,
-``test_mutation_gate.py`` and ``test_pr_followup_hook.py``. They already derive
+**Six modules still carry their own copy** — ``test_portability.py``,
+``test_mutation_gate.py``, ``test_pr_followup_hook.py``, ``test_pr_watch.py``,
+``test_check_memory_budget.py`` and ``test_reconcile_sessions.py``. This said
+*three* until a review lens counted; it named four, and the grep says six. Do
+not transcribe this list — re-derive it, which is one grep:
+``grep -clE '^ENGINE_DIR = Path' scripts/tests/*.py``. Anchored at line start on
+purpose: the unanchored form matches this very sentence, and returns SEVEN.
+They already derive
 the engine directory from their own location, so they are not affected by
 #134 and were left alone rather than swept into its fix; consolidating them, and
 deciding whether the raising fallback should survive anywhere, is ``#203``. Do
