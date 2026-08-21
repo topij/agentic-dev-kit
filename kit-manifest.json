@@ -187,7 +187,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "c3ac659cd9699e033f51004555b3170571dc914537ab05644bf6d0fce50bc9be"
+      "sha256": "0f137a9341bbb1a0f23f909ecd518766741cadea76c36976ad1c2d2376d5796c"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -243,7 +243,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "a12c1c17414bc27640e3d7835885c6e73fb1d0db27a66406cb3b16078c4256d0"
+      "sha256": "60e14f35528b5491501b529b3aff0c1b7fcdd932e766b3787cd7a3f5eceedf45"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",

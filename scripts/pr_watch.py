@@ -1496,6 +1496,53 @@ def _outage_row_present(rows: list[dict], bots: tuple[str, ...]) -> bool:
     return False
 
 
+def _identity_read_needed(rows: list[dict], bots: tuple[str, ...]) -> bool:
+    """Whether any row's identity has a CONSUMER this poll — the fetch precondition.
+
+    Strictly wider than :func:`_outage_row_present`, and the difference is #535.
+    Identity has **two** consumers, not one:
+
+    - the outage CANCEL, which :func:`_outage_row_present` covers; and
+    - ``trusted`` on a **pending** entry, which the report's mid-review
+      deference reads (#521 for the coverage warning, #518 for ``review owed``).
+
+    Gating the fetch on the first alone left the second reading an identity
+    nothing had resolved. :func:`_match_bot_identity` returns ``None`` for an
+    empty identity, so ``trusted`` was ``False`` on every healthy mid-review row
+    and #521's deference was **inert** — both report lines fired throughout the
+    healthy window, which is the exact case their own comments say must be
+    deferred to.
+
+    The defect was not uniform across transports, which is what made it look
+    like a report bug rather than a fetch one. A REST **check run** escapes it:
+    :func:`_rest_check_rows` takes ``app.slug`` off an object the fetch already
+    had, so its identity is populated unconditionally. The ``gh`` backend
+    (neither surface carries a creator) and the REST **status-context** surface
+    (the combined-status endpoint omits ``creator``) both come back empty — and
+    a reviewer posting a status context, which this engine's own docstrings note
+    CodeRabbit does, is empty on both.
+
+    Still lazy where laziness is free: a poll whose bot-named rows are all
+    terminal and unmarked pays nothing, which is the steady state once a reviewer
+    has reported. The added cost is bounded by the pending window — the same
+    window the deference it feeds exists for.
+
+    Evaluated over the same predicates the consumers use — :func:`_match_bot` and
+    :func:`_check_is_pending` — for the reason :func:`_outage_row_present` states:
+    a narrower test here skips the fetch for a row the consumer then judges on an
+    empty identity, which reads as untrusted and silently disables the path.
+    """
+    if _outage_row_present(rows, bots):
+        return True
+    for row in rows:
+        name = str(row.get("name") or row.get("context") or "")
+        if not _match_bot(name, bots):
+            continue
+        if _check_is_pending(row):
+            return True
+    return False
+
+
 def _gh_api_pages(path: str) -> list:
     """``gh api --paginate --slurp`` for one path — the list of PAGES, or ``[]``.
 
@@ -1621,8 +1668,19 @@ def fetch_check_details(
 
     ``identity`` is the #95 addition: the creator a check is attributable to,
     which the outage path requires before letting a description cancel a pending
-    reviewer. It is resolved **lazily** — only when :func:`_outage_row_present`
-    finds a row that could cancel something — so a healthy poll pays nothing.
+    reviewer, and which the report's mid-review deference requires before
+    believing a pending row belongs to the reviewer it is named for. It is
+    resolved **lazily** — only when :func:`_identity_read_needed` finds a row
+    whose identity has a consumer this poll — so a poll whose bot rows are all
+    terminal and unmarked pays nothing.
+
+    That precondition used to be :func:`_outage_row_present`, which is #535: the
+    outage cancel was one of identity's two consumers and the only one the gate
+    consulted, so a healthy PENDING row never had its identity read and
+    ``trusted`` was ``False`` for the whole mid-review window. The deference
+    built on it was inert wherever the transport does not supply a creator for
+    free — the whole `gh` backend, and REST's status-context surface.
+
     Every row carries the key on **both** backends whether or not that read ran;
     an unresolved one is ``""``, which reads as untrusted. Consumers still use
     ``.get`` — the uniform key exists so a future reader who indexes it is not
@@ -1697,11 +1755,14 @@ def fetch_check_details(
                 raise RuntimeError(f"PR #{pr} response carried no head SHA")
             check_runs, statuses = _rest_fetch_checks(sha, token=token, slug=slug)
             rows = _rest_check_rows(check_runs, statuses)
-            # The #95 identity read, only when a row could actually cancel a
-            # pending block. Check runs already carry `app.slug` from the fetch
+            # The #95 identity read, whenever a row's identity has a consumer
+            # this poll. Check runs already carry `app.slug` from the fetch
             # above; it is the STATUS surface that needs a second endpoint,
-            # because the combined-status read has no `creator`.
-            if _outage_row_present(rows, bots):
+            # because the combined-status read has no `creator` — so on THIS
+            # backend the widening from `_outage_row_present` to
+            # `_identity_read_needed` (#535) buys the status surface alone, and
+            # a check-run-shaped reviewer was already covered.
+            if _identity_read_needed(rows, bots):
                 # ITS OWN try, inside the outer one. `rows` above is already read
                 # and already carries the outage marker; letting a failure in this
                 # third call discard it would take #19's and #23's guards dark for
@@ -1809,8 +1870,9 @@ def fetch_check_details(
         row.setdefault("identity", "")
     # The #95 identity read on the `gh` backend. Same precondition as the REST
     # branch, but both surfaces need the extra call here, since `gh pr checks`
-    # carries no creator on either.
-    if _outage_row_present(rows, bots):
+    # carries no creator on either — which is why #535's inert-deference defect
+    # was total on this backend and only partial on REST.
+    if _identity_read_needed(rows, bots):
         sha = head_sha or _gh_head_sha(pr)
         identities = _gh_identity_map(sha) if sha else {}
         # Fail closed if the head moved across this read. `gh pr checks` always
@@ -4168,6 +4230,17 @@ def render(report: dict) -> str:
     # The gate is untouched by this. `blocking` still decides whether a pending
     # check blocks a merge, unchanged and fail-closed as before — a forged
     # pending check still blocks the PR that forged it, and still ages out.
+    #
+    # #535: this set is only as alive as the FETCH that populates `identity`. It
+    # shipped inert because `fetch_check_details` resolved identity only for an
+    # OUTAGE row, so a healthy mid-review row arrived with `identity: ""`,
+    # `trusted` was False for every one of them, and the suppression this whole
+    # block exists to perform never fired once in production. Nothing here was
+    # wrong; the precondition upstream was. If you ever narrow
+    # `_identity_read_needed` back toward `_outage_row_present`, you turn this
+    # off again — silently, and with every test in this file still passing,
+    # because they hand `check_details` to `build_report` directly and never
+    # cross the transport boundary where the defect lives.
     reviewing_trusted = {
         e["bot"]
         for e in bots.get("pending") or []
@@ -4229,6 +4302,17 @@ def render(report: dict) -> str:
     #     is coming; telling you to request one spends a second unit on a review
     #     already in flight. Same `reviewing_trusted` set the coverage warning
     #     above computes, and for the same reason.
+    #   - Silent where the bot is resolved UNAVAILABLE on a TRUSTED surface.
+    #     #535 item 4. The sanctioned remedy for an announced outage is the
+    #     fallback panel, and the `⚠ review unavailable` line below prescribes
+    #     it in the same render — so "request one now" here contradicts the line
+    #     underneath it and names the one action the outage has ruled out. The
+    #     trust qualifier is load-bearing rather than symmetry: an UNTRUSTED
+    #     outage row is a forgery that cancelled nothing (#95), the real
+    #     reviewer is still owed a look, and this line must still fire. Reading
+    #     it without that term would hand a same-repo PR a second way to silence
+    #     "nobody has reviewed this" about its own diff — the defect #521 closed
+    #     one branch of, re-entered through the outage surface.
     #   - Silent where the review-bot read FAILED (`signal` is not `ok`). The
     #     hedge printed above says reviewer state could not be read this poll;
     #     an absolute about reviewer state underneath it would retract that
@@ -4290,6 +4374,11 @@ def render(report: dict) -> str:
         covered
         | reviewing_trusted
         | {e["bot"] for e in bots.get("comment_verdicts") or []}
+        | {
+            e["bot"]
+            for e in bots.get("unavailable") or []
+            if e.get("trusted", True)
+        }
     )
     unreviewed = sorted(set(_REVIEW_BOTS) - accounted)
     # `signal == "ok"` positively, rather than excluding the states that are not

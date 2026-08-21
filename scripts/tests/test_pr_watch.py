@@ -1089,6 +1089,15 @@ def _bot_check(**overrides):
     ``test_an_unresolvable_identity_cannot_cancel_but_costs_only_the_grace``; if
     this default ever silently became the *only* thing keeping the outage path
     alive, those two would fail.
+
+    **The default is a claim about the transport, and it was false for one
+    release (#535).** Paired with an empty ``description`` it describes a healthy
+    pending row — a shape no transport emitted while identity was resolved only
+    for outage rows, so every deference test built on it passed against
+    production's opposite. The claim holds again now, and what holds it is
+    ``test_a_healthy_mid_review_row_gets_its_identity_read_on_the_gh_backend``
+    rather than anything in this helper. Nothing in a fixture can pin a
+    transport; do not let this default stand in for one.
     """
     detail = {
         "name": "CodeRabbit",
@@ -2039,10 +2048,20 @@ def test_the_gh_backend_resolves_a_status_contexts_creator_across_pages(
 
 
 def test_identity_is_read_only_when_a_row_could_cancel_something() -> None:
-    """The lazy precondition: a healthy poll must not pay for the identity read.
+    """`_outage_row_present` — "could a row CANCEL a pending block".
 
-    Also the guard against the read being skipped when it DOES matter — the two
-    directions are one predicate, so they are pinned together.
+    Both directions of that one question, pinned together: a row that could
+    cancel something must reach the fetch, and one that could not must not be
+    the reason for it.
+
+    **This is no longer the whole fetch precondition**, and reading it as one is
+    #535. `fetch_check_details` gates on `_identity_read_needed`, which is
+    strictly wider — a healthy PENDING bot row has no cancel to make and still
+    needs its identity, because the report's mid-review deference consumes
+    `trusted`. The assertions below stayed true throughout that defect, which is
+    why they did not catch it. See
+    `test_identity_read_needed_is_wider_than_the_outage_predicate` for the
+    predicate the call sites actually use.
     """
     pr_watch = _load_pr_watch()
     bots = ("coderabbit",)
@@ -4950,6 +4969,21 @@ def test_a_genuinely_trusted_pending_bot_still_silences_the_coverage_warning() -
     deference impossible to reach at all. A real reviewer's own pending check
     — resolvable identity, actively blocking — must still suppress the
     staleness warning about a review it is in the middle of redoing.
+
+    **#535 item 3 — read the premise here, not the default.** This test used to
+    inherit `_bot_check`'s `identity` silently, on a row with an empty
+    `description`, and that combination was emitted by NO transport: identity
+    was resolved only for outage-marked rows, so a healthy pending row always
+    arrived with `identity: ""`. The test passed on a shape production could not
+    produce, which is exactly what let the inert deference ship green.
+
+    The shape is real now — `_identity_read_needed` resolves identity for a
+    pending bot row on both backends — and the identity is written out below
+    rather than inherited, so this test states its own premise. What keeps that
+    premise honest is not this file: it is
+    `test_a_healthy_mid_review_row_gets_its_identity_read_on_the_gh_backend`,
+    which crosses the transport boundary. If that test is deleted, this one goes
+    back to proving nothing about production.
     """
     pr_watch = _load_pr_watch()
     view = _green_view(
@@ -4961,7 +4995,14 @@ def test_a_genuinely_trusted_pending_bot_still_silences_the_coverage_warning() -
         [],
         set(),
         check_details=[
-            _bot_check(state="PENDING", bucket="pending", startedAt=_minutes_ago(1))
+            _bot_check(
+                state="PENDING",
+                bucket="pending",
+                startedAt=_minutes_ago(1),
+                # Explicit: the value a resolved read actually returns for this
+                # repo's CodeRabbit status context.
+                identity="coderabbitai[bot]",
+            )
         ],
         now=NOW,
     )
@@ -5003,6 +5044,282 @@ def test_an_unresolvable_identity_does_not_silence_the_coverage_warning() -> Non
     assert pending["blocking"] is True
 
     assert "review coverage" in pr_watch.render(blank_identity)
+
+
+def test_a_healthy_mid_review_row_gets_its_identity_read_on_the_gh_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#535, and the test that would have caught it.
+
+    Every other test of the mid-review deference hands `check_details` straight
+    to `build_report`, so the row's `identity` is whatever the FIXTURE says. The
+    defect lived one layer below that, in which rows `fetch_check_details`
+    bothers to resolve an identity for — so the whole deference shipped inert
+    with its unit tests green.
+
+    Driven at the process boundary: only `subprocess.run` is stubbed, and every
+    argv it receives is recorded. `_gh`, `_gh_json`, `_gh_head_sha` and
+    `_gh_identity_map` all run for real, which is what makes the recorded call
+    list evidence rather than a restatement of the stub.
+
+    Before the fix this asserted `[["pr", "checks", ...]]` and nothing else —
+    the exact shape reported on #535.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_resolve_backend", lambda: ("gh", None))
+    argvs: list[list[str]] = []
+
+    class _Result:
+        def __init__(self, stdout: str) -> None:
+            self.stdout = stdout
+            self.returncode = 0
+            self.stderr = ""
+
+    def _run(cmd, *a, **k):
+        argvs.append(list(cmd[1:]))
+        joined = " ".join(cmd)
+        if "pr checks" in joined or ("checks" in cmd and "pr" in cmd):
+            # A HEALTHY mid-review row: pending, no outage marker anywhere.
+            return _Result(
+                '[{"name":"CodeRabbit","state":"PENDING","bucket":"pending",'
+                '"description":"Review in progress","startedAt":"2026-07-25T11:59:00Z"}]'
+            )
+        if "headRefOid" in joined:
+            # The head-move guard re-reads the head even when the caller supplied
+            # one — `gh pr checks` carries no sha, so the rows and the identities
+            # are two point-in-time reads that must be confirmed to be the same
+            # commit. Answering with the SAME sha is what lets the identities
+            # survive; answering differently is a distinct test.
+            return _Result('{"headRefOid":"abc123"}')
+        if "check-runs" in joined:
+            return _Result("[]")
+        if "statuses" in joined:
+            return _Result(
+                '[[{"context":"CodeRabbit","state":"pending",'
+                '"created_at":"2026-07-25T11:59:00Z",'
+                '"creator":{"login":"coderabbitai[bot]"}}]]'
+            )
+        raise AssertionError(f"unrouted gh call {cmd}")
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", _run)
+
+    details = pr_watch.fetch_check_details(
+        1234, bots=("coderabbit",), head_sha="abc123"
+    )
+
+    # The read HAPPENED. Stated as "some call reached the statuses endpoint"
+    # rather than as a fixed call list, so adding an unrelated `gh` call does not
+    # fail this test for the wrong reason.
+    assert any("statuses" in " ".join(argv) for argv in argvs), argvs
+    # …and it landed on the row, which is the part the report consumes.
+    assert details.rows[0]["identity"] == "coderabbitai[bot]"
+
+    # End-to-end: the row is now TRUSTED, so the deference actually defers.
+    bots = pr_watch.summarize_review_bots(
+        details.rows, [], now=NOW, bots=("coderabbit",), signal=details.signal
+    )
+    pending = bots["pending"][0]
+    assert pending["trusted"] is True
+    assert pending["blocking"] is True
+
+
+def test_a_healthy_mid_review_status_context_gets_its_identity_read_on_rest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#535's other empty surface.
+
+    The scope correction on that issue matters here: a REST **check run** was
+    never affected, because `_rest_check_rows` lifts `app.slug` off an object the
+    fetch already had. It is the **status context** — the surface this engine's
+    own docstrings say CodeRabbit posts on — whose creator lives behind a second
+    endpoint that the old precondition never reached on a healthy poll.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    calls = _route_http(
+        pr_watch,
+        monkeypatch,
+        {
+            "pulls/7": {"head": {"sha": "abc123"}},
+            "check-runs": {"total_count": 0, "check_runs": []},
+            # The combined-status endpoint, which carries NO creator …
+            "/status?": {
+                "state": "pending",
+                "statuses": [
+                    {
+                        "context": "CodeRabbit",
+                        "state": "pending",
+                        "description": "Review in progress",
+                    }
+                ],
+            },
+            # … and the sibling plural one, which does.
+            "/statuses?": [
+                {
+                    "context": "CodeRabbit",
+                    "state": "pending",
+                    "created_at": "2026-07-25T11:59:00Z",
+                    "creator": {"login": "coderabbitai[bot]"},
+                }
+            ],
+        },
+    )
+
+    details = pr_watch.fetch_check_details(7, bots=("coderabbit",))
+
+    assert any("/statuses?" in url for url in calls), calls
+    assert details.rows[0]["identity"] == "coderabbitai[bot]"
+
+
+def test_a_settled_reviewer_still_costs_no_identity_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The laziness the widening must NOT spend.
+
+    #535's fix widens the precondition from "an outage row exists" to "some
+    row's identity has a consumer". The bound that keeps it cheap is that a
+    TERMINAL, unmarked bot row has neither consumer — which is the steady state
+    for the rest of a PR's life once the reviewer has reported. Without this,
+    the fix reads as "resolve identity always" and the next reader has no way to
+    know the laziness was deliberate rather than vestigial.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_resolve_backend", lambda: ("gh", None))
+    argvs: list[list[str]] = []
+
+    class _Result:
+        stdout = (
+            '[{"name":"CodeRabbit","state":"SUCCESS","bucket":"pass",'
+            '"description":"","startedAt":"2026-07-25T11:50:00Z"}]'
+        )
+        returncode = 0
+        stderr = ""
+
+    def _run(cmd, *a, **k):
+        argvs.append(list(cmd[1:]))
+        return _Result()
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", _run)
+    details = pr_watch.fetch_check_details(1234, bots=("coderabbit",), head_sha="abc")
+
+    assert not any("statuses" in " ".join(argv) for argv in argvs), argvs
+    assert not any("check-runs" in " ".join(argv) for argv in argvs), argvs
+    assert details.rows[0]["identity"] == ""
+
+
+def test_identity_read_needed_is_wider_than_the_outage_predicate() -> None:
+    """The two preconditions, side by side, on the rows that separate them.
+
+    `_outage_row_present` is unchanged and still answers its own question —
+    "could a row cancel a pending block". #535 is that it was being asked a
+    DIFFERENT question: "does any row's identity have a consumer". Pinning both
+    against the same inputs is what stops the two from being collapsed back into
+    one by someone reading the call sites and seeing a redundant wrapper.
+    """
+    pr_watch = _load_pr_watch()
+    bots = ("coderabbit",)
+    pending_row = _bot_check(state="PENDING", bucket="pending")
+
+    # The row #535 is about: nothing to cancel, but `trusted` is consumed.
+    assert not pr_watch._outage_row_present([pending_row], bots)
+    assert pr_watch._identity_read_needed([pending_row], bots)
+
+    # A settled, unmarked reviewer needs neither.
+    assert not pr_watch._outage_row_present([_bot_check()], bots)
+    assert not pr_watch._identity_read_needed([_bot_check()], bots)
+
+    # A non-bot pending check is not the reviewer mid-review.
+    assert not pr_watch._identity_read_needed(
+        [{"name": "toolkit", "state": "PENDING", "bucket": "pending"}], bots
+    )
+
+    # An outage row still reaches it through the first term, forged name and all.
+    assert pr_watch._identity_read_needed(
+        [{"name": "coderabbit-shim", "description": "Review rate limited"}], bots
+    )
+
+    # Fail-closed on a row carrying neither `bucket` nor `state`:
+    # `_check_is_pending` reads it as pending, so identity gets resolved rather
+    # than defaulting to the untrusted-and-therefore-noisy path.
+    assert pr_watch._identity_read_needed([{"name": "CodeRabbit"}], bots)
+
+
+def test_an_announced_outage_does_not_also_demand_a_review_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#535 item 4: `accounted` omitted `review_bots["unavailable"]`.
+
+    Fully production-shaped — `_outage_row_present` genuinely fires here, so the
+    identity really is resolved and the outage really is trusted. The render then
+    said both of these at once:
+
+        ⚠ review owed: … coderabbit has not reviewed it — request one now …
+        ⚠ review unavailable [check] CodeRabbit: review limit reached — run the
+          fallback review panel …
+
+    The second names the sanctioned remedy; the first prescribes the one action
+    the outage has ruled out.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view()
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        check_details=[
+            _bot_check(
+                state="SUCCESS",
+                bucket="pass",
+                description="Review limit reached",
+            )
+        ],
+        now=NOW,
+    )
+
+    unavailable = report["review_bots"]["unavailable"][0]
+    assert unavailable["bot"] == "coderabbit"
+    assert unavailable["trusted"] is True
+    assert report["converged"] is True
+
+    out = pr_watch.render(report)
+    assert "review unavailable" in out
+    assert "review owed" not in out
+
+
+def test_a_FORGED_outage_still_leaves_the_review_owed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The trust term in #535 item 4's fix, which is not symmetry.
+
+    Accounting for an outage without checking WHO announced it would hand a
+    same-repo PR a second route to silence "nobody has reviewed this" about its
+    own diff — #521's defect, re-entered one surface over. An untrusted outage
+    row cancels nothing (#95), so the reviewer is still owed a look and the line
+    must still fire.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view()
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        check_details=[
+            _bot_check(
+                name="coderabbit-shim-status",
+                state="SUCCESS",
+                bucket="pass",
+                description="Review limit reached",
+                identity="github-actions[bot]",
+            )
+        ],
+        now=NOW,
+    )
+
+    assert report["review_bots"]["unavailable"][0]["trusted"] is False
+    out = pr_watch.render(report)
+    assert "review owed" in out
 
 
 def test_coverage_honours_a_non_default_review_bots_list() -> None:
