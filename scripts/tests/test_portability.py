@@ -3730,22 +3730,50 @@ def test_the_target_lines_noop_message_is_pinned(
 
 
 def _is_path_constructor(node: ast.AST) -> bool:
-    """`Path` or `pathlib.Path`, as a callee."""
+    """A `Path` callee — bare, or any qualification of it.
+
+    Name-only, like :func:`_is_repo_root`: `pathlib.Path` and `p.Path` both
+    match, and so would an unrelated `shutil.Path`. That over-matches in the
+    LOUD direction — a false positive names a file and a line in the assertion
+    message — which is the direction this whole guard is built to fail in.
+    """
     if isinstance(node, ast.Name):
         return node.id == "Path"
     return isinstance(node, ast.Attribute) and node.attr == "Path"
 
 
 def _is_repo_root(node: ast.AST) -> bool:
-    """`REPO_ROOT`, however it is reached — a bare name or an attribute.
+    """`REPO_ROOT`, however it is reached.
 
-    `_repo_layout.REPO_ROOT` is the same constant one qualification away, and a
-    guard that saw only the bare name would treat the qualified spelling as a
-    different thing.
+    Three ways, and the third is recursive:
+
+    - a bare name, `REPO_ROOT`;
+    - an attribute, `_repo_layout.REPO_ROOT` — the same constant one
+      qualification away, which a name-only guard would treat as a different
+      thing;
+    - wrapped in a single-argument `Path(...)`, because `Path(REPO_ROOT)` IS
+      `REPO_ROOT` — the constructor is a no-op on something already a Path, so
+      `Path(REPO_ROOT) / "scripts"` is the defect wearing a hat.
+
+    The recursion is what makes the third case general rather than one more
+    spelling: it composes with both other forms and with itself, so
+    `Path(pathlib.Path(mod.REPO_ROOT))` resolves too. A lens found the
+    unwrapped case open AFTER a previous round had closed
+    `Path(REPO_ROOT, "scripts")` and declared the class shut — the difference
+    being one argument, which is exactly the kind of distinction an enumeration
+    misses and a recursive definition does not.
+
+    Single-argument only: `Path(REPO_ROOT, "scripts")` is not "the repo root",
+    it is the repo root JOINED to something, and the scanner's Call branch
+    handles it there.
     """
     if isinstance(node, ast.Name):
         return node.id == "REPO_ROOT"
-    return isinstance(node, ast.Attribute) and node.attr == "REPO_ROOT"
+    if isinstance(node, ast.Attribute):
+        return node.attr == "REPO_ROOT"
+    if isinstance(node, ast.Call) and _is_path_constructor(node.func):
+        return len(node.args) == 1 and _is_repo_root(node.args[0])
+    return False
 
 
 def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
@@ -3761,20 +3789,29 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
     mentions this one. Re-derive with
     `grep -ln 'REPO_ROOT / "scripts"' scripts/tests/*.py`.)
 
-    **Known limitation, and the line it is drawn on.** Recognized:
-    `REPO_ROOT / "scripts"`, the same through an attribute
-    (`mod.REPO_ROOT / "scripts"`), `REPO_ROOT.joinpath("scripts", …)`, and
-    `Path(REPO_ROOT, "scripts", …)`.
+    **What it recognizes, and a warning about this paragraph.** Recognized:
+    `REPO_ROOT` reached as a bare name, as an attribute, or wrapped in a
+    single-argument `Path(...)` — see :func:`_is_repo_root`, which resolves all
+    three recursively — divided by `"scripts"`, or joined to it via
+    `.joinpath("scripts", …)` or `Path(<root>, "scripts", …)`.
 
-    NOT recognized, and both need dataflow analysis: binding the constant to a
-    local name first (`root = REPO_ROOT; root / "scripts"`), and hoisting the
-    segment (`SEG = "scripts"; REPO_ROOT / SEG`). That is the line — **needs
-    dataflow or not** — rather than a list of spellings someone happened to
-    think of. An earlier version of this paragraph presented itself as a
-    complete inventory while omitting `Path(REPO_ROOT, "scripts")`, which costs
-    exactly what `.joinpath` costs to detect; a lens found it, and the honest
-    repair was to close it rather than add it to the list. Anything else in the
-    no-dataflow class belongs in the code, not here.
+    Two forms are NOT recognized and need dataflow analysis: binding the
+    constant to a local name (`root = REPO_ROOT; root / "scripts"`), and
+    hoisting the segment (`SEG = "scripts"; REPO_ROOT / SEG`). Closing either
+    is out of proportion, and a naive attempt at the first immediately false-
+    positives on a legitimate `root` fixture elsewhere in this suite.
+
+    **Do not read the paragraph above as a proof of completeness.** Three
+    consecutive review rounds each closed a no-dataflow gap here and each
+    declared the class shut — `.joinpath`, then `Path(root, "scripts")`, then
+    `Path(root) / "scripts"` — and the third was found by a lens that built the
+    real defect in a real file and watched the scan pass over it. The intended
+    line is "needs dataflow or not"; the demonstrated track record is that the
+    line has been drawn wrong every time it has been drawn. `_GUARD_CASES`
+    below is therefore the authority on what this recognizes, because it
+    executes; this prose is a summary of it and has been the less reliable of
+    the two. If you are about to add a spelling here, add a case there first
+    and let it fail.
 
     Also unrecognized and deliberately so: `os.path.join(REPO_ROOT, "scripts")`.
     This suite is pathlib throughout, so that form would be conspicuous on its
@@ -3836,6 +3873,11 @@ _GUARD_CASES = [
     ('x = REPO_ROOT.joinpath("scripts", "a.py")', True),
     ('x = Path(REPO_ROOT, "scripts", "a.py")', True),
     ('x = pathlib.Path(REPO_ROOT, "scripts")', True),
+    # `Path(REPO_ROOT)` IS `REPO_ROOT`; a lens found these open after a previous
+    # round had closed the two-argument form and called the class shut.
+    ('x = Path(REPO_ROOT) / "scripts"', True),
+    ('x = Path(REPO_ROOT).joinpath("scripts")', True),
+    ('x = pathlib.Path(mod.REPO_ROOT) / "scripts"', True),
     # Correct and common here: these tests build synthetic trees standing in for
     # an adopter on the kit's default layout.
     ('x = tmp_path / "scripts" / "a.py"', False),
