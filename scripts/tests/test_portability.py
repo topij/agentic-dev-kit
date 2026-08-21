@@ -3729,14 +3729,42 @@ def test_the_target_lines_noop_message_is_pinned(
     assert "nothing to move: 46 line(s) <= --target-lines 46." in capsys.readouterr().out
 
 
+def _is_repo_root(node: ast.AST) -> bool:
+    """`REPO_ROOT`, however it is reached — a bare name or an attribute.
+
+    `_repo_layout.REPO_ROOT` is the same constant one qualification away, and a
+    guard that saw only the bare name would treat the qualified spelling as a
+    different thing.
+    """
+    if isinstance(node, ast.Name):
+        return node.id == "REPO_ROOT"
+    return isinstance(node, ast.Attribute) and node.attr == "REPO_ROOT"
+
+
 def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
     """Line numbers of live `REPO_ROOT / "scripts"` expressions in ``source``.
 
     AST, not grep, and that is the whole point: this file, `test_pr_watch.py`,
-    `test_kit_doctor.py` and `_repo_layout.py` all DISCUSS the bad idiom in
+    `test_kit_doctor.py` and `test_kitconfig.py` all DISCUSS the bad idiom in
     comments and docstrings explaining why it was removed. A textual scan would
     have to be taught to ignore those, and the day it got that wrong the honest
     fix would be to delete the explanation. Parsing sees only what executes.
+    (That list named `_repo_layout.py` until a lens checked it — that file
+    discusses the *different*, already-fixed `parents[2]` idiom and never
+    mentions this one. Re-derive with
+    `grep -ln 'REPO_ROOT / "scripts"' scripts/tests/*.py`.)
+
+    **Known limitation, stated rather than left to be discovered.** This
+    recognizes one spelling: `REPO_ROOT / "scripts"`, plus attribute access and
+    `.joinpath(...)`. A lens confirmed by live mutation that two further
+    spellings reintroduce the identical defect and pass — binding the constant
+    to a local name first (`root = REPO_ROOT; root / "scripts"`), and hoisting
+    the segment (`SEG = "scripts"; REPO_ROOT / SEG`). Both need dataflow
+    analysis, which is out of proportion to a guard whose job is to make a
+    known regression loud rather than to be a type system. The guard is
+    deliberately anchored on `REPO_ROOT` rather than matching any `/ "scripts"`:
+    `tmp_path / "scripts"` is correct and common here, because the synthetic
+    trees these tests build stand in for an adopter on the kit's default layout.
     """
     found: list[int] = []
     for node in ast.walk(ast.parse(source)):
@@ -3744,9 +3772,20 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
             continue
         if not (isinstance(node.right, ast.Constant) and node.right.value == "scripts"):
             continue
-        if isinstance(node.left, ast.Name) and node.left.id == "REPO_ROOT":
+        if _is_repo_root(node.left):
             found.append(node.lineno)
-    return found
+    # `REPO_ROOT.joinpath("scripts", …)` is path-identical to the form above and
+    # is pathlib's own idiom, so a refactor reaches it without meaning to. A lens
+    # confirmed it slipped past when this matched only the `/` operator.
+    for node in ast.walk(ast.parse(source)):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        if node.func.attr != "joinpath" or not _is_repo_root(node.func.value):
+            continue
+        first = node.args[0] if node.args else None
+        if isinstance(first, ast.Constant) and first.value == "scripts":
+            found.append(node.lineno)
+    return sorted(found)
 
 
 def test_no_test_module_rebuilds_the_engine_dir_from_repo_root():
@@ -3772,7 +3811,10 @@ def test_no_test_module_rebuilds_the_engine_dir_from_repo_root():
     relative: `docs/`, `.claude/`, `.agents/`, `kit-manifest.json`.
     """
     offenders = {}
-    for path in sorted(ENGINE_DIR.glob("tests/*.py")):
+    # rglob, so `lib/state_paths/tests/` is covered too — AGENTS.md counts it as
+    # part of the full suite, and a guard that stops at one test directory is a
+    # guard with a documented blind spot.
+    for path in sorted(ENGINE_DIR.rglob("tests/*.py")):
         lines = _repo_root_slash_scripts_nodes(path.read_text(encoding="utf-8"))
         if lines:
             offenders[path.name] = lines

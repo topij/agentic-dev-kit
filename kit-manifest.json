@@ -195,7 +195,7 @@
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
-      "sha256": "d6e52452788c7a384a97dc67c206b6e5816b7a551c3c0a134f914081bbf7e0af"
+      "sha256": "ab5c81c04b751f61a603f8b8a80f182b103f85417a58feb8abb725aebad7881b"
     },
     "scripts/tests/conftest.py": {
       "role": "test",
@@ -235,7 +235,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "038ce3d368ff6a05c3d78ed983291e0ac8ec95acc1d027f0d5a4e3c04538d08d"
+      "sha256": "0cbc801321b86d1abb3ad87bd93ecc1d7697ef08ddc6df01acde1a5212546e15"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

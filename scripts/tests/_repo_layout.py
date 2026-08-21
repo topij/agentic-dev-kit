@@ -39,7 +39,8 @@ this module's, and it is *pinned* rather than merely described, by
 ``test_check_memory_budget.py`` and ``test_reconcile_sessions.py``. This said
 *three* until a review lens counted; it named four, and the grep says six. Do
 not transcribe this list — re-derive it, which is one grep:
-``grep -c 'ENGINE_DIR = Path(__file__).resolve().parent.parent' scripts/tests/*.py``.
+``grep -clE '^ENGINE_DIR = Path' scripts/tests/*.py``. Anchored at line start on
+purpose: the unanchored form matches this very sentence, and returns SEVEN.
 They already derive
 the engine directory from their own location, so they are not affected by
 #134 and were left alone rather than swept into its fix; consolidating them, and
