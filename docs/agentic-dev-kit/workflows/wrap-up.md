@@ -72,28 +72,46 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    - a **proposed fix**.
 
    Three parts means it is issue-shaped already, and a triage pass can add nothing to
-   it but latency. Record it in `<handoff>` the way the handoff-update step above
-   records any filed work — the enumeration, never a count beside it.
+   it but latency.
 
-   **Filing writes to a system outside this repo, so it takes the operator's
+   **Filing writes to a system outside this repo, so it needs the operator's
    go-ahead.** Name the findings you intend to file, with their severities, and file
-   on their word. This is the same checkpoint `triage-friction-log` spends an entire
-   second session to obtain, and routing a finding *past* the inbox must not become
-   the way to skip it. Treat a decline as a park, not an argument: it goes to
-   `<friction-log>` like any other entry.
+   on their word. A decline is a park, not an argument.
+
+   That checkpoint is deliberately **weaker** than `triage-friction-log`'s, and the
+   difference is what decides when this route is available at all: that workflow is
+   built to run unattended, so it persists an approval request to a DM channel and
+   resumes from it a session later. This step has neither channel nor state — it asks
+   whoever is in the session. **So when there is nobody to ask, it does not proceed.**
+
+   **Park the finding and say why whenever the filing route is unavailable**, which
+   is more often than it looks:
+
+   - **No operator in the session** — a scheduled, looped, or otherwise unattended
+     wrap-up. The inbox is the route that needs no permission.
+   - **No tracker to file into** — `tracker.backend` is `none`, or a backend is named
+     but unwired. `init.sh` offers `none` as a first-class answer, so this is an
+     ordinary configuration, not an edge case.
+   - **The create failed, or the credential is missing.**
+
+   A finding that reached neither the tracker nor the inbox is the one outcome this
+   step must never produce, and every bullet above is a way to produce it.
 
    **Carry into the ticket what the inbox entry would have carried** — the severity
    (**H**/**M**/**L**) alongside all three parts above. The filed path is the faster
    and more consequential of the two; a ticket that drops the severity tells a reader
-   *less* than the parked entry it replaced, which is backwards.
+   *less* than the parked entry it replaced, which is backwards. Record the filing in
+   `<handoff>` **once it has actually happened**, the way the handoff-update step
+   above records any filed work — the enumeration, never a count beside it.
 
-   **Two failure modes to close before you file.** If the create fails, or the tracker
-   credential is missing, **park the entry instead and say so** — a finding that
-   reached neither the tracker nor the inbox is the one outcome this step must never
-   produce. And check the finding is not already on the tracker before filing: a
-   session re-filing what a previous one filed is exactly the duplicate
-   `triage-friction-log`'s frozen-inbox snapshot exists to prevent, and nothing here
-   snapshots anything.
+   **Search the tracker for the finding before filing**, on its mechanism rather than
+   on your own wording. Be honest about what that buys: it is a plain search with none
+   of the guarantees `triage-friction-log`'s frozen-inbox snapshot gives, and it will
+   miss a duplicate phrased differently — so say what you searched when you name the
+   finding to the operator. **A duplicate is not nothing to report.** Add the
+   occurrence to the existing item rather than opening a second one: a second
+   occurrence is the evidence Principle #2 routes *up* on, and it is lost if the
+   finding is silently dropped.
 
    **Park it in `<friction-log>`** — a short entry under a dated `## YYYY-MM-DD`
    heading carrying the observed issue, a severity (**H**/**M**/**L**), and whichever

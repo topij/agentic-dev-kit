@@ -8,10 +8,11 @@
 >
 > **What lands here is what is not yet issue-shaped.** A finding that already carries a
 > reproduction, a named mechanism and a proposed fix is filed straight to the tracker at
-> session end, by `/wrap-up`'s friction-routing step — a triage pass could add nothing
-> to it but latency.
+> session end, by `wrap-up`'s friction-routing step and on the operator's go-ahead — a
+> triage pass could add nothing to it but latency. When that route is unavailable (no
+> operator, no tracker, a failed create) the finding parks here instead.
 > This file holds the remainder: findings still missing one of those three, and single
-> instances of a shape that only matters if it recurs. A periodic triage (`/triage-friction-log`)
+> instances of a shape that only matters if it recurs. A periodic triage (`triage-friction-log`)
 > graduates those — single incidents go **down** to the tracker; a genuine,
 > multi-occurrence **pattern** goes **up** into a rule or skill change. Route down by
 > default, up only on repetition — so the flywheel self-regulates instead of ratcheting

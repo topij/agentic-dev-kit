@@ -172,8 +172,9 @@ and what's next…
 ```
 
 …and routes any friction you hit. Anything you can already explain — a
-reproduction, a named mechanism, *and* a fix — it files straight to your tracker,
-because a triage pass could add nothing to it. What you *can't* yet explain goes to
+reproduction, a named mechanism, *and* a fix — it offers to file straight to your
+tracker, because a triage pass could add nothing to it. It files on your go-ahead,
+and parks the finding instead if you decline or there is no tracker to file into. What you *can't* yet explain goes to
 `docs/friction-log.md` while it's fresh:
 
 ```markdown
@@ -202,8 +203,9 @@ Single incidents route **down** (to the tracker); repeated patterns route **up**
 and your friction log honest instead of ratcheting every week.
 
 The down-route runs on two clocks, not one. `/wrap-up` takes it immediately for
-anything already issue-shaped; this pass takes it for what has since become
-explicable, and sweeps the rest. So an inbox that stays small is the system working,
+anything already issue-shaped; this pass takes it for everything else that proves to
+be a single incident — explicable by now or not — and routes **up** only what
+recurred. So an inbox that stays small is the system working,
 and one that fills with things you could have filed at session end means `/wrap-up`'s
 friction-routing step is being skipped — not that triage is overdue.
 
