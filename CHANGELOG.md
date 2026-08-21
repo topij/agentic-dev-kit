@@ -53,9 +53,10 @@ starts.
   expectation breaks** — a real reviewer's own pending check now reports its
   creator and `trusted: true`. A REST check-*run* is unchanged; it already
   carried `app.slug`. Cost while a bot check is pending: **one** extra REST
-  call (the plural `/commits/{sha}/statuses`), or **three** extra `gh`
-  invocations on the `gh` backend (a check-runs page, a statuses page, and the
-  head-move recheck). None once every bot row is terminal and unmarked.
+  call (the plural `/commits/{sha}/statuses`), or **up to three** extra `gh`
+  invocations on the `gh` backend — a check-runs page and a statuses page
+  always, plus the head-move recheck only when those resolved at least one
+  identity. None once every bot row is terminal and unmarked.
 - **`⚠ review coverage` and `⚠ review owed` are now silent while a trusted bot
   is mid-review** — the suppression `#521` and `#518` documented but which
   never fired on the `gh` backend or for a REST status context. A REST **check
