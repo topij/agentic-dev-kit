@@ -3729,6 +3729,22 @@ def test_the_target_lines_noop_message_is_pinned(
     assert "nothing to move: 46 line(s) <= --target-lines 46." in capsys.readouterr().out
 
 
+def _is_os_path_join(node: ast.AST) -> bool:
+    """An `os.path.join` callee.
+
+    Requires the `.path` qualifier rather than matching any `.join`: the bare
+    form would also match `", ".join(...)`, and over-matching a method this
+    common is noise rather than the loud-direction failure the other helpers
+    accept.
+    """
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == "join"
+        and isinstance(node.value, ast.Attribute)
+        and node.value.attr == "path"
+    )
+
+
 def _is_path_constructor(node: ast.AST) -> bool:
     """A `Path` callee — bare, or any qualification of it.
 
@@ -3740,6 +3756,22 @@ def _is_path_constructor(node: ast.AST) -> bool:
     if isinstance(node, ast.Name):
         return node.id == "Path"
     return isinstance(node, ast.Attribute) and node.attr == "Path"
+
+
+def _is_scripts_segment(node: ast.AST) -> bool:
+    """The literal ``"scripts"``, bare or wrapped in a single-argument `Path()`.
+
+    The mirror of :func:`_is_repo_root`, and it exists for the same reason one
+    round later: a lens closed the wrapped-ROOT forms and then found
+    `REPO_ROOT / Path("scripts")` still open — the wrapper had simply moved to
+    the other operand. Wrapping either side is a no-op on the resulting path, so
+    both sides have to resolve through it.
+    """
+    if isinstance(node, ast.Constant):
+        return node.value == "scripts"
+    if isinstance(node, ast.Call) and _is_path_constructor(node.func):
+        return len(node.args) == 1 and _is_scripts_segment(node.args[0])
+    return False
 
 
 def _is_repo_root(node: ast.AST) -> bool:
@@ -3795,11 +3827,19 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
     three recursively — divided by `"scripts"`, or joined to it via
     `.joinpath("scripts", …)` or `Path(<root>, "scripts", …)`.
 
-    Two forms are NOT recognized and need dataflow analysis: binding the
-    constant to a local name (`root = REPO_ROOT; root / "scripts"`), and
-    hoisting the segment (`SEG = "scripts"; REPO_ROOT / SEG`). Closing either
-    is out of proportion, and a naive attempt at the first immediately false-
-    positives on a legitimate `root` fixture elsewhere in this suite.
+    THREE forms are NOT recognized, and all three are name-binding — which is
+    the actual shape of the excluded class, dataflow being the consequence
+    rather than the definition:
+
+    - binding the constant (`root = REPO_ROOT; root / "scripts"`);
+    - hoisting the segment (`SEG = "scripts"; REPO_ROOT / SEG`);
+    - aliasing the constructor (`from pathlib import Path as PP;
+      PP(REPO_ROOT, "scripts")`) — named here because a lens pointed out it
+      rides under the same umbrella and the umbrella did not mention it.
+
+    Closing any of them is out of proportion, and a naive attempt at the first
+    immediately false-positives on a legitimate `root` fixture elsewhere in this
+    suite.
 
     **Do not read the paragraph above as a proof of completeness.** Three
     consecutive review rounds each closed a no-dataflow gap here and each
@@ -3813,9 +3853,13 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
     the two. If you are about to add a spelling here, add a case there first
     and let it fail.
 
-    Also unrecognized and deliberately so: `os.path.join(REPO_ROOT, "scripts")`.
-    This suite is pathlib throughout, so that form would be conspicuous on its
-    own. The guard is
+    `os.path.join(REPO_ROOT, "scripts")` is recognized too. It was previously
+    excused on the argument that a stdlib join would be conspicuous in a
+    pathlib-only suite — a social claim inside a mechanical guard, and `os` is
+    already imported in this file for unrelated reasons. It costs the same
+    one-hop inspection as the rest.
+
+    The guard is
     deliberately anchored on `REPO_ROOT` rather than matching any `/ "scripts"`:
     `tmp_path / "scripts"` is correct and common here, because the synthetic
     trees these tests build stand in for an adopter on the kit's default layout.
@@ -3824,9 +3868,7 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
     for node in ast.walk(ast.parse(source)):
         if not (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)):
             continue
-        if not (isinstance(node.right, ast.Constant) and node.right.value == "scripts"):
-            continue
-        if _is_repo_root(node.left):
+        if _is_repo_root(node.left) and _is_scripts_segment(node.right):
             found.append(node.lineno)
     # Two Call forms, both path-identical to the operator form above and both
     # pathlib's own idiom, so a refactor reaches either without meaning to:
@@ -3844,6 +3886,15 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
         if isinstance(node.func, ast.Attribute) and node.func.attr == "joinpath":
             if not _is_repo_root(node.func.value):
                 continue
+        elif _is_os_path_join(node.func):
+            # Closed rather than excused. The previous version left this open on
+            # the argument that a stdlib join would "be conspicuous" in a
+            # pathlib-only suite — a social claim inside a mechanical guard, and
+            # `os` is already imported here for unrelated reasons. It costs the
+            # same one-hop inspection as the others.
+            if not (args and _is_repo_root(args[0])):
+                continue
+            args = args[1:]
         elif _is_path_constructor(node.func):
             # `Path(REPO_ROOT, "scripts")` — the root is the FIRST argument, so
             # the segment to check is the second.
@@ -3853,7 +3904,7 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
         else:
             continue
         first = args[0] if args else None
-        if isinstance(first, ast.Constant) and first.value == "scripts":
+        if first is not None and _is_scripts_segment(first):
             found.append(node.lineno)
     return sorted(found)
 
@@ -3882,11 +3933,17 @@ _GUARD_CASES = [
     # an adopter on the kit's default layout.
     ('x = tmp_path / "scripts" / "a.py"', False),
     ('x = REPO_ROOT / "state"', False),
-    # Documented limitations. Both need dataflow.
+    # Documented limitations. All three are name-binding.
     ('root = REPO_ROOT\nx = root / "scripts"', False),
     ('SEG = "scripts"\nx = REPO_ROOT / SEG', False),
-    # Documented non-goal: this suite is pathlib throughout.
-    ('x = os.path.join(REPO_ROOT, "scripts")', False),
+    ('from pathlib import Path as PP\nx = PP(REPO_ROOT, "scripts")', False),
+    ('x = os.path.join(REPO_ROOT, "scripts")', True),
+    # The wrapper on the SEGMENT rather than the root — a lens found these open
+    # one round after the wrapped-root forms were closed.
+    ('x = REPO_ROOT / Path("scripts")', True),
+    ('x = REPO_ROOT.joinpath(Path("scripts"), "a.py")', True),
+    # `.join` without the `.path` qualifier is an ordinary string method.
+    ('x = ", ".join(REPO_ROOT)', False),
     # Prose is inert under a parser — the reason this is AST and not grep.
     ('"""Do not write REPO_ROOT / \'scripts\' here."""', False),
 ]
