@@ -1306,7 +1306,10 @@ def test_migration_never_corrupts_or_silently_drops_adopter_config(
     # kitconfig (what the engines actually use) must agree with PyYAML — the
     # reader exists so engines can drop the dependency, so a disagreement means
     # the migration produced a file the two halves of the kit read differently.
-    sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
+    # ENGINE_DIR, not `REPO_ROOT / "scripts"` (#534): this imports the reader
+    # THIS repo actually ships, which under a vendored `paths.engines` is not
+    # under `scripts/`.
+    sys.path.insert(0, str(ENGINE_DIR / "lib"))
     import kitconfig  # noqa: PLC0415
 
     if shape == "multiline_item":

@@ -4699,7 +4699,30 @@ def test_the_merge_wrapper_reads_a_coverage_route_report_as_mergeable() -> None:
     report = pr_watch.build_report(view, [], set(), **_settled(view))
     assert report["review_evidence"]["route"] == "bot-coverage"
 
-    wrapper = (REPO_ROOT / "scripts" / "dev_session.sh").read_text()
+    # ENGINE_DIR, not `REPO_ROOT / "scripts"` (#534) — and this one was not a
+    # loud failure, it was a SILENT FALSE PASS. In an adopter vendoring engines
+    # at `scripts/devkit`, `REPO_ROOT / "scripts" / "dev_session.sh"` still
+    # EXISTS: it is that repo's own pre-kit wrapper, unrelated to the kit. This
+    # assertion ran against the wrong file and passed — green for the wrong
+    # reason, in the one test file adopters actually install, and in the file
+    # `#40` certifies as portable. Measured on cs-toolkit, whose
+    # `scripts/dev_session.sh` is its own 53KB file from 2026-06-22, predating
+    # the kit; both it and the kit's hold exactly one matching block, so even
+    # the `len(blocks) == 1` guard below could not tell them apart (`#537`).
+    wrapper_path = ENGINE_DIR / "dev_session.sh"
+    # A SKIP rather than a FileNotFoundError, because absence here is a
+    # legitimate adopter choice and not a fault. `dev_session.sh` is separately
+    # declinable, and this is the only test in this file that reads a *different*
+    # engine than the one under test — a cross-engine dependency nothing else
+    # declares (`#534` cause 2, same shape one file over). Erroring would make
+    # this file's installability depend on an engine the adopter never took.
+    if not wrapper_path.exists():
+        pytest.skip(
+            f"{wrapper_path.name} is not installed at {wrapper_path.parent} — "
+            "this test pins that wrapper's merge-gate extraction, and there is "
+            "nothing to pin where it was declined"
+        )
+    wrapper = wrapper_path.read_text()
     # Selected by CONTENT, not position: `dev_session.sh` embeds several
     # `python3 -c` blocks and the merge gate's is not the first. Indexing them
     # would silently re-point this test at another block the day one is added

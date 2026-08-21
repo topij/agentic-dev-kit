@@ -2223,8 +2223,16 @@ def test_kit_doctor_source_has_no_hardcoded_engine_prefix():
     """Scans the file's own source text, not just the docstring's Usage
     block: #285 named two more candidates for the same literal — the
     `--help` text and the `hint:` lines in `main()` — and a whole-file scan
-    catches any of the three without needing to know which one moved."""
-    text = (REPO_ROOT / "scripts" / "kit_doctor.py").read_text(encoding="utf-8")
+    catches any of the three without needing to know which one moved.
+
+    Reached through `ENGINE_DIR`, not `REPO_ROOT / "scripts"` (#534). A test
+    that exists to forbid a hardcoded `scripts/` engine prefix cannot hardcode
+    the engine prefix to find the file it scans — under
+    `paths.engines: scripts/devkit` it read a path that does not exist, so the
+    one guard against this literal was the one guard that could not run in the
+    layout it protects. The sibling at `ENGINE_DIR / "kit_doctor.py"` above had
+    it right already."""
+    text = (ENGINE_DIR / "kit_doctor.py").read_text(encoding="utf-8")
     assert _bare_engine_path_lines(text) == []
 
 
