@@ -42,6 +42,43 @@ starts.
 
 ---
 
+## #553 — 2026-08-21
+
+- **`triage-friction-log` is now a shared workflow at
+  `docs/agentic-dev-kit/workflows/triage-friction-log.md`, tracked in
+  `kit-manifest.json`** (`#243`). Its doctrine previously lived only in
+  `.claude/commands/triage-friction-log.md`, which no manifest entry covered,
+  so `/upgrade` never refreshed it and `kit_doctor` could not report it as
+  `differs` however stale it was. **Do not expect your first `kit_doctor` run to
+  name the new workflow at all.** `inspect()` iterates the `KIT_OWNED` tuple in
+  the *running* script and consults `--manifest` only for the hash of a path
+  that tuple already knows, so the run `/upgrade` Step 1 prescribes — your own
+  installed `kit_doctor.py` against the new kit's manifest — reports
+  `0 missing` and never mentions it. What that run does show is
+  `scripts/kit_doctor.py` itself as `differs`; taking that update is what makes
+  the workflow visible. **Afterwards** a pre-existing baseline gets an
+  informational `new-upstream` block — never a finding — and a repo with no
+  baseline recorded reports `missing`. No state here fails a gate, and
+  `/upgrade` offers the doc either way. **If you edited your copy of the Claude command, your edits
+  survive — and that is the hazard, not a reassurance.** `/upgrade` Step 4
+  keeps an adopter's existing runtime adapter rather than refreshing it, so
+  your thick edited copy stays in place and keeps being what your
+  `triage-friction-log` invocation runs. It will not be overwritten, and it
+  will not be updated either: every future change to this workflow lands in the
+  shared doc. Move your edits there and let the adapter become a pointer, or
+  accept that you are pinned to your fork. A new Codex binding ships at
+  `.agents/skills/triage-friction-log/`; ignore it if you do not run Codex.
+- **The workflow's paths are now resolved from `config/dev-model.yaml` instead
+  of hardcoded.** It named `docs/friction-log.md` and `scripts/<engine>.py`
+  literally; it now resolves `<friction-log>`, `<friction-log-archive>`,
+  `<engine-dir>`, `<state-dir>` and `<tracker>`. **If your `paths.friction_log`
+  or `paths.engines` is anything other than the kit default, this workflow
+  followed the wrong path before and follows yours now** — that is a behaviour
+  change, not only a wording one. No config key was added, removed, or
+  redefined; the keys it reads already existed.
+- No engine is vendored by this change and no report shape, gate semantic, or
+  CLI surface moved. `#6` still tracks the triage engine.
+
 ## #538 — 2026-08-21
 
 - **A pending review bot's `identity` is now resolved on a healthy poll, not

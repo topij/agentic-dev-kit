@@ -286,6 +286,9 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # own upgrade path cannot upgrade it is the closed loop being broken here.
     ("docs/agentic-dev-kit/workflows/adopt.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/upgrade.md", "workflow"),
+    # No Codex binding and no shared doc until #243's first slice; both landed
+    # together, so this entry and .agents/skills/triage-friction-log/ are a pair.
+    ("docs/agentic-dev-kit/workflows/triage-friction-log.md", "workflow"),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
     # /upgrade — links to it from rules 2 and 3. An untracked target means an

@@ -1180,7 +1180,15 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
     # filesystem instead is #341, filed rather than built here because a fix round
     # addresses the finding and not the mechanism around it
     # (safety-critical-changes.md rule 3).
-    for name in ("session-start", "wrap-up", "pr-watch", "parallel", "adopt", "upgrade"):
+    for name in (
+        "session-start",
+        "wrap-up",
+        "pr-watch",
+        "parallel",
+        "adopt",
+        "upgrade",
+        "triage-friction-log",
+    ):
         skill_dir = REPO_ROOT / ".agents" / "skills" / name
         skill_text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
         assert skill_text.startswith("---\n")
