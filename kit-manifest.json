@@ -195,7 +195,7 @@
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
-      "sha256": "5a0fe196b53829983d3c507c57bcad61a8be32ec44a3a7801f6d55c7a2ebad46"
+      "sha256": "d6e52452788c7a384a97dc67c206b6e5816b7a551c3c0a134f914081bbf7e0af"
     },
     "scripts/tests/conftest.py": {
       "role": "test",
@@ -235,7 +235,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "89f92b7605ed5cdc5f5c268094dc6e7a636fb585262a7cd54681ac535f4708b1"
+      "sha256": "038ce3d368ff6a05c3d78ed983291e0ac8ec95acc1d027f0d5a4e3c04538d08d"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -243,7 +243,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "b983db3c2ee562bb4153c24ab9a708dbdc71fcc28e9d7e11c31f94719cac87b9"
+      "sha256": "5af0a2dacf41d7ad6a1e64b5fc06c2fa0840966ddd2cc0eb3b2b455c8051a6ed"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",

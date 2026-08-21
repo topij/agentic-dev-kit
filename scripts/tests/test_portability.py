@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import contextlib
 import importlib.util
 import json
@@ -3726,3 +3727,57 @@ def test_the_target_lines_noop_message_is_pinned(
 
     assert result == 0
     assert "nothing to move: 46 line(s) <= --target-lines 46." in capsys.readouterr().out
+
+
+def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
+    """Line numbers of live `REPO_ROOT / "scripts"` expressions in ``source``.
+
+    AST, not grep, and that is the whole point: this file, `test_pr_watch.py`,
+    `test_kit_doctor.py` and `_repo_layout.py` all DISCUSS the bad idiom in
+    comments and docstrings explaining why it was removed. A textual scan would
+    have to be taught to ignore those, and the day it got that wrong the honest
+    fix would be to delete the explanation. Parsing sees only what executes.
+    """
+    found: list[int] = []
+    for node in ast.walk(ast.parse(source)):
+        if not (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)):
+            continue
+        if not (isinstance(node.right, ast.Constant) and node.right.value == "scripts"):
+            continue
+        if isinstance(node.left, ast.Name) and node.left.id == "REPO_ROOT":
+            found.append(node.lineno)
+    return found
+
+
+def test_no_test_module_rebuilds_the_engine_dir_from_repo_root():
+    """#534 cause 3, pinned — because nothing else in this repo can pin it.
+
+    `ENGINE_DIR` and `REPO_ROOT / "scripts"` resolve to the SAME path in the
+    kit's own layout, so no test running here can distinguish the correct form
+    from the defective one by behaviour. A review lens on `#545` reverted all
+    three fixes and the whole suite stayed green — structurally, not by
+    accident. Until this test, the only thing that had ever caught this class
+    was a real adopter running a real vendored install (`#40`, `#134`, `#534`,
+    `#537`), which is a feedback loop measured in months.
+
+    So this pins the SHAPE rather than the behaviour. That is a weaker
+    guarantee and it is the one available: a test that cannot fail in the
+    layout it runs in has to assert about the source text instead of the
+    result.
+
+    Engine paths in a test module must come from `ENGINE_DIR` — which every one
+    of these modules already computes, either from `_repo_layout.engine_dir()`
+    or from its own `Path(__file__).resolve().parent.parent`. `REPO_ROOT` stays
+    correct for everything that is genuinely repo-relative and not engine-
+    relative: `docs/`, `.claude/`, `.agents/`, `kit-manifest.json`.
+    """
+    offenders = {}
+    for path in sorted(ENGINE_DIR.glob("tests/*.py")):
+        lines = _repo_root_slash_scripts_nodes(path.read_text(encoding="utf-8"))
+        if lines:
+            offenders[path.name] = lines
+    assert offenders == {}, (
+        "a test module builds an engine path as `REPO_ROOT / \"scripts\"`, which "
+        "is only correct while `paths.engines` is `scripts`. Use ENGINE_DIR. "
+        f"Offenders: {offenders}"
+    )
