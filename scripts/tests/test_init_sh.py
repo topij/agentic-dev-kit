@@ -3215,7 +3215,9 @@ def _upgrade_commands() -> list[str]:
     - a shell line continuation puts `uv run` on one line and `<engine-dir>` on
       the next, so a filter requiring both on one line stops SEEING it — not
       missing the defect, but excluding the command from consideration;
-    - a fenced-block scan never saw a command prescribed in prose at all.
+    - a fenced-block scan never saw a command prescribed in prose at all;
+    - and a fence whose tag was not in a hardcoded pair vanished from both
+      pools at once, which is the tag-vocabulary guess this no longer makes.
 
     Each fix patched the previous spelling and the next round found another.
     Flattening first removes the whole class instead of the instance: the
@@ -3249,11 +3251,29 @@ def _upgrade_commands() -> list[str]:
     for match in re.finditer(r"```(\w*)\n(.*?)```", joined, re.DOTALL):
         rest.append(joined[cursor : match.start()])
         cursor = match.end()
-        # Only shell fences are commands. A ```text fence is transcript — this
-        # document has one showing the very failure being guarded against, and
-        # treating it as prescribed would flag the illustration.
-        if match.group(1) in ("bash", "sh"):
-            chunks.append(match.group(2))
+        # EVERY fence is prescribed, whatever its tag — and the tag is not the
+        # discriminator, a `$ ` prompt is.
+        #
+        # This gate used to read `if match.group(1) in ("bash", "sh")`, and a
+        # lens showed that a fence tagged `console`, tagged `Bash`, or left
+        # untagged then vanished ENTIRELY: not prescribed, and not returned to
+        # `rest` either, since its span had already been excised. The miss was
+        # total and silent, and ```console is not hypothetical — this repo's own
+        # docs already use it twice. Worse, it was a REGRESSION: the line-based
+        # version this replaced had no fence-awareness at all, so it caught a
+        # bad line wherever it sat, whatever the tag.
+        #
+        # Keying on the tag meant guessing an author's vocabulary. Keying on the
+        # prompt asks what the line IS: `$ ` marks what a user typed, shown to
+        # illustrate an outcome, and this document's one transcript uses it to
+        # display the very failure being guarded against. A prescribed command
+        # here never carries a prompt — verified across all thirteen fences.
+        body = "\n".join(
+            line
+            for line in match.group(2).splitlines()
+            if not line.strip().startswith("$ ")
+        )
+        chunks.append(body)
     rest.append(joined[cursor:])
 
     # Inline spans need a runner word; fenced shell blocks do NOT, and the
