@@ -3204,7 +3204,7 @@ _ANCHORED_ENGINE_DIR = re.compile(r'"\$\{REPO:\?[^}]*\}"/<engine-dir>')
 _ROOT_ARG = re.compile(r"--root(?:=|\s+)(\"[^\"]*\"|'[^']*'|\S+)")
 
 
-def _upgrade_commands() -> list[str]:
+def _upgrade_commands(doc: str | None = None) -> list[str]:
     """Every fenced shell block and every command-shaped inline span in
     upgrade.md, whitespace-flattened.
 
@@ -3234,9 +3234,10 @@ def _upgrade_commands() -> list[str]:
     `--root .` concretely again, instead of describing it as "a bare dot"
     because a substring rule could not tell an example from an instruction.
     """
-    doc = (
-        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
-    ).read_text(encoding="utf-8")
+    if doc is None:
+        doc = (
+            REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+        ).read_text(encoding="utf-8")
     # Shell continuations first — a trailing backslash joins two source lines
     # into one command, and every later step must see it that way.
     joined = doc.replace("\\\n", " ")
@@ -3252,7 +3253,7 @@ def _upgrade_commands() -> list[str]:
     chunks: list[str] = []
     rest: list[str] = []
     cursor = 0
-    for match in re.finditer(r"```(\w*)\n(.*?)```", joined, re.DOTALL):
+    for match in re.finditer(r"^(`{3,})(\w*)\n(.*?)^\1", joined, re.DOTALL | re.M):
         rest.append(joined[cursor : match.start()])
         cursor = match.end()
         # EVERY fence, whole, whatever its tag and whatever its lines look
@@ -3276,7 +3277,7 @@ def _upgrade_commands() -> list[str]:
         # rather than described: an illustration must not use the placeholder or
         # the flag. One that does is flagged — loudly, in CI, which is the
         # direction a guard should fail when it cannot tell intent.
-        chunks.append(match.group(2))
+        chunks.append(match.group(3))
     rest.append(joined[cursor:])
 
     # Inline spans need a runner word; fenced shell blocks do NOT, and the
@@ -3294,13 +3295,18 @@ def _upgrade_commands() -> list[str]:
     # invisible, and the cheapest honest answer to "which runners?" is more of
     # them rather than a note explaining which ones do not count.
     #
-    # This IS an enumeration, and enumerations are what four rounds of review
+    # This IS an enumeration, and enumerations are what five rounds of review
     # kept breaking. It survives here only because the failure direction is
     # different: an inline span is prose unless proven otherwise, so a missing
     # runner word costs a missed command in ONE span, while the fence rule above
     # — which had the same shape and much wider blast radius — was replaced
     # outright. If an engine command ever needs to be prescribed inline with a
     # runner not listed here, put it in a fence instead.
+    #
+    # Be precise about how that miss presents, because I described it wrongly to
+    # a review panel: it is SILENT. Nothing reports that a span was skipped —
+    # the command simply never enters the pool. The loud failure is the other
+    # one, where an illustration using the placeholder gets flagged.
     runners = ("uv run", "uvx ", "python3 ", "python ", "bash ", "sh ", "make ", "./")
     inline = [
         span
@@ -3308,6 +3314,81 @@ def _upgrade_commands() -> list[str]:
         if any(runner in span for runner in runners)
     ]
     return [re.sub(r"\s+", " ", chunk) for chunk in [*chunks, *inline]]
+
+
+# One synthetic document per failure shape this extractor has actually shipped,
+# each hiding the SAME unanchored command. `_upgrade_commands` must surface it
+# from every one of them.
+#
+# This exists because the permanent test below is pinned to the real
+# `upgrade.md`, which contains none of these shapes — so for six rounds the
+# suite could not tell the fixed extractor from any of the five broken ones. Two
+# lenses independently reintroduced round 4's tag gate and round 5's prompt
+# filter and watched `make test` stay green. Every one of those five regressions
+# was caught by a lens executing hostile input, never by CI.
+#
+# The document is the fixture, so the shapes stay pinned no matter what
+# `upgrade.md` is later edited to contain.
+#
+# WHICH SHAPES ACTUALLY DISCRIMINATE, measured rather than assumed — because a
+# fixture set that looks exhaustive and kills nothing is the failure this whole
+# test exists to end:
+#
+#   tag gate reintroduced      -> killed by the three tag shapes
+#   prompt filter reintroduced -> killed by the two prompted shapes
+#   inline extraction dropped  -> killed by "inline span in prose"
+#   fence run-length fixed at 3 -> NOT killed
+#   continuation joining removed -> NOT killed
+#
+# The last two are kept deliberately, and what they show is worth more than a
+# clean sweep would be. Under the truncating three-backtick regex the
+# four-backtick command is still surfaced — by the INLINE fallback, which
+# rescues it — so that fix is a correctness improvement rather than the only
+# thing standing between the guard and a miss. And with fences now taken whole,
+# a shell continuation is inside one chunk regardless, so joining continuations
+# no longer carries fenced content at all; it remains only for an inline span
+# that wraps. Both are defence in depth now. Do not delete either on the
+# strength of "no test fails" — that is exactly the reasoning that has to be
+# checked against what the code would do, not against the suite.
+_BAD = "uv run <engine-dir>/kit_doctor.py --manifest x"
+_EXTRACTION_SHAPES = {
+    "plain bash fence": "```bash\n" + _BAD + "\n```",
+    # Round 4: the gate keyed on the fence TAG.
+    "unusual tag": "```console\n" + _BAD + "\n```",
+    "capitalised tag": "```Bash\n" + _BAD + "\n```",
+    "untagged fence": "```\n" + _BAD + "\n```",
+    # Round 5: the gate keyed on a `$ ` PROMPT, per line, so a fence whose every
+    # line carried one filtered to the empty string.
+    "every line prompted": "```bash\n$ " + _BAD + "\n$ " + _BAD + "\n```",
+    "mixed prompt and output": "```bash\n$ " + _BAD + "\nsome output\n```",
+    # Round 3: a shell continuation split the runner from the placeholder.
+    "shell continuation": "```bash\nuv run \\\n  <engine-dir>/kit_doctor.py --manifest x\n```",
+    # Round 3: a command prescribed in prose, never inside a fence at all.
+    "inline span in prose": "Run this: `" + _BAD + "` and then continue.",
+    # Round 6: a four-backtick fence wrapping a markdown example truncated the
+    # non-greedy regex at the INNER closing run.
+    "four-backtick outer fence": "````markdown\n```text\nexample\n```\n" + _BAD + "\n````",
+}
+
+
+@pytest.mark.parametrize("shape", sorted(_EXTRACTION_SHAPES))
+def test_the_extractor_surfaces_a_command_from_every_shape_it_has_missed(shape):
+    """Pins the extractor itself, independently of what upgrade.md contains."""
+    commands = _upgrade_commands(_EXTRACTION_SHAPES[shape])
+    assert any("<engine-dir>" in command for command in commands), (
+        f"the {shape!r} shape hides an engine command from the guard entirely — "
+        f"extracted: {commands}"
+    )
+
+
+def test_prose_that_merely_mentions_the_placeholder_is_not_a_command():
+    """The other direction: without a runner word, an inline span is prose.
+
+    Keeps the shapes above from being satisfied by a rule that simply treats
+    every backtick span as a command, which would flag this document's own
+    explanatory text.
+    """
+    assert _upgrade_commands("Read `<engine-dir>` from `paths.engines`.") == []
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
