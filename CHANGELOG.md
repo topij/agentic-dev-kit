@@ -42,6 +42,30 @@ starts.
 
 ---
 
+## #538 — 2026-08-21
+
+- **A pending review bot's `identity` is now resolved on a healthy poll, not
+  only on an outage-marked one** (`#535`). `review_bots.pending[].identity` and
+  `.trusted` were `""` / `false` for every mid-review row on the `gh` backend
+  and on REST's status-context surface, because `fetch_check_details` gated the
+  identity read on a row that could *cancel* a pending block. **If you pin
+  `identity: ""` or `trusted: false` on a healthy pending entry, that
+  expectation breaks** — a real reviewer's own pending check now reports its
+  creator and `trusted: true`. A REST check-*run* is unchanged; it already
+  carried `app.slug`. Costs one extra API read per poll while a bot check is
+  pending, and none once every bot row is terminal and unmarked.
+- **`⚠ review coverage` and `⚠ review owed` are now silent while a trusted bot
+  is mid-review** — the suppression `#521` and `#518` documented but which had
+  never fired. **If you assert on either line's presence during a bot's pending
+  window, that assertion inverts.** Neither line gates anything; `mergeable`,
+  `converged` and `merge_blockers` are unchanged.
+- **`⚠ review owed` is additionally silent for a bot whose outage is announced
+  on a TRUSTED surface** (`#535` item 4) — it previously told you to request a
+  review from a reviewer that had just announced it could not run, in the same
+  render that prescribed the fallback panel. An **untrusted** outage row still
+  leaves the line firing, deliberately: it cancelled nothing (`#95`), so the
+  reviewer is still owed a look.
+
 ## #527 — 2026-08-20
 
 - **`kit-manifest.json` now tracks the kit's own test suite** (`#493`): all 16
