@@ -25,6 +25,24 @@
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
 
+## 2026-08-22
+
+- **Across eight panel rounds on two docs-only PRs, every finding was in a claim *about* the
+  work rather than in the work.** Severity **M**. `#548` ran six rounds and `#553` two; the
+  code, the 500-line doc move and the new guards came back clean under mutation every time a
+  lens tried them — content parity re-derived twice by reverse-substituting placeholders, both
+  registration guards killed by real set-equality assertions, four live `kit_doctor` scenarios.
+  What kept being wrong was the prose beside them: a checkpoint that claimed to be the same as
+  `triage-friction-log`'s and was weaker, a `kit_doctor` state named `missing` that is
+  `new-upstream`, a refresh forecast inverted against `upgrade.md:613`, a positional invariant
+  that `finalize_triage.py`'s keep-window breaks, an up-route attributed to a pass with no
+  recurrence step. **Parked rather than filed, deliberately, on both park conditions:** there is
+  no named mechanism — "authors overstate" is a description, not a cause — and the point is
+  accumulation. One session cannot tell whether this is a property of docs-heavy PRs, of this
+  author, or of a panel that has more purchase on prose than on tested code. If it recurs with
+  a mechanism attached it is worth a rule; the shape to watch is whether a claim verified
+  against a *command* ever failed, versus one verified against nothing.
+
 ## 2026-08-21
 
 - **Two lenses launched together against one head can land against different heads, and
