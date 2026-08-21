@@ -9,12 +9,13 @@ into a runtime-specific file.
 
 ## Verification
 
-**`make test` is the verification command for this repo.** It runs the full suite
-(`scripts/lib/state_paths/tests` + `scripts/tests`), supplying its own dependencies via
-`uv run --with pytest --with pyyaml`. **It is long-running** — a default tool timeout
-cuts it off partway, and the truncation reads as a hang rather than as a timeout, so
-raise yours before you start. pytest's summary line prints the elapsed time for the run
-you actually did.
+**`make test` is the verification command for this repo.** It runs `lint` and
+`check-syntax` first, and a failure in either stops it there — no pytest, and so no
+summary line. The suite itself (`scripts/lib/state_paths/tests` + `scripts/tests`) gets
+pytest and PyYAML from `uv run --with pytest --with pyyaml`; `lint` supplies `ruff`
+separately, through `uvx`. **Raise your tool timeout before you start it** — the default
+cuts the run off partway, and the truncation reads as a hang rather than as a timeout.
+pytest's summary line prints the elapsed time for the run you actually did.
 
 The two probes an agent reaches for first both fail here in a way that reads as
 "pytest is unavailable in this environment". Neither is evidence of that:
@@ -25,29 +26,36 @@ The two probes an agent reaches for first both fail here in a way that reads as
 Do not conclude tests cannot run locally, and do not defer verification to CI, without
 having run `make test`. When claiming something is verified, name the command that
 established it and its actual result — #54 tracks making this a standing rule. When
-that result is a figure rather than a verdict, *Numbers in prose* below governs how
-you write it.
+that result is a figure, or a verdict resting on one, *Numbers in prose* below governs
+how you write it.
 
 ## Numbers in prose
 
 **A number describing current state does not go in prose.** If a reader can count it,
 write the enumeration and let them; if a command prints it, name the command. This
 binds **every surface a session writes**: commit messages, PR bodies, code comments,
-docstrings, issue text, review replies, and the narrative docs. The docs were never the
-problem — `wrap-up.md` has bound them all along, and the other surfaces are where it
-breaks. The shape it takes is a commit that grows a list and leaves the number
-describing it alone: the list is the thing being edited, the number is prose beside it,
-and the edit never reaches it (`#546` enumerates the occurrences). A value that is part
+docstrings, issue text, review replies, and the narrative docs. The handoff was never
+the problem — `wrap-up.md` has bound that one all along. Every other surface in that
+list, the rest of the narrative docs included, this section reaches first. The shape it
+takes is a commit that grows a list and leaves the number describing it alone: the list
+is the thing being edited, the number is prose beside it, and the edit never reaches it
+(`#546` enumerates the occurrences). A value that is part
 of a contract is not a count of anything and is untouched by this — an exit code, a
 `config/dev-model.yaml` value, a budget **ceiling** (never the live count against it),
 a version, an issue number.
 
 **Naming the command covers the number and not the verdict built on it.** Dropping the
-digit while keeping the judgement it supported is the halfway fix, and it is the half
+digit while keeping the judgement it supported is the halfway remedy, and it is the half
 that failed: *"over budget — `check_doc_budget.py` prints the live figure"* has no
 figure left in it and was false within hours anyway (`#258`). `over budget`,
 `converged`, `passing`, `clean` are the same claim as the number they replaced, wearing
-a word. Drop the claim, not just the digits.
+a word.
+
+So a verdict is not the cheap way out of the rule above, and **a verdict is rescued by
+exactly the stamp a figure is, by nothing weaker**. Bound to the run and the revision
+that produced it, it is an observation and it keeps. Standing loose in a document, it is
+a claim about now that nobody will re-check. Drop it, or stamp it — the same two exits
+the number had.
 
 **A measured figure is stamped with its command, its revision and its date, or it is
 dropped.** The stamp is what makes the sentence a different kind of claim, not
@@ -66,14 +74,18 @@ one of those or it is a defect.
 **Where this meets Verification, and how that resolves.** Verification asks for the
 command *and its actual result*, which is exactly what invites a figure into the
 sentence. Neither rule yields: Verification still requires the command and the result,
-and this section governs the form the result takes when it is a figure. **`actual` is
+and this section governs the form that result takes, whether it is a figure or a verdict
+resting on one. **`actual` is
 the operative word — read the result back out of the run you are naming.** If you
 cannot point at the output the figure came from, because the run has scrolled or
 because you are counting what you believe you just added, you do not have the figure,
 and re-running to read it is the only way to get it. A figure written from expectation
 is the defect this section is mostly about, and the harder one to catch, because a
-stamp beside it reads as compliance. Most results are not figures at all — *"`make
-test` → green"* satisfies Verification whole and has nothing in it to go stale.
+stamp beside it reads as compliance. And note what is *not* the way out: *"`make test`
+→ green"* is not compliant for having no digit in it — unstamped, that is `over budget`
+one command over. *"`make test` at `<sha>` → green"* is, and it is usually all
+Verification needs, because the pass or the failure is the result it asked for and how
+many tests passed is rarely the point.
 
 `wrap-up.md` carries the handoff's application of this rule ("an event is not a
 tally") and stays self-contained rather than pointing here, because it ships to
