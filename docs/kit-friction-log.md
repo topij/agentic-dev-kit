@@ -11,13 +11,16 @@
 > not a neglected inbox. What stays is the remainder: findings still missing one of those
 > three, and single instances of a shape that only matters if it recurs.
 >
-> **The un-graduated entries are the dated sections above the most recent
-> `## … — Backlog migrated` marker.** New entries are appended at the *top*, and a sweep
-> moves the entries it graduates out to the archive entirely, leaving only its marker
-> behind — so "above the marker" is a consequence of how the file is written and swept,
-> not an invariant the file can enforce on its own. If you ever find a dated section
-> *below* a marker, it is an un-swept straggler and the next `triage-friction-log` run
-> owns it ([`#224`](https://github.com/topij/agentic-dev-kit/issues/224)).
+> **Position alone does not tell you what is un-graduated, and this file does not
+> pretend otherwise** ([`#224`](https://github.com/topij/agentic-dev-kit/issues/224)).
+> New entries are appended at the *top*, so the dated sections above the most recent
+> `## … — Backlog migrated` marker are un-graduated. But a sweep does not archive
+> everything it passes over: an entry added *between* a triage run's draft and its
+> finalize is recognised as new and deliberately **kept in this file, below the new
+> marker**, ready for the next pass rather than archived unfiled. So the un-graduated
+> set is everything above the newest marker **plus anything kept below it**, and a
+> dated section below a marker is that safety mechanism working — not a straggler.
+> Each marker's own block records what it swept.
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 

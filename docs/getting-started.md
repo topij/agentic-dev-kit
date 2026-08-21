@@ -188,7 +188,8 @@ unattended. What you *can't* yet explain goes to
   detection branch it takes when it does.
 ```
 
-That one parks because it has no mechanism yet, not because it is minor. Because the
+That one parks because it has no mechanism and no fix yet — only a next diagnostic
+step — not because it is minor. Any one missing part is enough to park it. Because the
 next `session-start` reads both the handoff and the inbox, neither thread is lost.
 
 ## 6 · Turn the flywheel
@@ -204,10 +205,12 @@ Single incidents route **down** (to the tracker); repeated patterns route **up**
 (to a rule). That asymmetry is deliberate — it's what keeps your rule set small
 and your friction log honest instead of ratcheting every week.
 
-The down-route runs on two clocks, not one. `/wrap-up` takes it immediately for
-anything already issue-shaped; this pass takes it for everything else that proves to
-be a single incident — explicable by now or not — and routes **up** only what
-recurred. So an inbox that stays small is the system working,
+The **down**-route runs on two clocks, not one. `/wrap-up` takes it immediately for
+anything already issue-shaped; `/triage-friction-log` takes it for everything else
+that proves to be a single incident — explicable by now or not. Neither is the
+**up**-route: that is `/post-merge-systemize`'s, over a different corpus entirely
+(merged-PR review comments, not inbox entries), which is why a pattern has to show up
+across PRs before it earns a rule. So an inbox that stays small is the system working,
 and one that fills with things you could have filed at session end means `/wrap-up`'s
 friction-routing step is being skipped — not that triage is overdue.
 
