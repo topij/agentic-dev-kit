@@ -3192,15 +3192,78 @@ def _step2_refresh_block() -> str:
     return matching[0]
 
 
-# `"${REPO:?…}"/<engine-dir>` — the only form that survives Step 0's guarantee
-# that `pwd` is somewhere INSIDE the repo rather than at its top.
+# Every `<engine-dir>` in a prescribed command must hang off this. `$REPO` is
+# bound in Step 0; the `:?` form fails loudly on an unset or empty value rather
+# than silently building a path from nothing (#496). An absolute path rooted
+# anywhere else would also survive Step 0's pwd guarantee — requiring THIS
+# spelling is the fail-fast convention on top of that, not the guarantee itself.
 _ANCHORED_ENGINE_DIR = re.compile(r'"\$\{REPO:\?[^}]*\}"/<engine-dir>')
+# A `--root` argument, quoted or not, joined by a space or an `=`. argparse
+# takes `--root V` and `--root=V` identically, and the shell strips quotes, so
+# `.`, `"."`, `'.'` and `=.` are one value wearing four spellings.
+_ROOT_ARG = re.compile(r"--root(?:=|\s+)(\"[^\"]*\"|'[^']*'|\S+)")
+
+
+def _upgrade_commands() -> list[str]:
+    """Every prescribed shell command in upgrade.md, whitespace-flattened.
+
+    A COMMAND, not a line, and this is the whole lesson of `#536`'s review. Three
+    successive versions of the guard below scanned lines and were each defeated
+    by a different way of splitting one command across two of them:
+
+    - the prescribed `--root` command wraps mid-argument inside its backticks;
+    - a shell line continuation puts `uv run` on one line and `<engine-dir>` on
+      the next, so a filter requiring both on one line stops SEEING it — not
+      missing the defect, but excluding the command from consideration;
+    - a fenced-block scan never saw a command prescribed in prose at all.
+
+    Each fix patched the previous spelling and the next round found another.
+    Flattening first removes the whole class instead of the instance: the
+    continuation is joined, the wrap collapses, and inline spans and fenced
+    blocks are treated alike — because a reader and a shell treat them alike.
+
+    Prose is excluded by requiring `uv run`, not by fencing. A sentence *about*
+    `--root` carries no runner word and is correctly ignored — which is what
+    bought back something the previous design had spent: the hazard note quotes
+    `--root .` concretely again, instead of describing it as "a bare dot"
+    because a substring rule could not tell an example from an instruction.
+    """
+    doc = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+    ).read_text(encoding="utf-8")
+    # Shell continuations first — a trailing backslash joins two source lines
+    # into one command, and every later step must see it that way.
+    joined = doc.replace("\\\n", " ")
+
+    # Fenced blocks are consumed BEFORE inline spans, and removed as they go.
+    # Leaving them in place breaks inline extraction outright: a ``` run is
+    # three backticks, so a naive pair-matching scan swallows fence markers and
+    # every span after the first fence pairs against the wrong delimiter. The
+    # symptom is not an error — it is commands that quietly stop being
+    # extracted, which is a guard that passes because it looked at nothing.
+    # Caught exactly that way: the one `--root` command in this document was
+    # absent from the extraction while four mutations of it "passed".
+    chunks: list[str] = []
+    rest: list[str] = []
+    cursor = 0
+    for match in re.finditer(r"```(\w*)\n(.*?)```", joined, re.DOTALL):
+        rest.append(joined[cursor : match.start()])
+        cursor = match.end()
+        # Only shell fences are commands. A ```text fence is transcript — this
+        # document has one showing the very failure being guarded against, and
+        # treating it as prescribed would flag the illustration.
+        if match.group(1) in ("bash", "sh"):
+            chunks.append(match.group(2))
+    rest.append(joined[cursor:])
+
+    chunks.extend(re.findall(r"`([^`]+)`", "".join(rest), re.DOTALL))
+    return [re.sub(r"\s+", " ", chunk) for chunk in chunks if "uv run" in chunk]
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
 def test_every_upgrade_engine_invocation_is_repo_anchored():
-    """Kills: dropping the `$REPO` anchor from any `<engine-dir>` command in
-    upgrade.md (#536).
+    """Kills: dropping the `$REPO` anchor from any engine command in upgrade.md
+    (#536).
 
     Step 0 pins `pwd` to be somewhere INSIDE `$REPO`, not at its top, and
     `paths.engines` is a path relative to the repo root — so a relative
@@ -3219,45 +3282,23 @@ def test_every_upgrade_engine_invocation_is_repo_anchored():
     that is fully adopted, and a wrong `pwd` is not in the differential that
     error invites.
 
-    **This test exists because the fix was pinned by nothing.** A review lens
-    reverted one anchored line to its pre-fix form and the entire suite still
-    passed — 1315 passed, 0 failed, with `driftcheck` deselected so it was not a
-    manifest false-kill. The nearest existing test extracts the very block whose
-    first line the fix changed and deliberately strips that line before running
-    the rest. So the guard against a hazard this repo has already lost two
-    sessions to (`#399`) could be removed silently.
-
-    Asserts over the DOCUMENT rather than a named block: the point is that no
-    invocation anywhere escapes the rule, and a block-scoped test would pass the
-    day someone adds a seventh site in a new step.
+    **Both assertions VALIDATE THE REQUIRED FORM rather than search for a known
+    bad one**, which is the design lesson of this test's own review history. The
+    search-for-bad-text version was defeated three times running, each time by a
+    spelling nobody had thought of — a wrap, a quote, an `=`, a continuation.
+    Asking "is every occurrence anchored?" has no such enumeration to be
+    incomplete: a value that is not the anchored form fails, whatever it looks
+    like. The count-based `<engine-dir>` check survived the round that killed
+    its substring sibling for exactly this reason, which is what the `--root`
+    check has now been rebuilt to match.
     """
-    doc = (
-        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
-    ).read_text(encoding="utf-8")
-    # The WHOLE document, not its fenced blocks. This test's own first cut
-    # scanned ```bash blocks and a mutation restoring `--root .` SURVIVED it:
-    # that command is prescribed in a prose paragraph with inline backticks, so
-    # a block-scoped scan never saw the one site whose failure is quiet. A
-    # command is a command wherever the document puts it.
-    lines = doc.splitlines()
+    commands = _upgrade_commands()
+    assert commands, "no `uv run` commands found — the extraction broke, not the doc"
 
     unanchored = [
-        line.strip()
-        for line in lines
-        # A prescribed invocation, identified by `uv run` rather than by
-        # fencing, that reaches an engine through `<engine-dir>`. Prose
-        # *mentions* of `<engine-dir>` ("Read `<engine-dir>` from
-        # `paths.engines`") carry no `uv run` and are correctly ignored.
-        if "uv run" in line and "<engine-dir>" in line
-        # COUNTED, not searched. The anchor must be the thing `<engine-dir>`
-        # hangs off — `--manifest "${KIT:?…}/…"` sits on several of these and
-        # must not satisfy the test — and EVERY occurrence on the line must
-        # carry it. A `re.search` here is existential, and Step 5's pytest line
-        # really does name `<engine-dir>` twice: a review lens stripped the
-        # anchor from the SECOND one and this test still passed, because the
-        # first one satisfied the search. That is the same defect this test
-        # exists to catch, surviving inside the test itself.
-        and len(_ANCHORED_ENGINE_DIR.findall(line)) != line.count("<engine-dir>")
+        cmd
+        for cmd in commands
+        if len(_ANCHORED_ENGINE_DIR.findall(cmd)) != cmd.count("<engine-dir>")
     ]
     assert unanchored == [], (
         "upgrade.md invokes an engine by a path that is not $REPO-anchored; "
@@ -3265,30 +3306,17 @@ def test_every_upgrade_engine_invocation_is_repo_anchored():
         f"the shell's cwd: {unanchored}"
     )
 
-    # `--root .` is the quiet half and carries no `<engine-dir>`, so the check
-    # above cannot see it. It is an explicit override that bypasses
-    # `kitconfig.repo_root()`'s walk up from `Path(__file__)` — which is what
-    # makes anchoring the script path sufficient everywhere else, and what makes
-    # this the one flag that needs `$REPO` spelled out.
-    # Over the WHITESPACE-NORMALIZED document. The prescribed `--root` command
-    # already wraps across two source lines, and a plain `"--root ." not in doc`
-    # check reads `--root\n.` as clean — so reverting the anchor while leaving
-    # the existing wrap in place, which is what any edit touching only the value
-    # does, slipped straight past. A review lens reproduced exactly that and the
-    # test passed. Normalizing first is what makes the rule see the command the
-    # way a reader (and a shell) does, and it was available all along: the
-    # earlier framing of "blunt substring vs. fragile regex" was a false choice
-    # that understated what the blunt form gave up.
-    #
-    # The remaining cost is real and unchanged: prose may not QUOTE the bad form
-    # even to explain it, which is why the hazard note says "passing `--root` a
-    # bare dot".
-    flat = re.sub(r"\s+", " ", doc)
-    assert "--root ." not in flat, (
-        "upgrade.md contains `--root .`, which resolves against cwd rather than "
-        "the repo root — pass \"${REPO:?...}\" instead. If this is prose "
-        "explaining the hazard rather than a prescribed command, describe the "
-        "form rather than quoting it; this rule is deliberately blunt."
+    bad_root = [
+        (cmd, value)
+        for cmd in commands
+        for value in _ROOT_ARG.findall(cmd)
+        if not re.fullmatch(r'\$\{REPO:\?[^}]*\}', value.strip("\"'"))
+    ]
+    assert bad_root == [], (
+        "upgrade.md passes `--root` something other than the $REPO anchor. It "
+        "is an explicit override that bypasses `kitconfig.repo_root()`'s walk "
+        "up from `Path(__file__)` — which is what makes anchoring the script "
+        f"path sufficient everywhere else: {bad_root}"
     )
 
 
