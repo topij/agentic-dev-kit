@@ -61,7 +61,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "a0e1928450e951fe104023000c5bf62631b5233387da2f4a99e044d930847370"
+      "sha256": "453818b904303ca13d5a17805cf30c94c9c60e1c8cd5046fe1d2dfd9df4fd643"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
@@ -77,7 +77,7 @@
     },
     "docs/templates/friction-log.md.tmpl": {
       "role": "template",
-      "sha256": "33e5bf0fe285ebbc248e062124d52f86bb78c47767f185d3d04df192db09c66d"
+      "sha256": "1e5fa714719cf147c03d03569e875e32a843c4b9f189025415d35dc2c326a062"
     },
     "docs/templates/handoff-history.md.tmpl": {
       "role": "template",

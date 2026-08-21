@@ -171,17 +171,26 @@ and what's next…
 ▶ Next: add the reset-email template and the rate-limit guard.
 ```
 
-…and captures any friction you hit into `docs/friction-log.md`, while it's fresh:
+…and routes any friction you hit. Anything you can already explain — a
+reproduction, a named mechanism, *and* a fix — it offers to file straight to your
+tracker, because a triage pass could add nothing to it. It files on your go-ahead, and
+parks the finding instead whenever that route is unavailable — you decline, there is no
+tracker configured, the create fails, or nobody is there to ask because the session is
+unattended. What you *can't* yet explain goes to
+`docs/friction-log.md` while it's fresh:
 
 ```markdown
 ## 2026-01-05 — inbox
 
-- **`init.sh` didn't detect an existing tracker config (severity: L).** Had to set
-  `tracker.linear.project_id` by hand. Fix: probe for a known config file first.
+- **`init.sh` skipped an existing tracker config (severity: L).** Second time this
+  week; it wrote a fresh `tracker.linear.project_id` over the one already there. No
+  idea what it keys on — a clean re-run didn't reproduce it. Next step: capture the
+  detection branch it takes when it does.
 ```
 
-Because the next `session-start` reads that handoff, the thread is never lost —
-and the friction entry is now queued for the flywheel.
+That one parks because it has no mechanism and no fix yet — only a next diagnostic
+step — not because it is minor. Any one missing part is enough to park it. Because the
+next `session-start` reads both the handoff and the inbox, neither thread is lost.
 
 ## 6 · Turn the flywheel
 
@@ -196,13 +205,27 @@ Single incidents route **down** (to the tracker); repeated patterns route **up**
 (to a rule). That asymmetry is deliberate — it's what keeps your rule set small
 and your friction log honest instead of ratcheting every week.
 
+The **down**-route runs on two clocks, not one. `/wrap-up` takes it immediately for
+anything already issue-shaped; `/triage-friction-log` takes it for everything else
+that proves to be a single incident — explicable by now or not. Neither is the
+**up**-route: that is `/post-merge-systemize`'s, over a different corpus entirely
+(merged-PR review comments, not inbox entries), which is why a pattern has to show up
+across PRs before it earns a rule. So an inbox that stays small is the system working,
+and one that fills with things you could have filed at session end means `/wrap-up`'s
+friction-routing step is being skipped — not that triage is overdue.
+
 > **Note:** these two skills ship as *doctrine* — the prose and routing rules are
 > here, but their deterministic engines — a tracker client, a notify channel, a
 > merged-PR fetcher, a heartbeat, and `triage-friction-log`'s own parse/finalize
 > scripts — are project-specific and left for you to wire
 > ([#6](https://github.com/topij/agentic-dev-kit/issues/6),
 > [#7](https://github.com/topij/agentic-dev-kit/issues/7)). The four core skills
-> (`session-start`, `wrap-up`, `parallel`, `pr-watch`) run out of the box.
+> (`session-start`, `wrap-up`, `parallel`, `pr-watch`) run out of the box — with one
+> exception worth knowing before you rely on it: `/wrap-up`'s **direct filing** route
+> reaches your tracker through whatever client your backend gives you, and ships as
+> doctrine like the two skills above rather than as a wired engine. Its consent gate
+> and duplicate check are prose the agent executes, not checks that fail. Everything
+> else in those four skills is engine-backed.
 
 ## That's the loop
 
