@@ -12,6 +12,23 @@
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
 
+## 2026-08-21
+
+- **Two lenses launched together against one head can land against different heads, and
+  the doctrine has no disposition for the stale one.** Severity **M**. Both lenses of a
+  round were launched at the same sha; the adversarial one returned first, its finding was
+  fixed and pushed, and the correctness lens then reported against the sha it had been
+  given — by then the parent. Several of its findings were already closed. Nothing in
+  `fallback-review-panel.md` says what a round means when its two reports describe
+  different trees, so the cockpit decides ad hoc: I re-checked each finding against the
+  current head and dispositioned per finding, which is right but is not written anywhere.
+  Worse, the confirmations are the risky half — a lens can confirm a draw that a later
+  commit has since falsified, and that reads as corroboration. Proposed fix: either hold
+  every fix until a round's lenses have all reported (simple, costs latency), or require a
+  delta report to state the head it reviewed and the cockpit to re-check each finding and
+  each CONFIRMED draw against the current head before acting. The second is what happened
+  here; the first is what the doctrine implies without saying.
+
 ## 2026-08-20
 
 - **A figure was read off a workflow run that had not finished, and nothing in the reading

@@ -4,6 +4,77 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-17 (three rulings shipped, and the defect that would have reached an adopter was a heading)
+
+**Theme —** the operator ruled on `#372` and on `#44`, and `#494` — the fail-open the
+previous session's ticket sweep had just filed against `#488` — was closed between them.
+Shipped: `#372` (`#498`, squash `9f912e5`), `#494` (`#499`, `fa8d490`), `#44` (`#500`,
+`4276654`). All three issues stay open; no closing keyword was written and nothing
+verified their acceptance criteria.
+
+- **`#372` ruled: convergence-only — and the first PR that tested it failed.**
+  `auto_review.enabled: false`, so the one hourly unit is spent at the head that merges
+  rather than the head that opens. The measurement that decided it is on the ticket: on
+  `#488` the auto pass at open and the Converged re-request **competed for the same
+  unit**. Paying was declined by the operator on cost, which discharges the conditional
+  deferral the 2026-08-15 ruling had left standing.
+
+  **Do not read this as a working posture.** `#501` — this wrap-up's own PR, and the
+  first the ruling actually governs — requested review at its converged head and
+  **`gh pr view 501 --json reviews` stayed empty**: no review object, no coverage, no
+  verdict. That puts ruling 2 in question on the one ground that matters: it moved the
+  whole review budget onto a request path that then did not deliver. Ruling 1
+  (`auto_incremental_review: false`) is untouched and still measured. The account and the
+  options it leaves are on `#372`; the next PR against this `main` is the second data
+  point.
+
+  **The evidence is stated as the empty review list on purpose.** The bot's own status
+  comments rewrite themselves in place, and successive readings of one comment on `#501`
+  gave different accounts of what had happened — two of which reached this file or that
+  ticket before being corrected. **How many times it was rewritten is not knowable**:
+  `updated_at` exposes only the most recent edit, so any count is a floor, and the count
+  I first wrote here was wrong before the commit landed. That is the point rather than an
+  aside — a tally off that surface is a claim about when you looked. The absent review
+  object is not.
+- **`#44` ruled: report it, never gate on it.** `review_bots.comment_verdicts` surfaces a
+  comment-borne clean verdict; no gate reads it. Direction (a) — parse it into `coverage`
+  so the gate self-clears — was declined because the failure modes are not symmetric:
+  keying the *gate* on a reviewer's prose lets an upstream wording change decide merges,
+  while keying a *report* on it lets a line go missing. `bot_review_coverage`'s docstring
+  was already the standing argument, and is cited rather than restated.
+- **`#494`'s fail-open shipped a fix: the objection now has its own read** over verdict
+  states only. Directions 2 and 3 were declined on the ticket. The two reductions are one
+  parameterized walk, not two copies — `#447` (the record for that shape) is why.
+  Worded this way deliberately: "`#494` closed by …" reads on a skim as the *ticket*
+  being closed, which it is not.
+
+**Learned**
+
+- **Three rulings' worth of panel found no gate defect; the thing that would have reached
+  an adopter was a CHANGELOG heading.** `#499`'s entry was headed with the *issue* number,
+  and `upgrade.md` Step 3 extracts by *PR* number — so a `BREAKING (gate semantics)` entry
+  would have been invisible to the documented upgrade path (`#430`'s failure, on the file
+  written to prevent it). Found because a lens **ran** the extraction rather than reading
+  the file. Nothing in CI checks this correspondence.
+- **`#447`'s shape recurred three times in one session**, each time found by mutation and
+  never by reading: a new field added beside pinned siblings inherits exactly the gaps the
+  siblings had already closed (`#499`'s objections scoping; `#500`'s config key and its
+  render line). Logged to the inbox as a candidate rule rather than a ticket, because the
+  third occurrence is what makes it a pattern.
+- **Every fix round in this session produced a prose imprecision the next round found.**
+  That is the doctrine's own claim observed under its own procedure, and it is the
+  argument for the log-don't-fix carve-out — the cost of a round is another round's worth
+  of new prose to get wrong.
+- **A trigger heuristic `#44` had relied on since 2026-07-27 is falsified:** an explicit
+  review request does *not* reliably produce a review object. Recorded on the ticket with
+  the observation, and it retires "just re-request it" as operational advice.
+
+▶ Next: open the next PR and watch what its converged-head review request does — that is
+`#372`'s second data point and it decides whether ruling 2 stands, gets reverted, or is
+renamed to "the panel is the reviewer". Behind it: `#460` (the last standing operator
+ruling, untouched today) and `#489` (an unparseable `submittedAt` still outranks every
+real timestamp, so a standing objection cannot yet be fully relied on even after `#494`).
+
 ## Session — 2026-08-16 (the receipt route closed, an upstream bypass left open, and a posture whose halves compete for one unit)
 
 **Theme —** `#485` shipped (`#488`, squash `5449947`) — the hole the previous block called
