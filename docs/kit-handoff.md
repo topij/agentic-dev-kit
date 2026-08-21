@@ -14,9 +14,90 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-20 (afternoon) — `#372`'s third ruling (the panel is the standing reviewer), `main`'s protection enabled at the forge, four PRs through the panel loop to merge, and the cs-toolkit upgrade boundary reached.
+Last updated: 2026-08-21 — the adopter's upgrade findings worked to merge, and a review loop that kept finding its own guards rather than the change.
 
-## Latest session — 2026-08-20 · afternoon (the third ruling, and the panel that corrected its own transcription)
+## Latest session — 2026-08-21 (the adopter's findings, and a loop that reviewed its own guards)
+
+**Theme —** cs-toolkit's `/upgrade` findings worked end to end. `#535`'s regression, `#536`'s
+items and `#534`'s cause 3 all merged (`#538`, `#544`, `#545`); every one of those issues
+stays open, since nothing verified their acceptance criteria in the field.
+
+- **`#535` was upstream of where the issue pointed.** `#521`'s deference was correct; the
+  FETCH under it was not — identity resolved only for rows that could cancel a pending
+  block, so a healthy mid-review row never had one and `trusted` was never true. The
+  precondition now covers both consumers. Fixed in the field on its own PR: `coverage: []`,
+  a comment-surface entry with no trust field beside a trusted check entry, and `review
+  owed` correctly silent via the check.
+
+- **The panel found the defect the fix introduced, not the one it fixed.** `accounted`
+  read `.get("trusted", True)`, and a comment-surface entry carries no such key — so one
+  stale acknowledged outage comment would have silenced `review owed` for a PR's whole
+  life. `summarize_review_bots`' own docstring forbids exactly that ("a comment is a
+  statement about the past"), one layer below where I broke it.
+
+- **On `#544` and `#545`, nothing executable changed after the first commit.** Diffed each
+  branch's first commit against its head: test files and the manifest, plus one
+  comment-only edit to `config/dev-model.yaml` (checked — no key or value moved). No
+  prescribed `upgrade.md` command and no `ENGINE_DIR` substitution changed. So on those two
+  the review turned inward — the HIGHs were in guards, several in the previous round's guard.
+  `#538` is the counterexample and the claim does not reach it: its `accounted` fix
+  (`d6e371d`, a later commit) changed an executable line. Stopping was by blast radius,
+  per the doctrine — not because a round came back clean.
+
+- **The reason that was possible is now closed on both.** Each guard was pinned only to
+  the real tree, which holds none of the shapes it exists to catch, so the suite could not
+  tell a fixed guard from a broken one — lenses proved it by reintroducing earlier bugs
+  and watching the suite stay green. Both are pinned on synthetic fixtures now, and
+  `#544`'s fixture records which shapes discriminate and which are defence-in-depth,
+  rather than implying a clean sweep.
+
+- **Filed this session: `#537`** (the adopter's declined `dev_session.sh` carries a
+  merge-gate hardening the kit lacks — the kit's own test certifies the fork), **`#540`**,
+  **`#541`**, **`#542`**, **`#543`**, **`#546`**. Occurrence comments on `#325` (panel
+  isolation holds for writes and failed for reads; the cockpit's own launch note was the
+  mechanism) and a scope comment on `#534`.
+
+- **The operator's unfiled candidates were all filed, none rejected** — `#540`, `#541`,
+  `#542`. `#541` went in despite being pre-existing because its consequence
+  changed: under coverage alone a truncated reviews list only ever refused a merge; with
+  `#488`'s objection blocker reading the same list it can now authorize one.
+
+- **Verified:** `make test` at `/Users/topi/Coding/agentic-dev-kit` on each branch head
+  before its push, and again on `#545`'s merge commit after taking `origin/main` in. Each
+  PR's record carries its own result at the sha it was taken from.
+
+**Learned**
+
+- **Across both files I kept keying a guard on what text LOOKED like instead of asserting
+  the required form** — a line wrap, quotes and `=`, a shell continuation, a
+  fence tag, a `$ ` prompt; an operator, an attribute, a constructor, a wrapper on the
+  other operand. That is `safety-critical-changes.md` rule 1 ("treat 'we tightened the
+  matcher' as a stopgap") and I did not see the shape until a lens had refuted the fifth.
+
+- **The completeness claim was the more reliable defect than the code.** Round after
+  round I declared a class closed and a lens found another member. Asserting closure is
+  worse than leaving a gap open, because the assertion gives the next reader a reason to
+  stop looking — the draws that finally worked named my own worst track record and asked
+  the lenses to attack it.
+
+- **A rule that binds one surface does not bind the author writing another.** `wrap-up.md`
+  forbids a count beside a list; I broke that in docstrings and commit messages all
+  session, each time in the commit that grew the list. Filed as `#546` — it is `#243`'s
+  shape applied to surfaces rather than runtimes, and it tensions with `#54`, which asks
+  for a command's actual result.
+
+- **A lens verifying a declared LIMITATION is worth more than one confirming a claim.**
+  The round that added most was one that built the real defect in a real scanned file and
+  watched the guard pass over it, and one that checked my stated gaps were honest rather
+  than that my stated capabilities worked.
+
+▶ Next: `#537` — the merge-gate scrub the adopter's fork carries and the kit lacks. It was
+blocked on `#534` cause 3, which merged today, so the test that pins it can now be written
+against the kit's own `dev_session.sh` rather than an adopter's.
+
+______________________________________________________________________
+
+## Session — 2026-08-20 · afternoon (the third ruling, and the panel that corrected its own transcription)
 
 **Theme —** executed the morning briefing's plan end-to-end. `#524` applied; `#372` ruled
 (third ruling: the panel is the standing reviewer, detection surface frozen — the ruling
@@ -308,79 +389,6 @@ needs to actually reach the request step before any of this happens automaticall
 Behind it: whether to act on `#310` (occurrence comment vs. implementing its
 routing fix — operator hasn't
 decided).
-
-______________________________________________________________________
-
-## Session — 2026-08-17 (three rulings shipped, and the defect that would have reached an adopter was a heading)
-
-**Theme —** the operator ruled on `#372` and on `#44`, and `#494` — the fail-open the
-previous session's ticket sweep had just filed against `#488` — was closed between them.
-Shipped: `#372` (`#498`, squash `9f912e5`), `#494` (`#499`, `fa8d490`), `#44` (`#500`,
-`4276654`). All three issues stay open; no closing keyword was written and nothing
-verified their acceptance criteria.
-
-- **`#372` ruled: convergence-only — and the first PR that tested it failed.**
-  `auto_review.enabled: false`, so the one hourly unit is spent at the head that merges
-  rather than the head that opens. The measurement that decided it is on the ticket: on
-  `#488` the auto pass at open and the Converged re-request **competed for the same
-  unit**. Paying was declined by the operator on cost, which discharges the conditional
-  deferral the 2026-08-15 ruling had left standing.
-
-  **Do not read this as a working posture.** `#501` — this wrap-up's own PR, and the
-  first the ruling actually governs — requested review at its converged head and
-  **`gh pr view 501 --json reviews` stayed empty**: no review object, no coverage, no
-  verdict. That puts ruling 2 in question on the one ground that matters: it moved the
-  whole review budget onto a request path that then did not deliver. Ruling 1
-  (`auto_incremental_review: false`) is untouched and still measured. The account and the
-  options it leaves are on `#372`; the next PR against this `main` is the second data
-  point.
-
-  **The evidence is stated as the empty review list on purpose.** The bot's own status
-  comments rewrite themselves in place, and successive readings of one comment on `#501`
-  gave different accounts of what had happened — two of which reached this file or that
-  ticket before being corrected. **How many times it was rewritten is not knowable**:
-  `updated_at` exposes only the most recent edit, so any count is a floor, and the count
-  I first wrote here was wrong before the commit landed. That is the point rather than an
-  aside — a tally off that surface is a claim about when you looked. The absent review
-  object is not.
-- **`#44` ruled: report it, never gate on it.** `review_bots.comment_verdicts` surfaces a
-  comment-borne clean verdict; no gate reads it. Direction (a) — parse it into `coverage`
-  so the gate self-clears — was declined because the failure modes are not symmetric:
-  keying the *gate* on a reviewer's prose lets an upstream wording change decide merges,
-  while keying a *report* on it lets a line go missing. `bot_review_coverage`'s docstring
-  was already the standing argument, and is cited rather than restated.
-- **`#494`'s fail-open shipped a fix: the objection now has its own read** over verdict
-  states only. Directions 2 and 3 were declined on the ticket. The two reductions are one
-  parameterized walk, not two copies — `#447` (the record for that shape) is why.
-  Worded this way deliberately: "`#494` closed by …" reads on a skim as the *ticket*
-  being closed, which it is not.
-
-**Learned**
-
-- **Three rulings' worth of panel found no gate defect; the thing that would have reached
-  an adopter was a CHANGELOG heading.** `#499`'s entry was headed with the *issue* number,
-  and `upgrade.md` Step 3 extracts by *PR* number — so a `BREAKING (gate semantics)` entry
-  would have been invisible to the documented upgrade path (`#430`'s failure, on the file
-  written to prevent it). Found because a lens **ran** the extraction rather than reading
-  the file. Nothing in CI checks this correspondence.
-- **`#447`'s shape recurred three times in one session**, each time found by mutation and
-  never by reading: a new field added beside pinned siblings inherits exactly the gaps the
-  siblings had already closed (`#499`'s objections scoping; `#500`'s config key and its
-  render line). Logged to the inbox as a candidate rule rather than a ticket, because the
-  third occurrence is what makes it a pattern.
-- **Every fix round in this session produced a prose imprecision the next round found.**
-  That is the doctrine's own claim observed under its own procedure, and it is the
-  argument for the log-don't-fix carve-out — the cost of a round is another round's worth
-  of new prose to get wrong.
-- **A trigger heuristic `#44` had relied on since 2026-07-27 is falsified:** an explicit
-  review request does *not* reliably produce a review object. Recorded on the ticket with
-  the observation, and it retires "just re-request it" as operational advice.
-
-▶ Next: open the next PR and watch what its converged-head review request does — that is
-`#372`'s second data point and it decides whether ruling 2 stands, gets reverted, or is
-renamed to "the panel is the reviewer". Behind it: `#460` (the last standing operator
-ruling, untouched today) and `#489` (an unparseable `submittedAt` still outranks every
-real timestamp, so a standing objection cannot yet be fully relied on even after `#494`).
 
 ______________________________________________________________________
 
