@@ -21,7 +21,53 @@ The two probes an agent reaches for first both fail here in a way that reads as
 
 Do not conclude tests cannot run locally, and do not defer verification to CI, without
 having run `make test`. When claiming something is verified, name the command that
-established it and its actual result — #54 tracks making this a standing rule.
+established it and its actual result — #54 tracks making this a standing rule. When
+that result is a figure rather than a verdict, *Numbers in prose* below governs how
+you write it.
+
+## Numbers in prose
+
+**A number describing current state does not go in prose.** If a reader can count it,
+write the enumeration and let them; if a command prints it, name the command. This
+binds **every surface a session writes** — commit messages, PR bodies, code comments,
+docstrings, issue text, review replies — not only the narrative docs, which are not
+where it breaks. The shape it takes is a commit that grows a list and leaves the number
+describing it alone: the list is the thing being edited, the number is prose beside it,
+and the edit never reaches it (`#546` enumerates the occurrences). A value that is part
+of a contract is not a count of anything and is untouched by this — an exit code, a
+`config/dev-model.yaml` value, a budget, a version, an issue number.
+
+**A measured figure is stamped with its command, its revision and its date, or it is
+dropped.** The stamp is what makes the sentence a different kind of claim, not
+decoration on the same kind. *"The helper recognises three forms"* says what is true
+now, so the next commit falsifies it without touching it; *"`make test` at `<sha>` on
+`<date>` printed `<n> passed`"* says what one run did, and nothing later can falsify
+that. An unstamped figure is a current-state claim however it was meant, because no
+reader can date it.
+
+**So the question to ask of a number you are about to write is whether you counted it
+or read it.** Counted — off a list, off your sense of the session, off what you believe
+you just added — it does not go in: write the enumeration, or name the command that
+prints it. Read out of the output of a run, it goes in stamped. A number in prose is
+one of those or it is a defect.
+
+**Where this meets Verification, and how that resolves.** Verification asks for the
+command *and its actual result*, which is exactly what invites a figure into the
+sentence. Neither rule yields: Verification still requires the command and the result,
+and this section governs the form the result takes when it is a figure. **`actual` is
+the operative word — read the result back out of the run you are naming.** If you
+cannot point at the output the figure came from, because the run has scrolled or
+because you are counting what you believe you just added, you do not have the figure,
+and re-running to read it is the only way to get it. A figure written from expectation
+is the defect this section is mostly about, and the harder one to catch, because a
+stamp beside it reads as compliance. Most results are not figures at all — *"`make
+test` → green"* satisfies Verification whole and has nothing in it to go stale.
+
+`wrap-up.md` carries the handoff's application of this rule ("an event is not a
+tally") and stays self-contained rather than pointing here, because it ships to
+adopters whose `AGENTS.md` is their own file and need not carry this section. This
+section is the general rule and that is its handoff-specific case; they must not
+disagree.
 
 ## Ground rules
 
