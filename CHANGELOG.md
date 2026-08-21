@@ -42,6 +42,39 @@ starts.
 
 ---
 
+## #538 — 2026-08-21
+
+- **A pending review bot's `identity` is now resolved on a healthy poll, not
+  only on an outage-marked one** (`#535`). `review_bots.pending[].identity` and
+  `.trusted` were `""` / `false` for every mid-review row on the `gh` backend
+  and on REST's status-context surface, because `fetch_check_details` gated the
+  identity read on a row that could *cancel* a pending block. **If you pin
+  `identity: ""` or `trusted: false` on a healthy pending entry, that
+  expectation breaks** — a real reviewer's own pending check now reports its
+  creator and `trusted: true`. A REST check-*run* is unchanged; it already
+  carried `app.slug`. Cost while a bot check is pending: **one** extra REST
+  call (the plural `/commits/{sha}/statuses`), or **up to three** extra `gh`
+  invocations on the `gh` backend — a check-runs page and a statuses page
+  always, plus the head-move recheck only when those resolved at least one
+  identity. None once every bot row is terminal and unmarked.
+- **`⚠ review coverage` and `⚠ review owed` are now silent while a trusted bot
+  is mid-review** — the suppression `#521` and `#518` documented but which
+  never fired on the `gh` backend or for a REST status context. A REST **check
+  run** already resolved its creator from `app.slug` and was unaffected, so
+  whether you see a change here depends on your transport and on which surface
+  your reviewer posts. **If you assert on either line's presence during a bot's
+  pending window, that assertion inverts.** Neither line gates anything; `mergeable`,
+  `converged` and `merge_blockers` are unchanged.
+- **`⚠ review owed` is additionally silent for a bot whose outage is announced
+  on its own TRUSTED CHECK** (`#535` item 4) — it previously told you to request a
+  review from a reviewer that had just announced it could not run, in the same
+  render that prescribed the fallback panel. Two shapes still leave the line
+  firing, deliberately: an **untrusted** outage row cancelled nothing (`#95`),
+  and a **comment**-borne outage is a statement about the past that
+  `collect_comments` returns unscoped by head or age — one stale rate-limit
+  comment would otherwise silence the line for the rest of the PR's life. In
+  both, the reviewer is still owed a look.
+
 ## #527 — 2026-08-20
 
 - **`kit-manifest.json` now tracks the kit's own test suite** (`#493`): all 16
