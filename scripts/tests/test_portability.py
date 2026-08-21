@@ -3729,6 +3729,13 @@ def test_the_target_lines_noop_message_is_pinned(
     assert "nothing to move: 46 line(s) <= --target-lines 46." in capsys.readouterr().out
 
 
+def _is_path_constructor(node: ast.AST) -> bool:
+    """`Path` or `pathlib.Path`, as a callee."""
+    if isinstance(node, ast.Name):
+        return node.id == "Path"
+    return isinstance(node, ast.Attribute) and node.attr == "Path"
+
+
 def _is_repo_root(node: ast.AST) -> bool:
     """`REPO_ROOT`, however it is reached — a bare name or an attribute.
 
@@ -3754,14 +3761,24 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
     mentions this one. Re-derive with
     `grep -ln 'REPO_ROOT / "scripts"' scripts/tests/*.py`.)
 
-    **Known limitation, stated rather than left to be discovered.** This
-    recognizes one spelling: `REPO_ROOT / "scripts"`, plus attribute access and
-    `.joinpath(...)`. A lens confirmed by live mutation that two further
-    spellings reintroduce the identical defect and pass — binding the constant
-    to a local name first (`root = REPO_ROOT; root / "scripts"`), and hoisting
-    the segment (`SEG = "scripts"; REPO_ROOT / SEG`). Both need dataflow
-    analysis, which is out of proportion to a guard whose job is to make a
-    known regression loud rather than to be a type system. The guard is
+    **Known limitation, and the line it is drawn on.** Recognized:
+    `REPO_ROOT / "scripts"`, the same through an attribute
+    (`mod.REPO_ROOT / "scripts"`), `REPO_ROOT.joinpath("scripts", …)`, and
+    `Path(REPO_ROOT, "scripts", …)`.
+
+    NOT recognized, and both need dataflow analysis: binding the constant to a
+    local name first (`root = REPO_ROOT; root / "scripts"`), and hoisting the
+    segment (`SEG = "scripts"; REPO_ROOT / SEG`). That is the line — **needs
+    dataflow or not** — rather than a list of spellings someone happened to
+    think of. An earlier version of this paragraph presented itself as a
+    complete inventory while omitting `Path(REPO_ROOT, "scripts")`, which costs
+    exactly what `.joinpath` costs to detect; a lens found it, and the honest
+    repair was to close it rather than add it to the list. Anything else in the
+    no-dataflow class belongs in the code, not here.
+
+    Also unrecognized and deliberately so: `os.path.join(REPO_ROOT, "scripts")`.
+    This suite is pathlib throughout, so that form would be conspicuous on its
+    own. The guard is
     deliberately anchored on `REPO_ROOT` rather than matching any `/ "scripts"`:
     `tmp_path / "scripts"` is correct and common here, because the synthetic
     trees these tests build stand in for an adopter on the kit's default layout.
@@ -3774,18 +3791,69 @@ def _repo_root_slash_scripts_nodes(source: str) -> list[int]:
             continue
         if _is_repo_root(node.left):
             found.append(node.lineno)
-    # `REPO_ROOT.joinpath("scripts", …)` is path-identical to the form above and
-    # is pathlib's own idiom, so a refactor reaches it without meaning to. A lens
-    # confirmed it slipped past when this matched only the `/` operator.
+    # Two Call forms, both path-identical to the operator form above and both
+    # pathlib's own idiom, so a refactor reaches either without meaning to:
+    #
+    #   REPO_ROOT.joinpath("scripts", …)   — a method on the constant
+    #   Path(REPO_ROOT, "scripts", …)      — the constructor's varargs
+    #
+    # Lenses found each of them slipping past a narrower version of this
+    # function, one round apart. Neither needs dataflow, which is what
+    # distinguishes them from the two genuinely-excluded spellings below.
     for node in ast.walk(ast.parse(source)):
-        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+        if not isinstance(node, ast.Call):
             continue
-        if node.func.attr != "joinpath" or not _is_repo_root(node.func.value):
+        args = node.args
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "joinpath":
+            if not _is_repo_root(node.func.value):
+                continue
+        elif _is_path_constructor(node.func):
+            # `Path(REPO_ROOT, "scripts")` — the root is the FIRST argument, so
+            # the segment to check is the second.
+            if not (args and _is_repo_root(args[0])):
+                continue
+            args = args[1:]
+        else:
             continue
-        first = node.args[0] if node.args else None
+        first = args[0] if args else None
         if isinstance(first, ast.Constant) and first.value == "scripts":
             found.append(node.lineno)
     return sorted(found)
+
+
+# (source, detected) — the guard's contract, pinned on synthetic input rather
+# than on whatever happens to be on disk. Round 1 swept the real offenders out,
+# so the scanning test below has nothing left to find and every widening added
+# since has been mutation-provably dead: a lens disabled the attribute branch,
+# then the joinpath loop, then the rglob, and the suite stayed green each time.
+#
+# The NEGATIVE cases are the half worth having. Two of them are the documented
+# limitations, so if someone ever closes one, this fails and sends them to the
+# docstring that claims it is open — a limit nobody can quietly outgrow.
+_GUARD_CASES = [
+    ('x = REPO_ROOT / "scripts" / "a.py"', True),
+    ('x = mod.REPO_ROOT / "scripts" / "a.py"', True),
+    ('x = REPO_ROOT.joinpath("scripts", "a.py")', True),
+    ('x = Path(REPO_ROOT, "scripts", "a.py")', True),
+    ('x = pathlib.Path(REPO_ROOT, "scripts")', True),
+    # Correct and common here: these tests build synthetic trees standing in for
+    # an adopter on the kit's default layout.
+    ('x = tmp_path / "scripts" / "a.py"', False),
+    ('x = REPO_ROOT / "state"', False),
+    # Documented limitations. Both need dataflow.
+    ('root = REPO_ROOT\nx = root / "scripts"', False),
+    ('SEG = "scripts"\nx = REPO_ROOT / SEG', False),
+    # Documented non-goal: this suite is pathlib throughout.
+    ('x = os.path.join(REPO_ROOT, "scripts")', False),
+    # Prose is inert under a parser — the reason this is AST and not grep.
+    ('"""Do not write REPO_ROOT / \'scripts\' here."""', False),
+]
+
+
+@pytest.mark.parametrize(("source", "detected"), _GUARD_CASES)
+def test_the_engine_dir_guard_recognises_exactly_what_it_claims(source, detected):
+    """The guard's own behaviour, pinned independently of the tree it scans."""
+    assert bool(_repo_root_slash_scripts_nodes(source)) is detected
 
 
 def test_no_test_module_rebuilds_the_engine_dir_from_repo_root():
@@ -3810,11 +3878,20 @@ def test_no_test_module_rebuilds_the_engine_dir_from_repo_root():
     correct for everything that is genuinely repo-relative and not engine-
     relative: `docs/`, `.claude/`, `.agents/`, `kit-manifest.json`.
     """
-    offenders = {}
     # rglob, so `lib/state_paths/tests/` is covered too — AGENTS.md counts it as
     # part of the full suite, and a guard that stops at one test directory is a
     # guard with a documented blind spot.
-    for path in sorted(ENGINE_DIR.rglob("tests/*.py")):
+    scanned = sorted(ENGINE_DIR.rglob("tests/*.py"))
+    # Pins the rglob itself. A lens reverted it to `glob` and nothing failed,
+    # because the directory it stops reaching holds no offender today — so the
+    # widening was live coverage that no test could tell had gone.
+    directories = {path.parent.relative_to(ENGINE_DIR).as_posix() for path in scanned}
+    assert directories == {"tests", "lib/state_paths/tests"}, (
+        f"the scan no longer covers both test directories: {sorted(directories)}"
+    )
+
+    offenders = {}
+    for path in scanned:
         lines = _repo_root_slash_scripts_nodes(path.read_text(encoding="utf-8"))
         if lines:
             offenders[path.name] = lines
