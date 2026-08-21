@@ -217,7 +217,12 @@ friction-routing step is being skipped — not that triage is overdue.
 > scripts — are project-specific and left for you to wire
 > ([#6](https://github.com/topij/agentic-dev-kit/issues/6),
 > [#7](https://github.com/topij/agentic-dev-kit/issues/7)). The four core skills
-> (`session-start`, `wrap-up`, `parallel`, `pr-watch`) run out of the box.
+> (`session-start`, `wrap-up`, `parallel`, `pr-watch`) run out of the box — with one
+> exception worth knowing before you rely on it: `/wrap-up`'s **direct filing** route
+> reaches your tracker through whatever client your backend gives you, and ships as
+> doctrine like the two skills above rather than as a wired engine. Its consent gate
+> and duplicate check are prose the agent executes, not checks that fail. Everything
+> else in those four skills is engine-backed.
 
 ## That's the loop
 

@@ -7,8 +7,13 @@ End-of-session wrap-up. Update the living handoff and commit.
 Read `config/dev-model.yaml` first. In this workflow, `<handoff>`,
 `<handoff-history>`, and `<friction-log>` mean the corresponding values under
 `paths`; `<engine-dir>` means `paths.engines`; `<handoff-budget>` means the
-`budget` field of `<handoff>`'s entry under `doc_budgets`. A workflow invocation
-means the current agent's native adapter (`/name` in Claude or `$name` in Codex).
+`budget` field of `<handoff>`'s entry under `doc_budgets`. `<tracker>` means the
+backend named by `tracker.backend` and the project named by `tracker.project_name`,
+reached through whatever client that backend gives you — `gh issue create` for
+`github-issues`, the Linear client or MCP plus `tracker.linear.*` for `linear`, a
+backend's own CLI or API otherwise. `none` means this repo has no tracker; see the
+friction-routing step for what that implies. A workflow invocation means the current
+agent's native adapter (`/name` in Claude or `$name` in Codex).
 
 ## Steps
 
@@ -75,8 +80,18 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    it but latency.
 
    **Filing writes to a system outside this repo, so it needs the operator's
-   go-ahead.** Name the findings you intend to file, with their severities, and file
-   on their word. A decline is a park, not an argument.
+   go-ahead. Do not proceed until the operator confirms.** Name the findings you
+   intend to file, with their severities, and file on their word. A decline is a park,
+   not an argument.
+
+   **This route has no vendored engine and nothing mechanical enforces any of what
+   follows.** The sibling workflows that perform this same class of write —
+   `triage-friction-log`, and `post-merge-systemize`'s tracker step — say so plainly
+   about their own engines, and this one is weaker still: they at least name the tool
+   and the config keys. Here the consent gate, the availability test and the duplicate
+   search are all prose you are executing, with no check that would fail if you skipped
+   them. Read the rest of this step as a standard you are holding yourself to, not a
+   guard rail that will stop you.
 
    That checkpoint is deliberately **weaker** than `triage-friction-log`'s, and the
    difference is what decides when this route is available at all: that workflow is
@@ -104,6 +119,13 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
      but unwired. `init.sh` offers `none` as a first-class answer, so this is an
      ordinary configuration, not an edge case.
    - **The create failed, or the credential is missing.**
+   - **You cannot tell whether the create landed** — a timeout, a dropped connection,
+     an error after the write. Do not retry blind: read `<tracker>` back and look for
+     the item. If it is there, the filing succeeded and the go-ahead is spent. If you
+     still cannot tell, park the entry **and say in the entry that a duplicate may
+     exist**, naming what you searched. The archive-sweep step below treats this same
+     ambiguity class the same way, and for the same reason — an unverified write is
+     not a completed one.
 
    A finding that reached neither the tracker nor the inbox is the one outcome this
    step must never produce, and every bullet above is a way to produce it.
@@ -231,9 +253,8 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
      blocks only* — `git show HEAD:<handoff>` — and paste them back into your
      copy. Do **not** `git checkout -- <handoff>`: that discards every
      uncommitted edit in the file, which at this point in the workflow is this
-     whole session's block, its `▶ Next:` line, and anything else the steps above
-     wrote there — the handoff update, any filing this session's friction routing
-     recorded, and the next-session starter.
+     whole session's block, its `▶ Next:` line, and any filing this session's
+     friction routing recorded there.
 
    Do not continue to the commit step until the sweep reported success. Stage
    **both** files (`<handoff>` + `<handoff-history>`) into this commit. If
