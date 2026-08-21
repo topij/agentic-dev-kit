@@ -49,10 +49,17 @@ starts.
   `kit-manifest.json`** (`#243`). Its doctrine previously lived only in
   `.claude/commands/triage-friction-log.md`, which no manifest entry covered,
   so `/upgrade` never refreshed it and `kit_doctor` could not report it as
-  `differs` however stale it was. **If you installed that command at an earlier
-  kit version, your next `kit_doctor` run reports the new workflow as
-  `missing`** until you take it, and `/upgrade` will offer it like any other
-  kit-owned doc. **If you edited your copy of the Claude command**, your edits
+  `differs` however stale it was. **Do not expect your first `kit_doctor` run to
+  name the new workflow at all.** `inspect()` iterates the `KIT_OWNED` tuple in
+  the *running* script and consults `--manifest` only for the hash of a path
+  that tuple already knows, so the run `/upgrade` Step 1 prescribes — your own
+  installed `kit_doctor.py` against the new kit's manifest — reports
+  `0 missing` and never mentions it. What that run does show is
+  `scripts/kit_doctor.py` itself as `differs`; taking that update is what makes
+  the workflow visible. **Afterwards** a pre-existing baseline gets an
+  informational `new-upstream` block — never a finding — and a repo with no
+  baseline recorded reports `missing`. No state here fails a gate, and
+  `/upgrade` offers the doc either way. **If you edited your copy of the Claude command**, your edits
   are in a file that is now a thin pointer — move them into the shared doc or
   they are lost on the next refresh. A new Codex binding ships at
   `.agents/skills/triage-friction-log/`; ignore it if you do not run Codex.
