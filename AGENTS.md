@@ -10,8 +10,11 @@ into a runtime-specific file.
 ## Verification
 
 **`make test` is the verification command for this repo.** It runs the full suite
-(`scripts/lib/state_paths/tests` + `scripts/tests`) in tens of seconds, supplying its
-own dependencies via `uv run --with pytest --with pyyaml`.
+(`scripts/lib/state_paths/tests` + `scripts/tests`), supplying its own dependencies via
+`uv run --with pytest --with pyyaml`. It takes **minutes, not seconds** — a default tool
+timeout cuts it off partway, and the truncation reads as a hang rather than as a
+timeout, so raise yours before you start. pytest's summary line prints the elapsed time
+for the run you actually did.
 
 The two probes an agent reaches for first both fail here in a way that reads as
 "pytest is unavailable in this environment". Neither is evidence of that:
@@ -29,9 +32,10 @@ you write it.
 
 **A number describing current state does not go in prose.** If a reader can count it,
 write the enumeration and let them; if a command prints it, name the command. This
-binds **every surface a session writes** — commit messages, PR bodies, code comments,
-docstrings, issue text, review replies — not only the narrative docs, which are not
-where it breaks. The shape it takes is a commit that grows a list and leaves the number
+binds **every surface a session writes**: commit messages, PR bodies, code comments,
+docstrings, issue text, review replies, and the narrative docs. The docs were never the
+problem — `wrap-up.md` has bound them all along, and the other surfaces are where it
+breaks. The shape it takes is a commit that grows a list and leaves the number
 describing it alone: the list is the thing being edited, the number is prose beside it,
 and the edit never reaches it (`#546` enumerates the occurrences). A value that is part
 of a contract is not a count of anything and is untouched by this — an exit code, a
