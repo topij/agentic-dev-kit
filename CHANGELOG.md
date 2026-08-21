@@ -52,19 +52,27 @@ starts.
   `identity: ""` or `trusted: false` on a healthy pending entry, that
   expectation breaks** — a real reviewer's own pending check now reports its
   creator and `trusted: true`. A REST check-*run* is unchanged; it already
-  carried `app.slug`. Costs one extra API read per poll while a bot check is
-  pending, and none once every bot row is terminal and unmarked.
+  carried `app.slug`. Cost while a bot check is pending: **one** extra REST
+  call (the plural `/commits/{sha}/statuses`), or **three** extra `gh`
+  invocations on the `gh` backend (a check-runs page, a statuses page, and the
+  head-move recheck). None once every bot row is terminal and unmarked.
 - **`⚠ review coverage` and `⚠ review owed` are now silent while a trusted bot
-  is mid-review** — the suppression `#521` and `#518` documented but which had
-  never fired. **If you assert on either line's presence during a bot's pending
-  window, that assertion inverts.** Neither line gates anything; `mergeable`,
+  is mid-review** — the suppression `#521` and `#518` documented but which
+  never fired on the `gh` backend or for a REST status context. A REST **check
+  run** already resolved its creator from `app.slug` and was unaffected, so
+  whether you see a change here depends on your transport and on which surface
+  your reviewer posts. **If you assert on either line's presence during a bot's
+  pending window, that assertion inverts.** Neither line gates anything; `mergeable`,
   `converged` and `merge_blockers` are unchanged.
 - **`⚠ review owed` is additionally silent for a bot whose outage is announced
-  on a TRUSTED surface** (`#535` item 4) — it previously told you to request a
+  on its own TRUSTED CHECK** (`#535` item 4) — it previously told you to request a
   review from a reviewer that had just announced it could not run, in the same
-  render that prescribed the fallback panel. An **untrusted** outage row still
-  leaves the line firing, deliberately: it cancelled nothing (`#95`), so the
-  reviewer is still owed a look.
+  render that prescribed the fallback panel. Two shapes still leave the line
+  firing, deliberately: an **untrusted** outage row cancelled nothing (`#95`),
+  and a **comment**-borne outage is a statement about the past that
+  `collect_comments` returns unscoped by head or age — one stale rate-limit
+  comment would otherwise silence the line for the rest of the PR's life. In
+  both, the reviewer is still owed a look.
 
 ## #527 — 2026-08-20
 

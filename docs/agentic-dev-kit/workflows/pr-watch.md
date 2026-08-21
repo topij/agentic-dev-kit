@@ -400,12 +400,24 @@ Self-pace on a bounded cadence — don't busy-wait:
     Nothing in `pr_watch.py` performs the request — it observes only. It does,
     however, **say when one is owed**, and name who owes it: at convergence,
     for each configured bot with no review covering the head, no comment-borne
-    verdict, and no review in flight — and only when the reviewer read
-    succeeded — the poll prints `⚠ review owed` naming that bot. That line is
+    verdict, no review in flight, and no outage the bot announced on its own
+    **check** — and only when the reviewer read succeeded — the poll prints
+    `⚠ review owed` naming that bot. That line is
     reported and gates nothing, deliberately — blocking there would wedge the
     loop on exactly the repos whose reviewer cannot answer. Its job
     is to make this bullet something you are *told about* rather than something you
-    must remember to come back to, which is the failure `#518` records. And note
+    must remember to come back to, which is the failure `#518` records.
+
+    The outage term is the one that surprises: during a trusted outage window the
+    line stays **silent**, because the render already prints `⚠ review unavailable`
+    beside it naming the fallback panel, and telling you to request a review from a
+    reviewer that has just announced it cannot run prescribes the one action the
+    outage rules out (`#535`). Two qualifiers on that, both load-bearing. It must be
+    the bot's own **check** — a *comment* announcing an outage is a statement about
+    the past, unscoped by head or age, so one stale rate-limit comment would
+    otherwise silence this line for the rest of the PR's life. And it must be
+    **trusted**: an outage row whose creator is not the reviewer cancelled nothing
+    (`#95`), so the reviewer is still owed a look and the line still fires. And note
     what this bullet does **not** say: it does not tell you to `--record-review`
     the bot's own verdict. That receipt vocabulary describes fallback passes, and
     a bot-reviewed head needs no receipt — its coverage *is* the evidence

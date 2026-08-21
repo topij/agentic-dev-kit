@@ -5287,6 +5287,78 @@ def test_an_announced_outage_does_not_also_demand_a_review_request(
     assert "review owed" not in out
 
 
+def test_a_STALE_OUTAGE_COMMENT_still_leaves_the_review_owed() -> None:
+    """The other half of #535 item 4's trust term, and the one a `.get` default
+    gets wrong.
+
+    `summarize_review_bots` states the rule this obeys: `collect_comments`
+    returns the whole PR history unscoped by head or age, so "this bot was
+    rate-limited earlier on this PR" is the NORMAL state of a later poll. A
+    check is a statement about the bot's state NOW; a comment is a statement
+    about the past. The engine already refuses to let a comment CANCEL a pending
+    block for that reason — and accounting on one here would let a single stale,
+    already-acknowledged outage comment silence "nobody has reviewed this" for
+    the rest of the PR's life, with `coverage: []` throughout.
+
+    The shape that makes this easy to get wrong: a comment-surface entry carries
+    NO `trusted` key at all — only the check surface does — so any defaulted
+    read (`.get("trusted", True)`) treats an unauthenticated comment author as
+    the reviewer. The first cut of this fix did exactly that; the adversarial
+    lens on #538 executed it and found `review owed` absent on a converged PR
+    the bot had never reviewed.
+    """
+    pr_watch = _load_pr_watch()
+    raw = {
+        "id": "IC_stale_outage",
+        "author": {"login": "coderabbitai"},
+        "createdAt": "2026-07-25T10:00:00Z",
+        "body": "Review limit reached — I could not review this.",
+        "url": "https://example.invalid/c/1",
+    }
+    # The comment goes on the VIEW, not in `build_report`'s second positional —
+    # that one is the INLINE list. An issue comment reaches the report only
+    # through the view, which is also the surface `--mark-seen`'s keys are
+    # derived from.
+    view = _green_view(comments=[raw])
+
+    # ACKNOWLEDGED, which is the whole point. An unacked outage comment blocks
+    # `converged` by itself, so the dangerous state is only reachable AFTER
+    # `--mark-seen` — the comment leaves `new_comments` and, before this fix,
+    # took the `review owed` line with it while `coverage` stayed empty.
+    seen = {
+        pr_watch._comment_key("issue", raw),
+        pr_watch._content_key("issue", "coderabbitai", raw["body"]),
+    }
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        seen,
+        # No CHECK-surface outage: the bot's current state carries no outage at
+        # all. The only outage signal anywhere is the historical comment.
+        check_details=[],
+        now=NOW,
+    )
+
+    assert report["new_comments"] == [], (
+        "the acked comment must be out of new_comments — otherwise this test is "
+        "measuring the unacked state, where `converged` is False anyway"
+    )
+
+    entry = report["review_bots"]["unavailable"][0]
+    assert entry["surface"] == "comment"
+    assert "trusted" not in entry, (
+        "a comment-surface entry must carry no trust field — if this ever gains "
+        "one, re-derive whether `accounted` should read it"
+    )
+    assert report["review_bots"]["coverage"] == []
+    assert report["converged"] is True
+
+    out = pr_watch.render(report)
+    assert "review unavailable" in out
+    assert "review owed" in out
+
+
 def test_a_FORGED_outage_still_leaves_the_review_owed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

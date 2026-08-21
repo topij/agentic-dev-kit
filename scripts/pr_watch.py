@@ -1472,13 +1472,21 @@ class CheckDetails(NamedTuple):
 
 
 def _outage_row_present(rows: list[dict], bots: tuple[str, ...]) -> bool:
-    """Whether any row could cancel a pending block — i.e. whether identity matters.
+    """Whether any row could CANCEL a pending block — one reason identity matters.
 
-    The precondition for the whole #95 identity read. A poll with no
-    bot-named, outage-marked row has no fail-open decision to make, so resolving
-    identities would cost a round trip (two, on the `gh` backend) to change
-    nothing. This is the overwhelmingly common case: a healthy reviewer never
-    matches it.
+    **No longer the fetch precondition, and reading it as one is #535.** It was
+    that until identity gained a second consumer: `trusted` on a pending entry,
+    which the report's mid-review deference reads. Gating the fetch here left
+    that consumer judging an unresolved identity — which reads as untrusted — so
+    the deference was inert for the whole pending window. The precondition is now
+    :func:`_identity_read_needed`, which calls this as its first term; this
+    function's only production caller. Keep the two distinct: this one answers
+    "could a row cancel", not "does identity matter to anyone this poll".
+
+    A poll with no bot-named, outage-marked row has no fail-open cancel decision
+    to make. That is the overwhelmingly common case — a healthy reviewer never
+    matches it — but it no longer implies the fetch is skipped, because a healthy
+    reviewer mid-review does match the wider predicate.
 
     Deliberately evaluated over the SAME predicates
     :func:`summarize_review_bots` uses — an unanchored name match and
@@ -4302,7 +4310,7 @@ def render(report: dict) -> str:
     #     is coming; telling you to request one spends a second unit on a review
     #     already in flight. Same `reviewing_trusted` set the coverage warning
     #     above computes, and for the same reason.
-    #   - Silent where the bot is resolved UNAVAILABLE on a TRUSTED surface.
+    #   - Silent where the bot is resolved UNAVAILABLE on a TRUSTED CHECK.
     #     #535 item 4. The sanctioned remedy for an announced outage is the
     #     fallback panel, and the `⚠ review unavailable` line below prescribes
     #     it in the same render — so "request one now" here contradicts the line
@@ -4313,6 +4321,20 @@ def render(report: dict) -> str:
     #     it without that term would hand a same-repo PR a second way to silence
     #     "nobody has reviewed this" about its own diff — the defect #521 closed
     #     one branch of, re-entered through the outage surface.
+    #
+    #     **The `surface == "check"` term is the load-bearing half, and it is
+    #     not symmetry either.** `summarize_review_bots` states the rule this
+    #     obeys: `collect_comments` returns the whole PR history unscoped by
+    #     head or age, so "this bot was rate-limited earlier on this PR" is the
+    #     NORMAL state of a later poll — a check is a statement about the bot's
+    #     state NOW, a comment is a statement about the past, and only the
+    #     former may cancel. Accounting on a comment lets one stale, already
+    #     acknowledged outage comment silence "nobody has reviewed this" for
+    #     the rest of the PR's life, with `coverage: []` the whole time. That is
+    #     #19 walking back in through the door built to close it, one layer up
+    #     — on the report line rather than the cancel. A comment-surface entry
+    #     also carries no `trusted` key at all (only the check surface does), so
+    #     any defaulted read of it necessarily trusts an unauthenticated author.
     #   - Silent where the review-bot read FAILED (`signal` is not `ok`). The
     #     hedge printed above says reviewer state could not be read this poll;
     #     an absolute about reviewer state underneath it would retract that
@@ -4377,7 +4399,7 @@ def render(report: dict) -> str:
         | {
             e["bot"]
             for e in bots.get("unavailable") or []
-            if e.get("trusted", True)
+            if e.get("surface") == "check" and e.get("trusted")
         }
     )
     unreviewed = sorted(set(_REVIEW_BOTS) - accounted)
