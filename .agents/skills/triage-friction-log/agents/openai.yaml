@@ -1,0 +1,4 @@
+interface:
+  display_name: "Triage Friction Log"
+  short_description: "Graduate the friction inbox to your tracker"
+  default_prompt: "Use $triage-friction-log to turn the friction-log inbox into tracker tickets, after operator approval."

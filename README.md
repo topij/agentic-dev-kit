@@ -252,7 +252,7 @@ Each piece maps to one or more of the ten principles in
 | `docs/friction-log.md` + `docs/friction-log-archive.md` | #2 Friction flywheel | Append-only inbox for bugs and rough edges, triaged on a cadence: single incidents route down to your tracker, real patterns graduate up into a rule. |
 | `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above, plus both root entry points — `AGENTS.md` (the contract every runtime reads) and `CLAUDE.md` (which imports it, since Claude Code reads only the latter) — on adopt or upgrade. Never overwrites one already in use. |
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
-| `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, and `pr-watch`. |
+| `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, `pr-watch`, `triage-friction-log`, `adopt`, and `upgrade` — every workflow except `post-merge-systemize`. |
 | `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the `--headless` JSON descriptor, the lane-contract preamble, the fan-out recipe. |
 | `.claude/commands/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows. Claude ships eight commands: the four wired workflows (`session-start`, `wrap-up`, `parallel`, `pr-watch`) plus `triage-friction-log`, `post-merge-systemize`, `adopt`, and `upgrade`. |
 | `scripts/check_memory_budget.py` | #1, #8 Mechanism over memory | A `SessionStart` hook (wired in `.claude/settings.json`) that warns when an agent-memory file outgrows its budget — the memory-side counterpart to `check_doc_budget.py`. |
@@ -280,16 +280,21 @@ is not shipped, so the doctrine there is aspirational until it's vendored.
 [Issue #7](https://github.com/topij/agentic-dev-kit/issues/7) tracks vendoring those
 engines. Read `PRINCIPLES.md` for both principles' full statement.
 
-**Four workflows ship wired for Claude and Codex; two ship as Claude-side doctrine.**
-`session-start`, `wrap-up`, `parallel`, and `pr-watch` come with their engine scripts
-and both runtime adapters. `triage-friction-log` and `post-merge-systemize` document
-the flywheel's
-triage and pattern-finding mechanism, but their deterministic engines are
-project-specific and left for you to wire — see the banner atop each of those two skill
-files. What is missing, precisely — two integrations plus five scripts, every one of the five
+**Two axes, and they are independent — runtime coverage is not engine wiring.**
+On *runtime coverage*, everything but `post-merge-systemize` now has a runtime-neutral
+definition under `docs/agentic-dev-kit/workflows/` plus thin Claude and Codex adapters
+over it; `post-merge-systemize` is the last workflow whose doctrine still lives only in
+its Claude command, and [issue #243](https://github.com/topij/agentic-dev-kit/issues/243)
+tracks the rest of that split. On *engine wiring*, `session-start`, `wrap-up`, `parallel`,
+and `pr-watch` come with their engine scripts; `triage-friction-log` and
+`post-merge-systemize` document the flywheel's triage and pattern-finding mechanism but
+leave their deterministic engines project-specific and to you — see the banner atop each.
+So `triage-friction-log` reaches both runtimes and is still unwired: the two axes move
+separately, and conflating them is what let its doctrine sit forked in an adopter's tree
+for months. What is missing, precisely — two integrations plus five scripts, every one of the five
 verified absent from `scripts/`: a tracker client, a notify channel, `scripts/fetch_merged_prs.py` (the forge-API fetcher), `scripts/digest_merged_prs.py`
 (the slimmer that consumes it), `scripts/heartbeat_cli.py`, and `triage-friction-log`'s own
-`scripts/triage_friction_log.py` + `scripts/finalize_triage.py`.
+`triage_friction_log.py` + `finalize_triage.py` (under `paths.engines`).
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
 behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)
 tracks the systemize side.
