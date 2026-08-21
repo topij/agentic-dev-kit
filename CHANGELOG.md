@@ -59,9 +59,14 @@ starts.
   the workflow visible. **Afterwards** a pre-existing baseline gets an
   informational `new-upstream` block — never a finding — and a repo with no
   baseline recorded reports `missing`. No state here fails a gate, and
-  `/upgrade` offers the doc either way. **If you edited your copy of the Claude command**, your edits
-  are in a file that is now a thin pointer — move them into the shared doc or
-  they are lost on the next refresh. A new Codex binding ships at
+  `/upgrade` offers the doc either way. **If you edited your copy of the Claude command, your edits
+  survive — and that is the hazard, not a reassurance.** `/upgrade` Step 4
+  keeps an adopter's existing runtime adapter rather than refreshing it, so
+  your thick edited copy stays in place and keeps being what your
+  `triage-friction-log` invocation runs. It will not be overwritten, and it
+  will not be updated either: every future change to this workflow lands in the
+  shared doc. Move your edits there and let the adapter become a pointer, or
+  accept that you are pinned to your fork. A new Codex binding ships at
   `.agents/skills/triage-friction-log/`; ignore it if you do not run Codex.
 - **The workflow's paths are now resolved from `config/dev-model.yaml` instead
   of hardcoded.** It named `docs/friction-log.md` and `scripts/<engine>.py`
