@@ -88,7 +88,12 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    is more often than it looks:
 
    - **No operator in the session** — a scheduled, looped, or otherwise unattended
-     wrap-up. The inbox is the route that needs no permission.
+     wrap-up. Detect it the way the rest of the kit does rather than by feel: your
+     cron/CI runner's env signal, any of `DEVKIT_CI_ENV_VARS` (default
+     `JOB_NAME,CI,GITHUB_ACTIONS,GITLAB_CI,BUILDKITE`) — the same signal `pr-watch`
+     uses to keep an automated PR out of an unattended watch loop. A run that cannot
+     establish an operator is present does not have one. The inbox is the route that
+     needs no permission.
    - **No tracker to file into** — `tracker.backend` is `none`, or a backend is named
      but unwired. `init.sh` offers `none` as a first-class answer, so this is an
      ordinary configuration, not an edge case.
@@ -109,9 +114,15 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
    of the guarantees `triage-friction-log`'s frozen-inbox snapshot gives, and it will
    miss a duplicate phrased differently — so say what you searched when you name the
    finding to the operator. **A duplicate is not nothing to report.** Add the
-   occurrence to the existing item rather than opening a second one: a second
-   occurrence is the evidence Principle #2 routes *up* on, and it is lost if the
-   finding is silently dropped.
+   occurrence to the existing item rather than opening a second one — on the same
+   go-ahead as a new filing, since a comment is a write to that system too.
+
+   Know what that does and does not buy. Nothing in this kit scans a tracker item's
+   comments for recurrence, so an occurrence recorded there is visible to a reader of
+   that item and to no periodic pass. The inbox is the only surface with one, which is
+   why *the point is accumulation* is a park condition above rather than a filing
+   note: if what makes the finding matter is that it might recur, park it and let
+   `triage-friction-log` see the pile.
 
    **Park it in `<friction-log>`** — a short entry under a dated `## YYYY-MM-DD`
    heading carrying the observed issue, a severity (**H**/**M**/**L**), and whichever
@@ -126,9 +137,14 @@ means the current agent's native adapter (`/name` in Claude or `$name` in Codex)
      **pattern** up into a rule, and a pattern is only visible once its instances
      share a home; the tracker is not that home.
 
-   **Severity is not the test.** It is the most tempting one and it is the wrong one:
-   an **M** carrying all three parts is more actionable than an **H** carrying none
-   ([`#310`](https://github.com/topij/agentic-dev-kit/issues/310)).
+   **Severity is not the test for whether a finding is issue-shaped.** It is the most
+   tempting one and it is the wrong one for *that* question: an **M** carrying all
+   three parts is more actionable than an **H** carrying none
+   ([`#310`](https://github.com/topij/agentic-dev-kit/issues/310)). Severity still
+   decides plenty — it rides along on the ticket, and a workflow mining a large
+   population of findings may add its own worth-gate on top of this one, as
+   `post-merge-systemize` does. What it must not decide is whether a complete finding
+   is ready to be a ticket.
 
    Two consequences follow, and both look like the workflow misbehaving if you are
    not expecting them. The inbox gets **smaller and less certain** — what stays in it

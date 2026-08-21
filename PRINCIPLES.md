@@ -38,8 +38,9 @@ not blocks) rather than left to discipline alone.
 
 **Statement.** Every session that surfaces friction — a bug, an awkward workflow, a
 recurring annoyance — records it immediately, at the moment it's fresh, and routes it
-by how well it is understood. A finding the session can already explain goes straight
-to the tracker as a work item; one it cannot yet explain goes to a lightweight inbox.
+by how completely it is understood. A finding the session can already reproduce,
+explain *and* say how to fix goes straight to the tracker as a work item; one missing
+any of those three goes to a lightweight inbox.
 On a regular cadence that inbox is triaged: single incidents get filed as tracked work
 items or simply noted; patterns that recur across multiple occurrences graduate into a
 permanent rule, check, or process change.

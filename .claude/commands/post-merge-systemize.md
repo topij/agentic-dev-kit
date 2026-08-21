@@ -28,7 +28,10 @@ status DM and exit. The pattern-finding half of the friction flywheel (Principle
 > **The cardinal discipline: NO retro-policing.** A normal week produces a "no
 > patterns" DM, *not* a CLAUDE.md edit. Per-PR or single-incident findings do **not**
 > graduate to always-loaded prompt rules — they go to the friction-log inbox (or the
-> tracker if high-severity). Only a pattern spanning **≥2 distinct PRs** (the
+> tracker if high-severity). That severity gate answers *is this worth a ticket*, over
+> the large population a week of merged PRs produces; it is not the *is this
+> issue-shaped* test `wrap-up`'s friction-routing step applies to a single finding, and
+> the two compose rather than compete. Only a pattern spanning **≥2 distinct PRs** (the
 > `pattern_threshold`) earns a rule edit. Bikeshedding CLAUDE.md weekly is the
 > explicit failure mode this skill must avoid. When in doubt, route *down* (inbox),
 > not *up* (rule).

@@ -173,8 +173,10 @@ and what's next…
 
 …and routes any friction you hit. Anything you can already explain — a
 reproduction, a named mechanism, *and* a fix — it offers to file straight to your
-tracker, because a triage pass could add nothing to it. It files on your go-ahead,
-and parks the finding instead if you decline or there is no tracker to file into. What you *can't* yet explain goes to
+tracker, because a triage pass could add nothing to it. It files on your go-ahead, and
+parks the finding instead whenever that route is unavailable — you decline, there is no
+tracker configured, the create fails, or nobody is there to ask because the session is
+unattended. What you *can't* yet explain goes to
 `docs/friction-log.md` while it's fresh:
 
 ```markdown
