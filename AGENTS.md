@@ -11,10 +11,10 @@ into a runtime-specific file.
 
 **`make test` is the verification command for this repo.** It runs the full suite
 (`scripts/lib/state_paths/tests` + `scripts/tests`), supplying its own dependencies via
-`uv run --with pytest --with pyyaml`. It takes **minutes, not seconds** — a default tool
-timeout cuts it off partway, and the truncation reads as a hang rather than as a
-timeout, so raise yours before you start. pytest's summary line prints the elapsed time
-for the run you actually did.
+`uv run --with pytest --with pyyaml`. **It is long-running** — a default tool timeout
+cuts it off partway, and the truncation reads as a hang rather than as a timeout, so
+raise yours before you start. pytest's summary line prints the elapsed time for the run
+you actually did.
 
 The two probes an agent reaches for first both fail here in a way that reads as
 "pytest is unavailable in this environment". Neither is evidence of that:
@@ -39,7 +39,15 @@ breaks. The shape it takes is a commit that grows a list and leaves the number
 describing it alone: the list is the thing being edited, the number is prose beside it,
 and the edit never reaches it (`#546` enumerates the occurrences). A value that is part
 of a contract is not a count of anything and is untouched by this — an exit code, a
-`config/dev-model.yaml` value, a budget, a version, an issue number.
+`config/dev-model.yaml` value, a budget **ceiling** (never the live count against it),
+a version, an issue number.
+
+**Naming the command covers the number and not the verdict built on it.** Dropping the
+digit while keeping the judgement it supported is the halfway fix, and it is the half
+that failed: *"over budget — `check_doc_budget.py` prints the live figure"* has no
+figure left in it and was false within hours anyway (`#258`). `over budget`,
+`converged`, `passing`, `clean` are the same claim as the number they replaced, wearing
+a word. Drop the claim, not just the digits.
 
 **A measured figure is stamped with its command, its revision and its date, or it is
 dropped.** The stamp is what makes the sentence a different kind of claim, not
