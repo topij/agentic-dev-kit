@@ -3256,8 +3256,24 @@ def _upgrade_commands() -> list[str]:
             chunks.append(match.group(2))
     rest.append(joined[cursor:])
 
-    chunks.extend(re.findall(r"`([^`]+)`", "".join(rest), re.DOTALL))
-    return [re.sub(r"\s+", " ", chunk) for chunk in chunks if "uv run" in chunk]
+    # Inline spans need a runner word; fenced shell blocks do NOT, and the
+    # asymmetry is deliberate. A ```bash block IS a command by declaration —
+    # everything in it is prescribed — so filtering it further would let a
+    # future `python3 <engine-dir>/…` line escape merely by not saying
+    # `uv run`. Every invocation in this document happens to use `uv run`
+    # today, which is exactly the condition under which that hole stays
+    # invisible until someone adds the seventh command.
+    #
+    # An inline span has no such declaration, so prose has to be told apart
+    # from instruction, and a runner word is the marker. The list is
+    # deliberately wider than this document currently needs.
+    runners = ("uv run", "python3 ", "python ", "bash ", "sh ", "./")
+    inline = [
+        span
+        for span in re.findall(r"`([^`]+)`", "".join(rest), re.DOTALL)
+        if any(runner in span for runner in runners)
+    ]
+    return [re.sub(r"\s+", " ", chunk) for chunk in [*chunks, *inline]]
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
