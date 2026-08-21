@@ -143,14 +143,22 @@ from a first report.** `CHANGELOG.md`'s `#553` entry is a worked instance: the
 workflow doc it added was invisible to a pre-upgrade `kit_doctor` for this exact
 reason, and named nowhere until `kit_doctor.py` itself was refreshed.
 
-**The same blind spot applies one level up, to this very file.** `upgrade.md` is
-itself kit-owned (`kit-manifest.json`) and is only refreshed in Step 4 — so the copy
-that governed Step 0 and governs this step may itself predate a fix to the workflow
-(`#544` anchored every engine invocation here to `$REPO`; a repo upgrading from before
-it is still reading the unanchored prose). Diff
-`"$KIT/docs/agentic-dev-kit/workflows/upgrade.md"` against
-`"$REPO/docs/agentic-dev-kit/workflows/upgrade.md"` now, while this step is still
-read-only; if they differ, finish this upgrade following `$KIT`'s copy.
+**A related risk sits one level up, in this very file — and it is timing, not the
+invisibility described above.** `upgrade.md` is itself kit-owned (`kit-manifest.json`,
+tracked in `KIT_OWNED` since `#337`, long before either paragraph on this page) — so,
+unlike a file the running `kit_doctor.py` has never heard of, an out-of-date copy of
+`upgrade.md` is not invisible: it correctly reports `differs`/`STALE` in the very run
+above, the same as any other tracked file. The gap is that this file is reconciled in
+**Step 4** ("Shared workflows … same state logic as engines"), while Steps 0–3 already
+ran on whatever copy sat on disk before you got there — so an out-of-date `upgrade.md`
+has already shaped what you just did, its own `differs` line in this report
+notwithstanding (`#544` anchored every engine invocation here to `$REPO`; a repo
+upgrading from before it ran Steps 0–3 against the unanchored prose). Confirm now,
+while this step is still read-only: diff
+`"${KIT:?KIT is not set — re-run Step 0}/docs/agentic-dev-kit/workflows/upgrade.md"`
+against
+`"${REPO:?REPO is not set — re-run Step 0}/docs/agentic-dev-kit/workflows/upgrade.md"`;
+if they differ, finish this upgrade following `$KIT`'s copy.
 
 **What `differs` splits into depends on whether this repo has a *trusted* baseline.** A
 baseline is `kit-manifest.json` here recording what *this repo installed*, written by
