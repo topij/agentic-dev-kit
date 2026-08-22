@@ -4703,9 +4703,10 @@ def test_the_merge_wrapper_reads_a_coverage_route_report_as_mergeable() -> None:
     # loud failure, it was a SILENT FALSE PASS. In an adopter vendoring engines
     # at `scripts/devkit`, `REPO_ROOT / "scripts" / "dev_session.sh"` still
     # EXISTS: it is that repo's own wrapper sitting at the kit's default path.
-    # Not an unrelated script — a FORK. cs-toolkit's carries the kit's
-    # merge-gate extraction with a hardening the kit itself lacks (`#537`), so
-    # the assertion did not merely read some other file: it certified a
+    # Not an unrelated script — a FORK. cs-toolkit's carried the kit's
+    # merge-gate extraction with a hardening the kit itself LACKED until `#558`
+    # ported it (`#537`), so the assertion did not merely read some other file:
+    # it certified a
     # DIVERGED COPY of the very mechanism it exists to pin, and reported green.
     # This assertion ran against the wrong file and passed — green for the wrong
     # reason, in the one test file adopters actually install, and in the file

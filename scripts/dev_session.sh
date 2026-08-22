@@ -701,7 +701,24 @@ row = rows[0]
 owner = row.get("headRepositoryOwner") or {}
 if isinstance(owner, dict):
     owner = owner.get("login") or owner.get("name") or ""
-print("\t".join(str(row.get(k) or "") for k in ("number", "baseRefName", "headRefName", "headRefOid")) + "\t" + str(owner))
+def f(v):
+    # Same scrub, same reason as the merge gate further down this file. These
+    # five fields are tab-joined and the shell splits them, so a control
+    # character in an EARLIER field shifts every later one -- and the checks
+    # that follow (base, branch, head-repo owner) are what keep a wrong-base PR
+    # or a fork PR off the merge path. Measured on the equivalent shape: a
+    # number of "8<TAB>trunk<TAB>lane/probe<TAB>reviewed-head<TAB>owner" with
+    # the other four fields empty satisfies ALL FOUR checks, because the last
+    # name in a `read` absorbs the remainder and the emptied tail collapses.
+    # A control character becomes a SPACE, never deleted, so a scrubbed value
+    # cannot fuse into a legitimate ref name; every comparison fails CLOSED.
+    # Unreachable through gh today -- a PR number is an int, and ref names and
+    # logins admit no control characters -- so this is defence in depth on an
+    # AUTHORIZATION path (#537), not a live bypass.
+    # NB: no apostrophes in this block -- it lives inside python3 -c SINGLE
+    # quotes, so one would terminate the string and break the extraction.
+    return "".join(" " if ch < "\x20" or ch == "\x7f" else ch for ch in str(v))
+print("\t".join(f(row.get(k) or "") for k in ("number", "baseRefName", "headRefName", "headRefOid")) + "\t" + f(owner))
 ')" || _die "expected exactly one open PR for '$branch'"
     IFS=$'\t' read -r pr listed_base listed_branch listed_head listed_owner <<< "$pr_meta"
     [[ -n "$pr" ]] || _die "open PR metadata for '$branch' has no number"
@@ -785,7 +802,30 @@ cmd_merge() {
     IFS=$'\t' read -r mergeable validated_pr validated_base validated_head <<< "$(printf '%s' "$report" | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
-print("\t".join(("true" if d.get("mergeable") is True else "false", str(d.get("pr") or ""), str(d.get("base") or ""), str(d.get("head") or ""))))
+def f(v):
+    # Load-bearing for AUTHORIZATION, not cosmetics. These fields are emitted
+    # tab-separated and the shell splits on tabs, so a tab inside `pr` shifts
+    # every later field: `base` is then read out of `pr` and matches the recorded
+    # value while the real base goes unexamined. Measured without this: a report
+    # with base "WRONG" and an empty head was AUTHORIZED.
+    # A control character becomes a SPACE rather than being DELETED. Deleting it
+    # would fuse a hostile value into a legitimate-looking one -- a base of
+    # "tr<TAB>unk" would scrub to "trunk" and match the recorded base. A space
+    # cannot appear in a git ref, so every comparison below fails CLOSED instead.
+    # Only the report side is scrubbed, so in principle a recorded base holding a
+    # SPACE could collide with a reported one holding a tab. Unreachable: that
+    # value must be a real git ref twice over (cmd_new fetches it, and the PR
+    # baseRefName must equal it), and git ref names admit neither.
+    # Unreachable through gh today, exactly as the sibling scrub in
+    # _resolve_lane_pr says of itself -- these three fields are a PR number, a
+    # ref name and a commit sha, none of which admit a control character. So
+    # this is defence in depth on an AUTHORIZATION path (#537), not a live
+    # bypass. Said at BOTH sites deliberately: one candid copy beside one silent
+    # copy of the same fix reads as the silent one knowing something.
+    # NB: no apostrophes in this block -- it lives inside python3 -c SINGLE
+    # quotes, so one would terminate the string and break the extraction.
+    return "".join(" " if ch < "\x20" or ch == "\x7f" else ch for ch in str(v))
+print("\t".join(("true" if d.get("mergeable") is True else "false", f(d.get("pr") or ""), f(d.get("base") or ""), f(d.get("head") or ""))))
 ')"
     [[ "$mergeable" == "true" ]] \
         || _die "PR #$pr is not green, review-clean, and merge-ready; run pr-watch to convergence first"

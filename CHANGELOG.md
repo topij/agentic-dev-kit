@@ -42,6 +42,28 @@ starts.
 
 ---
 
+## #558 — 2026-08-22
+
+- **`dev_session.sh merge` now REFUSES a `pr_watch --json` report whose `pr`,
+  `base`, or `head` carries a control character, where it previously
+  mis-parsed one and could authorize the merge** (`#537`). The gate emits those
+  fields tab-joined and the shell splits them, so a tab inside an earlier field
+  shifted every later one; measured, a report whose real base was `WRONG` and
+  whose real head was empty was AUTHORIZED. Control characters are now mapped
+  to a space before the join, which no git ref or PR number can contain, so the
+  identity checks fail closed. **If you vendor `scripts/dev_session.sh`, take
+  the new copy.** No report key, config key, or CLI flag changed, and no report
+  any real `pr_watch` emits parses differently — a lane that merged before
+  still merges.
+- **`_resolve_lane_pr` (used by both `dev_session.sh merge` and
+  `dev_session.sh pr-watch`) refuses the same shape in `gh pr list` metadata**
+  (`#537`). Its base / branch / head-repo-owner checks were bypassable by the
+  same field shift. Same scrub, same fail-closed direction.
+- Both are pinned by new tests in `scripts/tests/test_portability.py`; if you
+  vendor that file too, take it with the engine.
+
+---
+
 ## #553 — 2026-08-21
 
 - **`triage-friction-log` is now a shared workflow at

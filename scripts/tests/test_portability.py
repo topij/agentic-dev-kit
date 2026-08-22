@@ -549,6 +549,217 @@ def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
         assert "pr merge" not in call_log.read_text(encoding="utf-8"), label
 
 
+def test_self_merge_refuses_a_report_whose_fields_carry_tabs(tmp_path: Path) -> None:
+    """The gate extraction is tab-joined and the shell splits it on tabs, so an
+    unscrubbed field SHIFTS every field after it (`#537`).
+
+    End-to-end rather than an assertion on the extraction's stdout, by
+    `safety-critical-changes.md` rule 4: the bypass is a collaboration between
+    the python emitter and bash `read`, and only the wrapper exercises both.
+    `read` with four names hands the last one the remainder of the line, and tab
+    is IFS whitespace so the emptied tail collapses away — which is how the
+    shifted fields come back looking exactly like a legitimate report.
+
+    Measured against the unscrubbed extraction, this exact report was
+    AUTHORIZED. `pr` carries `8<TAB>trunk<TAB>reviewed-head`, so `validated_pr`
+    read `8`, `validated_base` read `trunk` and matched the recorded base, and
+    `validated_head` read `reviewed-head<TAB>WRONG` — the last name absorbing
+    the remainder — which is non-empty and so passed its only check. The
+    report's real base (`WRONG`) and real head (empty) were never examined at
+    all, and the merge ran with `--match-head-commit reviewed-head<TAB>WRONG`.
+    """
+    _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
+    _prepare_self_merge_session(sessions)
+    fake_bin, call_log, uv_log = _install_fake_merge_tools(tmp_path)
+
+    result = subprocess.run(
+        ["bash", str(engine_dir / "dev_session.sh"), "merge", "probe"],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "DEVKIT_SESSIONS_DIR": str(sessions),
+            "CALL_LOG": str(call_log),
+            "UV_LOG": str(uv_log),
+            "PR_JSON": json.dumps(
+                [
+                    {
+                        "number": 8,
+                        "baseRefName": "trunk",
+                        "headRefName": "lane/probe",
+                        "headRefOid": "reviewed-head",
+                        "headRepositoryOwner": {"login": "owner"},
+                    }
+                ]
+            ),
+            "REPORT_JSON": json.dumps(
+                {
+                    "pr": "8\ttrunk\treviewed-head",
+                    "base": "WRONG",
+                    "head": "",
+                    "done": True,
+                    "mergeable": True,
+                }
+            ),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    # The scrub turns the tabs into spaces, which no git ref and no PR number
+    # can contain — so the identity check fails CLOSED instead of shifting.
+    assert "not resolved PR #8" in result.stderr
+    assert "pr merge" not in call_log.read_text(encoding="utf-8")
+
+
+def test_lane_pr_resolution_refuses_metadata_whose_fields_carry_tabs(
+    tmp_path: Path,
+) -> None:
+    """The same field-shift, one step earlier — `_resolve_lane_pr` (`#537`).
+
+    This extraction tab-joins FIVE fields and the four checks that follow are
+    what keep a wrong-base PR, a wrong-branch PR, or a fork PR off the merge
+    path. The owner check reads the LAST name, which absorbs the remainder, so
+    a naive injection trips it — but emptying the four real fields makes the
+    tail collapse and all four checks pass on values read out of `number`.
+
+    The report served here is fully valid, so nothing downstream would refuse:
+    against the unscrubbed extraction this run merges.
+    """
+    _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
+    _prepare_self_merge_session(sessions)
+    fake_bin, call_log, uv_log = _install_fake_merge_tools(tmp_path)
+
+    result = subprocess.run(
+        ["bash", str(engine_dir / "dev_session.sh"), "merge", "probe"],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "DEVKIT_SESSIONS_DIR": str(sessions),
+            "CALL_LOG": str(call_log),
+            "UV_LOG": str(uv_log),
+            "PR_JSON": json.dumps(
+                [
+                    {
+                        "number": "8\ttrunk\tlane/probe\treviewed-head\towner",
+                        "baseRefName": "",
+                        "headRefName": "",
+                        "headRefOid": "",
+                        "headRepositoryOwner": {},
+                    }
+                ]
+            ),
+            "REPORT_JSON": json.dumps(
+                {
+                    "pr": 8,
+                    "base": "trunk",
+                    "head": "reviewed-head",
+                    "done": True,
+                    "mergeable": True,
+                }
+            ),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "not recorded base 'trunk'" in result.stderr
+    # Refused before pr-watch was ever polled, and before any merge call.
+    assert not uv_log.exists()
+    assert "pr merge" not in call_log.read_text(encoding="utf-8")
+
+
+def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
+    """Both scrubs claim a character CLASS; the two tests above pin one member.
+
+    Round 1 of the fallback review panel narrowed each scrub in an isolated
+    clone and watched the whole suite stay green — twice, in two different
+    directions, each time reopening a live authorization bypass:
+
+    - **`" "` -> `""`** (delete instead of replace). A base of `tr<TAB>unk` then
+      scrubs to `trunk` and MATCHES the recorded base — the fusion the scrubs'
+      own comments name as the reason for choosing a space — and the merge was
+      authorized. `make mutation-test` reported 1353 passed, 1 deselected.
+    - **the range narrowed to `ch == "\\t"`**, tab being the only character
+      anyone associates with `IFS=$'\\t' read`. A NUL then survives the scrub,
+      and bash `$(…)` command substitution DELETES an embedded NUL and fuses
+      the text around it, so `tr<NUL>unk` reaches the comparison as `trunk` and
+      the merge was authorized again. (A newline in the same position only
+      truncates the `read`, so it is not a fusion vector — NUL is.)
+
+    Neither mutant is reachable through `gh` today, and neither was a defect in
+    the shipped code: the point is that the property was *named* broadly and
+    *pinned* narrowly, which is how the class this change closes gets reopened
+    by a later simplification with CI green.
+
+    So the contract is pinned here directly, and over BOTH blocks rather than
+    one — the scrub body is duplicated at the two call sites and nothing else
+    forces them to be edited in lockstep. Read out of `dev_session.sh` so the
+    copies cannot drift away from this test or from each other.
+    """
+    wrapper = (ENGINE_DIR / "dev_session.sh").read_text(encoding="utf-8")
+    blocks = re.findall(r"python3 -c '\n(import json, sys\n.*?)'", wrapper, re.S)
+    # Selected by CONTENT, not position — the rule `test_pr_watch.py`'s
+    # merge-gate test states: indexing would silently re-point this test the day
+    # a block is added above one of these. The selector has to be a token that
+    # cannot appear in the OTHER block's prose, which `baseRefName` is not: the
+    # gate's comment names it, so selecting on it matched both blocks and this
+    # assertion caught it. `headRepositoryOwner` appears only as code.
+    gate = [block for block in blocks if "mergeable" in block]
+    meta = [block for block in blocks if "headRepositoryOwner" in block]
+    assert len(gate) == 1, f"expected one merge-gate extraction, found {len(gate)}"
+    assert len(meta) == 1, f"expected one lane-PR extraction, found {len(meta)}"
+
+    def gate_payload(value: str) -> str:
+        return json.dumps({"mergeable": True, "pr": 8, "base": value, "head": "h"})
+
+    def meta_payload(value: str) -> str:
+        return json.dumps(
+            [
+                {
+                    "number": 8,
+                    "baseRefName": value,
+                    "headRefName": "b",
+                    "headRefOid": "h",
+                    "headRepositoryOwner": {"login": "o"},
+                }
+            ]
+        )
+
+    def emitted(block: str, payload: str, field: int) -> str:
+        proc = subprocess.run(
+            [sys.executable, "-c", block],
+            input=payload,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return proc.stdout.rstrip("\n").split("\t")[field]
+
+    # `base` sits at index 2 of the gate's four fields, `baseRefName` at index 1
+    # of the lane-PR block's five.
+    sites = (
+        ("merge gate", gate[0], gate_payload, 2),
+        ("lane PR metadata", meta[0], meta_payload, 1),
+    )
+    for label, block, payload, field in sites:
+        for code in [*range(0x20), 0x7F]:
+            got = emitted(block, payload(f"tr{chr(code)}unk"), field)
+            assert got == "tr unk", (
+                f"{label}: chr({code}) emitted as {got!r} — 'trunk' means it was "
+                "DELETED and now fuses into the recorded base; anything else "
+                "means it was not scrubbed at all"
+            )
+        # The class stops there: a printable character is left alone, so a scrub
+        # that flattened everything would not pass here either.
+        assert emitted(block, payload("tr-unk"), field) == "tr-unk", label
+
+
 def test_self_merge_pins_validated_head_so_push_race_is_refused(tmp_path: Path) -> None:
     repo, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
     session = _prepare_self_merge_session(sessions)
