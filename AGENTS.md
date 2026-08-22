@@ -49,14 +49,21 @@ commit falsifies it without touching it; *"`make test` at `<sha>` on `<date>` pr
 `<n> passed`"* says what one run did, and nothing later can falsify that. An unstamped
 figure is a current-state claim however it was meant, because no reader can date it.
 
-**A constant is untouched by this. A reading is not.** A constant is fixed in advance
-and reads the same for everyone: a documented exit code, a configured budget ceiling, a
-pinned version, an issue number. A reading is what one look at the system returned: the
-status your run exited with, the live count against that ceiling, the version actually
-installed, what a config key resolved to on this machine. **Every pair there is one word
-apart, so apply the test and not the list** — the list only illustrates the test, and no
-list of exempt values can be complete. A reading takes the stamp, whatever it is spelled
-as.
+**A constant is untouched by this. A reading is not.** A constant is *declared* —
+written once somewhere you can point at, and the same for everyone who looks. A reading
+is what one look at the system returned. They usually sit a word apart, and the pair is
+easier to recognise than the rule: a pinned version against the version actually
+installed; a configured budget ceiling against the live count against it; the exit code
+a command documents against the status your run returned; a config key's written value
+against what it resolved to on this machine. Some constants have no reading beside them
+at all — an issue number is just an issue number. **Apply the test and not the list**:
+the list only illustrates it, and no list of exempt values can be complete. A reading
+takes the stamp, whatever it is spelled as.
+
+**Being stable is not being declared.** *"The helper recognises three forms"* does not
+change on its own either, and it is still a count you performed on the code rather than
+a value the code declares. Stability is why the miscount survives; it is not an
+exemption from the rule.
 
 **Naming the command covers the number and not the verdict built on it.** Dropping the
 digit while keeping the judgement it supported is the halfway remedy, and it is the half
