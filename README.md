@@ -335,10 +335,10 @@ make mutation-test # same, minus the drift self-check — use this when mutating
 
 `make test` is the command, not a convenience wrapper. The probes you would otherwise
 reach for fail in a way that reads as *"pytest is unavailable here"* and is not:
-`uv run pytest` → `Failed to spawn: pytest` (pytest is not a project dependency);
-`python3 -m pytest` → `No module named pytest` (the system Python has none); and a bare
-`python` may not exist at all. The `Makefile` target exists precisely because the bare
-invocation does not work.
+`uv run pytest` → `error: Failed to spawn: pytest` (pytest is not a project dependency);
+`python3 -m pytest` → `No module named pytest` (the system Python has none). A bare
+`python` is a different trap and may not exist at all, which misleads one step earlier.
+The `Makefile` target exists precisely because the bare invocation does not work.
 
 Improvements that would help other adopters are welcome back here.
 

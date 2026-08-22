@@ -10,24 +10,26 @@ into a runtime-specific file.
 ## Verification
 
 **`make test` is the verification command for this repo.** It runs `lint` and
-`check-syntax` before the suite, and a `lint` failure stops it there — no pytest, and so
-no summary line. **`check-syntax` does not cover what its name suggests**: it hands a
+`check-syntax` before the suite, and a failure in either stops it there — no pytest, and
+so no summary line. **`check-syntax` does not cover what its name suggests**: it hands a
 list of filenames to one `bash -n`, which parses the first and takes the rest as that
 script's arguments, so every file after the first goes unchecked — locally and in CI
 alike, since both run the same line. `#561` names them. A green run is not evidence
-those scripts parse. The suite itself
-(`scripts/lib/state_paths/tests` + `scripts/tests`) gets pytest and PyYAML from
-`uv run --with pytest --with pyyaml`; `lint` supplies `ruff` separately, through `uvx`.
-**Raise your tool timeout before starting the run** — a default timeout can cut the run
-off partway, and how that truncation surfaces differs by runtime. pytest's summary line
-prints the elapsed time for the run you actually did.
+those scripts parse. The suite itself (`scripts/lib/state_paths/tests` +
+`scripts/tests`) gets pytest and PyYAML from `uv run --with pytest --with pyyaml`;
+`lint` supplies `ruff` separately, through `uvx`. **Raise your tool timeout before
+starting the run** — a default timeout can cut the run off partway, and how that
+truncation surfaces differs by runtime. pytest's summary line prints the elapsed time
+for the run you actually did.
 
 The probes an agent reaches for first fail here in a way that reads as "pytest is
 unavailable in this environment". None of them is evidence of that:
 
 - `uv run pytest` → `error: Failed to spawn: pytest` (pytest is not a project dependency)
 - `python3 -m pytest` → `No module named pytest` (the system Python has no pytest)
-- a bare `python` may not exist at all, which misleads one step earlier
+
+A bare `python` is a different trap rather than another of these — it may not exist at
+all, and `command not found` says nothing about pytest either way.
 
 Do not conclude tests cannot run locally, and do not defer verification to CI, without
 having run `make test`. When claiming something is verified, name the command that
