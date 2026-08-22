@@ -52,7 +52,7 @@ again, and this time inside the PR that ships the rule against it.
   that exists for this, too shallow to catch it. The marker now names which fields it
   covered.
 
-- **Round 2 caught round 1's fix breaking a rule that had merged hours earlier.** The
+- **Round 2 caught round 1's fix breaking a rule that had merged earlier the same morning.** The
   repair for a count ambiguity added counts to prose, which `AGENTS.md`'s `Numbers in prose`
   forbids. The rule shipped as `df32eb2`, which is the very commit round 1 reviewed
   against, so it governed every line round 1 looked at. An earlier phrasing called
@@ -68,10 +68,10 @@ again, and this time inside the PR that ships the rule against it.
   entry and silently ends the accumulation it exists for.
 
 - **`triage-friction-log` ran end-to-end for the first time since `#553` rewrote it** —
-  `#243`'s slice had no field test until now. Two deviations, both deliberate and disclosed
+  `#243`'s slice had no field test until now. The deviations were deliberate and disclosed
   in the marker: approval came in-session because the Slack MCP was unauthorized and no
   notify engine exists (`#573` asks whether that route should be sanctioned or the gate held
-  absolute), and one entry was kept rather than swept because it parks for accumulation
+  absolute), and an entry was kept rather than swept because it parks for accumulation
   (`#575`).
 
 - **Filed this session:** `#562`, `#563`, `#564`, `#565`, `#566`, `#567`, `#568`, `#569`,
