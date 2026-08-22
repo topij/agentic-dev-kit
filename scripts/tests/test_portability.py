@@ -1382,7 +1382,52 @@ def test_python_engine_root_walk_supports_namespacing(tmp_path: Path) -> None:
     assert pr_watch._find_repo_root(nested_script) == repo
 
 
+def _assert_claude_workflow_adapter(
+    name: str, shared_path: str | None, claude_path: str
+) -> None:
+    claude_adapter = (REPO_ROOT / claude_path).read_text(encoding="utf-8")
+    assert claude_adapter.startswith("---\n")
+    _, claude_frontmatter, claude_body = claude_adapter.split("---", 2)
+    metadata = yaml.safe_load(claude_frontmatter)
+    assert isinstance(metadata.get("description"), str)
+    assert metadata["description"].strip()
+    if shared_path:
+        assert shared_path in claude_body
+
+
+def _assert_codex_workflow_adapter(name: str, shared_path: str, codex_path: str) -> None:
+    skill_dir = (REPO_ROOT / codex_path).parent
+    skill_text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    assert skill_text.startswith("---\n")
+    _, skill_frontmatter, body = skill_text.split("---", 2)
+    metadata = yaml.safe_load(skill_frontmatter)
+    assert set(metadata) == {"name", "description"}
+    assert metadata["name"] == name
+    assert "TODO" not in skill_text
+    assert shared_path in body
+
+    interface = yaml.safe_load(
+        (skill_dir / "agents" / "openai.yaml").read_text(encoding="utf-8")
+    )["interface"]
+    assert 25 <= len(interface["short_description"]) <= 64
+    assert f"${name}" in interface["default_prompt"]
+
+
 def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
+    for skill_path in (REPO_ROOT / ".agents" / "skills").glob("*/SKILL.md"):
+        name = skill_path.parent.name
+        shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
+        claude_path = f".claude/commands/{name}.md"
+        _assert_codex_workflow_adapter(
+            name,
+            shared_path,
+            skill_path.relative_to(REPO_ROOT).as_posix(),
+        )
+        _assert_claude_workflow_adapter(name, shared_path, claude_path)
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/runtime-parity.md")
+def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
     parity_doc = REPO_ROOT / "docs" / "agentic-dev-kit" / "runtime-parity.md"
     text = parity_doc.read_text(encoding="utf-8")
     assert text.startswith("---\n")
@@ -1437,32 +1482,11 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
 
         shared_path = entry["shared"]
         if entry["codex"]:
-            skill_dir = (REPO_ROOT / entry["codex"]).parent
-            skill_text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
-            assert skill_text.startswith("---\n")
-            _, skill_frontmatter, body = skill_text.split("---", 2)
-            metadata = yaml.safe_load(skill_frontmatter)
-            assert set(metadata) == {"name", "description"}
-            assert metadata["name"] == name
-            assert "TODO" not in skill_text
-            if shared_path:
-                assert shared_path in body
-
-            interface = yaml.safe_load(
-                (skill_dir / "agents" / "openai.yaml").read_text(encoding="utf-8")
-            )["interface"]
-            assert 25 <= len(interface["short_description"]) <= 64
-            assert f"${name}" in interface["default_prompt"]
+            assert shared_path
+            _assert_codex_workflow_adapter(name, shared_path, entry["codex"])
 
         if entry["claude"]:
-            claude_adapter = (REPO_ROOT / entry["claude"]).read_text(encoding="utf-8")
-            assert claude_adapter.startswith("---\n")
-            _, claude_frontmatter, claude_body = claude_adapter.split("---", 2)
-            metadata = yaml.safe_load(claude_frontmatter)
-            assert isinstance(metadata.get("description"), str)
-            assert metadata["description"].strip()
-            if shared_path:
-                assert shared_path in claude_body
+            _assert_claude_workflow_adapter(name, shared_path, entry["claude"])
 
 
 def test_shared_lane_contract_has_no_runtime_specific_peer_api() -> None:

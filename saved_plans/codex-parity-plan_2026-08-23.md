@@ -7,7 +7,13 @@ safety guarantees, review evidence, lane isolation, and upgrade behavior as Clau
 Code. Runtime-specific files may differ in shape; their observable contract should
 not.
 
-## Current assessment
+This plan records the pre-implementation baseline. Its repository observations were
+collected with `rg --files`, targeted `rg`, and
+`uv run scripts/kit_doctor.py --json` at
+`9c4969687f9adbec1eca55cbfb47955d85025026` on 2026-08-23. They intentionally describe
+that revision; the delivery slices below are expected to change them.
+
+## Pre-implementation assessment
 
 ### Aligned foundation
 
@@ -33,9 +39,10 @@ not.
   targets Claude Code's external `MEMORY.md` and states that the artifact has no Codex
   equivalent.
 - `init.sh` carries Codex hook guidance derived from an older measured client whose
-  matcher and trust behavior no longer matches the current documented surface.
+  matcher and trust behavior did not match the documented surface reviewed for this
+  baseline.
 - Codex capability tiers vary reasoning effort but do not select a model, despite
-  current subagent support for both controls.
+  the documented subagent support for both controls reviewed for this baseline.
 - The headless-lane contract requires worktree and environment replacement, while
   native Codex subagent dispatch does not itself provide that launch contract.
 - Claude repository permissions are shipped in `.claude/settings.json`; the kit has
@@ -51,7 +58,7 @@ not.
 - The repository has static coverage for Codex shapes but no trusted, end-to-end
   Codex smoke test covering instructions, skills, hooks, review, and isolated lanes.
 - `docs/kit-convergence-plan.md` preserves historical status that is easy to misread
-  as the current parity inventory, and README hook descriptions have drifted from
+  as the live parity inventory, and README hook descriptions have drifted from
   the shipped Codex registration.
 
 ## Delivery plan

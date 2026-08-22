@@ -2518,14 +2518,18 @@ def test_the_budget_advisory_prints_the_shipped_codex_commands_verbatim(
 
     result = _run_init(repo)
 
-    # Whole line, for the reason the Claude sibling's comment gives: substring
-    # matching misses a guard stripped from the FRONT of the shipped command.
-    printed = {line.strip() for line in result.stdout.splitlines()}
-    for command in _codex_session_start_commands():
-        assert command in printed, (
-            "the printed advisory has drifted from the shipped registration:\n"
-            f"  shipped: {command}"
-        )
+    # Scope the comparison to the Codex block so an extra command cannot hide
+    # among Claude's intentionally different registrations. Whole-line matching
+    # catches a guard stripped from the front of a command.
+    lines = result.stdout.splitlines()
+    codex_start = next(i for i, line in enumerate(lines) if line.strip().startswith("Codex —"))
+    claude_start = next(i for i, line in enumerate(lines) if line.strip().startswith("Claude —"))
+    printed = {
+        line.strip()
+        for line in lines[codex_start + 1 : claude_start]
+        if "budget.py" in line
+    }
+    assert printed == set(_codex_session_start_commands())
 
 
 def _claude_session_start_commands() -> list[str]:
