@@ -11,10 +11,11 @@ into a runtime-specific file.
 
 **`make test` is the verification command for this repo.** It runs `lint` and
 `check-syntax` before the suite, and a `lint` failure stops it there — no pytest, and so
-no summary line. **`check-syntax` does not cover what its name suggests**: it hands
-several filenames to one `bash -n`, which parses the first and takes the rest as that
-script's arguments, so most of the files it names are never checked, locally or in CI
-(`#561`). A green run is not evidence those scripts parse. The suite itself
+no summary line. **`check-syntax` does not cover what its name suggests**: it hands a
+list of filenames to one `bash -n`, which parses the first and takes the rest as that
+script's arguments, so every file after the first goes unchecked — locally and in CI
+alike, since both run the same line. `#561` names them. A green run is not evidence
+those scripts parse. The suite itself
 (`scripts/lib/state_paths/tests` + `scripts/tests`) gets pytest and PyYAML from
 `uv run --with pytest --with pyyaml`; `lint` supplies `ruff` separately, through `uvx`.
 **Raise your tool timeout before starting the run** — a default timeout can cut the run
@@ -38,8 +39,10 @@ how you write it.
 
 **A number describing current state does not go in prose.** If a reader can count it,
 write the enumeration and let them; if a command prints it, name the command. This
-binds **every surface a session writes**: commit messages, PR bodies, code comments,
-docstrings, issue text, review replies, and the narrative docs. The handoff was never
+binds **every surface a session writes** — commit messages, PR bodies, code comments,
+docstrings, issue text, review replies, the narrative docs, and whatever else you write
+that someone reads later. **Apply the scope and not the list**: a surface is bound
+because a session wrote it, not because it is named here. The handoff was never
 the problem — `wrap-up.md` has bound that one all along. Every other surface in that
 list, the rest of the narrative docs included, this section reaches first. The shape it
 takes is a commit that grows a list and leaves the number describing it alone: the list
@@ -95,7 +98,9 @@ one of those or it is a defect.
 2026-08-09"* records what happened, carries its date, and is followed by the instances
 themselves; nothing later falsifies it. That is the same permission `wrap-up.md` gives
 an enumerated event, and it is why the account below of two trees and two repos stands
-as written.
+as written. **The test is whether the sentence says what happened or what is** — a date
+in front of a current-state count does not convert it, so *"as of `<date>`, the suite
+has `<n>` tests"* is a reading and takes the stamp like any other.
 
 **A quantity word is a number.** *"several tests failed"*, *"most of the forms"*,
 *"nearly all of them"* make the same current-state claim, go stale the same way, and
