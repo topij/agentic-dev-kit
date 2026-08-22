@@ -1446,6 +1446,15 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
     }
     for key, paths in declared.items():
         assert len(paths) == len(set(paths)), f"runtime-parity reuses a {key} path"
+
+    baseline = json.loads((REPO_ROOT / "kit-manifest.json").read_text(encoding="utf-8"))
+    raw_declined = baseline.get("not_installed") if "kit_commit" in baseline else []
+    declined = (
+        set(raw_declined)
+        if isinstance(raw_declined, list)
+        and all(isinstance(path, str) for path in raw_declined)
+        else set()
+    )
     actual_shared = {
         path.relative_to(REPO_ROOT).as_posix()
         for path in (REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows").glob("*.md")
@@ -1458,9 +1467,9 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
         path.relative_to(REPO_ROOT).as_posix()
         for path in (REPO_ROOT / ".agents" / "skills").glob("*/SKILL.md")
     }
-    assert set(declared["shared"]) == actual_shared
-    assert set(declared["claude"]) == actual_claude
-    assert set(declared["codex"]) == actual_codex
+    assert set(declared["shared"]) - declined == actual_shared
+    assert set(declared["claude"]) - declined == actual_claude
+    assert set(declared["codex"]) - declined == actual_codex
 
     for entry in contract:
         name = entry["name"]
@@ -1476,17 +1485,77 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
         if entry["status"] == "companion":
             assert entry["shared"] and not entry["claude"] and not entry["codex"]
         elif entry["status"] == "gap":
-            assert not all(entry[key] for key in ("shared", "claude", "codex"))
+            paths = [entry[key] for key in ("shared", "claude", "codex")]
+            assert any(paths) and not all(paths)
         else:
             assert all(entry[key] for key in ("shared", "claude", "codex"))
 
         shared_path = entry["shared"]
-        if entry["codex"]:
+        if entry["codex"] and entry["codex"] not in declined:
             assert shared_path
             _assert_codex_workflow_adapter(name, shared_path, entry["codex"])
 
-        if entry["claude"]:
+        if entry["claude"] and entry["claude"] not in declined:
             _assert_claude_workflow_adapter(name, shared_path, entry["claude"])
+
+
+def _runtime_parity_fixture(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    doctrine_dir = repo / "docs" / "agentic-dev-kit"
+    doctrine_dir.mkdir(parents=True)
+    shutil.copytree(
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows",
+        doctrine_dir / "workflows",
+    )
+    shutil.copy2(
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "runtime-parity.md",
+        doctrine_dir / "runtime-parity.md",
+    )
+    (repo / ".claude").mkdir()
+    shutil.copytree(REPO_ROOT / ".claude" / "commands", repo / ".claude" / "commands")
+    (repo / ".agents").mkdir()
+    shutil.copytree(REPO_ROOT / ".agents" / "skills", repo / ".agents" / "skills")
+    return repo
+
+
+def test_runtime_parity_contract_distinguishes_a_decline_from_a_removal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _runtime_parity_fixture(tmp_path)
+    declined = ".agents/skills/session-start/SKILL.md"
+    shutil.rmtree(repo / ".agents" / "skills" / "session-start")
+    baseline = {"kit_commit": "recorded-kit", "not_installed": [declined]}
+    (repo / "kit-manifest.json").write_text(json.dumps(baseline), encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
+
+    test_runtime_parity_contract_covers_workflows_and_adapters()
+
+    baseline["not_installed"] = []
+    (repo / "kit-manifest.json").write_text(json.dumps(baseline), encoding="utf-8")
+    with pytest.raises(AssertionError):
+        test_runtime_parity_contract_covers_workflows_and_adapters()
+
+
+def test_runtime_parity_contract_rejects_a_gap_with_no_real_surface(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _runtime_parity_fixture(tmp_path)
+    (repo / "kit-manifest.json").write_text("{}\n", encoding="utf-8")
+    parity_doc = repo / "docs" / "agentic-dev-kit" / "runtime-parity.md"
+    text = parity_doc.read_text(encoding="utf-8")
+    insertion = (
+        "  - name: phantom-workflow\n"
+        "    status: gap\n"
+        "    shared: null\n"
+        "    claude: null\n"
+        "    codex: null\n"
+    )
+    text = text.replace("\n---\n\n# Runtime parity contract", f"\n{insertion}---\n\n# Runtime parity contract")
+    parity_doc.write_text(text, encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
+
+    with pytest.raises(AssertionError):
+        test_runtime_parity_contract_covers_workflows_and_adapters()
 
 
 def test_shared_lane_contract_has_no_runtime_specific_peer_api() -> None:
