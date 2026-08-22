@@ -13,9 +13,9 @@ into a runtime-specific file.
 `check-syntax` first, and a failure in either stops it there — no pytest, and so no
 summary line. The suite itself (`scripts/lib/state_paths/tests` + `scripts/tests`) gets
 pytest and PyYAML from `uv run --with pytest --with pyyaml`; `lint` supplies `ruff`
-separately, through `uvx`. **Raise your tool timeout before you start it** — a default
-timeout can cut the run off partway, and how that truncation surfaces differs by runtime.
-pytest's summary line prints the elapsed time for the run you actually did.
+separately, through `uvx`. **Raise your tool timeout before starting the run** — a
+default timeout can cut the run off partway, and how that truncation surfaces differs by
+runtime. pytest's summary line prints the elapsed time for the run you actually did.
 
 The two probes an agent reaches for first both fail here in a way that reads as
 "pytest is unavailable in this environment". Neither is evidence of that:
@@ -40,9 +40,12 @@ list, the rest of the narrative docs included, this section reaches first. The s
 takes is a commit that grows a list and leaves the number describing it alone: the list
 is the thing being edited, the number is prose beside it, and the edit never reaches it
 (`#546` enumerates the occurrences). A value that is part of a contract is not a count
-of anything and is untouched by this — an exit code, a
-`config/dev-model.yaml` value, a budget **ceiling** (never the live count against it),
-a version, an issue number.
+of anything and is untouched by this — the exit code a command is *documented to
+return*, a `config/dev-model.yaml` value, a budget ceiling, a version, an issue number.
+**The line is between the constant and the reading, and it governs that whole list
+rather than the item it is written beside**: the ceiling is a contract, the live count
+against it is a reading; the documented exit code is a contract, the status your run
+actually returned is a reading. A reading takes the stamp, whatever it is spelled as.
 
 **A measured figure is stamped with its command, its revision and its date, or it is
 dropped.** Those three are the stamp; everything below means this one and restates it
@@ -69,6 +72,11 @@ or read it.** Counted — off a list, off your sense of the session, off what yo
 you just added — it does not go in: write the enumeration, or name the command that
 prints it. Read out of the output of a run, it goes in stamped. A number in prose is
 one of those or it is a defect.
+
+**A quantity word is a number.** *"several tests failed"*, *"most of the forms"*,
+*"nearly all of them"* make the same current-state claim, go stale the same way, and
+have no digit in them to catch a reader's eye. The rule is about the claim, not the
+notation — the same reason a verdict does not escape it.
 
 **Where this meets Verification, and how that resolves.** Verification asks for the
 command *and its actual result*, which is exactly what invites a figure into the
