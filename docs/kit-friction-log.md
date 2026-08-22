@@ -39,7 +39,10 @@ verbatim), [#511](https://github.com/topij/agentic-dev-kit/issues/511) and
 two, since its second half is a `gh`-cwd-resolution finding rather than a two-tree
 one), and [#510](https://github.com/topij/agentic-dev-kit/issues/510) — and **one
 entry deliberately kept in the active file**, below. All six creates and all five
-comments were re-read from the tracker after landing per `#138`.
+comments were re-read from the tracker after landing per `#138` — state, title, body and
+**labels**. The first re-read checked everything but labels and so missed that all six
+issues had been filed with none; a panel lens caught it against the previous sweep, and
+the labels were applied before this marker was written.
 
 **One entry was kept rather than swept, which diverges from the engine's spec.**
 `triage-friction-log.md` Step 5 sweeps every block present at draft time, *including
