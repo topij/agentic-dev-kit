@@ -14,9 +14,82 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-22 — the overnight batch landed, the friction inbox graduated, and a panel that kept finding the narration wrong.
+Last updated: 2026-08-22 — an adopter's field report acted on rather than filed, and a remedy moved out of the document it was about.
 
-## Latest session — 2026-08-22 · overnight and morning (the batch landed, and a panel that kept finding the narration wrong)
+## Latest session — 2026-08-22 · afternoon (a field report acted on, and a remedy moved out of the document it was about)
+
+**Theme —** `#577`, a cs-toolkit field report that is explicitly not a defect report, read
+and acted on rather than triaged. Its headline item shipped as `#580`; the rest went to the
+tracker. Squash on `main`: `#580`. The one correction this session made to the report ran
+in the kit's favour, and only running it in this tree could establish that — which is the
+report's own thesis, demonstrated on the report.
+
+- **A remedy written inside the document it is about cannot reach the reader who needs
+  it.** `upgrade.md` Step 1 told an operator to diff `$KIT`'s copy of that file against
+  theirs; a reader whose copy is out of date is reading the out-of-date copy. `#580`
+  moves it to surfaces a stale reader can reach and leaves the paragraph in place saying
+  it cannot be the one that saves anyone, so a later pass does not tidy the others away
+  as duplicates.
+
+- **The report proposed the adapter or the engine, and neither closes the class alone.**
+  A runtime adapter is adopter-owned and Step 4 keeps the adopter's version, so a kit fix
+  there never reaches an already-adopted repo; `kit_doctor` reaches every adopter, but
+  only from their *next* upgrade, because the copy running Step 1 today is the one
+  installed last time. They fail in opposite directions. `#580` ships them and states the
+  gap each leaves.
+
+- **`#560` shaped what the new engine block may not say.** It prescribes *reading* the
+  fetched copy — safe in every state it fires on — and leaves keep-or-replace to the drift
+  list, rather than repeating the blanket "take the kit's copy" that is wrong for a
+  `LOCALLY EDITED` one. `test_the_block_does_not_prescribe_replacing_the_file` fails if a
+  prescriptive form returns. `#560` stays open; the paragraph it is about is unchanged.
+
+- **A brief's inherited claim reached a commit message as fact, and the report inherited
+  it too.** `#558` hardened `_resolve_lane_pr` and the merge gate. The adopter's fork has
+  the scrub at the merge gate and not at `_resolve_lane_pr`; the kit's own copy has it at
+  each — checked here before relaying it. `#582` is the general form.
+
+- **The configured reviewer answered by editing its earlier skip comment in place.**
+  `#509`'s shape. The doctrine's read-the-body-not-the-count rule caught it, and
+  `pr_watch`'s `ⓘ review reported:` line named the reviewed sha without being asked. The
+  verdict was clean and the merge still rested on the panel receipt, which is the split
+  `#350` and `#44` describe working as intended.
+
+- **Filed this session:** `#581`, `#582`, `#583`. Occurrence comments on `#576`, `#507`,
+  `#578`. `#577` closed.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` on merged `main` at
+  `fabf554` printed `1362 passed`, and `kit_doctor` at the same sha in the same directory
+  printed `56 unchanged, 0 differ, 0 missing, 0 unknown`. Before the commit, the new
+  render block was mutation-checked with `upgrade_doc` forced to `None` — the mutation
+  asserted applied by hash change and marker presence, tests failed, file restored to its
+  pre-mutation hash — and each review lens repeated that independently in its own clone
+  with the `driftcheck` self-check deselected.
+
+**Learned**
+
+- **Inlining the rendered panel prompt into the lens's own prompt is what made the
+  operational parameters bind.** `#578` says a parameter binds where the agent's
+  instructions live, not where the prompt points from. This panel passed
+  `panel_prompt.py`'s output as the agent prompt itself rather than as a file to go read,
+  with the timeout and the no-subagents rule at the top; the `adversarial` and
+  `correctness` lenses each ran `make test` to completion, and no lens stalled. Recorded on `#578` as the predicted remedy holding.
+
+- **A field report that says which item matters most is worth taking at its word.** `#577`
+  named its own headline and ranked the rest, and that ranking survived contact — the
+  headline was the one with a structural fix, and the others were each a defect a careful
+  reader eventually catches. The ranking came from the reporter having run the thing.
+
+▶ Next: `#576` item 1 — Step 0's clone is not re-runnable, and the invocations that name
+the kit path hardcode it instead of using the `KIT` that Step 0 binds. Re-derive where
+those sit; the line numbers in the issue body predate this session's squash. `#580` raised
+this item's value rather than touching it — the clone is now also the source of the
+*workflow the operator is told to follow*, so a reaped or stale clone mis-sources
+instructions and not only files.
+
+______________________________________________________________________
+
+## Session — 2026-08-22 · overnight and morning (the batch landed, and a panel that kept finding the narration wrong)
 
 **Theme —** An autonomous overnight batch of isolated lanes, all merged the next
 morning; then the friction inbox graduated and swept. Squashes on `main`: `#559`, `#558`,
@@ -262,72 +335,6 @@ stays open, since nothing verified their acceptance criteria in the field.
 ▶ Next: `#537` — the merge-gate scrub the adopter's fork carries and the kit lacks. It was
 blocked on `#534` cause 3, which merged today, so the test that pins it can now be written
 against the kit's own `dev_session.sh` rather than an adopter's.
-
-______________________________________________________________________
-
-## Session — 2026-08-20 · afternoon (the third ruling, and the panel that corrected its own transcription)
-
-**Theme —** executed the morning briefing's plan end-to-end. `#524` applied; `#372` ruled
-(third ruling: the panel is the standing reviewer, detection surface frozen — the ruling
-and its same-day correction are on the ticket); the ruling's doctrine follow-up plus three
-delegated fixes driven through the full panel loop to merge. Squashes on `main`: `#529`
-(upgrade.md `${KIT:?}` guards, addresses `#496`), `#530` (`review_evidence.head` nulled on
-the bot-coverage route, addresses `#495`), `#528` (pr-watch.md converged step carries the
-ruling), `#527` (manifest tracks the kit's own test suite, addresses `#493`). All four
-issues stay open — nothing verified their acceptance criteria in the field.
-
-- **The gap `#524` names is shut at the forge: ruleset `protect-main` is `active`** — PR required
-  (0 approvals), `toolkit` required and pinned to the GitHub Actions `integration_id`
-  (`#95`'s identity rule applied to the forge gate), deletion + non-fast-forward kept, no
-  bypass actors. Verified: `gh api repos/topij/agentic-dev-kit/rules/branches/main` lists
-  all four rule types, run from this repo's root.
-- **The session's sharpest event: `#528`'s adversarial lens executed
-  `bot_comment_verdicts()` against the live history and refuted the ruling it was
-  reviewing the transcription of.** The ruling's receipt-time-re-read item had conflated
-  `#519`'s conjunction-disqualification with `#525`'s count-blind hand-rolled loop — the
-  engine would have seen `#525` — and carried a figure that measured the blind loop, not
-  the bot. Corrected on `#372`; the fix round shortened rather than corrected, and round 2
-  found only lens-labeled cosmetic Lows on the shortened text.
-- **The ruling was field-tested the same afternoon, on the ticket:** `#529`'s
-  converged-head request delivered a comment-only clean review the `ⓘ review reported`
-  line caught; `#530`'s, a minute later, hit the quota wall, reported on both surfaces;
-  `⚠ review owed` fired at both convergences. Neither outcome was waited on; both merges
-  stood on dual-lens `fallback:panel` receipts.
-- **`#527` took three rounds** (finding → fix → merge-resolution). The round-3 re-run over
-  a "mechanical" merge delta found a real Medium (`#532`) — evidence against inventing a
-  cheaper carve-out for merge-resolution deltas.
-- **Filed this session: `#531`** (an adopter's own `conftest.py` misjudged via the
-  engine-role basename), **`#532`** (KIT_OWNED role labels pinned by nothing — the guards
-  derive their universe from the tuple they guard). Occurrence comments: `#372` (ruling,
-  correction, two request outcomes), `#480` (executed evidence: `cd ""` is a no-op success
-  in bash/zsh/sh; the false prose claim beneath the patched block; the test-name
-  overclaim), `#496` (behavioral-pin residual), `#506` (`#532`'s shape). Caps posted on
-  `#44` and `#509` — records and occurrence landing places now, not build backlog.
-- **The cs-toolkit upgrade boundary is reached (`#504`):** precondition 1 by the `#372`
-  ruling, precondition 2 by `#529`/`#530`/`#527` shipping the `#497` fix set. `kit_doctor`
-  now drift-checks vendored tests — the exact hazard `#493` measured on that repo.
-- **Verified:** `make test` at `/Users/topi/Coding/agentic-dev-kit` on each PR's final
-  branch head before its push — each PR's record carries its own summary line.
-
-**Learned**
-
-- **A ruling written from the trail's latest occurrence comment inherited the trail's
-  uncorrected layer.** The refuting evidence route was execution, not reading — the same
-  lesson the lens contract's "Execute, don't only read" already carries, arriving on the
-  record-authoring side.
-- **This morning's delegate-stall friction entry recurred with its proposed fix applied
-  verbatim and not binding.** What bound was a follow-up naming a concrete 600000ms
-  timeout for the verification command: the stall is timeout-shaped, not
-  obedience-shaped — `#514`'s carrier-not-wording, again.
-- **Two same-session converged-head requests competed for the hourly unit a minute
-  apart** — the first delivered, the second walled. Under the panel-as-reviewer posture
-  that budget is corroboration, not review capacity, so this costs nothing.
-
-▶ Next: run `/upgrade` on cs-toolkit — `#504`'s preconditions are both met. At upgrade
-time re-run the CHANGES_REQUESTED sweep (non-zero pulls `#499` ahead), and fold CUS-1293
-(`panel_prompt.py`: copy it or document the decline) and CUS-1306 (merge the
-operator-merge `paths:` glob into the shared doc) into the same pass. Behind it: `#532`
-is a clean self-contained build; `#310` is still the operator decision nobody has made.
 
 ______________________________________________________________________
 

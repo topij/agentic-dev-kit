@@ -4,6 +4,70 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-20 · afternoon (the third ruling, and the panel that corrected its own transcription)
+
+**Theme —** executed the morning briefing's plan end-to-end. `#524` applied; `#372` ruled
+(third ruling: the panel is the standing reviewer, detection surface frozen — the ruling
+and its same-day correction are on the ticket); the ruling's doctrine follow-up plus three
+delegated fixes driven through the full panel loop to merge. Squashes on `main`: `#529`
+(upgrade.md `${KIT:?}` guards, addresses `#496`), `#530` (`review_evidence.head` nulled on
+the bot-coverage route, addresses `#495`), `#528` (pr-watch.md converged step carries the
+ruling), `#527` (manifest tracks the kit's own test suite, addresses `#493`). All four
+issues stay open — nothing verified their acceptance criteria in the field.
+
+- **The gap `#524` names is shut at the forge: ruleset `protect-main` is `active`** — PR required
+  (0 approvals), `toolkit` required and pinned to the GitHub Actions `integration_id`
+  (`#95`'s identity rule applied to the forge gate), deletion + non-fast-forward kept, no
+  bypass actors. Verified: `gh api repos/topij/agentic-dev-kit/rules/branches/main` lists
+  all four rule types, run from this repo's root.
+- **The session's sharpest event: `#528`'s adversarial lens executed
+  `bot_comment_verdicts()` against the live history and refuted the ruling it was
+  reviewing the transcription of.** The ruling's receipt-time-re-read item had conflated
+  `#519`'s conjunction-disqualification with `#525`'s count-blind hand-rolled loop — the
+  engine would have seen `#525` — and carried a figure that measured the blind loop, not
+  the bot. Corrected on `#372`; the fix round shortened rather than corrected, and round 2
+  found only lens-labeled cosmetic Lows on the shortened text.
+- **The ruling was field-tested the same afternoon, on the ticket:** `#529`'s
+  converged-head request delivered a comment-only clean review the `ⓘ review reported`
+  line caught; `#530`'s, a minute later, hit the quota wall, reported on both surfaces;
+  `⚠ review owed` fired at both convergences. Neither outcome was waited on; both merges
+  stood on dual-lens `fallback:panel` receipts.
+- **`#527` took three rounds** (finding → fix → merge-resolution). The round-3 re-run over
+  a "mechanical" merge delta found a real Medium (`#532`) — evidence against inventing a
+  cheaper carve-out for merge-resolution deltas.
+- **Filed this session: `#531`** (an adopter's own `conftest.py` misjudged via the
+  engine-role basename), **`#532`** (KIT_OWNED role labels pinned by nothing — the guards
+  derive their universe from the tuple they guard). Occurrence comments: `#372` (ruling,
+  correction, two request outcomes), `#480` (executed evidence: `cd ""` is a no-op success
+  in bash/zsh/sh; the false prose claim beneath the patched block; the test-name
+  overclaim), `#496` (behavioral-pin residual), `#506` (`#532`'s shape). Caps posted on
+  `#44` and `#509` — records and occurrence landing places now, not build backlog.
+- **The cs-toolkit upgrade boundary is reached (`#504`):** precondition 1 by the `#372`
+  ruling, precondition 2 by `#529`/`#530`/`#527` shipping the `#497` fix set. `kit_doctor`
+  now drift-checks vendored tests — the exact hazard `#493` measured on that repo.
+- **Verified:** `make test` at `/Users/topi/Coding/agentic-dev-kit` on each PR's final
+  branch head before its push — each PR's record carries its own summary line.
+
+**Learned**
+
+- **A ruling written from the trail's latest occurrence comment inherited the trail's
+  uncorrected layer.** The refuting evidence route was execution, not reading — the same
+  lesson the lens contract's "Execute, don't only read" already carries, arriving on the
+  record-authoring side.
+- **This morning's delegate-stall friction entry recurred with its proposed fix applied
+  verbatim and not binding.** What bound was a follow-up naming a concrete 600000ms
+  timeout for the verification command: the stall is timeout-shaped, not
+  obedience-shaped — `#514`'s carrier-not-wording, again.
+- **Two same-session converged-head requests competed for the hourly unit a minute
+  apart** — the first delivered, the second walled. Under the panel-as-reviewer posture
+  that budget is corroboration, not review capacity, so this costs nothing.
+
+▶ Next: run `/upgrade` on cs-toolkit — `#504`'s preconditions are both met. At upgrade
+time re-run the CHANGES_REQUESTED sweep (non-zero pulls `#499` ahead), and fold CUS-1293
+(`panel_prompt.py`: copy it or document the decline) and CUS-1306 (merge the
+operator-merge `paths:` glob into the shared doc) into the same pass. Behind it: `#532`
+is a clean self-contained build; `#310` is still the operator decision nobody has made.
+
 ## Session — 2026-08-20 · morning (the enforcement under the gate, and an author who was the unreliable narrator)
 
 **Theme —** cross-repo. `#525` shipped here (`#95`'s forgery route at `#521`'s site, squash `6201af6`); `ci-gate`
