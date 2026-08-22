@@ -42,6 +42,24 @@ starts.
 
 ---
 
+## #588 — 2026-08-23
+
+- **CHANGED — the Codex `SessionStart` registration printed by `./init.sh` and
+  shipped in `.codex/hooks.json` no longer invokes `check_memory_budget.py`**
+  (`#243`). That engine reads Claude Code's external `MEMORY.md`; Codex keeps the
+  portable `check_doc_budget.py` registration. **Existing hook configuration is
+  adopter-owned: remove the memory-budget command by hand, reconcile the document
+  command printed by `./init.sh`, then review and trust its current definition through
+  `/hooks`.** The printed guidance now says that omitting a matcher covers every
+  supported start source.
+- **ADDED — `kit_doctor` tracks
+  `docs/agentic-dev-kit/runtime-parity.md` as kit-owned doctrine** (`#243`). An
+  older install baseline reports the absent path as `new-upstream`. **During
+  `/upgrade`, take the file to adopt the machine-readable adapter inventory and
+  capability matrix, or explicitly decline it.**
+
+---
+
 ## #580 — 2026-08-22
 
 - **`kit_doctor`'s text report now opens with a dedicated block when this repo's copy
