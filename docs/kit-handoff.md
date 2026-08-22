@@ -82,10 +82,10 @@ report's own thesis, demonstrated on the report.
 
 ▶ Next: `#576` item 1 — Step 0's clone is not re-runnable, and the invocations that name
 the kit path hardcode it instead of using the `KIT` that Step 0 binds. Re-derive where
-those sit rather than trusting the line numbers in the issue body: `#580` edited
-`upgrade.md` above them and moved them. `#580` raised this item's value rather than
-touching it — the clone is now also the source of the *workflow the operator is told to
-follow*, so a reaped or stale clone mis-sources instructions and not only files.
+those sit; the line numbers in the issue body predate this session's squash. `#580` raised
+this item's value rather than touching it — the clone is now also the source of the
+*workflow the operator is told to follow*, so a reaped or stale clone mis-sources
+instructions and not only files.
 
 ______________________________________________________________________
 
