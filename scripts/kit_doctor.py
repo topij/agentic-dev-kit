@@ -289,6 +289,11 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # No Codex binding and no shared doc until #243's first slice; both landed
     # together, so this entry and .agents/skills/triage-friction-log/ are a pair.
     ("docs/agentic-dev-kit/workflows/triage-friction-log.md", "workflow"),
+    # The machine-readable front matter is the declared runtime-adapter set, and
+    # test_portability derives its coverage from it. Track the declaration so an
+    # adopter cannot refresh the adapters or shared workflows while keeping an
+    # older account of which ones are supposed to exist.
+    ("docs/agentic-dev-kit/runtime-parity.md", "doctrine"),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
     # /upgrade — links to it from rules 2 and 3. An untracked target means an

@@ -2477,18 +2477,11 @@ def _codex_session_start_commands() -> list[str]:
 
 
 def test_the_shipped_codex_session_start_carries_no_matcher() -> None:
-    """Kills: adding `"matcher": "startup"` to the Codex SessionStart entry.
+    """The portable document check runs for every supported start source.
 
-    MEASURED on `codex-cli 0.147.0`, not read off documentation — the
-    convergence plan assumed Claude's `startup`/`resume`/`clear` matcher shape
-    transferred, and it does not. The one real SessionStart registration on the
-    machine this was measured on (a shipping third-party integration) carries no
-    `matcher` key.
-
-    This is the load-bearing direction: a Codex registration carrying Claude's
-    matcher is ACCEPTED and simply never fires, so the failure is silent and
-    looks exactly like a hook that was never trusted. Nothing else in the suite
-    would notice — `kit-manifest.json` does not track this file.
+    Codex supports a matcher on SessionStart, but copying Claude's `startup`
+    subset would narrow the registration. Omission is the intentional match-all
+    shape. The Claude-only memory checker must not be present here.
     """
     parsed = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     entries = [
@@ -2499,13 +2492,15 @@ def test_the_shipped_codex_session_start_carries_no_matcher() -> None:
     assert entries, "no SessionStart budget registration in the shipped file"
     for entry in entries:
         assert "matcher" not in entry, (
-            "the Codex SessionStart entry grew a `matcher` key. Codex accepts it "
-            "and the hook then never fires — measured, not inferred."
+            "the Codex SessionStart entry grew a matcher and no longer covers "
+            "every supported start source"
         )
-    assert len(_codex_session_start_commands()) == 2, (
-        "both budget tripwires must be registered; Principle #1's mechanism "
-        "reaching one runtime is what #380 is about"
+    commands = _codex_session_start_commands()
+    assert len(commands) == 1, (
+        "Codex should register only the portable document-budget tripwire"
     )
+    assert "check_doc_budget.py" in commands[0]
+    assert "check_memory_budget.py" not in commands[0]
 
 
 def test_the_budget_advisory_prints_the_shipped_codex_commands_verbatim(
@@ -2583,69 +2578,45 @@ def test_the_budget_advisory_prints_the_shipped_claude_commands_verbatim(
         )
 
 
-def test_the_budget_advisory_says_an_untrusted_hook_is_skipped_silently(
+def test_the_budget_advisory_requires_reviewing_and_trusting_codex_hooks(
     tmp_path: Path,
 ) -> None:
-    """#380's acceptance names this sentence specifically, and it is the one an
-    adopter cannot derive.
-
-    Codex skips an untrusted hook with NO diagnostic: the session starts
-    normally and reports nothing. Verified by controlled comparison on
-    `codex-cli 0.147.0` — same repo, same `workspace-write` sandbox, the only
-    difference `--dangerously-bypass-hook-trust`; with it the hook fired, without
-    it nothing ran and nothing was said. Project trust (`trust_level =
-    "trusted"`) is NOT hook trust and does not substitute for it.
-
-    So the observable for "I forgot `/hooks`" is identical to the observable for
-    "the hook is broken". An advisory that omits this sends the adopter to debug
-    the command string.
-    """
+    """The hand-written project hook does not run until Codex trusts it."""
     repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
 
     result = _run_init(repo)
 
     assert "/hooks" in result.stdout
     lowered = result.stdout.lower()
-    assert "silently" in lowered, (
-        "the advisory must state that an untrusted hook is skipped SILENTLY"
-    )
-    assert "indistinguishable" in lowered, (
-        "the advisory must say a skipped hook cannot be told from a broken one — "
-        "that is the part an adopter cannot work out for themselves"
-    )
+    assert "review and trust" in lowered
+    assert "skipped until" in lowered
 
 
-def test_the_codex_session_start_takes_no_matcher_per_the_advisory(
+def test_the_codex_session_start_match_all_shape_is_explained_by_the_advisory(
     tmp_path: Path,
 ) -> None:
-    """The advisory must SAY the matcher rule, not merely omit the key.
-
-    An adopter hand-writing the entry from Claude's example will add
-    `"matcher": "startup"` unless told otherwise, and Codex will accept it.
-    """
+    """The adopter must know omission is intentional rather than accidental."""
     repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
 
     result = _run_init(repo)
 
-    assert 'NO "matcher" key' in result.stdout
-    assert "never fires" in result.stdout
+    assert "omit matcher" in result.stdout
+    assert "every supported start source" in result.stdout
 
 
-@pytest.mark.parametrize("which", [0, 1], ids=["doc-budget", "memory-budget"])
-def test_the_codex_budget_registrations_survive_a_git_less_tree(
-    tmp_path: Path, which: int
+def test_the_codex_budget_registration_survives_a_git_less_tree(
+    tmp_path: Path,
 ) -> None:
     """`#359`'s guard, on the new commands — a LEVEL-2 test that EXECUTES them.
 
     `$(git rev-parse --show-toplevel)` is the empty string outside a worktree, so
     an unguarded form resolves to a path rooted at `/` and the interpreter exits
-    non-zero on every session start. Both registrations are parametrized rather
-    than looped, so a failure names which one broke.
+    non-zero on every session start.
 
     Text-level assertions cannot catch this: when the command string is wrong,
     the advisory and the shipped file are wrong identically.
     """
-    command = _codex_session_start_commands()[which]
+    command = _codex_session_start_commands()[0]
 
     outside = subprocess.run(
         ["sh", "-c", command],
@@ -2913,10 +2884,7 @@ def _with_stub_uv(tmp_path: Path) -> tuple[dict[str, str], Path]:
     return env, witness
 
 
-@pytest.mark.parametrize("which", [0, 1], ids=["doc-budget", "memory-budget"])
-def test_the_codex_budget_registration_skips_a_cron_run(
-    tmp_path: Path, which: int
-) -> None:
+def test_the_codex_budget_registration_skips_a_cron_run(tmp_path: Path) -> None:
     """The `JOB_NAME` guard, EXECUTED — the level-2 test this guard did not have.
 
     Mutation-checked, and the result is why this exists: dropping
@@ -2930,7 +2898,7 @@ def test_the_codex_budget_registration_skips_a_cron_run(
     Both arms are asserted. Without the positive control, a registration that had
     stopped invoking anything at all would satisfy the cron arm and pass.
     """
-    command = _codex_session_start_commands()[which]
+    command = _codex_session_start_commands()[0]
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)

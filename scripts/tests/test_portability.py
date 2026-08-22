@@ -1383,24 +1383,47 @@ def test_python_engine_root_walk_supports_namespacing(tmp_path: Path) -> None:
 
 
 def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
-    # Extended for `adopt` and `upgrade` when #330 moved them to shared workflow
-    # definitions. This tuple is the ONLY thing validating `.agents/skills/*`, and
-    # it is a hardcoded restatement of "every dual-runtime skill" — so adding a
-    # skill without adding it here drops coverage silently, which is exactly what
-    # this change did until a review lens caught it. Deriving the set from the
-    # filesystem instead is #341, filed rather than built here because a fix round
-    # addresses the finding and not the mechanism around it
-    # (safety-critical-changes.md rule 3).
-    for name in (
-        "session-start",
-        "wrap-up",
-        "pr-watch",
-        "parallel",
-        "adopt",
-        "upgrade",
-        "triage-friction-log",
-    ):
-        skill_dir = REPO_ROOT / ".agents" / "skills" / name
+    parity_doc = REPO_ROOT / "docs" / "agentic-dev-kit" / "runtime-parity.md"
+    text = parity_doc.read_text(encoding="utf-8")
+    assert text.startswith("---\n")
+    _, frontmatter, _body = text.split("---", 2)
+    contract = yaml.safe_load(frontmatter)["workflow_contract"]
+
+    names = [entry["name"] for entry in contract]
+    assert len(names) == len(set(names)), "runtime-parity declares a workflow more than once"
+    assert {entry["status"] for entry in contract} <= {"aligned", "gap", "companion"}
+
+    declared_shared = {entry["shared"] for entry in contract if entry["shared"]}
+    declared_claude = {entry["claude"] for entry in contract if entry["claude"]}
+    declared_codex = {entry["codex"] for entry in contract if entry["codex"]}
+    actual_shared = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in (REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows").glob("*.md")
+    }
+    actual_claude = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in (REPO_ROOT / ".claude" / "commands").glob("*.md")
+    }
+    actual_codex = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in (REPO_ROOT / ".agents" / "skills").glob("*/SKILL.md")
+    }
+    assert declared_shared == actual_shared
+    assert declared_claude == actual_claude
+    assert declared_codex == actual_codex
+
+    for entry in contract:
+        name = entry["name"]
+        if entry["status"] == "companion":
+            assert entry["shared"] and not entry["claude"] and not entry["codex"]
+            continue
+        if entry["status"] == "gap":
+            assert not all(entry[key] for key in ("shared", "claude", "codex"))
+            continue
+
+        assert all(entry[key] for key in ("shared", "claude", "codex"))
+        shared_path = entry["shared"]
+        skill_dir = (REPO_ROOT / entry["codex"]).parent
         skill_text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
         assert skill_text.startswith("---\n")
         _, frontmatter, body = skill_text.split("---", 2)
@@ -1408,7 +1431,7 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
         assert set(metadata) == {"name", "description"}
         assert metadata["name"] == name
         assert "TODO" not in skill_text
-        assert f"docs/agentic-dev-kit/workflows/{name}.md" in body
+        assert shared_path in body
 
         interface = yaml.safe_load(
             (skill_dir / "agents" / "openai.yaml").read_text(encoding="utf-8")
@@ -1416,10 +1439,8 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
         assert 25 <= len(interface["short_description"]) <= 64
         assert f"${name}" in interface["default_prompt"]
 
-        claude_adapter = (REPO_ROOT / ".claude" / "commands" / f"{name}.md").read_text(
-            encoding="utf-8"
-        )
-        assert f"docs/agentic-dev-kit/workflows/{name}.md" in claude_adapter
+        claude_adapter = (REPO_ROOT / entry["claude"]).read_text(encoding="utf-8")
+        assert shared_path in claude_adapter
 
 
 def test_shared_lane_contract_has_no_runtime_specific_peer_api() -> None:
