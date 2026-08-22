@@ -72,8 +72,8 @@ report's own thesis, demonstrated on the report.
   operational parameters bind.** `#578` says a parameter binds where the agent's
   instructions live, not where the prompt points from. This panel passed
   `panel_prompt.py`'s output as the agent prompt itself rather than as a file to go read,
-  with the timeout and the no-subagents rule at the top; neither lens stalled, and each ran
-  `make test` to completion. Recorded on `#578` as the predicted remedy holding.
+  with the timeout and the no-subagents rule at the top; the `adversarial` and
+  `correctness` lenses each ran `make test` to completion, and no lens stalled. Recorded on `#578` as the predicted remedy holding.
 
 - **A field report that says which item matters most is worth taking at its word.** `#577`
   named its own headline and ranked the rest, and that ranking survived contact — the
@@ -81,10 +81,11 @@ report's own thesis, demonstrated on the report.
   reader eventually catches. The ranking came from the reporter having run the thing.
 
 ▶ Next: `#576` item 1 — Step 0's clone is not re-runnable, and the invocations that name
-the kit path hardcode it instead of using the `KIT` that Step 0 binds; `#576` enumerates
-them with line numbers. `#580` raised its value rather than touching it: the clone is now also
-the source of the *workflow the operator is told to follow*, so a reaped or stale clone
-mis-sources instructions and not only files. The issue carries the proposed fix.
+the kit path hardcode it instead of using the `KIT` that Step 0 binds. Re-derive where
+those sit rather than trusting the line numbers in the issue body: `#580` edited
+`upgrade.md` above them and moved them. `#580` raised this item's value rather than
+touching it — the clone is now also the source of the *workflow the operator is told to
+follow*, so a reaped or stale clone mis-sources instructions and not only files.
 
 ______________________________________________________________________
 
