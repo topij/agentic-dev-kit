@@ -39,13 +39,7 @@ the problem — `wrap-up.md` has bound that one all along. Every other surface i
 list, the rest of the narrative docs included, this section reaches first. The shape it
 takes is a commit that grows a list and leaves the number describing it alone: the list
 is the thing being edited, the number is prose beside it, and the edit never reaches it
-(`#546` enumerates the occurrences). A value that is part of a contract is not a count
-of anything and is untouched by this — the exit code a command is *documented to
-return*, a `config/dev-model.yaml` value, a budget ceiling, a version, an issue number.
-**The line is between the constant and the reading, and it governs that whole list
-rather than the item it is written beside**: the ceiling is a contract, the live count
-against it is a reading; the documented exit code is a contract, the status your run
-actually returned is a reading. A reading takes the stamp, whatever it is spelled as.
+(`#546` enumerates the occurrences).
 
 **A measured figure is stamped with its command, its revision and its date, or it is
 dropped.** Those three are the stamp; everything below means this one and restates it
@@ -54,6 +48,15 @@ the same kind. *"The helper recognises three forms"* says what is true now, so t
 commit falsifies it without touching it; *"`make test` at `<sha>` on `<date>` printed
 `<n> passed`"* says what one run did, and nothing later can falsify that. An unstamped
 figure is a current-state claim however it was meant, because no reader can date it.
+
+**A constant is untouched by this. A reading is not.** A constant is fixed in advance
+and reads the same for everyone: a documented exit code, a configured budget ceiling, a
+pinned version, an issue number. A reading is what one look at the system returned: the
+status your run exited with, the live count against that ceiling, the version actually
+installed, what a config key resolved to on this machine. **Every pair there is one word
+apart, so apply the test and not the list** — the list only illustrates the test, and no
+list of exempt values can be complete. A reading takes the stamp, whatever it is spelled
+as.
 
 **Naming the command covers the number and not the verdict built on it.** Dropping the
 digit while keeping the judgement it supported is the halfway remedy, and it is the half
@@ -88,16 +91,19 @@ run has scrolled or because you are counting what you believe you just added, yo
 have the figure, and re-running to read it is the only way to get it. A figure written
 from expectation is the defect this section is mostly about, and the harder one to
 catch, because a stamp beside it reads as compliance. And note what is *not* the way
-out: *"`make test` → green"* is not compliant for having no digit in it — unstamped,
-that is `over budget` one command over. *"`make test` at `<sha>` on `<date>` → green"*
-is, and a pass or a failure is a result Verification accepts; it does not additionally
-require the count.
+out: *"`make test` → green"* does not escape the rule by having no digit in it.
+Unstamped, it is `over budget` one command over. Stamped — *"`make test` at `<sha>` on
+`<date>` → green"* — it is fine, and a pass or a failure is a result Verification
+accepts; it does not additionally require the count.
 
 `wrap-up.md` carries the handoff's application of this rule ("an event is not a
 tally") and stays self-contained rather than pointing here, because it ships to
 adopters whose `AGENTS.md` is their own file and need not carry this section. This
-section is the general rule and that is its handoff-specific case; they must not
-disagree.
+section is the general rule and that is its handoff-specific case. **It is not a
+subset**: `wrap-up.md` also asks a verification claim to name *the directory it ran in*,
+which is not in the stamp above and which this repo's two-tree hazard makes load-bearing
+on its own. Where both apply, satisfy both. Neither may contradict the other, and a
+change to one is a reason to read the other.
 
 ## Ground rules
 
