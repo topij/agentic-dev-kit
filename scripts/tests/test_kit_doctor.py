@@ -3913,3 +3913,155 @@ def test_an_escaped_dollar_is_a_literal_not_a_placeholder(tmp_path):
     assert [s.state for s in claude] == ["unresolvable"], (
         f"an escaped placeholder was expanded: {[(s.state, s.detail) for s in claude]}"
     )
+
+
+# ── The upgrade-workflow bootstrap block (#577) ──────────────────────────────
+#
+# The gap this pins: an upgrade executes Steps 2-3 from the copy of `upgrade.md`
+# on disk and replaces that copy only in Step 4, so a drifted copy drives the
+# whole run — and the paragraph telling the operator to check for that is inside
+# the copy they do not have yet. `render` hoists this one file out of the drift
+# list so the machinery does the reminding. Every assertion below is on the
+# HOISTED block, never on the drift list, which carries the file either way.
+
+_BOOTSTRAP_MARK = "THE UPGRADE WORKFLOW ITSELF HAS DRIFTED"
+_UPGRADE_REL = "docs/agentic-dev-kit/workflows/upgrade.md"
+
+
+def test_the_upgrade_workflow_constant_names_a_real_kit_owned_entry():
+    """Derived from KIT_OWNED rather than spelled again, so a moved path cannot
+    silently stop matching — the failure PRE_PUSH_REL's comment describes. An
+    empty constant would make the block below unreachable while every
+    `not in` assertion still passed, so the identity is pinned here."""
+    assert kit_doctor.UPGRADE_WORKFLOW_REL == _UPGRADE_REL
+    assert (_UPGRADE_REL, "workflow") in kit_doctor.KIT_OWNED
+
+
+@pytest.mark.parametrize(
+    "installed, recorded",
+    [
+        # STALE — installed matches the baseline, kit has moved on.
+        ("installed", "installed"),
+        # LOCALLY EDITED — installed matches neither; baseline says kit's copy.
+        ("edited here", "kit"),
+    ],
+)
+def test_a_drifted_upgrade_workflow_gets_its_own_block_above_the_drift_list(
+    tmp_path, capsys, installed, recorded
+):
+    """Both split states, because the block must not be a STALE-only nicety:
+    an adopter whose copy is LOCALLY EDITED is running the wrong prose just as
+    surely, and #560 is about that state being the one this file's advice
+    handles worst."""
+    root = _fake_repo(tmp_path)
+    _write(root / _UPGRADE_REL, installed)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(
+        root,
+        _manifest({_UPGRADE_REL: _sha("kit")}),
+        config,
+        _baseline({_UPGRADE_REL: _sha(recorded)}),
+    )
+    assert next(f for f in report.files if f.path == _UPGRADE_REL).state in (
+        "stale",
+        "locally-edited",
+    )
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+    assert _BOOTSTRAP_MARK in out
+    # Above the drift list, not inside it. The whole finding is that saying it
+    # among the other drifted files is saying it where it does not help — so
+    # position is the assertion, not mere presence.
+    assert out.index(_BOOTSTRAP_MARK) < out.index("  files:")
+    assert out.index(_BOOTSTRAP_MARK) < out.index(f"    · {_UPGRADE_REL}")
+
+
+def test_the_block_does_not_prescribe_replacing_the_file():
+    """#560's finding, kept out of the engine. `LOCALLY EDITED` is the state
+    that can lose work, and a blanket "take the kit's copy" is wrong for it —
+    so the block prescribes READING the fetched copy, which is safe in every
+    state it fires on, and leaves the keep/replace question to the drift list."""
+    report = kit_doctor.Report(
+        kit_version_config=2,
+        kit_version_manifest=2,
+        engines_dir="scripts",
+        engines_dir_ok=True,
+        hooks_installed=True,
+        narrative_rendered={},
+        files=[
+            kit_doctor.FileStatus(
+                path=_UPGRADE_REL, role="workflow", state="locally-edited", detail=""
+            )
+        ],
+    )
+    # Scoped to the block itself — the rest of the report says "replace them"
+    # about the drift list, which is correct there and would mask this.
+    rendered = kit_doctor.render(report).splitlines()
+    start = next(i for i, ln in enumerate(rendered) if _BOOTSTRAP_MARK in ln)
+    end = next(i for i in range(start + 1, len(rendered)) if not rendered[i].strip())
+    text = " ".join(rendered[start:end])
+    # The one imperative the block issues, and it is safe in every state it
+    # fires on.
+    assert "Read the fetched kit's copy" in text
+    # ...and the keep/replace decision is deferred rather than answered.
+    assert "the drift list answers" in text
+    # The prescriptive forms, none of which may appear. `replaces` on its own is
+    # not among them: the block uses it to DESCRIBE what an upgrade does to this
+    # file, which is the fact the warning rests on. An earlier version of this
+    # test banned the substring and failed on that sentence — the ban has to be
+    # on the instruction, not on the word.
+    for prescription in (
+        "take the kit's copy",
+        "replace it",
+        "replace them",
+        "replace yours",
+        "replace this file",
+    ):
+        assert prescription not in text, prescription
+
+
+def test_an_unchanged_upgrade_workflow_renders_no_block(tmp_path, capsys):
+    """The discriminating half. A block that fired unconditionally would satisfy
+    every assertion above while pinning nothing — the shape the kit-bug nudge's
+    pair of tests exists to rule out."""
+    root = _fake_repo(tmp_path)
+    _write(root / _UPGRADE_REL, "kit")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    target = root / _UPGRADE_REL
+    report = kit_doctor.inspect(
+        root, _manifest({_UPGRADE_REL: kit_doctor.sha256_of(target)}), config
+    )
+    assert next(f for f in report.files if f.path == _UPGRADE_REL).state == "unchanged"
+    print(kit_doctor.render(report))
+    assert _BOOTSTRAP_MARK not in capsys.readouterr().out
+
+
+def test_another_drifted_file_does_not_raise_the_block(tmp_path, capsys):
+    """The second discriminator, and the one that catches a block keyed on
+    `report.drifted` being non-empty rather than on this file being in it."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "check_doc_budget.py", "edited here")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(
+        root, _manifest({"scripts/check_doc_budget.py": _sha("kit")}), config
+    )
+    assert report.drifted
+    print(kit_doctor.render(report))
+    assert _BOOTSTRAP_MARK not in capsys.readouterr().out
+
+
+def test_an_absent_upgrade_workflow_renders_no_block(tmp_path, capsys):
+    """A repo with no installed copy has nothing to be misled BY — it is reading
+    the kit's copy already, so the warning would be false. `drifted` excludes
+    every absent state, and this pins that the block inherits that boundary
+    rather than re-deriving one."""
+    root = _fake_repo(tmp_path)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, _manifest({_UPGRADE_REL: _sha("kit")}), config)
+    assert next(f for f in report.files if f.path == _UPGRADE_REL).state in (
+        "missing",
+        "declined",
+        "missing-required",
+    )
+    print(kit_doctor.render(report))
+    assert _BOOTSTRAP_MARK not in capsys.readouterr().out

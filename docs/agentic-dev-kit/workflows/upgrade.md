@@ -160,6 +160,23 @@ against
 `"${REPO:?REPO is not set — re-run Step 0}/docs/agentic-dev-kit/workflows/upgrade.md"`;
 if they differ, finish this upgrade following `$KIT`'s copy.
 
+**This paragraph cannot be the thing that saves you, and other surfaces carry it for
+that reason.** A reader whose copy is out of date is reading the out-of-date copy — so an
+instruction written *here* about *this file* reaches everyone except the person who needs
+it. The remedy has to come from outside: `kit_doctor` gives this file its own line at the
+top of the report rather than leaving it in the drift list with everything else, and the
+runtime adapters (`.claude/commands/upgrade.md`, `.agents/skills/upgrade/SKILL.md`) say
+to re-read this workflow from the clone before Step 2. Neither is a complete answer
+alone, and they fail in opposite directions, which is why each exists: the adapter is
+the only surface read before *any* of this, but it is adopter-owned and Step 4 keeps
+your version, so a kit fix to it never reaches a repo already adopted; the engine does
+reach every upgrade, but only from the *next* one — the copy running Step 1 today is the
+copy you installed last time. (An operator who takes the engine update inside Step 1 and
+re-runs, as the paragraph above prescribes, gets it in this run — but that prescription
+is itself in this file, so it inherits the same problem.) **Do not delete either as a
+duplicate of this paragraph** — they are the copies a stale reader can reach, and this is
+the one they cannot (`#577`).
+
 **What `differs` splits into depends on whether this repo has a *trusted* baseline.** A
 baseline is `kit-manifest.json` here recording what *this repo installed*, written by
 `--record-install` at the end of Step 4. Trusted means it carries a `kit_commit` key —

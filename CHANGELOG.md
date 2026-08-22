@@ -42,6 +42,29 @@ starts.
 
 ---
 
+## #580 — 2026-08-22
+
+- **`kit_doctor`'s text report now opens with a dedicated block when this repo's copy
+  of `docs/agentic-dev-kit/workflows/upgrade.md` has drifted** (`#577`), above the
+  installation checks and above the drift list — which still carries the file as
+  before. The block exists because that file's drift is not like the others': an
+  upgrade runs Steps 2-3 from the copy on disk and replaces it only in Step 4, so a
+  drifted copy drives the whole run, and the paragraph telling you to check for that
+  is inside the copy you do not have yet. **If you parse the text report, expect a
+  leading block that was not there.** Nothing else moved: no flag, no `--json` key
+  (the state is still read off `files`), and no exit code — `drifted` already carried
+  this file, so a run that renders the block was already exiting non-zero. It fires on
+  every drift state and on no absent state.
+- **The `/upgrade` runtime adapters now tell you to re-read the workflow from the
+  Step 0 clone before Step 2** (`.claude/commands/upgrade.md`,
+  `.agents/skills/upgrade/SKILL.md`). **These are adopter-owned and `/upgrade` Step 4
+  keeps your version, so upgrading does not give you this — copy the new text in by
+  hand**, or the gap above stays open on the one surface that is read before any of
+  the workflow is. Same reason `#553`'s entry gives for the `triage-friction-log`
+  adapter: your copy will not be overwritten, and it will not be updated either.
+
+---
+
 ## #558 — 2026-08-22
 
 - **`dev_session.sh merge` now REFUSES a `pr_watch --json` report whose `pr`,

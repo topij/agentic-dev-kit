@@ -432,6 +432,19 @@ PRE_PUSH_REL = next(
     "",
 )
 
+# The one kit-owned file whose drift changes how THIS REPORT must be acted on,
+# derived from KIT_OWNED rather than spelled again for the reason PRE_PUSH_REL
+# is. Empty when no such entry exists, which simply means the block in `render`
+# can never fire.
+UPGRADE_WORKFLOW_REL = next(
+    (
+        rel
+        for rel, role in KIT_OWNED
+        if role == "workflow" and PurePosixPath(rel).name == "upgrade.md"
+    ),
+    "",
+)
+
 # Paths that are the ADOPTER's — expected to differ, never reported as drift.
 # Listed explicitly (rather than inferred) so the boundary is auditable, and so
 # an installer can consume the same list to decide what not to copy.
@@ -1964,6 +1977,53 @@ def inspect(
 
 def render(report: Report) -> str:
     lines: list[str] = ["kit-doctor — installation report", ""]
+
+    # Hoisted OUT of the drift list at the bottom and given its own block at the
+    # top, because this file's drift is not like the other entries'. An upgrade
+    # executes its early steps from the copy of this workflow that is on disk and
+    # replaces that copy only near the end, so a drifted one drives the entire
+    # run before anything refreshes it — and the instruction to check for exactly
+    # that is a paragraph in Step 1 of the copy the operator does not have yet.
+    # That is the bootstrap gap #577 reports: the remedy is written where the
+    # reader cannot reach it, so listing this file among the others is the report
+    # saying it in the one place that does not help.
+    #
+    # The engine is a surface that CAN reach them, and for the same reason the
+    # equivalent blindness in `inspect`'s KIT_OWNED tuple is survivable: the run
+    # that cannot see a new file still reports the engine hiding it as drifted, so
+    # an operator who takes the update and re-runs is corrected by the machinery
+    # rather than by having remembered a warning. This block makes that true one
+    # level up. It does NOT close the gap for a repo whose installed engine
+    # predates it — that copy renders no such line — which is why the runtime
+    # adapters carry the same instruction; between them, an adopter who is current
+    # on either surface is covered.
+    #
+    # Deliberately not a new exit code: `drifted` already carries this file, so the
+    # status is non-zero whenever this renders. Deliberately not a new `--json`
+    # key either: a consumer reads the state off `files`, which is the rule the
+    # rest of that payload is built on — emit only what cannot be derived there.
+    #
+    # And it does not say "take the kit's copy". That is #560's blanket
+    # instruction, and it is the wrong advice for a LOCALLY EDITED one. READING
+    # the fetched copy is safe in every state this can fire on; which copy to keep
+    # is the same question the drift list below already answers for this file.
+    upgrade_doc = next((f for f in report.drifted if f.path == UPGRADE_WORKFLOW_REL), None)
+    if upgrade_doc is not None:
+        lines.append(f"  ⚠ THE UPGRADE WORKFLOW ITSELF HAS DRIFTED — {upgrade_doc.path}")
+        lines.append(
+            "    An upgrade runs its early steps from the copy on disk and replaces this"
+        )
+        lines.append(
+            "    file only near the end, so a drifted copy drives the whole run before"
+        )
+        lines.append(
+            "    anything refreshes it. Read the fetched kit's copy before the first step"
+        )
+        lines.append(
+            "    that writes. Whether to keep yours is the question the drift list answers."
+        )
+        lines.append("")
+
     cfg_v, man_v = report.kit_version_config, report.kit_version_manifest
     if cfg_v is None and report.kit_version_config_raw is not None:
         # Present but not a number. Deliberately NOT the "run ./init.sh to
