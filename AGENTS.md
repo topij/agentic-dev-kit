@@ -17,8 +17,8 @@ separately, through `uvx`. **Raise your tool timeout before starting the run** �
 default timeout can cut the run off partway, and how that truncation surfaces differs by
 runtime. pytest's summary line prints the elapsed time for the run you actually did.
 
-The two probes an agent reaches for first both fail here in a way that reads as
-"pytest is unavailable in this environment". Neither is evidence of that:
+The probes an agent reaches for first fail here in a way that reads as "pytest is
+unavailable in this environment". None of them is evidence of that:
 
 - `uv run pytest` → `error: Failed to spawn: pytest` (pytest is not a project dependency)
 - `python3 -m pytest` → `No module named pytest` (the system Python has no pytest)
