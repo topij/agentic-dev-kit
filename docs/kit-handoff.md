@@ -14,9 +14,100 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-22 — the friction log's routing rule, decided and shipped; and a panel that refused its own cheap exit.
+Last updated: 2026-08-22 — the overnight batch landed, the friction inbox graduated, and a panel that kept finding the narration wrong.
 
-## Latest session — 2026-08-22 (the routing rule, and a panel that refused its own cheap exit)
+## Latest session — 2026-08-22 · overnight and morning (the batch landed, and a panel that kept finding the narration wrong)
+
+**Theme —** An autonomous overnight batch of three isolated lanes, all merged the next
+morning; then the friction inbox graduated and swept. Squashes on `main`: `#559`, `#558`,
+`#557`. The sweep is `#572`, open and merge-ready at session end. Every defect the review
+panel found across the session was in a claim *about* the work rather than in the work —
+again, and this time inside the PR that ships the rule against it.
+
+- **The batch shape worked; `merge-gate-scrub` and `upgrade-paths` stalled the same way.**
+  Lanes were launched `new --headless` with per-lane merge classes decided at plan time —
+  `upgrade-paths` self, the others operator. Both ended their turn awaiting review lenses
+  they had spawned themselves, with
+  the prohibition verbatim in their injected contract. Distinct from the two prior
+  timeout-shaped stalls: the explicit `timeout: 600000` in every brief held, and no lane
+  stalled on `make test`. Filed as `#564`.
+
+- **The cockpit's obvious way to verify a lane is wrong by default, and the wrong answer
+  looks like a lying lane.** A cockpit-side `pr_watch` poll reads the cockpit's state root,
+  so a lane's receipt and seen-set are invisible and its finished PR reports as unreviewed
+  and unsettled. A correction was drafted on that basis before the lane's own sandbox was
+  read; the lane had been right. Principle #3 working, with a failure mode shaped exactly
+  like the thing it is not. `#563`.
+
+- **Following `pr-watch`'s Converged step un-converges the PR.** It prescribes posting an
+  on-demand review request at the converged head; that comment then blocks `converged`, and
+  `reconcile_sessions.sh` reports the lane `open` rather than `held` — so a closeable batch
+  reads as not closeable on the surface used to decide. `#562`. The same write also blocked
+  a self-merge lane overnight when `--mark-seen` was refused by the permission classifier,
+  unattended; `#565`.
+
+- **The panel found a HIGH the author's own verification step should have caught.** All six
+  issues the sweep filed carried no labels, against a taxonomy every prior sweep's issues
+  use. The `#138` post-landing re-read had run and checked state and title — the mechanism
+  that exists for this, too shallow to catch it. The marker now names which fields it
+  covered.
+
+- **Round 2 caught round 1's fix breaking a rule merged that morning.** The repair for a
+  count ambiguity added counts to prose, which `AGENTS.md`'s `Numbers in prose` forbids —
+  and its merge commit is the direct parent of round 1's own base, so it was in force. The
+  lens established that by reading the parentage rather than asserting it.
+
+- **Both delta lenses disputed an author draw, and the adversarial one checked the claim
+  behind it.** The kept-entry divergence had been tied to `#6` by assertion; `#6` is about
+  vendoring the engine and says nothing about disposition semantics, so nobody scoping it
+  would have found the question. Now `#575`, which argues the real risk: `finalize_triage.py`
+  cannot see *why* a block was not filed, so the first vendored run archives every parked
+  entry and silently ends the accumulation it exists for.
+
+- **`triage-friction-log` ran end-to-end for the first time since `#553` rewrote it** —
+  `#243`'s slice had no field test until now. Two deviations, both deliberate and disclosed
+  in the marker: approval came in-session because the Slack MCP was unauthorized and no
+  notify engine exists (`#573` asks whether that route should be sanctioned or the gate held
+  absolute), and one entry was kept rather than swept because it parks for accumulation
+  (`#575`).
+
+- **Filed this session:** `#562`, `#563`, `#564`, `#565`, `#566`, `#567`, `#568`, `#569`,
+  `#570`, `#571`, `#573`, `#574`, `#575`, `#578`. Occurrence comments on `#509`, `#514`,
+  `#511`, `#246`, `#510`, `#534`, `#546`, `#128`.
+
+- **Verified:** `make test` at `/Users/topi/Coding/agentic-dev-kit` on merged `main` at
+  `df32eb2` printed `1355 passed`, and again on `chore/triage-2026-08-22` at `64fd2b2`.
+  `kit_doctor` on merged `main` at `df32eb2`: `56 unchanged, 0 differ, 0 missing, 0 unknown`.
+  `#537`'s pins were watched to fail against a reverted wrapper in a throwaway worktree at
+  `9de2daa`, with the mutation asserted applied two ways before the run.
+
+**Learned**
+
+- **A parameter binds where the agent's instructions live, not where the prompt points from.**
+  `#514`'s fix — name the timeout, do not plead — worked for every lane, whose briefs
+  *are* their instruction set. It failed for every lens on `#572`'s panel, whose wrapper
+  points at a `panel_prompt.py`-rendered file they are told to follow exactly. Same words,
+  outranked by the document they were attached to; `#578` enumerates them.
+
+- **Knowing a failure does not prevent it when the wrong answer is well-formed.** The
+  cs-toolkit brief's own closing warning is about classifying adopter files by path
+  existence; the table above it had two rows wrong from doing exactly that, in both
+  directions at once. Recorded on `#534`.
+
+- **The review receipt makes a record's imprecision permanent, which is an argument for
+  getting it right at write time.** A wording fix moves the head and invalidates a two-lens
+  receipt; re-recording at an unreviewed head would be false. So the mechanism protecting
+  the review protects the imprecision with it — noted on `#128`, with a suggestion that the
+  approval record take a fixed shape rather than being composed in prose each sweep.
+
+▶ Next: merge `#572` if it is still open (green, review-clean, receipt bound to `64fd2b2`
+plus a CodeRabbit review of the same head), then run the cs-toolkit `/upgrade` — the brief
+is at `/tmp/cs-toolkit-upgrade-brief.md`, and its one out-of-band fact is that their
+installed `upgrade.md` predates `#544` and `#559`, so follow `$KIT`'s copy, not `$REPO`'s.
+
+______________________________________________________________________
+
+## Session — 2026-08-22 · earlier (the routing rule, and a panel that refused its own cheap exit)
 
 **Theme —** `#310`'s decision was taken and shipped. `wrap-up`'s friction-routing step now
 routes on evidence rather than severity, and `triage-friction-log` became a shared workflow
@@ -233,162 +324,6 @@ time re-run the CHANGES_REQUESTED sweep (non-zero pulls `#499` ahead), and fold 
 (`panel_prompt.py`: copy it or document the decline) and CUS-1306 (merge the
 operator-merge `paths:` glob into the shared doc) into the same pass. Behind it: `#532`
 is a clean self-contained build; `#310` is still the operator decision nobody has made.
-
-______________________________________________________________________
-
-## Session — 2026-08-20 · morning (the enforcement under the gate, and an author who was the unreliable narrator)
-
-**Theme —** cross-repo. `#525` shipped here (`#95`'s forgery route at `#521`'s site, squash `6201af6`); `ci-gate`
-shipped in the cs-toolkit adopter (`4e743dc3`). Both PRs' review rounds found real defects and
-**every one was in the record prose, not the mechanism** — the diffs came through clean and the
-narration did not.
-
-- **`#524`: this repo's `main` is protected by convention only.** No classic protection
-  (404), `rules/branches/main` empty, the sole ruleset `dont-delete-main` left
-  `enforcement: disabled` since it was created. `scripts/hooks/pre-push` guards only
-  `dev/*` pushes touching the narrative files, so a direct push to `main` reaches its
-  `exit 0`. The kit ships the rule it does not enforce on itself. An enable script is
-  with the operator; **not applied** — the finding stands until it is.
-
-- **The adopter is better protected than the kit.** cs-toolkit's ruleset requires a PR
-  (0 approvals) but carries no `required_status_checks`. Closing that meant a `ci-gate`
-  aggregate job rather than a protection edit, because most of its checks are
-  matrix-generated and requiring those names wedges every PR the moment a package moves.
-  Tracked adopter-side; `CUS-1307` (nothing enforces `ci-gate.needs` stays complete) and
-  `CUS-1308` (`always()` vs `!cancelled()` on a gate job) came out of its review.
-
-- **`#372`: `#525` was reviewed, and this session's first account of it was wrong.** The
-  request at the converged head *completed* — as a comment-only clean review naming its
-  range (`6905aac` → `89939c0`) and reporting zero units remaining. The bot corrected the
-  record on the ticket before this block was written. What made it look like silence: the
-  acknowledgement comment was **mutated in place** into the review, and a poll that counts
-  comments cannot see an update — `#509`'s mutable-surface hazard, paid. `#525` is therefore
-  `#44`'s comment-only shape (a detection problem), and the adopter's `#2044` is the quota
-  one; they are not one cause. `#498`'s convergence-only ruling **did** take effect: the one
-  unit was spent on the merging head, which is what it was for.
-
-- **`#518` got its field evidence and the line works.** `⚠ review owed` fired unprompted at
-  `#525`'s converged head and was acted on rather than merged past. `#522` reproduced in the
-  same output — the `✅ DONE — green, reviewed` banner sits four lines above it.
-
-- **Filed this session: `#524`; `CUS-1307`, `CUS-1308`. Occurrence comments on `#372`,
-  and the cs-toolkit routing audit on `CUS-1306`.** That audit's finding: the `paths:` glob
-  binding the operator-merge rule exists only in `.claude/rules/`, so the runtime entering
-  through `AGENTS.md` gets the doctrine with no file list at all — `#243`/`#273`'s failure,
-  live in an adopter. Bidirectional drift, so it needs a merge and not a copy.
-
-- **Verified:** `make test` at `/Users/topi/Coding/agentic-dev-kit` on the `#525` branch,
-  and `make check-root` at `/Users/topi/Coding/in-parallel/cs-toolkit` — both passed, exit 0.
-  Counts deliberately not restated: the commands own them, and each PR's own record carries
-  the figure at the sha it was taken from.
-
-**Learned**
-
-- **A measurement taken from a still-running workflow read as a finished one.** A CI-cost
-  figure was gathered with a `.jobs[] | select(.conclusion != null)` filter while the run was
-  in flight; the filter silently dropped the unfinished jobs, including the long pole, and the
-  partial set was reported as the total — into a commit message and a PR body, off by
-  roughly fourfold. This is `settle_grace_minutes`' own failure mode committed by hand, one
-  layer up: a count cannot tell you it is incomplete. Assert the run is `completed` before
-  reading any figure off it.
-
-- **The correction was wrong too, in the opposite direction.** The `if: always()` claim was
-  repaired once and still false — GitHub documents `always()` as running "even when
-  canceled", which is why its docs recommend `!cancelled()`. The delta pass caught it against
-  primary sources. The third version asserts only what holds either way. `fallback-review-panel.md`'s
-  "shorten, don't correct" is the rule that would have skipped two rounds.
-
-- **Both lenses found the same structural gap from opposite directions**, and neither found
-  it in the diff — the adversarial lens hunting a bypass, the correctness lens checking claims
-  against the tree, both landing on `ci-gate.needs` having no enforcement. Disjoint lenses
-  converging is the panel doctrine's claim; this is an instance of it.
-
-- **A delegated implementer left its work uncommitted on `main` and stalled awaiting a
-  notification that was never coming.** Nothing was pushed, so nothing was violated — the only
-  thing preventing a commit to `main` was the agent not getting that far, which is `#524`
-  demonstrating itself the same hour it was filed.
-
-- **A CHANGELOG placeholder cannot survive this repo's own suite.**
-  `test_real_changelog_headings_match_the_extraction_pattern` runs against the real file, so a
-  `#TBD` heading fails `make test` by construction. Any split where an implementer pushes and
-  the cockpit opens the PR hits this; the number has to be substituted before the suite can pass.
-  Related to `#507`.
-
-▶ Next: `#524` is the session's own unfinished business — the enable script is drafted and
-unapplied, and until it runs every ground rule about `main` here rests on agents obeying it.
-Behind it: `#44`/`#509` are where `#372`'s remaining weight sits now that the review turned
-out to have happened and the gate could not see it, and `#310` is still the operator decision
-nobody has made.
-
-______________________________________________________________________
-
-## Session — 2026-08-19 (a gate predicate used to answer a report's question, and a review the gate could see)
-
-**Theme —** `#518` shipped (`#520`, squash `ab2bdad`): the converged head now names each
-configured reviewer that has not looked at it. The line's first cut was wrong, and wrong
-again in a second way after the first fix; the panel caught both before they reached
-`main`. `#518` stays open — nothing verified its acceptance criteria in the field.
-
-- **What shipped.** `⚠ review owed` at convergence, per configured bot, gated on the
-  reviewer read having succeeded. `pr-watch.md`'s converged step settles that request
-  *before* reading `mergeable` and says an already-true `mergeable` does not discharge it —
-  which is the exit ramp `#516` took out of the loop. Reported only: the gate is untouched
-  and a `fallback:panel` receipt still authorizes while the line still prints.
-
-- **The defect worth carrying past this PR: a merge-gate predicate is not a report
-  predicate.** The line read `qualifying_bot_coverage`, which under-reports *by design*
-  because it feeds a gate, where under-reporting refuses a merge and is harmless. In a
-  report the same bias asserts nobody reviewed the diff — false both where a bot had
-  objected on the head and where the check read had failed, each reproduced before
-  acting. Both lenses found it independently. In the friction log as
-  a doctrine candidate; deliberately not a ticket — the instance is already handled in `#520`, and the
-  general shape is the part worth keeping.
-
-- **`#95`'s forgery, one namespace over.** The suppression trusted `_match_bot` over a check
-  **name** — a substring match — so a same-repo workflow holding `checks: write` could
-  silence "nobody has reviewed this" on its own PR. `review_bots.pending` now carries
-  `identity`/`trusted`, and `blocking` deliberately does not read them so the gate stays
-  fail-closed.
-
-- **Filed this session: `#521` (the same forgery against the pre-existing coverage warning,
-  which `#520` deliberately did not widen into), `#522` (the `DONE` banner says "reviewed"
-  four lines above `review owed`).** Occurrence comments on `#506` and `#372`.
-
-- **Verified:** `make test` at the repo root on merged `ab2bdad` — 1304 passed, exit 0.
-
-**Learned**
-
-- **`#372`: the request at the converged head produced a review the gate could see.**
-  `@coderabbitai full review` at `#520`'s converged head produced a real review object and
-  satisfied the `bot-coverage` route with no receipt needed. Read it against the runs
-  already on that ticket rather than on its own: `#501`, where the request produced
-  nothing, and `#519`, where it produced a genuine review that no detection route could
-  see. What separates this run from those is unclassified, and the caution that ticket already
-  carries about the detection routes is untouched by a run that happened to be detected.
-  It did find a real defect the panel had missed, which is evidence against treating the
-  panel as a standing replacement for the reviewer — one of the three postures `#372` is
-  held open to decide.
-
-- **`#506`'s shape recurred in a variant its own remedy does not catch.** Separate terms of
-  one `if` were pinned by nothing, each found only by mutation and none by reading — by
-  either lens, or by the author. The sharpest: an assertion placed in the neighbouring
-  sibling test, whose fixtures carry an unacked comment and therefore never converge, so it
-  passed while asserting nothing about a state it could not construct. "Extend the sibling's
-  test" is *how it got there*. The occurrence on `#506` proposes the sharpening — a new term
-  needs a case where that term alone decides the outcome.
-
-- **The panel and the bot found disjoint defects, in both directions.** The lenses found the
-  gate-predicate inversion and the forgery route; the bot then found a `CHANGELOG` sentence
-  that was true when written and made false by a later bullet in the same entry, which the
-  panel had read past. Neither substitutes for the other, which is what the panel
-  doctrine claims and what this session observed rather than assumed.
-
-▶ Next: `#518` and `#372` both want field evidence, and the next PR against this `main` is
-the cheapest source of it — open with `session-start` and let the poll speak. Specifically:
-does `⚠ review owed` fire at convergence and get acted on without prompting, and does a
-second explicit request at the converged head deliver a review object the way `#520`'s did
-and `#501`'s did not. Behind those: `#521` is a clean self-contained build, and `#310` is
-still the operator decision nobody has made.
 
 ______________________________________________________________________
 
