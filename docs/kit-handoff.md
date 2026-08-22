@@ -14,9 +14,98 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-22 — an adopter's field report acted on rather than filed, and a remedy moved out of the document it was about.
+Last updated: 2026-08-22 — the review process assessed, and a session that kept reproducing the defect class it was assessing.
 
-## Latest session — 2026-08-22 · afternoon (a field report acted on, and a remedy moved out of the document it was about)
+## Latest session — 2026-08-22 · evening (the review process assessed, and a session that kept reproducing the defect class it was assessing)
+
+**Theme —** A planning session on why PR review costs what it does. The assessment found a
+gap nothing on the tracker held and filed it. Then, writing up the finding, this session
+produced the same defect three times — a claim generalised from one observation — and each
+was refuted by something cheap that no panel had to run.
+
+- **The proportionality machinery all governs re-runs; the opening pass has none.**
+  Blast-radius classes, the executed/record discriminator, the delta pass, logged
+  dispositions — every one is scoped to what a *fix round* owes.
+  `fallback-review-panel.md` then closes the other door explicitly: a PR's initial review
+  takes the full panel, never a delta pass. So a wrap-up PR of pure record prose opens with
+  the pass a merge-gate change opens with. Filed as `#585`, with the three holes it has to
+  survive named rather than waved at. Distinct from `#209` (within a PR's re-run chain) and
+  `#420` (across sibling PRs), both of which are about a pass after the first.
+
+- **The reviewer selection is not a choice anyone is making badly.** The bot reviews when it
+  can, the panel runs when it cannot, and `fallback_commands` is degraded mode for a runtime
+  that cannot isolate a lens — which Claude Code can, so it never runs here. Combined with
+  `#372`'s quota shape, the session's *second* PR reliably gets the panel, and a session's
+  second PR is reliably its wrap-up. The most expensive review a normal session buys is the
+  one on the content with the least to break.
+
+- **Doctrine carries to adopters; the economics do not.** `fallback-review-panel.md`,
+  `safety-critical-changes.md`, `pr-watch.md` and `wrap-up.md` are byte-identical between
+  this repo and cs-toolkit's install, so a fix to `#585` arrives there on its next
+  `/upgrade` with no separate assessment. Whether the gap *costs* anything there is a
+  per-repo fact and is unmeasured.
+
+- **A paid reviewer tier is still metered, and past the allowance the behaviour is a
+  console setting.** `#372` now carries the readings: a stated allowance per hour, and an
+  over-limit path that bills, pauses, or stops depending on the usage-based add-on's mode,
+  with any mode refusing once the spending cap is reached. That narrows what option 3 *is*
+  without choosing it — paying makes the refusal a setting rather than removing it.
+
+- **`#491` showed up live three times in one session**, in three different contexts: a
+  configured incremental skip reported identically to an outage on a PR that had just
+  configured the skip; the same on a later head; and once alongside *valid* coverage, where
+  it was harmless. Followed literally the first time, it prescribes a two-lens panel over a
+  YAML config file. Recorded there — the failure is not fail-open, it is fail-expensive.
+
+- **Executed prose has no deterministic checker at all.** `make lint` is `ruff` and nothing
+  else; there is no prose tool anywhere in the tree. So the surface where findings actually
+  concentrate is checked only by a stochastic reviewer. Filed as `#586`, scoped to executed
+  prose and explicitly *not* to record accuracy — `#120`'s territory, which no lint can
+  reach, because those are truth defects rather than clarity ones.
+
+- **In cs-toolkit:** `#2076` merged (`c5a6897f`) adding that repo's first
+  `.coderabbit.yaml`; `#2078` carries its handoff update. Following `wrap-up.md` there hit
+  `#505`'s mechanism with a second file pair — the workflow names `check_doc_budget.py`
+  unconditionally, that adopter declines it deliberately and says so, and a *downstream*
+  instruction depending on its output was silently skipped while the wrap-up reported
+  success. Recorded there, with a third direction that issue lacked: the workflow could
+  consult the `remedy:` field it already reads.
+
+- **Filed this session:** `#585`, `#586`. Occurrence comments on `#491` and `#505`, and on
+  `#372` — where an earlier comment of this session's was corrected in place rather than
+  answered with a second one.
+
+- **Verified:** no kit code changed this session, so nothing here rests on the suite; the
+  claims above were established by reading rather than by running. The byte-identity of the
+  four doctrine files was checked with `shasum -a 256` over both trees from
+  `/Users/topi/Coding/agentic-dev-kit`; the absence of a prose linter by reading the `lint:`
+  target and grepping the Makefile, `.github/workflows/` and `scripts/` at `fabf554`; the
+  engine defaults behind three "absent" adopter config keys by reading `pr_watch.py`'s
+  module constants, which is what retracted them as findings.
+
+**Learned**
+
+- **Three claims this session were generalisations from one observation, and each was
+  refuted by something cheaper than a review round.** No refusals in a PR sweep read as
+  "there is no quota" — refuted by an allowance line already in the reviewer's own output.
+  One `Charged:` receipt read as "it bills rather than refusing" — refuted by a vendor docs
+  page. And an adopter's absent config keys read as gaps — retracted by the engine's own
+  defaults. Each reading was accurate; the error each time was treating one reading of a
+  *configurable* system as a property of it.
+
+- **What caught them is the argument for `#585` and `#586` both.** An allowance line, a
+  docs page, and a module constant — none of them a panel. The expensive reviewer is not
+  the only thing capable of finding this class, and the cheap things that found it were
+  already present and unread.
+
+▶ Next: `#372` — take the posture decision. It gates how much `#585` and `#586` are worth:
+if the reviewer covers every head, the opening-pass gap is latent rather than live. It now
+carries the metered-tier readings, the over-limit mode table, and the adopter comparison it
+was missing, and a further occurrence has nothing left to teach it.
+
+______________________________________________________________________
+
+## Session — 2026-08-22 · afternoon (a field report acted on, and a remedy moved out of the document it was about)
 
 **Theme —** `#577`, a cs-toolkit field report that is explicitly not a defect report, read
 and acted on rather than triaged. Its headline item shipped as `#580`; the rest went to the
@@ -254,87 +343,6 @@ with a Codex binding. Squashes on `main`: `#548`, `#553`. `#310`, `#515`, `#224`
 ▶ Next: the friction inbox is over budget and un-graduated, and `triage-friction-log` — the
 workflow `#553` just rewrote — is the way to clear it. Running it end-to-end is also the first
 field test of that rewrite, which is what `#243`'s slice still lacks.
-
-______________________________________________________________________
-
-## Session — 2026-08-21 (the adopter's findings, and a loop that reviewed its own guards)
-
-**Theme —** cs-toolkit's `/upgrade` findings worked end to end. `#535`'s regression, `#536`'s
-items and `#534`'s cause 3 all merged (`#538`, `#544`, `#545`); every one of those issues
-stays open, since nothing verified their acceptance criteria in the field.
-
-- **`#535` was upstream of where the issue pointed.** `#521`'s deference was correct; the
-  FETCH under it was not — identity resolved only for rows that could cancel a pending
-  block, so a healthy mid-review row never had one and `trusted` was never true. The
-  precondition now covers both consumers. Fixed in the field on its own PR: `coverage: []`,
-  a comment-surface entry with no trust field beside a trusted check entry, and `review
-  owed` correctly silent via the check.
-
-- **The panel found the defect the fix introduced, not the one it fixed.** `accounted`
-  read `.get("trusted", True)`, and a comment-surface entry carries no such key — so one
-  stale acknowledged outage comment would have silenced `review owed` for a PR's whole
-  life. `summarize_review_bots`' own docstring forbids exactly that ("a comment is a
-  statement about the past"), one layer below where I broke it.
-
-- **On `#544` and `#545`, nothing executable changed after the first commit.** Diffed each
-  branch's first commit against its head: test files and the manifest, plus one
-  comment-only edit to `config/dev-model.yaml` (checked — no key or value moved). No
-  prescribed `upgrade.md` command and no `ENGINE_DIR` substitution changed. So on those two
-  the review turned inward — the HIGHs were in guards, several in the previous round's guard.
-  `#538` is the counterexample and the claim does not reach it: its `accounted` fix
-  (`d6e371d`, a later commit) changed an executable line. Stopping was by blast radius,
-  per the doctrine — not because a round came back clean.
-
-- **The reason that was possible is now closed on both.** Each guard was pinned only to
-  the real tree, which holds none of the shapes it exists to catch, so the suite could not
-  tell a fixed guard from a broken one — lenses proved it by reintroducing earlier bugs
-  and watching the suite stay green. Both are pinned on synthetic fixtures now, and
-  `#544`'s fixture records which shapes discriminate and which are defence-in-depth,
-  rather than implying a clean sweep.
-
-- **Filed this session: `#537`** (the adopter's declined `dev_session.sh` carries a
-  merge-gate hardening the kit lacks — the kit's own test certifies the fork), **`#540`**,
-  **`#541`**, **`#542`**, **`#543`**, **`#546`**. Occurrence comments on `#325` (panel
-  isolation holds for writes and failed for reads; the cockpit's own launch note was the
-  mechanism) and a scope comment on `#534`.
-
-- **The operator's unfiled candidates were all filed, none rejected** — `#540`, `#541`,
-  `#542`. `#541` went in despite being pre-existing because its consequence
-  changed: under coverage alone a truncated reviews list only ever refused a merge; with
-  `#488`'s objection blocker reading the same list it can now authorize one.
-
-- **Verified:** `make test` at `/Users/topi/Coding/agentic-dev-kit` on each branch head
-  before its push, and again on `#545`'s merge commit after taking `origin/main` in. Each
-  PR's record carries its own result at the sha it was taken from.
-
-**Learned**
-
-- **Across both files I kept keying a guard on what text LOOKED like instead of asserting
-  the required form** — a line wrap, quotes and `=`, a shell continuation, a
-  fence tag, a `$ ` prompt; an operator, an attribute, a constructor, a wrapper on the
-  other operand. That is `safety-critical-changes.md` rule 1 ("treat 'we tightened the
-  matcher' as a stopgap") and I did not see the shape until a lens had refuted the fifth.
-
-- **The completeness claim was the more reliable defect than the code.** Round after
-  round I declared a class closed and a lens found another member. Asserting closure is
-  worse than leaving a gap open, because the assertion gives the next reader a reason to
-  stop looking — the draws that finally worked named my own worst track record and asked
-  the lenses to attack it.
-
-- **A rule that binds one surface does not bind the author writing another.** `wrap-up.md`
-  forbids a count beside a list; I broke that in docstrings and commit messages all
-  session, each time in the commit that grew the list. Filed as `#546` — it is `#243`'s
-  shape applied to surfaces rather than runtimes, and it tensions with `#54`, which asks
-  for a command's actual result.
-
-- **A lens verifying a declared LIMITATION is worth more than one confirming a claim.**
-  The round that added most was one that built the real defect in a real scanned file and
-  watched the guard pass over it, and one that checked my stated gaps were honest rather
-  than that my stated capabilities worked.
-
-▶ Next: `#537` — the merge-gate scrub the adopter's fork carries and the kit lacks. It was
-blocked on `#534` cause 3, which merged today, so the test that pins it can now be written
-against the kit's own `dev_session.sh` rather than an adopter's.
 
 ______________________________________________________________________
 

@@ -4,6 +4,85 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-21 (the adopter's findings, and a loop that reviewed its own guards)
+
+**Theme —** cs-toolkit's `/upgrade` findings worked end to end. `#535`'s regression, `#536`'s
+items and `#534`'s cause 3 all merged (`#538`, `#544`, `#545`); every one of those issues
+stays open, since nothing verified their acceptance criteria in the field.
+
+- **`#535` was upstream of where the issue pointed.** `#521`'s deference was correct; the
+  FETCH under it was not — identity resolved only for rows that could cancel a pending
+  block, so a healthy mid-review row never had one and `trusted` was never true. The
+  precondition now covers both consumers. Fixed in the field on its own PR: `coverage: []`,
+  a comment-surface entry with no trust field beside a trusted check entry, and `review
+  owed` correctly silent via the check.
+
+- **The panel found the defect the fix introduced, not the one it fixed.** `accounted`
+  read `.get("trusted", True)`, and a comment-surface entry carries no such key — so one
+  stale acknowledged outage comment would have silenced `review owed` for a PR's whole
+  life. `summarize_review_bots`' own docstring forbids exactly that ("a comment is a
+  statement about the past"), one layer below where I broke it.
+
+- **On `#544` and `#545`, nothing executable changed after the first commit.** Diffed each
+  branch's first commit against its head: test files and the manifest, plus one
+  comment-only edit to `config/dev-model.yaml` (checked — no key or value moved). No
+  prescribed `upgrade.md` command and no `ENGINE_DIR` substitution changed. So on those two
+  the review turned inward — the HIGHs were in guards, several in the previous round's guard.
+  `#538` is the counterexample and the claim does not reach it: its `accounted` fix
+  (`d6e371d`, a later commit) changed an executable line. Stopping was by blast radius,
+  per the doctrine — not because a round came back clean.
+
+- **The reason that was possible is now closed on both.** Each guard was pinned only to
+  the real tree, which holds none of the shapes it exists to catch, so the suite could not
+  tell a fixed guard from a broken one — lenses proved it by reintroducing earlier bugs
+  and watching the suite stay green. Both are pinned on synthetic fixtures now, and
+  `#544`'s fixture records which shapes discriminate and which are defence-in-depth,
+  rather than implying a clean sweep.
+
+- **Filed this session: `#537`** (the adopter's declined `dev_session.sh` carries a
+  merge-gate hardening the kit lacks — the kit's own test certifies the fork), **`#540`**,
+  **`#541`**, **`#542`**, **`#543`**, **`#546`**. Occurrence comments on `#325` (panel
+  isolation holds for writes and failed for reads; the cockpit's own launch note was the
+  mechanism) and a scope comment on `#534`.
+
+- **The operator's unfiled candidates were all filed, none rejected** — `#540`, `#541`,
+  `#542`. `#541` went in despite being pre-existing because its consequence
+  changed: under coverage alone a truncated reviews list only ever refused a merge; with
+  `#488`'s objection blocker reading the same list it can now authorize one.
+
+- **Verified:** `make test` at `/Users/topi/Coding/agentic-dev-kit` on each branch head
+  before its push, and again on `#545`'s merge commit after taking `origin/main` in. Each
+  PR's record carries its own result at the sha it was taken from.
+
+**Learned**
+
+- **Across both files I kept keying a guard on what text LOOKED like instead of asserting
+  the required form** — a line wrap, quotes and `=`, a shell continuation, a
+  fence tag, a `$ ` prompt; an operator, an attribute, a constructor, a wrapper on the
+  other operand. That is `safety-critical-changes.md` rule 1 ("treat 'we tightened the
+  matcher' as a stopgap") and I did not see the shape until a lens had refuted the fifth.
+
+- **The completeness claim was the more reliable defect than the code.** Round after
+  round I declared a class closed and a lens found another member. Asserting closure is
+  worse than leaving a gap open, because the assertion gives the next reader a reason to
+  stop looking — the draws that finally worked named my own worst track record and asked
+  the lenses to attack it.
+
+- **A rule that binds one surface does not bind the author writing another.** `wrap-up.md`
+  forbids a count beside a list; I broke that in docstrings and commit messages all
+  session, each time in the commit that grew the list. Filed as `#546` — it is `#243`'s
+  shape applied to surfaces rather than runtimes, and it tensions with `#54`, which asks
+  for a command's actual result.
+
+- **A lens verifying a declared LIMITATION is worth more than one confirming a claim.**
+  The round that added most was one that built the real defect in a real scanned file and
+  watched the guard pass over it, and one that checked my stated gaps were honest rather
+  than that my stated capabilities worked.
+
+▶ Next: `#537` — the merge-gate scrub the adopter's fork carries and the kit lacks. It was
+blocked on `#534` cause 3, which merged today, so the test that pins it can now be written
+against the kit's own `dev_session.sh` rather than an adopter's.
+
 ## Session — 2026-08-20 · afternoon (the third ruling, and the panel that corrected its own transcription)
 
 **Theme —** executed the morning briefing's plan end-to-end. `#524` applied; `#372` ruled
