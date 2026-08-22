@@ -87,7 +87,7 @@ records broader capability parity that cannot be expressed as an adapter path.
 | Repository instructions | `AGENTS.md` | `CLAUDE.md` imports it | reads `AGENTS.md` directly | aligned |
 | Workflow adapters | `docs/agentic-dev-kit/workflows/` | `.claude/commands/` | `.agents/skills/` | declaration above is authoritative |
 | Safety-critical doctrine | `docs/agentic-dev-kit/safety-critical-changes.md` | path-scoped `.claude/rules/` binding | broad `AGENTS.md` routing only | gap: add an enforceable Codex binding without forking doctrine |
-| Document-budget tripwire | `check_doc_budget.py` | `SessionStart` | `SessionStart` | aligned |
+| Document-budget tripwire | `check_doc_budget.py` | `SessionStart` | `SessionStart` | gap: repository wiring is present; live trusted-session validation is pending |
 | Runtime memory tripwire | runtime-specific artifact | `check_memory_budget.py` checks Claude's `MEMORY.md` | no corresponding repository artifact | intentional difference: never invoke the Claude engine on Codex |
 | PR follow-through | `pr_followup_hook.py` | `PostToolUse` with Claude runtime mapping | `PostToolUse` with Codex runtime mapping | aligned; trust remains a Codex operator step |
 | Review fallback | shared panel doctrine and receipt | isolated reviewers where available | isolated reviewers where available | aligned outcome; compute controls remain runtime-specific |

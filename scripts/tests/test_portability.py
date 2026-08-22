@@ -1395,7 +1395,9 @@ def _assert_claude_workflow_adapter(
         assert shared_path in claude_body
 
 
-def _assert_codex_workflow_adapter(name: str, shared_path: str, codex_path: str) -> None:
+def _assert_codex_workflow_adapter(
+    name: str, shared_path: str | None, codex_path: str
+) -> None:
     skill_dir = (REPO_ROOT / codex_path).parent
     skill_text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
     assert skill_text.startswith("---\n")
@@ -1404,7 +1406,8 @@ def _assert_codex_workflow_adapter(name: str, shared_path: str, codex_path: str)
     assert set(metadata) == {"name", "description"}
     assert metadata["name"] == name
     assert "TODO" not in skill_text
-    assert shared_path in body
+    if shared_path:
+        assert shared_path in body
 
     interface = yaml.safe_load(
         (skill_dir / "agents" / "openai.yaml").read_text(encoding="utf-8")
@@ -1418,12 +1421,14 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
         name = skill_path.parent.name
         shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
         claude_path = f".claude/commands/{name}.md"
+        declared_shared = shared_path if (REPO_ROOT / shared_path).is_file() else None
         _assert_codex_workflow_adapter(
             name,
-            shared_path,
+            declared_shared,
             skill_path.relative_to(REPO_ROOT).as_posix(),
         )
-        _assert_claude_workflow_adapter(name, shared_path, claude_path)
+        if (REPO_ROOT / claude_path).is_file():
+            _assert_claude_workflow_adapter(name, declared_shared, claude_path)
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/runtime-parity.md")
@@ -1492,7 +1497,6 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
 
         shared_path = entry["shared"]
         if entry["codex"] and entry["codex"] not in declined:
-            assert shared_path
             _assert_codex_workflow_adapter(name, shared_path, entry["codex"])
 
         if entry["claude"] and entry["claude"] not in declined:
@@ -1556,6 +1560,37 @@ def test_runtime_parity_contract_rejects_a_gap_with_no_real_surface(
 
     with pytest.raises(AssertionError):
         test_runtime_parity_contract_covers_workflows_and_adapters()
+
+
+def test_runtime_parity_contract_allows_a_codex_only_gap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _runtime_parity_fixture(tmp_path)
+    (repo / "kit-manifest.json").write_text("{}\n", encoding="utf-8")
+    parity_doc = repo / "docs" / "agentic-dev-kit" / "runtime-parity.md"
+    text = parity_doc.read_text(encoding="utf-8")
+    aligned = (
+        "  - name: session-start\n"
+        "    status: aligned\n"
+        "    shared: docs/agentic-dev-kit/workflows/session-start.md\n"
+        "    claude: .claude/commands/session-start.md\n"
+        "    codex: .agents/skills/session-start/SKILL.md\n"
+    )
+    codex_only = (
+        "  - name: session-start\n"
+        "    status: gap\n"
+        "    shared: null\n"
+        "    claude: null\n"
+        "    codex: .agents/skills/session-start/SKILL.md\n"
+    )
+    assert aligned in text
+    parity_doc.write_text(text.replace(aligned, codex_only), encoding="utf-8")
+    (repo / "docs" / "agentic-dev-kit" / "workflows" / "session-start.md").unlink()
+    (repo / ".claude" / "commands" / "session-start.md").unlink()
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
+
+    test_codex_skill_adapters_are_valid_and_share_workflows()
+    test_runtime_parity_contract_covers_workflows_and_adapters()
 
 
 def test_shared_lane_contract_has_no_runtime_specific_peer_api() -> None:
