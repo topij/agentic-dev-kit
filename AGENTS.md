@@ -63,8 +63,11 @@ that. An unstamped figure is a current-state claim however it was meant, because
 reader can date it.
 
 **A constant is untouched by this. A reading is not.** A constant is *declared* —
-written once somewhere you can point at, and the same for everyone who looks. A reading
-is what one look at the system returned. They usually sit a word apart, and the pair is
+written down as the value the system is **to** use, in the place that decides it, the
+same for everyone who looks. A reading is what one look at the system returned. **Being
+written down is not what makes a constant**, or every stale figure in an old PR body
+would qualify by being quotable; a past reading stays a reading, and pointing at where
+someone recorded it does not stamp it. They usually sit a word apart, and the pair is
 easier to recognise than the rule: a pinned version against the version actually
 installed; a configured budget ceiling against the live count against it; the exit code
 a command documents against the status your run returned; a config key's written value
