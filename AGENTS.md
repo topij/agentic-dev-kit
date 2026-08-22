@@ -9,19 +9,134 @@ into a runtime-specific file.
 
 ## Verification
 
-**`make test` is the verification command for this repo.** It runs the full suite
-(`scripts/lib/state_paths/tests` + `scripts/tests`) in tens of seconds, supplying its
-own dependencies via `uv run --with pytest --with pyyaml`.
+**`make test` is the verification command for this repo.** It runs `lint` and
+`check-syntax` before the suite, and a failure in either stops it there — no pytest, and
+so no summary line. **`check-syntax` does not cover what its name suggests**: it hands a
+list of filenames to one `bash -n`, which parses the first and takes the rest as that
+script's arguments, so every file after the first goes unchecked — locally and in CI
+alike, since both run the same line. `#561` names them. A green run is not evidence
+those scripts parse. The suite itself (`scripts/lib/state_paths/tests` +
+`scripts/tests`) gets pytest and PyYAML from `uv run --with pytest --with pyyaml`;
+`lint` supplies `ruff` separately, through `uvx`. **Raise your tool timeout before
+starting the run** — a default timeout can cut the run off partway, and how that
+truncation surfaces differs by runtime. pytest's summary line prints the elapsed time
+for the run you actually did.
 
-The two probes an agent reaches for first both fail here in a way that reads as
-"pytest is unavailable in this environment". Neither is evidence of that:
+The probes an agent reaches for first fail here in a way that reads as "pytest is
+unavailable in this environment". None of them is evidence of that:
 
 - `uv run pytest` → `error: Failed to spawn: pytest` (pytest is not a project dependency)
 - `python3 -m pytest` → `No module named pytest` (the system Python has no pytest)
 
+A bare `python` is a different trap rather than another of these — it may not exist at
+all, and `command not found` says nothing about pytest either way.
+
 Do not conclude tests cannot run locally, and do not defer verification to CI, without
 having run `make test`. When claiming something is verified, name the command that
-established it and its actual result — #54 tracks making this a standing rule.
+established it and its actual result — #54 tracks making this a standing rule. When
+that result is a figure, or a verdict resting on one, *Numbers in prose* below governs
+how you write it.
+
+## Numbers in prose
+
+**A number describing current state does not go in prose.** If a reader can count it,
+write the enumeration and let them; if a command prints it, name the command. This
+binds **every surface a session writes** — commit messages, PR bodies, code comments,
+docstrings, issue text, review replies, the narrative docs, and whatever else you write
+that someone reads later. **Apply the scope and not the list**: a surface is bound
+because a session wrote it, not because it is named here. The handoff was never
+the problem — `wrap-up.md` has bound that one all along. Every other surface in that
+list, the rest of the narrative docs included, this section reaches first. The shape it
+takes is a commit that grows a list and leaves the number describing it alone: the list
+is the thing being edited, the number is prose beside it, and the edit never reaches it
+(`#546` enumerates the occurrences).
+
+**A measured figure is stamped with its command, its revision and its date, or it is
+dropped.** Those three are the stamp; everything below means this one and restates it
+nowhere. Where the claim precedes the commit that carries it — a run quoted in the
+message you are about to write — the revision is the one you ran against, not the one
+that does not exist yet. **The revision is a sha, never a moving name.** `HEAD`, a
+branch, or "latest" supplies the word and not the guarantee: the ref moves, and the
+sentence quietly stops describing the run it names. That is `#75`'s lesson, one surface
+over. The stamp is what makes a sentence a different kind of claim, not decoration on
+the same kind. *"The helper recognises three forms"* says what is true now, so the next
+commit falsifies it without touching it; *"`make test` at `<sha>` on `<date>` printed
+`<n> passed`"* says what one run did, and nothing later can falsify that. An unstamped
+figure is a current-state claim however it was meant, because no reader can date it.
+
+**A constant is untouched by this. A reading is not.** A constant is *declared* —
+written down as the value the system is **to** use, in the place that decides it, the
+same for everyone who looks. A reading is what one look at the system returned. **Being
+written down is not what makes a constant**, or every stale figure in an old PR body
+would qualify by being quotable; a past reading stays a reading, and pointing at where
+someone recorded it does not stamp it. They usually sit a word apart, and the pair is
+easier to recognise than the rule: a pinned version against the version actually
+installed; a configured budget ceiling against the live count against it; the exit code
+a command documents against the status your run returned; a config key's written value
+against what it resolved to on this machine. Some constants have no reading beside them
+at all — an issue number is just an issue number. **Apply the test and not the list**:
+the list only illustrates it, and no list of exempt values can be complete. A reading
+takes the stamp, whatever it is spelled as.
+
+**Being stable is not being declared.** *"The helper recognises three forms"* does not
+change on its own either, and it is still a count you performed on the code rather than
+a value the code declares. Stability is why the miscount survives; it is not an
+exemption from the rule.
+
+**Naming the command covers the number and not the verdict built on it.** Dropping the
+digit while keeping the judgement it supported is the halfway remedy, and it is the half
+that failed: *"over budget — `check_doc_budget.py` prints the live figure"* has no
+figure left in it and was false within hours anyway (`#258`). `over budget`,
+`converged`, `passing`, `clean` are the same claim as the number they replaced, wearing
+a word.
+
+So a verdict is not the cheap way out of the rule above. **A verdict takes that same
+stamp, and nothing weaker.** Stamped, it is an observation and it keeps; standing loose
+in a document, it is a claim about now that nobody will re-check. Drop it, or stamp it —
+the same two exits the number had.
+
+**So the question to ask of a number you are about to write is whether you counted it
+or read it.** Counted — off a list, off your sense of the session, off what you believe
+you just added — it does not go in: write the enumeration, or name the command that
+prints it. Read out of the output of a run, it goes in stamped. A number in prose is
+one of those or it is a defect.
+
+**A dated narrative event is not a reading.** *"It cost two sessions time on
+2026-08-09"* records what happened, carries its date, and is followed by the instances
+themselves; nothing later falsifies it. That is the same permission `wrap-up.md` gives
+an enumerated event, and it is why the account below of two trees and two repos stands
+as written. **The test is whether the sentence says what happened or what is** — a date
+in front of a current-state count does not convert it, so *"as of `<date>`, the suite
+has `<n>` tests"* is a reading and takes the stamp like any other.
+
+**A quantity word is a number.** *"several tests failed"*, *"most of the forms"*,
+*"nearly all of them"* make the same current-state claim, go stale the same way, and
+have no digit in them to catch a reader's eye. The rule is about the claim, not the
+notation — the same reason a verdict does not escape it.
+
+**Where this meets Verification, and how that resolves.** Verification asks for the
+command *and its actual result*, which is exactly what invites a figure into the
+sentence. Neither rule yields: Verification still requires the command and the result,
+and this section governs the form that result takes, whether it is a figure or a verdict
+resting on one. **`actual` is the operative word — read the result back out of the run
+you are naming.** If you cannot point at the output the figure came from, because the
+run has scrolled or because you are counting what you believe you just added, you do not
+have the figure, and re-running to read it is the only way to get it. A figure written
+from expectation is the defect this section is mostly about, and the harder one to
+catch, because a stamp beside it reads as compliance. And note what is *not* the way
+out: *"`make test` → green"* does not escape the rule by having no digit in it.
+Unstamped, it is `over budget` one command over. Stamped — *"`make test` at `<sha>` on
+`<date>` → green"* — it is fine, and a pass or a failure is a result Verification
+accepts; it does not additionally require the count.
+
+`wrap-up.md` carries the handoff's application of this rule ("an event is not a
+tally") and stays self-contained rather than pointing here, because it ships to
+adopters whose `AGENTS.md` is their own file and need not carry this section. This
+section is the general rule and that is its handoff-specific case. **It is not a
+subset**: `wrap-up.md` also asks a verification claim to name *the directory it ran in*,
+which is not in the stamp above and which this repo's two-tree hazard makes load-bearing
+on its own. Where both apply, satisfy both. Neither may contradict the other, and a
+change to one is a reason to read the other.
 
 ## Ground rules
 
