@@ -35,7 +35,7 @@ report's own thesis, demonstrated on the report.
   A runtime adapter is adopter-owned and Step 4 keeps the adopter's version, so a kit fix
   there never reaches an already-adopted repo; `kit_doctor` reaches every adopter, but
   only from their *next* upgrade, because the copy running Step 1 today is the one
-  installed last time. They fail in opposite directions. `#580` ships both and states the
+  installed last time. They fail in opposite directions. `#580` ships them and states the
   gap each leaves.
 
 - **`#560` shaped what the new engine block may not say.** It prescribes *reading* the
@@ -45,9 +45,9 @@ report's own thesis, demonstrated on the report.
   prescriptive form returns. `#560` stays open; the paragraph it is about is unchanged.
 
 - **A brief's inherited claim reached a commit message as fact, and the report inherited
-  it too.** `#558` hardened `_resolve_lane_pr` and the merge gate; the adopter's fork has
-  the scrub at one of them. The kit's own copy has it at both — checked here before
-  relaying it. `#582` is the general form.
+  it too.** `#558` hardened `_resolve_lane_pr` and the merge gate. The adopter's fork has
+  the scrub at the merge gate and not at `_resolve_lane_pr`; the kit's own copy has it at
+  each — checked here before relaying it. `#582` is the general form.
 
 - **The configured reviewer answered by editing its earlier skip comment in place.**
   `#509`'s shape. The doctrine's read-the-body-not-the-count rule caught it, and
@@ -72,7 +72,7 @@ report's own thesis, demonstrated on the report.
   operational parameters bind.** `#578` says a parameter binds where the agent's
   instructions live, not where the prompt points from. This panel passed
   `panel_prompt.py`'s output as the agent prompt itself rather than as a file to go read,
-  with the timeout and the no-subagents rule at the top; neither lens stalled and both ran
+  with the timeout and the no-subagents rule at the top; neither lens stalled, and each ran
   `make test` to completion. Recorded on `#578` as the predicted remedy holding.
 
 - **A field report that says which item matters most is worth taking at its word.** `#577`
@@ -80,8 +80,9 @@ report's own thesis, demonstrated on the report.
   headline was the one with a structural fix, and the others were each a defect a careful
   reader eventually catches. The ranking came from the reporter having run the thing.
 
-▶ Next: `#576` item 1 — Step 0's clone is not re-runnable and three `$KIT` paths are
-hardcoded. `#580` raised its value rather than touching it: the Step 0 clone is now also
+▶ Next: `#576` item 1 — Step 0's clone is not re-runnable, and the invocations that name
+the kit path hardcode it instead of using the `KIT` that Step 0 binds; `#576` enumerates
+them with line numbers. `#580` raised its value rather than touching it: the clone is now also
 the source of the *workflow the operator is told to follow*, so a reaped or stale clone
 mis-sources instructions and not only files. The issue carries the proposed fix.
 
