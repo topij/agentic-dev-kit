@@ -18,7 +18,7 @@ Last updated: 2026-08-22 — the overnight batch landed, the friction inbox grad
 
 ## Latest session — 2026-08-22 · overnight and morning (the batch landed, and a panel that kept finding the narration wrong)
 
-**Theme —** An autonomous overnight batch of three isolated lanes, all merged the next
+**Theme —** An autonomous overnight batch of isolated lanes, all merged the next
 morning; then the friction inbox graduated and swept. Squashes on `main`: `#559`, `#558`,
 `#557`. The sweep is `#572`, open and merge-ready at session end. Every defect the review
 panel found across the session was in a claim *about* the work rather than in the work —
@@ -28,8 +28,8 @@ again, and this time inside the PR that ships the rule against it.
   Lanes were launched `new --headless` with per-lane merge classes decided at plan time —
   `upgrade-paths` self, the others operator. Both ended their turn awaiting review lenses
   they had spawned themselves, with
-  the prohibition verbatim in their injected contract. Distinct from the two prior
-  timeout-shaped stalls: the explicit `timeout: 600000` in every brief held, and no lane
+  the prohibition verbatim in their injected contract. Distinct from the earlier
+  timeout-shaped stalls on `#514`: the explicit `timeout: 600000` in every brief held, and no lane
   stalled on `make test`. Filed as `#564`.
 
 - **The cockpit's obvious way to verify a lane is wrong by default, and the wrong answer
@@ -46,16 +46,19 @@ again, and this time inside the PR that ships the rule against it.
   a self-merge lane overnight when `--mark-seen` was refused by the permission classifier,
   unattended; `#565`.
 
-- **The panel found a HIGH the author's own verification step should have caught.** All six
-  issues the sweep filed carried no labels, against a taxonomy every prior sweep's issues
+- **The panel found a HIGH the author's own verification step should have caught.** Every
+  issue the sweep filed carried no labels, against a taxonomy every prior sweep's issues
   use. The `#138` post-landing re-read had run and checked state and title — the mechanism
   that exists for this, too shallow to catch it. The marker now names which fields it
   covered.
 
-- **Round 2 caught round 1's fix breaking a rule merged that morning.** The repair for a
-  count ambiguity added counts to prose, which `AGENTS.md`'s `Numbers in prose` forbids —
-  and its merge commit is the direct parent of round 1's own base, so it was in force. The
-  lens established that by reading the parentage rather than asserting it.
+- **Round 2 caught round 1's fix breaking a rule that had merged hours earlier.** The
+  repair for a count ambiguity added counts to prose, which `AGENTS.md`'s `Numbers in prose`
+  forbids. The rule shipped as `df32eb2`, which is the very commit round 1 reviewed
+  against, so it governed every line round 1 looked at. An earlier phrasing called
+  `df32eb2` the *parent* of round 1's base; it **is** that base, and `#579`'s lenses
+  split on the ambiguity — one could not trace it, one resolved it to the wrong commit and
+  confirmed.
 
 - **Both delta lenses disputed an author draw, and the adversarial one checked the claim
   behind it.** The kept-entry divergence had been tied to `#6` by assertion; `#6` is about
@@ -79,7 +82,8 @@ again, and this time inside the PR that ships the rule against it.
   `df32eb2` printed `1355 passed`, and again on `chore/triage-2026-08-22` at `64fd2b2`.
   `kit_doctor` on merged `main` at `df32eb2`: `56 unchanged, 0 differ, 0 missing, 0 unknown`.
   `#537`'s pins were watched to fail against a reverted wrapper in a throwaway worktree at
-  `9de2daa`, with the mutation asserted applied two ways before the run.
+  `9de2daa`, with the mutation asserted applied — a non-empty diff against `HEAD`, and the
+  scrub markers gone from the wrapper — before the run.
 
 **Learned**
 
@@ -91,7 +95,7 @@ again, and this time inside the PR that ships the rule against it.
 
 - **Knowing a failure does not prevent it when the wrong answer is well-formed.** The
   cs-toolkit brief's own closing warning is about classifying adopter files by path
-  existence; the table above it had two rows wrong from doing exactly that, in both
+  existence; the table above it had rows wrong from doing exactly that, in both
   directions at once. Recorded on `#534`.
 
 - **The review receipt makes a record's imprecision permanent, which is an argument for
