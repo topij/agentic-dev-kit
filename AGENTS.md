@@ -10,18 +10,23 @@ into a runtime-specific file.
 ## Verification
 
 **`make test` is the verification command for this repo.** It runs `lint` and
-`check-syntax` first, and a failure in either stops it there — no pytest, and so no
-summary line. The suite itself (`scripts/lib/state_paths/tests` + `scripts/tests`) gets
-pytest and PyYAML from `uv run --with pytest --with pyyaml`; `lint` supplies `ruff`
-separately, through `uvx`. **Raise your tool timeout before starting the run** — a
-default timeout can cut the run off partway, and how that truncation surfaces differs by
-runtime. pytest's summary line prints the elapsed time for the run you actually did.
+`check-syntax` before the suite, and a `lint` failure stops it there — no pytest, and so
+no summary line. **`check-syntax` does not cover what its name suggests**: it hands
+several filenames to one `bash -n`, which parses the first and takes the rest as that
+script's arguments, so most of the files it names are never checked, locally or in CI
+(`#561`). A green run is not evidence those scripts parse. The suite itself
+(`scripts/lib/state_paths/tests` + `scripts/tests`) gets pytest and PyYAML from
+`uv run --with pytest --with pyyaml`; `lint` supplies `ruff` separately, through `uvx`.
+**Raise your tool timeout before starting the run** — a default timeout can cut the run
+off partway, and how that truncation surfaces differs by runtime. pytest's summary line
+prints the elapsed time for the run you actually did.
 
 The probes an agent reaches for first fail here in a way that reads as "pytest is
 unavailable in this environment". None of them is evidence of that:
 
 - `uv run pytest` → `error: Failed to spawn: pytest` (pytest is not a project dependency)
 - `python3 -m pytest` → `No module named pytest` (the system Python has no pytest)
+- a bare `python` may not exist at all, which misleads one step earlier
 
 Do not conclude tests cannot run locally, and do not defer verification to CI, without
 having run `make test`. When claiming something is verified, name the command that
@@ -85,6 +90,12 @@ or read it.** Counted — off a list, off your sense of the session, off what yo
 you just added — it does not go in: write the enumeration, or name the command that
 prints it. Read out of the output of a run, it goes in stamped. A number in prose is
 one of those or it is a defect.
+
+**A dated narrative event is not a reading.** *"It cost two sessions time on
+2026-08-09"* records what happened, carries its date, and is followed by the instances
+themselves; nothing later falsifies it. That is the same permission `wrap-up.md` gives
+an enumerated event, and it is why the account below of two trees and two repos stands
+as written.
 
 **A quantity word is a number.** *"several tests failed"*, *"most of the forms"*,
 *"nearly all of them"* make the same current-state claim, go stale the same way, and
