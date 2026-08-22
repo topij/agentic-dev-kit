@@ -333,11 +333,12 @@ make test          # the whole suite; supplies pytest + pyyaml itself via uv
 make mutation-test # same, minus the drift self-check — use this when mutating files
 ```
 
-`make test` is the command, not a convenience wrapper. The two probes you would
-otherwise reach for both fail in a way that reads as *"pytest is unavailable here"* and
-is not: `uv run pytest` → `Failed to spawn: pytest` (pytest is not a project
-dependency), and `python3 -m pytest` → `No module named pytest` (the system Python has
-none; a bare `python` may not exist at all, which is a third misleading signal). The `Makefile` target exists precisely because the bare invocation does not work.
+`make test` is the command, not a convenience wrapper. The probes you would otherwise
+reach for fail in a way that reads as *"pytest is unavailable here"* and is not:
+`uv run pytest` → `Failed to spawn: pytest` (pytest is not a project dependency);
+`python3 -m pytest` → `No module named pytest` (the system Python has none); and a bare
+`python` may not exist at all. The `Makefile` target exists precisely because the bare
+invocation does not work.
 
 Improvements that would help other adopters are welcome back here.
 

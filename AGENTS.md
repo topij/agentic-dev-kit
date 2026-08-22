@@ -43,11 +43,14 @@ is the thing being edited, the number is prose beside it, and the edit never rea
 
 **A measured figure is stamped with its command, its revision and its date, or it is
 dropped.** Those three are the stamp; everything below means this one and restates it
-nowhere. The stamp is what makes a sentence a different kind of claim, not decoration on
-the same kind. *"The helper recognises three forms"* says what is true now, so the next
-commit falsifies it without touching it; *"`make test` at `<sha>` on `<date>` printed
-`<n> passed`"* says what one run did, and nothing later can falsify that. An unstamped
-figure is a current-state claim however it was meant, because no reader can date it.
+nowhere. Where the claim precedes the commit that carries it — a run quoted in the
+message you are about to write — the revision is the one you ran against, not the one
+that does not exist yet. The stamp is what makes a sentence a different kind of claim,
+not decoration on the same kind. *"The helper recognises three forms"* says what is true
+now, so the next commit falsifies it without touching it; *"`make test` at `<sha>` on
+`<date>` printed `<n> passed`"* says what one run did, and nothing later can falsify
+that. An unstamped figure is a current-state claim however it was meant, because no
+reader can date it.
 
 **A constant is untouched by this. A reading is not.** A constant is *declared* —
 written once somewhere you can point at, and the same for everyone who looks. A reading
