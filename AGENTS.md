@@ -13,8 +13,8 @@ into a runtime-specific file.
 `check-syntax` first, and a failure in either stops it there — no pytest, and so no
 summary line. The suite itself (`scripts/lib/state_paths/tests` + `scripts/tests`) gets
 pytest and PyYAML from `uv run --with pytest --with pyyaml`; `lint` supplies `ruff`
-separately, through `uvx`. **Raise your tool timeout before you start it** — the default
-cuts the run off partway, and the truncation reads as a hang rather than as a timeout.
+separately, through `uvx`. **Raise your tool timeout before you start it** — a default
+timeout can cut the run off partway, and how that truncation surfaces differs by runtime.
 pytest's summary line prints the elapsed time for the run you actually did.
 
 The two probes an agent reaches for first both fail here in a way that reads as
@@ -39,10 +39,18 @@ the problem — `wrap-up.md` has bound that one all along. Every other surface i
 list, the rest of the narrative docs included, this section reaches first. The shape it
 takes is a commit that grows a list and leaves the number describing it alone: the list
 is the thing being edited, the number is prose beside it, and the edit never reaches it
-(`#546` enumerates the occurrences). A value that is part
-of a contract is not a count of anything and is untouched by this — an exit code, a
+(`#546` enumerates the occurrences). A value that is part of a contract is not a count
+of anything and is untouched by this — an exit code, a
 `config/dev-model.yaml` value, a budget **ceiling** (never the live count against it),
 a version, an issue number.
+
+**A measured figure is stamped with its command, its revision and its date, or it is
+dropped.** Those three are the stamp; everything below means this one and restates it
+nowhere. The stamp is what makes a sentence a different kind of claim, not decoration on
+the same kind. *"The helper recognises three forms"* says what is true now, so the next
+commit falsifies it without touching it; *"`make test` at `<sha>` on `<date>` printed
+`<n> passed`"* says what one run did, and nothing later can falsify that. An unstamped
+figure is a current-state claim however it was meant, because no reader can date it.
 
 **Naming the command covers the number and not the verdict built on it.** Dropping the
 digit while keeping the judgement it supported is the halfway remedy, and it is the half
@@ -51,19 +59,10 @@ figure left in it and was false within hours anyway (`#258`). `over budget`,
 `converged`, `passing`, `clean` are the same claim as the number they replaced, wearing
 a word.
 
-So a verdict is not the cheap way out of the rule above, and **a verdict is rescued by
-exactly the stamp a figure is, by nothing weaker**. Bound to the run and the revision
-that produced it, it is an observation and it keeps. Standing loose in a document, it is
-a claim about now that nobody will re-check. Drop it, or stamp it — the same two exits
-the number had.
-
-**A measured figure is stamped with its command, its revision and its date, or it is
-dropped.** The stamp is what makes the sentence a different kind of claim, not
-decoration on the same kind. *"The helper recognises three forms"* says what is true
-now, so the next commit falsifies it without touching it; *"`make test` at `<sha>` on
-`<date>` printed `<n> passed`"* says what one run did, and nothing later can falsify
-that. An unstamped figure is a current-state claim however it was meant, because no
-reader can date it.
+So a verdict is not the cheap way out of the rule above. **A verdict takes that same
+stamp, and nothing weaker.** Stamped, it is an observation and it keeps; standing loose
+in a document, it is a claim about now that nobody will re-check. Drop it, or stamp it —
+the same two exits the number had.
 
 **So the question to ask of a number you are about to write is whether you counted it
 or read it.** Counted — off a list, off your sense of the session, off what you believe
@@ -75,17 +74,16 @@ one of those or it is a defect.
 command *and its actual result*, which is exactly what invites a figure into the
 sentence. Neither rule yields: Verification still requires the command and the result,
 and this section governs the form that result takes, whether it is a figure or a verdict
-resting on one. **`actual` is
-the operative word — read the result back out of the run you are naming.** If you
-cannot point at the output the figure came from, because the run has scrolled or
-because you are counting what you believe you just added, you do not have the figure,
-and re-running to read it is the only way to get it. A figure written from expectation
-is the defect this section is mostly about, and the harder one to catch, because a
-stamp beside it reads as compliance. And note what is *not* the way out: *"`make test`
-→ green"* is not compliant for having no digit in it — unstamped, that is `over budget`
-one command over. *"`make test` at `<sha>` → green"* is, and it is usually all
-Verification needs, because the pass or the failure is the result it asked for and how
-many tests passed is rarely the point.
+resting on one. **`actual` is the operative word — read the result back out of the run
+you are naming.** If you cannot point at the output the figure came from, because the
+run has scrolled or because you are counting what you believe you just added, you do not
+have the figure, and re-running to read it is the only way to get it. A figure written
+from expectation is the defect this section is mostly about, and the harder one to
+catch, because a stamp beside it reads as compliance. And note what is *not* the way
+out: *"`make test` → green"* is not compliant for having no digit in it — unstamped,
+that is `over budget` one command over. *"`make test` at `<sha>` on `<date>` → green"*
+is, and a pass or a failure is a result Verification accepts; it does not additionally
+require the count.
 
 `wrap-up.md` carries the handoff's application of this rule ("an event is not a
 tally") and stays self-contained rather than pointing here, because it ships to
