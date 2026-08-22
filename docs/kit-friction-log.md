@@ -38,11 +38,13 @@ verbatim), [#511](https://github.com/topij/agentic-dev-kit/issues/511) and
 [#246](https://github.com/topij/agentic-dev-kit/issues/246) (one entry split across
 two, since its second half is a `gh`-cwd-resolution finding rather than a two-tree
 one), and [#510](https://github.com/topij/agentic-dev-kit/issues/510) — and **one
-entry deliberately kept in the active file**, below. All six creates and all five
+entry deliberately kept in the active file**, below (the disposition question that
+raises is [#575](https://github.com/topij/agentic-dev-kit/issues/575)). All six creates and all five
 comments were re-read from the tracker after landing per `#138` — state, title, body and
-**labels**. The first re-read checked everything but labels and so missed that all six
-issues had been filed with none; a panel lens caught it against the previous sweep, and
-the labels were applied before this marker was written.
+**labels**. The first re-read checked everything but labels and so missed that the six
+issues had been filed with none; a panel lens caught it against the previous sweep.
+`gh api repos/topij/agentic-dev-kit/issues/{566..571}/timeline` on 2026-08-22 shows each
+created with no label and labelled in one later batch, both before this marker's commit.
 
 **One entry was kept rather than swept, which diverges from the engine's spec.**
 `triage-friction-log.md` Step 5 sweeps every block present at draft time, *including

@@ -19,18 +19,17 @@ in the active file rather than swept. All six creates and all five comments were
 re-read from the tracker after landing per `#138`. The approval record and
 frozen-inbox digest are in this sweep's graduation marker in `kit-friction-log.md`.
 
-**Eleven of the twelve entries are below; the twelfth is deliberately absent.** The
-2026-08-22 entry — every panel finding across eight rounds landing in a claim *about*
-the work rather than in the work — parks itself for accumulation, and archiving it
-would put it beyond the reach of the periodic pass it is waiting for. It stays in
-`kit-friction-log.md`. Note this diverges from Step 5's spec, which sweeps
-LLM-skipped entries too; the divergence and its reasoning are recorded in the marker.
+**The 2026-08-22 entry is deliberately absent from what follows.** Every panel finding
+across eight rounds landing in a claim *about* the work rather than in the work — it
+parks itself for accumulation, and archiving it would put it beyond the reach of the
+periodic pass it is waiting for. It stays in `kit-friction-log.md`. This diverges from
+Step 5's spec, which sweeps LLM-skipped entries too; the reasoning is in the marker and
+the disposition question is [#575](https://github.com/topij/agentic-dev-kit/issues/575).
 
-Below are those eleven entries plus the previous sweep's graduation marker — twelve
-blocks in all, swept verbatim with headings demoted one level. The marker was never one
-of the twelve *entries*; it is the boundary they accumulated above, which is why the two
-counts in this section differ by one. This sweep's own marker is in
-`kit-friction-log.md`, not here.
+Everything else is below, verbatim, with headings demoted one level: the entries this
+sweep graduated, and — last — the previous sweep's graduation marker, which is the
+boundary they accumulated above rather than an entry itself. Count them there rather
+than here. This sweep's own marker is in `kit-friction-log.md`, not here.
 
 ### 2026-08-21
 
