@@ -75,7 +75,9 @@ was refuted by something cheap that no panel had to run.
   `#372` — where an earlier comment of this session's was corrected in place rather than
   answered with a second one.
 
-- **Verified:** no kit code changed this session, so nothing here rests on the suite; the
+- **Verified:** no kit code changed this session, so nothing here rests on the suite —
+  though `make test` in `/Users/topi/Coding/agentic-dev-kit` on this branch at `0a06365`
+  printed `1362 passed`, which says the tree was green at handoff and nothing more. The
   claims above were established by reading rather than by running. The byte-identity of the
   four doctrine files was checked with `shasum -a 256` over both trees from
   `/Users/topi/Coding/agentic-dev-kit`; the absence of a prose linter by reading the `lint:`
