@@ -1389,13 +1389,18 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
     _, frontmatter, _body = text.split("---", 2)
     contract = yaml.safe_load(frontmatter)["workflow_contract"]
 
+    expected_keys = {"name", "status", "shared", "claude", "codex"}
+    assert all(set(entry) == expected_keys for entry in contract)
     names = [entry["name"] for entry in contract]
     assert len(names) == len(set(names)), "runtime-parity declares a workflow more than once"
     assert {entry["status"] for entry in contract} <= {"aligned", "gap", "companion"}
 
-    declared_shared = {entry["shared"] for entry in contract if entry["shared"]}
-    declared_claude = {entry["claude"] for entry in contract if entry["claude"]}
-    declared_codex = {entry["codex"] for entry in contract if entry["codex"]}
+    declared = {
+        key: [entry[key] for entry in contract if entry[key]]
+        for key in ("shared", "claude", "codex")
+    }
+    for key, paths in declared.items():
+        assert len(paths) == len(set(paths)), f"runtime-parity reuses a {key} path"
     actual_shared = {
         path.relative_to(REPO_ROOT).as_posix()
         for path in (REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows").glob("*.md")
@@ -1408,39 +1413,56 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
         path.relative_to(REPO_ROOT).as_posix()
         for path in (REPO_ROOT / ".agents" / "skills").glob("*/SKILL.md")
     }
-    assert declared_shared == actual_shared
-    assert declared_claude == actual_claude
-    assert declared_codex == actual_codex
+    assert set(declared["shared"]) == actual_shared
+    assert set(declared["claude"]) == actual_claude
+    assert set(declared["codex"]) == actual_codex
 
     for entry in contract:
         name = entry["name"]
+        expected_paths = {
+            "shared": f"docs/agentic-dev-kit/workflows/{name}.md",
+            "claude": f".claude/commands/{name}.md",
+            "codex": f".agents/skills/{name}/SKILL.md",
+        }
+        for key, expected in expected_paths.items():
+            if entry[key]:
+                assert entry[key] == expected
+
         if entry["status"] == "companion":
             assert entry["shared"] and not entry["claude"] and not entry["codex"]
-            continue
-        if entry["status"] == "gap":
+        elif entry["status"] == "gap":
             assert not all(entry[key] for key in ("shared", "claude", "codex"))
-            continue
+        else:
+            assert all(entry[key] for key in ("shared", "claude", "codex"))
 
-        assert all(entry[key] for key in ("shared", "claude", "codex"))
         shared_path = entry["shared"]
-        skill_dir = (REPO_ROOT / entry["codex"]).parent
-        skill_text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
-        assert skill_text.startswith("---\n")
-        _, frontmatter, body = skill_text.split("---", 2)
-        metadata = yaml.safe_load(frontmatter)
-        assert set(metadata) == {"name", "description"}
-        assert metadata["name"] == name
-        assert "TODO" not in skill_text
-        assert shared_path in body
+        if entry["codex"]:
+            skill_dir = (REPO_ROOT / entry["codex"]).parent
+            skill_text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+            assert skill_text.startswith("---\n")
+            _, skill_frontmatter, body = skill_text.split("---", 2)
+            metadata = yaml.safe_load(skill_frontmatter)
+            assert set(metadata) == {"name", "description"}
+            assert metadata["name"] == name
+            assert "TODO" not in skill_text
+            if shared_path:
+                assert shared_path in body
 
-        interface = yaml.safe_load(
-            (skill_dir / "agents" / "openai.yaml").read_text(encoding="utf-8")
-        )["interface"]
-        assert 25 <= len(interface["short_description"]) <= 64
-        assert f"${name}" in interface["default_prompt"]
+            interface = yaml.safe_load(
+                (skill_dir / "agents" / "openai.yaml").read_text(encoding="utf-8")
+            )["interface"]
+            assert 25 <= len(interface["short_description"]) <= 64
+            assert f"${name}" in interface["default_prompt"]
 
-        claude_adapter = (REPO_ROOT / entry["claude"]).read_text(encoding="utf-8")
-        assert shared_path in claude_adapter
+        if entry["claude"]:
+            claude_adapter = (REPO_ROOT / entry["claude"]).read_text(encoding="utf-8")
+            assert claude_adapter.startswith("---\n")
+            _, claude_frontmatter, claude_body = claude_adapter.split("---", 2)
+            metadata = yaml.safe_load(claude_frontmatter)
+            assert isinstance(metadata.get("description"), str)
+            assert metadata["description"].strip()
+            if shared_path:
+                assert shared_path in claude_body
 
 
 def test_shared_lane_contract_has_no_runtime_specific_peer_api() -> None:

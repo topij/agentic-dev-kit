@@ -219,7 +219,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "3b3695c8dfa445ebf34e51e17d8c8b5ddafeb1ad24ba55cd0480bd1579d22f87"
+      "sha256": "0d717c3b076233cee4a25705a47efec1d1a546ca387cc0dc93d7f5e23c6331ec"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -243,7 +243,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "396e4c6b18853a40296cc4e519b5f42226e0f5a0011f4df1546fa9a76d4a771f"
+      "sha256": "04b26e9d0a90458d7b0b47f8ea3c9830d4c62abb16a5e44b6f981670a98d96cd"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

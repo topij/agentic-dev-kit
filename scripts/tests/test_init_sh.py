@@ -2885,18 +2885,10 @@ def _with_stub_uv(tmp_path: Path) -> tuple[dict[str, str], Path]:
 
 
 def test_the_codex_budget_registration_skips_a_cron_run(tmp_path: Path) -> None:
-    """The `JOB_NAME` guard, EXECUTED — the level-2 test this guard did not have.
+    """Execute both directions of the Codex registration's `JOB_NAME` guard.
 
-    Mutation-checked, and the result is why this exists: dropping
-    `[ -z "${JOB_NAME:-}" ] || exit 0` from both shipped commands killed exactly
-    one test, `..._prints_the_shipped_codex_commands_verbatim`, which compares the
-    advisory against the shipped file. That is a DRIFT check — it fails only
-    because one surface moved. Change both surfaces consistently and the guard is
-    gone with the suite green, which is the level-1/level-2 distinction the
-    git-less sibling's docstring draws.
-
-    Both arms are asserted. Without the positive control, a registration that had
-    stopped invoking anything at all would satisfy the cron arm and pass.
+    Without the positive control, a registration that had stopped invoking anything
+    at all would satisfy the cron arm and pass.
     """
     command = _codex_session_start_commands()[0]
     repo = tmp_path / "repo"
