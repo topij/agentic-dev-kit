@@ -1080,6 +1080,7 @@ def _script_words(command: str) -> tuple[bool, list[str]]:
     buf: list[str] = []
     state: str | None = None
     escaped = False
+    comment = False
 
     def flush(expandable: bool) -> None:
         if buf:
@@ -1094,6 +1095,11 @@ def _script_words(command: str) -> tuple[bool, list[str]]:
             parts.clear()
 
     for char in command:
+        if comment:
+            if char in "\n\r":
+                comment = False
+                end_word()
+            continue
         if escaped:
             # An escaped character is LITERAL, so it must not be marked: a shell
             # never expands `\$CLAUDE_PROJECT_DIR`, and marking it anyway
@@ -1112,7 +1118,7 @@ def _script_words(command: str) -> tuple[bool, list[str]]:
             # a hook line was read as an invocation — reporting a phantom
             # registration, or a dead one, from a comment (panel, adversarial
             # lens, round 7).
-            break
+            comment = True
         elif state is None and (char in " \t\n\r" or char in ";&|<>()"):
             end_word()
         elif state is None and char in "\"'":
@@ -1844,21 +1850,18 @@ def _codex_registration_semantics(
                     continue
                 semantic_words = _semantic_shell_words(command)
                 shell_commands = _simple_shell_commands(semantic_words)
-                matches = []
+                matches: list[tuple[str, list[str]]] = []
                 for name in sorted(kit_scripts):
-                    token = next(
-                        (
-                            candidate
-                            for candidate in _matching_words(words, name)
-                            if _token_looks_like_kit_engine(
-                                candidate, engine_paths[name], root
-                            )
-                        ),
-                        None,
-                    )
-                    if token is not None:
-                        matches.append((name, token))
-                for name, token in matches:
+                    candidates = [
+                        candidate
+                        for candidate in _matching_words(words, name)
+                        if _token_looks_like_kit_engine(
+                            candidate, engine_paths[name], root
+                        )
+                    ]
+                    if candidates:
+                        matches.append((name, candidates))
+                for name, _candidates in matches:
                     if name == "check_memory_budget.py":
                         problem(
                             "check_memory_budget.py is Claude-only and must not be registered "
@@ -1869,10 +1872,25 @@ def _codex_registration_semantics(
                     if contract is None:
                         continue
                     expected_event, accepted_matchers, expected_timeout = contract
-                    bound_commands = _script_commands(shell_commands, name)
+                    named_commands = _script_commands(shell_commands, name)
+                    bound_commands = [
+                        bound
+                        for bound in named_commands
+                        if _token_looks_like_kit_engine(
+                            bound[1][bound[3]], engine_paths[name], root
+                        )
+                    ]
+                    if not bound_commands:
+                        problem(f"{name} path must be invoked as the configured kit engine")
+                        continue
+                    tokens = [
+                        raw_command[script_index]
+                        for _command_index, raw_command, _command, script_index in bound_commands
+                    ]
                     occurrences[name] = occurrences.get(name, 0) + len(bound_commands)
-                    if not _token_targets_kit_engine(
-                        token, engine_paths[name], root
+                    if not all(
+                        _token_targets_kit_engine(token, engine_paths[name], root)
+                        for token in tokens
                     ):
                         problem(f"{name} path must resolve to the configured kit engine")
                     if _shell_words_have_grouping(
@@ -1925,27 +1943,29 @@ def _codex_registration_semantics(
                     timeout = handler.get("timeout")
                     if isinstance(timeout, bool) or timeout != expected_timeout:
                         problem(f"{name} timeout must be {expected_timeout} seconds")
-                    literal_relative = (
+                    literal_relative = any(
                         "$" not in token
                         and _ROOT_SENTINEL not in token
                         and not Path(token).is_absolute()
-                        and not (
-                            bound_commands
-                            and all(
-                                _relative_path_is_root_anchored(shell_commands, command_index)
-                                for command_index, _raw, _command, _script_index in bound_commands
-                            )
+                        and not all(
+                            _relative_path_is_root_anchored(shell_commands, command_index)
+                            for command_index, _raw, _command, _script_index in bound_commands
                         )
+                        for token in tokens
                     )
-                    pwd_relative = bool(
+                    pwd_relative = any(
                         re.search(r"\$PWD\b|\$\{PWD(?:[^}]*)\}", token)
-                        or re.search(r"(?:^|/)\$\(\s*pwd(?:\s+-[LP])?\s*\)(?:/|$)", token)
+                        or re.search(
+                            r"(?:^|/)\$\(\s*pwd(?:\s+-[LP])?\s*\)(?:/|$)", token
+                        )
+                        for token in tokens
                     )
                     root_alias_invalid = not _root_alias_is_verified(
                         shell_commands, bound_commands
                     )
-                    root_parameterized = bool(
+                    root_parameterized = any(
                         re.search(r"\$\{root[^A-Za-z0-9_}][^}]*\}", token)
+                        for token in tokens
                     )
                     expansion_provenance_invalid = any(
                         (

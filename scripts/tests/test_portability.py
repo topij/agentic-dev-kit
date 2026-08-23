@@ -1536,10 +1536,17 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         REPO_ROOT / ".claude" / "rules" / "safety-critical-changes.md"
     ).read_text(encoding="utf-8")
 
-    assert doctrine in root_agents
-    assert doctrine in template
-    assert doctrine in merge_section
-    assert doctrine in claude_rule
+    assert re.search(r"Read and apply\s+`" + re.escape(doctrine) + r"`", root_agents)
+    assert re.search(
+        r"Read the shared contract[\s\S]+governed by[\s\S]+"
+        + re.escape(doctrine),
+        template,
+    )
+    assert re.search(r"read and apply\s+`" + re.escape(doctrine) + r"`", merge_section)
+    assert re.search(
+        r"Read `" + re.escape(doctrine) + r"` completely and apply that\s+doctrine",
+        claude_rule,
+    )
     for text in (root_agents, template, merge_section, claude_rule):
         assert "pr_watch.py" in text
         assert "dev_session.sh" in text
@@ -1554,8 +1561,6 @@ def test_codex_live_validation_fixture_commands_are_executable(
     shutil.copytree(fixture, probe)
     subprocess.run(["git", "init", "-q"], cwd=probe, check=True)
     hooks = json.loads((probe / ".codex" / "hooks.json").read_text(encoding="utf-8"))
-    configured = json.dumps(hooks)
-
     def command_for(name: str) -> str:
         commands = [
             handler["command"]
@@ -1580,20 +1585,36 @@ def test_codex_live_validation_fixture_commands_are_executable(
             env=os.environ.copy(),
         )
 
-    assert set(hooks["hooks"]) == {"SessionStart", "PostToolUse"}
-    assert "ss-resume" in configured
-    assert "pt-lowercase" in configured
-    assert "ss-visible" in configured
-    assert "pt-json" in configured
-    assert "pt-plain" in configured
-    assert run("ss-visible").stdout.strip() == "SESSION_PLAIN_VISIBLE"
-    post_json = json.loads(run("pt-json").stdout)
+    names = {
+        handler["command"].rsplit(" ", 1)[1]
+        for groups in hooks["hooks"].values()
+        for group in groups
+        for handler in group["hooks"]
+    }
+    assert names == {
+        "ss-visible",
+        "ss-resume",
+        "ss-omitted",
+        "ss-star",
+        "ss-empty",
+        "ss-timeout",
+        "pt-json",
+        "pt-plain",
+        "pt-timeout",
+        "pt-lowercase",
+        "pt-star",
+        "pt-empty",
+        "pt-omitted",
+    }
+    results = {name: run(name) for name in names}
+    assert results["ss-visible"].stdout.strip() == "SESSION_PLAIN_VISIBLE"
+    post_json = json.loads(results["pt-json"].stdout)
     assert post_json["systemMessage"] == "POST_SYSTEM_VISIBLE"
     assert (
         post_json["hookSpecificOutput"]["additionalContext"]
         == "POST_CONTEXT_VISIBLE"
     )
-    assert run("pt-plain").stdout.strip() == "POST_PLAIN_SHOULD_BE_IGNORED"
+    assert results["pt-plain"].stdout.strip() == "POST_PLAIN_SHOULD_BE_IGNORED"
 
 
 def _runtime_parity_fixture(tmp_path: Path) -> Path:

@@ -3400,9 +3400,10 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-runtime-unbound", "must pass --runtime codex"),
         ("pr-runtime-shadowed", "must pass --runtime codex"),
         ("pr-runtime-expanded", "must pass --runtime codex"),
+        ("pr-leading-comment", "must pass --runtime codex"),
         ("pr-runtime-midword-hash", "must pass --runtime codex"),
-        ("pr-echo-argument", "must pass --runtime codex"),
-        ("pr-python-data", "must pass --runtime codex"),
+        ("pr-echo-argument", "path must be invoked as the configured kit engine"),
+        ("pr-python-data", "path must be invoked as the configured kit engine"),
         ("pr-disabled-invocation", "must use supported shell control flow"),
         ("pr-or-invocation", "must use supported shell control flow"),
         ("pr-piped-invocation", "must use supported shell control flow"),
@@ -3412,9 +3413,9 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-dup-redirection", "must not use shell redirection"),
         ("pr-group-exit", "must not use compound shell syntax"),
         ("pr-conditional", "must not use compound shell syntax"),
-        ("pr-heredoc", "must not use compound shell syntax"),
+        ("pr-heredoc", "path must be invoked as the configured kit engine"),
         ("pr-command-substitution", "must not use compound shell syntax"),
-        ("pr-inline-root", "must not use compound shell syntax"),
+        ("pr-inline-root", "path must be invoked as the configured kit engine"),
         ("pr-read-root", "must use the shipped Git-root"),
         ("pr-root-guard-missing", "must use the shipped Git-root"),
         ("absolute-dead-prefix", "must use the shipped Git-root"),
@@ -3561,6 +3562,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
     elif mutation == "pr-runtime-expanded":
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", '"$RUNTIME_ARG" --runtime codex'
+        )
+    elif mutation == "pr-leading-comment":
+        post_hook["command"] = "# explanation\n" + post_hook["command"].replace(
+            "--runtime codex", "--runtime claude"
         )
     elif mutation == "pr-runtime-midword-hash":
         post_hook["command"] = post_hook["command"].replace(
@@ -4323,6 +4328,27 @@ def test_an_external_decoy_does_not_hide_the_kit_lifecycle_invocation(tmp_path):
     details = [s.detail for s in statuses if s.state == "misconfigured"]
 
     assert any("must pass --runtime codex" in detail for detail in details), details
+
+
+def test_an_inert_kit_path_does_not_bless_an_external_invocation(tmp_path):
+    root = _fake_repo(tmp_path / "repo")
+    external = tmp_path / "external" / "pr_followup_hook.py"
+    _write(external, "print('adopter hook')\n")
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] = (
+        f'python3 "{external}" --runtime codex '
+        f'"{root / HOOK_REL}"'
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert any(
+        "path must be invoked as the configured kit engine" in detail
+        for detail in details
+    ), details
 
 
 @pytest.mark.parametrize(
