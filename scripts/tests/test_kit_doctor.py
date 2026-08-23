@@ -3414,6 +3414,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-inline-root", "must not use compound shell syntax"),
         ("pr-read-root", "must use the shipped Git-root"),
         ("pr-root-guard-missing", "must use the shipped Git-root"),
+        ("absolute-dead-prefix", "must use the shipped Git-root"),
         ("relative-path", "path must not depend on the session working directory"),
         ("pwd-path", "path must not depend on the session working directory"),
         ("pwd-command-path", "path must not depend on the session working directory"),
@@ -3622,6 +3623,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
     elif mutation == "pr-root-guard-missing":
         post_hook["command"] = post_hook["command"].replace(
             ' || exit 0; [ -n "$root" ] || exit 0;', ";"
+        )
+    elif mutation == "absolute-dead-prefix":
+        post_hook["command"] = (
+            f'set -e; false; exec python3 "{root / HOOK_REL}" --runtime codex'
         )
     elif mutation == "relative-path":
         post_hook["command"] = (
@@ -4164,6 +4169,10 @@ def test_inline_rev_parse_resolves_but_fails_codex_lifecycle_semantics(tmp_path)
             "misconfigured",
             "pr_followup_hook.py invocation must not use compound shell syntax",
         ),
+        (
+            "misconfigured",
+            "pr_followup_hook.py must use the shipped Git-root resolution guard",
+        ),
     ]
 
 
@@ -4214,6 +4223,22 @@ def test_a_quoted_absolute_path_containing_a_space_is_one_path(tmp_path):
     codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
 
     assert [(s.state, s.detail) for s in codex] == [("resolves", HOOK_REL)]
+
+
+def test_an_external_same_basename_hook_is_not_kit_lifecycle_wiring(tmp_path):
+    root = _fake_repo(tmp_path / "repo")
+    external = tmp_path / "external" / "pr_followup_hook.py"
+    _write(external, "print('adopter hook')\n")
+    _registration(
+        root,
+        ".codex/hooks.json",
+        f'exec python3 "{external}" --runtime codex',
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    codex = [s for s in statuses if s.surface == ".codex/hooks.json"]
+
+    assert [(s.state, s.detail) for s in codex] == [("resolves", str(external))]
 
 
 def test_an_unbalanced_quote_is_reported_as_unjudged_not_as_absent(tmp_path):

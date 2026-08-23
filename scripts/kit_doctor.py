@@ -1707,10 +1707,25 @@ def _root_alias_is_verified(
     return True
 
 
+def _token_targets_kit_engine(token: str, expected_rel: str, root: Path) -> bool:
+    expected_abs = str(root / expected_rel)
+    if token in (expected_rel, f"{_ROOT_SENTINEL}/{expected_rel}", expected_abs):
+        return True
+    if Path(token).is_absolute():
+        return False
+    known_root_form = re.search(
+        r"\$(?:root\b|\{root(?:[^}]*)\}|PWD\b|\{PWD(?:[^}]*)\}|\(\s*pwd(?:\s+-[LP])?\s*\))",
+        token,
+    )
+    return known_root_form is not None and token.endswith(f"/{expected_rel}")
+
+
 def _codex_registration_semantics(
     document: object,
     surface: str,
     kit_scripts: set[str],
+    root: Path,
+    engine_paths: dict[str, str],
 ) -> list[RegistrationStatus]:
     """Check the deterministic Codex contract without claiming live trust.
 
@@ -1741,11 +1756,13 @@ def _codex_registration_semantics(
                 pending.extend(nested)
         for nested_command in nested_commands:
             nested_lexed, nested_words = _script_words(nested_command)
-            if not nested_lexed:
-                continue
-            names.update(
-                name for name in kit_scripts if _match_word(nested_words, name) is not None
-            )
+            for name in kit_scripts:
+                token = _match_word(nested_words, name) if nested_lexed else None
+                if (
+                    token is not None
+                    and _token_targets_kit_engine(token, engine_paths[name], root)
+                ) or (not nested_lexed and engine_paths[name] in nested_command):
+                    names.add(name)
         return names
 
     if not isinstance(document, dict):
@@ -1789,7 +1806,7 @@ def _codex_registration_semantics(
                 lexed, words = _script_words(command)
                 if not lexed:
                     for name in sorted(kit_scripts):
-                        if name in command:
+                        if engine_paths[name] in command:
                             problem(f"{name} command must use valid shell syntax")
                     continue
                 semantic_words = _semantic_shell_words(command)
@@ -1798,6 +1815,7 @@ def _codex_registration_semantics(
                     (name, token)
                     for name in sorted(kit_scripts)
                     if (token := _match_word(words, name)) is not None
+                    and _token_targets_kit_engine(token, engine_paths[name], root)
                 ]
                 for name, token in matches:
                     if name == "check_memory_budget.py":
@@ -1816,18 +1834,22 @@ def _codex_registration_semantics(
                         semantic_words
                     ) or _shell_has_unsupported_compound_syntax(command, semantic_words):
                         problem(f"{name} invocation must not use compound shell syntax")
-                    root_bound_commands = [
-                        bound
-                        for bound in bound_commands
-                        if re.search(
-                            r"\$(?:\{root\}|root)(?:/|$)", bound[1][bound[3]]
-                        )
-                    ]
                     expected_root_index = 6 if name == "check_doc_budget.py" else 4
-                    if root_bound_commands and (
-                        not _has_shipped_repo_root_resolution(shell_commands)
-                        or any(bound[0] != expected_root_index for bound in root_bound_commands)
-                    ):
+                    prefix_is_supported = all(
+                        (
+                            Path(raw_command[script_index]).is_absolute()
+                            and command_index == 0
+                        )
+                        or (
+                            _has_shipped_repo_root_resolution(shell_commands)
+                            and command_index == expected_root_index
+                        )
+                        or _relative_path_is_root_anchored(
+                            shell_commands, command_index
+                        )
+                        for command_index, raw_command, _command, script_index in bound_commands
+                    )
+                    if bound_commands and not prefix_is_supported:
                         problem(f"{name} must use the shipped Git-root resolution guard")
                     if bound_commands and not all(
                         _script_command_has_supported_control_flow(
@@ -1946,6 +1968,11 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
     # 1, permanently and with no way for them to know why (panel, adversarial
     # lens, delta round). Anything under a `lib/` is imported, never invoked.
     kit_scripts = _invocable_kit_scripts()
+    engine_paths = {
+        PurePosixPath(rel).name: _remap(rel, engines_dir)
+        for rel, role in KIT_OWNED
+        if PurePosixPath(rel).name in kit_scripts and role not in ("template", "test")
+    }
     statuses: list[RegistrationStatus] = []
     for runtime, surface, report_absent in REGISTRATION_SURFACES:
         path = root / surface
@@ -2034,7 +2061,11 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
             )
         statuses.extend(found)
         if runtime == "codex":
-            statuses.extend(_codex_registration_semantics(document, surface, kit_scripts))
+            statuses.extend(
+                _codex_registration_semantics(
+                    document, surface, kit_scripts, root, engine_paths
+                )
+            )
     return statuses
 
 
