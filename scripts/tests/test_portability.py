@@ -1562,6 +1562,8 @@ def test_codex_live_validation_fixture_executes_its_observed_surfaces(
     assert "ss-resume" in configured
     assert "pt-lowercase" in configured
     assert "ss-visible" in configured
+    assert "pt-json" in configured
+    assert "pt-plain" in configured
     assert run("ss-visible").stdout.strip() == "SESSION_PLAIN_VISIBLE"
     post_json = json.loads(run("pt-json").stdout)
     assert post_json["systemMessage"] == "POST_SYSTEM_VISIBLE"

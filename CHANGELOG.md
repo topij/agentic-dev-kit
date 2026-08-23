@@ -48,8 +48,9 @@ starts.
   `misconfigured`, and that state makes its process exit non-zero** (`#243`). The
   check applies to the portable document-budget and PR-follow-through engines and
   covers lifecycle event, matcher, timeout, command-handler type, Codex runtime
-  mapping, duplicate registration, Claude-only engine use, and paths tied to the
-  session working directory. **If you parse the JSON report, accept
+  arguments on recognized engine invocations, duplicate invocations, Claude-only
+  engine use, direct cwd aliases, and the shipped Git-root resolution pattern.
+  **If you parse the JSON report, accept
   `misconfigured` as a registration state. Run `kit_doctor`, then reconcile any
   finding against the Codex block printed by `./init.sh` and review the current
   definition through `/hooks`.** The check is structural; it does not claim that a

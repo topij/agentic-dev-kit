@@ -1225,9 +1225,16 @@ def _semantic_shell_words(command: str) -> list[str]:
     lexer.whitespace_split = True
     lexer.commenters = "#"
     try:
-        return list(lexer)
+        lexed = list(lexer)
     except ValueError:
         return []
+    words: list[str] = []
+    for word in lexed:
+        if words and words[-1].endswith("\\") and not set(word) <= set(";&|"):
+            words[-1] = words[-1][:-1] + " " + word
+        else:
+            words.append(word)
+    return words
 
 
 def _semantic_word_value(word: str) -> str:
@@ -1255,23 +1262,46 @@ def _simple_shell_commands(words: list[str]) -> list[tuple[list[str], str | None
 
 def _script_commands(
     commands: list[tuple[list[str], str | None]], name: str
-) -> list[tuple[int, list[str], int]]:
-    found: list[tuple[int, list[str], int]] = []
+) -> list[tuple[int, list[str], list[str], int]]:
+    found: list[tuple[int, list[str], list[str], int]] = []
     for command_index, (command, _operator) in enumerate(commands):
         values = [_semantic_word_value(word) for word in command]
-        for word_index, word in enumerate(values):
-            if PurePosixPath(word).name == name:
-                found.append((command_index, values, word_index))
-                break
+        cursor = 1 if values and values[0] == "exec" else 0
+        if cursor >= len(values):
+            continue
+        executable = PurePosixPath(values[cursor]).name
+        script_index: int | None = None
+        if executable == name:
+            script_index = cursor
+        elif executable in ("python", "python3"):
+            candidate = cursor + 1
+            if candidate < len(values) and PurePosixPath(values[candidate]).name == name:
+                script_index = candidate
+        elif executable == "uv" and values[cursor + 1 : cursor + 2] == ["run"]:
+            try:
+                option_index = values.index("--script", cursor + 2)
+            except ValueError:
+                option_index = -1
+            candidate = option_index + 1
+            if (
+                option_index >= 0
+                and candidate < len(values)
+                and PurePosixPath(values[candidate]).name == name
+            ):
+                script_index = candidate
+        if script_index is not None:
+            found.append((command_index, command, values, script_index))
     return found
 
 
 def _script_commands_have_option(
-    script_commands: list[tuple[int, list[str], int]], option: str, value: str | None = None
+    script_commands: list[tuple[int, list[str], list[str], int]],
+    option: str,
+    value: str | None = None,
 ) -> bool:
     if not script_commands:
         return False
-    for _command_index, command, script_index in script_commands:
+    for _command_index, _raw_command, command, script_index in script_commands:
         arguments = command[script_index + 1 :]
         if value is None:
             if option not in arguments:
@@ -1291,6 +1321,9 @@ def _has_scheduled_run_skip(
         return False
     guard, guard_operator = commands[script_command_index - 2]
     exit_command, exit_operator = commands[script_command_index - 1]
+    operator_before_guard = (
+        commands[script_command_index - 3][1] if script_command_index >= 3 else None
+    )
     job_forms = {'"$JOB_NAME"', '"${JOB_NAME-}"', '"${JOB_NAME:-}"'}
     zero_guard = (
         len(guard) == 4
@@ -1320,7 +1353,32 @@ def _has_scheduled_run_skip(
         and guard[2] in job_forms
         and guard_operator == "&&"
     )
-    return (zero_guard or nonzero_guard) and exit_command == ["exit", "0"] and exit_operator == ";"
+    return (
+        (zero_guard or nonzero_guard)
+        and exit_command == ["exit", "0"]
+        and exit_operator == ";"
+        and operator_before_guard in (None, ";")
+    )
+
+
+def _has_repo_root_assignment_before(
+    commands: list[tuple[list[str], str | None]], before_index: int
+) -> bool:
+    if not commands or before_index <= 0:
+        return False
+    assignment, operator = commands[0]
+    source = " ".join(assignment)
+    if not re.fullmatch(
+        r'root="?\$\(git rev-parse --show-toplevel(?: 2>/dev/null)?\)"?', source
+    ):
+        return False
+    if operator == ";":
+        return True
+    return (
+        operator == "||"
+        and before_index > 1
+        and commands[1] == (["exit", "0"], ";")
+    )
 
 
 def _is_repo_root_cd(command: list[str]) -> bool:
@@ -1343,7 +1401,8 @@ def _relative_path_is_root_anchored(
         if (
             _is_repo_root_cd(cd_command)
             and cd_operator == "&&"
-            and operator_before_cd in (None, ";", "&&")
+            and operator_before_cd in (None, ";")
+            and _has_repo_root_assignment_before(commands, cd_index)
         ):
             return True
     if script_command_index < 2:
@@ -1357,8 +1416,22 @@ def _relative_path_is_root_anchored(
         and cd_operator == "||"
         and exit_command == ["exit", "0"]
         and exit_operator == ";"
-        and operator_before_cd in (None, ";", "&&")
+        and operator_before_cd in (None, ";")
+        and _has_repo_root_assignment_before(commands, cd_index)
     )
+
+
+def _root_alias_is_verified(
+    commands: list[tuple[list[str], str | None]],
+    script_commands: list[tuple[int, list[str], list[str], int]],
+) -> bool:
+    for command_index, raw_command, _command, script_index in script_commands:
+        script_word = raw_command[script_index]
+        if re.search(
+            r"\$(?:\{root\}|root)(?:/|$)", script_word
+        ) and not _has_repo_root_assignment_before(commands, command_index):
+            return False
+    return True
 
 
 def _codex_registration_semantics(
@@ -1446,9 +1519,9 @@ def _codex_registration_semantics(
                     contract = _CODEX_HOOK_CONTRACT.get(name)
                     if contract is None:
                         continue
-                    occurrences[name] = occurrences.get(name, 0) + 1
                     expected_event, accepted_matchers, expected_timeout = contract
                     bound_commands = _script_commands(shell_commands, name)
+                    occurrences[name] = occurrences.get(name, 0) + len(bound_commands)
                     if handler.get("type") != "command":
                         problem(f"{name} must use a command handler")
                     if event != expected_event:
@@ -1472,7 +1545,7 @@ def _codex_registration_semantics(
                             bound_commands
                             and all(
                                 _relative_path_is_root_anchored(shell_commands, command_index)
-                                for command_index, _command, _script_index in bound_commands
+                                for command_index, _raw, _command, _script_index in bound_commands
                             )
                         )
                     )
@@ -1480,12 +1553,15 @@ def _codex_registration_semantics(
                         re.search(r"(?:^|/)\$(?:\{PWD\}|PWD)(?:/|$)", token)
                         or re.search(r"(?:^|/)\$\(\s*pwd(?:\s+-[LP])?\s*\)(?:/|$)", token)
                     )
-                    if literal_relative or pwd_relative:
+                    root_alias_invalid = not _root_alias_is_verified(
+                        shell_commands, bound_commands
+                    )
+                    if literal_relative or pwd_relative or root_alias_invalid:
                         problem(f"{name} path must not depend on the session working directory")
                     if name == "check_doc_budget.py":
                         if not bound_commands or not all(
                             _has_scheduled_run_skip(shell_commands, command_index)
-                            for command_index, _command, _script_index in bound_commands
+                            for command_index, _raw, _command, _script_index in bound_commands
                         ):
                             problem("check_doc_budget.py must use the shipped scheduled-run guard")
                         if not _script_commands_have_option(bound_commands, "--quiet"):

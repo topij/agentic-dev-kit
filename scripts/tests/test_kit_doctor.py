@@ -3374,6 +3374,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("doc-job-literal", "must use the shipped scheduled-run guard"),
         ("doc-job-late", "must use the shipped scheduled-run guard"),
         ("doc-job-echo", "must use the shipped scheduled-run guard"),
+        ("doc-job-disabled", "must use the shipped scheduled-run guard"),
         ("doc-quiet", "must run in quiet mode"),
         ("doc-quiet-comment", "must run in quiet mode"),
         ("doc-quiet-unbound", "must run in quiet mode"),
@@ -3383,10 +3384,14 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-runtime", "must pass --runtime codex"),
         ("pr-runtime-comment", "must pass --runtime codex"),
         ("pr-runtime-unbound", "must pass --runtime codex"),
+        ("pr-echo-argument", "must pass --runtime codex"),
+        ("pr-python-data", "must pass --runtime codex"),
         ("relative-path", "path must not depend on the session working directory"),
         ("pwd-path", "path must not depend on the session working directory"),
         ("pwd-command-path", "path must not depend on the session working directory"),
         ("disabled-root-path", "path must not depend on the session working directory"),
+        ("dead-root-chain", "path must not depend on the session working directory"),
+        ("root-pwd-alias", "path must not depend on the session working directory"),
         ("handler-type", "must use a command handler"),
     ],
 )
@@ -3430,6 +3435,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         session_hook["command"] = session_hook["command"].replace(
             '[ -z "${JOB_NAME:-}" ]', 'echo [ -z "${JOB_NAME:-}" ]'
         )
+    elif mutation == "doc-job-disabled":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ]', 'false && [ -z "${JOB_NAME:-}" ]'
+        )
     elif mutation == "doc-quiet":
         session_hook["command"] = session_hook["command"].replace(" --quiet", "")
     elif mutation == "doc-quiet-comment":
@@ -3459,6 +3468,16 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", "--runtime claude; echo --runtime codex"
         )
+    elif mutation == "pr-echo-argument":
+        post_hook["command"] = (
+            'root="$(git rev-parse --show-toplevel)"; '
+            'echo "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "pr-python-data":
+        post_hook["command"] = (
+            'root="$(git rev-parse --show-toplevel)"; '
+            'python3 -c pass "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
     elif mutation == "relative-path":
         post_hook["command"] = (
             "python3 scripts/hooks/pr_followup_hook.py --runtime codex"
@@ -3475,6 +3494,16 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = (
             'root="$(git rev-parse --show-toplevel)"; false && cd "$root"; '
             "python3 scripts/hooks/pr_followup_hook.py --runtime codex"
+        )
+    elif mutation == "dead-root-chain":
+        post_hook["command"] = (
+            'root="$(git rev-parse --show-toplevel)"; false && cd "$root" && '
+            "python3 scripts/hooks/pr_followup_hook.py --runtime codex"
+        )
+    elif mutation == "root-pwd-alias":
+        post_hook["command"] = (
+            'root=$PWD; exec python3 "$root/scripts/hooks/pr_followup_hook.py" '
+            "--runtime codex"
         )
     elif mutation == "handler-type":
         post_hook["type"] = "prompt"
@@ -3579,6 +3608,23 @@ def test_duplicate_codex_lifecycle_registration_is_a_finding(tmp_path):
     document = _valid_codex_lifecycle_document()
     document["hooks"]["SessionStart"].append(
         json.loads(json.dumps(document["hooks"]["SessionStart"][0]))
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+
+    assert any(
+        s.state == "misconfigured" and "duplicate" in s.detail
+        for s in report.dead_registrations
+    )
+
+
+def test_duplicate_codex_invocations_inside_one_handler_are_a_finding(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    hook["command"] += (
+        '; exec python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
     )
     _write_codex_lifecycle_fixture(root, document)
 
