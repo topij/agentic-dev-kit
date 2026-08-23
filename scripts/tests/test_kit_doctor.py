@@ -3369,6 +3369,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
     [
         ("doc-matcher", "matcher must cover every supported start source"),
         ("doc-matcher-container", "matcher must cover every supported start source"),
+        ("doc-matcher-null", "matcher must cover every supported start source"),
         ("doc-timeout", "check_doc_budget.py timeout must be 15 seconds"),
         ("doc-job-skip", "must use the shipped scheduled-run guard"),
         ("doc-job-reversed", "must use the shipped scheduled-run guard"),
@@ -3407,6 +3408,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-background-invocation", "must use supported shell control flow"),
         ("pr-exit-before-invocation", "must use supported shell control flow"),
         ("pr-redirection", "must not use shell redirection"),
+        ("pr-dup-redirection", "must not use shell redirection"),
         ("pr-group-exit", "must not use compound shell syntax"),
         ("pr-conditional", "must not use compound shell syntax"),
         ("pr-heredoc", "must not use compound shell syntax"),
@@ -3420,6 +3422,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pwd-command-path", "path must not depend on the session working directory"),
         ("pwd-parameter-path", "path must not depend on the session working directory"),
         ("root-pwd-default-path", "path must not depend on the session working directory"),
+        ("root-parameter-path", "path must not depend on the session working directory"),
         ("disabled-root-path", "path must not depend on the session working directory"),
         ("dead-root-chain", "path must not depend on the session working directory"),
         ("root-pwd-alias", "path must not depend on the session working directory"),
@@ -3444,6 +3447,8 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         session["matcher"] = "^startup$"
     elif mutation == "doc-matcher-container":
         session["matcher"] = ["startup"]
+    elif mutation == "doc-matcher-null":
+        session["matcher"] = None
     elif mutation == "doc-timeout":
         session_hook["timeout"] = 14
     elif mutation == "doc-job-skip":
@@ -3588,6 +3593,8 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", "> --runtime codex"
         )
+    elif mutation == "pr-dup-redirection":
+        post_hook["command"] += " 1>&2"
     elif mutation == "pr-group-exit":
         post_hook["command"] = post_hook["command"].replace(
             'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
@@ -3647,6 +3654,11 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
     elif mutation == "root-pwd-default-path":
         post_hook["command"] = (
             'python3 "${root:-$PWD}/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "root-parameter-path":
+        post_hook["command"] = (
+            'python3 "${root:+/definitely/not-the-repo}/scripts/hooks/'
+            'pr_followup_hook.py" --runtime codex'
         )
     elif mutation == "disabled-root-path":
         post_hook["command"] = (

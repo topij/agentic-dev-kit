@@ -1206,8 +1206,8 @@ def _invocable_kit_scripts() -> set[str]:
     }
 
 
-_CODEX_HOOK_CONTRACT: dict[str, tuple[str, frozenset[object], int]] = {
-    "check_doc_budget.py": ("SessionStart", frozenset((None, "", "*")), 15),
+_CODEX_HOOK_CONTRACT: dict[str, tuple[str, frozenset[str], int]] = {
+    "check_doc_budget.py": ("SessionStart", frozenset(("", "*")), 15),
     "pr_followup_hook.py": ("PostToolUse", frozenset(("^Bash$",)), 10),
 }
 
@@ -1671,7 +1671,12 @@ def _script_commands_have_redirection(
     script_commands: list[tuple[int, list[str], list[str], int]],
 ) -> bool:
     return any(
-        any(word and set(word) <= set("<>") for word in raw_command)
+        any(
+            word
+            and ("<" in word or ">" in word)
+            and set(word) <= set(";&|<>()")
+            for word in raw_command
+        )
         for _command_index, raw_command, _command, _script_index in script_commands
     )
 
@@ -1719,7 +1724,8 @@ def _token_targets_kit_engine(token: str, expected_rel: str, root: Path) -> bool
     if Path(token).is_absolute():
         return False
     known_root_form = re.search(
-        r"\$(?:root\b|\{root(?:[^}]*)\}|PWD\b|\{PWD(?:[^}]*)\}|\(\s*pwd(?:\s+-[LP])?\s*\))",
+        r"\$(?:root\b|\{root(?:[^A-Za-z0-9_}][^}]*)?\}|PWD\b|"
+        r"\{PWD(?:[^A-Za-z0-9_}][^}]*)?\}|\(\s*pwd(?:\s+-[LP])?\s*\))",
         token,
     )
     return known_root_form is not None and token.endswith(f"/{expected_rel}")
@@ -1869,7 +1875,12 @@ def _codex_registration_semantics(
                         problem(f"{name} must use a command handler")
                     if event != expected_event:
                         problem(f"{name} must be registered under {expected_event}")
-                    if not isinstance(matcher, (str, type(None))) or matcher not in accepted_matchers:
+                    matcher_is_accepted = (
+                        name == "check_doc_budget.py" and "matcher" not in group
+                    ) or (
+                        isinstance(matcher, str) and matcher in accepted_matchers
+                    )
+                    if not matcher_is_accepted:
                         if name == "check_doc_budget.py":
                             problem(
                                 "check_doc_budget.py SessionStart matcher must cover every "
@@ -1899,6 +1910,9 @@ def _codex_registration_semantics(
                     root_alias_invalid = not _root_alias_is_verified(
                         shell_commands, bound_commands
                     )
+                    root_parameterized = bool(
+                        re.search(r"\$\{root[^A-Za-z0-9_}][^}]*\}", token)
+                    )
                     expansion_provenance_invalid = any(
                         (
                             _UNQUOTED_EXPANSION_SENTINEL in raw_command[script_index]
@@ -1913,6 +1927,7 @@ def _codex_registration_semantics(
                         literal_relative
                         or pwd_relative
                         or root_alias_invalid
+                        or root_parameterized
                         or expansion_provenance_invalid
                     ):
                         problem(f"{name} path must not depend on the session working directory")
