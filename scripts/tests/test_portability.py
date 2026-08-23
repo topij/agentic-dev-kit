@@ -2199,6 +2199,35 @@ def test_engines_avoid_datetime_utc_alias() -> None:
     )
 
 
+def test_kit_doctor_help_survives_without_stdlib_tomllib() -> None:
+    """The stdlib-only bare-python route must fail in its TOML result, not import."""
+    probe = """
+import builtins
+import runpy
+import sys
+
+real_import = builtins.__import__
+
+def guarded_import(name, *args, **kwargs):
+    if name == "tomllib":
+        raise ModuleNotFoundError("blocked tomllib compatibility probe")
+    return real_import(name, *args, **kwargs)
+
+builtins.__import__ = guarded_import
+sys.argv = [sys.argv[1], "--help"]
+runpy.run_path(sys.argv[0], run_name="__main__")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", probe, str(ENGINE_DIR / "kit_doctor.py")],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "usage:" in result.stdout
+
+
 def _load_dataclass_module(name: str, path: Path) -> ModuleType:
     """Like `_load_module`, but registers the module in `sys.modules` while exec'ing.
 

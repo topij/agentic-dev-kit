@@ -140,9 +140,9 @@ only to exact repository-owned command strings:
 - duplicate registrations across the additive project sources are defects because
   matching handlers all execute.
 - either present project feature-switch spelling (`hooks` or its deprecated
-  `codex_hooks` alias) must be boolean; a false value disables the lifecycle
-  wiring and is a deterministic configuration defect when the kit engines are
-  registered.
+  `codex_hooks` alias) must be boolean. When both are present, canonical `hooks`
+  takes precedence; otherwise the present value controls whether registered kit
+  lifecycle wiring is disabled.
 
 Project trust, current-definition trust, and actual execution remain live-client
 facts. `kit_doctor` must report structural semantics without claiming those facts;

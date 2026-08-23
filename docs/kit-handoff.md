@@ -45,7 +45,9 @@ the configured object either matches the installer-emitted canonical form or it 
 - **The exact-string panel tightened the remaining surfaces.** Its findings scoped feature
   validation to repositories with an exactly identified lifecycle command, corrected the
   README's stale fail-closed claim for altered shell text, and aligned the exit-gate
-  rationale with unsupported lifecycle object keys.
+  rationale with unsupported lifecycle object keys. The follow-up correctness lens then
+  exposed the bare-Python TOML import and contradictory feature-alias precedence; the fix
+  reports an unavailable TOML parser explicitly and mirrors canonical-key precedence.
 
 - **The runtime contract remains shared.** Installer guidance, the parity matrix,
   `CHANGELOG.md`, and the live evidence record describe the same bounded result. The
@@ -59,9 +61,9 @@ the configured object either matches the installer-emitted canonical form or it 
   reserved for unsupported structure around an exact command; declining to classify an
   altered command is the honest shell-semantics boundary.
 
-- **Aliases are independent inputs even when one is preferred.** Precedence is useful for
-  choosing a value, but it is unsafe for validation: a malformed or disabling deprecated
-  alias can still make the client reject or disable the configuration.
+- **Alias type validation and value precedence are separate.** Every present spelling must
+  be boolean, while canonical `hooks` wins when it appears beside deprecated
+  `codex_hooks`; only the effective value establishes whether lifecycle hooks are disabled.
 
 ▶ Next: `$pr-watch` PR `#590` — act on any exact-head findings; when CI and the fresh
 adversarial/correctness evidence are clean, hand the operator the authorized merge.

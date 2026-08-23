@@ -2228,8 +2228,8 @@ def test_codex_hook_advisories_name_the_additive_project_config(tmp_path: Path) 
 
     assert ".codex/config.toml" in result.stdout
     assert "remove any inline registration" in result.stdout
-    assert "[features].hooks or its deprecated" in result.stdout
-    assert "codex_hooks alias set to false" in result.stdout
+    assert "Set [features].hooks to true" in result.stdout
+    assert "codex_hooks alias is present" in result.stdout
     assert "merges inline hooks with hooks.json" in result.stdout
 
 

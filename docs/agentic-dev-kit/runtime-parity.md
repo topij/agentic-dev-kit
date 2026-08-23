@@ -108,6 +108,8 @@ additive inline project hooks and each present project hook feature-switch alias
 altered command string is not assigned lifecycle semantics or accepted as
 shell-equivalent; it retains the generic registration-path result. Repository
 inspection does not establish that a client trusted or executed the definitions.
+Each present project feature spelling must be boolean; canonical `hooks` supplies the
+effective value when deprecated `codex_hooks` is also present.
 
 The separate trusted-client record is
 [`saved_plans/codex-hooks-live-validation_2026-08-23.md`](../../saved_plans/codex-hooks-live-validation_2026-08-23.md).

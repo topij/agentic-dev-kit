@@ -178,9 +178,21 @@ import os
 import re
 import subprocess
 import sys
-import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Preserve the pre-tomllib bare-engine route.
+    tomllib = None
+
+_TOML_DECODE_ERRORS = () if tomllib is None else (tomllib.TOMLDecodeError,)
+_REGISTRATION_PARSE_ERRORS = (
+    json.JSONDecodeError,
+    OSError,
+    UnicodeDecodeError,
+    RecursionError,
+) + _TOML_DECODE_ERRORS
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
@@ -1446,16 +1458,20 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
             if report_absent:
                 statuses.append(RegistrationStatus(runtime, surface, "absent"))
             continue
+        if path.suffix == ".toml" and tomllib is None:
+            statuses.append(
+                RegistrationStatus(
+                    runtime,
+                    surface,
+                    "unreadable",
+                    "TOML parser unavailable; run kit_doctor through uv",
+                )
+            )
+            continue
         try:
             source = path.read_text(encoding="utf-8")
             document = tomllib.loads(source) if path.suffix == ".toml" else json.loads(source)
-        except (
-            json.JSONDecodeError,
-            tomllib.TOMLDecodeError,
-            OSError,
-            UnicodeDecodeError,
-            RecursionError,
-        ) as exc:
+        except _REGISTRATION_PARSE_ERRORS as exc:
             # Same degrade-don't-abort rule the baseline read follows: a
             # registration file this run could not parse is reported, never
             # raised. A diagnostic that dies on one malformed file tells the
@@ -1598,7 +1614,18 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                         f"Codex project feature {feature_key} must be a boolean",
                     )
                 )
-            if occurrence_names and any(features[key] is False for key in feature_keys):
+            aliases_are_boolean = all(
+                type(features[key]) is bool for key in feature_keys
+            )
+            # Canonical precedence is deliberate: `hooks` supplies the effective
+            # value when both spellings are present. Type validity is separate; an
+            # invalid losing alias still makes the TOML unacceptable.
+            effective_feature = (
+                features.get("hooks")
+                if "hooks" in features
+                else features.get("codex_hooks")
+            )
+            if aliases_are_boolean and effective_feature is False:
                 statuses.append(
                     RegistrationStatus(
                         "codex",

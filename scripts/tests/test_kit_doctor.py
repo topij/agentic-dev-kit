@@ -3508,18 +3508,45 @@ def test_codex_lifecycle_semantics_validates_each_present_feature_alias(tmp_path
     assert "Codex project feature codex_hooks must be a boolean" in details
 
 
-def test_codex_lifecycle_semantics_detects_disable_in_deprecated_alias(tmp_path):
+def test_invalid_feature_alias_does_not_claim_an_effective_disable(tmp_path):
     root = _fake_repo(tmp_path)
     _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
     _write(
         root / ".codex" / "config.toml",
-        "[features]\nhooks = true\ncodex_hooks = false\n",
+        "[features]\nhooks = false\ncodex_hooks = 0\n",
     )
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
     details = [s.detail for s in statuses if s.state == "misconfigured"]
 
-    assert "Codex lifecycle hooks are disabled by the project config" in details
+    assert details == ["Codex project feature codex_hooks must be a boolean"]
+
+
+@pytest.mark.parametrize(
+    ("canonical", "deprecated", "disabled"),
+    [
+        (True, False, False),
+        (False, True, True),
+    ],
+)
+def test_canonical_codex_feature_key_takes_precedence(
+    tmp_path, canonical, deprecated, disabled
+):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(
+        root / ".codex" / "config.toml",
+        "[features]\n"
+        f"hooks = {str(canonical).lower()}\n"
+        f"codex_hooks = {str(deprecated).lower()}\n",
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert (
+        "Codex lifecycle hooks are disabled by the project config" in details
+    ) is disabled
 
 
 @pytest.mark.parametrize(
@@ -3583,6 +3610,22 @@ def test_codex_lifecycle_semantics_reject_float_inline_timeout(tmp_path):
     details = [s.detail for s in statuses if s.state == "misconfigured"]
 
     assert "pr_followup_hook.py timeout must be 10 seconds" in details
+
+
+def test_inline_codex_config_is_explicitly_unreadable_without_tomllib(
+    tmp_path, monkeypatch
+):
+    root = _fake_repo(tmp_path)
+    _write(root / ".codex" / "config.toml", _valid_codex_inline_posttooluse())
+    monkeypatch.setattr(kit_doctor, "tomllib", None)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert [
+        (status.state, status.detail)
+        for status in statuses
+        if status.surface == ".codex/config.toml"
+    ] == [("unreadable", "TOML parser unavailable; run kit_doctor through uv")]
 
 
 def test_codex_lifecycle_semantics_validate_inline_project_config(tmp_path):

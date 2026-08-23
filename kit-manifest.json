@@ -29,7 +29,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "62521f65b4e8f4f07c5c1160437ace9cfbf230a82f2dc9da923857bc8adbd607"
+      "sha256": "b4f3541b1ba3dd36c04fd5fbbdc0aa696e8a23f9fd5a5b0d0c00ac05b29b89ac"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -93,7 +93,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "503a4769ef7b1511faaf79378c43b196280cc42e0de50950053ed6cc06090fd8"
+      "sha256": "356367a2e4ab0cdf905cb606f2a9ee7c051547bcd2c48d97a7be2acabba8cd37"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -125,7 +125,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "65d49113fbd961607d8be3e07b95c9bfeeabc3f25171b3c68f8190ba97fced8c"
+      "sha256": "580856a26c10198c76115d4b63e1b61e27dea0a3f6d1ac2bc167f07c1596b7be"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
@@ -219,11 +219,11 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "987eecb8f40509625d683f3be6cc882f169850e0b2602b7b404fed76234ff43b"
+      "sha256": "3ca10fb469c16b0407de20248ea066459e1638ce8c392d550fa6d6886d1aceb0"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "8b9466e97a78dce8e8a932699b51c66c65ebf9310f1b6615d666c1e637cb000b"
+      "sha256": "812b45ad6dd20c396277da44853683869afcc827752e842653d6cc97b94bc790"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -243,7 +243,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "c468184b5b2b434ba976f22178add97bd577a6c61594deccb629a40cb5fdf896"
+      "sha256": "5b17ae7dd0380b50307f55dacad68caaa9870c923e67f2f2b1f875dc4f21acda"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

@@ -1169,8 +1169,8 @@ register_pr_hook() {
   echo "      what that runtime actually loaded, which is the authority here."
   echo "      Codex — .codex/hooks.json, under hooks.PostToolUse, matcher \"^Bash\$\":"
   echo "        First inspect .codex/config.toml: remove any inline registration for"
-  echo "        this engine, and do not leave [features].hooks or its deprecated"
-  echo "        codex_hooks alias set to false. Codex"
+  echo "        this engine. Set [features].hooks to true; if only its deprecated"
+  echo "        codex_hooks alias is present, do not leave that alias false. Codex"
   echo "        merges inline hooks with hooks.json instead of replacing them."
   # The guard clauses are not decoration (#359). A bare
   # `python3 "$(git rev-parse --show-toplevel)/…"` collapses to an absolute path
@@ -1278,8 +1278,8 @@ register_budget_hooks() {
     echo "      Codex — .codex/hooks.json, under hooks.SessionStart; omit matcher"
     echo "      for open-ended coverage as new start sources are added:"
     echo "        First inspect .codex/config.toml: remove any inline registration for"
-    echo "        this engine, and do not leave [features].hooks or its deprecated"
-    echo "        codex_hooks alias set to false."
+    echo "        this engine. Set [features].hooks to true; if only its deprecated"
+    echo "        codex_hooks alias is present, do not leave that alias false."
     echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_doc_budget_src}\" --quiet || true"
     echo "        Keep this exact command form; kit_doctor assigns lifecycle semantics only"
     echo "        to the repository-owned string and leaves altered strings to path diagnostics."
