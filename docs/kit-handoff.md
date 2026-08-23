@@ -14,9 +14,55 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-23 — the Codex parity baseline and its implementation roadmap shipped.
+Last updated: 2026-08-23 — PR `#590` narrowed Codex lifecycle enforcement to a
+canonical-form contract and remains open for exact-head review and operator merge.
 
-## Latest session — 2026-08-23 (the Codex parity baseline and its implementation roadmap shipped)
+## Latest session — 2026-08-23 (Codex lifecycle enforcement bounded by canonical form)
+
+**Theme —** PR `#590` keeps the trusted-client lifecycle evidence and installer wiring,
+while `kit_doctor` now makes only the deterministic claim the repository can support:
+the configured object either matches the installer-emitted canonical form or it does not.
+
+- **The architecture was narrowed in place.** The earlier shell-equivalence parser remains
+  visible in branch history, but the live checker no longer approximates general shell
+  semantics. Exact canonical command objects report `verified`; structural defects report
+  `misconfigured`; recognized noncanonical command families report `unverifiable`; other
+  forms retain the generic path-resolution result.
+
+- **The evidence boundary stayed explicit.** The controlled record preserves trusted
+  `SessionStart` and `PostToolUse` execution, additive project-source behavior, definition
+  trust behavior, and the observed output channels. Repository inspection does not claim
+  project trust, current-definition trust, live execution, or interactive-TUI
+  `systemMessage` visibility.
+
+- **The hostile probes became durable behavioral tests.** The corpus rejects the
+  accumulated command mutations without specifying a shell grammar. The fresh fallback
+  panel then exposed alias-precedence, inert-comment, accepted-matcher, and exit-contract
+  regressions; the fix round validates each present feature alias, limits recognition to
+  explicit command families, accepts the documented match-all forms, and aligns the exit
+  documentation.
+
+- **The runtime contract remains shared.** Installer guidance, the parity matrix,
+  `CHANGELOG.md`, and the live evidence record describe the same bounded result. The
+  safety-critical doctrine remains one runtime-neutral document with runtime bindings,
+  and its merge class makes this PR operator-merge.
+
+**Learned**
+
+- **A positive result needs a syntax the repository owns.** Exact canonical objects have a
+  stable mutation surface; purportedly equivalent shell spellings do not. Unverifiable is
+  an honest boundary, not a lesser form of verification.
+
+- **Aliases are independent inputs even when one is preferred.** Precedence is useful for
+  choosing a value, but it is unsafe for validation: a malformed or disabling deprecated
+  alias can still make the client reject or disable the configuration.
+
+▶ Next: `$pr-watch` PR `#590` — act on any exact-head findings; when CI and the fresh
+adversarial/correctness evidence are clean, hand the operator the authorized merge.
+
+______________________________________________________________________
+
+## Session — 2026-08-23 (the Codex parity baseline and its implementation roadmap shipped)
 
 **Theme —** Codex support moved from scattered compatibility surfaces to an explicit,
 tested parity contract. PR `#588` merged the assessed roadmap and its recommended starting
