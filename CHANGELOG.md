@@ -42,6 +42,21 @@ starts.
 
 ---
 
+## #590 — 2026-08-23
+
+- **CHANGED — `kit_doctor` can now report a Codex hook registration as
+  `misconfigured`, and that state makes its process exit non-zero** (`#243`). The
+  check applies to the portable document-budget and PR-follow-through engines and
+  covers lifecycle event, matcher, timeout, command-handler type, Codex runtime
+  mapping, duplicate registration, Claude-only engine use, and paths tied to the
+  session working directory. **If you parse the JSON report, accept
+  `misconfigured` as a registration state. Run `kit_doctor`, then reconcile any
+  finding against the Codex block printed by `./init.sh` and review the current
+  definition through `/hooks`.** The check is structural; it does not claim that a
+  project or hook definition is trusted or executing.
+
+---
+
 ## #588 — 2026-08-23
 
 - **CHANGED — the Codex `SessionStart` registration printed by `./init.sh` and
