@@ -3386,6 +3386,9 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("doc-quiet-unbound", "must run in quiet mode"),
         ("doc-quiet-json", "quiet mode must not be overridden"),
         ("doc-quiet-json-equals", "quiet mode must not be overridden"),
+        ("doc-root-option", "must use repository-resolved root and config"),
+        ("doc-config-option", "must use repository-resolved root and config"),
+        ("doc-uv-help", "must use the shipped uv run --script launcher"),
         ("doc-redirection", "must not use shell redirection"),
         ("pr-event", "must be registered under PostToolUse"),
         ("pr-matcher", 'matcher must be "^Bash$"'),
@@ -3403,7 +3406,9 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-background-invocation", "must use supported shell control flow"),
         ("pr-exit-before-invocation", "must use supported shell control flow"),
         ("pr-redirection", "must not use shell redirection"),
-        ("pr-group-exit", "must not use shell grouping"),
+        ("pr-group-exit", "must not use compound shell syntax"),
+        ("pr-conditional", "must not use compound shell syntax"),
+        ("pr-heredoc", "must not use compound shell syntax"),
         ("pr-read-root", "must use the shipped Git-root"),
         ("pr-root-guard-missing", "must use the shipped Git-root"),
         ("relative-path", "path must not depend on the session working directory"),
@@ -3496,6 +3501,18 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         session_hook["command"] = session_hook["command"].replace(
             "--quiet", "--quiet --json=true"
         )
+    elif mutation == "doc-root-option":
+        session_hook["command"] = session_hook["command"].replace(
+            "--quiet", '--quiet --root "$PWD"'
+        )
+    elif mutation == "doc-config-option":
+        session_hook["command"] = session_hook["command"].replace(
+            "--quiet", "--quiet --config=config/dev-model.yaml"
+        )
+    elif mutation == "doc-uv-help":
+        session_hook["command"] = session_hook["command"].replace(
+            "uv run --script", "uv run --help --script"
+        )
     elif mutation == "doc-redirection":
         session_hook["command"] = session_hook["command"].replace(
             "--quiet", "> --quiet"
@@ -3564,6 +3581,18 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = post_hook["command"].replace(
             'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
             '{ exit 0; }; exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-conditional":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex',
+            'if false; then :; exec python3 '
+            '"$root/scripts/hooks/pr_followup_hook.py" --runtime codex; fi',
+        )
+    elif mutation == "pr-heredoc":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex',
+            'cat <<EOF\nexec python3 "$root/scripts/hooks/pr_followup_hook.py" '
+            '--runtime codex\nEOF',
         )
     elif mutation == "pr-read-root":
         post_hook["command"] = post_hook["command"].replace(

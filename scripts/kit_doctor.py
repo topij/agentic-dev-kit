@@ -1413,10 +1413,22 @@ def _script_commands_avoid_options(
     return all(
         not any(
             word in forbidden or any(word.startswith(f"{option}=") for option in forbidden)
-            for word in command[script_index + 1 :]
+            for word in command
         )
         for _command_index, _raw_command, command, script_index in script_commands
     )
+
+
+def _script_commands_use_shipped_uv_launcher(
+    script_commands: list[tuple[int, list[str], list[str], int]],
+) -> bool:
+    if not script_commands:
+        return False
+    for _command_index, _raw_command, command, script_index in script_commands:
+        cursor = 1 if command[:1] == ["exec"] else 0
+        if command[cursor:script_index] != ["uv", "run", "--script"]:
+            return False
+    return True
 
 
 def _shell_variable_is_reassigned_before(
@@ -1653,6 +1665,18 @@ def _shell_words_have_grouping(words: list[str]) -> bool:
     return bool(grouping.intersection(words))
 
 
+def _shell_has_unsupported_compound_syntax(command: str, words: list[str]) -> bool:
+    continued = command.replace("\\\r\n", "").replace("\\\n", "")
+    if "\n" in continued or "\r" in continued:
+        return True
+    reserved = frozenset(
+        ("if", "then", "elif", "else", "fi", "for", "while", "until", "case", "esac", "do", "done")
+    )
+    if reserved.intersection(words):
+        return True
+    return any(word.startswith("<<") for word in words)
+
+
 def _root_alias_is_verified(
     commands: list[tuple[list[str], str | None]],
     script_commands: list[tuple[int, list[str], list[str], int]],
@@ -1768,8 +1792,10 @@ def _codex_registration_semantics(
                     expected_event, accepted_matchers, expected_timeout = contract
                     bound_commands = _script_commands(shell_commands, name)
                     occurrences[name] = occurrences.get(name, 0) + len(bound_commands)
-                    if _shell_words_have_grouping(semantic_words):
-                        problem(f"{name} invocation must not use shell grouping")
+                    if _shell_words_have_grouping(
+                        semantic_words
+                    ) or _shell_has_unsupported_compound_syntax(command, semantic_words):
+                        problem(f"{name} invocation must not use compound shell syntax")
                     root_bound_commands = [
                         bound
                         for bound in bound_commands
@@ -1839,6 +1865,10 @@ def _codex_registration_semantics(
                     ):
                         problem(f"{name} path must not depend on the session working directory")
                     if name == "check_doc_budget.py":
+                        if not _script_commands_use_shipped_uv_launcher(bound_commands):
+                            problem(
+                                "check_doc_budget.py must use the shipped uv run --script launcher"
+                            )
                         if not bound_commands or not all(
                             _has_scheduled_run_skip(shell_commands, command_index)
                             for command_index, _raw, _command, _script_index in bound_commands
@@ -1847,9 +1877,16 @@ def _codex_registration_semantics(
                         if not _script_commands_have_option(bound_commands, "--quiet"):
                             problem("check_doc_budget.py must run in quiet mode")
                         if not _script_commands_avoid_options(
-                            bound_commands, frozenset(("--json", "--help", "-h"))
+                            bound_commands,
+                            frozenset(("--json", "--help", "-h")),
                         ):
                             problem("check_doc_budget.py quiet mode must not be overridden")
+                        if not _script_commands_avoid_options(
+                            bound_commands, frozenset(("--root", "--config"))
+                        ):
+                            problem(
+                                "check_doc_budget.py must use repository-resolved root and config"
+                            )
                     elif not _script_commands_select_option(
                         bound_commands, "--runtime", "codex"
                     ):
