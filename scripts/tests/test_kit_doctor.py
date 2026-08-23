@@ -3366,15 +3366,21 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
     ("mutation", "expected"),
     [
         ("doc-matcher", "matcher must cover every supported start source"),
+        ("doc-matcher-container", "matcher must cover every supported start source"),
         ("doc-timeout", "check_doc_budget.py timeout must be 15 seconds"),
-        ("doc-job-skip", "must preserve the scheduled-run skip"),
+        ("doc-job-skip", "must use the shipped scheduled-run guard"),
+        ("doc-job-reversed", "must use the shipped scheduled-run guard"),
+        ("doc-job-comment", "must use the shipped scheduled-run guard"),
         ("doc-quiet", "must run in quiet mode"),
+        ("doc-quiet-comment", "must run in quiet mode"),
         ("pr-event", "must be registered under PostToolUse"),
         ("pr-matcher", 'matcher must be "^Bash$"'),
         ("pr-timeout", "pr_followup_hook.py timeout must be 10 seconds"),
         ("pr-runtime", "must pass --runtime codex"),
+        ("pr-runtime-comment", "must pass --runtime codex"),
         ("relative-path", "path must not depend on the session working directory"),
         ("pwd-path", "path must not depend on the session working directory"),
+        ("pwd-command-path", "path must not depend on the session working directory"),
         ("handler-type", "must use a command handler"),
     ],
 )
@@ -3390,14 +3396,28 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
 
     if mutation == "doc-matcher":
         session["matcher"] = "^startup$"
+    elif mutation == "doc-matcher-container":
+        session["matcher"] = ["startup"]
     elif mutation == "doc-timeout":
         session_hook["timeout"] = 14
     elif mutation == "doc-job-skip":
         session_hook["command"] = session_hook["command"].replace(
             '[ -z "${JOB_NAME:-}" ] || exit 0; ', ""
         )
+    elif mutation == "doc-job-reversed":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ]', '[ -n "${JOB_NAME:-}" ]'
+        )
+    elif mutation == "doc-job-comment":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ] || exit 0; ', ""
+        ) + ' # [ -z "${JOB_NAME:-}" ] || exit 0'
     elif mutation == "doc-quiet":
         session_hook["command"] = session_hook["command"].replace(" --quiet", "")
+    elif mutation == "doc-quiet-comment":
+        session_hook["command"] = session_hook["command"].replace(
+            " --quiet", ""
+        ) + " # --quiet"
     elif mutation == "pr-event":
         document["hooks"]["SessionStart"].append(post)
         document["hooks"]["PostToolUse"] = []
@@ -3409,6 +3429,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", "--runtime claude"
         )
+    elif mutation == "pr-runtime-comment":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", "--runtime claude # --runtime codex"
+        )
     elif mutation == "relative-path":
         post_hook["command"] = (
             "python3 scripts/hooks/pr_followup_hook.py --runtime codex"
@@ -3416,6 +3440,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
     elif mutation == "pwd-path":
         post_hook["command"] = (
             'python3 "$PWD/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "pwd-command-path":
+        post_hook["command"] = (
+            'python3 "$(pwd)/scripts/hooks/pr_followup_hook.py" --runtime codex'
         )
     elif mutation == "handler-type":
         post_hook["type"] = "prompt"
@@ -3425,6 +3453,52 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
     details = [s.detail for s in statuses if s.state == "misconfigured"]
 
     assert any(expected in detail for detail in details), details
+
+
+@pytest.mark.parametrize("runtime_arg", ["--runtime codex", "--runtime=codex"])
+def test_codex_semantics_accept_root_anchored_relative_paths(tmp_path, runtime_arg):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] = (
+        'root="$(git rev-parse --show-toplevel)"; cd "$root" || exit 0; '
+        f"python3 scripts/hooks/pr_followup_hook.py {runtime_arg}"
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not [s.detail for s in statuses if s.state == "misconfigured"]
+
+
+@pytest.mark.parametrize("container", ["groups", "handlers"])
+def test_codex_semantics_reject_non_list_lifecycle_containers(tmp_path, container):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post = document["hooks"]["PostToolUse"][0]
+    if container == "groups":
+        document["hooks"]["PostToolUse"] = post
+    else:
+        post["hooks"] = post["hooks"][0]
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert any("must be a list" in detail for detail in details), details
+
+
+def test_codex_misconfiguration_renders_as_a_failure(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    document["hooks"]["PostToolUse"][0]["matcher"] = "Bash"
+    _write_codex_lifecycle_fixture(root, document)
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    rendered = kit_doctor.render(report)
+
+    assert "✗ .codex/hooks.json [codex]" in rendered
+    assert "lifecycle wiring does not match" in rendered
 
 
 def test_codex_rejects_the_claude_only_memory_tripwire(tmp_path):

@@ -174,6 +174,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -1126,9 +1127,10 @@ def _script_words(command: str) -> tuple[bool, list[str]]:
 
     cleaned = []
     for word in words:
-        if "=" in word:
+        assignment = re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=(.*)", word, re.DOTALL)
+        if assignment:
             # An assignment form (`HOOK="$root/…"`) should yield the path.
-            word = word.rsplit("=", 1)[-1]
+            word = assignment.group(1)
         # A separator glued to the last word of a statement (`…/hook.py; exec …`).
         cleaned.append(word.rstrip(";&|"))
     # `state` is still set only when a quote never closed. A shell would refuse
@@ -1210,6 +1212,65 @@ _CODEX_HOOK_CONTRACT: dict[str, tuple[str, frozenset[object], int]] = {
 }
 
 
+def _semantic_shell_words(command: str) -> list[str]:
+    """Active shell words and operators, with comments excluded.
+
+    `_script_words` preserves quote-sensitive root expansion for path
+    resolution. This narrower second lexer has a different job: distinguish
+    active arguments and guards from the same spelling inside a shell comment.
+    `shlex` is suitable here because none of those checks needs to retain quote
+    provenance.
+    """
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|")
+    lexer.whitespace_split = True
+    lexer.commenters = "#"
+    try:
+        return list(lexer)
+    except ValueError:
+        return []
+
+
+def _contains_word_sequence(words: list[str], sequence: tuple[str, ...]) -> bool:
+    width = len(sequence)
+    return any(tuple(words[index : index + width]) == sequence for index in range(len(words)))
+
+
+def _has_scheduled_run_skip(words: list[str]) -> bool:
+    job_forms = ("$JOB_NAME", "${JOB_NAME-}", "${JOB_NAME:-}")
+    guards = []
+    for job in job_forms:
+        guards.extend(
+            (
+                ("[", "-z", job, "]", "||", "exit", "0"),
+                ("test", "-z", job, "||", "exit", "0"),
+                ("[", "-n", job, "]", "&&", "exit", "0"),
+                ("test", "-n", job, "&&", "exit", "0"),
+            )
+        )
+    return any(_contains_word_sequence(words, guard) for guard in guards)
+
+
+def _has_codex_runtime(words: list[str]) -> bool:
+    return "--runtime=codex" in words or any(
+        word == "--runtime" and index + 1 < len(words) and words[index + 1] == "codex"
+        for index, word in enumerate(words)
+    )
+
+
+def _relative_path_is_root_anchored(words: list[str], token: str) -> bool:
+    """Whether the last literal `cd` before this script selects the repo root."""
+    try:
+        script_index = words.index(token)
+    except ValueError:
+        return False
+    cd_targets = [
+        words[index + 1]
+        for index, word in enumerate(words[:script_index])
+        if word == "cd" and index + 1 < script_index
+    ]
+    return bool(cd_targets and cd_targets[-1] == _ROOT_SENTINEL)
+
+
 def _codex_registration_semantics(
     document: object,
     surface: str,
@@ -1233,8 +1294,21 @@ def _codex_registration_semantics(
     def problem(detail: str) -> None:
         statuses.append(RegistrationStatus("codex", surface, "misconfigured", detail))
 
+    def recognized_names(node: object) -> set[str]:
+        names: set[str] = set()
+        for nested_command in _hook_commands({"hooks": node}):
+            nested_lexed, nested_words = _script_words(nested_command)
+            if not nested_lexed:
+                continue
+            names.update(
+                name for name in kit_scripts if _match_word(nested_words, name) is not None
+            )
+        return names
+
     for event, groups in events.items():
         if not isinstance(groups, list):
+            for name in recognized_names(groups):
+                problem(f"{name} {event} matcher groups must be a list")
             continue
         for group in groups:
             if not isinstance(group, dict):
@@ -1242,6 +1316,8 @@ def _codex_registration_semantics(
             matcher = group.get("matcher")
             handlers = group.get("hooks")
             if not isinstance(handlers, list):
+                for name in recognized_names(handlers):
+                    problem(f"{name} command handlers must be a list")
                 continue
             for handler in handlers:
                 if not isinstance(handler, dict):
@@ -1252,6 +1328,7 @@ def _codex_registration_semantics(
                 lexed, words = _script_words(command)
                 if not lexed:
                     continue
+                semantic_words = _semantic_shell_words(command)
                 matches = [
                     (name, token)
                     for name in sorted(kit_scripts)
@@ -1273,7 +1350,7 @@ def _codex_registration_semantics(
                         problem(f"{name} must use a command handler")
                     if event != expected_event:
                         problem(f"{name} must be registered under {expected_event}")
-                    if matcher not in accepted_matchers:
+                    if not isinstance(matcher, (str, type(None))) or matcher not in accepted_matchers:
                         if name == "check_doc_budget.py":
                             problem(
                                 "check_doc_budget.py SessionStart matcher must cover every "
@@ -1288,18 +1365,20 @@ def _codex_registration_semantics(
                         "$" not in token
                         and _ROOT_SENTINEL not in token
                         and not Path(token).is_absolute()
+                        and not _relative_path_is_root_anchored(words, token)
                     )
                     pwd_relative = bool(
                         re.search(r"(?:^|/)\$(?:\{PWD\}|PWD)(?:/|$)", token)
+                        or re.search(r"(?:^|/)\$\(\s*pwd(?:\s+-[LP])?\s*\)(?:/|$)", token)
                     )
                     if literal_relative or pwd_relative:
                         problem(f"{name} path must not depend on the session working directory")
                     if name == "check_doc_budget.py":
-                        if "JOB_NAME" not in command:
-                            problem("check_doc_budget.py must preserve the scheduled-run skip")
-                        if "--quiet" not in command:
+                        if not _has_scheduled_run_skip(semantic_words):
+                            problem("check_doc_budget.py must use the shipped scheduled-run guard")
+                        if "--quiet" not in semantic_words:
                             problem("check_doc_budget.py must run in quiet mode")
-                    elif not re.search(r"(?:^|\s)--runtime\s+codex(?:\s|$)", command):
+                    elif not _has_codex_runtime(semantic_words):
                         problem("pr_followup_hook.py must pass --runtime codex")
 
     for name, count in occurrences.items():
