@@ -3424,6 +3424,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pwd-parameter-path", "path must not depend on the session working directory"),
         ("root-pwd-default-path", "path must not depend on the session working directory"),
         ("root-parameter-path", "path must not depend on the session working directory"),
+        ("root-traversal-path", "path must resolve to the configured kit engine"),
         ("disabled-root-path", "path must not depend on the session working directory"),
         ("dead-root-chain", "path must not depend on the session working directory"),
         ("root-pwd-alias", "path must not depend on the session working directory"),
@@ -3664,6 +3665,11 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = (
             'python3 "${root:+/definitely/not-the-repo}/scripts/hooks/'
             'pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "root-traversal-path":
+        post_hook["command"] = post_hook["command"].replace(
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            '"$root/../../sibling/scripts/hooks/pr_followup_hook.py"',
         )
     elif mutation == "disabled-root-path":
         post_hook["command"] = (
@@ -4299,6 +4305,57 @@ def test_an_external_same_basename_hook_is_not_kit_lifecycle_wiring(tmp_path):
     codex = [s for s in statuses if s.surface == ".codex/hooks.json"]
 
     assert [(s.state, s.detail) for s in codex] == [("resolves", str(external))]
+
+
+def test_an_external_decoy_does_not_hide_the_kit_lifecycle_invocation(tmp_path):
+    root = _fake_repo(tmp_path / "repo")
+    external = tmp_path / "external" / "pr_followup_hook.py"
+    _write(external, "print('adopter hook')\n")
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] = post_hook["command"].replace(
+        "--runtime codex", "--runtime claude"
+    )
+    post_hook["command"] = f'DECOY="{external}"; ' + post_hook["command"]
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert any("must pass --runtime codex" in detail for detail in details), details
+
+
+@pytest.mark.parametrize(
+    ("event", "from_path", "to_path"),
+    [
+        (
+            "SessionStart",
+            '"$root/scripts/check_doc_budget.py"',
+            '"$root/../../sibling/scripts/check_doc_budget.py"',
+        ),
+        (
+            "PostToolUse",
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            '"$root/../../sibling/scripts/hooks/pr_followup_hook.py"',
+        ),
+    ],
+)
+def test_codex_lifecycle_paths_cannot_traverse_outside_the_repo(
+    tmp_path, event, from_path, to_path
+):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    handler = document["hooks"][event][0]["hooks"][0]
+    handler["command"] = handler["command"].replace(from_path, to_path)
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert any(
+        "path must resolve to the configured kit engine" in detail
+        for detail in details
+    ), details
 
 
 def test_an_unbalanced_quote_is_reported_as_unjudged_not_as_absent(tmp_path):

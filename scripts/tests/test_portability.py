@@ -1546,7 +1546,7 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
 
 
 @pytest.mark.kit_repo_only("saved_plans/codex-hooks-live-probe/.codex/hooks.json")
-def test_codex_live_validation_fixture_executes_its_observed_surfaces(
+def test_codex_live_validation_fixture_commands_are_executable(
     tmp_path: Path,
 ) -> None:
     fixture = REPO_ROOT / "saved_plans" / "codex-hooks-live-probe"

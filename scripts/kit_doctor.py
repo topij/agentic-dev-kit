@@ -1146,16 +1146,18 @@ _OUT_OF_ROTATION_SUFFIXES = frozenset(
 )
 
 
-def _match_word(words: list[str], name: str) -> str | None:
-    """The word naming `name`, or None.
+def _matching_words(words: list[str], name: str) -> list[str]:
+    """Every word naming `name`.
 
     Matched on the BASENAME rather than by substring: `env_paths.py` ends with
     `paths.py`, and matching that claimed an adopter's own file as the kit's.
     """
+    matches: list[str] = []
     for word in words:
         base = PurePosixPath(word).name
         if base == name:
-            return word
+            matches.append(word)
+            continue
         # A named out-of-rotation suffix, and nothing else. `hook.py.disabled` is
         # the kit's own hook taken out of service and worth reporting dead;
         # `logs/hook.py.log` is an unrelated ARGUMENT, and claiming it produced
@@ -1169,8 +1171,13 @@ def _match_word(words: list[str], name: str) -> str | None:
         # own doctrine — never claim a measurement it did not make.
         suffix = base[len(name) + 1 :].lower() if base.startswith(name + ".") else None
         if suffix in _OUT_OF_ROTATION_SUFFIXES:
-            return word
-    return None
+            matches.append(word)
+    return matches
+
+
+def _match_word(words: list[str], name: str) -> str | None:
+    """The first word naming `name`, or None."""
+    return next(iter(_matching_words(words, name)), None)
 
 
 def _invocable_kit_scripts() -> set[str]:
@@ -1723,9 +1730,11 @@ def _root_alias_is_verified(
     return True
 
 
-def _token_targets_kit_engine(token: str, expected_rel: str, root: Path) -> bool:
+def _token_looks_like_kit_engine(token: str, expected_rel: str, root: Path) -> bool:
     expected_abs = str(root / expected_rel)
     if token in (expected_rel, f"{_ROOT_SENTINEL}/{expected_rel}", expected_abs):
+        return True
+    if token.startswith(f"{_ROOT_SENTINEL}/") and token.endswith(f"/{expected_rel}"):
         return True
     if Path(token).is_absolute():
         return False
@@ -1735,6 +1744,13 @@ def _token_targets_kit_engine(token: str, expected_rel: str, root: Path) -> bool
         token,
     )
     return known_root_form is not None and token.endswith(f"/{expected_rel}")
+
+
+def _token_targets_kit_engine(token: str, expected_rel: str, root: Path) -> bool:
+    return (
+        ".." not in PurePosixPath(token).parts
+        and _token_looks_like_kit_engine(token, expected_rel, root)
+    )
 
 
 def _codex_registration_semantics(
@@ -1828,12 +1844,20 @@ def _codex_registration_semantics(
                     continue
                 semantic_words = _semantic_shell_words(command)
                 shell_commands = _simple_shell_commands(semantic_words)
-                matches = [
-                    (name, token)
-                    for name in sorted(kit_scripts)
-                    if (token := _match_word(words, name)) is not None
-                    and _token_targets_kit_engine(token, engine_paths[name], root)
-                ]
+                matches = []
+                for name in sorted(kit_scripts):
+                    token = next(
+                        (
+                            candidate
+                            for candidate in _matching_words(words, name)
+                            if _token_looks_like_kit_engine(
+                                candidate, engine_paths[name], root
+                            )
+                        ),
+                        None,
+                    )
+                    if token is not None:
+                        matches.append((name, token))
                 for name, token in matches:
                     if name == "check_memory_budget.py":
                         problem(
@@ -1847,6 +1871,10 @@ def _codex_registration_semantics(
                     expected_event, accepted_matchers, expected_timeout = contract
                     bound_commands = _script_commands(shell_commands, name)
                     occurrences[name] = occurrences.get(name, 0) + len(bound_commands)
+                    if not _token_targets_kit_engine(
+                        token, engine_paths[name], root
+                    ):
+                        problem(f"{name} path must resolve to the configured kit engine")
                     if _shell_words_have_grouping(
                         semantic_words
                     ) or _shell_has_unsupported_compound_syntax(command, semantic_words):
