@@ -1213,15 +1213,15 @@ _CODEX_HOOK_CONTRACT: dict[str, tuple[str, frozenset[object], int]] = {
 
 
 def _semantic_shell_words(command: str) -> list[str]:
-    """Active shell words and operators, with comments excluded.
+    """Active shell words and operators, with comments and quote loss excluded.
 
     `_script_words` preserves quote-sensitive root expansion for path
-    resolution. This narrower second lexer has a different job: distinguish
-    active arguments and guards from the same spelling inside a shell comment.
-    `shlex` is suitable here because none of those checks needs to retain quote
-    provenance.
+    resolution. This second lexer retains surrounding quotes so a literal
+    `'${JOB_NAME:-}'` cannot masquerade as the expanding guard the shipped hook
+    uses. It also keeps shell operators as tokens, letting argument checks stay
+    attached to the simple command that invokes the engine.
     """
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|")
+    lexer = shlex.shlex(command, posix=False, punctuation_chars=";&|")
     lexer.whitespace_split = True
     lexer.commenters = "#"
     try:
@@ -1230,45 +1230,135 @@ def _semantic_shell_words(command: str) -> list[str]:
         return []
 
 
-def _contains_word_sequence(words: list[str], sequence: tuple[str, ...]) -> bool:
-    width = len(sequence)
-    return any(tuple(words[index : index + width]) == sequence for index in range(len(words)))
+def _semantic_word_value(word: str) -> str:
+    if len(word) >= 2 and word[0] == word[-1] == "'":
+        return word[1:-1]
+    if len(word) >= 2 and word[0] == word[-1] == '"':
+        return _mark_root(word[1:-1])
+    return _mark_root(word)
 
 
-def _has_scheduled_run_skip(words: list[str]) -> bool:
-    job_forms = ("$JOB_NAME", "${JOB_NAME-}", "${JOB_NAME:-}")
-    guards = []
-    for job in job_forms:
-        guards.extend(
-            (
-                ("[", "-z", job, "]", "||", "exit", "0"),
-                ("test", "-z", job, "||", "exit", "0"),
-                ("[", "-n", job, "]", "&&", "exit", "0"),
-                ("test", "-n", job, "&&", "exit", "0"),
-            )
-        )
-    return any(_contains_word_sequence(words, guard) for guard in guards)
+def _simple_shell_commands(words: list[str]) -> list[tuple[list[str], str | None]]:
+    commands: list[tuple[list[str], str | None]] = []
+    current: list[str] = []
+    for word in words:
+        if word and set(word) <= set(";&|"):
+            if current:
+                commands.append((current, word))
+                current = []
+        else:
+            current.append(word)
+    if current:
+        commands.append((current, None))
+    return commands
 
 
-def _has_codex_runtime(words: list[str]) -> bool:
-    return "--runtime=codex" in words or any(
-        word == "--runtime" and index + 1 < len(words) and words[index + 1] == "codex"
-        for index, word in enumerate(words)
+def _script_commands(
+    commands: list[tuple[list[str], str | None]], name: str
+) -> list[tuple[int, list[str], int]]:
+    found: list[tuple[int, list[str], int]] = []
+    for command_index, (command, _operator) in enumerate(commands):
+        values = [_semantic_word_value(word) for word in command]
+        for word_index, word in enumerate(values):
+            if PurePosixPath(word).name == name:
+                found.append((command_index, values, word_index))
+                break
+    return found
+
+
+def _script_commands_have_option(
+    script_commands: list[tuple[int, list[str], int]], option: str, value: str | None = None
+) -> bool:
+    if not script_commands:
+        return False
+    for _command_index, command, script_index in script_commands:
+        arguments = command[script_index + 1 :]
+        if value is None:
+            if option not in arguments:
+                return False
+        elif f"{option}={value}" not in arguments and not any(
+            word == option and index + 1 < len(arguments) and arguments[index + 1] == value
+            for index, word in enumerate(arguments)
+        ):
+            return False
+    return True
+
+
+def _has_scheduled_run_skip(
+    commands: list[tuple[list[str], str | None]], script_command_index: int
+) -> bool:
+    if script_command_index < 2:
+        return False
+    guard, guard_operator = commands[script_command_index - 2]
+    exit_command, exit_operator = commands[script_command_index - 1]
+    job_forms = {'"$JOB_NAME"', '"${JOB_NAME-}"', '"${JOB_NAME:-}"'}
+    zero_guard = (
+        len(guard) == 4
+        and guard[0] == "["
+        and guard[1] == "-z"
+        and guard[2] in job_forms
+        and guard[3] == "]"
+        and guard_operator == "||"
+    ) or (
+        len(guard) == 3
+        and guard[0] == "test"
+        and guard[1] == "-z"
+        and guard[2] in job_forms
+        and guard_operator == "||"
+    )
+    nonzero_guard = (
+        len(guard) == 4
+        and guard[0] == "["
+        and guard[1] == "-n"
+        and guard[2] in job_forms
+        and guard[3] == "]"
+        and guard_operator == "&&"
+    ) or (
+        len(guard) == 3
+        and guard[0] == "test"
+        and guard[1] == "-n"
+        and guard[2] in job_forms
+        and guard_operator == "&&"
+    )
+    return (zero_guard or nonzero_guard) and exit_command == ["exit", "0"] and exit_operator == ";"
+
+
+def _is_repo_root_cd(command: list[str]) -> bool:
+    values = [_semantic_word_value(word) for word in command]
+    return values in (
+        ["cd", _ROOT_SENTINEL],
+        ["cd", "-L", _ROOT_SENTINEL],
+        ["cd", "-P", _ROOT_SENTINEL],
+        ["cd", "--", _ROOT_SENTINEL],
     )
 
 
-def _relative_path_is_root_anchored(words: list[str], token: str) -> bool:
-    """Whether the last literal `cd` before this script selects the repo root."""
-    try:
-        script_index = words.index(token)
-    except ValueError:
+def _relative_path_is_root_anchored(
+    commands: list[tuple[list[str], str | None]], script_command_index: int
+) -> bool:
+    if script_command_index >= 1:
+        cd_index = script_command_index - 1
+        cd_command, cd_operator = commands[cd_index]
+        operator_before_cd = commands[cd_index - 1][1] if cd_index else None
+        if (
+            _is_repo_root_cd(cd_command)
+            and cd_operator == "&&"
+            and operator_before_cd in (None, ";", "&&")
+        ):
+            return True
+    if script_command_index < 2:
         return False
-    cd_targets = [
-        words[index + 1]
-        for index, word in enumerate(words[:script_index])
-        if word == "cd" and index + 1 < script_index
-    ]
-    return bool(cd_targets and cd_targets[-1] == _ROOT_SENTINEL)
+    cd_index = script_command_index - 2
+    cd_command, cd_operator = commands[cd_index]
+    exit_command, exit_operator = commands[cd_index + 1]
+    operator_before_cd = commands[cd_index - 1][1] if cd_index else None
+    return (
+        _is_repo_root_cd(cd_command)
+        and cd_operator == "||"
+        and exit_command == ["exit", "0"]
+        and exit_operator == ";"
+        and operator_before_cd in (None, ";", "&&")
+    )
 
 
 def _codex_registration_semantics(
@@ -1285,8 +1375,6 @@ def _codex_registration_semantics(
     if surface != ".codex/hooks.json" or not isinstance(document, dict):
         return []
     events = document.get("hooks")
-    if not isinstance(events, dict):
-        return []
 
     statuses: list[RegistrationStatus] = []
     occurrences: dict[str, int] = {}
@@ -1296,7 +1384,11 @@ def _codex_registration_semantics(
 
     def recognized_names(node: object) -> set[str]:
         names: set[str] = set()
-        for nested_command in _hook_commands({"hooks": node}):
+        try:
+            nested_commands = _hook_commands({"hooks": node})
+        except (_RegistrationTooDeep, RecursionError):
+            return names
+        for nested_command in nested_commands:
             nested_lexed, nested_words = _script_words(nested_command)
             if not nested_lexed:
                 continue
@@ -1305,6 +1397,11 @@ def _codex_registration_semantics(
             )
         return names
 
+    if not isinstance(events, dict):
+        for name in recognized_names(events):
+            problem(f"{name} lifecycle events must be an object")
+        return statuses
+
     for event, groups in events.items():
         if not isinstance(groups, list):
             for name in recognized_names(groups):
@@ -1312,6 +1409,8 @@ def _codex_registration_semantics(
             continue
         for group in groups:
             if not isinstance(group, dict):
+                for name in recognized_names(group):
+                    problem(f"{name} matcher group must be an object")
                 continue
             matcher = group.get("matcher")
             handlers = group.get("hooks")
@@ -1321,6 +1420,8 @@ def _codex_registration_semantics(
                 continue
             for handler in handlers:
                 if not isinstance(handler, dict):
+                    for name in recognized_names(handler):
+                        problem(f"{name} command handler must be an object")
                     continue
                 command = handler.get("command")
                 if not isinstance(command, str):
@@ -1329,6 +1430,7 @@ def _codex_registration_semantics(
                 if not lexed:
                     continue
                 semantic_words = _semantic_shell_words(command)
+                shell_commands = _simple_shell_commands(semantic_words)
                 matches = [
                     (name, token)
                     for name in sorted(kit_scripts)
@@ -1346,6 +1448,7 @@ def _codex_registration_semantics(
                         continue
                     occurrences[name] = occurrences.get(name, 0) + 1
                     expected_event, accepted_matchers, expected_timeout = contract
+                    bound_commands = _script_commands(shell_commands, name)
                     if handler.get("type") != "command":
                         problem(f"{name} must use a command handler")
                     if event != expected_event:
@@ -1365,7 +1468,13 @@ def _codex_registration_semantics(
                         "$" not in token
                         and _ROOT_SENTINEL not in token
                         and not Path(token).is_absolute()
-                        and not _relative_path_is_root_anchored(words, token)
+                        and not (
+                            bound_commands
+                            and all(
+                                _relative_path_is_root_anchored(shell_commands, command_index)
+                                for command_index, _command, _script_index in bound_commands
+                            )
+                        )
                     )
                     pwd_relative = bool(
                         re.search(r"(?:^|/)\$(?:\{PWD\}|PWD)(?:/|$)", token)
@@ -1374,11 +1483,16 @@ def _codex_registration_semantics(
                     if literal_relative or pwd_relative:
                         problem(f"{name} path must not depend on the session working directory")
                     if name == "check_doc_budget.py":
-                        if not _has_scheduled_run_skip(semantic_words):
+                        if not bound_commands or not all(
+                            _has_scheduled_run_skip(shell_commands, command_index)
+                            for command_index, _command, _script_index in bound_commands
+                        ):
                             problem("check_doc_budget.py must use the shipped scheduled-run guard")
-                        if "--quiet" not in semantic_words:
+                        if not _script_commands_have_option(bound_commands, "--quiet"):
                             problem("check_doc_budget.py must run in quiet mode")
-                    elif not _has_codex_runtime(semantic_words):
+                    elif not _script_commands_have_option(
+                        bound_commands, "--runtime", "codex"
+                    ):
                         problem("pr_followup_hook.py must pass --runtime codex")
 
     for name, count in occurrences.items():
@@ -3070,11 +3184,11 @@ def main(argv: list[str] | None = None) -> int:
     # `dead_registrations` joins the exit code for the reason #379 was filed:
     # the observable for a registration naming a path that is not there is a
     # hook that silently stopped firing, and until now nothing in the kit's own
-    # instrument reported it. `broken` and `unreadable` reach here — see
-    # `Report.dead_registrations` for why those two and not the other three.
-    # Semantic mismatches join the same gate: a path that resolves under the
-    # wrong event or matcher is no more able to provide the intended lifecycle
-    # behavior than an absent path is.
+    # instrument reported it. `broken`, `misconfigured`, and `unreadable` reach
+    # here — see `Report.dead_registrations` for why the supported absent and
+    # unresolvable states do not. A path that resolves under the wrong event or
+    # matcher is no more able to provide the intended lifecycle behavior than
+    # an absent path is.
     return 1 if report.drifted or report.broken or report.dead_registrations else 0
 
 

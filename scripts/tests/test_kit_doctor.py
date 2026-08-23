@@ -3371,16 +3371,22 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("doc-job-skip", "must use the shipped scheduled-run guard"),
         ("doc-job-reversed", "must use the shipped scheduled-run guard"),
         ("doc-job-comment", "must use the shipped scheduled-run guard"),
+        ("doc-job-literal", "must use the shipped scheduled-run guard"),
+        ("doc-job-late", "must use the shipped scheduled-run guard"),
+        ("doc-job-echo", "must use the shipped scheduled-run guard"),
         ("doc-quiet", "must run in quiet mode"),
         ("doc-quiet-comment", "must run in quiet mode"),
+        ("doc-quiet-unbound", "must run in quiet mode"),
         ("pr-event", "must be registered under PostToolUse"),
         ("pr-matcher", 'matcher must be "^Bash$"'),
         ("pr-timeout", "pr_followup_hook.py timeout must be 10 seconds"),
         ("pr-runtime", "must pass --runtime codex"),
         ("pr-runtime-comment", "must pass --runtime codex"),
+        ("pr-runtime-unbound", "must pass --runtime codex"),
         ("relative-path", "path must not depend on the session working directory"),
         ("pwd-path", "path must not depend on the session working directory"),
         ("pwd-command-path", "path must not depend on the session working directory"),
+        ("disabled-root-path", "path must not depend on the session working directory"),
         ("handler-type", "must use a command handler"),
     ],
 )
@@ -3412,12 +3418,28 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         session_hook["command"] = session_hook["command"].replace(
             '[ -z "${JOB_NAME:-}" ] || exit 0; ', ""
         ) + ' # [ -z "${JOB_NAME:-}" ] || exit 0'
+    elif mutation == "doc-job-literal":
+        session_hook["command"] = session_hook["command"].replace(
+            '"${JOB_NAME:-}"', "'${JOB_NAME:-}'"
+        )
+    elif mutation == "doc-job-late":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ] || exit 0; ', ""
+        ) + '; [ -z "${JOB_NAME:-}" ] || exit 0'
+    elif mutation == "doc-job-echo":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ]', 'echo [ -z "${JOB_NAME:-}" ]'
+        )
     elif mutation == "doc-quiet":
         session_hook["command"] = session_hook["command"].replace(" --quiet", "")
     elif mutation == "doc-quiet-comment":
         session_hook["command"] = session_hook["command"].replace(
             " --quiet", ""
         ) + " # --quiet"
+    elif mutation == "doc-quiet-unbound":
+        session_hook["command"] = session_hook["command"].replace(
+            " --quiet", ""
+        ) + "; echo --quiet"
     elif mutation == "pr-event":
         document["hooks"]["SessionStart"].append(post)
         document["hooks"]["PostToolUse"] = []
@@ -3433,6 +3455,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", "--runtime claude # --runtime codex"
         )
+    elif mutation == "pr-runtime-unbound":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", "--runtime claude; echo --runtime codex"
+        )
     elif mutation == "relative-path":
         post_hook["command"] = (
             "python3 scripts/hooks/pr_followup_hook.py --runtime codex"
@@ -3445,6 +3471,11 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = (
             'python3 "$(pwd)/scripts/hooks/pr_followup_hook.py" --runtime codex'
         )
+    elif mutation == "disabled-root-path":
+        post_hook["command"] = (
+            'root="$(git rev-parse --show-toplevel)"; false && cd "$root"; '
+            "python3 scripts/hooks/pr_followup_hook.py --runtime codex"
+        )
     elif mutation == "handler-type":
         post_hook["type"] = "prompt"
 
@@ -3456,12 +3487,15 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
 
 
 @pytest.mark.parametrize("runtime_arg", ["--runtime codex", "--runtime=codex"])
-def test_codex_semantics_accept_root_anchored_relative_paths(tmp_path, runtime_arg):
+@pytest.mark.parametrize("cd_command", ['cd "$root"', 'cd -P "$root"', 'cd -- "$root"'])
+def test_codex_semantics_accept_root_anchored_relative_paths(
+    tmp_path, runtime_arg, cd_command
+):
     root = _fake_repo(tmp_path)
     document = _valid_codex_lifecycle_document()
     post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
     post_hook["command"] = (
-        'root="$(git rev-parse --show-toplevel)"; cd "$root" || exit 0; '
+        f'root="$(git rev-parse --show-toplevel)"; {cd_command} || exit 0; '
         f"python3 scripts/hooks/pr_followup_hook.py {runtime_arg}"
     )
     _write_codex_lifecycle_fixture(root, document)
@@ -3471,21 +3505,41 @@ def test_codex_semantics_accept_root_anchored_relative_paths(tmp_path, runtime_a
     assert not [s.detail for s in statuses if s.state == "misconfigured"]
 
 
-@pytest.mark.parametrize("container", ["groups", "handlers"])
-def test_codex_semantics_reject_non_list_lifecycle_containers(tmp_path, container):
+@pytest.mark.parametrize(
+    "container", ["events", "groups", "group-entry", "handlers", "handler-entry"]
+)
+def test_codex_semantics_reject_malformed_lifecycle_containers(tmp_path, container):
     root = _fake_repo(tmp_path)
     document = _valid_codex_lifecycle_document()
     post = document["hooks"]["PostToolUse"][0]
-    if container == "groups":
+    post_hook = post["hooks"][0]
+    if container == "events":
+        document["hooks"] = [document["hooks"]]
+    elif container == "groups":
         document["hooks"]["PostToolUse"] = post
+    elif container == "group-entry":
+        document["hooks"]["PostToolUse"] = [[post]]
+    elif container == "handler-entry":
+        post["hooks"] = [[post_hook]]
     else:
-        post["hooks"] = post["hooks"][0]
+        post["hooks"] = post_hook
     _write_codex_lifecycle_fixture(root, document)
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
     details = [s.detail for s in statuses if s.state == "misconfigured"]
 
-    assert any("must be a list" in detail for detail in details), details
+    assert any("must be" in detail for detail in details), details
+
+
+def test_script_word_scan_preserves_equals_options_as_arguments():
+    lexed, words = kit_doctor._script_words(
+        "echo --script=pr_followup_hook.py --runtime=codex"
+    )
+
+    assert lexed
+    assert "--script=pr_followup_hook.py" in words
+    assert "--runtime=codex" in words
+    assert kit_doctor._match_word(words, "pr_followup_hook.py") is None
 
 
 def test_codex_misconfiguration_renders_as_a_failure(tmp_path):

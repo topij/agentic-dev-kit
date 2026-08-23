@@ -1541,17 +1541,35 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
 
 
 @pytest.mark.kit_repo_only("saved_plans/codex-hooks-live-probe/.codex/hooks.json")
-def test_codex_live_validation_fixture_keeps_its_observed_surfaces() -> None:
+def test_codex_live_validation_fixture_executes_its_observed_surfaces(
+    tmp_path: Path,
+) -> None:
     fixture = REPO_ROOT / "saved_plans" / "codex-hooks-live-probe"
     hooks = json.loads((fixture / ".codex" / "hooks.json").read_text(encoding="utf-8"))
-    recorder = (fixture / "record_hook.py").read_text(encoding="utf-8")
+    configured = json.dumps(hooks)
+
+    def run(name: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(fixture / "record_hook.py"), name],
+            input=json.dumps({"hook_event_name": "test", "cwd": str(tmp_path)}),
+            text=True,
+            capture_output=True,
+            check=True,
+            env={**os.environ, "PROBE_ROOT": str(tmp_path)},
+        )
 
     assert set(hooks["hooks"]) == {"SessionStart", "PostToolUse"}
-    assert "ss-resume" in json.dumps(hooks)
-    assert "pt-lowercase" in json.dumps(hooks)
-    assert "SESSION_PLAIN_VISIBLE" in recorder
-    assert "POST_CONTEXT_VISIBLE" in recorder
-    assert "POST_PLAIN_SHOULD_BE_IGNORED" in recorder
+    assert "ss-resume" in configured
+    assert "pt-lowercase" in configured
+    assert "ss-visible" in configured
+    assert run("ss-visible").stdout.strip() == "SESSION_PLAIN_VISIBLE"
+    post_json = json.loads(run("pt-json").stdout)
+    assert post_json["systemMessage"] == "POST_SYSTEM_VISIBLE"
+    assert (
+        post_json["hookSpecificOutput"]["additionalContext"]
+        == "POST_CONTEXT_VISIBLE"
+    )
+    assert run("pt-plain").stdout.strip() == "POST_PLAIN_SHOULD_BE_IGNORED"
 
 
 def _runtime_parity_fixture(tmp_path: Path) -> Path:
