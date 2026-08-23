@@ -125,7 +125,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "21e943679e7ae0437882cc3fe5a4c216fde7fa95b3a228fe6f6b04584ee6365c"
+      "sha256": "00595587a6d578832e2d3b312580bf42e46d42e74dde1aede2e3bb259919a313"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
@@ -223,7 +223,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "17e121663f8d56f77a8c150952f04ba7b76156bab0c3f0828d55257ae6727aee"
+      "sha256": "03fc3cfd46385f108a93f654955dafeaebef110df528ab6037c975cce5ba59d4"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",

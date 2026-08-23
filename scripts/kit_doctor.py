@@ -1238,6 +1238,7 @@ def _semantic_shell_words(command: str) -> list[str]:
             continue
         if command[cursor : cursor + 2] == "\\$":
             prepared.append(_LITERAL_EXPANSION_SENTINEL)
+            prepared.append("$")
             cursor += 2
             at_word_start = False
             continue
@@ -1272,6 +1273,7 @@ def _semantic_shell_words(command: str) -> list[str]:
                     continue
                 if command[end : end + 2] == "\\$":
                     quoted.append(_LITERAL_EXPANSION_SENTINEL)
+                    quoted.append("$")
                     end += 2
                     continue
                 if command[end] == '"':
@@ -1429,6 +1431,15 @@ def _script_commands_use_shipped_uv_launcher(
         if command[cursor:script_index] != ["uv", "run", "--script"]:
             return False
     return True
+
+
+def _script_commands_have_exact_arguments(
+    script_commands: list[tuple[int, list[str], list[str], int]], expected: list[str]
+) -> bool:
+    return bool(script_commands) and all(
+        command[script_index + 1 :] == expected
+        for _command_index, _raw_command, command, script_index in script_commands
+    )
 
 
 def _shell_variable_is_reassigned_before(
@@ -1674,6 +1685,14 @@ def _shell_has_unsupported_compound_syntax(command: str, words: list[str]) -> bo
     )
     if reserved.intersection(words):
         return True
+    without_root_lookup = re.sub(
+        r'root="\$\(git rev-parse --show-toplevel(?: 2>/dev/null)?\)"',
+        "",
+        command,
+        count=1,
+    )
+    if "$(" in without_root_lookup or "`" in without_root_lookup:
+        return True
     return any(word.startswith("<<") for word in words)
 
 
@@ -1853,8 +1872,13 @@ def _codex_registration_semantics(
                         shell_commands, bound_commands
                     )
                     expansion_provenance_invalid = any(
-                        _UNQUOTED_EXPANSION_SENTINEL in raw_command[script_index]
-                        or _LITERAL_EXPANSION_SENTINEL in raw_command[script_index]
+                        (
+                            _UNQUOTED_EXPANSION_SENTINEL in raw_command[script_index]
+                            or _LITERAL_EXPANSION_SENTINEL in raw_command[script_index]
+                        )
+                        and re.search(
+                            r"\$(?:\{root\}|root)(?:/|$)", raw_command[script_index]
+                        )
                         for _command_index, raw_command, _command, script_index in bound_commands
                     )
                     if (
@@ -1868,6 +1892,12 @@ def _codex_registration_semantics(
                         if not _script_commands_use_shipped_uv_launcher(bound_commands):
                             problem(
                                 "check_doc_budget.py must use the shipped uv run --script launcher"
+                            )
+                        if not _script_commands_have_exact_arguments(
+                            bound_commands, ["--quiet"]
+                        ):
+                            problem(
+                                "check_doc_budget.py must use only the shipped --quiet argument"
                             )
                         if not bound_commands or not all(
                             _has_scheduled_run_skip(shell_commands, command_index)

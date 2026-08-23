@@ -3389,6 +3389,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("doc-root-option", "must use repository-resolved root and config"),
         ("doc-config-option", "must use repository-resolved root and config"),
         ("doc-uv-help", "must use the shipped uv run --script launcher"),
+        ("doc-stray-argument", "must use only the shipped --quiet argument"),
         ("doc-redirection", "must not use shell redirection"),
         ("pr-event", "must be registered under PostToolUse"),
         ("pr-matcher", 'matcher must be "^Bash$"'),
@@ -3409,6 +3410,8 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-group-exit", "must not use compound shell syntax"),
         ("pr-conditional", "must not use compound shell syntax"),
         ("pr-heredoc", "must not use compound shell syntax"),
+        ("pr-command-substitution", "must not use compound shell syntax"),
+        ("pr-inline-root", "must not use compound shell syntax"),
         ("pr-read-root", "must use the shipped Git-root"),
         ("pr-root-guard-missing", "must use the shipped Git-root"),
         ("relative-path", "path must not depend on the session working directory"),
@@ -3513,6 +3516,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         session_hook["command"] = session_hook["command"].replace(
             "uv run --script", "uv run --help --script"
         )
+    elif mutation == "doc-stray-argument":
+        session_hook["command"] = session_hook["command"].replace(
+            "--quiet", "--quiet stray-argument"
+        )
     elif mutation == "doc-redirection":
         session_hook["command"] = session_hook["command"].replace(
             "--quiet", "> --quiet"
@@ -3593,6 +3600,16 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
             'exec python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex',
             'cat <<EOF\nexec python3 "$root/scripts/hooks/pr_followup_hook.py" '
             '--runtime codex\nEOF',
+        )
+    elif mutation == "pr-command-substitution":
+        post_hook["command"] += (
+            ' "$(python3 "$root/scripts/hooks/pr_followup_hook.py" '
+            '--runtime claude)"'
+        )
+    elif mutation == "pr-inline-root":
+        post_hook["command"] = post_hook["command"].replace(
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            '"$(git rev-parse --show-toplevel)/scripts/hooks/pr_followup_hook.py"',
         )
     elif mutation == "pr-read-root":
         post_hook["command"] = post_hook["command"].replace(
@@ -4115,11 +4132,9 @@ def test_a_repo_root_containing_a_space_does_not_break_the_path_scan(tmp_path):
     assert report.dead_registrations == []
 
 
-def test_the_inline_rev_parse_form_is_read_as_the_root(tmp_path):
-    """`$(git rev-parse --show-toplevel)` contains spaces of its own, so it has
-    the same hazard as a spaced root and is covered by the same sentinel. An
-    adopter who wrote the registration by hand rather than from `init.sh`'s
-    printed block reaches this shape."""
+def test_inline_rev_parse_resolves_but_fails_codex_lifecycle_semantics(tmp_path):
+    """Path discovery can resolve this form without making it safe lifecycle
+    wiring: a non-repository cwd turns the substitution into an empty root."""
     root = _fake_repo(tmp_path)
     _write(root / HOOK_REL, "print('hook')\n")
     _registration(
@@ -4130,7 +4145,13 @@ def test_the_inline_rev_parse_form_is_read_as_the_root(tmp_path):
     report = _inspect(root, {ENGINE: _sha("x")}, None)
     codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
 
-    assert [(s.state, s.detail) for s in codex] == [("resolves", HOOK_REL)]
+    assert [(s.state, s.detail) for s in codex] == [
+        ("resolves", HOOK_REL),
+        (
+            "misconfigured",
+            "pr_followup_hook.py invocation must not use compound shell syntax",
+        ),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -4353,6 +4374,21 @@ def test_adjacent_quoted_and_unquoted_path_fragments_form_one_shell_word(tmp_pat
     post_hook["command"] = post_hook["command"].replace(
         '"$root/scripts/hooks/pr_followup_hook.py"',
         '"$root"/scripts/hooks/pr_followup_hook.py',
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not [s.detail for s in statuses if s.state == "misconfigured"]
+
+
+def test_an_escaped_literal_dollar_in_an_absolute_path_is_not_a_root_alias(tmp_path):
+    root = _fake_repo(tmp_path / "$repo")
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    escaped_hook = str(root / HOOK_REL).replace("$", r"\$")
+    post_hook["command"] = post_hook["command"].replace(
+        '"$root/scripts/hooks/pr_followup_hook.py"', f'"{escaped_hook}"'
     )
     _write_codex_lifecycle_fixture(root, document)
 
