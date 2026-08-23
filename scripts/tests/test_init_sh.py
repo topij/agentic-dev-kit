@@ -2221,6 +2221,17 @@ def test_register_pr_hook_reports_both_runtimes_and_writes_neither(tmp_path: Pat
     assert not (repo / ".claude" / "settings.json").exists()
 
 
+def test_codex_hook_advisories_name_the_additive_project_config(tmp_path: Path) -> None:
+    repo = _with_pr_hook(_with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True)))
+
+    result = _run_init(repo)
+
+    assert ".codex/config.toml" in result.stdout
+    assert "remove any inline registration" in result.stdout
+    assert "[features].hooks set to false" in result.stdout
+    assert "merges inline hooks with hooks.json" in result.stdout
+
+
 @pytest.mark.parametrize("shape", ["directory", "dangling_symlink"])
 def test_no_advisory_when_the_engine_path_is_not_a_file(tmp_path: Path, shape: str) -> None:
     """Kills: `[ ! -f "$_hook_src" ]` weakened to `-e`.

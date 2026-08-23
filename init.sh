@@ -1168,6 +1168,9 @@ register_pr_hook() {
   echo "      Skip whichever you have already done — \`/hooks\` in a session lists"
   echo "      what that runtime actually loaded, which is the authority here."
   echo "      Codex — .codex/hooks.json, under hooks.PostToolUse, matcher \"^Bash\$\":"
+  echo "        First inspect .codex/config.toml: remove any inline registration for"
+  echo "        this engine, and do not leave [features].hooks set to false. Codex"
+  echo "        merges inline hooks with hooks.json instead of replacing them."
   # The guard clauses are not decoration (#359). A bare
   # `python3 "$(git rev-parse --show-toplevel)/…"` collapses to an absolute path
   # rooted at `/` in a tree with no `.git`, because the substitution yields the
@@ -1271,6 +1274,8 @@ register_budget_hooks() {
   if [ -f "$_doc_budget_src" ]; then
     echo "      Codex — .codex/hooks.json, under hooks.SessionStart; omit matcher"
     echo "      to cover every supported start source:"
+    echo "        First inspect .codex/config.toml: remove any inline registration for"
+    echo "        this engine, and do not leave [features].hooks set to false."
     echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_doc_budget_src}\" --quiet || true"
     echo "        Set the command handler timeout to 15 seconds. SessionStart plain stdout"
     echo "        becomes developer context, so the quiet flag keeps healthy runs empty."

@@ -47,9 +47,11 @@ starts.
 - **CHANGED — `kit_doctor` can now report a Codex hook registration as
   `misconfigured`, and that state makes its process exit non-zero** (`#243`). The
   check applies to the portable document-budget and PR-follow-through engines and
-  covers lifecycle event, matcher, timeout, command-handler type, Codex runtime
-  arguments on recognized engine invocations, duplicate invocations, Claude-only
-  engine use, direct cwd aliases, and the shipped Git-root resolution pattern.
+  covers the merged `.codex/hooks.json` and inline `.codex/config.toml` project
+  sources, project hook enablement, lifecycle event, matcher, timeout,
+  command-handler type, Codex runtime arguments on recognized engine invocations,
+  duplicate invocations, Claude-only engine use, shell validity, direct cwd aliases,
+  and the shipped silent Git-root resolution pattern.
   **If you parse the JSON report, accept
   `misconfigured` as a registration state. Run `kit_doctor`, then reconcile any
   finding against the Codex block printed by `./init.sh` and review the current

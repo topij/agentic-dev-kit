@@ -177,6 +177,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -899,8 +900,8 @@ def sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
-# The two files a runtime reads to learn that the kit's hook exists, plus the
-# overlay Claude Code merges over the first. Literals, for the same reason
+# The project files each runtime reads to learn that the kit's hook exists,
+# plus the Claude Code local overlay. Literals, for the same reason
 # `AGENTS.md` and `CLAUDE.md` are literals in `inspect`: they are the runtime's
 # names, not the adopter's, and there is no config key that could hold them —
 # a repo that renamed `.claude/settings.json` has no hook either way.
@@ -915,6 +916,7 @@ def sha256_of(path: Path) -> str:
 REGISTRATION_SURFACES: tuple[tuple[str, str, bool], ...] = (
     ("claude", ".claude/settings.json", True),
     ("codex", ".codex/hooks.json", True),
+    ("codex", ".codex/config.toml", False),
     ("claude", ".claude/settings.local.json", False),
 )
 
@@ -1022,8 +1024,9 @@ def _hook_commands(node: object, depth: int = 0, inside_hooks: bool = False) -> 
 # ago, and described the mechanism that replaced it as the one it replaced; a
 # lens caught it. Same class as the rest of this session.)
 #
-# NUL cannot appear in a path or in JSON text, so it cannot collide with
-# anything an adopter wrote.
+# A JSON escape can decode to NUL even though a shell cannot execute a command
+# containing one. `_semantic_shell_words` rejects input NULs before this marker
+# is introduced, so adopter text cannot impersonate it.
 _ROOT_SENTINEL = "\x00devkit-root\x00"
 
 
@@ -1239,6 +1242,9 @@ def _semantic_shell_words(command: str) -> list[str]:
     operators as tokens, letting argument checks stay attached to the simple
     command that invokes the engine.
     """
+    if "\x00" in command:
+        return []
+
     prepared: list[str] = []
     cursor = 0
     at_word_start = True
@@ -1347,19 +1353,24 @@ def _bound_script_path_value(word: str) -> str:
     return _semantic_word_value(stripped)
 
 
-def _simple_shell_commands(words: list[str]) -> list[tuple[list[str], str | None]]:
+def _simple_shell_commands(
+    words: list[str],
+) -> tuple[bool, list[tuple[list[str], str | None]]]:
     commands: list[tuple[list[str], str | None]] = []
     current: list[str] = []
     for word in words:
         if word and set(word) <= set(";&|"):
-            if current:
-                commands.append((current, word))
-                current = []
+            if not current or word not in (";", "&", "&&", "|", "||"):
+                return False, []
+            commands.append((current, word))
+            current = []
         else:
             current.append(word)
     if current:
         commands.append((current, None))
-    return commands
+    elif commands and commands[-1][1] not in (";", "&"):
+        return False, []
+    return bool(commands), commands
 
 
 def _script_commands(
@@ -1474,8 +1485,7 @@ def _script_commands_use_shipped_uv_launcher(
     if not script_commands:
         return False
     for _command_index, _raw_command, command, script_index in script_commands:
-        cursor = 1 if command[:1] == ["exec"] else 0
-        if command[cursor:script_index] != ["uv", "run", "--script"]:
+        if command[:script_index] != ["uv", "run", "--script"]:
             return False
     return True
 
@@ -1569,7 +1579,7 @@ def _has_repo_root_assignment_before(
     assignment, operator = commands[0]
     source = " ".join(assignment)
     if not re.fullmatch(
-        r'root="?\$\(git rev-parse --show-toplevel(?: 2>/dev/null)?\)"?', source
+        r'root="?\$\(git rev-parse --show-toplevel 2>/dev/null\)"?', source
     ):
         return False
     for later, _later_operator in commands[1:before_index]:
@@ -1596,7 +1606,7 @@ def _has_shipped_repo_root_resolution(
     return (
         bool(
             re.fullmatch(
-                r'root="?\$\(git rev-parse --show-toplevel(?: 2>/dev/null)?\)"?',
+                r'root="?\$\(git rev-parse --show-toplevel 2>/dev/null\)"?',
                 source,
             )
         )
@@ -1802,18 +1812,20 @@ def _codex_registration_semantics(
     kit_scripts: set[str],
     root: Path,
     engine_paths: dict[str, str],
+    occurrences: dict[str, int] | None = None,
 ) -> list[RegistrationStatus]:
     """Check the deterministic Codex contract without claiming live trust.
 
     `/hooks` remains authoritative for what the client loaded. This check only
-    judges the JSON that Codex will receive after the project and each current
-    command-hook definition are trusted.
+    judges the project JSON and inline TOML that Codex will receive after the
+    project and each current command-hook definition are trusted.
     """
-    if surface != ".codex/hooks.json":
+    if surface not in (".codex/hooks.json", ".codex/config.toml"):
         return []
 
     statuses: list[RegistrationStatus] = []
-    occurrences: dict[str, int] = {}
+    if occurrences is None:
+        occurrences = {}
 
     def problem(detail: str) -> None:
         statuses.append(RegistrationStatus("codex", surface, "misconfigured", detail))
@@ -1886,7 +1898,7 @@ def _codex_registration_semantics(
                             problem(f"{name} command must use valid shell syntax")
                     continue
                 semantic_words = _semantic_shell_words(command)
-                shell_commands = _simple_shell_commands(semantic_words)
+                semantic_valid, shell_commands = _simple_shell_commands(semantic_words)
                 matches: list[tuple[str, list[str]]] = []
                 for name in sorted(kit_scripts):
                     candidates = [
@@ -1898,6 +1910,10 @@ def _codex_registration_semantics(
                     ]
                     if candidates:
                         matches.append((name, candidates))
+                if not semantic_valid:
+                    for name, _candidates in matches:
+                        problem(f"{name} command must use valid shell syntax")
+                    continue
                 for name, _candidates in matches:
                     if name == "check_memory_budget.py":
                         problem(
@@ -2062,9 +2078,6 @@ def _codex_registration_semantics(
                     elif not _script_commands_use_python3_launcher(bound_commands):
                         problem("pr_followup_hook.py must use the shipped python3 launcher")
 
-    for name, count in occurrences.items():
-        if count > 1:
-            problem(f"{name} has a duplicate Codex registration")
     return statuses
 
 
@@ -2091,6 +2104,8 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
         if PurePosixPath(rel).name in kit_scripts and role not in ("template", "test")
     }
     statuses: list[RegistrationStatus] = []
+    codex_documents: dict[str, object] = {}
+    codex_occurrences: dict[str, int] = {}
     for runtime, surface, report_absent in REGISTRATION_SURFACES:
         path = root / surface
         if not path.is_file():
@@ -2098,8 +2113,15 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                 statuses.append(RegistrationStatus(runtime, surface, "absent"))
             continue
         try:
-            document = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError, UnicodeDecodeError, RecursionError) as exc:
+            source = path.read_text(encoding="utf-8")
+            document = tomllib.loads(source) if path.suffix == ".toml" else json.loads(source)
+        except (
+            json.JSONDecodeError,
+            tomllib.TOMLDecodeError,
+            OSError,
+            UnicodeDecodeError,
+            RecursionError,
+        ) as exc:
             # Same degrade-don't-abort rule the baseline read follows: a
             # registration file this run could not parse is reported, never
             # raised. A diagnostic that dies on one malformed file tells the
@@ -2178,11 +2200,47 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
             )
         statuses.extend(found)
         if runtime == "codex":
+            codex_documents[surface] = document
             statuses.extend(
                 _codex_registration_semantics(
-                    document, surface, kit_scripts, root, engine_paths
+                    document,
+                    surface,
+                    kit_scripts,
+                    root,
+                    engine_paths,
+                    codex_occurrences,
                 )
             )
+    duplicate_surface = (
+        ".codex/config.toml"
+        if ".codex/config.toml" in codex_documents
+        else ".codex/hooks.json"
+    )
+    for name, count in codex_occurrences.items():
+        if count > 1:
+            statuses.append(
+                RegistrationStatus(
+                    "codex",
+                    duplicate_surface,
+                    "misconfigured",
+                    f"{name} has a duplicate Codex registration",
+                )
+            )
+
+    codex_config = codex_documents.get(".codex/config.toml")
+    if isinstance(codex_config, dict):
+        features = codex_config.get("features")
+        if isinstance(features, dict):
+            feature_value = features.get("hooks", features.get("codex_hooks"))
+            if feature_value is False and codex_occurrences:
+                statuses.append(
+                    RegistrationStatus(
+                        "codex",
+                        ".codex/config.toml",
+                        "misconfigured",
+                        "Codex lifecycle hooks are disabled by the project config",
+                    )
+                )
     return statuses
 
 

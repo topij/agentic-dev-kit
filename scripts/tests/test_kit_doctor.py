@@ -3285,6 +3285,17 @@ def test_a_malformed_registration_degrades_instead_of_aborting_the_report(tmp_pa
     assert [s.state for s in statuses if s.surface == ".codex/hooks.json"] == ["unreadable"]
 
 
+def test_a_malformed_codex_project_config_degrades_instead_of_aborting(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / ".codex" / "config.toml", "[hooks\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert [s.state for s in statuses if s.surface == ".codex/config.toml"] == [
+        "unreadable"
+    ]
+
+
 def test_a_session_start_registration_is_checked_too(tmp_path):
     """The walk is over every `command` in the document, not a lookup into the
     events the kit ships today — `SessionStart` is already a second one, and a
@@ -3350,6 +3361,18 @@ def _write_codex_lifecycle_fixture(root: Path, document: dict) -> None:
     _write(root / ".codex" / "hooks.json", json.dumps(document))
 
 
+def _valid_codex_inline_posttooluse() -> str:
+    return """\
+[[hooks.PostToolUse]]
+matcher = "^Bash$"
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = 'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; [ -n "$root" ] || exit 0; exec python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+timeout = 10
+"""
+
+
 def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
     root = _fake_repo(tmp_path)
     _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
@@ -3362,6 +3385,55 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         "scripts/check_doc_budget.py",
         HOOK_REL,
     }
+
+
+def test_codex_lifecycle_semantics_accept_inline_project_config(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _write(root / ".codex" / "config.toml", _valid_codex_inline_posttooluse())
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    codex = [s for s in statuses if s.runtime == "codex"]
+
+    assert not [s for s in codex if s.state == "misconfigured"]
+    assert any(s.state == "resolves" and s.detail == HOOK_REL for s in codex)
+
+
+def test_codex_lifecycle_semantics_detect_cross_source_duplicate(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", _valid_codex_inline_posttooluse())
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert any("pr_followup_hook.py has a duplicate" in detail for detail in details)
+
+
+@pytest.mark.parametrize("feature", ["hooks", "codex_hooks"])
+def test_codex_lifecycle_semantics_detect_project_feature_disable(tmp_path, feature):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", f"[features]\n{feature} = false\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert "Codex lifecycle hooks are disabled by the project config" in details
+
+
+def test_codex_lifecycle_semantics_validate_inline_project_config(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    invalid = _valid_codex_inline_posttooluse().replace(
+        "--runtime codex", "--runtime claude"
+    )
+    _write(root / ".codex" / "config.toml", invalid)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert any("must pass --runtime codex" in detail for detail in details)
 
 
 @pytest.mark.parametrize(
@@ -3391,6 +3463,8 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("doc-root-option", "must use repository-resolved root and config"),
         ("doc-config-option", "must use repository-resolved root and config"),
         ("doc-uv-help", "must use the shipped uv run --script launcher"),
+        ("doc-exec", "must use the shipped uv run --script launcher"),
+        ("doc-root-stderr", "must use the shipped Git-root"),
         ("doc-stray-argument", "must use only the shipped --quiet argument"),
         ("doc-redirection", "must not use shell redirection"),
         ("pr-event", "must be registered under PostToolUse"),
@@ -3402,6 +3476,9 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-runtime-shadowed", "must pass --runtime codex"),
         ("pr-runtime-expanded", "must pass --runtime codex"),
         ("pr-runtime-crlf", "must pass --runtime codex"),
+        ("pr-leading-operator", "command must use valid shell syntax"),
+        ("pr-consecutive-operator", "command must use valid shell syntax"),
+        ("pr-nul-sentinel", "command must use valid shell syntax"),
         ("pr-leading-comment", "must pass --runtime codex"),
         ("pr-absolute-launcher", "must use the shipped python3 launcher"),
         ("pr-escaped-space-comment", "must use supported shell control flow"),
@@ -3538,6 +3615,14 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         session_hook["command"] = session_hook["command"].replace(
             "uv run --script", "uv run --help --script"
         )
+    elif mutation == "doc-exec":
+        session_hook["command"] = session_hook["command"].replace(
+            "uv run --script", "exec uv run --script"
+        )
+    elif mutation == "doc-root-stderr":
+        session_hook["command"] = session_hook["command"].replace(
+            " --show-toplevel 2>/dev/null", " --show-toplevel"
+        )
     elif mutation == "doc-stray-argument":
         session_hook["command"] = session_hook["command"].replace(
             "--quiet", "--quiet stray-argument"
@@ -3576,6 +3661,17 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
     elif mutation == "pr-runtime-crlf":
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", '--runtime "co\\\r\ndex"'
+        )
+    elif mutation == "pr-leading-operator":
+        post_hook["command"] = "&& " + post_hook["command"]
+    elif mutation == "pr-consecutive-operator":
+        post_hook["command"] = post_hook["command"].replace(
+            " || exit 0", " || || exit 0", 1
+        )
+    elif mutation == "pr-nul-sentinel":
+        post_hook["command"] = post_hook["command"].replace(
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            '"\x00devkit-root\x00/scripts/hooks/pr_followup_hook.py"',
         )
     elif mutation == "pr-leading-comment":
         post_hook["command"] = "# explanation\n" + post_hook["command"].replace(

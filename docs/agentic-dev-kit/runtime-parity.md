@@ -97,14 +97,15 @@ records broader capability parity that cannot be expressed as an adapter path.
 | Command permissions | repository policy | `.claude/settings.json` permissions | no shipped project rules | gap: decide and ship the Codex policy surface |
 | Tracker and notification tools | backend names in config | runtime client or MCP | runtime client or MCP | gap: declare dependencies and preflight behavior |
 | Adapter upgrade | shared workflow refresh | existing adapter retained | existing adapter retained | gap: runtime-specific fixes can remain stale |
-| Drift inspection | `kit_doctor` | registration paths resolved | lifecycle event, matcher, timeout, runtime mapping, engine ownership, direct cwd aliases, and the shipped Git-root resolution pattern checked | gap narrowed: runtime-adapter semantics remain |
+| Drift inspection | `kit_doctor` | registration paths resolved | merged project hook sources, project enablement, lifecycle event, matcher, timeout, runtime mapping, engine ownership, shell validity, direct cwd aliases, and the shipped silent Git-root resolution pattern checked | gap narrowed: runtime-adapter semantics remain |
 
 ## Lifecycle validation boundary
 
 Repository checks establish that the shipped Codex JSON names the portable engine,
 keeps the Claude-only memory engine out, selects the intended lifecycle events and
-matchers, passes the Codex runtime mapping, and carries bounded timeouts. They do not
-establish that a client trusted or executed the file.
+matchers, passes the Codex runtime mapping, and carries bounded timeouts. They also
+inspect additive inline project hooks and the project hook feature switch. They do not
+establish that a client trusted or executed the definitions.
 
 The separate trusted-client record is
 [`saved_plans/codex-hooks-live-validation_2026-08-23.md`](../../saved_plans/codex-hooks-live-validation_2026-08-23.md).

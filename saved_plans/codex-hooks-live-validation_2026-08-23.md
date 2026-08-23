@@ -4,8 +4,9 @@
 
 This record separates the evidence:
 
-- **Repository structure** can prove what `.codex/hooks.json`, `init.sh`, tests,
-  and `kit_doctor` declare. It cannot prove that Codex trusted or executed a hook.
+- **Repository structure** can prove what `.codex/hooks.json`, project
+  `.codex/config.toml`, `init.sh`, tests, and `kit_doctor` declare. It cannot
+  prove that Codex trusted or executed a hook.
 - **Trusted-client behavior** below was observed in a controlled Git repository.
   It proves the installed client's behavior for the exercised surfaces, not every
   future client or an adopter's unreviewed configuration.
@@ -132,7 +133,10 @@ the client consumed:
   Claude-only memory engine.
 - `pr_followup_hook.py` belongs under `PostToolUse`, uses `^Bash$`, passes
   `--runtime codex`, and uses the shipped bounded timeout.
-- duplicate registrations are defects because matching handlers all execute.
+- duplicate registrations across the additive project sources are defects because
+  matching handlers all execute.
+- project `[features].hooks = false` disables the lifecycle wiring and is a
+  deterministic configuration defect when the kit engines are registered.
 
 Project trust, current-definition trust, and actual execution remain live-client
 facts. `kit_doctor` must report structural semantics without claiming those facts;
