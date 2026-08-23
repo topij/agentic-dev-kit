@@ -1216,36 +1216,82 @@ def _semantic_shell_words(command: str) -> list[str]:
     """Active shell words and operators, with comments and quote loss excluded.
 
     `_script_words` preserves quote-sensitive root expansion for path
-    resolution. This second lexer retains surrounding quotes so a literal
-    `'${JOB_NAME:-}'` cannot masquerade as the expanding guard the shipped hook
-    uses. It also keeps shell operators as tokens, letting argument checks stay
-    attached to the simple command that invokes the engine.
+    resolution. This second lexer concatenates adjacent shell fragments while
+    marking single-quoted expansions, so a literal `'${JOB_NAME:-}'` cannot
+    masquerade as the expanding guard the shipped hook uses. It also keeps shell
+    operators as tokens, letting argument checks stay attached to the simple
+    command that invokes the engine.
     """
-    # A shell removes a backslash-newline pair before tokenization. Leaving it
-    # for ``shlex(posix=False)`` produces a standalone ``\\`` token, which is
-    # indistinguishable from the prefix of an escaped-space path below.
-    command = command.replace("\\\r\n", "").replace("\\\n", "")
-    lexer = shlex.shlex(command, posix=False, punctuation_chars=";&|")
+    prepared: list[str] = []
+    cursor = 0
+    at_word_start = True
+    while cursor < len(command):
+        char = command[cursor]
+        if command[cursor : cursor + 3] == "\\\r\n":
+            cursor += 3
+            continue
+        if command[cursor : cursor + 2] == "\\\n":
+            cursor += 2
+            continue
+        if char == "#" and at_word_start:
+            newline = command.find("\n", cursor)
+            if newline < 0:
+                break
+            prepared.append("\n")
+            cursor = newline + 1
+            at_word_start = True
+            continue
+        if char == "'":
+            end = command.find("'", cursor + 1)
+            if end < 0:
+                return []
+            quoted = command[cursor : end + 1]
+            if "$" in quoted or "`" in quoted:
+                prepared.append("__CODEX_SINGLE_QUOTED__")
+            prepared.append(quoted)
+            cursor = end + 1
+            at_word_start = False
+            continue
+        if char == '"':
+            end = cursor + 1
+            quoted = ['"']
+            while end < len(command):
+                if command[end : end + 3] == "\\\r\n":
+                    end += 3
+                    continue
+                if command[end : end + 2] == "\\\n":
+                    end += 2
+                    continue
+                if command[end] == '"':
+                    break
+                if command[end] == "\\" and end + 1 < len(command):
+                    quoted.extend(command[end : end + 2])
+                    end += 2
+                    continue
+                quoted.append(command[end])
+                end += 1
+            if end >= len(command):
+                return []
+            quoted.append('"')
+            prepared.extend(quoted)
+            cursor = end + 1
+            at_word_start = False
+            continue
+        prepared.append(char)
+        at_word_start = char.isspace() or char in ";|&<>()"
+        cursor += 1
+
+    lexer = shlex.shlex("".join(prepared), posix=True, punctuation_chars=";&|<>")
     lexer.whitespace_split = True
-    lexer.commenters = "#"
+    lexer.commenters = ""
     try:
         lexed = list(lexer)
     except ValueError:
         return []
-    words: list[str] = []
-    for word in lexed:
-        if words and words[-1].endswith("\\") and not set(word) <= set(";&|"):
-            words[-1] = words[-1][:-1] + " " + word
-        else:
-            words.append(word)
-    return words
+    return lexed
 
 
 def _semantic_word_value(word: str) -> str:
-    if len(word) >= 2 and word[0] == word[-1] == "'":
-        return word[1:-1]
-    if len(word) >= 2 and word[0] == word[-1] == '"':
-        return _mark_root(word[1:-1])
     return _mark_root(word)
 
 
@@ -1346,6 +1392,28 @@ def _script_commands_select_option(
     return True
 
 
+def _script_commands_avoid_options(
+    script_commands: list[tuple[int, list[str], list[str], int]],
+    forbidden: frozenset[str],
+) -> bool:
+    return all(
+        not forbidden.intersection(command[script_index + 1 :])
+        for _command_index, _raw_command, command, script_index in script_commands
+    )
+
+
+def _shell_variable_is_reassigned_before(
+    commands: list[tuple[list[str], str | None]], variable: str, before_index: int
+) -> bool:
+    assignment = re.compile(rf"^{re.escape(variable)}(?:\+)?=")
+    for command, _operator in commands[:before_index]:
+        if any(assignment.match(word) for word in command):
+            return True
+        if command[:1] == ["unset"] and variable in command[1:]:
+            return True
+    return False
+
+
 def _has_scheduled_run_skip(
     commands: list[tuple[list[str], str | None]], script_command_index: int
 ) -> bool:
@@ -1356,7 +1424,7 @@ def _has_scheduled_run_skip(
     operator_before_guard = (
         commands[script_command_index - 3][1] if script_command_index >= 3 else None
     )
-    job_forms = {'"$JOB_NAME"', '"${JOB_NAME-}"', '"${JOB_NAME:-}"'}
+    job_forms = {"$JOB_NAME", "${JOB_NAME-}", "${JOB_NAME:-}"}
     zero_guard = (
         len(guard) == 4
         and guard[0] == "["
@@ -1390,6 +1458,7 @@ def _has_scheduled_run_skip(
         and exit_command == ["exit", "0"]
         and exit_operator == ";"
         and operator_before_guard in (None, ";")
+        and not _shell_variable_is_reassigned_before(commands, "JOB_NAME", script_command_index - 2)
     )
 
 
@@ -1458,6 +1527,38 @@ def _relative_path_is_root_anchored(
     )
 
 
+def _has_repo_root_nonempty_guard(
+    commands: list[tuple[list[str], str | None]], script_command_index: int
+) -> bool:
+    if script_command_index < 2:
+        return False
+    guard, guard_operator = commands[script_command_index - 2]
+    exit_command, exit_operator = commands[script_command_index - 1]
+    operator_before_guard = (
+        commands[script_command_index - 3][1] if script_command_index >= 3 else None
+    )
+    guard_matches = (
+        len(guard) == 4
+        and guard[0] == "["
+        and guard[1] == "-n"
+        and _semantic_word_value(guard[2]) == _ROOT_SENTINEL
+        and guard[3] == "]"
+    ) or (
+        len(guard) == 3
+        and guard[0] == "test"
+        and guard[1] == "-n"
+        and _semantic_word_value(guard[2]) == _ROOT_SENTINEL
+    )
+    return (
+        guard_matches
+        and guard_operator == "||"
+        and exit_command == ["exit", "0"]
+        and exit_operator == ";"
+        and operator_before_guard in (None, ";")
+        and _has_repo_root_assignment_before(commands, script_command_index - 2)
+    )
+
+
 def _script_command_has_supported_control_flow(
     commands: list[tuple[list[str], str | None]], script_command_index: int
 ) -> bool:
@@ -1465,10 +1566,36 @@ def _script_command_has_supported_control_flow(
     operator_before = (
         commands[script_command_index - 1][1] if script_command_index else None
     )
-    if operator_before in (None, ";"):
-        return True
-    return operator_before == "&&" and _relative_path_is_root_anchored(
-        commands, script_command_index
+    if operator_before not in (None, ";") and not (
+        operator_before == "&&"
+        and _relative_path_is_root_anchored(commands, script_command_index)
+    ):
+        return False
+    for index, (command, _operator) in enumerate(commands[:script_command_index]):
+        values = [_semantic_word_value(word) for word in command]
+        if values[:1] not in (["exit"], ["return"]):
+            continue
+        allowed_root_lookup_exit = (
+            index == 1
+            and commands[0][1] == "||"
+            and _has_repo_root_assignment_before(commands, script_command_index)
+        )
+        allowed_conditional_exit = (
+            _has_scheduled_run_skip(commands, index + 1)
+            or _relative_path_is_root_anchored(commands, index + 1)
+            or _has_repo_root_nonempty_guard(commands, index + 1)
+        )
+        if not (allowed_root_lookup_exit or allowed_conditional_exit):
+            return False
+    return True
+
+
+def _script_commands_have_redirection(
+    script_commands: list[tuple[int, list[str], list[str], int]],
+) -> bool:
+    return any(
+        any(word and set(word) <= set("<>") for word in raw_command)
+        for _command_index, raw_command, _command, _script_index in script_commands
     )
 
 
@@ -1580,6 +1707,8 @@ def _codex_registration_semantics(
                         for command_index, _raw, _command, _script_index in bound_commands
                     ):
                         problem(f"{name} invocation must use supported shell control flow")
+                    if _script_commands_have_redirection(bound_commands):
+                        problem(f"{name} invocation must not use shell redirection")
                     if handler.get("type") != "command":
                         problem(f"{name} must use a command handler")
                     if event != expected_event:
@@ -1624,6 +1753,10 @@ def _codex_registration_semantics(
                             problem("check_doc_budget.py must use the shipped scheduled-run guard")
                         if not _script_commands_have_option(bound_commands, "--quiet"):
                             problem("check_doc_budget.py must run in quiet mode")
+                        if not _script_commands_avoid_options(
+                            bound_commands, frozenset(("--json", "--help", "-h"))
+                        ):
+                            problem("check_doc_budget.py quiet mode must not be overridden")
                     elif not _script_commands_select_option(
                         bound_commands, "--runtime", "codex"
                     ):

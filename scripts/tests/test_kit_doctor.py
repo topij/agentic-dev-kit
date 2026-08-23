@@ -3375,9 +3375,12 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("doc-job-late", "must use the shipped scheduled-run guard"),
         ("doc-job-echo", "must use the shipped scheduled-run guard"),
         ("doc-job-disabled", "must use the shipped scheduled-run guard"),
+        ("doc-job-reassigned", "must use the shipped scheduled-run guard"),
         ("doc-quiet", "must run in quiet mode"),
         ("doc-quiet-comment", "must run in quiet mode"),
         ("doc-quiet-unbound", "must run in quiet mode"),
+        ("doc-quiet-json", "quiet mode must not be overridden"),
+        ("doc-redirection", "must not use shell redirection"),
         ("pr-event", "must be registered under PostToolUse"),
         ("pr-matcher", 'matcher must be "^Bash$"'),
         ("pr-timeout", "pr_followup_hook.py timeout must be 10 seconds"),
@@ -3385,10 +3388,13 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-runtime-comment", "must pass --runtime codex"),
         ("pr-runtime-unbound", "must pass --runtime codex"),
         ("pr-runtime-shadowed", "must pass --runtime codex"),
+        ("pr-runtime-midword-hash", "must pass --runtime codex"),
         ("pr-echo-argument", "must pass --runtime codex"),
         ("pr-python-data", "must pass --runtime codex"),
         ("pr-disabled-invocation", "must use supported shell control flow"),
         ("pr-or-invocation", "must use supported shell control flow"),
+        ("pr-exit-before-invocation", "must use supported shell control flow"),
+        ("pr-redirection", "must not use shell redirection"),
         ("relative-path", "path must not depend on the session working directory"),
         ("pwd-path", "path must not depend on the session working directory"),
         ("pwd-command-path", "path must not depend on the session working directory"),
@@ -3443,6 +3449,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         session_hook["command"] = session_hook["command"].replace(
             '[ -z "${JOB_NAME:-}" ]', 'false && [ -z "${JOB_NAME:-}" ]'
         )
+    elif mutation == "doc-job-reassigned":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ]', 'JOB_NAME=; [ -z "${JOB_NAME:-}" ]'
+        )
     elif mutation == "doc-quiet":
         session_hook["command"] = session_hook["command"].replace(" --quiet", "")
     elif mutation == "doc-quiet-comment":
@@ -3453,6 +3463,14 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         session_hook["command"] = session_hook["command"].replace(
             " --quiet", ""
         ) + "; echo --quiet"
+    elif mutation == "doc-quiet-json":
+        session_hook["command"] = session_hook["command"].replace(
+            "--quiet", "--quiet --json"
+        )
+    elif mutation == "doc-redirection":
+        session_hook["command"] = session_hook["command"].replace(
+            "--quiet", "> --quiet"
+        )
     elif mutation == "pr-event":
         document["hooks"]["SessionStart"].append(post)
         document["hooks"]["PostToolUse"] = []
@@ -3476,6 +3494,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", "--runtime claude --runtime codex"
         )
+    elif mutation == "pr-runtime-midword-hash":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", "--runtime codex#typo"
+        )
     elif mutation == "pr-echo-argument":
         post_hook["command"] = (
             'root="$(git rev-parse --show-toplevel)"; '
@@ -3495,6 +3517,15 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = post_hook["command"].replace(
             'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
             'true || exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-exit-before-invocation":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+            'exit 0; exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-redirection":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", "> --runtime codex"
         )
     elif mutation == "relative-path":
         post_hook["command"] = (
@@ -4212,6 +4243,25 @@ def test_a_shell_line_continuation_keeps_the_runtime_argument_valid(tmp_path):
     post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
     post_hook["command"] = post_hook["command"].replace(
         "--runtime codex", "--runtime \\\n codex"
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not [s.detail for s in statuses if s.state == "misconfigured"]
+
+
+def test_adjacent_quoted_and_unquoted_path_fragments_form_one_shell_word(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    session_hook = document["hooks"]["SessionStart"][0]["hooks"][0]
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    session_hook["command"] = session_hook["command"].replace(
+        '"$root/scripts/check_doc_budget.py"', '"$root"/scripts/check_doc_budget.py'
+    )
+    post_hook["command"] = post_hook["command"].replace(
+        '"$root/scripts/hooks/pr_followup_hook.py"',
+        '"$root"/scripts/hooks/pr_followup_hook.py',
     )
     _write_codex_lifecycle_fixture(root, document)
 
