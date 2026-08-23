@@ -1407,6 +1407,18 @@ def _script_commands(
     return found
 
 
+def _reachable_script_commands(
+    script_commands: list[tuple[int, list[str], list[str], int]],
+) -> list[tuple[int, list[str], list[str], int]]:
+    """Invocations reachable before a successful engine ``exec`` replaces sh."""
+    reachable: list[tuple[int, list[str], list[str], int]] = []
+    for bound in script_commands:
+        reachable.append(bound)
+        if bound[2][:1] == ["exec"]:
+            break
+    return reachable
+
+
 def _script_commands_have_option(
     script_commands: list[tuple[int, list[str], list[str], int]],
     option: str,
@@ -1812,7 +1824,7 @@ def _codex_registration_semantics(
     kit_scripts: set[str],
     root: Path,
     engine_paths: dict[str, str],
-    occurrences: dict[str, int] | None = None,
+    occurrences: dict[str, dict[str, int]] | None = None,
 ) -> list[RegistrationStatus]:
     """Check the deterministic Codex contract without claiming live trust.
 
@@ -1938,11 +1950,15 @@ def _codex_registration_semantics(
                     if not bound_commands:
                         problem(f"{name} path must be invoked as the configured kit engine")
                         continue
+                    reachable_bound_commands = _reachable_script_commands(bound_commands)
                     tokens = [
                         _bound_script_path_value(raw_command[script_index])
                         for _command_index, raw_command, _command, script_index in bound_commands
                     ]
-                    occurrences[name] = occurrences.get(name, 0) + len(bound_commands)
+                    surface_occurrences = occurrences.setdefault(surface, {})
+                    surface_occurrences[name] = surface_occurrences.get(name, 0) + 1
+                    if len(reachable_bound_commands) > 1:
+                        problem(f"{name} has a duplicate Codex invocation")
                     if not all(
                         _token_targets_kit_engine(token, engine_paths[name], root)
                         for token in tokens
@@ -1992,8 +2008,8 @@ def _codex_registration_semantics(
                     if not matcher_is_accepted:
                         if name == "check_doc_budget.py":
                             problem(
-                                "check_doc_budget.py SessionStart matcher must cover every "
-                                "supported start source"
+                                "check_doc_budget.py SessionStart matcher must be omitted, "
+                                'empty, or "*" for open-ended match-all coverage'
                             )
                         else:
                             problem('pr_followup_hook.py PostToolUse matcher must be "^Bash$"')
@@ -2105,7 +2121,7 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
     }
     statuses: list[RegistrationStatus] = []
     codex_documents: dict[str, object] = {}
-    codex_occurrences: dict[str, int] = {}
+    codex_occurrences: dict[str, dict[str, int]] = {}
     for runtime, surface, report_absent in REGISTRATION_SURFACES:
         path = root / surface
         if not path.is_file():
@@ -2135,8 +2151,11 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
             # adversarial lens, PR #389).
             statuses.append(RegistrationStatus(runtime, surface, "unreadable", str(exc)))
             continue
+        registration_document: object = document
+        if surface == ".codex/config.toml" and isinstance(document, dict):
+            registration_document = {"hooks": document.get("hooks")}
         try:
-            commands = _hook_commands(document)
+            commands = _hook_commands(registration_document)
         except (_RegistrationTooDeep, RecursionError) as exc:
             # The walk gets the same treatment as the parse, and for the same
             # reason. `RecursionError` stays beside the cap because the cap is
@@ -2211,19 +2230,27 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                     codex_occurrences,
                 )
             )
-    duplicate_surface = (
-        ".codex/config.toml"
-        if ".codex/config.toml" in codex_documents
-        else ".codex/hooks.json"
-    )
-    for name, count in codex_occurrences.items():
-        if count > 1:
+    occurrence_names = {
+        name for source_counts in codex_occurrences.values() for name in source_counts
+    }
+    for name in sorted(occurrence_names):
+        sources = [
+            surface
+            for surface, source_counts in codex_occurrences.items()
+            if source_counts.get(name, 0)
+        ]
+        total = sum(codex_occurrences[surface].get(name, 0) for surface in sources)
+        if total > 1:
+            duplicate_surface = (
+                ".codex/config.toml" if len(sources) > 1 else sources[0]
+            )
+            suffix = " across project hook sources" if len(sources) > 1 else ""
             statuses.append(
                 RegistrationStatus(
                     "codex",
                     duplicate_surface,
                     "misconfigured",
-                    f"{name} has a duplicate Codex registration",
+                    f"{name} has a duplicate Codex registration{suffix}",
                 )
             )
 
@@ -2255,7 +2282,7 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                         f"Codex project feature {feature_key} must be a boolean",
                     )
                 )
-            elif feature_value is False and codex_occurrences:
+            elif feature_value is False and occurrence_names:
                 statuses.append(
                     RegistrationStatus(
                         "codex",

@@ -1169,7 +1169,8 @@ register_pr_hook() {
   echo "      what that runtime actually loaded, which is the authority here."
   echo "      Codex — .codex/hooks.json, under hooks.PostToolUse, matcher \"^Bash\$\":"
   echo "        First inspect .codex/config.toml: remove any inline registration for"
-  echo "        this engine, and do not leave [features].hooks set to false. Codex"
+  echo "        this engine, and do not leave [features].hooks or its deprecated"
+  echo "        codex_hooks alias set to false. Codex"
   echo "        merges inline hooks with hooks.json instead of replacing them."
   # The guard clauses are not decoration (#359). A bare
   # `python3 "$(git rev-parse --show-toplevel)/…"` collapses to an absolute path
@@ -1273,9 +1274,10 @@ register_budget_hooks() {
   # and the suggested patch that raised this finding was written in that shape.
   if [ -f "$_doc_budget_src" ]; then
     echo "      Codex — .codex/hooks.json, under hooks.SessionStart; omit matcher"
-    echo "      to cover every supported start source:"
+    echo "      for open-ended coverage as new start sources are added:"
     echo "        First inspect .codex/config.toml: remove any inline registration for"
-    echo "        this engine, and do not leave [features].hooks set to false."
+    echo "        this engine, and do not leave [features].hooks or its deprecated"
+    echo "        codex_hooks alias set to false."
     echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_doc_budget_src}\" --quiet || true"
     echo "        Set the command handler timeout to 15 seconds. SessionStart plain stdout"
     echo "        becomes developer context, so the quiet flag keeps healthy runs empty."

@@ -128,9 +128,11 @@ that standalone file. This is the representation the kit ships.
 The live record justifies deterministic checks for the configuration properties
 the client consumed:
 
-- `check_doc_budget.py` belongs under match-all `SessionStart`, uses the shipped
-  bounded timeout, stays quiet on a healthy run, and must not be joined by the
-  Claude-only memory engine.
+- `check_doc_budget.py` belongs under open-ended match-all `SessionStart`, uses
+  the shipped bounded timeout, stays quiet on a healthy run, and must not be
+  joined by the Claude-only memory engine. Omitted, empty, and `*` matchers keep
+  that coverage open when Codex adds a start source; a regex that enumerates the
+  currently documented sources does not.
 - `pr_followup_hook.py` belongs under `PostToolUse`, uses `^Bash$`, passes
   `--runtime codex`, and uses the shipped bounded timeout.
 - duplicate registrations across the additive project sources are defects because

@@ -2228,7 +2228,8 @@ def test_codex_hook_advisories_name_the_additive_project_config(tmp_path: Path) 
 
     assert ".codex/config.toml" in result.stdout
     assert "remove any inline registration" in result.stdout
-    assert "[features].hooks set to false" in result.stdout
+    assert "[features].hooks or its deprecated" in result.stdout
+    assert "codex_hooks alias set to false" in result.stdout
     assert "merges inline hooks with hooks.json" in result.stdout
 
 
@@ -2638,7 +2639,7 @@ def test_the_codex_session_start_match_all_shape_is_explained_by_the_advisory(
     result = _run_init(repo)
 
     assert "omit matcher" in result.stdout
-    assert "every supported start source" in result.stdout
+    assert "open-ended coverage as new start sources are added" in result.stdout
 
 
 def test_the_codex_budget_registration_survives_a_git_less_tree(

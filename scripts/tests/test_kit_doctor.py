@@ -3402,6 +3402,23 @@ def test_codex_lifecycle_semantics_accept_inline_project_config(tmp_path):
     assert any(s.state == "resolves" and s.detail == HOOK_REL for s in codex)
 
 
+def test_nested_hooks_metadata_is_not_an_inline_codex_registration(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    command = _valid_codex_lifecycle_document()["hooks"]["PostToolUse"][0]["hooks"][
+        0
+    ]["command"]
+    _write(
+        root / ".codex" / "config.toml",
+        f"[metadata.hooks]\ncommand = {json.dumps(command)}\n",
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    inline = [s for s in statuses if s.surface == ".codex/config.toml"]
+
+    assert inline == []
+
+
 def test_codex_lifecycle_semantics_detect_cross_source_duplicate(tmp_path):
     root = _fake_repo(tmp_path)
     _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
@@ -3411,6 +3428,25 @@ def test_codex_lifecycle_semantics_detect_cross_source_duplicate(tmp_path):
     details = [s.detail for s in statuses if s.state == "misconfigured"]
 
     assert any("pr_followup_hook.py has a duplicate" in detail for detail in details)
+
+
+def test_duplicate_is_attributed_to_the_source_that_contains_it(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    document["hooks"]["SessionStart"].append(
+        json.loads(json.dumps(document["hooks"]["SessionStart"][0]))
+    )
+    _write_codex_lifecycle_fixture(root, document)
+    _write(root / ".codex" / "config.toml", "[features]\nhooks = true\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    duplicates = [
+        s for s in statuses if s.state == "misconfigured" and "duplicate" in s.detail
+    ]
+
+    assert [(s.surface, s.detail) for s in duplicates] == [
+        (".codex/hooks.json", "check_doc_budget.py has a duplicate Codex registration")
+    ]
 
 
 @pytest.mark.parametrize("feature", ["hooks", "codex_hooks"])
@@ -3487,9 +3523,9 @@ def test_codex_lifecycle_semantics_validate_inline_project_config(tmp_path):
 @pytest.mark.parametrize(
     ("mutation", "expected"),
     [
-        ("doc-matcher", "matcher must cover every supported start source"),
-        ("doc-matcher-container", "matcher must cover every supported start source"),
-        ("doc-matcher-null", "matcher must cover every supported start source"),
+        ("doc-matcher", "for open-ended match-all coverage"),
+        ("doc-matcher-container", "for open-ended match-all coverage"),
+        ("doc-matcher-null", "for open-ended match-all coverage"),
         ("doc-timeout", "check_doc_budget.py timeout must be 15 seconds"),
         ("doc-timeout-float", "check_doc_budget.py timeout must be 15 seconds"),
         ("doc-job-skip", "must use the shipped scheduled-run guard"),
@@ -4054,8 +4090,9 @@ def test_duplicate_codex_invocations_inside_one_handler_are_a_finding(tmp_path):
     root = _fake_repo(tmp_path)
     document = _valid_codex_lifecycle_document()
     hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    hook["command"] = hook["command"].replace("exec python3", "python3")
     hook["command"] += (
-        '; exec python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        '; python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
     )
     _write_codex_lifecycle_fixture(root, document)
 
@@ -4065,6 +4102,22 @@ def test_duplicate_codex_invocations_inside_one_handler_are_a_finding(tmp_path):
         s.state == "misconfigured" and "duplicate" in s.detail
         for s in report.dead_registrations
     )
+
+
+def test_command_after_engine_exec_is_not_reported_as_a_duplicate(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    hook["command"] += (
+        '; python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert not [detail for detail in details if "duplicate" in detail]
+    assert any("supported shell control flow" in detail for detail in details)
 
 
 def test_a_declined_pre_push_is_reported_as_declined_not_as_missing(tmp_path, capsys):
