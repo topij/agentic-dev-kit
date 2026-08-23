@@ -1211,8 +1211,8 @@ register_pr_hook() {
   # property of the same runtime's hook handling. `exec` is the right call either
   # way (it is strictly fewer processes), so nothing depends on settling it.
   echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; exec python3 \"\$root/${_hook_src}\" --runtime codex"
-  echo "        Keep this exact command form; kit_doctor does not infer equivalent shell"
-  echo "        spellings and reports a recognizable alternative as unverifiable."
+  echo "        Keep this exact command form; kit_doctor assigns lifecycle semantics only"
+  echo "        to the repository-owned string and leaves altered strings to path diagnostics."
   echo "        Set the command handler timeout to 10 seconds. PostToolUse ignores"
   echo "        plain stdout; this engine returns JSON additionalContext when it fires."
   echo "        Codex also needs the project and current hook definition trusted"
@@ -1281,8 +1281,8 @@ register_budget_hooks() {
     echo "        this engine, and do not leave [features].hooks or its deprecated"
     echo "        codex_hooks alias set to false."
     echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_doc_budget_src}\" --quiet || true"
-    echo "        Keep this exact command form; kit_doctor does not infer equivalent shell"
-    echo "        spellings and reports a recognizable alternative as unverifiable."
+    echo "        Keep this exact command form; kit_doctor assigns lifecycle semantics only"
+    echo "        to the repository-owned string and leaves altered strings to path diagnostics."
     echo "        Set the command handler timeout to 15 seconds. SessionStart plain stdout"
     echo "        becomes developer context, so the quiet flag keeps healthy runs empty."
     echo "        Review and trust the project and current definition via /hooks."

@@ -749,13 +749,13 @@ class RegistrationStatus:
     theirs (#303) — so hashing them would report every adopter permanently
     `locally-edited`, which is #286's failure. What the kit may legitimately
     assert is mechanical: a registration that names a path is claiming that
-    path runs, and a Codex registration for a kit lifecycle engine is also
-    claiming an event, matcher, timeout, and runtime mapping. Codex lifecycle
-    commands are verified only in the canonical form printed by ``init.sh``;
-    another shell spelling is reported as ``unverifiable`` rather than parsed
-    as if this module implemented a shell. Those fields and that exact-form
-    comparison are deterministic configuration checks. Neither pretends to
-    establish project trust or live client behavior.
+    path runs. Codex lifecycle semantics are associated with a kit engine only
+    when the command string exactly equals a repository-owned definition; an
+    altered shell string receives only the generic path result rather than an
+    inferred lifecycle meaning. Once identified exactly, event, matcher,
+    timeout, runtime mapping, and object keys are deterministic configuration
+    checks. Neither axis pretends to establish project trust or live client
+    behavior.
 
     That is the check that would have caught #359 and #368, both of which an
     operator experienced as *a hook that silently stopped firing* — a
@@ -874,9 +874,9 @@ class Report:
 
         `broken` — the file it names is not there. `misconfigured` — the
         runtime event, matcher, timeout, or runtime mapping is not the kit's
-        contract. `unverifiable` — a Codex lifecycle command references a kit
-        engine but is not the canonical form this repository can judge without
-        interpreting general shell semantics. `unreadable` — the
+        contract. `unverifiable` — an exactly identified Codex lifecycle command
+        sits in an object with keys outside the supported structural contract.
+        `unreadable` — the
         registration file itself does not parse, so EVERY registration in it is
         unmeasurable, and the runtime that must parse the same JSON is no better
         placed than this check was. Leaving that one out was the shape #379 was
@@ -1242,12 +1242,12 @@ def _codex_registration_semantics(
     engine_paths: dict[str, str],
     occurrences: dict[str, dict[str, int]] | None = None,
 ) -> list[RegistrationStatus]:
-    """Verify only the shipped Codex lifecycle form, never shell equivalence.
+    """Verify only repository-owned Codex lifecycle strings, never shell equivalence.
 
     ``/hooks`` remains authoritative for what the client loaded. This check can
     prove the JSON/TOML structure and exact command string Codex will receive
-    after trust. It deliberately cannot prove that a different shell spelling
-    is equivalent, reachable, or safe, so such a reference is ``unverifiable``.
+    after trust. A different shell spelling is not assigned lifecycle semantics
+    at all; the generic registration-path axis may still report its path.
     """
     if surface not in (".codex/hooks.json", ".codex/config.toml"):
         return []
@@ -1277,33 +1277,22 @@ def _codex_registration_semantics(
         ),
     }
 
-    def command_names(command: str) -> set[str]:
-        """Kit lifecycle paths in the shipped command families.
-
-        Recognition is deliberately narrower than a substring scan. The doctor
-        does not parse shell comments or decide whether arbitrary surrounding
-        shell text executes a visible path. It recognizes only the exact
-        installer preamble or explicit ``exec python3`` prefix (whose remainder
-        may then be noncanonical), plus the Claude-only memory command family
-        that Codex must reject.
-        """
-        installer_preamble = (
+    forbidden_commands = {
+        "check_memory_budget.py": (
             'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+            '[ -n "$root" ] || exit 0; [ -z "${JOB_NAME:-}" ] || exit 0; '
+            f'uv run --script "$root/{engine_paths["check_memory_budget.py"]}" '
+            "--quiet || true"
         )
-        recognizable_prefix = command.startswith(
-            (installer_preamble, "exec python3 ")
-        )
-        names = {
+    }
+
+    def command_names(command: str) -> set[str]:
+        """Names assigned only by exact repository-owned command strings."""
+        return {
             name
-            for name in _CODEX_HOOK_CONTRACT
-            if name in engine_paths and engine_paths[name] in command
-            and recognizable_prefix
+            for name, expected in (expected_commands | forbidden_commands).items()
+            if command == expected
         }
-        memory_name = "check_memory_budget.py"
-        memory_path = engine_paths.get(memory_name)
-        if memory_path and command.startswith(f'python3 "$root/{memory_path}"'):
-            names.add(memory_name)
-        return names
 
     def recognized_names(node: object) -> set[str]:
         names: set[str] = set()
@@ -1392,15 +1381,14 @@ def _codex_registration_semantics(
                     canonical_group_keys = {"hooks"}
                     if name != "check_doc_budget.py" or "matcher" in group:
                         canonical_group_keys.add("matcher")
-                    command_shape_is_noncanonical = (
-                        command != expected_commands[name]
-                        or set(handler) != {"type", "command", "timeout"}
+                    object_shape_is_unsupported = (
+                        set(handler) != {"type", "command", "timeout"}
                         or set(group) != canonical_group_keys
                     )
-                    if command_shape_is_noncanonical:
+                    if object_shape_is_unsupported:
                         unverifiable(
-                            f"{name} command hook is not the canonical form printed by "
-                            "init.sh; shell semantics were not verified"
+                            f"{name} lifecycle object contains unsupported keys; only "
+                            "the installer-emitted key set was verified"
                         )
                     elif (
                         handler.get("type") == "command"
@@ -1409,12 +1397,18 @@ def _codex_registration_semantics(
                         and type(timeout) is int
                         and timeout == expected_timeout
                     ):
+                        detail = f"{name} canonical lifecycle form verified"
+                        if name == "check_doc_budget.py" and "matcher" in group:
+                            detail = (
+                                "check_doc_budget.py supported match-all lifecycle "
+                                "form verified"
+                            )
                         statuses.append(
                             RegistrationStatus(
                                 "codex",
                                 surface,
                                 "verified",
-                                f"{name} canonical lifecycle form verified",
+                                detail,
                             )
                         )
 

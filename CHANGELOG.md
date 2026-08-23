@@ -44,16 +44,17 @@ starts.
 
 ## #590 — 2026-08-23
 
-- **CHANGED — `kit_doctor` now reports canonical Codex lifecycle wiring as
-  `verified`, structural drift as `misconfigured`, and a recognizable noncanonical
-  command as `unverifiable`; the latter states make its process exit non-zero**
+- **CHANGED — `kit_doctor` now reports exactly identified Codex lifecycle wiring as
+  `verified`, structural drift as `misconfigured`, and unsupported object keys around
+  an exact command as `unverifiable`; the latter states make its process exit non-zero**
   (`#243`). The bounded check applies to the portable document-budget and
   PR-follow-through engines across `.codex/hooks.json` and inline
   `.codex/config.toml`, including project hook enablement and duplicate recognizable
-  references. It does not interpret alternative shell spellings. **If you parse
+  references. It does not assign lifecycle meaning to altered shell strings. **If you parse
   the JSON report, accept `verified`, `misconfigured`, and `unverifiable` as
-  registration states. Replace an unverifiable command with the exact block printed
-  by `./init.sh`, then review the current definition through `/hooks`.** Repository
+  registration states. Replace an unverifiable object with the exact block printed
+  by `./init.sh`; altered command strings receive only generic path diagnostics. Then
+  review the current definition through `/hooks`.** Repository
   inspection does not establish project trust, definition trust, or live execution.
 
 ---

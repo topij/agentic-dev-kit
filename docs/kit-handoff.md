@@ -25,9 +25,9 @@ the configured object either matches the installer-emitted canonical form or it 
 
 - **The architecture was narrowed in place.** The earlier shell-equivalence parser remains
   visible in branch history, but the live checker no longer approximates general shell
-  semantics. Exact canonical command objects report `verified`; structural defects report
-  `misconfigured`; recognized noncanonical command families report `unverifiable`; other
-  forms retain the generic path-resolution result.
+  semantics. Exact repository-owned command strings receive structural lifecycle checks;
+  altered strings retain only the generic path-resolution result. Unsupported keys around
+  an exact command report `unverifiable`.
 
 - **The evidence boundary stayed explicit.** The controlled record preserves trusted
   `SessionStart` and `PostToolUse` execution, additive project-source behavior, definition
@@ -38,9 +38,9 @@ the configured object either matches the installer-emitted canonical form or it 
 - **The hostile probes became durable behavioral tests.** The corpus rejects the
   accumulated command mutations without specifying a shell grammar. The fresh fallback
   panel then exposed alias-precedence, inert-comment, accepted-matcher, and exit-contract
-  regressions; the fix round validates each present feature alias, limits recognition to
-  explicit command families, accepts the documented match-all forms, and aligns the exit
-  documentation.
+  regressions; the fix rounds validate each present feature alias, remove noncanonical
+  shell recognition, distinguish supported match-all structures from the printed form,
+  and align the exit documentation.
 
 - **The runtime contract remains shared.** Installer guidance, the parity matrix,
   `CHANGELOG.md`, and the live evidence record describe the same bounded result. The

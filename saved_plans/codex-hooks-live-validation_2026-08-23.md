@@ -126,9 +126,9 @@ that standalone file. This is the representation the kit ships.
 ## Repository-structural conclusions
 
 The live record justifies deterministic checks for the configuration properties
-and exact command objects the client consumed. It does not justify treating another
-shell spelling as equivalent; `kit_doctor` reports recognizable noncanonical commands
-as unverifiable:
+and exact command objects the client consumed. It does not justify identifying another
+shell spelling as the same lifecycle engine; `kit_doctor` assigns lifecycle semantics
+only to exact repository-owned command strings:
 
 - `check_doc_budget.py` belongs under open-ended match-all `SessionStart`, uses
   the shipped bounded timeout, stays quiet on a healthy run, and must not be

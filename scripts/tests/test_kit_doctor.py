@@ -3373,6 +3373,13 @@ timeout = 10
 """
 
 
+def _has_verified_lifecycle(statuses, name: str) -> bool:
+    return any(
+        status.state == "verified" and status.detail.startswith(name)
+        for status in statuses
+    )
+
+
 def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
     root = _fake_repo(tmp_path)
     shipped = json.loads(
@@ -3407,7 +3414,7 @@ def test_codex_lifecycle_semantics_verify_explicit_match_all_session_matchers(
     doc = [s for s in statuses if s.detail.startswith("check_doc_budget.py")]
 
     assert [(s.state, s.detail) for s in doc] == [
-        ("verified", "check_doc_budget.py canonical lifecycle form verified")
+        ("verified", "check_doc_budget.py supported match-all lifecycle form verified")
     ]
 
 
@@ -3569,16 +3576,14 @@ def test_codex_lifecycle_semantics_validate_inline_project_config(tmp_path):
     _write(root / ".codex" / "config.toml", invalid)
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
-    unverifiable = [s.detail for s in statuses if s.state == "unverifiable"]
-
-    assert any("not the canonical form" in detail for detail in unverifiable)
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
 
 
 # Frozen from the fallback-panel probes accumulated on PR #590. These cases are
 # a hostile corpus, not a grammar specification: each mutation must fail to
 # receive the positive ``verified`` result, but the checker does not explain its
-# shell behavior. Recognizable noncanonical references report ``unverifiable``;
-# forms that hide the configured path may fall back to the generic path result.
+# shell behavior. Altered command strings receive no lifecycle classification;
+# the generic path axis remains independent.
 @pytest.mark.parametrize(
     ("mutation", "expected"),
     [
@@ -4022,7 +4027,7 @@ def test_codex_lifecycle_hostile_corpus_is_never_verified(
 
 @pytest.mark.parametrize("runtime_arg", ["--runtime codex", "--runtime=codex"])
 @pytest.mark.parametrize("cd_command", ['cd "$root"', 'cd -P "$root"', 'cd -- "$root"'])
-def test_noncanonical_root_anchored_relative_paths_are_unverifiable(
+def test_noncanonical_root_anchored_relative_paths_are_not_verified(
     tmp_path, runtime_arg, cd_command
 ):
     root = _fake_repo(tmp_path)
@@ -4037,13 +4042,13 @@ def test_noncanonical_root_anchored_relative_paths_are_unverifiable(
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
 
-    assert any(s.state == "unverifiable" for s in statuses)
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
 
 
 @pytest.mark.parametrize(
     "runtime_args", ["--runtime= --runtime codex", '--runtime "" --runtime=codex']
 )
-def test_noncanonical_repeated_runtime_options_are_unverifiable(runtime_args, tmp_path):
+def test_noncanonical_repeated_runtime_options_are_not_verified(runtime_args, tmp_path):
     root = _fake_repo(tmp_path)
     document = _valid_codex_lifecycle_document()
     post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
@@ -4052,10 +4057,10 @@ def test_noncanonical_repeated_runtime_options_are_unverifiable(runtime_args, tm
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
 
-    assert any(s.state == "unverifiable" for s in statuses)
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
 
 
-def test_adjacent_shell_operators_are_unverifiable(tmp_path):
+def test_adjacent_shell_operators_are_not_verified(tmp_path):
     root = _fake_repo(tmp_path)
     document = _valid_codex_lifecycle_document()
     post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
@@ -4065,7 +4070,7 @@ def test_adjacent_shell_operators_are_unverifiable(tmp_path):
     _write_codex_lifecycle_fixture(root, document)
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
-    assert any(s.state == "unverifiable" for s in statuses)
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
 
 
 @pytest.mark.parametrize(
@@ -4136,11 +4141,11 @@ def test_codex_misconfiguration_renders_as_a_failure(tmp_path):
     assert "lifecycle wiring does not match" in rendered
 
 
-def test_noncanonical_codex_command_renders_as_an_unverifiable_failure(tmp_path):
+def test_exact_codex_command_with_unsupported_keys_is_an_unverifiable_failure(tmp_path):
     root = _fake_repo(tmp_path)
     document = _valid_codex_lifecycle_document()
     hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
-    hook["command"] += " # noncanonical"
+    hook["async"] = False
     _write_codex_lifecycle_fixture(root, document)
 
     report = _inspect(root, {ENGINE: _sha("x")}, None)
@@ -4148,7 +4153,7 @@ def test_noncanonical_codex_command_renders_as_an_unverifiable_failure(tmp_path)
 
     assert any(s.state == "unverifiable" for s in report.dead_registrations)
     assert "✗ .codex/hooks.json [codex]" in rendered
-    assert "shell semantics were not verified" in rendered
+    assert "installer-emitted key set was verified" in rendered
 
 
 @pytest.mark.parametrize(
@@ -4158,7 +4163,7 @@ def test_noncanonical_codex_command_renders_as_an_unverifiable_failure(tmp_path)
         ("group", "description", "extra metadata"),
     ],
 )
-def test_noncanonical_codex_object_keys_are_unverifiable(
+def test_unsupported_codex_object_keys_are_unverifiable(
     tmp_path, container, key, value
 ):
     root = _fake_repo(tmp_path)
@@ -4185,7 +4190,12 @@ def test_codex_rejects_the_claude_only_memory_tripwire(tmp_path):
     document["hooks"]["SessionStart"][0]["hooks"].append(
         {
             "type": "command",
-            "command": 'python3 "$root/scripts/check_memory_budget.py"',
+            "command": (
+                'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+                '[ -n "$root" ] || exit 0; [ -z "${JOB_NAME:-}" ] || exit 0; '
+                'uv run --script "$root/scripts/check_memory_budget.py" '
+                "--quiet || true"
+            ),
             "timeout": 15,
         }
     )
@@ -4214,7 +4224,7 @@ def test_duplicate_codex_lifecycle_registration_is_a_finding(tmp_path):
     )
 
 
-def test_multiple_invocations_inside_one_command_are_unverifiable(tmp_path):
+def test_multiple_invocations_inside_one_command_are_not_verified(tmp_path):
     root = _fake_repo(tmp_path)
     document = _valid_codex_lifecycle_document()
     hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
@@ -4226,11 +4236,11 @@ def test_multiple_invocations_inside_one_command_are_unverifiable(tmp_path):
 
     report = _inspect(root, {ENGINE: _sha("x")}, None)
 
-    assert any(s.state == "unverifiable" for s in report.dead_registrations)
+    assert not _has_verified_lifecycle(report.registrations, "pr_followup_hook.py")
     assert not [s for s in report.dead_registrations if "duplicate" in s.detail]
 
 
-def test_command_after_engine_exec_is_unverifiable_not_interpreted(tmp_path):
+def test_command_after_engine_exec_is_not_assigned_lifecycle_semantics(tmp_path):
     root = _fake_repo(tmp_path)
     document = _valid_codex_lifecycle_document()
     hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
@@ -4240,7 +4250,7 @@ def test_command_after_engine_exec_is_unverifiable_not_interpreted(tmp_path):
     _write_codex_lifecycle_fixture(root, document)
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
-    assert any(s.state == "unverifiable" for s in statuses)
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
     assert not [s for s in statuses if "duplicate" in s.detail]
 
 
@@ -4473,7 +4483,6 @@ def test_a_variable_that_merely_starts_with_root_is_not_expanded(tmp_path):
     codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
 
     assert any(s.state == "unresolvable" for s in codex)
-    assert any(s.state == "unverifiable" for s in codex)
 
 
 def test_only_invocable_scripts_are_candidates_for_a_registration_match(tmp_path):
@@ -4578,7 +4587,7 @@ def test_a_repo_root_containing_a_space_does_not_break_the_path_scan(tmp_path):
     assert report.dead_registrations == []
 
 
-def test_inline_rev_parse_resolves_but_fails_codex_lifecycle_semantics(tmp_path):
+def test_inline_rev_parse_resolves_without_getting_lifecycle_semantics(tmp_path):
     """Path discovery can resolve this form without making it safe lifecycle
     wiring: a non-repository cwd turns the substitution into an empty root."""
     root = _fake_repo(tmp_path)
@@ -4591,14 +4600,7 @@ def test_inline_rev_parse_resolves_but_fails_codex_lifecycle_semantics(tmp_path)
     report = _inspect(root, {ENGINE: _sha("x")}, None)
     codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
 
-    assert [(s.state, s.detail) for s in codex] == [
-        ("resolves", HOOK_REL),
-        (
-            "unverifiable",
-            "pr_followup_hook.py command hook is not the canonical form printed by "
-            "init.sh; shell semantics were not verified",
-        ),
-    ]
+    assert [(s.state, s.detail) for s in codex] == [("resolves", HOOK_REL)]
 
 
 @pytest.mark.parametrize(
@@ -4648,7 +4650,6 @@ def test_a_quoted_absolute_path_containing_a_space_is_one_path(tmp_path):
     codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
 
     assert any(s.state == "resolves" and s.detail == HOOK_REL for s in codex)
-    assert any(s.state == "unverifiable" for s in codex)
 
 
 def test_an_external_same_basename_hook_is_not_kit_lifecycle_wiring(tmp_path):
@@ -4667,7 +4668,7 @@ def test_an_external_same_basename_hook_is_not_kit_lifecycle_wiring(tmp_path):
     assert [(s.state, s.detail) for s in codex] == [("resolves", str(external))]
 
 
-def test_an_external_decoy_does_not_hide_the_kit_lifecycle_invocation(tmp_path):
+def test_leading_assignment_keeps_an_altered_lifecycle_string_unidentified(tmp_path):
     root = _fake_repo(tmp_path / "repo")
     external = tmp_path / "external" / "pr_followup_hook.py"
     _write(external, "print('adopter hook')\n")
@@ -4877,8 +4878,16 @@ def test_a_name_mentioned_in_a_shell_comment_is_not_an_invocation(tmp_path):
         "scripts/check_memory_budget.py",
     ],
 )
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "echo ok # ",
+        'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+        '[ -n "$root" ] || exit 0; echo ok # ',
+    ],
+)
 def test_codex_lifecycle_name_in_an_unrelated_comment_is_not_a_candidate(
-    tmp_path, target
+    tmp_path, target, prefix
 ):
     root = _fake_repo(tmp_path)
     _write(root / HOOK_REL, "print('hook')\n")
@@ -4890,7 +4899,7 @@ def test_codex_lifecycle_name_in_an_unrelated_comment_is_not_a_candidate(
                     "hooks": [
                         {
                             "type": "command",
-                            "command": f"echo ok # {target}",
+                            "command": f"{prefix}{target}",
                             "timeout": 10,
                         }
                     ],
@@ -4912,6 +4921,26 @@ def test_codex_lifecycle_name_in_an_unrelated_comment_is_not_a_candidate(
     assert semantic_failures == []
 
 
+def test_inert_prefix_keeps_an_altered_lifecycle_string_on_the_path_axis(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    document = _valid_codex_lifecycle_document()
+    hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    hook["command"] = "exit 0; " + hook["command"]
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    semantic = [
+        status
+        for status in statuses
+        if status.state in ("verified", "misconfigured", "unverifiable")
+        and status.detail.startswith("pr_followup_hook.py")
+    ]
+
+    assert semantic == []
+    assert any(status.state == "resolves" and status.detail == HOOK_REL for status in statuses)
+
+
 def test_an_escaped_space_keeps_a_path_whole(tmp_path):
     """`\\ ` is how a shell carries a space without quotes. A split that ignores
     the escape cuts the path in half, which is the same defect as the two the
@@ -4927,10 +4956,9 @@ def test_an_escaped_space_keeps_a_path_whole(tmp_path):
     codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
 
     assert any(s.state == "resolves" and s.detail == HOOK_REL for s in codex)
-    assert any(s.state == "unverifiable" for s in codex)
 
 
-def test_a_shell_line_continuation_is_unverifiable(tmp_path):
+def test_a_shell_line_continuation_is_not_verified(tmp_path):
     root = _fake_repo(tmp_path)
     document = _valid_codex_lifecycle_document()
     post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
@@ -4941,10 +4969,10 @@ def test_a_shell_line_continuation_is_unverifiable(tmp_path):
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
 
-    assert any(s.state == "unverifiable" for s in statuses)
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
 
 
-def test_adjacent_path_fragments_are_unverifiable(tmp_path):
+def test_adjacent_path_fragments_are_not_verified(tmp_path):
     root = _fake_repo(tmp_path)
     document = _valid_codex_lifecycle_document()
     session_hook = document["hooks"]["SessionStart"][0]["hooks"][0]
@@ -4960,14 +4988,11 @@ def test_adjacent_path_fragments_are_unverifiable(tmp_path):
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
 
-    assert {
-        s.detail.split()[0]
-        for s in statuses
-        if s.state == "unverifiable"
-    } == {"check_doc_budget.py", "pr_followup_hook.py"}
+    assert not _has_verified_lifecycle(statuses, "check_doc_budget.py")
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
 
 
-def test_an_escaped_literal_dollar_path_is_unverifiable(tmp_path):
+def test_an_escaped_literal_dollar_path_is_not_verified(tmp_path):
     root = _fake_repo(tmp_path / "$repo")
     document = _valid_codex_lifecycle_document()
     post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
@@ -4979,10 +5004,10 @@ def test_an_escaped_literal_dollar_path_is_unverifiable(tmp_path):
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
 
-    assert any(s.state == "unverifiable" for s in statuses)
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
 
 
-def test_comment_text_makes_the_command_noncanonical(tmp_path):
+def test_comment_text_makes_the_command_not_exact(tmp_path):
     root = _fake_repo(tmp_path)
     document = _valid_codex_lifecycle_document()
     post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
@@ -4991,7 +5016,7 @@ def test_comment_text_makes_the_command_noncanonical(tmp_path):
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
 
-    assert any(s.state == "unverifiable" for s in statuses)
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
 
 
 def test_the_optional_overlay_is_silent_when_it_registers_nothing_too(tmp_path):
