@@ -53,8 +53,9 @@ starts.
   `.codex/config.toml`, including project hook enablement and duplicate recognizable
   references. It does not assign lifecycle meaning to altered shell strings. **If you parse
   the JSON report, accept `verified`, `misconfigured`, and `unverifiable` as
-  registration states. Replace an unverifiable object with the exact block printed
-  by `./init.sh`; altered command strings receive only generic path diagnostics. Then
+  registration states. Reconcile an unverifiable object to the exact command and
+  structural fields printed by `./init.sh`; altered command strings receive only
+  generic path diagnostics. Then
   review the current definition through `/hooks`. When canonical `hooks` and deprecated
   `codex_hooks` are both present, keep the canonical value authoritative; both values
   must still be boolean. If bare Python lacks a standard-library TOML parser, rerun the
