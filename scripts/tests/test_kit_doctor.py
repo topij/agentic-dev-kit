@@ -3417,6 +3417,8 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("relative-path", "path must not depend on the session working directory"),
         ("pwd-path", "path must not depend on the session working directory"),
         ("pwd-command-path", "path must not depend on the session working directory"),
+        ("pwd-parameter-path", "path must not depend on the session working directory"),
+        ("root-pwd-default-path", "path must not depend on the session working directory"),
         ("disabled-root-path", "path must not depend on the session working directory"),
         ("dead-root-chain", "path must not depend on the session working directory"),
         ("root-pwd-alias", "path must not depend on the session working directory"),
@@ -3424,6 +3426,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("root-unquoted-guard", "must use the shipped Git-root"),
         ("root-single-quoted-path", "path must not depend on the session working directory"),
         ("handler-type", "must use a command handler"),
+        ("invalid-shell", "command must use valid shell syntax"),
     ],
 )
 def test_codex_lifecycle_semantic_mismatches_are_reported(
@@ -3632,6 +3635,14 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = (
             'python3 "$(pwd)/scripts/hooks/pr_followup_hook.py" --runtime codex'
         )
+    elif mutation == "pwd-parameter-path":
+        post_hook["command"] = (
+            'python3 "${PWD:+$PWD}/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "root-pwd-default-path":
+        post_hook["command"] = (
+            'python3 "${root:-$PWD}/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
     elif mutation == "disabled-root-path":
         post_hook["command"] = (
             'root="$(git rev-parse --show-toplevel)"; false && cd "$root"; '
@@ -3663,6 +3674,8 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         )
     elif mutation == "handler-type":
         post_hook["type"] = "prompt"
+    elif mutation == "invalid-shell":
+        post_hook["command"] += ' "'
 
     _write_codex_lifecycle_fixture(root, document)
     statuses = kit_doctor.inspect_registrations(root, "scripts")
@@ -4390,6 +4403,18 @@ def test_an_escaped_literal_dollar_in_an_absolute_path_is_not_a_root_alias(tmp_p
     post_hook["command"] = post_hook["command"].replace(
         '"$root/scripts/hooks/pr_followup_hook.py"', f'"{escaped_hook}"'
     )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not [s.detail for s in statuses if s.state == "misconfigured"]
+
+
+def test_comment_text_does_not_create_compound_shell_syntax(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] += " # explanatory $(inactive)"
     _write_codex_lifecycle_fixture(root, document)
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")

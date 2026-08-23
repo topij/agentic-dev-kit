@@ -1685,14 +1685,12 @@ def _shell_has_unsupported_compound_syntax(command: str, words: list[str]) -> bo
     )
     if reserved.intersection(words):
         return True
-    without_root_lookup = re.sub(
-        r'root="\$\(git rev-parse --show-toplevel(?: 2>/dev/null)?\)"',
-        "",
-        command,
-        count=1,
+    root_lookup = re.compile(
+        r"root=\$\(git rev-parse --show-toplevel(?: 2>/dev/null)?\)"
     )
-    if "$(" in without_root_lookup or "`" in without_root_lookup:
-        return True
+    for word in words:
+        if ("$(" in word or "`" in word) and not root_lookup.fullmatch(word):
+            return True
     return any(word.startswith("<<") for word in words)
 
 
@@ -1790,6 +1788,9 @@ def _codex_registration_semantics(
                     continue
                 lexed, words = _script_words(command)
                 if not lexed:
+                    for name in sorted(kit_scripts):
+                        if name in command:
+                            problem(f"{name} command must use valid shell syntax")
                     continue
                 semantic_words = _semantic_shell_words(command)
                 shell_commands = _simple_shell_commands(semantic_words)
@@ -1865,7 +1866,7 @@ def _codex_registration_semantics(
                         )
                     )
                     pwd_relative = bool(
-                        re.search(r"(?:^|/)\$(?:\{PWD\}|PWD)(?:/|$)", token)
+                        re.search(r"\$PWD\b|\$\{PWD(?:[^}]*)\}", token)
                         or re.search(r"(?:^|/)\$\(\s*pwd(?:\s+-[LP])?\s*\)(?:/|$)", token)
                     )
                     root_alias_invalid = not _root_alias_is_verified(
