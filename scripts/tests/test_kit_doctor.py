@@ -3710,6 +3710,36 @@ def test_codex_semantics_accept_root_anchored_relative_paths(
 
 
 @pytest.mark.parametrize(
+    "runtime_args", ["--runtime= --runtime codex", '--runtime "" --runtime=codex']
+)
+def test_codex_semantics_follow_the_hooks_first_nonempty_runtime(runtime_args, tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] = post_hook["command"].replace("--runtime codex", runtime_args)
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not [s.detail for s in statuses if s.state == "misconfigured"]
+
+
+def test_codex_semantics_tokenize_adjacent_shell_operators(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] = post_hook["command"].replace(
+        "--runtime codex", "--runtime claude&&echo ignored"
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert any("must pass --runtime codex" in detail for detail in details), details
+
+
+@pytest.mark.parametrize(
     "container",
     ["document", "events", "groups", "group-entry", "handlers", "handler-entry", "command"],
 )
@@ -3738,6 +3768,19 @@ def test_codex_semantics_reject_malformed_lifecycle_containers(tmp_path, contain
     details = [s.detail for s in statuses if s.state == "misconfigured"]
 
     assert any("must be" in detail for detail in details), details
+
+
+def test_codex_semantics_reject_a_nested_command_without_a_handler_command(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["metadata"] = {"command": post_hook.pop("command")}
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert any("command must be a string" in detail for detail in details), details
 
 
 def test_script_word_scan_preserves_equals_options_as_arguments():

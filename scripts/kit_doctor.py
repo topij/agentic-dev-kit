@@ -1113,7 +1113,7 @@ def _script_words(command: str) -> tuple[bool, list[str]]:
             # registration, or a dead one, from a comment (panel, adversarial
             # lens, round 7).
             break
-        elif state is None and char in " \t\n\r":
+        elif state is None and (char in " \t\n\r" or char in ";&|<>()"):
             end_word()
         elif state is None and char in "\"'":
             flush(True)
@@ -1385,11 +1385,12 @@ def _script_commands_select_option(
     option: str,
     value: str,
 ) -> bool:
-    """Whether every invocation's first option occurrence selects ``value``.
+    """Whether every invocation selects ``value`` like its engine does.
 
-    ``pr_followup_hook.py`` deliberately uses the first ``--runtime`` argument.
+    ``pr_followup_hook.py`` uses the first non-empty ``--runtime`` argument.
     Merely finding a later Codex spelling would bless
-    ``--runtime claude --runtime codex`` while the hook actually runs as Claude.
+    ``--runtime claude --runtime codex`` while the hook actually runs as Claude,
+    but an empty spelling must not hide the later value the hook will select.
     """
     if not script_commands:
         return False
@@ -1398,11 +1399,15 @@ def _script_commands_select_option(
         selected: str | None = None
         for index, word in enumerate(arguments):
             if word == option:
-                selected = arguments[index + 1] if index + 1 < len(arguments) else None
-                break
+                candidate = arguments[index + 1] if index + 1 < len(arguments) else None
+                if candidate:
+                    selected = candidate
+                    break
             if word.startswith(f"{option}="):
-                selected = word.split("=", 1)[1]
-                break
+                candidate = word.split("=", 1)[1]
+                if candidate:
+                    selected = candidate
+                    break
         if selected != value:
             return False
     return True
@@ -1800,7 +1805,7 @@ def _codex_registration_semantics(
                     continue
                 command = handler.get("command")
                 if not isinstance(command, str):
-                    for name in recognized_names(command):
+                    for name in recognized_names(handler):
                         problem(f"{name} command must be a string")
                     continue
                 lexed, words = _script_words(command)
