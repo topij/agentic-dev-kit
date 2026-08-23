@@ -3316,7 +3316,8 @@ def _valid_codex_lifecycle_document() -> dict:
                     "hooks": [
                         {
                             "type": "command",
-                            "command": 'root="$(git rev-parse --show-toplevel)"; '
+                            "command": 'root="$(git rev-parse --show-toplevel 2>/dev/null)" '
+                            '|| exit 0; [ -n "$root" ] || exit 0; '
                             '[ -z "${JOB_NAME:-}" ] || exit 0; '
                             'uv run --script "$root/scripts/check_doc_budget.py" '
                             "--quiet || true",
@@ -3331,7 +3332,8 @@ def _valid_codex_lifecycle_document() -> dict:
                     "hooks": [
                         {
                             "type": "command",
-                            "command": 'root="$(git rev-parse --show-toplevel)"; '
+                            "command": 'root="$(git rev-parse --show-toplevel 2>/dev/null)" '
+                            '|| exit 0; [ -n "$root" ] || exit 0; '
                             'exec python3 "$root/scripts/hooks/pr_followup_hook.py" '
                             "--runtime codex",
                             "timeout": 10,
@@ -3376,10 +3378,13 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("doc-job-echo", "must use the shipped scheduled-run guard"),
         ("doc-job-disabled", "must use the shipped scheduled-run guard"),
         ("doc-job-reassigned", "must use the shipped scheduled-run guard"),
+        ("doc-read-job", "must use the shipped Git-root"),
+        ("doc-root-guard-missing", "must use the shipped Git-root"),
         ("doc-quiet", "must run in quiet mode"),
         ("doc-quiet-comment", "must run in quiet mode"),
         ("doc-quiet-unbound", "must run in quiet mode"),
         ("doc-quiet-json", "quiet mode must not be overridden"),
+        ("doc-quiet-json-equals", "quiet mode must not be overridden"),
         ("doc-redirection", "must not use shell redirection"),
         ("pr-event", "must be registered under PostToolUse"),
         ("pr-matcher", 'matcher must be "^Bash$"'),
@@ -3395,6 +3400,9 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-or-invocation", "must use supported shell control flow"),
         ("pr-exit-before-invocation", "must use supported shell control flow"),
         ("pr-redirection", "must not use shell redirection"),
+        ("pr-group-exit", "must not use shell grouping"),
+        ("pr-read-root", "must use the shipped Git-root"),
+        ("pr-root-guard-missing", "must use the shipped Git-root"),
         ("relative-path", "path must not depend on the session working directory"),
         ("pwd-path", "path must not depend on the session working directory"),
         ("pwd-command-path", "path must not depend on the session working directory"),
@@ -3453,6 +3461,14 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         session_hook["command"] = session_hook["command"].replace(
             '[ -z "${JOB_NAME:-}" ]', 'JOB_NAME=; [ -z "${JOB_NAME:-}" ]'
         )
+    elif mutation == "doc-read-job":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ]', 'read JOB_NAME; [ -z "${JOB_NAME:-}" ]'
+        )
+    elif mutation == "doc-root-guard-missing":
+        session_hook["command"] = session_hook["command"].replace(
+            ' || exit 0; [ -n "$root" ] || exit 0;', ";"
+        )
     elif mutation == "doc-quiet":
         session_hook["command"] = session_hook["command"].replace(" --quiet", "")
     elif mutation == "doc-quiet-comment":
@@ -3466,6 +3482,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
     elif mutation == "doc-quiet-json":
         session_hook["command"] = session_hook["command"].replace(
             "--quiet", "--quiet --json"
+        )
+    elif mutation == "doc-quiet-json-equals":
+        session_hook["command"] = session_hook["command"].replace(
+            "--quiet", "--quiet --json=true"
         )
     elif mutation == "doc-redirection":
         session_hook["command"] = session_hook["command"].replace(
@@ -3527,6 +3547,20 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", "> --runtime codex"
         )
+    elif mutation == "pr-group-exit":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+            '{ exit 0; }; exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-read-root":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+            'read root; exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-root-guard-missing":
+        post_hook["command"] = post_hook["command"].replace(
+            ' || exit 0; [ -n "$root" ] || exit 0;', ";"
+        )
     elif mutation == "relative-path":
         post_hook["command"] = (
             "python3 scripts/hooks/pr_followup_hook.py --runtime codex"
@@ -3578,7 +3612,8 @@ def test_codex_semantics_accept_root_anchored_relative_paths(
     document = _valid_codex_lifecycle_document()
     post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
     post_hook["command"] = (
-        f'root="$(git rev-parse --show-toplevel)"; {cd_command} || exit 0; '
+        'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+        f'[ -n "$root" ] || exit 0; {cd_command} || exit 0; '
         f"python3 scripts/hooks/pr_followup_hook.py {runtime_arg}"
     )
     _write_codex_lifecycle_fixture(root, document)
@@ -3589,14 +3624,17 @@ def test_codex_semantics_accept_root_anchored_relative_paths(
 
 
 @pytest.mark.parametrize(
-    "container", ["events", "groups", "group-entry", "handlers", "handler-entry"]
+    "container",
+    ["document", "events", "groups", "group-entry", "handlers", "handler-entry", "command"],
 )
 def test_codex_semantics_reject_malformed_lifecycle_containers(tmp_path, container):
     root = _fake_repo(tmp_path)
     document = _valid_codex_lifecycle_document()
     post = document["hooks"]["PostToolUse"][0]
     post_hook = post["hooks"][0]
-    if container == "events":
+    if container == "document":
+        document = [document]
+    elif container == "events":
         document["hooks"] = [document["hooks"]]
     elif container == "groups":
         document["hooks"]["PostToolUse"] = post
@@ -3604,6 +3642,8 @@ def test_codex_semantics_reject_malformed_lifecycle_containers(tmp_path, contain
         document["hooks"]["PostToolUse"] = [[post]]
     elif container == "handler-entry":
         post["hooks"] = [[post_hook]]
+    elif container == "command":
+        post_hook["command"] = [post_hook["command"]]
     else:
         post["hooks"] = post_hook
     _write_codex_lifecycle_fixture(root, document)

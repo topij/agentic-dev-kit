@@ -1545,17 +1545,34 @@ def test_codex_live_validation_fixture_executes_its_observed_surfaces(
     tmp_path: Path,
 ) -> None:
     fixture = REPO_ROOT / "saved_plans" / "codex-hooks-live-probe"
-    hooks = json.loads((fixture / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    probe = tmp_path / "probe"
+    shutil.copytree(fixture, probe)
+    subprocess.run(["git", "init", "-q"], cwd=probe, check=True)
+    hooks = json.loads((probe / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     configured = json.dumps(hooks)
+
+    def command_for(name: str) -> str:
+        commands = [
+            handler["command"]
+            for groups in hooks["hooks"].values()
+            for group in groups
+            for handler in group["hooks"]
+            if handler["command"].endswith(f" {name}")
+        ]
+        assert len(commands) == 1
+        return commands[0]
 
     def run(name: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(fixture / "record_hook.py"), name],
-            input=json.dumps({"hook_event_name": "test", "cwd": str(tmp_path)}),
+            command_for(name),
+            shell=True,
+            executable="/bin/sh",
+            cwd=probe / "subdir",
+            input=json.dumps({"hook_event_name": "test", "cwd": str(probe / "subdir")}),
             text=True,
             capture_output=True,
             check=True,
-            env={**os.environ, "PROBE_ROOT": str(tmp_path)},
+            env=os.environ.copy(),
         )
 
     assert set(hooks["hooks"]) == {"SessionStart", "PostToolUse"}

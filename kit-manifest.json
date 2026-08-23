@@ -125,7 +125,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "e3b1972cfe88fecb1ac6b40586ff7c91405b267ab5269fc41350922596e539a2"
+      "sha256": "0584d7c53f7b3affb6cf4b7d1573ecabcc5c6b7f23eae29a2a15251560b61c19"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
@@ -223,7 +223,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "622cc19c379e52df2742d010288a12d20f63fee148f21a78de39c9608cb10fd2"
+      "sha256": "124c3bf94c874fc8b4010bcc59c3df759d747d26ce2d19d926806fd0b9cc036c"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -243,7 +243,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "9a83f4ffd6a593f1ddc6c2373719df82737200bd5d838de7ff7e38a3b4dcdbc9"
+      "sha256": "d694f873ee9fda73205d3c381d94b23a84bef55e56110a53454e854b8f52d5c5"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

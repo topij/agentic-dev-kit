@@ -1281,7 +1281,7 @@ def _semantic_shell_words(command: str) -> list[str]:
         at_word_start = char.isspace() or char in ";|&<>()"
         cursor += 1
 
-    lexer = shlex.shlex("".join(prepared), posix=True, punctuation_chars=";&|<>")
+    lexer = shlex.shlex("".join(prepared), posix=True, punctuation_chars=";&|<>()")
     lexer.whitespace_split = True
     lexer.commenters = ""
     try:
@@ -1397,7 +1397,10 @@ def _script_commands_avoid_options(
     forbidden: frozenset[str],
 ) -> bool:
     return all(
-        not forbidden.intersection(command[script_index + 1 :])
+        not any(
+            word in forbidden or any(word.startswith(f"{option}=") for option in forbidden)
+            for word in command[script_index + 1 :]
+        )
         for _command_index, _raw_command, command, script_index in script_commands
     )
 
@@ -1487,6 +1490,26 @@ def _has_repo_root_assignment_before(
     )
 
 
+def _has_shipped_repo_root_resolution(
+    commands: list[tuple[list[str], str | None]]
+) -> bool:
+    if len(commands) < 4:
+        return False
+    assignment, assignment_operator = commands[0]
+    source = " ".join(assignment)
+    return (
+        bool(
+            re.fullmatch(
+                r'root="?\$\(git rev-parse --show-toplevel(?: 2>/dev/null)?\)"?',
+                source,
+            )
+        )
+        and assignment_operator == "||"
+        and commands[1] == (["exit", "0"], ";")
+        and _has_repo_root_nonempty_guard(commands, 4)
+    )
+
+
 def _is_repo_root_cd(command: list[str]) -> bool:
     values = [_semantic_word_value(word) for word in command]
     return values in (
@@ -1505,10 +1528,11 @@ def _relative_path_is_root_anchored(
         cd_command, cd_operator = commands[cd_index]
         operator_before_cd = commands[cd_index - 1][1] if cd_index else None
         if (
-            _is_repo_root_cd(cd_command)
+            cd_index == 4
+            and _is_repo_root_cd(cd_command)
             and cd_operator == "&&"
             and operator_before_cd in (None, ";")
-            and _has_repo_root_assignment_before(commands, cd_index)
+            and _has_shipped_repo_root_resolution(commands)
         ):
             return True
     if script_command_index < 2:
@@ -1518,12 +1542,13 @@ def _relative_path_is_root_anchored(
     exit_command, exit_operator = commands[cd_index + 1]
     operator_before_cd = commands[cd_index - 1][1] if cd_index else None
     return (
-        _is_repo_root_cd(cd_command)
+        cd_index == 4
+        and _is_repo_root_cd(cd_command)
         and cd_operator == "||"
         and exit_command == ["exit", "0"]
         and exit_operator == ";"
         and operator_before_cd in (None, ";")
-        and _has_repo_root_assignment_before(commands, cd_index)
+        and _has_shipped_repo_root_resolution(commands)
     )
 
 
@@ -1599,6 +1624,11 @@ def _script_commands_have_redirection(
     )
 
 
+def _shell_words_have_grouping(words: list[str]) -> bool:
+    grouping = frozenset(("{", "}", "(", ")"))
+    return bool(grouping.intersection(words))
+
+
 def _root_alias_is_verified(
     commands: list[tuple[list[str], str | None]],
     script_commands: list[tuple[int, list[str], list[str], int]],
@@ -1623,9 +1653,8 @@ def _codex_registration_semantics(
     judges the JSON that Codex will receive after the project and each current
     command-hook definition are trusted.
     """
-    if surface != ".codex/hooks.json" or not isinstance(document, dict):
+    if surface != ".codex/hooks.json":
         return []
-    events = document.get("hooks")
 
     statuses: list[RegistrationStatus] = []
     occurrences: dict[str, int] = {}
@@ -1635,10 +1664,16 @@ def _codex_registration_semantics(
 
     def recognized_names(node: object) -> set[str]:
         names: set[str] = set()
-        try:
-            nested_commands = _hook_commands({"hooks": node})
-        except (_RegistrationTooDeep, RecursionError):
-            return names
+        pending = [node]
+        nested_commands: list[str] = []
+        while pending:
+            nested = pending.pop()
+            if isinstance(nested, str):
+                nested_commands.append(nested)
+            elif isinstance(nested, dict):
+                pending.extend(nested.values())
+            elif isinstance(nested, list):
+                pending.extend(nested)
         for nested_command in nested_commands:
             nested_lexed, nested_words = _script_words(nested_command)
             if not nested_lexed:
@@ -1647,6 +1682,13 @@ def _codex_registration_semantics(
                 name for name in kit_scripts if _match_word(nested_words, name) is not None
             )
         return names
+
+    if not isinstance(document, dict):
+        for name in recognized_names(document):
+            problem(f"{name} lifecycle document must be an object")
+        return statuses
+
+    events = document.get("hooks")
 
     if not isinstance(events, dict):
         for name in recognized_names(events):
@@ -1676,6 +1718,8 @@ def _codex_registration_semantics(
                     continue
                 command = handler.get("command")
                 if not isinstance(command, str):
+                    for name in recognized_names(command):
+                        problem(f"{name} command must be a string")
                     continue
                 lexed, words = _script_words(command)
                 if not lexed:
@@ -1700,6 +1744,21 @@ def _codex_registration_semantics(
                     expected_event, accepted_matchers, expected_timeout = contract
                     bound_commands = _script_commands(shell_commands, name)
                     occurrences[name] = occurrences.get(name, 0) + len(bound_commands)
+                    if _shell_words_have_grouping(semantic_words):
+                        problem(f"{name} invocation must not use shell grouping")
+                    root_bound_commands = [
+                        bound
+                        for bound in bound_commands
+                        if re.search(
+                            r"\$(?:\{root\}|root)(?:/|$)", bound[1][bound[3]]
+                        )
+                    ]
+                    expected_root_index = 6 if name == "check_doc_budget.py" else 4
+                    if root_bound_commands and (
+                        not _has_shipped_repo_root_resolution(shell_commands)
+                        or any(bound[0] != expected_root_index for bound in root_bound_commands)
+                    ):
+                        problem(f"{name} must use the shipped Git-root resolution guard")
                     if bound_commands and not all(
                         _script_command_has_supported_control_flow(
                             shell_commands, command_index
