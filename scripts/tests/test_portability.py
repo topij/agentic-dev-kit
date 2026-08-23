@@ -1382,44 +1382,247 @@ def test_python_engine_root_walk_supports_namespacing(tmp_path: Path) -> None:
     assert pr_watch._find_repo_root(nested_script) == repo
 
 
+def _assert_claude_workflow_adapter(
+    name: str, shared_path: str | None, claude_path: str
+) -> None:
+    claude_adapter = (REPO_ROOT / claude_path).read_text(encoding="utf-8")
+    assert claude_adapter.startswith("---\n")
+    _, claude_frontmatter, claude_body = claude_adapter.split("---", 2)
+    metadata = yaml.safe_load(claude_frontmatter)
+    assert isinstance(metadata.get("description"), str)
+    assert metadata["description"].strip()
+    if shared_path:
+        assert shared_path in claude_body
+
+
+def _assert_codex_workflow_adapter(
+    name: str, shared_path: str | None, codex_path: str
+) -> None:
+    skill_dir = (REPO_ROOT / codex_path).parent
+    skill_text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    assert skill_text.startswith("---\n")
+    _, skill_frontmatter, body = skill_text.split("---", 2)
+    metadata = yaml.safe_load(skill_frontmatter)
+    assert set(metadata) == {"name", "description"}
+    assert metadata["name"] == name
+    assert "TODO" not in skill_text
+    if shared_path:
+        assert shared_path in body
+
+    interface = yaml.safe_load(
+        (skill_dir / "agents" / "openai.yaml").read_text(encoding="utf-8")
+    )["interface"]
+    assert 25 <= len(interface["short_description"]) <= 64
+    assert f"${name}" in interface["default_prompt"]
+
+
 def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
-    # Extended for `adopt` and `upgrade` when #330 moved them to shared workflow
-    # definitions. This tuple is the ONLY thing validating `.agents/skills/*`, and
-    # it is a hardcoded restatement of "every dual-runtime skill" — so adding a
-    # skill without adding it here drops coverage silently, which is exactly what
-    # this change did until a review lens caught it. Deriving the set from the
-    # filesystem instead is #341, filed rather than built here because a fix round
-    # addresses the finding and not the mechanism around it
-    # (safety-critical-changes.md rule 3).
-    for name in (
-        "session-start",
-        "wrap-up",
-        "pr-watch",
-        "parallel",
-        "adopt",
-        "upgrade",
-        "triage-friction-log",
-    ):
-        skill_dir = REPO_ROOT / ".agents" / "skills" / name
-        skill_text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
-        assert skill_text.startswith("---\n")
-        _, frontmatter, body = skill_text.split("---", 2)
-        metadata = yaml.safe_load(frontmatter)
-        assert set(metadata) == {"name", "description"}
-        assert metadata["name"] == name
-        assert "TODO" not in skill_text
-        assert f"docs/agentic-dev-kit/workflows/{name}.md" in body
-
-        interface = yaml.safe_load(
-            (skill_dir / "agents" / "openai.yaml").read_text(encoding="utf-8")
-        )["interface"]
-        assert 25 <= len(interface["short_description"]) <= 64
-        assert f"${name}" in interface["default_prompt"]
-
-        claude_adapter = (REPO_ROOT / ".claude" / "commands" / f"{name}.md").read_text(
-            encoding="utf-8"
+    for skill_path in (REPO_ROOT / ".agents" / "skills").glob("*/SKILL.md"):
+        name = skill_path.parent.name
+        shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
+        claude_path = f".claude/commands/{name}.md"
+        declared_shared = shared_path if (REPO_ROOT / shared_path).is_file() else None
+        _assert_codex_workflow_adapter(
+            name,
+            declared_shared,
+            skill_path.relative_to(REPO_ROOT).as_posix(),
         )
-        assert f"docs/agentic-dev-kit/workflows/{name}.md" in claude_adapter
+        if (REPO_ROOT / claude_path).is_file():
+            _assert_claude_workflow_adapter(name, declared_shared, claude_path)
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/runtime-parity.md")
+def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
+    parity_doc = REPO_ROOT / "docs" / "agentic-dev-kit" / "runtime-parity.md"
+    text = parity_doc.read_text(encoding="utf-8")
+    assert text.startswith("---\n")
+    _, frontmatter, _body = text.split("---", 2)
+    contract = yaml.safe_load(frontmatter)["workflow_contract"]
+
+    expected_keys = {"name", "status", "shared", "claude", "codex"}
+    assert all(
+        set(entry) == expected_keys
+        or (entry["status"] == "companion" and set(entry) == expected_keys | {"loaded_by"})
+        for entry in contract
+    )
+    names = [entry["name"] for entry in contract]
+    assert len(names) == len(set(names)), "runtime-parity declares a workflow more than once"
+    assert {entry["status"] for entry in contract} <= {"aligned", "gap", "companion"}
+
+    declared = {
+        key: [entry[key] for entry in contract if entry[key]]
+        for key in ("shared", "claude", "codex")
+    }
+    for key, paths in declared.items():
+        assert len(paths) == len(set(paths)), f"runtime-parity reuses a {key} path"
+
+    baseline = json.loads((REPO_ROOT / "kit-manifest.json").read_text(encoding="utf-8"))
+    raw_declined = baseline.get("not_installed") if "kit_commit" in baseline else []
+    declined = (
+        set(raw_declined)
+        if isinstance(raw_declined, list)
+        and all(isinstance(path, str) for path in raw_declined)
+        else set()
+    )
+    actual_shared = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in (REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows").glob("*.md")
+    }
+    actual_claude = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in (REPO_ROOT / ".claude" / "commands").glob("*.md")
+    }
+    actual_codex = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in (REPO_ROOT / ".agents" / "skills").glob("*/SKILL.md")
+    }
+    assert set(declared["shared"]) - declined == actual_shared
+    assert set(declared["claude"]) - declined == actual_claude
+    assert set(declared["codex"]) - declined == actual_codex
+
+    for entry in contract:
+        name = entry["name"]
+        expected_paths = {
+            "shared": f"docs/agentic-dev-kit/workflows/{name}.md",
+            "claude": f".claude/commands/{name}.md",
+            "codex": f".agents/skills/{name}/SKILL.md",
+        }
+        for key, expected in expected_paths.items():
+            if entry[key]:
+                assert entry[key] == expected
+
+        if entry["status"] == "companion":
+            assert entry["shared"] and not entry["claude"] and not entry["codex"]
+            owner_name = entry["loaded_by"]
+            owners = [candidate for candidate in contract if candidate["name"] == owner_name]
+            assert len(owners) == 1, f"companion {name} has no unique loaded_by owner"
+            owner_shared = owners[0]["shared"]
+            assert owner_shared, f"companion {name} owner {owner_name} has no shared workflow"
+            owner_text = (REPO_ROOT / owner_shared).read_text(encoding="utf-8")
+            companion_filename = Path(entry["shared"]).name
+            assert companion_filename in owner_text, (
+                f"companion {name} is not referenced by its loaded_by owner {owner_name}"
+            )
+        elif entry["status"] == "gap":
+            paths = [entry[key] for key in ("shared", "claude", "codex")]
+            assert any(paths) and not all(paths)
+        else:
+            assert all(entry[key] for key in ("shared", "claude", "codex"))
+
+        shared_path = entry["shared"]
+        if entry["codex"] and entry["codex"] not in declined:
+            _assert_codex_workflow_adapter(name, shared_path, entry["codex"])
+
+        if entry["claude"] and entry["claude"] not in declined:
+            _assert_claude_workflow_adapter(name, shared_path, entry["claude"])
+
+
+def _runtime_parity_fixture(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    doctrine_dir = repo / "docs" / "agentic-dev-kit"
+    doctrine_dir.mkdir(parents=True)
+    shutil.copytree(
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows",
+        doctrine_dir / "workflows",
+    )
+    shutil.copy2(
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "runtime-parity.md",
+        doctrine_dir / "runtime-parity.md",
+    )
+    (repo / ".claude").mkdir()
+    shutil.copytree(REPO_ROOT / ".claude" / "commands", repo / ".claude" / "commands")
+    (repo / ".agents").mkdir()
+    shutil.copytree(REPO_ROOT / ".agents" / "skills", repo / ".agents" / "skills")
+    return repo
+
+
+def test_runtime_parity_contract_distinguishes_a_decline_from_a_removal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _runtime_parity_fixture(tmp_path)
+    declined = ".agents/skills/session-start/SKILL.md"
+    shutil.rmtree(repo / ".agents" / "skills" / "session-start")
+    baseline = {"kit_commit": "recorded-kit", "not_installed": [declined]}
+    (repo / "kit-manifest.json").write_text(json.dumps(baseline), encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
+
+    test_runtime_parity_contract_covers_workflows_and_adapters()
+
+    baseline["not_installed"] = []
+    (repo / "kit-manifest.json").write_text(json.dumps(baseline), encoding="utf-8")
+    with pytest.raises(AssertionError):
+        test_runtime_parity_contract_covers_workflows_and_adapters()
+
+
+def test_runtime_parity_contract_rejects_a_gap_with_no_real_surface(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _runtime_parity_fixture(tmp_path)
+    (repo / "kit-manifest.json").write_text("{}\n", encoding="utf-8")
+    parity_doc = repo / "docs" / "agentic-dev-kit" / "runtime-parity.md"
+    text = parity_doc.read_text(encoding="utf-8")
+    insertion = (
+        "  - name: phantom-workflow\n"
+        "    status: gap\n"
+        "    shared: null\n"
+        "    claude: null\n"
+        "    codex: null\n"
+    )
+    text = text.replace("\n---\n\n# Runtime parity contract", f"\n{insertion}---\n\n# Runtime parity contract")
+    parity_doc.write_text(text, encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
+
+    with pytest.raises(AssertionError):
+        test_runtime_parity_contract_covers_workflows_and_adapters()
+
+
+def test_runtime_parity_contract_allows_a_codex_only_gap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _runtime_parity_fixture(tmp_path)
+    (repo / "kit-manifest.json").write_text("{}\n", encoding="utf-8")
+    parity_doc = repo / "docs" / "agentic-dev-kit" / "runtime-parity.md"
+    text = parity_doc.read_text(encoding="utf-8")
+    aligned = (
+        "  - name: session-start\n"
+        "    status: aligned\n"
+        "    shared: docs/agentic-dev-kit/workflows/session-start.md\n"
+        "    claude: .claude/commands/session-start.md\n"
+        "    codex: .agents/skills/session-start/SKILL.md\n"
+    )
+    codex_only = (
+        "  - name: session-start\n"
+        "    status: gap\n"
+        "    shared: null\n"
+        "    claude: null\n"
+        "    codex: .agents/skills/session-start/SKILL.md\n"
+    )
+    assert aligned in text
+    parity_doc.write_text(text.replace(aligned, codex_only), encoding="utf-8")
+    (repo / "docs" / "agentic-dev-kit" / "workflows" / "session-start.md").unlink()
+    (repo / ".claude" / "commands" / "session-start.md").unlink()
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
+
+    test_codex_skill_adapters_are_valid_and_share_workflows()
+    test_runtime_parity_contract_covers_workflows_and_adapters()
+
+
+def test_runtime_parity_companion_must_be_referenced_by_its_owner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _runtime_parity_fixture(tmp_path)
+    (repo / "kit-manifest.json").write_text("{}\n", encoding="utf-8")
+    owner = repo / "docs" / "agentic-dev-kit" / "workflows" / "parallel.md"
+    text = owner.read_text(encoding="utf-8")
+    assert "parallel-headless.md" in text
+    owner.write_text(
+        text.replace("parallel-headless.md", "removed-companion.md"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
+
+    with pytest.raises(AssertionError, match="not referenced by its loaded_by owner"):
+        test_runtime_parity_contract_covers_workflows_and_adapters()
 
 
 def test_shared_lane_contract_has_no_runtime_specific_peer_api() -> None:

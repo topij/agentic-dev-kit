@@ -2491,6 +2491,26 @@ def test_a_file_the_kit_added_after_the_baseline_is_neither_declined_nor_broken(
     assert report.broken == [], "a file that was never offered was called broken"
 
 
+def test_runtime_parity_contract_is_tracked_and_new_to_an_older_baseline(tmp_path):
+    runtime_parity = "docs/agentic-dev-kit/runtime-parity.md"
+    assert dict(kit_doctor.KIT_OWNED).get(runtime_parity) == "doctrine"
+    root = _fake_repo(tmp_path)
+    engine_hash = kit_doctor.sha256_of(root / ENGINE)
+    baseline = _scoped_baseline(
+        {ENGINE: engine_hash},
+        unrecorded=(runtime_parity,),
+    )
+
+    report = _inspect(
+        root,
+        {ENGINE: engine_hash, runtime_parity: "newer-doctrine"},
+        baseline,
+    )
+
+    assert _states(report)[runtime_parity] == "new-upstream"
+    assert runtime_parity in [status.path for status in report.new_upstream]
+
+
 def test_a_baseline_without_the_key_gets_the_old_report_not_an_inferred_one(tmp_path):
     """Every baseline written before #286 lacks `not_installed`. Inferring
     "declined" from its silence would assert an intent nobody expressed — and

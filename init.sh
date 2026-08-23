@@ -1215,37 +1215,24 @@ register_pr_hook() {
 }
 
 # ── SessionStart budget tripwires (#380) ─────────────────────────────────
-# Principle #1's budget mechanism reached Claude only: the kit shipped a
-# `SessionStart` block for `.claude/settings.json` and no Codex shape at all,
-# so an adopter on Codex had the two tripwire scripts and nothing firing them.
+# Principle #1's portable document-budget mechanism reaches both runtimes.
+# `check_memory_budget.py` is different: its input is Claude Code's external
+# per-project `MEMORY.md`, so it belongs only in Claude's SessionStart block.
+# Registering it on Codex does not create parity; it makes Codex inspect another
+# runtime's artifact (or swallow the missing-file error through `|| true`).
 #
 # Same position as `register_pr_hook` above and for the same reasons (#303):
 # PRINT both, write neither, name `/hooks` as the authority. Do not re-derive
 # that stance from the ergonomics — the three defects behind it are recorded
 # in that function.
 #
-# Four properties below are MEASURED on `codex-cli 0.147.0`, not read off
-# documentation, because the documentation-derived guess was wrong about the
-# first one:
-#
-#   1. `SessionStart` takes NO `matcher` key. The convergence plan assumed
-#      Claude's `startup`/`resume`/`clear` shape transferred; the one real
-#      `SessionStart` registration on this machine (a shipping third-party
-#      integration) carries no `matcher`, and carrying Claude's over would
-#      ship a hook that silently never fires.
-#   2. A PROJECT-level `.codex/hooks.json` IS read — measured by that same
-#      probe, which is the point: it had been carried as an ASSUMPTION since
-#      Phase 0, and everything below depends on it. An earlier draft of this
-#      line read "Carried unverified since Phase 0", which standalone says the
-#      opposite of the header above it — a lens caught it.
-#   3. The gate is hook TRUST, and an untrusted hook is skipped SILENTLY —
-#      the session starts clean and says nothing. That is why the advisory
-#      below states it outright: the observable is identical to a broken
-#      hook, so an adopter who skips `/hooks` has no signal to debug from.
-#   4. Codex exposes no project-dir variable, so the root comes from
-#      `git rev-parse` with #359's guard clauses rather than from an
-#      environment variable. Claude's own registration uses
-#      `$CLAUDE_PROJECT_DIR` and is left alone.
+# Codex's current hook contract supports a `SessionStart` matcher over start
+# sources. This registration omits it deliberately so the housekeeping check
+# runs for every supported source rather than only Claude's `startup` subset.
+# Project hooks still require review and trust; `/hooks` is the authority for
+# what the current client loaded. The command resolves the project through git
+# because hooks may start below the repository root; #359's guard clauses make
+# the no-repository case a quiet no-op.
 #
 # Two deliberate differences from the `PostToolUse` registration above, called
 # out because an unexplained asymmetry between two neighbouring registrations
@@ -1265,10 +1252,9 @@ register_budget_hooks() {
     return 0
   fi
 
-  echo "note: the SessionStart budget tripwires are registered by hand, once per"
-  echo "      runtime. Skip whichever you have already done — \`/hooks\` in a"
+  echo "note: the SessionStart budget tripwires are registered by hand on each"
+  echo "      applicable runtime. Skip whichever you have already done — \`/hooks\` in a"
   echo "      session lists what that runtime actually loaded."
-  echo "      Codex — .codex/hooks.json, under hooks.SessionStart, NO \"matcher\" key:"
   # Per ENGINE, not just per pair. The early return above covers "both absent";
   # with exactly one present the advisory used to print both commands anyway, and
   # the absent one then fails at every session start with `|| true` hiding it —
@@ -1280,16 +1266,13 @@ register_budget_hooks() {
   # statement is the abort this same PR fixes in the --no-clobber summary (#397),
   # and the suggested patch that raised this finding was written in that shape.
   if [ -f "$_doc_budget_src" ]; then
+    echo "      Codex — .codex/hooks.json, under hooks.SessionStart; omit matcher"
+    echo "      to cover every supported start source:"
     echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_doc_budget_src}\" --quiet || true"
+    echo "        Review and trust the entry via /hooks. New or changed project hooks"
+    echo "        are skipped silently until their current definition is trusted; an"
+    echo "        untrusted hook is therefore indistinguishable from a broken one."
   fi
-  if [ -f "$_mem_budget_src" ]; then
-    echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_mem_budget_src}\" --quiet || true"
-  fi
-  echo "        SessionStart takes no \"matcher\" — a Codex registration carrying"
-  echo "        Claude's \"startup\" matcher is accepted and never fires."
-  echo "        Then TRUST it via /hooks. Codex skips an untrusted hook SILENTLY:"
-  echo "        the session starts normally and reports nothing, so a hook you"
-  echo "        have not trusted is indistinguishable from one that is broken."
   echo "      Claude — .claude/settings.json, under hooks.SessionStart, matcher \"startup\":"
   if [ -f "$_doc_budget_src" ]; then
     echo "        [ -z \"\$JOB_NAME\" ] && cd \"\$CLAUDE_PROJECT_DIR\" && uv run --script ${_doc_budget_src} --quiet || true"
