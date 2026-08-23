@@ -1394,8 +1394,14 @@ def _script_commands_select_option(
     """
     if not script_commands:
         return False
-    for _command_index, _raw_command, command, script_index in script_commands:
+    for _command_index, raw_command, command, script_index in script_commands:
         arguments = command[script_index + 1 :]
+        raw_arguments = raw_command[script_index + 1 :]
+        if any(
+            "$" in word or "`" in word
+            for word in raw_arguments
+        ):
+            return False
         selected: str | None = None
         for index, word in enumerate(arguments):
             if word == option:

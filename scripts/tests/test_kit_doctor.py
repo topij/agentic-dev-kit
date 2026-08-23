@@ -3399,6 +3399,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-runtime-comment", "must pass --runtime codex"),
         ("pr-runtime-unbound", "must pass --runtime codex"),
         ("pr-runtime-shadowed", "must pass --runtime codex"),
+        ("pr-runtime-expanded", "must pass --runtime codex"),
         ("pr-runtime-midword-hash", "must pass --runtime codex"),
         ("pr-echo-argument", "must pass --runtime codex"),
         ("pr-python-data", "must pass --runtime codex"),
@@ -3555,6 +3556,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
     elif mutation == "pr-runtime-shadowed":
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", "--runtime claude --runtime codex"
+        )
+    elif mutation == "pr-runtime-expanded":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", '"$RUNTIME_ARG" --runtime codex'
         )
     elif mutation == "pr-runtime-midword-hash":
         post_hook["command"] = post_hook["command"].replace(

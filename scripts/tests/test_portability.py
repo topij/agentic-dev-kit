@@ -1517,7 +1517,12 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
             _assert_claude_workflow_adapter(name, shared_path, entry["claude"])
 
 
-@pytest.mark.kit_repo_only("AGENTS.md")
+@pytest.mark.kit_repo_only(
+    "AGENTS.md",
+    "docs/templates/AGENTS.md.tmpl",
+    "docs/AGENTS-sections.md",
+    ".claude/rules/safety-critical-changes.md",
+)
 def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     doctrine = "docs/agentic-dev-kit/safety-critical-changes.md"
     root_agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
