@@ -1571,7 +1571,7 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
             )
 
     codex_config = codex_documents.get(".codex/config.toml")
-    if isinstance(codex_config, dict):
+    if isinstance(codex_config, dict) and occurrence_names:
         features = codex_config.get("features")
         if "features" in codex_config and not isinstance(features, dict):
             statuses.append(
@@ -3188,9 +3188,9 @@ def main(argv: list[str] | None = None) -> int:
     # hook that silently stopped firing, and until now nothing in the kit's own
     # instrument reported it. `broken`, `misconfigured`, and `unreadable` reach
     # here — see `Report.dead_registrations` for why the supported absent and
-    # unresolvable states do not. `unverifiable` also reaches this gate: a path
-    # whose noncanonical command semantics were not established cannot provide
-    # the intended lifecycle behavior any more reliably than an absent path can.
+    # unresolvable states do not. `unverifiable` also reaches this gate: an exact
+    # lifecycle command inside an unsupported object shape cannot provide the
+    # bounded structural evidence that a `verified` result promises.
     return 1 if report.drifted or report.broken or report.dead_registrations else 0
 
 

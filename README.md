@@ -177,9 +177,9 @@ It also checks installation properties the file hashes cannot establish:
   is the silent breakage where every workflow's `<engine-dir>/…` reference resolves to
   nothing
 - that the pre-push hook is installed, not merely shipped
-- that runtime hook registrations resolve; Codex lifecycle registrations receive a
-  positive semantic result only in the exact canonical form printed by `./init.sh`,
-  while structural drift and recognizable alternative shell forms fail explicitly
+- that runtime hook registrations resolve; Codex lifecycle semantics apply only to
+  exact repository-owned command strings, structural drift within those identified
+  objects fails explicitly, and altered strings retain generic path diagnostics
 - that the narrative docs were rendered, not left as unrendered templates
 
 `kit-manifest.json` is the hash set it compares against, regenerated at release

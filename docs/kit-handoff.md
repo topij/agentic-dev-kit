@@ -14,10 +14,10 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-23 — PR `#590` narrowed Codex lifecycle enforcement to a
-canonical-form contract and remains open for exact-head review and operator merge.
+Last updated: 2026-08-24 — PR `#590` narrowed Codex lifecycle enforcement to an
+exact-string contract and remains open for exact-head review and operator merge.
 
-## Latest session — 2026-08-23 (Codex lifecycle enforcement bounded by canonical form)
+## Latest session — 2026-08-24 (Codex lifecycle enforcement bounded by exact strings)
 
 **Theme —** PR `#590` keeps the trusted-client lifecycle evidence and installer wiring,
 while `kit_doctor` now makes only the deterministic claim the repository can support:
@@ -42,6 +42,11 @@ the configured object either matches the installer-emitted canonical form or it 
   shell recognition, distinguish supported match-all structures from the printed form,
   and align the exit documentation.
 
+- **The exact-string panel tightened the remaining surfaces.** Its findings scoped feature
+  validation to repositories with an exactly identified lifecycle command, corrected the
+  README's stale fail-closed claim for altered shell text, and aligned the exit-gate
+  rationale with unsupported lifecycle object keys.
+
 - **The runtime contract remains shared.** Installer guidance, the parity matrix,
   `CHANGELOG.md`, and the live evidence record describe the same bounded result. The
   safety-critical doctrine remains one runtime-neutral document with runtime bindings,
@@ -51,7 +56,8 @@ the configured object either matches the installer-emitted canonical form or it 
 
 - **A positive result needs a syntax the repository owns.** Exact canonical objects have a
   stable mutation surface; purportedly equivalent shell spellings do not. Unverifiable is
-  an honest boundary, not a lesser form of verification.
+  reserved for unsupported structure around an exact command; declining to classify an
+  altered command is the honest shell-semantics boundary.
 
 - **Aliases are independent inputs even when one is preferred.** Precedence is useful for
   choosing a value, but it is unsafe for validation: a malformed or disabling deprecated

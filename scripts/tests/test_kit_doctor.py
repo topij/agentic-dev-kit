@@ -3555,6 +3555,24 @@ def test_codex_lifecycle_semantics_reject_nontable_project_features(tmp_path):
     assert "Codex project features must be a table" in details
 
 
+@pytest.mark.parametrize(
+    "config",
+    [
+        "features = 0\n",
+        '[features]\nhooks = "false"\n',
+    ],
+)
+def test_unrelated_codex_feature_shape_is_ignored_without_identified_lifecycle_commands(
+    tmp_path, config
+):
+    root = _fake_repo(tmp_path)
+    _write(root / ".codex" / "config.toml", config)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not [status for status in statuses if status.state == "misconfigured"]
+
+
 def test_codex_lifecycle_semantics_reject_float_inline_timeout(tmp_path):
     root = _fake_repo(tmp_path)
     _write(root / HOOK_REL, "print('hook')\n")
