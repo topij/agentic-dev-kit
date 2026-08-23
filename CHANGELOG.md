@@ -44,19 +44,17 @@ starts.
 
 ## #590 — 2026-08-23
 
-- **CHANGED — `kit_doctor` can now report a Codex hook registration as
-  `misconfigured`, and that state makes its process exit non-zero** (`#243`). The
-  check applies to the portable document-budget and PR-follow-through engines and
-  covers the merged `.codex/hooks.json` and inline `.codex/config.toml` project
-  sources, project hook enablement, lifecycle event, matcher, timeout,
-  command-handler type, Codex runtime arguments on recognized engine invocations,
-  duplicate invocations, Claude-only engine use, shell validity, direct cwd aliases,
-  and the shipped silent Git-root resolution pattern.
-  **If you parse the JSON report, accept
-  `misconfigured` as a registration state. Run `kit_doctor`, then reconcile any
-  finding against the Codex block printed by `./init.sh` and review the current
-  definition through `/hooks`.** The check is structural; it does not claim that a
-  project or hook definition is trusted or executing.
+- **CHANGED — `kit_doctor` now reports canonical Codex lifecycle wiring as
+  `verified`, structural drift as `misconfigured`, and a recognizable noncanonical
+  command as `unverifiable`; the latter states make its process exit non-zero**
+  (`#243`). The bounded check applies to the portable document-budget and
+  PR-follow-through engines across `.codex/hooks.json` and inline
+  `.codex/config.toml`, including project hook enablement and duplicate recognizable
+  references. It does not interpret alternative shell spellings. **If you parse
+  the JSON report, accept `verified`, `misconfigured`, and `unverifiable` as
+  registration states. Replace an unverifiable command with the exact block printed
+  by `./init.sh`, then review the current definition through `/hooks`.** Repository
+  inspection does not establish project trust, definition trust, or live execution.
 
 ---
 

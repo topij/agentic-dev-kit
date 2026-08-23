@@ -174,7 +174,6 @@ import hashlib
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 import tomllib
@@ -740,7 +739,7 @@ class FileStatus:
 
 @dataclass
 class RegistrationStatus:
-    """One hook registration, judged by path resolution and known semantics.
+    """One hook registration, judged by path resolution and bounded semantics.
 
     Not by hash, and the distinction is the whole design (#379). `.claude/
     settings.json` and `.codex/hooks.json` are the adopter's files — `init.sh`
@@ -749,9 +748,12 @@ class RegistrationStatus:
     `locally-edited`, which is #286's failure. What the kit may legitimately
     assert is mechanical: a registration that names a path is claiming that
     path runs, and a Codex registration for a kit lifecycle engine is also
-    claiming an event, matcher, timeout, and runtime mapping. Those fields are
-    deterministic configuration; checking them does not pretend to establish
-    project trust or live client behavior.
+    claiming an event, matcher, timeout, and runtime mapping. Codex lifecycle
+    commands are verified only in the canonical form printed by ``init.sh``;
+    another shell spelling is reported as ``unverifiable`` rather than parsed
+    as if this module implemented a shell. Those fields and that exact-form
+    comparison are deterministic configuration checks. Neither pretends to
+    establish project trust or live client behavior.
 
     That is the check that would have caught #359 and #368, both of which an
     operator experienced as *a hook that silently stopped firing* — a
@@ -870,7 +872,9 @@ class Report:
 
         `broken` — the file it names is not there. `misconfigured` — the
         runtime event, matcher, timeout, or runtime mapping is not the kit's
-        contract. `unreadable` — the
+        contract. `unverifiable` — a Codex lifecycle command references a kit
+        engine but is not the canonical form this repository can judge without
+        interpreting general shell semantics. `unreadable` — the
         registration file itself does not parse, so EVERY registration in it is
         unmeasurable, and the runtime that must parse the same JSON is no better
         placed than this check was. Leaving that one out was the shape #379 was
@@ -888,7 +892,7 @@ class Report:
         return [
             r
             for r in self.registrations
-            if r.state in ("broken", "misconfigured", "unreadable")
+            if r.state in ("broken", "misconfigured", "unverifiable", "unreadable")
         ]
 
 
@@ -1024,9 +1028,10 @@ def _hook_commands(node: object, depth: int = 0, inside_hooks: bool = False) -> 
 # ago, and described the mechanism that replaced it as the one it replaced; a
 # lens caught it. Same class as the rest of this session.)
 #
-# A JSON escape can decode to NUL even though a shell cannot execute a command
-# containing one. `_semantic_shell_words` rejects input NULs before this marker
-# is introduced, so adopter text cannot impersonate it.
+# A JSON escape can decode to NUL and impersonate this marker on the generic
+# path-resolution axis. The bounded Codex lifecycle check does not rely on that
+# axis for its positive result: only the exact canonical command is `verified`,
+# and a command containing such a decoded marker is not that command.
 _ROOT_SENTINEL = "\x00devkit-root\x00"
 
 
@@ -1227,610 +1232,20 @@ _CODEX_HOOK_CONTRACT: dict[str, tuple[str, frozenset[str], int]] = {
     "pr_followup_hook.py": ("PostToolUse", frozenset(("^Bash$",)), 10),
 }
 
-_UNQUOTED_EXPANSION_SENTINEL = "\0codex-unquoted-expansion\0"
-_QUOTED_EXPANSION_SENTINEL = "\0codex-quoted-expansion\0"
-_LITERAL_EXPANSION_SENTINEL = "\0codex-literal-expansion\0"
-
-
-def _semantic_shell_words(command: str) -> list[str]:
-    """Active shell words and operators, with comments and quote loss excluded.
-
-    `_script_words` preserves quote-sensitive root expansion for path
-    resolution. This second lexer concatenates adjacent shell fragments while
-    marking single-quoted expansions, so a literal `'${JOB_NAME:-}'` cannot
-    masquerade as the expanding guard the shipped hook uses. It also keeps shell
-    operators as tokens, letting argument checks stay attached to the simple
-    command that invokes the engine.
-    """
-    if "\x00" in command:
-        return []
-
-    prepared: list[str] = []
-    cursor = 0
-    at_word_start = True
-    while cursor < len(command):
-        char = command[cursor]
-        if command[cursor : cursor + 2] == "\\\n":
-            cursor += 2
-            continue
-        if command[cursor : cursor + 2] == "\\$":
-            prepared.append(_LITERAL_EXPANSION_SENTINEL)
-            prepared.append("$")
-            cursor += 2
-            at_word_start = False
-            continue
-        if char == "\\" and cursor + 1 < len(command):
-            prepared.extend(command[cursor : cursor + 2])
-            cursor += 2
-            at_word_start = False
-            continue
-        if char == "#" and at_word_start:
-            newline = command.find("\n", cursor)
-            if newline < 0:
-                break
-            prepared.append("\n")
-            cursor = newline + 1
-            at_word_start = True
-            continue
-        if char == "'":
-            end = command.find("'", cursor + 1)
-            if end < 0:
-                return []
-            quoted = command[cursor : end + 1]
-            if "$" in quoted or "`" in quoted:
-                prepared.append(_LITERAL_EXPANSION_SENTINEL)
-            prepared.append(quoted)
-            cursor = end + 1
-            at_word_start = False
-            continue
-        if char == '"':
-            end = cursor + 1
-            quoted = ['"']
-            while end < len(command):
-                if command[end : end + 2] == "\\\n":
-                    end += 2
-                    continue
-                if command[end : end + 2] == "\\$":
-                    quoted.append(_LITERAL_EXPANSION_SENTINEL)
-                    quoted.append("$")
-                    end += 2
-                    continue
-                if command[end] == "$":
-                    following = command[end + 1] if end + 1 < len(command) else ""
-                    sentinel = (
-                        _QUOTED_EXPANSION_SENTINEL
-                        if re.match(r"[A-Za-z0-9_{(]", following)
-                        else _LITERAL_EXPANSION_SENTINEL
-                    )
-                    quoted.append(sentinel)
-                    quoted.append("$")
-                    end += 1
-                    continue
-                if command[end] == '"':
-                    break
-                if command[end] == "\\" and end + 1 < len(command):
-                    quoted.extend(command[end : end + 2])
-                    end += 2
-                    continue
-                quoted.append(command[end])
-                end += 1
-            if end >= len(command):
-                return []
-            quoted.append('"')
-            prepared.extend(quoted)
-            cursor = end + 1
-            at_word_start = False
-            continue
-        if char == "$":
-            prepared.append(_UNQUOTED_EXPANSION_SENTINEL)
-        prepared.append(char)
-        at_word_start = char.isspace() or char in ";|&<>()"
-        cursor += 1
-
-    lexer = shlex.shlex("".join(prepared), posix=True, punctuation_chars=";&|<>()")
-    lexer.whitespace_split = True
-    lexer.commenters = ""
-    try:
-        lexed = list(lexer)
-    except ValueError:
-        return []
-    return [word.replace(_QUOTED_EXPANSION_SENTINEL, "") for word in lexed]
-
-
-def _semantic_word_value(word: str) -> str:
-    return _mark_root(word)
-
-
-def _bound_script_path_value(word: str) -> str:
-    """Path value of an invocation token, without lexer provenance markers."""
-    stripped = (
-        word.replace(_UNQUOTED_EXPANSION_SENTINEL, "")
-        .replace(_QUOTED_EXPANSION_SENTINEL, "")
-        .replace(_LITERAL_EXPANSION_SENTINEL, "")
-    )
-    if Path(stripped).is_absolute() or _LITERAL_EXPANSION_SENTINEL in word:
-        return stripped
-    return _semantic_word_value(stripped)
-
-
-def _simple_shell_commands(
-    words: list[str],
-) -> tuple[bool, list[tuple[list[str], str | None]]]:
-    commands: list[tuple[list[str], str | None]] = []
-    current: list[str] = []
-    for word in words:
-        if word and set(word) <= set(";&|"):
-            if not current or word not in (";", "&", "&&", "|", "||"):
-                return False, []
-            commands.append((current, word))
-            current = []
-        else:
-            current.append(word)
-    if current:
-        commands.append((current, None))
-    elif commands and commands[-1][1] not in (";", "&"):
-        return False, []
-    return bool(commands), commands
-
-
-def _script_commands(
-    commands: list[tuple[list[str], str | None]], name: str
-) -> list[tuple[int, list[str], list[str], int]]:
-    found: list[tuple[int, list[str], list[str], int]] = []
-    for command_index, (command, _operator) in enumerate(commands):
-        values = [_semantic_word_value(word) for word in command]
-        cursor = 1 if values and values[0] == "exec" else 0
-        if cursor >= len(values):
-            continue
-        executable = PurePosixPath(values[cursor]).name
-        script_index: int | None = None
-        if executable == name:
-            script_index = cursor
-        elif executable in ("python", "python3"):
-            candidate = cursor + 1
-            if candidate < len(values) and PurePosixPath(values[candidate]).name == name:
-                script_index = candidate
-        elif executable == "uv" and values[cursor + 1 : cursor + 2] == ["run"]:
-            try:
-                option_index = values.index("--script", cursor + 2)
-            except ValueError:
-                option_index = -1
-            candidate = option_index + 1
-            if (
-                option_index >= 0
-                and candidate < len(values)
-                and PurePosixPath(values[candidate]).name == name
-            ):
-                script_index = candidate
-        if script_index is not None:
-            found.append((command_index, command, values, script_index))
-    return found
-
-
-def _reachable_script_commands(
-    script_commands: list[tuple[int, list[str], list[str], int]],
-) -> list[tuple[int, list[str], list[str], int]]:
-    """Invocations reachable before a successful engine ``exec`` replaces sh."""
-    reachable: list[tuple[int, list[str], list[str], int]] = []
-    for bound in script_commands:
-        reachable.append(bound)
-        if bound[2][:1] == ["exec"]:
-            break
-    return reachable
-
-
-def _script_commands_have_option(
-    script_commands: list[tuple[int, list[str], list[str], int]],
-    option: str,
-    value: str | None = None,
-) -> bool:
-    if not script_commands:
-        return False
-    for _command_index, _raw_command, command, script_index in script_commands:
-        arguments = command[script_index + 1 :]
-        if value is None:
-            if option not in arguments:
-                return False
-        elif f"{option}={value}" not in arguments and not any(
-            word == option and index + 1 < len(arguments) and arguments[index + 1] == value
-            for index, word in enumerate(arguments)
-        ):
-            return False
-    return True
-
-
-def _script_commands_select_option(
-    script_commands: list[tuple[int, list[str], list[str], int]],
-    option: str,
-    value: str,
-) -> bool:
-    """Whether every invocation selects ``value`` like its engine does.
-
-    ``pr_followup_hook.py`` uses the first non-empty ``--runtime`` argument.
-    Merely finding a later Codex spelling would bless
-    ``--runtime claude --runtime codex`` while the hook actually runs as Claude,
-    but an empty spelling must not hide the later value the hook will select.
-    """
-    if not script_commands:
-        return False
-    for _command_index, raw_command, command, script_index in script_commands:
-        arguments = command[script_index + 1 :]
-        raw_arguments = raw_command[script_index + 1 :]
-        if any(
-            "$" in word or "`" in word
-            for word in raw_arguments
-        ):
-            return False
-        selected: str | None = None
-        for index, word in enumerate(arguments):
-            if word == option:
-                candidate = arguments[index + 1] if index + 1 < len(arguments) else None
-                if candidate:
-                    selected = candidate
-                    break
-            if word.startswith(f"{option}="):
-                candidate = word.split("=", 1)[1]
-                if candidate:
-                    selected = candidate
-                    break
-        if selected != value:
-            return False
-    return True
-
-
-def _script_commands_avoid_options(
-    script_commands: list[tuple[int, list[str], list[str], int]],
-    forbidden: frozenset[str],
-) -> bool:
-    return all(
-        not any(
-            word in forbidden or any(word.startswith(f"{option}=") for option in forbidden)
-            for word in command
-        )
-        for _command_index, _raw_command, command, script_index in script_commands
-    )
-
-
-def _script_commands_use_shipped_uv_launcher(
-    script_commands: list[tuple[int, list[str], list[str], int]],
-) -> bool:
-    if not script_commands:
-        return False
-    for _command_index, _raw_command, command, script_index in script_commands:
-        if command[:script_index] != ["uv", "run", "--script"]:
-            return False
-    return True
-
-
-def _script_commands_use_python3_launcher(
-    script_commands: list[tuple[int, list[str], list[str], int]],
-) -> bool:
-    if not script_commands:
-        return False
-    for _command_index, _raw_command, command, script_index in script_commands:
-        cursor = 1 if command[:1] == ["exec"] else 0
-        if command[cursor:script_index] != ["python3"]:
-            return False
-    return True
-
-
-def _script_commands_have_exact_arguments(
-    script_commands: list[tuple[int, list[str], list[str], int]], expected: list[str]
-) -> bool:
-    return bool(script_commands) and all(
-        command[script_index + 1 :] == expected
-        for _command_index, _raw_command, command, script_index in script_commands
-    )
-
-
-def _shell_variable_is_reassigned_before(
-    commands: list[tuple[list[str], str | None]], variable: str, before_index: int
-) -> bool:
-    assignment = re.compile(rf"^{re.escape(variable)}(?:\+)?=")
-    for command, _operator in commands[:before_index]:
-        if any(assignment.match(word) for word in command):
-            return True
-        if command[:1] == ["unset"] and variable in command[1:]:
-            return True
-    return False
-
-
-def _has_scheduled_run_skip(
-    commands: list[tuple[list[str], str | None]], script_command_index: int
-) -> bool:
-    if script_command_index < 2:
-        return False
-    guard, guard_operator = commands[script_command_index - 2]
-    exit_command, exit_operator = commands[script_command_index - 1]
-    operator_before_guard = (
-        commands[script_command_index - 3][1] if script_command_index >= 3 else None
-    )
-    job_forms = {"$JOB_NAME", "${JOB_NAME-}", "${JOB_NAME:-}"}
-    zero_guard = (
-        len(guard) == 4
-        and guard[0] == "["
-        and guard[1] == "-z"
-        and guard[2] in job_forms
-        and guard[3] == "]"
-        and guard_operator == "||"
-    ) or (
-        len(guard) == 3
-        and guard[0] == "test"
-        and guard[1] == "-z"
-        and guard[2] in job_forms
-        and guard_operator == "||"
-    )
-    nonzero_guard = (
-        len(guard) == 4
-        and guard[0] == "["
-        and guard[1] == "-n"
-        and guard[2] in job_forms
-        and guard[3] == "]"
-        and guard_operator == "&&"
-    ) or (
-        len(guard) == 3
-        and guard[0] == "test"
-        and guard[1] == "-n"
-        and guard[2] in job_forms
-        and guard_operator == "&&"
-    )
-    return (
-        (zero_guard or nonzero_guard)
-        and exit_command == ["exit", "0"]
-        and exit_operator == ";"
-        and operator_before_guard in (None, ";")
-        and not _shell_variable_is_reassigned_before(commands, "JOB_NAME", script_command_index - 2)
-    )
-
-
-def _has_repo_root_assignment_before(
-    commands: list[tuple[list[str], str | None]], before_index: int
-) -> bool:
-    if not commands or before_index <= 0:
-        return False
-    assignment, operator = commands[0]
-    source = " ".join(assignment)
-    if not re.fullmatch(
-        r'root="?\$\(git rev-parse --show-toplevel 2>/dev/null\)"?', source
-    ):
-        return False
-    for later, _later_operator in commands[1:before_index]:
-        if any(re.match(r"^root(?:\+)?=", word) for word in later):
-            return False
-        if later[:1] == ["unset"] and "root" in later[1:]:
-            return False
-    if operator == ";":
-        return True
-    return (
-        operator == "||"
-        and before_index > 1
-        and commands[1] == (["exit", "0"], ";")
-    )
-
-
-def _has_shipped_repo_root_resolution(
-    commands: list[tuple[list[str], str | None]]
-) -> bool:
-    if len(commands) < 4:
-        return False
-    assignment, assignment_operator = commands[0]
-    source = " ".join(assignment)
-    return (
-        bool(
-            re.fullmatch(
-                r'root="?\$\(git rev-parse --show-toplevel 2>/dev/null\)"?',
-                source,
-            )
-        )
-        and assignment_operator == "||"
-        and commands[1] == (["exit", "0"], ";")
-        and _has_repo_root_nonempty_guard(commands, 4)
-    )
-
-
-def _is_repo_root_cd(command: list[str]) -> bool:
-    values = [_semantic_word_value(word) for word in command]
-    return values in (
-        ["cd", _ROOT_SENTINEL],
-        ["cd", "-L", _ROOT_SENTINEL],
-        ["cd", "-P", _ROOT_SENTINEL],
-        ["cd", "--", _ROOT_SENTINEL],
-    )
-
-
-def _relative_path_is_root_anchored(
-    commands: list[tuple[list[str], str | None]], script_command_index: int
-) -> bool:
-    if script_command_index >= 1:
-        cd_index = script_command_index - 1
-        cd_command, cd_operator = commands[cd_index]
-        operator_before_cd = commands[cd_index - 1][1] if cd_index else None
-        if (
-            cd_index == 4
-            and _is_repo_root_cd(cd_command)
-            and cd_operator == "&&"
-            and operator_before_cd in (None, ";")
-            and _has_shipped_repo_root_resolution(commands)
-        ):
-            return True
-    if script_command_index < 2:
-        return False
-    cd_index = script_command_index - 2
-    cd_command, cd_operator = commands[cd_index]
-    exit_command, exit_operator = commands[cd_index + 1]
-    operator_before_cd = commands[cd_index - 1][1] if cd_index else None
-    return (
-        cd_index == 4
-        and _is_repo_root_cd(cd_command)
-        and cd_operator == "||"
-        and exit_command == ["exit", "0"]
-        and exit_operator == ";"
-        and operator_before_cd in (None, ";")
-        and _has_shipped_repo_root_resolution(commands)
-    )
-
-
-def _has_repo_root_nonempty_guard(
-    commands: list[tuple[list[str], str | None]], script_command_index: int
-) -> bool:
-    if script_command_index < 2:
-        return False
-    guard, guard_operator = commands[script_command_index - 2]
-    exit_command, exit_operator = commands[script_command_index - 1]
-    operator_before_guard = (
-        commands[script_command_index - 3][1] if script_command_index >= 3 else None
-    )
-    guard_matches = (
-        len(guard) == 4
-        and guard[0] == "["
-        and guard[1] == "-n"
-        and _semantic_word_value(guard[2]) == _ROOT_SENTINEL
-        and guard[3] == "]"
-    ) or (
-        len(guard) == 3
-        and guard[0] == "test"
-        and guard[1] == "-n"
-        and _semantic_word_value(guard[2]) == _ROOT_SENTINEL
-    )
-    return (
-        guard_matches
-        and guard_operator == "||"
-        and exit_command == ["exit", "0"]
-        and exit_operator == ";"
-        and operator_before_guard in (None, ";")
-        and _has_repo_root_assignment_before(commands, script_command_index - 2)
-    )
-
-
-def _script_command_has_supported_control_flow(
-    commands: list[tuple[list[str], str | None]], script_command_index: int, name: str
-) -> bool:
-    """Whether the invocation is reached by the shipped deterministic forms."""
-    operator_before = (
-        commands[script_command_index - 1][1] if script_command_index else None
-    )
-    if operator_before not in (None, ";") and not (
-        operator_before == "&&"
-        and _relative_path_is_root_anchored(commands, script_command_index)
-    ):
-        return False
-    operator_after = commands[script_command_index][1]
-    if name == "check_doc_budget.py":
-        if not (
-            operator_after == "||"
-            and script_command_index + 2 == len(commands)
-            and commands[script_command_index + 1] == (["true"], None)
-        ):
-            return False
-    elif operator_after is not None or script_command_index + 1 != len(commands):
-        return False
-    for index, (command, _operator) in enumerate(commands[:script_command_index]):
-        values = [_semantic_word_value(word) for word in command]
-        if values[:1] not in (["exit"], ["return"]):
-            continue
-        allowed_root_lookup_exit = (
-            index == 1
-            and commands[0][1] == "||"
-            and _has_repo_root_assignment_before(commands, script_command_index)
-        )
-        allowed_conditional_exit = (
-            _has_scheduled_run_skip(commands, index + 1)
-            or _relative_path_is_root_anchored(commands, index + 1)
-            or _has_repo_root_nonempty_guard(commands, index + 1)
-        )
-        if not (allowed_root_lookup_exit or allowed_conditional_exit):
-            return False
-    return True
-
-
-def _script_commands_have_redirection(
-    script_commands: list[tuple[int, list[str], list[str], int]],
-) -> bool:
-    return any(
-        any(
-            word
-            and ("<" in word or ">" in word)
-            and set(word) <= set(";&|<>()")
-            for word in raw_command
-        )
-        for _command_index, raw_command, _command, _script_index in script_commands
-    )
-
-
-def _shell_words_have_grouping(words: list[str]) -> bool:
-    grouping = frozenset(("{", "}", "(", ")"))
-    return bool(grouping.intersection(words))
-
-
-def _shell_has_unsupported_compound_syntax(command: str, words: list[str]) -> bool:
-    continued = command.replace("\\\n", "")
-    if "\n" in continued or "\r" in continued:
-        return True
-    reserved = frozenset(
-        ("if", "then", "elif", "else", "fi", "for", "while", "until", "case", "esac", "do", "done")
-    )
-    if reserved.intersection(words):
-        return True
-    root_lookup = re.compile(
-        r"root=\$\(git rev-parse --show-toplevel(?: 2>/dev/null)?\)"
-    )
-    for word in words:
-        if ("$(" in word or "`" in word) and not root_lookup.fullmatch(word):
-            return True
-    return any(word.startswith("<<") for word in words)
-
-
-def _root_alias_is_verified(
-    commands: list[tuple[list[str], str | None]],
-    script_commands: list[tuple[int, list[str], list[str], int]],
-) -> bool:
-    for command_index, raw_command, _command, script_index in script_commands:
-        script_word = raw_command[script_index]
-        if re.search(
-            r"\$(?:\{root\}|root)(?:/|$)", script_word
-        ) and not _has_repo_root_assignment_before(commands, command_index):
-            return False
-    return True
-
-
-def _token_looks_like_kit_engine(token: str, expected_rel: str, root: Path) -> bool:
-    expected_abs = str(root / expected_rel)
-    if token in (expected_rel, f"{_ROOT_SENTINEL}/{expected_rel}", expected_abs):
-        return True
-    if token.startswith(f"{_ROOT_SENTINEL}/") and token.endswith(f"/{expected_rel}"):
-        return True
-    if Path(token).is_absolute():
-        return False
-    known_root_form = re.search(
-        r"\$(?:root\b|\{root(?:[^A-Za-z0-9_}][^}]*)?\}|PWD\b|"
-        r"\{PWD(?:[^A-Za-z0-9_}][^}]*)?\}|\(\s*pwd(?:\s+-[LP])?\s*\))",
-        token,
-    )
-    return known_root_form is not None and token.endswith(f"/{expected_rel}")
-
-
-def _token_targets_kit_engine(token: str, expected_rel: str, root: Path) -> bool:
-    exact = (expected_rel, f"{_ROOT_SENTINEL}/{expected_rel}", str(root / expected_rel))
-    if token in exact:
-        return True
-    if _ROOT_SENTINEL in token or ".." in PurePosixPath(token).parts:
-        return False
-    return _token_looks_like_kit_engine(token, expected_rel, root)
 
 
 def _codex_registration_semantics(
     document: object,
     surface: str,
-    kit_scripts: set[str],
-    root: Path,
     engine_paths: dict[str, str],
     occurrences: dict[str, dict[str, int]] | None = None,
 ) -> list[RegistrationStatus]:
-    """Check the deterministic Codex contract without claiming live trust.
+    """Verify only the shipped Codex lifecycle form, never shell equivalence.
 
-    `/hooks` remains authoritative for what the client loaded. This check only
-    judges the project JSON and inline TOML that Codex will receive after the
-    project and each current command-hook definition are trusted.
+    ``/hooks`` remains authoritative for what the client loaded. This check can
+    prove the JSON/TOML structure and exact command string Codex will receive
+    after trust. It deliberately cannot prove that a different shell spelling
+    is equivalent, reachable, or safe, so such a reference is ``unverifiable``.
     """
     if surface not in (".codex/hooks.json", ".codex/config.toml"):
         return []
@@ -1842,27 +1257,48 @@ def _codex_registration_semantics(
     def problem(detail: str) -> None:
         statuses.append(RegistrationStatus("codex", surface, "misconfigured", detail))
 
+    def unverifiable(detail: str) -> None:
+        statuses.append(RegistrationStatus("codex", surface, "unverifiable", detail))
+
+    expected_commands = {
+        "check_doc_budget.py": (
+            'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+            '[ -n "$root" ] || exit 0; [ -z "${JOB_NAME:-}" ] || exit 0; '
+            f'uv run --script "$root/{engine_paths["check_doc_budget.py"]}" '
+            "--quiet || true"
+        ),
+        "pr_followup_hook.py": (
+            'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+            '[ -n "$root" ] || exit 0; '
+            f'exec python3 "$root/{engine_paths["pr_followup_hook.py"]}" '
+            "--runtime codex"
+        ),
+    }
+
+    def command_names(command: str) -> set[str]:
+        """Kit lifecycle paths visibly referenced by one command string.
+
+        This is intentionally literal. If a shell builds a path indirectly, the
+        lifecycle check does not infer it.
+        """
+        candidates = set(_CODEX_HOOK_CONTRACT) | {"check_memory_budget.py"}
+        return {
+            name
+            for name in candidates
+            if name in engine_paths and engine_paths[name] in command
+        }
+
     def recognized_names(node: object) -> set[str]:
         names: set[str] = set()
         pending = [node]
-        nested_commands: list[str] = []
         while pending:
             nested = pending.pop()
             if isinstance(nested, str):
-                nested_commands.append(nested)
+                names.update(command_names(nested))
             elif isinstance(nested, dict):
                 pending.extend(nested.values())
             elif isinstance(nested, list):
                 pending.extend(nested)
-        for nested_command in nested_commands:
-            nested_lexed, nested_words = _script_words(nested_command)
-            for name in kit_scripts:
-                token = _match_word(nested_words, name) if nested_lexed else None
-                if (
-                    token is not None
-                    and _token_targets_kit_engine(token, engine_paths[name], root)
-                ) or (not nested_lexed and engine_paths[name] in nested_command):
-                    names.add(name)
         return names
 
     if not isinstance(document, dict):
@@ -1871,7 +1307,6 @@ def _codex_registration_semantics(
         return statuses
 
     events = document.get("hooks")
-
     if not isinstance(events, dict):
         for name in recognized_names(events):
             problem(f"{name} lifecycle events must be an object")
@@ -1903,99 +1338,18 @@ def _codex_registration_semantics(
                     for name in recognized_names(handler):
                         problem(f"{name} command must be a string")
                     continue
-                lexed, words = _script_words(command)
-                if not lexed:
-                    for name in sorted(kit_scripts):
-                        if engine_paths[name] in command:
-                            problem(f"{name} command must use valid shell syntax")
-                    continue
-                semantic_words = _semantic_shell_words(command)
-                semantic_valid, shell_commands = _simple_shell_commands(semantic_words)
-                matches: list[tuple[str, list[str]]] = []
-                for name in sorted(kit_scripts):
-                    candidates = [
-                        candidate
-                        for candidate in _matching_words(words, name)
-                        if _token_looks_like_kit_engine(
-                            candidate, engine_paths[name], root
-                        )
-                    ]
-                    if candidates:
-                        matches.append((name, candidates))
-                if not semantic_valid:
-                    for name, _candidates in matches:
-                        problem(f"{name} command must use valid shell syntax")
-                    continue
-                for name, _candidates in matches:
+                for name in sorted(command_names(command)):
                     if name == "check_memory_budget.py":
                         problem(
-                            "check_memory_budget.py is Claude-only and must not be registered "
-                            "on Codex"
+                            "check_memory_budget.py is Claude-only and must not be "
+                            "referenced by a Codex command hook"
                         )
                         continue
-                    contract = _CODEX_HOOK_CONTRACT.get(name)
-                    if contract is None:
-                        continue
-                    expected_event, accepted_matchers, expected_timeout = contract
-                    named_commands = _script_commands(shell_commands, name)
-                    bound_commands = [
-                        bound
-                        for bound in named_commands
-                        if _token_looks_like_kit_engine(
-                            _bound_script_path_value(bound[1][bound[3]]),
-                            engine_paths[name],
-                            root,
-                        )
-                    ]
-                    if not bound_commands:
-                        problem(f"{name} path must be invoked as the configured kit engine")
-                        continue
-                    reachable_bound_commands = _reachable_script_commands(bound_commands)
-                    tokens = [
-                        _bound_script_path_value(raw_command[script_index])
-                        for _command_index, raw_command, _command, script_index in bound_commands
-                    ]
+                    expected_event, accepted_matchers, expected_timeout = (
+                        _CODEX_HOOK_CONTRACT[name]
+                    )
                     surface_occurrences = occurrences.setdefault(surface, {})
                     surface_occurrences[name] = surface_occurrences.get(name, 0) + 1
-                    if len(reachable_bound_commands) > 1:
-                        problem(f"{name} has a duplicate Codex invocation")
-                    if not all(
-                        _token_targets_kit_engine(token, engine_paths[name], root)
-                        for token in tokens
-                    ):
-                        problem(f"{name} path must resolve to the configured kit engine")
-                    if _shell_words_have_grouping(
-                        semantic_words
-                    ) or _shell_has_unsupported_compound_syntax(command, semantic_words):
-                        problem(f"{name} invocation must not use compound shell syntax")
-                    expected_root_index = 6 if name == "check_doc_budget.py" else 4
-                    prefix_is_supported = all(
-                        (
-                            Path(
-                                _bound_script_path_value(raw_command[script_index])
-                            ).is_absolute()
-                            and command_index == 0
-                        )
-                        or (
-                            _has_shipped_repo_root_resolution(shell_commands)
-                            and command_index == expected_root_index
-                        )
-                        or _relative_path_is_root_anchored(
-                            shell_commands, command_index
-                        )
-                        for command_index, raw_command, _command, script_index in bound_commands
-                    )
-                    if bound_commands and not prefix_is_supported:
-                        problem(f"{name} must use the shipped Git-root resolution guard")
-                    if bound_commands and not all(
-                        _script_command_has_supported_control_flow(
-                            shell_commands, command_index, name
-                        )
-                        for command_index, _raw, _command, _script_index in bound_commands
-                    ):
-                        problem(f"{name} invocation must use supported shell control flow")
-                    if _script_commands_have_redirection(bound_commands):
-                        problem(f"{name} invocation must not use shell redirection")
                     if handler.get("type") != "command":
                         problem(f"{name} must use a command handler")
                     if event != expected_event:
@@ -2012,87 +1366,42 @@ def _codex_registration_semantics(
                                 'empty, or "*" for open-ended match-all coverage'
                             )
                         else:
-                            problem('pr_followup_hook.py PostToolUse matcher must be "^Bash$"')
+                            problem(
+                                'pr_followup_hook.py PostToolUse matcher must be "^Bash$"'
+                            )
                     timeout = handler.get("timeout")
                     if type(timeout) is not int or timeout != expected_timeout:
                         problem(f"{name} timeout must be {expected_timeout} seconds")
-                    literal_relative = any(
-                        "$" not in token
-                        and _ROOT_SENTINEL not in token
-                        and not Path(token).is_absolute()
-                        and not all(
-                            _relative_path_is_root_anchored(shell_commands, command_index)
-                            for command_index, _raw, _command, _script_index in bound_commands
+                    canonical_group_keys = (
+                        {"hooks"}
+                        if name == "check_doc_budget.py"
+                        else {"matcher", "hooks"}
+                    )
+                    command_shape_is_noncanonical = (
+                        command != expected_commands[name]
+                        or set(handler) != {"type", "command", "timeout"}
+                        or set(group) != canonical_group_keys
+                    )
+                    if command_shape_is_noncanonical:
+                        unverifiable(
+                            f"{name} command hook is not the canonical form printed by "
+                            "init.sh; shell semantics were not verified"
                         )
-                        for token in tokens
-                    )
-                    pwd_relative = any(
-                        re.search(r"\$PWD\b|\$\{PWD(?:[^}]*)\}", token)
-                        or re.search(
-                            r"(?:^|/)\$\(\s*pwd(?:\s+-[LP])?\s*\)(?:/|$)", token
-                        )
-                        for token in tokens
-                    )
-                    root_alias_invalid = not _root_alias_is_verified(
-                        shell_commands, bound_commands
-                    )
-                    root_parameterized = any(
-                        re.search(r"\$\{root[^A-Za-z0-9_}][^}]*\}", token)
-                        for token in tokens
-                    )
-                    expansion_provenance_invalid = any(
-                        (
-                            _UNQUOTED_EXPANSION_SENTINEL in raw_command[script_index]
-                            or _LITERAL_EXPANSION_SENTINEL in raw_command[script_index]
-                        )
-                        and re.search(
-                            r"\$(?:\{root\}|root)(?:/|$)", raw_command[script_index]
-                        )
-                        for _command_index, raw_command, _command, script_index in bound_commands
-                    )
-                    if (
-                        literal_relative
-                        or pwd_relative
-                        or root_alias_invalid
-                        or root_parameterized
-                        or expansion_provenance_invalid
+                    elif (
+                        handler.get("type") == "command"
+                        and event == expected_event
+                        and matcher_is_accepted
+                        and type(timeout) is int
+                        and timeout == expected_timeout
                     ):
-                        problem(f"{name} path must not depend on the session working directory")
-                    if name == "check_doc_budget.py":
-                        if not _script_commands_use_shipped_uv_launcher(bound_commands):
-                            problem(
-                                "check_doc_budget.py must use the shipped uv run --script launcher"
+                        statuses.append(
+                            RegistrationStatus(
+                                "codex",
+                                surface,
+                                "verified",
+                                f"{name} canonical lifecycle form verified",
                             )
-                        if not _script_commands_have_exact_arguments(
-                            bound_commands, ["--quiet"]
-                        ):
-                            problem(
-                                "check_doc_budget.py must use only the shipped --quiet argument"
-                            )
-                        if not bound_commands or not all(
-                            _has_scheduled_run_skip(shell_commands, command_index)
-                            for command_index, _raw, _command, _script_index in bound_commands
-                        ):
-                            problem("check_doc_budget.py must use the shipped scheduled-run guard")
-                        if not _script_commands_have_option(bound_commands, "--quiet"):
-                            problem("check_doc_budget.py must run in quiet mode")
-                        if not _script_commands_avoid_options(
-                            bound_commands,
-                            frozenset(("--json", "--help", "-h")),
-                        ):
-                            problem("check_doc_budget.py quiet mode must not be overridden")
-                        if not _script_commands_avoid_options(
-                            bound_commands, frozenset(("--root", "--config"))
-                        ):
-                            problem(
-                                "check_doc_budget.py must use repository-resolved root and config"
-                            )
-                    elif not _script_commands_select_option(
-                        bound_commands, "--runtime", "codex"
-                    ):
-                        problem("pr_followup_hook.py must pass --runtime codex")
-                    elif not _script_commands_use_python3_launcher(bound_commands):
-                        problem("pr_followup_hook.py must use the shipped python3 launcher")
+                        )
 
     return statuses
 
@@ -2224,8 +1533,6 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                 _codex_registration_semantics(
                     document,
                     surface,
-                    kit_scripts,
-                    root,
                     engine_paths,
                     codex_occurrences,
                 )
@@ -3075,8 +2382,10 @@ def render(report: Report) -> str:
     for reg in report.registrations:
         mark, text = {
             "resolves": ("✓", f"{reg.detail} resolves"),
+            "verified": ("✓", reg.detail),
             "broken": ("✗", f"{reg.detail} — NO SUCH FILE, so this hook cannot fire"),
             "misconfigured": ("✗", f"{reg.detail} — lifecycle wiring does not match"),
+            "unverifiable": ("✗", reg.detail),
             "unresolvable": ("⚠", f"{reg.detail} — path not resolvable from here"),
             # The detail names the engines dir the check resolved, which is the
             # useful half when nothing is registered — it was computed and shown
