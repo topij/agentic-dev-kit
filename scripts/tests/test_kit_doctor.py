@@ -3415,7 +3415,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-conditional", "must not use compound shell syntax"),
         ("pr-heredoc", "path must be invoked as the configured kit engine"),
         ("pr-command-substitution", "must not use compound shell syntax"),
-        ("pr-inline-root", "path must be invoked as the configured kit engine"),
+        ("pr-inline-root", "must not use compound shell syntax"),
         ("pr-read-root", "must use the shipped Git-root"),
         ("pr-root-guard-missing", "must use the shipped Git-root"),
         ("absolute-dead-prefix", "must use the shipped Git-root"),

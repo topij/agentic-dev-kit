@@ -1324,6 +1324,16 @@ def _semantic_word_value(word: str) -> str:
     return _mark_root(word)
 
 
+def _bound_script_path_value(word: str) -> str:
+    """Path value of an invocation token, without lexer provenance markers."""
+    stripped = word.replace(_UNQUOTED_EXPANSION_SENTINEL, "").replace(
+        _LITERAL_EXPANSION_SENTINEL, ""
+    )
+    if Path(stripped).is_absolute() or _LITERAL_EXPANSION_SENTINEL in word:
+        return stripped
+    return _semantic_word_value(stripped)
+
+
 def _simple_shell_commands(words: list[str]) -> list[tuple[list[str], str | None]]:
     commands: list[tuple[list[str], str | None]] = []
     current: list[str] = []
@@ -1877,14 +1887,16 @@ def _codex_registration_semantics(
                         bound
                         for bound in named_commands
                         if _token_looks_like_kit_engine(
-                            bound[1][bound[3]], engine_paths[name], root
+                            _bound_script_path_value(bound[1][bound[3]]),
+                            engine_paths[name],
+                            root,
                         )
                     ]
                     if not bound_commands:
                         problem(f"{name} path must be invoked as the configured kit engine")
                         continue
                     tokens = [
-                        raw_command[script_index]
+                        _bound_script_path_value(raw_command[script_index])
                         for _command_index, raw_command, _command, script_index in bound_commands
                     ]
                     occurrences[name] = occurrences.get(name, 0) + len(bound_commands)
@@ -1900,7 +1912,9 @@ def _codex_registration_semantics(
                     expected_root_index = 6 if name == "check_doc_budget.py" else 4
                     prefix_is_supported = all(
                         (
-                            Path(raw_command[script_index]).is_absolute()
+                            Path(
+                                _bound_script_path_value(raw_command[script_index])
+                            ).is_absolute()
                             and command_index == 0
                         )
                         or (
