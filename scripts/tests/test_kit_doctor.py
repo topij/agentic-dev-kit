@@ -3374,6 +3374,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("doc-job-reversed", "must use the shipped scheduled-run guard"),
         ("doc-job-comment", "must use the shipped scheduled-run guard"),
         ("doc-job-literal", "must use the shipped scheduled-run guard"),
+        ("doc-job-escaped", "must use the shipped scheduled-run guard"),
         ("doc-job-late", "must use the shipped scheduled-run guard"),
         ("doc-job-echo", "must use the shipped scheduled-run guard"),
         ("doc-job-disabled", "must use the shipped scheduled-run guard"),
@@ -3398,6 +3399,8 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-python-data", "must pass --runtime codex"),
         ("pr-disabled-invocation", "must use supported shell control flow"),
         ("pr-or-invocation", "must use supported shell control flow"),
+        ("pr-piped-invocation", "must use supported shell control flow"),
+        ("pr-background-invocation", "must use supported shell control flow"),
         ("pr-exit-before-invocation", "must use supported shell control flow"),
         ("pr-redirection", "must not use shell redirection"),
         ("pr-group-exit", "must not use shell grouping"),
@@ -3410,6 +3413,8 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("dead-root-chain", "path must not depend on the session working directory"),
         ("root-pwd-alias", "path must not depend on the session working directory"),
         ("root-overwritten", "path must not depend on the session working directory"),
+        ("root-unquoted-guard", "must use the shipped Git-root"),
+        ("root-single-quoted-path", "path must not depend on the session working directory"),
         ("handler-type", "must use a command handler"),
     ],
 )
@@ -3444,6 +3449,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
     elif mutation == "doc-job-literal":
         session_hook["command"] = session_hook["command"].replace(
             '"${JOB_NAME:-}"', "'${JOB_NAME:-}'"
+        )
+    elif mutation == "doc-job-escaped":
+        session_hook["command"] = session_hook["command"].replace(
+            '"${JOB_NAME:-}"', r"\${JOB_NAME:-}"
         )
     elif mutation == "doc-job-late":
         session_hook["command"] = session_hook["command"].replace(
@@ -3538,6 +3547,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
             'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
             'true || exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
         )
+    elif mutation == "pr-piped-invocation":
+        post_hook["command"] += " | true"
+    elif mutation == "pr-background-invocation":
+        post_hook["command"] += " &"
     elif mutation == "pr-exit-before-invocation":
         post_hook["command"] = post_hook["command"].replace(
             'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
@@ -3592,6 +3605,15 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = (
             'root="$(git rev-parse --show-toplevel)"; root=$PWD; '
             'exec python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "root-unquoted-guard":
+        post_hook["command"] = post_hook["command"].replace(
+            '[ -n "$root" ]', "[ -n $root ]"
+        )
+    elif mutation == "root-single-quoted-path":
+        post_hook["command"] = post_hook["command"].replace(
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            "'$root/scripts/hooks/pr_followup_hook.py'",
         )
     elif mutation == "handler-type":
         post_hook["type"] = "prompt"

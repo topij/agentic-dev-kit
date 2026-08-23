@@ -1211,6 +1211,9 @@ _CODEX_HOOK_CONTRACT: dict[str, tuple[str, frozenset[object], int]] = {
     "pr_followup_hook.py": ("PostToolUse", frozenset(("^Bash$",)), 10),
 }
 
+_UNQUOTED_EXPANSION_SENTINEL = "\0codex-unquoted-expansion\0"
+_LITERAL_EXPANSION_SENTINEL = "\0codex-literal-expansion\0"
+
 
 def _semantic_shell_words(command: str) -> list[str]:
     """Active shell words and operators, with comments and quote loss excluded.
@@ -1233,6 +1236,11 @@ def _semantic_shell_words(command: str) -> list[str]:
         if command[cursor : cursor + 2] == "\\\n":
             cursor += 2
             continue
+        if command[cursor : cursor + 2] == "\\$":
+            prepared.append(_LITERAL_EXPANSION_SENTINEL)
+            cursor += 2
+            at_word_start = False
+            continue
         if char == "#" and at_word_start:
             newline = command.find("\n", cursor)
             if newline < 0:
@@ -1247,7 +1255,7 @@ def _semantic_shell_words(command: str) -> list[str]:
                 return []
             quoted = command[cursor : end + 1]
             if "$" in quoted or "`" in quoted:
-                prepared.append("__CODEX_SINGLE_QUOTED__")
+                prepared.append(_LITERAL_EXPANSION_SENTINEL)
             prepared.append(quoted)
             cursor = end + 1
             at_word_start = False
@@ -1260,6 +1268,10 @@ def _semantic_shell_words(command: str) -> list[str]:
                     end += 3
                     continue
                 if command[end : end + 2] == "\\\n":
+                    end += 2
+                    continue
+                if command[end : end + 2] == "\\$":
+                    quoted.append(_LITERAL_EXPANSION_SENTINEL)
                     end += 2
                     continue
                 if command[end] == '"':
@@ -1277,6 +1289,8 @@ def _semantic_shell_words(command: str) -> list[str]:
             cursor = end + 1
             at_word_start = False
             continue
+        if char == "$":
+            prepared.append(_UNQUOTED_EXPANSION_SENTINEL)
         prepared.append(char)
         at_word_start = char.isspace() or char in ";|&<>()"
         cursor += 1
@@ -1585,7 +1599,7 @@ def _has_repo_root_nonempty_guard(
 
 
 def _script_command_has_supported_control_flow(
-    commands: list[tuple[list[str], str | None]], script_command_index: int
+    commands: list[tuple[list[str], str | None]], script_command_index: int, name: str
 ) -> bool:
     """Whether the invocation is reached by the shipped deterministic forms."""
     operator_before = (
@@ -1595,6 +1609,16 @@ def _script_command_has_supported_control_flow(
         operator_before == "&&"
         and _relative_path_is_root_anchored(commands, script_command_index)
     ):
+        return False
+    operator_after = commands[script_command_index][1]
+    if name == "check_doc_budget.py":
+        if not (
+            operator_after == "||"
+            and script_command_index + 2 == len(commands)
+            and commands[script_command_index + 1] == (["true"], None)
+        ):
+            return False
+    elif operator_after is not None or script_command_index + 1 != len(commands):
         return False
     for index, (command, _operator) in enumerate(commands[:script_command_index]):
         values = [_semantic_word_value(word) for word in command]
@@ -1761,7 +1785,7 @@ def _codex_registration_semantics(
                         problem(f"{name} must use the shipped Git-root resolution guard")
                     if bound_commands and not all(
                         _script_command_has_supported_control_flow(
-                            shell_commands, command_index
+                            shell_commands, command_index, name
                         )
                         for command_index, _raw, _command, _script_index in bound_commands
                     ):
@@ -1802,7 +1826,17 @@ def _codex_registration_semantics(
                     root_alias_invalid = not _root_alias_is_verified(
                         shell_commands, bound_commands
                     )
-                    if literal_relative or pwd_relative or root_alias_invalid:
+                    expansion_provenance_invalid = any(
+                        _UNQUOTED_EXPANSION_SENTINEL in raw_command[script_index]
+                        or _LITERAL_EXPANSION_SENTINEL in raw_command[script_index]
+                        for _command_index, raw_command, _command, script_index in bound_commands
+                    )
+                    if (
+                        literal_relative
+                        or pwd_relative
+                        or root_alias_invalid
+                        or expansion_provenance_invalid
+                    ):
                         problem(f"{name} path must not depend on the session working directory")
                     if name == "check_doc_budget.py":
                         if not bound_commands or not all(
