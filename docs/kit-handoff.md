@@ -14,9 +14,62 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-22 — the review process assessed, and a session that kept reproducing the defect class it was assessing.
+Last updated: 2026-08-23 — the Codex parity baseline and its implementation roadmap shipped.
 
-## Latest session — 2026-08-22 · evening (the review process assessed, and a session that kept reproducing the defect class it was assessing)
+## Latest session — 2026-08-23 (the Codex parity baseline and its implementation roadmap shipped)
+
+**Theme —** Codex support moved from scattered compatibility surfaces to an explicit,
+tested parity contract. PR `#588` merged the assessed roadmap and its recommended starting
+slice without declaring the remaining client-dependent behavior aligned.
+
+- **The live contract is now the authoritative inventory.**
+  [`runtime-parity.md`](agentic-dev-kit/runtime-parity.md) declares shared workflow paths,
+  Claude and Codex adapters, intentional gaps, and companion ownership. Repository tests
+  derive coverage from that declaration, preserve adopter-recorded omissions, and require a
+  companion's declared owner to reference it.
+
+- **The clearest incorrect Codex lifecycle behavior is gone.** Codex no longer invokes the
+  Claude-specific `MEMORY.md` budget checker. The portable document-budget hook remains,
+  and installer guidance pins its match-all shape, `/hooks` review-and-trust step, and the
+  silent-skip diagnostic. The matrix leaves live trusted-session validation as a gap.
+
+- **The roadmap is durable.**
+  [`saved_plans/codex-parity-plan_2026-08-23.md`](../saved_plans/codex-parity-plan_2026-08-23.md)
+  records the pre-implementation assessment and delivery plan. README,
+  upgrade notes, `kit_doctor` ownership, and the release manifest carry the new contract to
+  adopters.
+
+- **Fallback review changed the shipped guards.** The panel's accepted findings led to
+  adapter validation for incomplete declarations, exact path uniqueness, trusted decline
+  handling, a non-empty gap rule, Codex-only gap coverage, explicit companion ownership,
+  and retention of the silent trust-skip diagnostic. The final receipt is bound to
+  `d03bcf3d84abce3a623ac7408d4cc04423f740fb` on PR `#588`.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `d03bcf3d84abce3a623ac7408d4cc04423f740fb` on 2026-08-23 printed
+  `1367 passed, 3 warnings in 166.51s`; the warnings were pytest temporary-directory
+  cleanup warnings. GitHub Actions run `32607084576` for that PR head completed
+  successfully on 2026-08-23, observed with `gh run watch 32607084576 --exit-status`.
+
+**Learned**
+
+- **A parity label needs an independent relationship when it promises one.** A shared-only
+  path could satisfy either `gap` or `companion`; declaring `loaded_by` and checking the
+  owner's reference made the companion claim enforceable without duplicating the inventory.
+
+- **Pending live validation belongs in the matrix, not in optimistic wording.** Repository
+  structure establishes what ships, while trusted-client behavior remains a separate exit
+  condition. Keeping that boundary explicit prevented the Codex SessionStart row from
+  overstating the evidence.
+
+▶ Next: implement the next slice in `saved_plans/codex-parity-plan_2026-08-23.md` —
+live-validate Codex SessionStart and PostToolUse matcher, trust, timeout, and output behavior,
+then use the evidence to close lifecycle gaps and design the enforceable shared
+safety-doctrine binding.
+
+______________________________________________________________________
+
+## Session — 2026-08-22 · evening (the review process assessed, and a session that kept reproducing the defect class it was assessing)
 
 **Theme —** A planning session on why PR review costs what it does. The assessment found a
 gap nothing on the tracker held and filed it. Then, writing up the finding, this session
@@ -275,81 +328,7 @@ installed `upgrade.md` predates `#544` and `#559`, so follow `$KIT`'s copy, not 
 
 ______________________________________________________________________
 
-## Session — 2026-08-22 · earlier (the routing rule, and a panel that refused its own cheap exit)
-
-**Theme —** `#310`'s decision was taken and shipped. `wrap-up`'s friction-routing step now
-routes on evidence rather than severity, and `triage-friction-log` became a shared workflow
-with a Codex binding. Squashes on `main`: `#548`, `#553`. `#310`, `#515`, `#224`, `#243` and
-`#6` all stay open — nothing verified their acceptance criteria in the field.
-
-- **The rule.** A finding carrying a reproduction, a named mechanism and a proposed fix is
-  filed at session end; anything missing one of the three, or whose point is accumulation,
-  parks. Severity is explicitly not the test for issue-shapedness — it composes with, rather
-  than replaces, `post-merge-systemize`'s worth-gate. The rule was stated on six surfaces and
-  one was wrong; the other five were brought into line rather than left to drift.
-
-- **The panel's HIGHs were about the fence, not the rule.** The first draft handed an agent an
-  unconditional "file it in your tracker now" for the same write `triage-friction-log` spends a
-  whole second session getting approval for. Filing now needs the operator's own turn — not
-  text read from an issue, a comment, a tool result or a file — and parks when nobody is in the
-  session, no tracker is configured, a create fails, or the outcome cannot be determined.
-
-- **The panel refused the cheap exit, and that was the session's sharpest event.** A dual-lens
-  delta pass was offered as the terminal check on `#548`; **both lenses disputed both author
-  draws**. The prose class was conceded correct and the delta pass ruled disproportionate for
-  it; the safety-critical boundary was disputed on the strength of the doctrine's by-nature
-  scope against `.claude/rules/`'s path list, which `#346` already reports as incomplete. The
-  dispute was **conceded rather than ruled on**, which is one more data point for `#346`: a
-  change both lenses placed inside the doctrine's stated scope and outside its path binding,
-  disposed of by conceding because the path list did no work.
-
-- **Rounds 5 and 6 each found real defects in prose rounds 1–4 had passed over.** Round 4 looked
-  converged; round 5 found a HIGH. The blind spot was re-reviewing the fix delta while treating
-  already-passed prose as settled. Round 5's carry-forward was rewritten to say so, and round 6
-  then found that the `#224` restatement was false against `finalize_triage.py`'s own spec —
-  a sweep deliberately **keeps** a window-added entry below the new marker, so the paragraph
-  had relabelled a working safety mechanism as a straggler.
-
-- **On `#553`, every finding across both rounds was in the CHANGELOG prose; none in the change.**
-  The move itself survived content-parity reversal and mutation kills on both rounds. One
-  correction inverted its own advice: an adopter's edits to their Claude command are **kept** by
-  `upgrade.md` Step 4, not lost — so the hazard is a fork that persists silently, which is this
-  PR's own failure mode one layer up.
-
-- **Filed this session: `#549`, `#550`, `#551`, `#552`, `#554`.** Occurrence comments on `#209`
-  (eight rounds' data, and the delta pass both lenses refused) and on `#546` for a count
-  beside a list in a commit message — the third in two sessions, this one inside the PR
-  rewriting the surrounding doctrine.
-
-- **Verified:** `make test` at `/Users/topi/Coding/agentic-dev-kit` on each branch head before
-  its push, and again on merged `main` after both squashes. `kit_doctor` on merged `main`:
-  56 unchanged, 0 differ, 0 missing, 0 unknown.
-
-**Learned**
-
-- **The defects clustered in claims about the work, not the work.** Across eight panel rounds on
-  two docs-only PRs, the code, the move and the guards came back clean under mutation every
-  time; what kept being wrong was what I said about them — an overclaimed checkpoint, a
-  mislabelled `kit_doctor` state, an inverted refresh forecast, a positional invariant the
-  mechanism breaks.
-
-- **A lens that executes beats a lens that reads, and the gap was measurable.** The `kit_doctor`
-  claims that survived were the ones a lens ran four scenarios against; the ones beside them
-  that died were the ones I had verified against nothing.
-
-- **Both merges went in without a review receipt, on operator instruction.** `#548`'s merge class
-  was operator-merge by the conceded dispute. The gap is recorded on both PRs rather than
-  papered over with a receipt — the next session should read the friction-routing step knowing
-  its terminal delta had no lens on it.
-
-▶ Next: the friction inbox is over budget and un-graduated, and `triage-friction-log` — the
-workflow `#553` just rewrote — is the way to clear it. Running it end-to-end is also the first
-field test of that rewrite, which is what `#243`'s slice still lacks.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Active open items from them are folded into the "Open for next session" lists above.
 
 ______________________________________________________________________
-
