@@ -2,7 +2,7 @@
 
 ## Boundary
 
-This record separates two kinds of evidence:
+This record separates the evidence:
 
 - **Repository structure** can prove what `.codex/hooks.json`, `init.sh`, tests,
   and `kit_doctor` declare. It cannot prove that Codex trusted or executed a hook.

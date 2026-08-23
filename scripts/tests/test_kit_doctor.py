@@ -3375,6 +3375,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("doc-job-reversed", "must use the shipped scheduled-run guard"),
         ("doc-job-comment", "must use the shipped scheduled-run guard"),
         ("doc-job-literal", "must use the shipped scheduled-run guard"),
+        ("doc-job-fragmented", "must use the shipped scheduled-run guard"),
         ("doc-job-escaped", "must use the shipped scheduled-run guard"),
         ("doc-job-late", "must use the shipped scheduled-run guard"),
         ("doc-job-echo", "must use the shipped scheduled-run guard"),
@@ -3401,6 +3402,8 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-runtime-shadowed", "must pass --runtime codex"),
         ("pr-runtime-expanded", "must pass --runtime codex"),
         ("pr-leading-comment", "must pass --runtime codex"),
+        ("pr-absolute-launcher", "must use the shipped python3 launcher"),
+        ("pr-escaped-space-comment", "must use supported shell control flow"),
         ("pr-runtime-midword-hash", "must pass --runtime codex"),
         ("pr-echo-argument", "path must be invoked as the configured kit engine"),
         ("pr-python-data", "path must be invoked as the configured kit engine"),
@@ -3432,6 +3435,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("root-overwritten", "path must not depend on the session working directory"),
         ("root-unquoted-guard", "must use the shipped Git-root"),
         ("root-single-quoted-path", "path must not depend on the session working directory"),
+        ("root-fragmented-path", "path must not depend on the session working directory"),
         ("handler-type", "must use a command handler"),
         ("invalid-shell", "command must use valid shell syntax"),
     ],
@@ -3469,6 +3473,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
     elif mutation == "doc-job-literal":
         session_hook["command"] = session_hook["command"].replace(
             '"${JOB_NAME:-}"', "'${JOB_NAME:-}'"
+        )
+    elif mutation == "doc-job-fragmented":
+        session_hook["command"] = session_hook["command"].replace(
+            '"${JOB_NAME:-}"', '"$"\'JOB_NAME\''
         )
     elif mutation == "doc-job-escaped":
         session_hook["command"] = session_hook["command"].replace(
@@ -3567,6 +3575,12 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = "# explanation\n" + post_hook["command"].replace(
             "--runtime codex", "--runtime claude"
         )
+    elif mutation == "pr-absolute-launcher":
+        post_hook["command"] = post_hook["command"].replace(
+            "exec python3", "exec /definitely/not-installed/python3"
+        )
+    elif mutation == "pr-escaped-space-comment":
+        post_hook["command"] += r" harmless\ #; false"
     elif mutation == "pr-runtime-midword-hash":
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", "--runtime codex#typo"
@@ -3704,6 +3718,11 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = post_hook["command"].replace(
             '"$root/scripts/hooks/pr_followup_hook.py"',
             "'$root/scripts/hooks/pr_followup_hook.py'",
+        )
+    elif mutation == "root-fragmented-path":
+        post_hook["command"] = post_hook["command"].replace(
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            '"$"\'root/scripts/hooks/pr_followup_hook.py\'',
         )
     elif mutation == "handler-type":
         post_hook["type"] = "prompt"

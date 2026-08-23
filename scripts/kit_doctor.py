@@ -1225,6 +1225,7 @@ _CODEX_HOOK_CONTRACT: dict[str, tuple[str, frozenset[str], int]] = {
 }
 
 _UNQUOTED_EXPANSION_SENTINEL = "\0codex-unquoted-expansion\0"
+_QUOTED_EXPANSION_SENTINEL = "\0codex-quoted-expansion\0"
 _LITERAL_EXPANSION_SENTINEL = "\0codex-literal-expansion\0"
 
 
@@ -1252,6 +1253,11 @@ def _semantic_shell_words(command: str) -> list[str]:
         if command[cursor : cursor + 2] == "\\$":
             prepared.append(_LITERAL_EXPANSION_SENTINEL)
             prepared.append("$")
+            cursor += 2
+            at_word_start = False
+            continue
+        if char == "\\" and cursor + 1 < len(command):
+            prepared.extend(command[cursor : cursor + 2])
             cursor += 2
             at_word_start = False
             continue
@@ -1289,6 +1295,17 @@ def _semantic_shell_words(command: str) -> list[str]:
                     quoted.append("$")
                     end += 2
                     continue
+                if command[end] == "$":
+                    following = command[end + 1] if end + 1 < len(command) else ""
+                    sentinel = (
+                        _QUOTED_EXPANSION_SENTINEL
+                        if re.match(r"[A-Za-z0-9_{(]", following)
+                        else _LITERAL_EXPANSION_SENTINEL
+                    )
+                    quoted.append(sentinel)
+                    quoted.append("$")
+                    end += 1
+                    continue
                 if command[end] == '"':
                     break
                 if command[end] == "\\" and end + 1 < len(command):
@@ -1317,7 +1334,7 @@ def _semantic_shell_words(command: str) -> list[str]:
         lexed = list(lexer)
     except ValueError:
         return []
-    return lexed
+    return [word.replace(_QUOTED_EXPANSION_SENTINEL, "") for word in lexed]
 
 
 def _semantic_word_value(word: str) -> str:
@@ -1326,8 +1343,10 @@ def _semantic_word_value(word: str) -> str:
 
 def _bound_script_path_value(word: str) -> str:
     """Path value of an invocation token, without lexer provenance markers."""
-    stripped = word.replace(_UNQUOTED_EXPANSION_SENTINEL, "").replace(
-        _LITERAL_EXPANSION_SENTINEL, ""
+    stripped = (
+        word.replace(_UNQUOTED_EXPANSION_SENTINEL, "")
+        .replace(_QUOTED_EXPANSION_SENTINEL, "")
+        .replace(_LITERAL_EXPANSION_SENTINEL, "")
     )
     if Path(stripped).is_absolute() or _LITERAL_EXPANSION_SENTINEL in word:
         return stripped
@@ -1463,6 +1482,18 @@ def _script_commands_use_shipped_uv_launcher(
     for _command_index, _raw_command, command, script_index in script_commands:
         cursor = 1 if command[:1] == ["exec"] else 0
         if command[cursor:script_index] != ["uv", "run", "--script"]:
+            return False
+    return True
+
+
+def _script_commands_use_python3_launcher(
+    script_commands: list[tuple[int, list[str], list[str], int]],
+) -> bool:
+    if not script_commands:
+        return False
+    for _command_index, _raw_command, command, script_index in script_commands:
+        cursor = 1 if command[:1] == ["exec"] else 0
+        if command[cursor:script_index] != ["python3"]:
             return False
     return True
 
@@ -2032,6 +2063,8 @@ def _codex_registration_semantics(
                         bound_commands, "--runtime", "codex"
                     ):
                         problem("pr_followup_hook.py must pass --runtime codex")
+                    elif not _script_commands_use_python3_launcher(bound_commands):
+                        problem("pr_followup_hook.py must use the shipped python3 launcher")
 
     for name, count in occurrences.items():
         if count > 1:
