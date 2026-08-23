@@ -3401,6 +3401,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-runtime-unbound", "must pass --runtime codex"),
         ("pr-runtime-shadowed", "must pass --runtime codex"),
         ("pr-runtime-expanded", "must pass --runtime codex"),
+        ("pr-runtime-crlf", "must pass --runtime codex"),
         ("pr-leading-comment", "must pass --runtime codex"),
         ("pr-absolute-launcher", "must use the shipped python3 launcher"),
         ("pr-escaped-space-comment", "must use supported shell control flow"),
@@ -3429,6 +3430,7 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("root-pwd-default-path", "path must not depend on the session working directory"),
         ("root-parameter-path", "path must not depend on the session working directory"),
         ("root-traversal-path", "path must resolve to the configured kit engine"),
+        ("root-nested-path", "path must resolve to the configured kit engine"),
         ("disabled-root-path", "path must not depend on the session working directory"),
         ("dead-root-chain", "path must not depend on the session working directory"),
         ("root-pwd-alias", "path must not depend on the session working directory"),
@@ -3571,6 +3573,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", '"$RUNTIME_ARG" --runtime codex'
         )
+    elif mutation == "pr-runtime-crlf":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", '--runtime "co\\\r\ndex"'
+        )
     elif mutation == "pr-leading-comment":
         post_hook["command"] = "# explanation\n" + post_hook["command"].replace(
             "--runtime codex", "--runtime claude"
@@ -3689,6 +3695,11 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = post_hook["command"].replace(
             '"$root/scripts/hooks/pr_followup_hook.py"',
             '"$root/../../sibling/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "root-nested-path":
+        post_hook["command"] = post_hook["command"].replace(
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            '"$root/decoy/scripts/hooks/pr_followup_hook.py"',
         )
     elif mutation == "disabled-root-path":
         post_hook["command"] = (

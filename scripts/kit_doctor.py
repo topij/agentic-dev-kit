@@ -1244,9 +1244,6 @@ def _semantic_shell_words(command: str) -> list[str]:
     at_word_start = True
     while cursor < len(command):
         char = command[cursor]
-        if command[cursor : cursor + 3] == "\\\r\n":
-            cursor += 3
-            continue
         if command[cursor : cursor + 2] == "\\\n":
             cursor += 2
             continue
@@ -1284,9 +1281,6 @@ def _semantic_shell_words(command: str) -> list[str]:
             end = cursor + 1
             quoted = ['"']
             while end < len(command):
-                if command[end : end + 3] == "\\\r\n":
-                    end += 3
-                    continue
                 if command[end : end + 2] == "\\\n":
                     end += 2
                     continue
@@ -1747,7 +1741,7 @@ def _shell_words_have_grouping(words: list[str]) -> bool:
 
 
 def _shell_has_unsupported_compound_syntax(command: str, words: list[str]) -> bool:
-    continued = command.replace("\\\r\n", "").replace("\\\n", "")
+    continued = command.replace("\\\n", "")
     if "\n" in continued or "\r" in continued:
         return True
     reserved = frozenset(
@@ -1794,10 +1788,12 @@ def _token_looks_like_kit_engine(token: str, expected_rel: str, root: Path) -> b
 
 
 def _token_targets_kit_engine(token: str, expected_rel: str, root: Path) -> bool:
-    return (
-        ".." not in PurePosixPath(token).parts
-        and _token_looks_like_kit_engine(token, expected_rel, root)
-    )
+    exact = (expected_rel, f"{_ROOT_SENTINEL}/{expected_rel}", str(root / expected_rel))
+    if token in exact:
+        return True
+    if _ROOT_SENTINEL in token or ".." in PurePosixPath(token).parts:
+        return False
+    return _token_looks_like_kit_engine(token, expected_rel, root)
 
 
 def _codex_registration_semantics(

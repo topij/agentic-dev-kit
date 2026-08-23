@@ -1547,6 +1547,13 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         r"Read `" + re.escape(doctrine) + r"` completely and apply that\s+doctrine",
         claude_rule,
     )
+    claude_frontmatter = yaml.safe_load(claude_rule.split("---", 2)[1])
+    assert set(claude_frontmatter["paths"]) == {
+        "scripts/dev_session.sh",
+        "scripts/devkit/dev_session.sh",
+        "scripts/pr_watch.py",
+        "scripts/devkit/pr_watch.py",
+    }
     for text in (root_agents, template, merge_section, claude_rule):
         assert "pr_watch.py" in text
         assert "dev_session.sh" in text
