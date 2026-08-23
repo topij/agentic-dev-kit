@@ -3394,6 +3394,23 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
     }
 
 
+@pytest.mark.parametrize("matcher", ["", "*"])
+def test_codex_lifecycle_semantics_verify_explicit_match_all_session_matchers(
+    tmp_path, matcher
+):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    document["hooks"]["SessionStart"][0]["matcher"] = matcher
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    doc = [s for s in statuses if s.detail.startswith("check_doc_budget.py")]
+
+    assert [(s.state, s.detail) for s in doc] == [
+        ("verified", "check_doc_budget.py canonical lifecycle form verified")
+    ]
+
+
 def test_codex_lifecycle_semantics_accept_inline_project_config(tmp_path):
     root = _fake_repo(tmp_path)
     _write(root / HOOK_REL, "print('hook')\n")
@@ -3463,6 +3480,34 @@ def test_codex_lifecycle_semantics_detect_project_feature_disable(tmp_path, feat
     root = _fake_repo(tmp_path)
     _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
     _write(root / ".codex" / "config.toml", f"[features]\n{feature} = false\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert "Codex lifecycle hooks are disabled by the project config" in details
+
+
+def test_codex_lifecycle_semantics_validates_each_present_feature_alias(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(
+        root / ".codex" / "config.toml",
+        "[features]\nhooks = true\ncodex_hooks = 0\n",
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert "Codex project feature codex_hooks must be a boolean" in details
+
+
+def test_codex_lifecycle_semantics_detects_disable_in_deprecated_alias(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(
+        root / ".codex" / "config.toml",
+        "[features]\nhooks = true\ncodex_hooks = false\n",
+    )
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
     details = [s.detail for s in statuses if s.state == "misconfigured"]
@@ -4635,7 +4680,11 @@ def test_an_external_decoy_does_not_hide_the_kit_lifecycle_invocation(tmp_path):
     _write_codex_lifecycle_fixture(root, document)
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
-    assert any(s.state == "unverifiable" for s in statuses)
+    assert not [
+        s
+        for s in statuses
+        if s.state == "verified" and s.detail.startswith("pr_followup_hook.py")
+    ]
 
 
 def test_an_inert_kit_path_does_not_bless_an_external_invocation(tmp_path):
@@ -4651,7 +4700,11 @@ def test_an_inert_kit_path_does_not_bless_an_external_invocation(tmp_path):
     _write_codex_lifecycle_fixture(root, document)
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
-    assert any(s.state == "unverifiable" for s in statuses)
+    assert not [
+        s
+        for s in statuses
+        if s.state == "verified" and s.detail.startswith("pr_followup_hook.py")
+    ]
 
 
 @pytest.mark.parametrize(
@@ -4814,6 +4867,49 @@ def test_a_name_mentioned_in_a_shell_comment_is_not_an_invocation(tmp_path):
     claude = [s for s in report.registrations if s.surface == ".claude/settings.json"]
 
     assert [(s.state, s.detail) for s in claude] == [("resolves", HOOK_REL)]
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "scripts/check_doc_budget.py",
+        "scripts/hooks/pr_followup_hook.py",
+        "scripts/check_memory_budget.py",
+    ],
+)
+def test_codex_lifecycle_name_in_an_unrelated_comment_is_not_a_candidate(
+    tmp_path, target
+):
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    document = {
+        "hooks": {
+            "PostToolUse": [
+                {
+                    "matcher": "^Bash$",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": f"echo ok # {target}",
+                            "timeout": 10,
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    target_name = PurePosixPath(target).name
+    semantic_failures = [
+        s
+        for s in statuses
+        if s.state in ("misconfigured", "unverifiable")
+        and target_name in s.detail
+    ]
+
+    assert semantic_failures == []
 
 
 def test_an_escaped_space_keeps_a_path_whole(tmp_path):

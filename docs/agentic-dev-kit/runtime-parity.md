@@ -104,7 +104,8 @@ records broader capability parity that cannot be expressed as an adapter path.
 Repository checks establish that the shipped Codex JSON names the portable engine,
 keeps the Claude-only memory engine out, and exactly matches the canonical event,
 matcher, handler, command, and timeout objects printed by `init.sh`. They also inspect
-additive inline project hooks and the project hook feature switch. A recognizable
+additive inline project hooks and each present project hook feature-switch alias. A
+recognizable
 alternative command is `unverifiable`, not accepted as shell-equivalent. Repository
 inspection does not establish that a client trusted or executed the definitions.
 

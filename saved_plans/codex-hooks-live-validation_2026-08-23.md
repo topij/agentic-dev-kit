@@ -139,8 +139,10 @@ as unverifiable:
   `--runtime codex`, and uses the shipped bounded timeout.
 - duplicate registrations across the additive project sources are defects because
   matching handlers all execute.
-- project `[features].hooks = false` disables the lifecycle wiring and is a
-  deterministic configuration defect when the kit engines are registered.
+- either present project feature-switch spelling (`hooks` or its deprecated
+  `codex_hooks` alias) must be boolean; a false value disables the lifecycle
+  wiring and is a deterministic configuration defect when the kit engines are
+  registered.
 
 Project trust, current-definition trust, and actual execution remain live-client
 facts. `kit_doctor` must report structural semantics without claiming those facts;

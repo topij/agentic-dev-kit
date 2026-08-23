@@ -149,7 +149,9 @@ Exit codes:
         a kit release must not turn an adopter's CI red.
     1 — at least one file `differs`, is `stale`, `locally-edited`,
         `stale-and-edited`, `unknown-version`, `missing-required`, or
-        `removed`. The last two are not drift, but they are a broken
+        `removed`, or a hook registration is `broken`, `misconfigured`,
+        `unreadable`, or `unverifiable`. The last two file states are not drift,
+        but they are a broken
         install, and the exit code an adopter gates CI on should not be green
         for a tree whose engines cannot load their own library. `declined` and
         `new-upstream` are NOT in this set and never fail the gate: the first
@@ -1276,17 +1278,32 @@ def _codex_registration_semantics(
     }
 
     def command_names(command: str) -> set[str]:
-        """Kit lifecycle paths visibly referenced by one command string.
+        """Kit lifecycle paths in the shipped command families.
 
-        This is intentionally literal. If a shell builds a path indirectly, the
-        lifecycle check does not infer it.
+        Recognition is deliberately narrower than a substring scan. The doctor
+        does not parse shell comments or decide whether arbitrary surrounding
+        shell text executes a visible path. It recognizes only the exact
+        installer preamble or explicit ``exec python3`` prefix (whose remainder
+        may then be noncanonical), plus the Claude-only memory command family
+        that Codex must reject.
         """
-        candidates = set(_CODEX_HOOK_CONTRACT) | {"check_memory_budget.py"}
-        return {
+        installer_preamble = (
+            'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+        )
+        recognizable_prefix = command.startswith(
+            (installer_preamble, "exec python3 ")
+        )
+        names = {
             name
-            for name in candidates
+            for name in _CODEX_HOOK_CONTRACT
             if name in engine_paths and engine_paths[name] in command
+            and recognizable_prefix
         }
+        memory_name = "check_memory_budget.py"
+        memory_path = engine_paths.get(memory_name)
+        if memory_path and command.startswith(f'python3 "$root/{memory_path}"'):
+            names.add(memory_name)
+        return names
 
     def recognized_names(node: object) -> set[str]:
         names: set[str] = set()
@@ -1372,11 +1389,9 @@ def _codex_registration_semantics(
                     timeout = handler.get("timeout")
                     if type(timeout) is not int or timeout != expected_timeout:
                         problem(f"{name} timeout must be {expected_timeout} seconds")
-                    canonical_group_keys = (
-                        {"hooks"}
-                        if name == "check_doc_budget.py"
-                        else {"matcher", "hooks"}
-                    )
+                    canonical_group_keys = {"hooks"}
+                    if name != "check_doc_budget.py" or "matcher" in group:
+                        canonical_group_keys.add("matcher")
                     command_shape_is_noncanonical = (
                         command != expected_commands[name]
                         or set(handler) != {"type", "command", "timeout"}
@@ -1574,13 +1589,13 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                 )
             )
         elif isinstance(features, dict):
-            feature_key = None
-            if "hooks" in features:
-                feature_key = "hooks"
-            elif "codex_hooks" in features:
-                feature_key = "codex_hooks"
-            feature_value = features.get(feature_key) if feature_key else None
-            if feature_key and type(feature_value) is not bool:
+            feature_keys = [
+                key for key in ("hooks", "codex_hooks") if key in features
+            ]
+            for feature_key in feature_keys:
+                feature_value = features[feature_key]
+                if type(feature_value) is bool:
+                    continue
                 statuses.append(
                     RegistrationStatus(
                         "codex",
@@ -1589,7 +1604,7 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                         f"Codex project feature {feature_key} must be a boolean",
                     )
                 )
-            elif feature_value is False and occurrence_names:
+            if occurrence_names and any(features[key] is False for key in feature_keys):
                 statuses.append(
                     RegistrationStatus(
                         "codex",
@@ -3179,9 +3194,9 @@ def main(argv: list[str] | None = None) -> int:
     # hook that silently stopped firing, and until now nothing in the kit's own
     # instrument reported it. `broken`, `misconfigured`, and `unreadable` reach
     # here — see `Report.dead_registrations` for why the supported absent and
-    # unresolvable states do not. A path that resolves under the wrong event or
-    # matcher is no more able to provide the intended lifecycle behavior than
-    # an absent path is.
+    # unresolvable states do not. `unverifiable` also reaches this gate: a path
+    # whose noncanonical command semantics were not established cannot provide
+    # the intended lifecycle behavior any more reliably than an absent path can.
     return 1 if report.drifted or report.broken or report.dead_registrations else 0
 
 
