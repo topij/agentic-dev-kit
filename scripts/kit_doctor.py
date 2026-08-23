@@ -1221,6 +1221,10 @@ def _semantic_shell_words(command: str) -> list[str]:
     uses. It also keeps shell operators as tokens, letting argument checks stay
     attached to the simple command that invokes the engine.
     """
+    # A shell removes a backslash-newline pair before tokenization. Leaving it
+    # for ``shlex(posix=False)`` produces a standalone ``\\`` token, which is
+    # indistinguishable from the prefix of an escaped-space path below.
+    command = command.replace("\\\r\n", "").replace("\\\n", "")
     lexer = shlex.shlex(command, posix=False, punctuation_chars=";&|")
     lexer.whitespace_split = True
     lexer.commenters = "#"
@@ -1314,6 +1318,34 @@ def _script_commands_have_option(
     return True
 
 
+def _script_commands_select_option(
+    script_commands: list[tuple[int, list[str], list[str], int]],
+    option: str,
+    value: str,
+) -> bool:
+    """Whether every invocation's first option occurrence selects ``value``.
+
+    ``pr_followup_hook.py`` deliberately uses the first ``--runtime`` argument.
+    Merely finding a later Codex spelling would bless
+    ``--runtime claude --runtime codex`` while the hook actually runs as Claude.
+    """
+    if not script_commands:
+        return False
+    for _command_index, _raw_command, command, script_index in script_commands:
+        arguments = command[script_index + 1 :]
+        selected: str | None = None
+        for index, word in enumerate(arguments):
+            if word == option:
+                selected = arguments[index + 1] if index + 1 < len(arguments) else None
+                break
+            if word.startswith(f"{option}="):
+                selected = word.split("=", 1)[1]
+                break
+        if selected != value:
+            return False
+    return True
+
+
 def _has_scheduled_run_skip(
     commands: list[tuple[list[str], str | None]], script_command_index: int
 ) -> bool:
@@ -1372,6 +1404,11 @@ def _has_repo_root_assignment_before(
         r'root="?\$\(git rev-parse --show-toplevel(?: 2>/dev/null)?\)"?', source
     ):
         return False
+    for later, _later_operator in commands[1:before_index]:
+        if any(re.match(r"^root(?:\+)?=", word) for word in later):
+            return False
+        if later[:1] == ["unset"] and "root" in later[1:]:
+            return False
     if operator == ";":
         return True
     return (
@@ -1418,6 +1455,20 @@ def _relative_path_is_root_anchored(
         and exit_operator == ";"
         and operator_before_cd in (None, ";")
         and _has_repo_root_assignment_before(commands, cd_index)
+    )
+
+
+def _script_command_has_supported_control_flow(
+    commands: list[tuple[list[str], str | None]], script_command_index: int
+) -> bool:
+    """Whether the invocation is reached by the shipped deterministic forms."""
+    operator_before = (
+        commands[script_command_index - 1][1] if script_command_index else None
+    )
+    if operator_before in (None, ";"):
+        return True
+    return operator_before == "&&" and _relative_path_is_root_anchored(
+        commands, script_command_index
     )
 
 
@@ -1522,6 +1573,13 @@ def _codex_registration_semantics(
                     expected_event, accepted_matchers, expected_timeout = contract
                     bound_commands = _script_commands(shell_commands, name)
                     occurrences[name] = occurrences.get(name, 0) + len(bound_commands)
+                    if bound_commands and not all(
+                        _script_command_has_supported_control_flow(
+                            shell_commands, command_index
+                        )
+                        for command_index, _raw, _command, _script_index in bound_commands
+                    ):
+                        problem(f"{name} invocation must use supported shell control flow")
                     if handler.get("type") != "command":
                         problem(f"{name} must use a command handler")
                     if event != expected_event:
@@ -1566,7 +1624,7 @@ def _codex_registration_semantics(
                             problem("check_doc_budget.py must use the shipped scheduled-run guard")
                         if not _script_commands_have_option(bound_commands, "--quiet"):
                             problem("check_doc_budget.py must run in quiet mode")
-                    elif not _script_commands_have_option(
+                    elif not _script_commands_select_option(
                         bound_commands, "--runtime", "codex"
                     ):
                         problem("pr_followup_hook.py must pass --runtime codex")

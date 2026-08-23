@@ -3384,14 +3384,18 @@ def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
         ("pr-runtime", "must pass --runtime codex"),
         ("pr-runtime-comment", "must pass --runtime codex"),
         ("pr-runtime-unbound", "must pass --runtime codex"),
+        ("pr-runtime-shadowed", "must pass --runtime codex"),
         ("pr-echo-argument", "must pass --runtime codex"),
         ("pr-python-data", "must pass --runtime codex"),
+        ("pr-disabled-invocation", "must use supported shell control flow"),
+        ("pr-or-invocation", "must use supported shell control flow"),
         ("relative-path", "path must not depend on the session working directory"),
         ("pwd-path", "path must not depend on the session working directory"),
         ("pwd-command-path", "path must not depend on the session working directory"),
         ("disabled-root-path", "path must not depend on the session working directory"),
         ("dead-root-chain", "path must not depend on the session working directory"),
         ("root-pwd-alias", "path must not depend on the session working directory"),
+        ("root-overwritten", "path must not depend on the session working directory"),
         ("handler-type", "must use a command handler"),
     ],
 )
@@ -3468,6 +3472,10 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", "--runtime claude; echo --runtime codex"
         )
+    elif mutation == "pr-runtime-shadowed":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", "--runtime claude --runtime codex"
+        )
     elif mutation == "pr-echo-argument":
         post_hook["command"] = (
             'root="$(git rev-parse --show-toplevel)"; '
@@ -3477,6 +3485,16 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = (
             'root="$(git rev-parse --show-toplevel)"; '
             'python3 -c pass "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "pr-disabled-invocation":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+            'false && exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-or-invocation":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+            'true || exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
         )
     elif mutation == "relative-path":
         post_hook["command"] = (
@@ -3504,6 +3522,11 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post_hook["command"] = (
             'root=$PWD; exec python3 "$root/scripts/hooks/pr_followup_hook.py" '
             "--runtime codex"
+        )
+    elif mutation == "root-overwritten":
+        post_hook["command"] = (
+            'root="$(git rev-parse --show-toplevel)"; root=$PWD; '
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
         )
     elif mutation == "handler-type":
         post_hook["type"] = "prompt"
@@ -4181,6 +4204,20 @@ def test_an_escaped_space_keeps_a_path_whole(tmp_path):
     codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
 
     assert [(s.state, s.detail) for s in codex] == [("resolves", HOOK_REL)]
+
+
+def test_a_shell_line_continuation_keeps_the_runtime_argument_valid(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] = post_hook["command"].replace(
+        "--runtime codex", "--runtime \\\n codex"
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not [s.detail for s in statuses if s.state == "misconfigured"]
 
 
 def test_the_optional_overlay_is_silent_when_it_registers_nothing_too(tmp_path):
