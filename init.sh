@@ -1270,7 +1270,8 @@ register_budget_hooks() {
     echo "      to cover every supported start source:"
     echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_doc_budget_src}\" --quiet || true"
     echo "        Review and trust the entry via /hooks. New or changed project hooks"
-    echo "        are skipped until their current definition is trusted."
+    echo "        are skipped silently until their current definition is trusted; an"
+    echo "        untrusted hook is therefore indistinguishable from a broken one."
   fi
   echo "      Claude — .claude/settings.json, under hooks.SessionStart, matcher \"startup\":"
   if [ -f "$_doc_budget_src" ]; then

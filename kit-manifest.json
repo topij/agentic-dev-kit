@@ -29,7 +29,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "deabbf4df37462487d76b8bf9d725a2d488fd65940461533a6bf520df3651422"
+      "sha256": "bce4ac47721b6eec17a9a121a27194aecbf3abc5649ffb715f103d60fd629ff0"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -93,7 +93,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "805ffa5ddd52b546303bf47a27e8ecfb7222cbc0c570a2de80e90140bf15e582"
+      "sha256": "d1ff39b93e2e8e96b0f69c7b002e694785635e856f144944c93062114bff9c29"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -219,7 +219,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "4d9355cd48d0cab35d680c1506ae9637a9b6721ecd0af90e9bc2f7916d5892e1"
+      "sha256": "57718bf56dc778ae52b8f7239676e4fe4f18461479a1b265b0fe18a312a2bb89"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -243,7 +243,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "d5e930b11da5e6ce5f9591ef1571629fc1e3e8b7d0db37484150b62eb06f98a8"
+      "sha256": "0f0cc59745167a04c158bcecea58e03515fee0af34698caae21deb46acb6aa5c"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

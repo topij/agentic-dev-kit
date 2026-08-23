@@ -2593,7 +2593,8 @@ def test_the_budget_advisory_requires_reviewing_and_trusting_codex_hooks(
     assert "/hooks" in result.stdout
     lowered = result.stdout.lower()
     assert "review and trust" in lowered
-    assert "skipped until" in lowered
+    assert "skipped silently until" in lowered
+    assert "indistinguishable from a broken one" in lowered
 
 
 def test_the_codex_session_start_match_all_shape_is_explained_by_the_advisory(

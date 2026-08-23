@@ -1440,7 +1440,11 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
     contract = yaml.safe_load(frontmatter)["workflow_contract"]
 
     expected_keys = {"name", "status", "shared", "claude", "codex"}
-    assert all(set(entry) == expected_keys for entry in contract)
+    assert all(
+        set(entry) == expected_keys
+        or (entry["status"] == "companion" and set(entry) == expected_keys | {"loaded_by"})
+        for entry in contract
+    )
     names = [entry["name"] for entry in contract]
     assert len(names) == len(set(names)), "runtime-parity declares a workflow more than once"
     assert {entry["status"] for entry in contract} <= {"aligned", "gap", "companion"}
@@ -1489,6 +1493,16 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
 
         if entry["status"] == "companion":
             assert entry["shared"] and not entry["claude"] and not entry["codex"]
+            owner_name = entry["loaded_by"]
+            owners = [candidate for candidate in contract if candidate["name"] == owner_name]
+            assert len(owners) == 1, f"companion {name} has no unique loaded_by owner"
+            owner_shared = owners[0]["shared"]
+            assert owner_shared, f"companion {name} owner {owner_name} has no shared workflow"
+            owner_text = (REPO_ROOT / owner_shared).read_text(encoding="utf-8")
+            companion_filename = Path(entry["shared"]).name
+            assert companion_filename in owner_text, (
+                f"companion {name} is not referenced by its loaded_by owner {owner_name}"
+            )
         elif entry["status"] == "gap":
             paths = [entry[key] for key in ("shared", "claude", "codex")]
             assert any(paths) and not all(paths)
@@ -1591,6 +1605,24 @@ def test_runtime_parity_contract_allows_a_codex_only_gap(
 
     test_codex_skill_adapters_are_valid_and_share_workflows()
     test_runtime_parity_contract_covers_workflows_and_adapters()
+
+
+def test_runtime_parity_companion_must_be_referenced_by_its_owner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _runtime_parity_fixture(tmp_path)
+    (repo / "kit-manifest.json").write_text("{}\n", encoding="utf-8")
+    owner = repo / "docs" / "agentic-dev-kit" / "workflows" / "parallel.md"
+    text = owner.read_text(encoding="utf-8")
+    assert "parallel-headless.md" in text
+    owner.write_text(
+        text.replace("parallel-headless.md", "removed-companion.md"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
+
+    with pytest.raises(AssertionError, match="not referenced by its loaded_by owner"):
+        test_runtime_parity_contract_covers_workflows_and_adapters()
 
 
 def test_shared_lane_contract_has_no_runtime_specific_peer_api() -> None:

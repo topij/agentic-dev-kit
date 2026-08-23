@@ -45,6 +45,7 @@ workflow_contract:
     shared: docs/agentic-dev-kit/workflows/parallel-headless.md
     claude: null
     codex: null
+    loaded_by: parallel
 ---
 
 # Runtime parity contract
@@ -74,8 +75,8 @@ Codex project configuration remain runtime-native surfaces.
 
 - `aligned` — shared definition and both runtime bindings ship.
 - `gap` — a user-facing workflow is missing a shared definition or runtime binding.
-- `companion` — shared material is loaded by another workflow and deliberately has no
-  direct runtime command or skill.
+- `companion` — shared material is loaded by the workflow named in `loaded_by` and
+  deliberately has no direct runtime command or skill.
 
 The machine-readable declaration is authoritative for file coverage. The matrix below
 records broader capability parity that cannot be expressed as an adapter path.
