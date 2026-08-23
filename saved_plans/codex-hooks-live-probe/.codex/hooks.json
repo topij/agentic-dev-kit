@@ -1,0 +1,115 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^startup$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" ss-visible"
+          }
+        ]
+      },
+      {
+        "matcher": "^resume$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" ss-resume"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" ss-omitted"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" ss-star"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" ss-empty"
+          }
+        ]
+      },
+      {
+        "matcher": "^startup$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" ss-timeout",
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" pt-json"
+          },
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" pt-plain"
+          },
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" pt-timeout",
+            "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "^bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" pt-lowercase"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" pt-star"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" pt-empty"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel)\"; PROBE_ROOT=\"$root\" exec python3 \"$root/record_hook.py\" pt-omitted"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1517,6 +1517,43 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
             _assert_claude_workflow_adapter(name, shared_path, entry["claude"])
 
 
+@pytest.mark.kit_repo_only("AGENTS.md")
+def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
+    doctrine = "docs/agentic-dev-kit/safety-critical-changes.md"
+    root_agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    template = (REPO_ROOT / "docs" / "templates" / "AGENTS.md.tmpl").read_text(
+        encoding="utf-8"
+    )
+    merge_section = (REPO_ROOT / "docs" / "AGENTS-sections.md").read_text(
+        encoding="utf-8"
+    )
+    claude_rule = (
+        REPO_ROOT / ".claude" / "rules" / "safety-critical-changes.md"
+    ).read_text(encoding="utf-8")
+
+    assert doctrine in root_agents
+    assert doctrine in template
+    assert doctrine in merge_section
+    assert doctrine in claude_rule
+    for text in (root_agents, template, merge_section, claude_rule):
+        assert "pr_watch.py" in text
+        assert "dev_session.sh" in text
+
+
+@pytest.mark.kit_repo_only("saved_plans/codex-hooks-live-probe/.codex/hooks.json")
+def test_codex_live_validation_fixture_keeps_its_observed_surfaces() -> None:
+    fixture = REPO_ROOT / "saved_plans" / "codex-hooks-live-probe"
+    hooks = json.loads((fixture / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    recorder = (fixture / "record_hook.py").read_text(encoding="utf-8")
+
+    assert set(hooks["hooks"]) == {"SessionStart", "PostToolUse"}
+    assert "ss-resume" in json.dumps(hooks)
+    assert "pt-lowercase" in json.dumps(hooks)
+    assert "SESSION_PLAIN_VISIBLE" in recorder
+    assert "POST_CONTEXT_VISIBLE" in recorder
+    assert "POST_PLAIN_SHOULD_BE_IGNORED" in recorder
+
+
 def _runtime_parity_fixture(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     doctrine_dir = repo / "docs" / "agentic-dev-kit"

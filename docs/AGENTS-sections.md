@@ -17,6 +17,7 @@ status in the configured handoff, not in `AGENTS.md`.
 - At the end of every meaningful session, use `wrap-up` to update the configured
   handoff, capture workflow friction, and leave one clear next step.
 - For customer-facing gates, destructive operations, recovery paths, security work,
-  and changes to the lane-safety engines, read and apply
+  and behavioral changes to the configured `<engine-dir>/pr_watch.py` or
+  `<engine-dir>/dev_session.sh`, read and apply
   `docs/agentic-dev-kit/safety-critical-changes.md`. Green CI is necessary but not
   sufficient; require independent review and operator sign-off.

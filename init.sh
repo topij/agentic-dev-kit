@@ -1207,7 +1207,10 @@ register_pr_hook() {
   # property of the same runtime's hook handling. `exec` is the right call either
   # way (it is strictly fewer processes), so nothing depends on settling it.
   echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; exec python3 \"\$root/${_hook_src}\" --runtime codex"
-  echo "        Codex also needs you to trust the hook via /hooks before it runs."
+  echo "        Set the command handler timeout to 10 seconds. PostToolUse ignores"
+  echo "        plain stdout; this engine returns JSON additionalContext when it fires."
+  echo "        Codex also needs the project and current hook definition trusted"
+  echo "        through /hooks before it runs."
   echo "      Claude — .claude/settings.json, under hooks.PostToolUse, matcher \"Bash\"."
   echo "      \`if\` goes on the hook entry beside \`command\`, not next to \`matcher\`:"
   echo "        python3 \"\$CLAUDE_PROJECT_DIR/${_hook_src}\" --runtime claude"
@@ -1269,9 +1272,12 @@ register_budget_hooks() {
     echo "      Codex — .codex/hooks.json, under hooks.SessionStart; omit matcher"
     echo "      to cover every supported start source:"
     echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_doc_budget_src}\" --quiet || true"
-    echo "        Review and trust the entry via /hooks. New or changed project hooks"
-    echo "        are skipped silently until their current definition is trusted; an"
-    echo "        untrusted hook is therefore indistinguishable from a broken one."
+    echo "        Set the command handler timeout to 15 seconds. SessionStart plain stdout"
+    echo "        becomes developer context, so the quiet flag keeps healthy runs empty."
+    echo "        Review and trust the project and current definition via /hooks."
+    echo "        New or changed definitions are"
+    echo "        skipped until trusted; absence in a noninteractive run does not distinguish"
+    echo "        pending trust from a broken command, so /hooks is the diagnostic authority."
   fi
   echo "      Claude — .claude/settings.json, under hooks.SessionStart, matcher \"startup\":"
   if [ -f "$_doc_budget_src" ]; then

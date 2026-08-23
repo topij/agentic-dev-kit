@@ -3173,9 +3173,10 @@ def test_a_malformed_baseline_reaches_the_same_note_and_it_does_not_claim_two_ca
 
 
 def _registration(root: Path, surface: str, command: str) -> None:
+    matcher = "^Bash$" if surface == ".codex/hooks.json" else "Bash"
     _write(
         root / surface,
-        json.dumps({"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
+        json.dumps({"hooks": {"PostToolUse": [{"matcher": matcher, "hooks": [
             {"type": "command", "command": command, "timeout": 10}
         ]}]}}),
     )
@@ -3305,6 +3306,160 @@ def test_a_session_start_registration_is_checked_too(tmp_path):
     assert [(s.state, s.detail) for s in claude] == [
         ("broken", "scripts/check_memory_budget.py")
     ]
+
+
+def _valid_codex_lifecycle_document() -> dict:
+    return {
+        "hooks": {
+            "SessionStart": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": 'root="$(git rev-parse --show-toplevel)"; '
+                            '[ -z "${JOB_NAME:-}" ] || exit 0; '
+                            'uv run --script "$root/scripts/check_doc_budget.py" '
+                            "--quiet || true",
+                            "timeout": 15,
+                        }
+                    ]
+                }
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": "^Bash$",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": 'root="$(git rev-parse --show-toplevel)"; '
+                            'exec python3 "$root/scripts/hooks/pr_followup_hook.py" '
+                            "--runtime codex",
+                            "timeout": 10,
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+
+
+def _write_codex_lifecycle_fixture(root: Path, document: dict) -> None:
+    _write(root / HOOK_REL, "print('hook')\n")
+    _write(root / ".codex" / "hooks.json", json.dumps(document))
+
+
+def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    codex = [s for s in statuses if s.runtime == "codex"]
+
+    assert not [s for s in codex if s.state == "misconfigured"]
+    assert {s.detail for s in codex if s.state == "resolves"} == {
+        "scripts/check_doc_budget.py",
+        HOOK_REL,
+    }
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("doc-matcher", "matcher must cover every supported start source"),
+        ("doc-timeout", "check_doc_budget.py timeout must be 15 seconds"),
+        ("doc-job-skip", "must preserve the scheduled-run skip"),
+        ("doc-quiet", "must run in quiet mode"),
+        ("pr-event", "must be registered under PostToolUse"),
+        ("pr-matcher", 'matcher must be "^Bash$"'),
+        ("pr-timeout", "pr_followup_hook.py timeout must be 10 seconds"),
+        ("pr-runtime", "must pass --runtime codex"),
+        ("relative-path", "path must not depend on the session working directory"),
+        ("pwd-path", "path must not depend on the session working directory"),
+        ("handler-type", "must use a command handler"),
+    ],
+)
+def test_codex_lifecycle_semantic_mismatches_are_reported(
+    tmp_path, mutation, expected
+):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    session = document["hooks"]["SessionStart"][0]
+    session_hook = session["hooks"][0]
+    post = document["hooks"]["PostToolUse"][0]
+    post_hook = post["hooks"][0]
+
+    if mutation == "doc-matcher":
+        session["matcher"] = "^startup$"
+    elif mutation == "doc-timeout":
+        session_hook["timeout"] = 14
+    elif mutation == "doc-job-skip":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ] || exit 0; ', ""
+        )
+    elif mutation == "doc-quiet":
+        session_hook["command"] = session_hook["command"].replace(" --quiet", "")
+    elif mutation == "pr-event":
+        document["hooks"]["SessionStart"].append(post)
+        document["hooks"]["PostToolUse"] = []
+    elif mutation == "pr-matcher":
+        post["matcher"] = "Bash"
+    elif mutation == "pr-timeout":
+        post_hook["timeout"] = 11
+    elif mutation == "pr-runtime":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", "--runtime claude"
+        )
+    elif mutation == "relative-path":
+        post_hook["command"] = (
+            "python3 scripts/hooks/pr_followup_hook.py --runtime codex"
+        )
+    elif mutation == "pwd-path":
+        post_hook["command"] = (
+            'python3 "$PWD/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "handler-type":
+        post_hook["type"] = "prompt"
+
+    _write_codex_lifecycle_fixture(root, document)
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert any(expected in detail for detail in details), details
+
+
+def test_codex_rejects_the_claude_only_memory_tripwire(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    document["hooks"]["SessionStart"][0]["hooks"].append(
+        {
+            "type": "command",
+            "command": 'python3 "$root/scripts/check_memory_budget.py"',
+            "timeout": 15,
+        }
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert any(
+        s.state == "misconfigured" and "Claude-only" in s.detail for s in statuses
+    )
+
+
+def test_duplicate_codex_lifecycle_registration_is_a_finding(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    document["hooks"]["SessionStart"].append(
+        json.loads(json.dumps(document["hooks"]["SessionStart"][0]))
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+
+    assert any(
+        s.state == "misconfigured" and "duplicate" in s.detail
+        for s in report.dead_registrations
+    )
 
 
 def test_a_declined_pre_push_is_reported_as_declined_not_as_missing(tmp_path, capsys):

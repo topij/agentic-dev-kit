@@ -2408,6 +2408,9 @@ def test_the_advisory_matches_the_registrations_it_describes(tmp_path: Path) -> 
     assert f'matcher "{codex_entry["matcher"]}"' in result.stdout
     assert f'matcher "{claude_entry["matcher"]}"' in result.stdout
     assert f'if: "{claude_hook["if"]}"' in result.stdout
+    assert f'timeout to {codex_hook["timeout"]} seconds' in result.stdout
+    assert "PostToolUse ignores" in result.stdout
+    assert "JSON additionalContext" in result.stdout
     # `if` lives on the hook entry beside `command`, not next to `matcher`, and
     # the advisory has to say so — an adopter who nests it wrong gets no error
     assert "if" not in claude_entry, "shipped file moved `if`; the advisory now lies"
@@ -2495,6 +2498,9 @@ def test_the_shipped_codex_session_start_carries_no_matcher() -> None:
             "the Codex SessionStart entry grew a matcher and no longer covers "
             "every supported start source"
         )
+        for hook in entry["hooks"]:
+            if "check_doc_budget.py" in hook.get("command", ""):
+                assert hook["timeout"] == 15
     commands = _codex_session_start_commands()
     assert len(commands) == 1, (
         "Codex should register only the portable document-budget tripwire"
@@ -2593,8 +2599,23 @@ def test_the_budget_advisory_requires_reviewing_and_trusting_codex_hooks(
     assert "/hooks" in result.stdout
     lowered = result.stdout.lower()
     assert "review and trust" in lowered
-    assert "skipped silently until" in lowered
-    assert "indistinguishable from a broken one" in lowered
+    assert "skipped until trusted" in lowered
+    assert "pending trust from a broken command" in lowered
+    assert "noninteractive run" in lowered
+    assert "diagnostic authority" in lowered
+
+
+def test_the_budget_advisory_explains_timeout_and_output_visibility(
+    tmp_path: Path,
+) -> None:
+    repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    assert "timeout to 15 seconds" in result.stdout
+    assert "SessionStart plain stdout" in result.stdout
+    assert "developer context" in result.stdout
+    assert "quiet flag" in result.stdout
 
 
 def test_the_codex_session_start_match_all_shape_is_explained_by_the_advisory(

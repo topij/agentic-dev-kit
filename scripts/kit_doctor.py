@@ -738,16 +738,18 @@ class FileStatus:
 
 @dataclass
 class RegistrationStatus:
-    """One hook registration, judged by whether the path it names RESOLVES.
+    """One hook registration, judged by path resolution and known semantics.
 
     Not by hash, and the distinction is the whole design (#379). `.claude/
     settings.json` and `.codex/hooks.json` are the adopter's files — `init.sh`
     prints both blocks and writes neither, precisely because their content is
     theirs (#303) — so hashing them would report every adopter permanently
     `locally-edited`, which is #286's failure. What the kit may legitimately
-    assert is narrower and mechanical: a registration that names a path is
-    claiming that path runs, and whether the file is there is checkable without
-    any opinion about the rest of the file.
+    assert is mechanical: a registration that names a path is claiming that
+    path runs, and a Codex registration for a kit lifecycle engine is also
+    claiming an event, matcher, timeout, and runtime mapping. Those fields are
+    deterministic configuration; checking them does not pretend to establish
+    project trust or live client behavior.
 
     That is the check that would have caught #359 and #368, both of which an
     operator experienced as *a hook that silently stopped firing* — a
@@ -862,24 +864,30 @@ class Report:
 
     @property
     def dead_registrations(self) -> list[RegistrationStatus]:
-        """Registrations that cannot fire, by the two routes there are.
+        """Registrations whose configured lifecycle behavior cannot be relied on.
 
-        `broken` — the file it names is not there. `unreadable` — the
+        `broken` — the file it names is not there. `misconfigured` — the
+        runtime event, matcher, timeout, or runtime mapping is not the kit's
+        contract. `unreadable` — the
         registration file itself does not parse, so EVERY registration in it is
         unmeasurable, and the runtime that must parse the same JSON is no better
         placed than this check was. Leaving that one out was the shape #379 was
         filed about, one level up: a `⚠` line and exit 0 over a file whose hooks
         nobody can account for (panel, correctness lens, delta round 2).
 
-        The omissions are the point, and they are the other three: `unregistered`
-        and `absent` describe an adopter who has not wired the hook, which is a
+        The omissions are the point. `unregistered` and `absent` describe an
+        adopter who has not wired the hook, which is a
         supported state — `init.sh` only ever PRINTS the block (#303) — and
         failing them would be #286's bug in a third place, a healthy adoption
         failing its own gate forever. `unresolvable` is a registration this check
         could not evaluate; reporting that as broken would be claiming a
         measurement it did not make.
         """
-        return [r for r in self.registrations if r.state in ("broken", "unreadable")]
+        return [
+            r
+            for r in self.registrations
+            if r.state in ("broken", "misconfigured", "unreadable")
+        ]
 
 
 def sha256_of(path: Path) -> str:
@@ -1196,6 +1204,110 @@ def _invocable_kit_scripts() -> set[str]:
     }
 
 
+_CODEX_HOOK_CONTRACT: dict[str, tuple[str, frozenset[object], int]] = {
+    "check_doc_budget.py": ("SessionStart", frozenset((None, "", "*")), 15),
+    "pr_followup_hook.py": ("PostToolUse", frozenset(("^Bash$",)), 10),
+}
+
+
+def _codex_registration_semantics(
+    document: object,
+    surface: str,
+    kit_scripts: set[str],
+) -> list[RegistrationStatus]:
+    """Check the deterministic Codex contract without claiming live trust.
+
+    `/hooks` remains authoritative for what the client loaded. This check only
+    judges the JSON that Codex will receive after the project and each current
+    command-hook definition are trusted.
+    """
+    if surface != ".codex/hooks.json" or not isinstance(document, dict):
+        return []
+    events = document.get("hooks")
+    if not isinstance(events, dict):
+        return []
+
+    statuses: list[RegistrationStatus] = []
+    occurrences: dict[str, int] = {}
+
+    def problem(detail: str) -> None:
+        statuses.append(RegistrationStatus("codex", surface, "misconfigured", detail))
+
+    for event, groups in events.items():
+        if not isinstance(groups, list):
+            continue
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            matcher = group.get("matcher")
+            handlers = group.get("hooks")
+            if not isinstance(handlers, list):
+                continue
+            for handler in handlers:
+                if not isinstance(handler, dict):
+                    continue
+                command = handler.get("command")
+                if not isinstance(command, str):
+                    continue
+                lexed, words = _script_words(command)
+                if not lexed:
+                    continue
+                matches = [
+                    (name, token)
+                    for name in sorted(kit_scripts)
+                    if (token := _match_word(words, name)) is not None
+                ]
+                for name, token in matches:
+                    if name == "check_memory_budget.py":
+                        problem(
+                            "check_memory_budget.py is Claude-only and must not be registered "
+                            "on Codex"
+                        )
+                        continue
+                    contract = _CODEX_HOOK_CONTRACT.get(name)
+                    if contract is None:
+                        continue
+                    occurrences[name] = occurrences.get(name, 0) + 1
+                    expected_event, accepted_matchers, expected_timeout = contract
+                    if handler.get("type") != "command":
+                        problem(f"{name} must use a command handler")
+                    if event != expected_event:
+                        problem(f"{name} must be registered under {expected_event}")
+                    if matcher not in accepted_matchers:
+                        if name == "check_doc_budget.py":
+                            problem(
+                                "check_doc_budget.py SessionStart matcher must cover every "
+                                "supported start source"
+                            )
+                        else:
+                            problem('pr_followup_hook.py PostToolUse matcher must be "^Bash$"')
+                    timeout = handler.get("timeout")
+                    if isinstance(timeout, bool) or timeout != expected_timeout:
+                        problem(f"{name} timeout must be {expected_timeout} seconds")
+                    literal_relative = (
+                        "$" not in token
+                        and _ROOT_SENTINEL not in token
+                        and not Path(token).is_absolute()
+                    )
+                    pwd_relative = bool(
+                        re.search(r"(?:^|/)\$(?:\{PWD\}|PWD)(?:/|$)", token)
+                    )
+                    if literal_relative or pwd_relative:
+                        problem(f"{name} path must not depend on the session working directory")
+                    if name == "check_doc_budget.py":
+                        if "JOB_NAME" not in command:
+                            problem("check_doc_budget.py must preserve the scheduled-run skip")
+                        if "--quiet" not in command:
+                            problem("check_doc_budget.py must run in quiet mode")
+                    elif not re.search(r"(?:^|\s)--runtime\s+codex(?:\s|$)", command):
+                        problem("pr_followup_hook.py must pass --runtime codex")
+
+    for name, count in occurrences.items():
+        if count > 1:
+            problem(f"{name} has a duplicate Codex registration")
+    return statuses
+
+
 def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStatus]:
     """Whether each runtime's hook registration names a path that exists.
 
@@ -1300,6 +1412,8 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                 RegistrationStatus(runtime, surface, "unregistered", f"engines: {engines_dir}")
             )
         statuses.extend(found)
+        if runtime == "codex":
+            statuses.extend(_codex_registration_semantics(document, surface, kit_scripts))
     return statuses
 
 
@@ -2085,6 +2199,7 @@ def render(report: Report) -> str:
         mark, text = {
             "resolves": ("✓", f"{reg.detail} resolves"),
             "broken": ("✗", f"{reg.detail} — NO SUCH FILE, so this hook cannot fire"),
+            "misconfigured": ("✗", f"{reg.detail} — lifecycle wiring does not match"),
             "unresolvable": ("⚠", f"{reg.detail} — path not resolvable from here"),
             # The detail names the engines dir the check resolved, which is the
             # useful half when nothing is registered — it was computed and shown
@@ -2831,10 +2946,10 @@ def main(argv: list[str] | None = None) -> int:
                     # consumer reading a bool must keep reading a bool, and the
                     # third state (#381) is what it could not previously see.
                     "hooks_state": report.hooks_state,
-                    # #379. A consumer cannot derive this from `files`: the two
+                    # #379. A consumer cannot derive this from `files`: runtime
                     # registration surfaces are adopter-owned and are in neither
-                    # `KIT_OWNED` nor any manifest, which is exactly why a
-                    # byte-perfect install could report clean with a dead hook.
+                    # `KIT_OWNED` nor any manifest. The state also carries Codex
+                    # semantic mismatches now; a path hash cannot express those.
                     "registrations": [
                         {
                             "runtime": r.runtime,
@@ -2878,9 +2993,9 @@ def main(argv: list[str] | None = None) -> int:
     # hook that silently stopped firing, and until now nothing in the kit's own
     # instrument reported it. `broken` and `unreadable` reach here — see
     # `Report.dead_registrations` for why those two and not the other three.
-    # (This said "only `broken`", written before `unreadable` joined the gate a
-    # round later, and a lens caught the sentence still describing the older
-    # behaviour — the same stale-prose class this session spent four PRs on.)
+    # Semantic mismatches join the same gate: a path that resolves under the
+    # wrong event or matcher is no more able to provide the intended lifecycle
+    # behavior than an absent path is.
     return 1 if report.drifted or report.broken or report.dead_registrations else 0
 
 
