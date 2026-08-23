@@ -3953,6 +3953,20 @@ def test_codex_lifecycle_hostile_corpus_is_never_verified(
         for s in statuses
         if s.state in ("misconfigured", "unverifiable") and target in s.detail
     ]
+    structurally_invalid = {
+        "doc-matcher",
+        "doc-matcher-container",
+        "doc-matcher-null",
+        "doc-timeout",
+        "doc-timeout-float",
+        "pr-event",
+        "pr-matcher",
+        "pr-timeout",
+        "pr-timeout-float",
+        "handler-type",
+    }
+    if mutation in structurally_invalid:
+        assert rejected, f"{mutation} was neither misconfigured nor unverifiable"
 
     if rejected:
         assert any(
