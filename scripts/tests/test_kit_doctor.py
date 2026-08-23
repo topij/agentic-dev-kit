@@ -3375,7 +3375,10 @@ timeout = 10
 
 def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
     root = _fake_repo(tmp_path)
-    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    shipped = json.loads(
+        (REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8")
+    )
+    _write_codex_lifecycle_fixture(root, shipped)
 
     statuses = kit_doctor.inspect_registrations(root, "scripts")
     codex = [s for s in statuses if s.runtime == "codex"]
@@ -3422,6 +3425,51 @@ def test_codex_lifecycle_semantics_detect_project_feature_disable(tmp_path, feat
     assert "Codex lifecycle hooks are disabled by the project config" in details
 
 
+@pytest.mark.parametrize(
+    ("feature", "value"),
+    [
+        ("hooks", "0"),
+        ("hooks", "0.0"),
+        ("hooks", '"false"'),
+        ("codex_hooks", "0"),
+    ],
+)
+def test_codex_lifecycle_semantics_reject_nonboolean_project_feature(
+    tmp_path, feature, value
+):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", f"[features]\n{feature} = {value}\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert f"Codex project feature {feature} must be a boolean" in details
+
+
+def test_codex_lifecycle_semantics_reject_nontable_project_features(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", "features = 0\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert "Codex project features must be a table" in details
+
+
+def test_codex_lifecycle_semantics_reject_float_inline_timeout(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    invalid = _valid_codex_inline_posttooluse().replace("timeout = 10", "timeout = 10.0")
+    _write(root / ".codex" / "config.toml", invalid)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert "pr_followup_hook.py timeout must be 10 seconds" in details
+
+
 def test_codex_lifecycle_semantics_validate_inline_project_config(tmp_path):
     root = _fake_repo(tmp_path)
     _write(root / HOOK_REL, "print('hook')\n")
@@ -3443,6 +3491,7 @@ def test_codex_lifecycle_semantics_validate_inline_project_config(tmp_path):
         ("doc-matcher-container", "matcher must cover every supported start source"),
         ("doc-matcher-null", "matcher must cover every supported start source"),
         ("doc-timeout", "check_doc_budget.py timeout must be 15 seconds"),
+        ("doc-timeout-float", "check_doc_budget.py timeout must be 15 seconds"),
         ("doc-job-skip", "must use the shipped scheduled-run guard"),
         ("doc-job-reversed", "must use the shipped scheduled-run guard"),
         ("doc-job-comment", "must use the shipped scheduled-run guard"),
@@ -3470,6 +3519,7 @@ def test_codex_lifecycle_semantics_validate_inline_project_config(tmp_path):
         ("pr-event", "must be registered under PostToolUse"),
         ("pr-matcher", 'matcher must be "^Bash$"'),
         ("pr-timeout", "pr_followup_hook.py timeout must be 10 seconds"),
+        ("pr-timeout-float", "pr_followup_hook.py timeout must be 10 seconds"),
         ("pr-runtime", "must pass --runtime codex"),
         ("pr-runtime-comment", "must pass --runtime codex"),
         ("pr-runtime-unbound", "must pass --runtime codex"),
@@ -3537,6 +3587,8 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         session["matcher"] = None
     elif mutation == "doc-timeout":
         session_hook["timeout"] = 14
+    elif mutation == "doc-timeout-float":
+        session_hook["timeout"] = 15.0
     elif mutation == "doc-job-skip":
         session_hook["command"] = session_hook["command"].replace(
             '[ -z "${JOB_NAME:-}" ] || exit 0; ', ""
@@ -3638,6 +3690,8 @@ def test_codex_lifecycle_semantic_mismatches_are_reported(
         post["matcher"] = "Bash"
     elif mutation == "pr-timeout":
         post_hook["timeout"] = 11
+    elif mutation == "pr-timeout-float":
+        post_hook["timeout"] = 10.0
     elif mutation == "pr-runtime":
         post_hook["command"] = post_hook["command"].replace(
             "--runtime codex", "--runtime claude"

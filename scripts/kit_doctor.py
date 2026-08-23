@@ -1998,7 +1998,7 @@ def _codex_registration_semantics(
                         else:
                             problem('pr_followup_hook.py PostToolUse matcher must be "^Bash$"')
                     timeout = handler.get("timeout")
-                    if isinstance(timeout, bool) or timeout != expected_timeout:
+                    if type(timeout) is not int or timeout != expected_timeout:
                         problem(f"{name} timeout must be {expected_timeout} seconds")
                     literal_relative = any(
                         "$" not in token
@@ -2230,9 +2230,32 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
     codex_config = codex_documents.get(".codex/config.toml")
     if isinstance(codex_config, dict):
         features = codex_config.get("features")
-        if isinstance(features, dict):
-            feature_value = features.get("hooks", features.get("codex_hooks"))
-            if feature_value is False and codex_occurrences:
+        if "features" in codex_config and not isinstance(features, dict):
+            statuses.append(
+                RegistrationStatus(
+                    "codex",
+                    ".codex/config.toml",
+                    "misconfigured",
+                    "Codex project features must be a table",
+                )
+            )
+        elif isinstance(features, dict):
+            feature_key = None
+            if "hooks" in features:
+                feature_key = "hooks"
+            elif "codex_hooks" in features:
+                feature_key = "codex_hooks"
+            feature_value = features.get(feature_key) if feature_key else None
+            if feature_key and type(feature_value) is not bool:
+                statuses.append(
+                    RegistrationStatus(
+                        "codex",
+                        ".codex/config.toml",
+                        "misconfigured",
+                        f"Codex project feature {feature_key} must be a boolean",
+                    )
+                )
+            elif feature_value is False and codex_occurrences:
                 statuses.append(
                     RegistrationStatus(
                         "codex",
