@@ -161,7 +161,8 @@ copy-in has no version marker and no record of whether it was edited, so nothing
 tell an older engine from a locally-patched one:
 
 ```sh
-uv run scripts/kit_doctor.py     # or: python scripts/kit_doctor.py   # stdlib only, no uv needed
+uv run scripts/kit_doctor.py
+python scripts/kit_doctor.py  # bare-Python fallback; inline TOML may require uv
 ```
 
 Per kit-owned file it reports `unchanged` (safe to replace outright), `differs` (diff

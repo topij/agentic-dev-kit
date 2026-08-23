@@ -47,7 +47,9 @@ the configured object either matches the installer-emitted canonical form or it 
   README's stale fail-closed claim for altered shell text, and aligned the exit-gate
   rationale with unsupported lifecycle object keys. The follow-up correctness lens then
   exposed the bare-Python TOML import and contradictory feature-alias precedence; the fix
-  reports an unavailable TOML parser explicitly and mirrors canonical-key precedence.
+  reports an unavailable TOML parser explicitly and mirrors canonical-key precedence. The
+  next adversarial pass corrected the changelog's breaking-change axis and the README's
+  unconditional bare-Python claim.
 
 - **The runtime contract remains shared.** Installer guidance, the parity matrix,
   `CHANGELOG.md`, and the live evidence record describe the same bounded result. The

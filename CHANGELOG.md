@@ -44,7 +44,8 @@ starts.
 
 ## #590 — 2026-08-23
 
-- **CHANGED — `kit_doctor` now reports exactly identified Codex lifecycle wiring as
+- **BREAKING (report / return shape, gate semantics) — `kit_doctor` now reports
+  exactly identified Codex lifecycle wiring as
   `verified`, structural drift as `misconfigured`, and unsupported object keys around
   an exact command as `unverifiable`; the latter states make its process exit non-zero**
   (`#243`). The bounded check applies to the portable document-budget and
