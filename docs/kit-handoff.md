@@ -51,10 +51,11 @@ the configured object either matches the installer-emitted canonical form or it 
   next adversarial pass corrected the changelog's breaking-change axis and the README's
   unconditional bare-Python claim.
 
-- **The runtime contract remains shared.** Installer guidance, the parity matrix,
-  `CHANGELOG.md`, and the live evidence record describe the same bounded result. The
-  safety-critical doctrine remains one runtime-neutral document with runtime bindings,
-  and its merge class makes this PR operator-merge.
+- **The runtime contract remains shared.** Installer guidance, `CHANGELOG.md`, and the
+  live evidence record preserve the lifecycle boundary. The parity matrix now distinguishes
+  structural safety-doctrine routing from the pending trusted Codex load evidence. The
+  doctrine remains one runtime-neutral document, and its merge class makes this PR
+  operator-merge.
 
 - **The sprint plan now reflects the delivery boundary.** The parity declaration is
   delivered, while the safety and lifecycle phase remains active. Hook execution has

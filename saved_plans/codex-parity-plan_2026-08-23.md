@@ -17,7 +17,7 @@ their delivery order and exit conditions.
   the maintained capability matrix, shared-workflow inventory, explicit exceptions,
   and declaration-derived structural checks.
 - [ ] **Phase 2 — Correct safety and lifecycle hooks.** PR `#588` removed the
-  Claude-only memory checker from Codex and routed shared safety doctrine. PR `#590`
+  Claude-only memory checker from Codex. PR `#590` routed shared safety doctrine and
   merged on 2026-08-24 with trusted-client hook evidence, canonical installer wiring,
   and exact-string lifecycle enforcement in `kit_doctor`. The phase remains active
   until a trusted Codex run establishes that affected merge-authority work loads the
