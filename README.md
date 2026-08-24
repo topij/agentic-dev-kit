@@ -323,7 +323,8 @@ changes to an intended destination stop that route instead of riding into its PR
 Set `systemize.operator_logins` to exact forge identities whose review findings are
 trusted; configured bot identities come from `review.bots` and explicit aliases only.
 The installer prompts for the operator list and never infers it from the repository
-owner or current authentication.
+owner or current authentication. Keep this prompted value as a one-line YAML flow
+sequence; `./init.sh` stops with a conversion example when it finds block style.
 
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
 behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)

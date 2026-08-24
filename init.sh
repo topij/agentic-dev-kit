@@ -1393,6 +1393,23 @@ migrate_kit_schema
 
 # ── prompts ──────────────────────────────────────────────────────────────
 
+# The prompt serializer owns a flow sequence on the key's line. A block sequence is
+# valid YAML, but get_field/set_field deliberately operate on scalar line values and
+# would silently display an empty default while leaving the block untouched. Stop
+# before any prompt re-stamps config rather than pretend an operator-login answer
+# landed (the identity list is a trust boundary for post-merge-systemize).
+if awk '
+  /^systemize:[[:space:]]*$/ { in_systemize = 1; next }
+  in_systemize && /^[^[:space:]]/ { in_systemize = 0 }
+  in_systemize && /^  operator_logins:[[:space:]]*$/ { found = 1 }
+  END { exit(found ? 0 : 1) }
+' "$CONFIG_FILE"; then
+  echo "error: systemize.operator_logins uses a block-style sequence." >&2
+  echo "  Rewrite it as a flow sequence on one line before running ./init.sh:" >&2
+  echo '    operator_logins: [first-login, second-login]' >&2
+  exit 1
+fi
+
 # yaml_scalar <value> — the text to stamp for a historically-unquoted prompted
 # scalar: double-quoted when the value carries a YAML indicator this helper
 # knows AND double-quoting is lossless, raw otherwise (issue #62).

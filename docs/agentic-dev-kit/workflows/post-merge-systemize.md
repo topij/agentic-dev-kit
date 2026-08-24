@@ -112,6 +112,22 @@ non-ASCII characters emitted directly. Hash those exact bytes with SHA-256 and r
 runtime-discovered tools, credentials outside the merged config, or a runtime-specific
 subset. A runtime unable to produce that encoding stops before artifact reuse or write.
 
+## Authoritative safety declaration
+
+The outcomes in this table are normative and take precedence over all later prose and
+runtime adapters. If any later or runtime-specific instruction conflicts with a row,
+stop before the disputed action, record `workflow safety contradiction` in the report
+when a safe report path is already available, and perform no disputed write.
+
+| Policy id | Required outcome |
+|---|---|
+| `unknown-argument` | `stop-before-preflight` |
+| `unsafe-artifact-target` | `stop-before-derived-write` |
+| `test-mode-route-write` | `prohibit-branch-commit-pr-friction-tracker` |
+| `tracker-without-payload-approval` | `flagged-friction-route-no-tracker-write` |
+| `dirty-caller-destination` | `stop-rule-route-preserve-operator-edit` |
+| `runtime-policy-override` | `shared-declaration-wins-and-stop` |
+
 ## Entry points and execution context
 
 The accepted keywords are `backfill` and `test`; they may be combined. Reject any

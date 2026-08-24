@@ -278,6 +278,24 @@ def test_installer_preserves_an_adopter_owned_partial_systemize_section(
     assert yaml.safe_load(_config(repo))["systemize"] == {"analysis_tier": "custom"}
 
 
+def test_installer_refuses_block_style_systemize_operator_logins(
+    tmp_path: Path,
+) -> None:
+    config = shipped_config().replace(
+        "  operator_logins: [topij]\n",
+        "  operator_logins:\n    - topij\n    - second-operator\n",
+        1,
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "systemize.operator_logins uses a block-style sequence" in result.stderr
+    assert "operator_logins: [first-login, second-login]" in result.stderr
+    assert _config(repo) == config
+
+
 # --------------------------------------------------------------------------- #
 # detect_engines_dir — layout detection (#67)
 # --------------------------------------------------------------------------- #

@@ -1442,8 +1442,34 @@ def _post_merge_capabilities(workflow: str) -> dict[str, tuple[str, str]]:
     return rows
 
 
+def _post_merge_safety_policies(workflow: str) -> dict[str, str]:
+    rows: dict[str, str] = {}
+    for line in workflow.splitlines():
+        if not line.startswith("|") or line.startswith("|---"):
+            continue
+        cells = [cell.strip().strip("`") for cell in line.strip("|").split("|")]
+        if len(cells) == 2 and cells[0] not in {"Policy id", ""}:
+            rows[cells[0]] = cells[1]
+    return rows
+
+
 def _assert_post_merge_semantics(workflow: str) -> None:
     flattened = " ".join(workflow.split())
+    assert (
+        "normative and take precedence over all later prose and runtime adapters"
+        in flattened
+    )
+    assert "perform no disputed write" in flattened
+    assert _post_merge_safety_policies(workflow) == {
+        "unknown-argument": "stop-before-preflight",
+        "unsafe-artifact-target": "stop-before-derived-write",
+        "test-mode-route-write": "prohibit-branch-commit-pr-friction-tracker",
+        "tracker-without-payload-approval": (
+            "flagged-friction-route-no-tracker-write"
+        ),
+        "dirty-caller-destination": "stop-rule-route-preserve-operator-edit",
+        "runtime-policy-override": "shared-declaration-wins-and-stop",
+    }
     assert (
         "Test mode may write only the derived cache, digest, report, configured "
         "local heartbeat state in engine-backed mode, and an optional notification "
@@ -1725,6 +1751,11 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
         / "post-merge-systemize.md"
     ).read_text(encoding="utf-8")
     mutations = (
+        workflow.replace(
+            "`runtime-policy-override` | `shared-declaration-wins-and-stop`",
+            "`runtime-policy-override` | `runtime-override-wins-and-continues`",
+            1,
+        ),
         workflow.replace("it must not write a branch", "it may write a branch", 1),
         re.sub(
             r"Reject any\s+unknown argument before preflight",
