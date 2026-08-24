@@ -27,10 +27,11 @@ Usage: ./init.sh [--no-clobber] [--help]
 
 Bootstraps the agentic-dev-kit in the current repo:
 
-  1. Prompts for project.name, runtime.default, tracker.backend (+ project name and, for
-     Linear, team/project ids), vcs.protected_branch, notify.user_key, and
-     review.bots — each showing the current value in config/dev-model.yaml
-     as the default. Press Enter to keep the default.
+  1. Prompts for project.name, runtime.default, systemize.operator_logins,
+     tracker.backend (+ project name and, for Linear, team/project ids),
+     vcs.protected_branch, notify.user_key, and review.bots — each showing the
+     current value in config/dev-model.yaml as the default. Press Enter to keep
+     the default.
   2. Stamps the answers into config/dev-model.yaml in place.
   3. Migrates an older config schema forward in place (kit.version) and
      stamps the current generation.
@@ -540,6 +541,8 @@ migrate_kit_schema() {
   # Shared post-merge-systemize workflow settings. Runtime adapters translate
   # invocation and compute controls only; policy stays in the shared workflow.
   analysis_tier: expensive
+  # Exact forge logins trusted as operator review-finding sources.
+  operator_logins: []
   lookback_days: 7
   backfill_days: 28
   pattern_threshold: 2
@@ -1432,6 +1435,28 @@ set_field "project:" "" "^  name:" "$(yaml_scalar "$name")"
 cur_runtime=$(get_field "runtime:" "" "^  default:")
 runtime=$(ask "Agent runtime (claude | codex | none)" "$cur_runtime")
 set_field "runtime:" "" "^  default:" "$(yaml_scalar "$runtime")"
+
+cur_operator_logins_raw=$(get_field "systemize:" "" "^  operator_logins:")
+cur_operator_logins=$(printf '%s' "$cur_operator_logins_raw" | sed -e 's/^\[//' -e 's/\]$//' -e 's/"//g' -e "s/'//g")
+operator_logins_answer=$(ask "Operator forge logins trusted as review sources (comma-separated, or 'none')" "$cur_operator_logins")
+operator_logins_answer=$(printf '%s' "$operator_logins_answer" | sed -e 's/^[[:space:]]*\[//' -e 's/\][[:space:]]*$//')
+if [ "$operator_logins_answer" = "none" ] || [ -z "$operator_logins_answer" ]; then
+  operator_logins_value="[]"
+else
+  operator_logins_value="[$(printf '%s\n' "$operator_logins_answer" | awk -F',' '{
+    out = ""
+    for (i = 1; i <= NF; i++) {
+      item = $i
+      gsub(/^[ \t]+|[ \t]+$/, "", item)
+      gsub(/^["'\'']|["'\'']$/, "", item)
+      gsub(/["\\]/, "", item)
+      if (item == "") continue
+      out = out (out == "" ? "" : ", ") "\"" item "\""
+    }
+    print out
+  }')]"
+fi
+set_field "systemize:" "" "^  operator_logins:" "$operator_logins_value"
 
 cur_backend=$(get_field "tracker:" "" "^  backend:")
 backend=$(ask "Tracker backend (linear | github-issues | jira | none)" "$cur_backend")

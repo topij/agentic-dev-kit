@@ -51,7 +51,8 @@ starts.
   guessing your policy; merge the missing shipped keys manually before invoking the
   workflow. Keep the shipped `{date}`, `{window}`, and `{mode}` placeholders in every
   artifact pattern so live, test, normal-window, and backfill runs do not share a
-  same-day artifact.**
+  same-day artifact. Set `systemize.operator_logins` to the exact forge identities
+  whose review findings the workflow may trust; `./init.sh` prompts for that list.**
 - **CHANGED (gate semantics) — `post-merge-systemize` now fails closed when the
   required repository, config, or complete merged-PR history is unavailable, and
   when only part of the configured engine set is installed; an entirely absent

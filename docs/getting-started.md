@@ -221,7 +221,10 @@ friction-routing step is being skipped — not that triage is overdue.
 > ([#6](https://github.com/topij/agentic-dev-kit/issues/6),
 > [#7](https://github.com/topij/agentic-dev-kit/issues/7)). `post-merge-systemize`
 > has an explicit LLM-only path when its configured engine set is wholly absent; a
-> partial set fails closed. `session-start`, `wrap-up`, `parallel`, and `pr-watch`
+> partial set fails closed. Configure exact trusted forge identities in
+> `systemize.operator_logins`; other human reviewers are excluded, while bot sources
+> come only from `review.bots` and its explicit aliases. `session-start`, `wrap-up`,
+> `parallel`, and `pr-watch`
 > run out of the box — with an exception worth knowing before you rely on it:
 > `wrap-up`'s **direct filing** route
 > reaches your tracker through whatever client your backend gives you, and ships as

@@ -1451,6 +1451,15 @@ def _assert_post_merge_semantics(workflow: str) -> None:
         "friction-log entry, or tracker item."
     ) in flattened
     assert "positive integers, not booleans" in flattened
+    assert "then require uniqueness and compare exactly" in flattened
+    assert "never infer aliases" in flattened
+    assert "Ignore human review or discussion from every other identity" in flattened
+    assert "post-merge-systemize-config-v1" in flattened
+    assert "RFC 8785 JSON canonicalization" in flattened
+    assert "Reject a non-string mapping key" in flattened
+    assert "mapping keys sorted recursively" in flattened
+    assert "Hash those exact bytes with SHA-256" in flattened
+    assert "`config_fingerprint` as `sha256:<lowercase-hex>`" in flattened
     assert "`pattern_threshold` is at least `2`" in flattened
     assert "`low < normal < high < critical`" in flattened
     assert "an unrecognized label map to `normal`" in flattened
@@ -1483,6 +1492,12 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     assert "require a link count of exactly one" in flattened
     assert "compare its device/inode identity" in flattened
     assert "publish derived files by atomic replacement" in flattened
+    assert "Reject any unknown argument before preflight" in flattened
+    assert "Also reject a target matching a repository control input" in flattened
+    assert (
+        "with no prior payload-specific approval, take the flagged friction-log route"
+        in flattened
+    )
     assert "Never switch branches in the caller's checkout" in flattened
     assert "create a fresh isolated Git worktree" in flattened
     assert "staged path set equals the intended destination set exactly" in flattened
@@ -1540,6 +1555,7 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
     systemize = config["systemize"]
     assert set(systemize) == {
         "analysis_tier",
+        "operator_logins",
         "lookback_days",
         "backfill_days",
         "pattern_threshold",
@@ -1558,6 +1574,12 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
         "pr_draft",
     }
     assert systemize["analysis_tier"] in config["models"]["tiers"]
+    assert isinstance(systemize["operator_logins"], list)
+    assert len(systemize["operator_logins"]) == len(set(systemize["operator_logins"]))
+    assert all(
+        isinstance(login, str) and login.strip()
+        for login in systemize["operator_logins"]
+    )
     integer_keys = (
         "lookback_days",
         "backfill_days",
@@ -1654,6 +1676,10 @@ def test_post_merge_systemize_required_and_degraded_preflights_are_discriminatin
     assert tracker_class == "optional and approval-gated"
     assert "does not authorize a write" in tracker_behavior
     assert "payload-specific approval" in workflow
+    assert (
+        "with no prior payload-specific approval, take the flagged friction-log route"
+        in " ".join(workflow.split())
+    )
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/post-merge-systemize.md")
@@ -1700,6 +1726,12 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
     ).read_text(encoding="utf-8")
     mutations = (
         workflow.replace("it must not write a branch", "it may write a branch", 1),
+        re.sub(
+            r"Reject any\s+unknown argument before preflight",
+            "Accept any unknown argument before preflight",
+            workflow,
+            count=1,
+        ),
         workflow.replace("at least `2`", "at least `0`", 1),
         re.sub(
             r"findings_pr_count <=\s+systemize\.single_pass_max_prs",
@@ -1729,6 +1761,12 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
             "a parent or target symlink may escape its resolved allowed root",
             1,
         ),
+        re.sub(
+            r"Also reject\s+a target matching a repository control input",
+            "Also permit a target matching a repository control input",
+            workflow,
+            count=1,
+        ),
         workflow.replace(
             "require a link count of exactly one",
             "allow any existing link count",
@@ -1743,6 +1781,17 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
         workflow.replace(
             "through the shared state read resolver",
             "directly from the worktree",
+            1,
+        ),
+        re.sub(
+            r"Hash those exact bytes with\s+SHA-256",
+            "Hash implementation-selected bytes with MD5",
+            workflow,
+            count=1,
+        ),
+        workflow.replace(
+            "never infer aliases",
+            "infer aliases by prefix",
             1,
         ),
         re.sub(
@@ -1761,6 +1810,12 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
             r"an operator's local edit into the systemize patch",
             "continue the route and blend an operator's local edit into the "
             "systemize patch",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"with no prior payload-specific approval, take the flagged\s+friction-log route",
+            "with no prior payload-specific approval, create the tracker item",
             workflow,
             count=1,
         ),

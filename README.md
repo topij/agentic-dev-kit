@@ -320,6 +320,10 @@ reports stay beneath `systemize.report_root`. Preflight rejects traversal, symli
 hard-link escape, artifact collisions, and tracked or control-file targets before an
 atomic write. A shared-rule proposal is staged only in a clean isolated worktree; local
 changes to an intended destination stop that route instead of riding into its PR.
+Set `systemize.operator_logins` to exact forge identities whose review findings are
+trusted; configured bot identities come from `review.bots` and explicit aliases only.
+The installer prompts for the operator list and never infers it from the repository
+owner or current authentication.
 
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
 behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)

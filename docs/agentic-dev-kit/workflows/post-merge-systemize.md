@@ -28,7 +28,8 @@ Every value used below comes from that merged configuration:
 - `<tracker>` and `<notify>` mean the configured `tracker` and `notify` sections.
 - `<systemize>` means the complete `systemize` section:
   `systemize.analysis_tier`, `systemize.lookback_days`,
-  `systemize.backfill_days`, `systemize.pattern_threshold`,
+  `systemize.operator_logins`, `systemize.backfill_days`,
+  `systemize.pattern_threshold`,
   `systemize.tracker_severity`, `systemize.batch_size`,
   `systemize.single_pass_max_prs`, `systemize.max_findings_prs_per_run`,
   `systemize.cache_pattern`, `systemize.digest_cache_pattern`,
@@ -54,6 +55,10 @@ Validate values as well as presence:
   `single_pass_max_prs`, which is no greater than `max_findings_prs_per_run`; and
   `pattern_threshold` is no greater than `max_findings_prs_per_run`.
 - `tracker_severity` is one of the canonical severities defined in Step 1.
+- `operator_logins` is a sequence of unique, non-empty forge logins. Normalize by
+  trimming ASCII whitespace and lowercasing ASCII letters while preserving every other
+  character, then require uniqueness and compare exactly. Never use a prefix, display
+  name, inferred repository owner, or current authentication identity as a substitute.
 - cache, digest, and report patterns are non-empty repository-relative paths;
   `report_root` is a non-empty repository-relative directory other than the repository
   root; configured engine names and `commit_subject` are non-empty strings; and
@@ -96,6 +101,17 @@ runtime's `models.runtime_mappings` value only when its launcher exposes the rel
 model or effort control. Otherwise state that the tier is instructed guidance. Never
 claim that a launcher switched model or effort merely because the config requested it.
 
+Compute the resumability fingerprint identically in every runtime. Parse the complete
+effective configuration after applying the local overlay, then encode
+`{"schema":"post-merge-systemize-config-v1","config":<effective-config>}` as UTF-8
+using RFC 8785 JSON canonicalization. Reject a non-string mapping key, a non-JSON scalar,
+or a non-finite number rather than coercing it. The canonical bytes have mapping keys
+sorted recursively, no insignificant whitespace, JSON booleans and nulls, and UTF-8
+non-ASCII characters emitted directly. Hash those exact bytes with SHA-256 and record
+`config_fingerprint` as `sha256:<lowercase-hex>`. Do not fingerprint
+runtime-discovered tools, credentials outside the merged config, or a runtime-specific
+subset. A runtime unable to produce that encoding stops before artifact reuse or write.
+
 ## Entry points and execution context
 
 The accepted keywords are `backfill` and `test`; they may be combined. Reject any
@@ -127,6 +143,14 @@ notification, and tracker destination first.
 Report each capability as `ready`, `degraded`, or `stop`, with the discovered mechanism
 or actionable reason. Capability names are runtime-neutral; use the current runtime's
 available connector, API, or CLI without copying its tool name into this workflow.
+
+Build the trusted review-source set before the forge read. Operator sources are the
+exact normalized identities in `systemize.operator_logins`. Configured-reviewer sources
+are the exact normalized `review.bots` identities plus only their explicitly listed
+`review.bot_author_aliases`; never infer aliases. Ignore human review or discussion from
+every other identity. An empty operator list honestly excludes operator-authored
+findings; if the union of operator and configured-reviewer identities is empty, stop
+with an instruction to configure at least one trusted review source.
 
 | Capability | Class | Preflight and unavailable behavior |
 |---|---|---|
@@ -190,6 +214,8 @@ identity and merge revision, review comments and review objects, configured-revi
 findings, operator review findings, file paths, source text, source identity, severity
 when the source supplies one, addressed state when evidenced, and originating tracker
 references. Plain discussion without a review finding is not evidence for a cluster.
+Classify a collected finding as operator or configured-reviewer evidence only after its
+source identity exactly matches the trusted set established during preflight.
 
 Normalize every source severity before ranking, capping, or routing. Preserve the
 source label beside the normalized value. The canonical order is

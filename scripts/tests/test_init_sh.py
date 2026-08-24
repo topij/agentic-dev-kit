@@ -255,8 +255,10 @@ def test_installer_adds_the_shared_systemize_config_to_an_existing_schema(
     result = _run_init(repo)
 
     parsed = yaml.safe_load(_config(repo))
+    expected_systemize = yaml.safe_load(shipped_config())["systemize"]
+    expected_systemize["operator_logins"] = []
     assert "added systemize workflow config" in result.stdout
-    assert parsed["systemize"] == yaml.safe_load(shipped_config())["systemize"]
+    assert parsed["systemize"] == expected_systemize
     assert parsed["kit"]["version"] == 2
 
 
