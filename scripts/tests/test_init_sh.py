@@ -278,12 +278,19 @@ def test_installer_preserves_an_adopter_owned_partial_systemize_section(
     assert yaml.safe_load(_config(repo))["systemize"] == {"analysis_tier": "custom"}
 
 
+@pytest.mark.parametrize(
+    "key_line",
+    (
+        "  operator_logins:\n",
+        "  operator_logins:  # exact trusted sources\n",
+    ),
+)
 def test_installer_refuses_block_style_systemize_operator_logins(
-    tmp_path: Path,
+    tmp_path: Path, key_line: str,
 ) -> None:
     config = shipped_config().replace(
         "  operator_logins: [topij]\n",
-        "  operator_logins:\n    - topij\n    - second-operator\n",
+        key_line + "    - topij\n    - second-operator\n",
         1,
     )
     repo = _fixture(tmp_path, config=config)
@@ -291,7 +298,7 @@ def test_installer_refuses_block_style_systemize_operator_logins(
     result = _run_init(repo, check=False)
 
     assert result.returncode != 0
-    assert "systemize.operator_logins uses a block-style sequence" in result.stderr
+    assert "systemize.operator_logins is not a one-line flow sequence" in result.stderr
     assert "operator_logins: [first-login, second-login]" in result.stderr
     assert _config(repo) == config
 
