@@ -42,6 +42,24 @@ starts.
 
 ---
 
+## #593 — 2026-08-24
+
+- **ADDED (engine CLI, report shape) — `pr_watch.py --record-review
+  fallback:delta` accepts `--compose-parent <reviewed-parent-sha>` and reports
+  validated `review_evidence.coverage` / `coverage_error` fields for composed
+  receipts** (`#32`). **Call the flag only with the exact head named by the standing
+  full-panel receipt, keep the parent and final commits available in the local Git
+  object store, and allow the additive fields in strict JSON consumers.** Legacy
+  receipts and delta recording without the flag retain their prior shape.
+- **CHANGED (gate semantics) — a composed current-head receipt no longer authorizes
+  merge when its full parent, delta chain, Git ancestry, final head, recorded lenses,
+  exact changed paths (including both sides of a rename), or preserved per-pass
+  review caveats cannot be re-established.** **Fetch the missing objects or rerun the
+  required review at the current head; do not hand-edit the persisted receipt to
+  bypass the failed validation.**
+
+---
+
 ## #590 — 2026-08-23
 
 - **BREAKING (report / return shape, gate semantics) — `kit_doctor` now reports

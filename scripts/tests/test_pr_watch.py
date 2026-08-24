@@ -5630,6 +5630,46 @@ def _record(monkeypatch, pr_watch, **kwargs) -> tuple[dict, dict]:
     return recorded[0]["review_receipt"], report
 
 
+def _record_composed(
+    monkeypatch: pytest.MonkeyPatch,
+    pr_watch,
+    previous: dict,
+    *,
+    head: str = "final-head",
+    parent: str = "parent-head",
+    paths: list[str] | None = None,
+    lenses: str = "correctness",
+    allow_pending_bot: bool = False,
+) -> tuple[dict, dict]:
+    monkeypatch.setattr(pr_watch, "require_gh_backend", lambda operation: None)
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_review_snapshot",
+        lambda pr: {"number": pr, "headRefOid": head, "reviews": []},
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {"review_receipt": previous})
+    recorded: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
+    monkeypatch.setattr(
+        pr_watch,
+        "_delta_paths",
+        lambda base, delta_head: list(paths or ["docs/review-record.md"]),
+    )
+    report = pr_watch.record_review(
+        9,
+        "fallback:delta",
+        head,
+        allow_pending_bot=allow_pending_bot,
+        lenses=lenses,
+        compose_parent=parent,
+        now=NOW,
+    )
+    return recorded[0]["review_receipt"], report
+
+
 def test_a_single_lens_receipt_does_not_read_like_a_panel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -5665,6 +5705,474 @@ def test_a_panel_receipt_names_every_lens_that_ran(
     rendered = pr_watch.render_record_review(report)
     assert "lenses: adversarial, correctness" in rendered
     assert "one lens only" not in rendered
+
+
+def test_composed_receipt_preserves_full_parent_and_exact_delta(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "parent-head",
+        "source": "fallback:panel",
+        "lenses": ["adversarial", "correctness"],
+        "recorded_at": "2026-08-24T10:00:00+00:00",
+    }
+
+    receipt, report = _record_composed(monkeypatch, pr_watch, previous)
+
+    assert receipt["head"] == "final-head"
+    assert receipt["source"] == "fallback:delta"
+    assert receipt["lenses"] == ["correctness"]
+    assert receipt["coverage"] == {
+        "version": 1,
+        "full_parent": {
+            "head": "parent-head",
+            "source": "fallback:panel",
+            "lenses": ["adversarial", "correctness"],
+            "recorded_at": "2026-08-24T10:00:00+00:00",
+        },
+        "deltas": [
+            {
+                "base": "parent-head",
+                "head": "final-head",
+                "source": "fallback:delta",
+                "lenses": ["correctness"],
+                "paths": ["docs/review-record.md"],
+                "recorded_at": NOW.isoformat(),
+            }
+        ],
+    }
+    rendered = pr_watch.render_record_review(report)
+    assert "composed with full parent parent-head via fallback:panel" in rendered
+    assert "delta parent-head..final-head" in rendered
+
+
+def test_composition_refuses_a_parent_without_full_panel_coverage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "parent-head",
+        "source": "fallback:codex",
+        "lenses": ["correctness"],
+    }
+
+    with pytest.raises(ValueError, match="not a dual-lens full pass"):
+        _record_composed(monkeypatch, pr_watch, previous)
+
+
+def test_composition_refuses_a_parent_that_is_not_the_standing_receipt_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "different-parent",
+        "source": "fallback:panel",
+        "lenses": ["adversarial", "correctness"],
+    }
+
+    with pytest.raises(ValueError, match="standing receipt head"):
+        _record_composed(monkeypatch, pr_watch, previous)
+
+
+def test_composition_refuses_an_unestablished_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "parent-head",
+        "source": "fallback:panel",
+        "lenses": ["adversarial", "correctness"],
+    }
+    monkeypatch.setattr(pr_watch, "require_gh_backend", lambda operation: None)
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_review_snapshot",
+        lambda pr: {"number": pr, "headRefOid": "final-head", "reviews": []},
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {"review_receipt": previous})
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: None)
+    monkeypatch.setattr(
+        pr_watch,
+        "_delta_paths",
+        lambda base, head: (_ for _ in ()).throw(ValueError("not an ancestor")),
+    )
+
+    with pytest.raises(ValueError, match="not an ancestor"):
+        pr_watch.record_review(
+            9,
+            "fallback:delta",
+            "final-head",
+            lenses="correctness",
+            compose_parent="parent-head",
+            now=NOW,
+        )
+
+
+def test_delta_paths_binds_real_git_ancestry_and_changed_paths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args], cwd=repo, text=True, capture_output=True, check=True
+        )
+        return result.stdout.strip()
+
+    git("init", "-q")
+    git("config", "user.name", "Review Evidence Test")
+    git("config", "user.email", "review-evidence@example.test")
+    (repo / "docs").mkdir()
+    (repo / "docs" / "record.md").write_text("parent\n", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-qm", "parent")
+    parent = git("rev-parse", "HEAD")
+    (repo / "docs" / "record.md").write_text("final\n", encoding="utf-8")
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "runtime.py").write_text("value = 1\n", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-qm", "final")
+    head = git("rev-parse", "HEAD")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    assert pr_watch._delta_paths(parent, head) == [
+        "docs/record.md",
+        "scripts/runtime.py",
+    ]
+    with pytest.raises(ValueError, match="is not an ancestor"):
+        pr_watch._delta_paths(head, parent)
+
+
+def test_delta_paths_preserves_both_sides_of_a_rename(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args], cwd=repo, text=True, capture_output=True, check=True
+        )
+        return result.stdout.strip()
+
+    git("init", "-q")
+    git("config", "user.name", "Review Evidence Test")
+    git("config", "user.email", "review-evidence@example.test")
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "runtime.py").write_text("value = 1\n", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-qm", "parent")
+    parent = git("rev-parse", "HEAD")
+    (repo / "docs").mkdir()
+    git("mv", "scripts/runtime.py", "docs/record.md")
+    git("commit", "-qm", "rename")
+    head = git("rev-parse", "HEAD")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    assert pr_watch._delta_paths(parent, head) == [
+        "docs/record.md",
+        "scripts/runtime.py",
+    ]
+
+
+def test_composed_coverage_invalidates_when_recorded_paths_do_not_match_git(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    receipt = {
+        "head": "abc123",
+        "source": "fallback:delta",
+        "lenses": ["correctness"],
+        "coverage": {
+            "version": 1,
+            "full_parent": {
+                "head": "parent-head",
+                "source": "fallback:panel",
+                "lenses": ["adversarial", "correctness"],
+            },
+            "deltas": [
+                {
+                    "base": "parent-head",
+                    "head": "abc123",
+                    "source": "fallback:delta",
+                    "lenses": ["correctness"],
+                    "paths": ["docs/claimed.md"],
+                }
+            ],
+        },
+    }
+    monkeypatch.setattr(
+        pr_watch, "_delta_paths", lambda base, head: ["scripts/runtime.py"]
+    )
+
+    report = pr_watch.build_report(
+        _green_view(), [], set(), review_receipt=receipt, **_settled(_green_view())
+    )
+
+    assert report["review_evidence"]["valid"] is False
+    assert report["review_evidence"]["coverage"] is None
+    assert report["review_evidence"]["coverage_error"] == (
+        "delta entry 0 paths do not match Git"
+    )
+    assert any(
+        blocker.startswith("composed review coverage is invalid:")
+        for blocker in report["merge_blockers"]
+    )
+
+
+def test_composed_coverage_binds_the_full_parent_and_final_receipt_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    baseline = {
+        "head": "abc123",
+        "source": "fallback:delta",
+        "lenses": ["correctness"],
+        "coverage": {
+            "version": 1,
+            "full_parent": {
+                "head": "parent-head",
+                "source": "fallback:panel",
+                "lenses": ["adversarial", "correctness"],
+            },
+            "deltas": [
+                {
+                    "base": "parent-head",
+                    "head": "abc123",
+                    "source": "fallback:delta",
+                    "lenses": ["correctness"],
+                    "paths": ["docs/record.md"],
+                }
+            ],
+        },
+    }
+    monkeypatch.setattr(pr_watch, "_delta_paths", lambda base, head: ["docs/record.md"])
+
+    valid, error = pr_watch._validate_composed_coverage(baseline, "abc123")
+    assert valid is True
+    assert error is None
+
+    wrong_parent = json.loads(json.dumps(baseline))
+    wrong_parent["coverage"]["full_parent"]["head"] = "unreviewed-parent"
+    valid, error = pr_watch._validate_composed_coverage(wrong_parent, "abc123")
+    assert valid is False
+    assert error == "delta entry 0 does not continue the coverage chain"
+
+    wrong_lens = json.loads(json.dumps(baseline))
+    wrong_lens["lenses"] = ["adversarial"]
+    valid, error = pr_watch._validate_composed_coverage(wrong_lens, "abc123")
+    assert valid is False
+    assert error == "coverage lenses do not match the current receipt"
+
+    malformed = {"head": "abc123", "source": "fallback:delta", "coverage": None}
+    valid, error = pr_watch._validate_composed_coverage(malformed, "abc123")
+    assert valid is False
+    assert error == "coverage is not an object"
+
+    malformed_caveat = json.loads(json.dumps(baseline))
+    malformed_caveat["coverage"]["full_parent"]["override"] = []
+    valid, error = pr_watch._validate_composed_coverage(
+        malformed_caveat, "abc123"
+    )
+    assert valid is False
+    assert error == "full_parent override is malformed"
+
+    caveat_mismatch = json.loads(json.dumps(baseline))
+    caveat_mismatch["coverage"]["deltas"][-1]["override"] = "pending-bot"
+    valid, error = pr_watch._validate_composed_coverage(caveat_mismatch, "abc123")
+    assert valid is False
+    assert error == "coverage caveats do not match the current receipt"
+
+
+def test_compose_rejects_malformed_standing_coverage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "parent123",
+        "source": "fallback:panel",
+        "lenses": ["adversarial", "correctness"],
+        "coverage": None,
+    }
+    receipt = {
+        "head": "final456",
+        "source": "fallback:delta",
+        "lenses": ["correctness"],
+        "recorded_at": "2026-08-24T12:00:00+00:00",
+    }
+    monkeypatch.setattr(pr_watch, "_delta_paths", lambda base, head: ["docs/record.md"])
+
+    with pytest.raises(
+        ValueError,
+        match="standing composed receipt is invalid: coverage is not an object",
+    ):
+        pr_watch._compose_coverage(previous, "parent123", receipt)
+
+
+def test_composed_coverage_can_extend_across_reviewed_delta_heads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "middle-head",
+        "source": "fallback:delta",
+        "lenses": ["adversarial", "correctness"],
+        "coverage": {
+            "version": 1,
+            "full_parent": {
+                "head": "parent-head",
+                "source": "fallback:panel",
+                "lenses": ["adversarial", "correctness"],
+            },
+            "deltas": [
+                {
+                    "base": "parent-head",
+                    "head": "middle-head",
+                    "source": "fallback:delta",
+                    "lenses": ["adversarial", "correctness"],
+                    "paths": ["docs/first.md"],
+                }
+            ],
+        },
+    }
+
+    def paths(base: str, head: str) -> list[str]:
+        return {
+            ("parent-head", "middle-head"): ["docs/first.md"],
+            ("middle-head", "final-head"): ["docs/second.md"],
+        }[(base, head)]
+
+    monkeypatch.setattr(pr_watch, "require_gh_backend", lambda operation: None)
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_review_snapshot",
+        lambda pr: {"number": pr, "headRefOid": "final-head", "reviews": []},
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {"review_receipt": previous})
+    recorded: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
+    monkeypatch.setattr(pr_watch, "_delta_paths", paths)
+    pr_watch.record_review(
+        9,
+        "fallback:delta",
+        "final-head",
+        lenses="adversarial,correctness",
+        compose_parent="middle-head",
+        now=NOW,
+    )
+    receipt = recorded[0]["review_receipt"]
+
+    assert [delta["head"] for delta in receipt["coverage"]["deltas"]] == [
+        "middle-head",
+        "final-head",
+    ]
+
+
+def test_composed_coverage_preserves_and_renders_each_pass_caveat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "middle-head",
+        "source": "fallback:delta",
+        "lenses": ["correctness"],
+        "bot_signal": "unavailable",
+        "bots_behind_head": {"coderabbit": "old-head"},
+        "coverage": {
+            "version": 1,
+            "full_parent": {
+                "head": "parent-head",
+                "source": "fallback:panel",
+                "lenses": ["adversarial", "correctness"],
+                "override": "pending-bot",
+            },
+            "deltas": [
+                {
+                    "base": "parent-head",
+                    "head": "middle-head",
+                    "source": "fallback:delta",
+                    "lenses": ["correctness"],
+                    "paths": ["docs/review-record.md"],
+                    "bot_signal": "unavailable",
+                    "bots_behind_head": {"coderabbit": "old-head"},
+                }
+            ],
+        },
+    }
+
+    receipt, report = _record_composed(
+        monkeypatch, pr_watch, previous, parent="middle-head"
+    )
+
+    full = receipt["coverage"]["full_parent"]
+    first_delta = receipt["coverage"]["deltas"][0]
+    assert full["override"] == "pending-bot"
+    assert first_delta["bot_signal"] == "unavailable"
+    assert first_delta["bots_behind_head"] == {"coderabbit": "old-head"}
+    rendered = pr_watch.render_record_review(report)
+    assert "full parent used an active override (pending-bot)" in rendered
+    assert "delta middle-head had unreadable review-bot state (unavailable)" in rendered
+    assert "coderabbit last reviewed old-head" in rendered
+    view = _green_view(headRefOid="final-head")
+    poll_report = pr_watch.build_report(
+        view, [], set(), review_receipt=receipt, **_settled(view)
+    )
+    poll_rendered = pr_watch.render(poll_report)
+    assert "full parent used an active override (pending-bot)" in poll_rendered
+    assert "delta middle-head had unreadable review-bot state" in poll_rendered
+    assert "coderabbit last reviewed old-head" in poll_rendered
+
+
+def test_composed_coverage_records_the_current_pass_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "parent-head",
+        "source": "fallback:panel",
+        "lenses": ["adversarial", "correctness"],
+    }
+
+    receipt, _ = _record_composed(
+        monkeypatch,
+        pr_watch,
+        previous,
+        allow_pending_bot=True,
+    )
+
+    assert receipt["override"] == "pending-bot"
+    assert receipt["coverage"]["deltas"][-1]["override"] == "pending-bot"
+
+
+def test_composed_coverage_preserves_a_legacy_parent_caveat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "parent-head",
+        "source": "fallback:panel",
+        "lenses": ["adversarial", "correctness"],
+        "bot_signal": "unavailable",
+        "bots_behind_head": {"coderabbit": "older-head"},
+    }
+
+    receipt, _ = _record_composed(monkeypatch, pr_watch, previous)
+
+    full = receipt["coverage"]["full_parent"]
+    assert full["bot_signal"] == "unavailable"
+    assert full["bots_behind_head"] == {"coderabbit": "older-head"}
+
+
 def test_the_poll_render_surfaces_override_and_unreadable_bot_state() -> None:
     """Same argument that moved `lenses` to the poll render applies to its
     siblings: a caveat printed only at record time is not visible when a merge
@@ -5955,6 +6463,55 @@ def test_the_cli_threads_lenses_through_to_the_receipt(
     with pytest.raises(SystemExit):
         pr_watch.main(["9", "--lenses", "adversarial"])
     assert "--lenses is only valid with --record-review" in capsys.readouterr().err
+
+
+def test_the_cli_threads_the_composed_parent_only_to_delta_receipts(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    called: dict = {}
+
+    def record(pr, source, head, **kwargs):
+        called.update({"pr": pr, "source": source, "head": head, **kwargs})
+        return {
+            "pr": pr,
+            "recorded_review": True,
+            "review_receipt": {"head": head, "source": source},
+        }
+
+    monkeypatch.setattr(pr_watch, "record_review", record)
+    assert pr_watch.main(
+        [
+            "9",
+            "--record-review",
+            "fallback:delta",
+            "--lenses",
+            "correctness",
+            "--compose-parent",
+            "parent-head",
+            "--head",
+            "final-head",
+        ]
+    ) == 0
+    assert called["compose_parent"] == "parent-head"
+
+    with pytest.raises(SystemExit):
+        pr_watch.main(
+            [
+                "9",
+                "--record-review",
+                "fallback:panel",
+                "--compose-parent",
+                "parent-head",
+                "--head",
+                "final-head",
+            ]
+        )
+    assert (
+        "--compose-parent requires --record-review fallback:delta"
+        in capsys.readouterr().err
+    )
 
 
 def test_a_hand_edited_receipt_cannot_break_or_inflate_either_render() -> None:
