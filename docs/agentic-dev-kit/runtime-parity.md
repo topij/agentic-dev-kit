@@ -111,14 +111,14 @@ inspection does not establish that a client trusted or executed the definitions.
 Each present project feature spelling must be boolean; canonical `hooks` supplies the
 effective value when deprecated `codex_hooks` is also present.
 
-The separate lifecycle trusted-client record is
-[`saved_plans/codex-hooks-live-validation_2026-08-23.md`](../../saved_plans/codex-hooks-live-validation_2026-08-23.md).
+The separate lifecycle trusted-client record is kept upstream at
+[`saved_plans/codex-hooks-live-validation_2026-08-23.md`](https://github.com/topij/agentic-dev-kit/blob/main/saved_plans/codex-hooks-live-validation_2026-08-23.md).
 It records the controlled repository, client, commands, revisions, and observed
 `SessionStart` / `PostToolUse` behavior. Interactive `systemMessage` presentation
 remains a gap; the noninteractive event stream and model-visible context were checked.
 
-The safety-doctrine trusted-client record is
-[`saved_plans/codex-safety-doctrine-live-validation_2026-08-24.md`](../../saved_plans/codex-safety-doctrine-live-validation_2026-08-24.md).
+The safety-doctrine trusted-client record is kept upstream at
+[`saved_plans/codex-safety-doctrine-live-validation_2026-08-24.md`](https://github.com/topij/agentic-dev-kit/blob/main/saved_plans/codex-safety-doctrine-live-validation_2026-08-24.md).
 It uses the client-visible prompt-input list rather than a correct answer to establish
 that the root route was supplied, then binds the doctrine read and applied result to a
 clean trusted checkout and exact client. The fixture includes a search decoy, a
