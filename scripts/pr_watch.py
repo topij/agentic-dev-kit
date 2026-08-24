@@ -3892,7 +3892,7 @@ def _compose_coverage(previous: dict, parent_head: str, receipt: dict) -> dict:
             "composed review parent does not match the standing receipt head"
         )
     existing = previous.get("coverage")
-    if existing is None:
+    if "coverage" not in previous:
         prior_lenses = _receipt_lenses(previous)
         prior_source = previous.get("source")
         if not isinstance(prior_source, str) or not prior_source.strip():

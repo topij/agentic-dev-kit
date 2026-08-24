@@ -5928,6 +5928,31 @@ def test_composed_coverage_binds_the_full_parent_and_final_receipt_identity(
     assert error == "coverage is not an object"
 
 
+def test_compose_rejects_malformed_standing_coverage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "parent123",
+        "source": "fallback:panel",
+        "lenses": ["adversarial", "correctness"],
+        "coverage": None,
+    }
+    receipt = {
+        "head": "final456",
+        "source": "fallback:delta",
+        "lenses": ["correctness"],
+        "recorded_at": "2026-08-24T12:00:00+00:00",
+    }
+    monkeypatch.setattr(pr_watch, "_delta_paths", lambda base, head: ["docs/record.md"])
+
+    with pytest.raises(
+        ValueError,
+        match="standing composed receipt is invalid: coverage is not an object",
+    ):
+        pr_watch._compose_coverage(previous, "parent123", receipt)
+
+
 def test_composed_coverage_can_extend_across_reviewed_delta_heads(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
