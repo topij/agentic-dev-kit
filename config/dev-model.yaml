@@ -93,9 +93,9 @@ systemize:
   # Shared post-merge-systemize workflow settings. The runtime adapter selects
   # no policy: Claude and Codex both read this block and the shared workflow.
   analysis_tier: expensive
-  # Exact forge logins trusted as operator review-finding sources. ADOPTERS:
-  # replace these kit-maintainer identities; no prefix or display-name matching.
-  operator_logins: [topij]
+  # Exact forge logins trusted as operator review-finding sources. Empty is the
+  # adopter-safe default; ./init.sh prompts rather than trusting a foreign identity.
+  operator_logins: []
   lookback_days: 7
   backfill_days: 28
   pattern_threshold: 2

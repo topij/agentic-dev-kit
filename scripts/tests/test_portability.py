@@ -1447,9 +1447,24 @@ def _post_merge_safety_policies(workflow: str) -> dict[str, str]:
     for line in workflow.splitlines():
         if not line.startswith("|") or line.startswith("|---"):
             continue
-        cells = [cell.strip().strip("`") for cell in line.strip("|").split("|")]
+        cells = [
+            cell.strip().replace("`", "") for cell in line.strip("|").split("|")
+        ]
         if len(cells) == 2 and cells[0] not in {"Policy id", ""}:
             rows[cells[0]] = cells[1]
+    return rows
+
+
+def _post_merge_routing(workflow: str) -> dict[str, tuple[str, str, str]]:
+    rows: dict[str, tuple[str, str, str]] = {}
+    for line in workflow.splitlines():
+        if not line.startswith("|") or line.startswith("|---"):
+            continue
+        cells = [
+            cell.strip().replace("`", "") for cell in line.strip("|").split("|")
+        ]
+        if len(cells) == 4 and cells[0] not in {"Route id", ""}:
+            rows[cells[0]] = (cells[1], cells[2], cells[3])
     return rows
 
 
@@ -1471,6 +1486,29 @@ def _assert_post_merge_semantics(workflow: str) -> None:
         "dirty-caller-destination": "stop-rule-route-preserve-operator-edit",
         "runtime-policy-override": "shared-declaration-wins-and-stop",
     }
+    assert _post_merge_routing(workflow) == {
+        "covered": (
+            "Existing shared instruction is adequate; no tightening proposed",
+            "any",
+            "report-rule-citation",
+        ),
+        "pattern": (
+            "Distinct PR count meets or exceeds systemize.pattern_threshold",
+            "any",
+            "shared-rule",
+        ),
+        "single-high": (
+            "Below threshold and distinct PR count equals 1",
+            "At or above systemize.tracker_severity",
+            "tracker-approval",
+        ),
+        "below-threshold": (
+            "Below threshold; all remaining clusters",
+            "any",
+            "friction-log",
+        ),
+    }
+    assert "Every cluster receives exactly one route" in flattened
     assert (
         "Test mode may write only the derived cache, digest, report, configured "
         "local heartbeat state in engine-backed mode, and an optional notification "
@@ -1757,6 +1795,13 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
         / "post-merge-systemize.md"
     ).read_text(encoding="utf-8")
     mutations = (
+        workflow.replace(
+            "`below-threshold` | Below threshold; all remaining clusters | any | "
+            "`friction-log`",
+            "`below-threshold` | Below threshold; all remaining clusters | any | "
+            "`drop-without-recording`",
+            1,
+        ),
         workflow.replace(
             "`existing-artifact-identity` | "
             "`stop-unless-kind-and-run-identity-match`",

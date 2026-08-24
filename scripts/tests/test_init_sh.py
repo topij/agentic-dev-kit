@@ -279,6 +279,27 @@ def test_installer_preserves_an_adopter_owned_partial_systemize_section(
 
 
 @pytest.mark.parametrize(
+    "section_line",
+    (
+        "systemize :\n",
+        '"systemize":\n',
+        "'systemize':\n",
+    ),
+)
+def test_installer_refuses_systemize_section_keys_it_cannot_migrate(
+    tmp_path: Path, section_line: str,
+) -> None:
+    config = shipped_config().replace("systemize:\n", section_line, 1)
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "top-level systemize key is not in canonical" in result.stderr
+    assert _config(repo) == config
+
+
+@pytest.mark.parametrize(
     "key_line",
     (
         "  operator_logins:\n",
@@ -289,7 +310,7 @@ def test_installer_refuses_block_style_systemize_operator_logins(
     tmp_path: Path, key_line: str,
 ) -> None:
     config = shipped_config().replace(
-        "  operator_logins: [topij]\n",
+        "  operator_logins: []\n",
         key_line + "    - topij\n    - second-operator\n",
         1,
     )
@@ -315,7 +336,7 @@ def test_installer_refuses_operator_login_keys_it_cannot_rewrite(
     tmp_path: Path, key_line: str,
 ) -> None:
     config = shipped_config().replace(
-        "  operator_logins: [topij]\n",
+        "  operator_logins: []\n",
         key_line,
         1,
     )

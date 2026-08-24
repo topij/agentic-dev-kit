@@ -524,6 +524,24 @@ migrate_runtime_schema() {
 # over an existing value — re-running init.sh is the supported upgrade path, so
 # a migration must be safe to apply to a config that already has it.
 migrate_kit_schema() {
+  # The line-oriented migrator owns the canonical top-level spelling. Equivalent
+  # YAML keys with quotes or whitespace are valid, but treating them as absent would
+  # append a duplicate mapping whose shipped values override adopter policy.
+  if awk '
+    /^[^[:space:]#]/ && /:/ {
+      key = $0
+      sub(/:.*/, "", key)
+      gsub(/[[:space:]"]/, "", key)
+      gsub(/\047/, "", key)
+      if (key == "systemize" && $0 !~ /^systemize:/) unsafe = 1
+    }
+    END { exit(unsafe ? 0 : 1) }
+  ' "$CONFIG_FILE"; then
+    echo "error: the top-level systemize key is not in canonical 'systemize:' form." >&2
+    echo "  Rewrite that key before running ./init.sh; no migration was applied." >&2
+    exit 1
+  fi
+
   if ! grep -q '^kit:' "$CONFIG_FILE"; then
     # Prepend, so the version stamp reads first. There is no earlier section to
     # anchor before, so insert_before_section targets the first one that exists.
@@ -1402,10 +1420,15 @@ migrate_kit_schema
 if awk '
   /^systemize:[[:space:]]*$/ { in_systemize = 1; next }
   in_systemize && /^[^[:space:]]/ { in_systemize = 0 }
-  in_systemize && /^  [^#]*operator_logins[^:]*:/ {
-    if ($0 !~ /^  operator_logins:[[:space:]]*\[[^]]*\][[:space:]]*(#.*)?$/) {
-      unsafe = 1
-    }
+  in_systemize && /^  [^#].*:/ {
+    key = $0
+    sub(/:.*/, "", key)
+    gsub(/[[:space:]"]/, "", key)
+    gsub(/\047/, "", key)
+    if (key == "operator_logins" &&
+        $0 !~ /^  operator_logins:[[:space:]]*\[[^]]*\][[:space:]]*(#.*)?$/) {
+        unsafe = 1
+      }
   }
   END { exit(unsafe ? 0 : 1) }
 ' "$CONFIG_FILE"; then

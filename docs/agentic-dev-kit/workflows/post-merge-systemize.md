@@ -330,6 +330,20 @@ classify review-evidence deltas and must not infer record-only semantics from fi
 paths, or prose. Any PR review needed for its own edits follows the shared `pr-watch` and
 fallback-panel doctrine unchanged.
 
+### Authoritative routing declaration
+
+Evaluate these rows from top to bottom after disputed clusters have been separated into
+incidents. Every cluster receives exactly one route. A below-threshold cluster never
+disappears merely because `systemize.pattern_threshold` is greater than its distinct
+pull-request count.
+
+| Route id | Match | Severity | Required route |
+|---|---|---|---|
+| `covered` | Existing shared instruction is adequate; no tightening proposed | any | `report-rule-citation` |
+| `pattern` | Distinct PR count meets or exceeds `systemize.pattern_threshold` | any | `shared-rule` |
+| `single-high` | Below threshold and distinct PR count equals `1` | At or above `systemize.tracker_severity` | `tracker-approval` |
+| `below-threshold` | Below threshold; all remaining clusters | any | `friction-log` |
+
 ## Step 3 — Route findings
 
 ### Shared-rule route
