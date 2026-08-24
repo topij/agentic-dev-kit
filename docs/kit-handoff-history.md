@@ -4,6 +4,99 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+## Session — 2026-08-22 · overnight and morning (the batch landed, and a panel that kept finding the narration wrong)
+
+**Theme —** An autonomous overnight batch of isolated lanes, all merged the next
+morning; then the friction inbox graduated and swept. Squashes on `main`: `#559`, `#558`,
+`#557`. The sweep is `#572`, open and merge-ready at session end. Every defect the review
+panel found across the session was in a claim *about* the work rather than in the work —
+again, and this time inside the PR that ships the rule against it.
+
+- **The batch shape worked; `merge-gate-scrub` and `upgrade-paths` stalled the same way.**
+  Lanes were launched `new --headless` with per-lane merge classes decided at plan time —
+  `upgrade-paths` self, the others operator. Both ended their turn awaiting review lenses
+  they had spawned themselves, with
+  the prohibition verbatim in their injected contract. Distinct from the earlier
+  timeout-shaped stalls on `#514`: the explicit `timeout: 600000` in every brief held, and no lane
+  stalled on `make test`. Filed as `#564`.
+
+- **The cockpit's obvious way to verify a lane is wrong by default, and the wrong answer
+  looks like a lying lane.** A cockpit-side `pr_watch` poll reads the cockpit's state root,
+  so a lane's receipt and seen-set are invisible and its finished PR reports as unreviewed
+  and unsettled. A correction was drafted on that basis before the lane's own sandbox was
+  read; the lane had been right. Principle #3 working, with a failure mode shaped exactly
+  like the thing it is not. `#563`.
+
+- **Following `pr-watch`'s Converged step un-converges the PR.** It prescribes posting an
+  on-demand review request at the converged head; that comment then blocks `converged`, and
+  `reconcile_sessions.sh` reports the lane `open` rather than `held` — so a closeable batch
+  reads as not closeable on the surface used to decide. `#562`. The same write also blocked
+  a self-merge lane overnight when `--mark-seen` was refused by the permission classifier,
+  unattended; `#565`.
+
+- **The panel found a HIGH the author's own verification step should have caught.** Every
+  issue the sweep filed carried no labels, against a taxonomy every prior sweep's issues
+  use. The `#138` post-landing re-read had run and checked state and title — the mechanism
+  that exists for this, too shallow to catch it. The marker now names which fields it
+  covered.
+
+- **Round 2 caught round 1's fix breaking a rule that had merged earlier the same morning.** The
+  repair for a count ambiguity added counts to prose, which `AGENTS.md`'s `Numbers in prose`
+  forbids. The rule shipped as `df32eb2`, which is the very commit round 1 reviewed
+  against, so it governed every line round 1 looked at. An earlier phrasing called
+  `df32eb2` the *parent* of round 1's base; it **is** that base, and `#579`'s lenses
+  split on the ambiguity — one could not trace it, one resolved it to the wrong commit and
+  confirmed.
+
+- **Both delta lenses disputed an author draw, and the adversarial one checked the claim
+  behind it.** The kept-entry divergence had been tied to `#6` by assertion; `#6` is about
+  vendoring the engine and says nothing about disposition semantics, so nobody scoping it
+  would have found the question. Now `#575`, which argues the real risk: `finalize_triage.py`
+  cannot see *why* a block was not filed, so the first vendored run archives every parked
+  entry and silently ends the accumulation it exists for.
+
+- **`triage-friction-log` ran end-to-end for the first time since `#553` rewrote it** —
+  `#243`'s slice had no field test until now. The deviations were deliberate and disclosed
+  in the marker: approval came in-session because the Slack MCP was unauthorized and no
+  notify engine exists (`#573` asks whether that route should be sanctioned or the gate held
+  absolute), and an entry was kept rather than swept because it parks for accumulation
+  (`#575`).
+
+- **Filed this session:** `#562`, `#563`, `#564`, `#565`, `#566`, `#567`, `#568`, `#569`,
+  `#570`, `#571`, `#573`, `#574`, `#575`, `#578`. Occurrence comments on `#509`, `#514`,
+  `#511`, `#246`, `#510`, `#534`, `#546`, `#128`.
+
+- **Verified:** `make test` at `/Users/topi/Coding/agentic-dev-kit` on merged `main` at
+  `df32eb2` printed `1355 passed`, and again on `chore/triage-2026-08-22` at `64fd2b2`.
+  `kit_doctor` on merged `main` at `df32eb2`: `56 unchanged, 0 differ, 0 missing, 0 unknown`.
+  `#537`'s pins were watched to fail against a reverted wrapper in a throwaway worktree at
+  `9de2daa`, with the mutation asserted applied — a non-empty diff against `HEAD`, and the
+  scrub markers gone from the wrapper — before the run.
+
+**Learned**
+
+- **A parameter binds where the agent's instructions live, not where the prompt points from.**
+  `#514`'s fix — name the timeout, do not plead — worked for every lane, whose briefs
+  *are* their instruction set. It failed for every lens on `#572`'s panel, whose wrapper
+  points at a `panel_prompt.py`-rendered file they are told to follow exactly. Same words,
+  outranked by the document they were attached to; `#578` enumerates them.
+
+- **Knowing a failure does not prevent it when the wrong answer is well-formed.** The
+  cs-toolkit brief's own closing warning is about classifying adopter files by path
+  existence; the table above it had rows wrong from doing exactly that, in both
+  directions at once. Recorded on `#534`.
+
+- **The review receipt makes a record's imprecision permanent, which is an argument for
+  getting it right at write time.** A wording fix moves the head and invalidates a two-lens
+  receipt; re-recording at an unreviewed head would be false. So the mechanism protecting
+  the review protects the imprecision with it — noted on `#128`, with a suggestion that the
+  approval record take a fixed shape rather than being composed in prose each sweep.
+
+▶ Next: merge `#572` if it is still open (green, review-clean, receipt bound to `64fd2b2`
+plus a CodeRabbit review of the same head), then run the cs-toolkit `/upgrade` — the brief
+is at `/tmp/cs-toolkit-upgrade-brief.md`, and its one out-of-band fact is that their
+installed `upgrade.md` predates `#544` and `#559`, so follow `$KIT`'s copy, not `$REPO`'s.
+
 ## Session — 2026-08-22 · earlier (the routing rule, and a panel that refused its own cheap exit)
 
 **Theme —** `#310`'s decision was taken and shipped. `wrap-up`'s friction-routing step now
