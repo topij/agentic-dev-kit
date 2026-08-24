@@ -362,8 +362,14 @@ def test_installer_refuses_operator_login_keys_it_cannot_rewrite(
         "systemize:\n  operator_logins: [&operator topij]\n",
         "systemize:\n  operator_logins: [true]\n",
         "systemize:\n  operator_logins: [.nan]\n",
+        "systemize:\n  operator_logins: [-1]\n",
+        "systemize:\n  operator_logins: [-1.5]\n",
+        "systemize:\n  operator_logins: [.5]\n",
         'systemize:\n  operator_logins: ["escaped\\nlogin"]\n',
         'systemize:\n  operator_logins: ["login # fragment"]\n',
+        'systemize:\n  operator_logins: [" lead"]\n',
+        'systemize:\n  operator_logins: ["trail "]\n',
+        "systemize:\n  operator_logins: [topij]#comment\n",
         "systemize:\n  analysis_tier: custom\nsystemize:\n  analysis_tier: expensive\n",
         "systemize:\n  analysis_tier: custom\n  analysis_tier: expensive\n",
     ),
@@ -423,7 +429,7 @@ def test_installer_preserves_supported_operator_login_flow_items(
 ) -> None:
     config = shipped_config().replace(
         "  operator_logins: []\n",
-        "  operator_logins: [topij, \"123\", 'git.lab']\n",
+        "  operator_logins: [topij, \"123\", 'git.lab']  # trusted sources\n",
         1,
     )
     repo = _fixture(tmp_path, config=config)
@@ -435,6 +441,7 @@ def test_installer_preserves_supported_operator_login_flow_items(
         "123",
         "git.lab",
     ]
+    assert "# trusted sources" in _config(repo)
 
 
 # --------------------------------------------------------------------------- #

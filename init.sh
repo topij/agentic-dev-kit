@@ -495,7 +495,7 @@ preflight_migration_config() {
     function valid_login_flow(line,   body, n, i, item, first, last, value, lower, sq) {
       body = line
       sub(/^  operator_logins:[[:space:]]*\[/, "", body)
-      sub(/\][[:space:]]*(#.*)?$/, "", body)
+      sub(/\]([[:space:]]*|[[:space:]]+#.*)$/, "", body)
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", body)
       if (body == "") return 1
       n = split(body, items, ",")
@@ -508,10 +508,10 @@ preflight_migration_config() {
         last = substr(item, length(item), 1)
         if ((first == "\"" && last == "\"") || (first == sq && last == sq)) {
           value = substr(item, 2, length(item) - 2)
-          if (value == "" || value ~ /[\\"#,\[\]]/ || index(value, sq)) return 0
+          if (value == "" || value ~ /[[:space:]\\"#,\[\]]/ || index(value, sq)) return 0
           continue
         }
-        if (item !~ /^[A-Za-z0-9_.-]+$/ || item ~ /^[0-9]/) return 0
+        if (item !~ /^[A-Za-z_][A-Za-z0-9_.-]*$/) return 0
         lower = tolower(item)
         if (lower ~ /^(true|false|null|yes|no|on|off|[-+]?\.(inf|nan))$/) return 0
       }
@@ -526,7 +526,7 @@ preflight_migration_config() {
       sub(/:.*/, "", key)
       if (seen_child[key]++) unsafe = 1
       if ($0 ~ /^  operator_logins:/ &&
-          ($0 !~ /^  operator_logins:[[:space:]]*\[[^]]*\][[:space:]]*(#.*)?$/ ||
+          ($0 !~ /^  operator_logins:[[:space:]]*\[[^]]*\]([[:space:]]*|[[:space:]]+#.*)$/ ||
            !valid_login_flow($0))) {
         unsafe = 1
       }
