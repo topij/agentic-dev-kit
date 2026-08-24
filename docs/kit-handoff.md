@@ -60,7 +60,8 @@ events, not on the model producing the expected policy answer.
   `#32` is the umbrella; `#76` and `#305` carry adjacent stale-head and stopping-rule
   occurrences. No tracker write was made.
 
-▶ Next: hold final merge of Workstream A for the operator. After it merges, run
+▶ Next: the operator authorized merging Workstream A once exact-head CI and required
+review gates are clean. After it merges, run
 `git fetch origin && git switch -c feat/review-evidence-composition origin/main`; make the
 first PR only the backward-compatible receipt/state/report migration that represents a
 full-panel parent plus an exact-head delta, validates ancestry and coverage fail-closed,
