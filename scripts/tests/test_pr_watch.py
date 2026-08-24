@@ -6154,6 +6154,25 @@ def test_composed_coverage_records_the_current_pass_override(
     assert receipt["coverage"]["deltas"][-1]["override"] == "pending-bot"
 
 
+def test_composed_coverage_preserves_a_legacy_parent_caveat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "parent-head",
+        "source": "fallback:panel",
+        "lenses": ["adversarial", "correctness"],
+        "bot_signal": "unavailable",
+        "bots_behind_head": {"coderabbit": "older-head"},
+    }
+
+    receipt, _ = _record_composed(monkeypatch, pr_watch, previous)
+
+    full = receipt["coverage"]["full_parent"]
+    assert full["bot_signal"] == "unavailable"
+    assert full["bots_behind_head"] == {"coderabbit": "older-head"}
+
+
 def test_the_poll_render_surfaces_override_and_unreadable_bot_state() -> None:
     """Same argument that moved `lenses` to the poll render applies to its
     siblings: a caveat printed only at record time is not visible when a merge
