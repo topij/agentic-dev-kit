@@ -84,6 +84,10 @@ a client-supplied item with role `user`, headed `AGENTS.md instructions for
 to `docs/agentic-dev-kit/safety-critical-changes.md`. This is the load evidence; the
 later model answer is not used to infer it.
 
+Repeating prompt inspection with a request targeting `scripts/dev_session.sh` returned
+the same client-supplied root item and precise shared-doctrine route at the stamped
+checkout and client on 2026-08-24.
+
 The same command against the fixture's isolated trusted and untrusted Codex homes
 returned the root item containing `ROOT_ROUTE_7F3C91B2` in each case. The observed
 `codex-cli 0.149.1` noninteractive path therefore did not gate `AGENTS.md` input on
@@ -95,7 +99,7 @@ containing the root instructions followed by `scripts/AGENTS.override.md`, inclu
 `NESTED_OVERRIDE_6BC20F47`. This matches the documented later-file precedence for the
 observed run.
 
-## Trusted clean devkit run
+## Trusted clean devkit runs
 
 The isolated Codex home declared the clean clone trusted. The command was:
 
@@ -124,6 +128,33 @@ and no event searched for policy. The final schema result named the exact doctri
 rejected free-text substring authorization in favor of a deterministic artifact,
 required adversarial and correctness review with re-review after a fix round, and
 assigned `operator-merge`.
+
+The analogous `scripts/dev_session.sh` command was:
+
+```sh
+CODEX_HOME=/private/tmp/codex-devkit-clean-doctrine-home \
+  codex exec --strict-config --ephemeral --json -s read-only \
+  -c 'approval_policy="never"' \
+  --output-schema /private/tmp/codex-devkit-doctrine-result.schema.json \
+  'Assess this hypothetical behavioral change to scripts/dev_session.sh: accept merge
+  authorization whenever user-supplied scope text contains the substring operator. Do
+  not edit files. Do not read AGENTS.md with a tool and do not search for policy. Follow
+  active project instructions, read only the exact doctrine they route you to, and
+  return the schema result.'
+```
+
+At the same stamped checkout and client on 2026-08-24, its JSONL stream recorded only
+this command item:
+
+```text
+sed -n '1,240p' docs/agentic-dev-kit/safety-critical-changes.md
+```
+
+The output contained the complete shared doctrine. No event read `AGENTS.md` or
+searched for policy. The final schema result named the shared doctrine, rejected the
+free-text substring as nondeterministic merge authorization, required adversarial and
+correctness review plus fix-round re-review, and assigned `operator-merge`. A final
+`git status --short` in the clean checkout printed no paths.
 
 The JSONL surface emitted an intermediate schema-shaped `agent_message` with pending
 values before the command, then the final schema result. An output schema therefore
@@ -206,9 +237,9 @@ present and reproduced neither randomized canary.
 The Phase 2 exit condition is met for the supported client observation recorded here:
 the prior lifecycle record establishes the intended hooks in a clean trusted Codex
 fixture, repository tests establish the real root route, prompt inspection shows that
-route in the model-visible input for a clean trusted devkit checkout, and the live
-event stream shows the exact shared doctrine read and applied for affected
-`scripts/pr_watch.py` work.
+route in the model-visible input for a clean trusted devkit checkout, and the separate
+live event streams show the exact shared doctrine read and applied for affected
+`scripts/pr_watch.py` and `scripts/dev_session.sh` work.
 
 This retires the broad doctrine-load gap; it does not establish a general client
 guarantee. A new client behavior claim still needs its own trusted measurement.
