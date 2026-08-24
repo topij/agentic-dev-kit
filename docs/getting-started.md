@@ -223,7 +223,10 @@ friction-routing step is being skipped — not that triage is overdue.
 > has an explicit LLM-only path when its configured engine set is wholly absent; a
 > partial set fails closed. Configure exact trusted forge identities in
 > `systemize.operator_logins`; other human reviewers are excluded, while bot sources
-> come only from `review.bots` and its explicit aliases. `session-start`, `wrap-up`,
+> come only from `review.bots` and its explicit aliases. The installer refuses YAML
+> key forms its shell migrator cannot own before writing: keep top-level keys unique
+> and bare, write a bare `systemize:` section line, and use bare keys within it.
+> `session-start`, `wrap-up`,
 > `parallel`, and `pr-watch`
 > run out of the box — with an exception worth knowing before you rely on it:
 > `wrap-up`'s **direct filing** route

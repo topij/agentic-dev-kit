@@ -327,6 +327,10 @@ trusted; configured bot identities come from `review.bots` and explicit aliases 
 The installer prompts for the operator list and never infers it from the repository
 owner or current authentication. Keep this prompted value as a one-line YAML flow
 sequence; `./init.sh` stops with a conversion example when it finds block style.
+Because the installer migrates YAML with shell text tools, its preflight also requires
+unique bare top-level keys, a bare `systemize:` section line, and bare keys inside that
+section. Rewrite tagged, quoted, anchored, explicit, duplicated, or inline-commented
+section-key forms before retrying; the refusal happens before migration writes.
 
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
 behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)

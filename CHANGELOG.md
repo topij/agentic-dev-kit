@@ -53,7 +53,11 @@ starts.
   artifact pattern so live, test, normal-window, and backfill runs do not share a
   same-day artifact. Set `systemize.operator_logins` to the exact forge identities
   whose review findings the workflow may trust; `./init.sh` prompts for that list and
-  requires its one-line YAML flow-sequence form.**
+  requires its one-line YAML flow-sequence form. Before re-running, rewrite tagged,
+  quoted, anchored, explicit, duplicated, or inline-commented top-level section keys
+  into unique bare YAML keys; write `systemize:` without an inline comment and keep
+  its child keys bare. The installer refuses unsupported forms before migration
+  writes.**
 - **CHANGED (gate semantics) — `post-merge-systemize` now fails closed when the
   required repository, config, or complete merged-PR history is unavailable, and
   when only part of the configured engine set is installed; an entirely absent

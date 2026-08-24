@@ -284,6 +284,8 @@ def test_installer_preserves_an_adopter_owned_partial_systemize_section(
         "systemize :\n",
         '"systemize":\n',
         "'systemize':\n",
+        "systemize:  # adopter policy\n",
+        "!!str systemize:\n",
     ),
 )
 def test_installer_refuses_systemize_section_keys_it_cannot_migrate(
@@ -295,7 +297,7 @@ def test_installer_refuses_systemize_section_keys_it_cannot_migrate(
     result = _run_init(repo, check=False)
 
     assert result.returncode != 0
-    assert "top-level systemize key is not in canonical" in result.stderr
+    assert "top-level key init.sh cannot migrate safely" in result.stderr
     assert _config(repo) == config
 
 
@@ -319,7 +321,7 @@ def test_installer_refuses_block_style_systemize_operator_logins(
     result = _run_init(repo, check=False)
 
     assert result.returncode != 0
-    assert "systemize.operator_logins is not a one-line flow sequence" in result.stderr
+    assert "systemize section contains a key or operator_logins value" in result.stderr
     assert "operator_logins: [first-login, second-login]" in result.stderr
     assert _config(repo) == config
 
@@ -345,7 +347,30 @@ def test_installer_refuses_operator_login_keys_it_cannot_rewrite(
     result = _run_init(repo, check=False)
 
     assert result.returncode != 0
-    assert "systemize.operator_logins is not a one-line flow sequence" in result.stderr
+    assert "systemize section contains a key or operator_logins value" in result.stderr
+    assert _config(repo) == config
+
+
+@pytest.mark.parametrize(
+    "systemize_block",
+    (
+        '"systemize":\n  analysis_tier: custom\n',
+        "!!str systemize:\n  analysis_tier: custom\n",
+        "systemize:\n  operator_logins:\n    - topij\n",
+        "systemize:\n  analysis_tier: custom\nsystemize:\n  analysis_tier: expensive\n",
+        "systemize:\n  analysis_tier: custom\n  analysis_tier: expensive\n",
+    ),
+)
+def test_installer_rejects_unsafe_systemize_shapes_before_legacy_migration(
+    tmp_path: Path, systemize_block: str,
+) -> None:
+    config = V1_CONFIG.replace("tracker:\n", systemize_block + "tracker:\n", 1)
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "no migration was applied" in result.stderr.lower()
     assert _config(repo) == config
 
 

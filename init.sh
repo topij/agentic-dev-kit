@@ -463,6 +463,52 @@ dev_session.sh"
   printf '%s\n' "${found:-scripts}"
 }
 
+# The migrations below are deliberately line-oriented so init.sh keeps its stated
+# shell-only dependency contract. Validate the shapes they own before either one
+# writes: YAML has equivalent tagged, quoted, explicit, and anchored mapping forms
+# that these helpers must refuse rather than mistake for a missing section.
+preflight_migration_config() {
+  if awk '
+    /^[[:space:]]*($|#)/ { next }
+    /^[^[:space:]]/ {
+      if ($0 !~ /^[A-Za-z_][A-Za-z0-9_]*:/) unsafe = 1
+      key = $0
+      sub(/:.*/, "", key)
+      if (seen[key]++) unsafe = 1
+      if (key == "systemize" && $0 !~ /^systemize:[[:space:]]*$/) unsafe = 1
+    }
+    END { exit(unsafe ? 0 : 1) }
+  ' "$CONFIG_FILE"; then
+    echo "error: config/dev-model.yaml has a top-level key init.sh cannot migrate safely." >&2
+    echo "  Use unique bare mapping keys with no tag, quote, anchor, or explicit-key" >&2
+    echo "  marker; write systemize as a bare 'systemize:' line. No migration was applied." >&2
+    exit 1
+  fi
+
+  if awk '
+    /^systemize:[[:space:]]*$/ { in_systemize = 1; next }
+    in_systemize && /^[^[:space:]]/ { in_systemize = 0 }
+    in_systemize && /^  [^[:space:]#]/ {
+      if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_]*:/) unsafe = 1
+      key = $0
+      sub(/^  /, "", key)
+      sub(/:.*/, "", key)
+      if (seen_child[key]++) unsafe = 1
+      if ($0 ~ /^  operator_logins:/ &&
+          $0 !~ /^  operator_logins:[[:space:]]*\[[^]]*\][[:space:]]*(#.*)?$/) {
+        unsafe = 1
+      }
+    }
+    END { exit(unsafe ? 0 : 1) }
+  ' "$CONFIG_FILE"; then
+    echo "error: the systemize section contains a key or operator_logins value init.sh cannot rewrite safely." >&2
+    echo "  Use bare scalar keys and a one-line operator login sequence:" >&2
+    echo '    operator_logins: [first-login, second-login]' >&2
+    echo "  No migration was applied." >&2
+    exit 1
+  fi
+}
+
 # Guards are SECTION-scoped, not whole-file `grep '^  key:'`. That form is a bug
 # in two directions at once: it misses the key when the adopter's section uses a
 # different indent (so the migration re-runs forever, appending a duplicate each
@@ -524,24 +570,6 @@ migrate_runtime_schema() {
 # over an existing value — re-running init.sh is the supported upgrade path, so
 # a migration must be safe to apply to a config that already has it.
 migrate_kit_schema() {
-  # The line-oriented migrator owns the canonical top-level spelling. Equivalent
-  # YAML keys with quotes or whitespace are valid, but treating them as absent would
-  # append a duplicate mapping whose shipped values override adopter policy.
-  if awk '
-    /^[^[:space:]#]/ && /:/ {
-      key = $0
-      sub(/:.*/, "", key)
-      gsub(/[[:space:]"]/, "", key)
-      gsub(/\047/, "", key)
-      if (key == "systemize" && $0 !~ /^systemize:/) unsafe = 1
-    }
-    END { exit(unsafe ? 0 : 1) }
-  ' "$CONFIG_FILE"; then
-    echo "error: the top-level systemize key is not in canonical 'systemize:' form." >&2
-    echo "  Rewrite that key before running ./init.sh; no migration was applied." >&2
-    exit 1
-  fi
-
   if ! grep -q '^kit:' "$CONFIG_FILE"; then
     # Prepend, so the version stamp reads first. There is no earlier section to
     # anchor before, so insert_before_section targets the first one that exists.
@@ -1406,37 +1434,11 @@ if [ ! -t 0 ]; then
   echo "note: no terminal attached — keeping all current config/dev-model.yaml values." >&2
 fi
 
+preflight_migration_config
 migrate_runtime_schema
 migrate_kit_schema
 
 # ── prompts ──────────────────────────────────────────────────────────────
-
-# The prompt serializer owns a flow sequence on the key's line. Other spellings,
-# including block sequences and multi-line flow sequences, can be valid YAML, but
-# get_field/set_field deliberately operate on scalar line values and would silently
-# display an empty default while leaving continuation lines untouched. Stop before any
-# prompt re-stamps config rather than pretend an operator-login answer landed (the
-# identity list is a trust boundary for post-merge-systemize).
-if awk '
-  /^systemize:[[:space:]]*$/ { in_systemize = 1; next }
-  in_systemize && /^[^[:space:]]/ { in_systemize = 0 }
-  in_systemize && /^  [^#].*:/ {
-    key = $0
-    sub(/:.*/, "", key)
-    gsub(/[[:space:]"]/, "", key)
-    gsub(/\047/, "", key)
-    if (key == "operator_logins" &&
-        $0 !~ /^  operator_logins:[[:space:]]*\[[^]]*\][[:space:]]*(#.*)?$/) {
-        unsafe = 1
-      }
-  }
-  END { exit(unsafe ? 0 : 1) }
-' "$CONFIG_FILE"; then
-  echo "error: systemize.operator_logins is not a one-line flow sequence." >&2
-  echo "  Rewrite it before running ./init.sh:" >&2
-  echo '    operator_logins: [first-login, second-login]' >&2
-  exit 1
-fi
 
 # yaml_scalar <value> — the text to stamp for a historically-unquoted prompted
 # scalar: double-quoted when the value carries a YAML indicator this helper
