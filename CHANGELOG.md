@@ -49,17 +49,20 @@ starts.
   after taking this kit update to add the shipped block. If your config already
   contains a partial `systemize:` block, the installer preserves it rather than
   guessing your policy; merge the missing shipped keys manually before invoking the
-  workflow.**
+  workflow. Keep the shipped `{date}`, `{window}`, and `{mode}` placeholders in every
+  artifact pattern so live, test, normal-window, and backfill runs do not share a
+  same-day artifact.**
 - **CHANGED (gate semantics) — `post-merge-systemize` now fails closed when the
   required repository, config, or complete merged-PR history is unavailable, and
   when only part of the configured engine set is installed; an entirely absent
   engine set selects the labelled agent-executed path** (`#243`; `#7` stays open).
-  **Install every configured engine or none of them, and treat the report as the
-  durable degraded path when an optional forge write, tracker, reviewer, or
-  notification capability is unavailable. Tracker writes additionally require the
-  operator to approve the exact payload. Resolve a local change to an intended rule
-  destination before retrying that route; it now requires a clean isolated worktree and
-  an exact staged-path set.**
+  **Keep the shared state-path resolver under `paths.engines`; install every configured
+  fetch/digest/heartbeat engine or none of that optional set. Treat the report as the
+  durable degraded path when an optional forge write, tracker, reviewer, or notification
+  capability is unavailable. Tracker writes additionally require the operator to
+  approve the exact payload. Resolve a local change to an intended rule destination
+  before retrying that route; it now requires a clean isolated worktree and an exact
+  staged-path set.**
 - **CHANGED (gate semantics) — the old Claude command directly creates tracker items
   and does not load the shared approval gate** (`#243`). **`/upgrade` ordinarily keeps
   an existing runtime adapter, so replace

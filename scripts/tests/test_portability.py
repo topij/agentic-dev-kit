@@ -1445,9 +1445,10 @@ def _post_merge_capabilities(workflow: str) -> dict[str, tuple[str, str]]:
 def _assert_post_merge_semantics(workflow: str) -> None:
     flattened = " ".join(workflow.split())
     assert (
-        "Test mode may write only the derived cache, digest, and report plus an "
-        "optional notification prefixed `[TEST]`; it must not write a branch, "
-        "commit, pull request, friction-log entry, or tracker item."
+        "Test mode may write only the derived cache, digest, report, configured "
+        "local heartbeat state in engine-backed mode, and an optional notification "
+        "prefixed `[TEST]`; it must not write a branch, commit, pull request, "
+        "friction-log entry, or tracker item."
     ) in flattened
     assert "positive integers, not booleans" in flattened
     assert "`pattern_threshold` is at least `2`" in flattened
@@ -1466,8 +1467,10 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     assert (
         "a digest cannot select its own evidence or working-set policy" in flattened
     )
-    assert "call the shared `scripts/lib/state_paths` write resolver" in flattened
-    assert "`state.dirname` to match the shared state resolver's declared" in flattened
+    assert "`<engine-dir>/lib/state_paths`" in flattened
+    assert "absence is a required-capability failure even in LLM-only mode" in flattened
+    assert "call the shared state-path write resolver" in flattened
+    assert "Require `state.dirname` to match that resolver's declared" in flattened
     assert "with `mkdir=False` during preflight" in flattened
     assert "honor `DEVKIT_STATE_ROOT` and `.devkit_state_root`" in flattened
     assert "even when the sandbox is outside the checkout" in flattened
@@ -1483,7 +1486,10 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     assert "Never switch branches in the caller's checkout" in flattened
     assert "create a fresh isolated Git worktree" in flattened
     assert "staged path set equals the intended destination set exactly" in flattened
-    assert "local edit into the systemize patch" in flattened
+    assert (
+        "stop the route and preserve the proposal in the report; do not blend an "
+        "operator's local edit into the systemize patch"
+    ) in flattened
     for rejected_path_shape in (
         "`..` traversal",
         "symlink that escapes",
@@ -1592,6 +1598,11 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
     assert digest_path.is_relative_to(state_root)
     assert report_path.is_relative_to(report_root)
     assert len({cache_path, digest_path, report_path}) == 3
+    for artifact_pattern in (cache_path, digest_path, report_path):
+        assert all(
+            placeholder in artifact_pattern.parts[-1]
+            for placeholder in ("{date}", "{window}", "{mode}")
+        )
     resolver = (ENGINE_DIR / "lib" / "state_paths" / "resolver.py").read_text(
         encoding="utf-8"
     )
@@ -1629,6 +1640,11 @@ def test_post_merge_systemize_required_and_degraded_preflights_are_discriminatin
     assert engine_class == "optional, atomic"
     assert "all absent selects LLM-only mode" in engine_behavior
     assert "a partial set stops" in engine_behavior
+
+    resolver_class, resolver_behavior = capabilities["Shared state-path resolver"]
+    assert resolver_class == "required"
+    assert "<engine-dir>/lib/state_paths" in resolver_behavior
+    assert "stops before any artifact write" in resolver_behavior
 
     notify_class, notify_behavior = capabilities["Notification"]
     assert notify_class == "optional"
@@ -1719,7 +1735,7 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
             1,
         ),
         re.sub(
-            r"must honor `DEVKIT_STATE_ROOT` and\s+`\.devkit_state_root`",
+            r"must\s+honor `DEVKIT_STATE_ROOT` and\s+`\.devkit_state_root`",
             "must ignore `DEVKIT_STATE_ROOT` and `.devkit_state_root`",
             workflow,
             count=1,
@@ -1739,6 +1755,14 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
             "create a fresh isolated Git worktree",
             "switch the caller checkout",
             1,
+        ),
+        re.sub(
+            r"stop the route and preserve the proposal in the report; do not\s+blend "
+            r"an operator's local edit into the systemize patch",
+            "continue the route and blend an operator's local edit into the "
+            "systemize patch",
+            workflow,
+            count=1,
         ),
     )
     for mutation_index, mutated in enumerate(mutations):

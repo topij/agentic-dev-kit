@@ -100,12 +100,14 @@ systemize:
   batch_size: 25
   single_pass_max_prs: 60
   max_findings_prs_per_run: 75
-  cache_pattern: "state/cache/merged-prs_{date}.json"
-  digest_cache_pattern: "state/cache/merged-prs-digest_{date}.json"
+  # {window} is the selected lookback in days (for example 7d); {mode} is
+  # live or test. Together they keep same-day entry points from sharing state.
+  cache_pattern: "state/cache/merged-prs_{window}_{mode}_{date}.json"
+  digest_cache_pattern: "state/cache/merged-prs-digest_{window}_{mode}_{date}.json"
   # Separate trusted root lets preflight reject a mistaken report_pattern that
   # points at source or config while keeping the filename configurable.
   report_root: reports
-  report_pattern: "reports/post-merge-systemize_{date}.md"
+  report_pattern: "reports/post-merge-systemize_{window}_{mode}_{date}.md"
   # Optional deterministic integration, resolved beneath paths.engines. The
   # shipped kit does not vendor these yet: all absent selects the documented
   # LLM-only path, all present selects engine-backed mode, and a partial set

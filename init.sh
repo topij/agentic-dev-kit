@@ -547,10 +547,11 @@ migrate_kit_schema() {
   batch_size: 25
   single_pass_max_prs: 60
   max_findings_prs_per_run: 75
-  cache_pattern: "state/cache/merged-prs_{date}.json"
-  digest_cache_pattern: "state/cache/merged-prs-digest_{date}.json"
+  # {window} is the selected lookback in days; {mode} is live or test.
+  cache_pattern: "state/cache/merged-prs_{window}_{mode}_{date}.json"
+  digest_cache_pattern: "state/cache/merged-prs-digest_{window}_{mode}_{date}.json"
   report_root: reports
-  report_pattern: "reports/post-merge-systemize_{date}.md"
+  report_pattern: "reports/post-merge-systemize_{window}_{mode}_{date}.md"
   # Optional deterministic integration, resolved beneath paths.engines.
   fetch_engine: fetch_merged_prs.py
   digest_engine: digest_merged_prs.py

@@ -59,12 +59,17 @@ Validate values as well as presence:
   root; configured engine names and `commit_subject` are non-empty strings; and
   `pr_draft` is a boolean.
 
-Before any derived write, substitute the selected date. Treat the configured cache and
-digest patterns as logical `state.dirname` paths. Require `state.dirname` to match the
-shared state resolver's declared `STATE_DIRNAME`; a mismatch is a hard stop because the
-resolver does not take that directory from config. Require the matching lexical prefix,
-remove it, then call the shared `scripts/lib/state_paths` write resolver with
-`mkdir=False` during preflight. That resolver must honor `DEVKIT_STATE_ROOT` and
+Before any derived write, substitute the selected date, `{window}` as the selected
+lookback followed by `d`, and `{mode}` as `live` or `test`. Require all three placeholders
+in each artifact pattern so normal, backfill, test, and combined entry points cannot
+overwrite one another on the same date. Treat the configured cache and digest patterns
+as logical `state.dirname` paths. Resolve the shared state-path package beneath
+`<engine-dir>` at `<engine-dir>/lib/state_paths`; its absence is a required-capability
+failure even in LLM-only mode. Require `state.dirname` to match that resolver's declared
+`STATE_DIRNAME`; a mismatch is a hard stop because the resolver does not take that
+directory from config. Require the matching lexical prefix, remove it, then call the
+shared state-path write resolver with `mkdir=False` during preflight. That resolver must
+honor `DEVKIT_STATE_ROOT` and
 `.devkit_state_root`; its returned state root is the allowed cache/digest root even when
 the sandbox is outside the checkout. Do not write those logical paths directly beneath
 the worktree. Resolve an existing cache or digest through the shared state read resolver
@@ -99,10 +104,11 @@ unknown argument before preflight.
 - With no `backfill`, use `systemize.lookback_days`.
 - With `backfill`, use `systemize.backfill_days`.
 - With `test`, perform real read-only fetch and analysis, then render the proposed
-  routes in the final output. Test mode may write only the derived cache, digest, and
-  report plus an optional notification prefixed `[TEST]`; it must not write a branch,
-  commit, pull request, friction-log entry, or tracker item. The notification is a real
-  optional external write, not an approval or a simulated receipt.
+  routes in the final output. Test mode may write only the derived cache, digest,
+  report, configured local heartbeat state in engine-backed mode, and an optional
+  notification prefixed `[TEST]`; it must not write a branch, commit, pull request,
+  friction-log entry, or tracker item. The notification is a real optional external
+  write, not an approval or a simulated receipt.
 
 Non-interactive runs never wait for operator input. If an action requires approval and
 the invocation does not already carry that explicit approval, preserve the proposal in
@@ -126,6 +132,7 @@ available connector, API, or CLI without copying its tool name into this workflo
 |---|---|---|
 | Repository/config read | required | Confirm the repository root, merged config, `<friction-log>`, and protected branch. Missing or unreadable input stops the run. |
 | Forge merged-PR read | required | Prove authenticated access by reading the target repository and a bounded merged-PR page. Missing access or incomplete pagination stops the run. |
+| Shared state-path resolver | required | Resolve `<engine-dir>/lib/state_paths` and prove non-creating write resolution plus existing-artifact read resolution. Missing or unusable resolution stops before any artifact write. |
 | Deterministic fetch/digest/heartbeat set | optional, atomic | Resolve every configured engine under `<engine-dir>`. All present selects engine-backed mode; all absent selects LLM-only mode; a partial set stops rather than mixing incompatible artifacts. |
 | Forge/git PR write | conditional | Required only for a qualifying rule route. If unavailable, preserve the proposed patch and evidence in the report; make no partial branch or PR write. |
 | `pr-watch` workflow | conditional | Required before calling a created rule PR complete. If unavailable, leave the PR unmerged, mark review follow-through owed, and report the gap. |
@@ -145,7 +152,8 @@ notification itself was the failed capability.
 ## Durable artifacts
 
 Every run may maintain the derived artifacts using the configured patterns. In test
-mode they and the optional `[TEST]` notification are the only permitted writes:
+mode they, configured local heartbeat state in engine-backed mode, and the optional
+`[TEST]` notification are the only permitted writes:
 
 - the fetched merged-PR bundle at `systemize.cache_pattern`;
 - the normalized review-finding digest at `systemize.digest_cache_pattern`;
