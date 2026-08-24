@@ -36,10 +36,8 @@ without forking review semantics between Claude and Codex.
 - **The review cycle produced material returns, then stopped.** The terminal panel found
   that Git rename detection could omit a safety-relevant source path and that composition
   could erase earlier override, unreadable-bot, or behind-head caveats. The bounded fix
-  records rename source and destination and preserves, validates, and renders per-pass caveats.
-  Fresh adversarial re-review at `77577274792ac2652a7c618362a7be5bb17df83a` on
-  2026-08-24 reported zero findings; fresh correctness re-review at the same revision and
-  date reported zero findings.
+  records rename source and destination and preserves, validates, and renders per-pass
+  caveats.
 
 - **The routing inventory did not justify another classifier.** The shared fallback
   doctrine and `panel_prompt.py` already carry full re-review for behavior, executed prose,
@@ -61,10 +59,11 @@ without forking review semantics between Claude and Codex.
   `1539 passed, 3 warnings in 191.34s`. The warnings in these runs were pytest
   temporary-directory cleanup warnings.
 
-▶ Next: continue Phase 3 with a fresh `feat/post-merge-systemize-shared` branch from
-`origin/main`; extract the bounded shared workflow and add the thin Codex binding. If a
-future review-routing PR starts instead, its first deliverable must be a deterministic
-artifact that proves record-only semantics without inferring them from filenames or prose;
+▶ Next: run
+`git fetch origin && git switch -c feat/post-merge-systemize-shared origin/main`, then
+extract the bounded shared workflow and add the thin Codex binding. If a future
+review-routing PR starts instead, its first deliverable must be a deterministic artifact
+that proves record-only semantics without inferring them from filenames or prose;
 otherwise keep the current full-review fallback and do not change `pr_watch.py`.
 
 ______________________________________________________________________
