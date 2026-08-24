@@ -147,6 +147,12 @@ change to one is a reason to read the other.
   `scripts/hooks/pre-push` refuses any push from a `dev/*` branch that touches
   `docs/kit-handoff.md` or `docs/kit-friction-log.md`. A wrap-up commit on a `dev/*`
   branch is blocked by the repo's own hook.
+- **Behavioral changes to `scripts/pr_watch.py` or `scripts/dev_session.sh` are
+  safety-critical.** Read and apply
+  `docs/agentic-dev-kit/safety-critical-changes.md` completely before changing either
+  merge-authority path. This precise root instruction is the Codex binding; Claude's
+  path-scoped rule binds the same shared file. Do not restate its doctrine here or in
+  either runtime adapter.
 - All configuration lives in `config/dev-model.yaml`; skills and engines read it from
   there. Never hardcode a value that belongs in it.
 - The living plan is `docs/kit-handoff.md` — read at session start, updated at wrap-up.

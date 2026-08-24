@@ -161,7 +161,8 @@ copy-in has no version marker and no record of whether it was edited, so nothing
 tell an older engine from a locally-patched one:
 
 ```sh
-uv run scripts/kit_doctor.py     # or: python scripts/kit_doctor.py   # stdlib only, no uv needed
+uv run scripts/kit_doctor.py
+python scripts/kit_doctor.py  # bare-Python fallback; inline TOML may require uv
 ```
 
 Per kit-owned file it reports `unchanged` (safe to replace outright), `differs` (diff
@@ -170,13 +171,16 @@ claim a cause — a hash mismatch can't distinguish "older version" from "hand-e
 it narrows by schema version and leaves the call to you. Adopter-owned paths (your
 config, your narrative docs) are never compared; they're *supposed* to differ.
 
-It also checks four things nothing else validates:
+It also checks installation properties the file hashes cannot establish:
 
 - your config's schema generation vs. the kit's
 - that **`paths.engines` points at a directory that actually holds engines** — a `✗` here
   is the silent breakage where every workflow's `<engine-dir>/…` reference resolves to
   nothing
 - that the pre-push hook is installed, not merely shipped
+- that runtime hook registrations resolve; Codex lifecycle semantics apply only to
+  exact repository-owned command strings, structural drift within those identified
+  objects fails explicitly, and altered strings retain generic path diagnostics
 - that the narrative docs were rendered, not left as unrendered templates
 
 `kit-manifest.json` is the hash set it compares against, regenerated at release
@@ -260,11 +264,11 @@ Each piece maps to one or more of the ten principles in
 | `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the `--headless` JSON descriptor, the lane-contract preamble, the fan-out recipe. |
 | `.claude/commands/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows. The authoritative inventory and explicit exceptions live in `docs/agentic-dev-kit/runtime-parity.md`. |
 | `scripts/check_memory_budget.py` | #1, #8 Mechanism over memory | A `SessionStart` hook (wired in `.claude/settings.json`) that warns when an agent-memory file outgrows its budget — the memory-side counterpart to `check_doc_budget.py`. |
-| `scripts/hooks/pr_followup_hook.py` | #5 PR follow-through | A `PostToolUse` hook that fires the mandatory watch-to-green loop the moment a PR is opened or readied — gated on `tool_response` carrying the PR URL or `gh`'s ready acknowledgement, so a command that merely quotes the trigger phrase no longer mandates a watch loop for a PR that does not exist, while an unreadable response still fires, so following through is a mechanism rather than a thing the agent has to remember. Registered on **both** runtimes — `.claude/settings.json` and `.codex/hooks.json`, each passing `--runtime`; `init.sh` prints both registrations on every run and writes neither, having no way to tell a real registration from a mention of one — and reads six config keys: `review.bots`, `review.fallback_commands.<runtime>`, `paths.engines`, `review.fallback_panel.lenses`, `review.fallback_panel.receipt_source` and `review.fallback_panel.lens_compute.<runtime>`. |
+| `scripts/hooks/pr_followup_hook.py` | #5 PR follow-through | A `PostToolUse` hook that fires the mandatory watch-to-green loop the moment a PR is opened or readied — gated on `tool_response` carrying the PR URL or `gh`'s ready acknowledgement, so a command that merely quotes the trigger phrase no longer mandates a watch loop for a PR that does not exist, while an unreadable response still fires, so following through is a mechanism rather than a thing the agent has to remember. Registered for Claude in `.claude/settings.json` and Codex in `.codex/hooks.json`, each passing `--runtime`; `init.sh` prints the registrations and writes neither, having no way to tell a real registration from a mention of one. Codex command definitions must be reviewed through `/hooks`; `kit_doctor` assigns lifecycle semantics only to exact repository-owned command strings across the additive project `hooks.json` and inline `config.toml` sources. Altered strings retain generic path diagnostics, and repository checks cannot assert that the client trusted or loaded them. The engine reads `review.bots`, `review.fallback_commands.<runtime>`, `paths.engines`, `review.fallback_panel.lenses`, `review.fallback_panel.receipt_source` and `review.fallback_panel.lens_compute.<runtime>`. |
 | `docs/AGENTS-sections.md` | #4, #5, #6 | Ready-to-merge persistent instructions for Codex adopters. |
 | `docs/CLAUDE-sections.md` | #4 Merge classes, #5 PR follow-through | Ready-to-paste CLAUDE.md sections: risk-based PR splitting, the mandatory watch-to-green loop, execution rules, the rules-layout convention. |
 | `docs/autonomous-session-playbook.md` | #4, #5, #7 | The full operating contract for operator-requested autonomous sessions — branch hygiene, sequencing, local gate, draft→ready, watch-and-fix to merge, self-merge policy. |
-| `docs/agentic-dev-kit/safety-critical-changes.md` | #6 Safety-critical doctrine | Shared doctrine for send-gates, destructive operations, and kill/recovery paths; bound through the Claude rule and the suggested `AGENTS.md` section. |
+| `docs/agentic-dev-kit/safety-critical-changes.md` | #6 Safety-critical doctrine | Shared doctrine for send-gates, destructive operations, and kill/recovery paths; bound through the Claude rule and precise root `AGENTS.md` routing without a runtime-specific copy. |
 | `docs/agentic-dev-kit/runtime-parity.md` | Runtime parity | Machine-readable workflow inventory and capability matrix for Claude Code and Codex; structural adapter tests derive their expected set from this contract. |
 | `config/dev-model.yaml` | #10 No hardcoding | The single config surface every skill and script reads instead of hardcoding a value. |
 | `scripts/lib/kitconfig.py` | #10 No hardcoding | Stdlib-only reader for `config/dev-model.yaml`, used where an engine must stay dependency-free (`pr_watch.py` declares zero third-party deps). |

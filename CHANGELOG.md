@@ -42,6 +42,28 @@ starts.
 
 ---
 
+## #590 — 2026-08-23
+
+- **BREAKING (report / return shape, gate semantics) — `kit_doctor` now reports
+  exactly identified Codex lifecycle wiring as
+  `verified`, structural drift as `misconfigured`, and unsupported object keys around
+  an exact command as `unverifiable`; the latter states make its process exit non-zero**
+  (`#243`). The bounded check applies to the portable document-budget and
+  PR-follow-through engines across `.codex/hooks.json` and inline
+  `.codex/config.toml`, including project hook enablement and duplicate recognizable
+  references. It does not assign lifecycle meaning to altered shell strings. **If you parse
+  the JSON report, accept `verified`, `misconfigured`, and `unverifiable` as
+  registration states. Reconcile an unverifiable object to the exact command and
+  structural fields printed by `./init.sh`; altered command strings receive only
+  generic path diagnostics. Then
+  review the current definition through `/hooks`. When canonical `hooks` and deprecated
+  `codex_hooks` are both present, keep the canonical value authoritative; both values
+  must still be boolean. If bare Python lacks a standard-library TOML parser, rerun the
+  doctor through `uv`.** Repository
+  inspection does not establish project trust, definition trust, or live execution.
+
+---
+
 ## #588 — 2026-08-23
 
 - **CHANGED — the Codex `SessionStart` registration printed by `./init.sh` and

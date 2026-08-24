@@ -3173,9 +3173,10 @@ def test_a_malformed_baseline_reaches_the_same_note_and_it_does_not_claim_two_ca
 
 
 def _registration(root: Path, surface: str, command: str) -> None:
+    matcher = "^Bash$" if surface == ".codex/hooks.json" else "Bash"
     _write(
         root / surface,
-        json.dumps({"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
+        json.dumps({"hooks": {"PostToolUse": [{"matcher": matcher, "hooks": [
             {"type": "command", "command": command, "timeout": 10}
         ]}]}}),
     )
@@ -3284,6 +3285,17 @@ def test_a_malformed_registration_degrades_instead_of_aborting_the_report(tmp_pa
     assert [s.state for s in statuses if s.surface == ".codex/hooks.json"] == ["unreadable"]
 
 
+def test_a_malformed_codex_project_config_degrades_instead_of_aborting(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / ".codex" / "config.toml", "[hooks\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert [s.state for s in statuses if s.surface == ".codex/config.toml"] == [
+        "unreadable"
+    ]
+
+
 def test_a_session_start_registration_is_checked_too(tmp_path):
     """The walk is over every `command` in the document, not a lookup into the
     events the kit ships today — `SessionStart` is already a second one, and a
@@ -3305,6 +3317,1002 @@ def test_a_session_start_registration_is_checked_too(tmp_path):
     assert [(s.state, s.detail) for s in claude] == [
         ("broken", "scripts/check_memory_budget.py")
     ]
+
+
+def _valid_codex_lifecycle_document() -> dict:
+    return {
+        "hooks": {
+            "SessionStart": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": 'root="$(git rev-parse --show-toplevel 2>/dev/null)" '
+                            '|| exit 0; [ -n "$root" ] || exit 0; '
+                            '[ -z "${JOB_NAME:-}" ] || exit 0; '
+                            'uv run --script "$root/scripts/check_doc_budget.py" '
+                            "--quiet || true",
+                            "timeout": 15,
+                        }
+                    ]
+                }
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": "^Bash$",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": 'root="$(git rev-parse --show-toplevel 2>/dev/null)" '
+                            '|| exit 0; [ -n "$root" ] || exit 0; '
+                            'exec python3 "$root/scripts/hooks/pr_followup_hook.py" '
+                            "--runtime codex",
+                            "timeout": 10,
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+
+
+def _write_codex_lifecycle_fixture(root: Path, document: dict) -> None:
+    _write(root / HOOK_REL, "print('hook')\n")
+    _write(root / ".codex" / "hooks.json", json.dumps(document))
+
+
+def _valid_codex_inline_posttooluse() -> str:
+    return """\
+[[hooks.PostToolUse]]
+matcher = "^Bash$"
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = 'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; [ -n "$root" ] || exit 0; exec python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+timeout = 10
+"""
+
+
+def _has_verified_lifecycle(statuses, name: str) -> bool:
+    return any(
+        status.state == "verified" and status.detail.startswith(name)
+        for status in statuses
+    )
+
+
+def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
+    root = _fake_repo(tmp_path)
+    shipped = json.loads(
+        (REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8")
+    )
+    _write_codex_lifecycle_fixture(root, shipped)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    codex = [s for s in statuses if s.runtime == "codex"]
+
+    assert not [s for s in codex if s.state == "misconfigured"]
+    assert {s.detail for s in codex if s.state == "resolves"} == {
+        "scripts/check_doc_budget.py",
+        HOOK_REL,
+    }
+    assert {s.detail for s in codex if s.state == "verified"} == {
+        "check_doc_budget.py canonical lifecycle form verified",
+        "pr_followup_hook.py canonical lifecycle form verified",
+    }
+
+
+@pytest.mark.parametrize("matcher", ["", "*"])
+def test_codex_lifecycle_semantics_verify_explicit_match_all_session_matchers(
+    tmp_path, matcher
+):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    document["hooks"]["SessionStart"][0]["matcher"] = matcher
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    doc = [s for s in statuses if s.detail.startswith("check_doc_budget.py")]
+
+    assert [(s.state, s.detail) for s in doc] == [
+        ("verified", "check_doc_budget.py supported match-all lifecycle form verified")
+    ]
+
+
+def test_codex_lifecycle_semantics_accept_inline_project_config(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    _write(root / ".codex" / "config.toml", _valid_codex_inline_posttooluse())
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    codex = [s for s in statuses if s.runtime == "codex"]
+
+    assert not [s for s in codex if s.state == "misconfigured"]
+    assert any(s.state == "resolves" and s.detail == HOOK_REL for s in codex)
+    assert any(
+        s.state == "verified"
+        and s.detail == "pr_followup_hook.py canonical lifecycle form verified"
+        for s in codex
+    )
+
+
+def test_nested_hooks_metadata_is_not_an_inline_codex_registration(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    command = _valid_codex_lifecycle_document()["hooks"]["PostToolUse"][0]["hooks"][
+        0
+    ]["command"]
+    _write(
+        root / ".codex" / "config.toml",
+        f"[metadata.hooks]\ncommand = {json.dumps(command)}\n",
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    inline = [s for s in statuses if s.surface == ".codex/config.toml"]
+
+    assert inline == []
+
+
+def test_codex_lifecycle_semantics_detect_cross_source_duplicate(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", _valid_codex_inline_posttooluse())
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert any("pr_followup_hook.py has a duplicate" in detail for detail in details)
+
+
+def test_duplicate_is_attributed_to_the_source_that_contains_it(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    document["hooks"]["SessionStart"].append(
+        json.loads(json.dumps(document["hooks"]["SessionStart"][0]))
+    )
+    _write_codex_lifecycle_fixture(root, document)
+    _write(root / ".codex" / "config.toml", "[features]\nhooks = true\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    duplicates = [
+        s for s in statuses if s.state == "misconfigured" and "duplicate" in s.detail
+    ]
+
+    assert [(s.surface, s.detail) for s in duplicates] == [
+        (".codex/hooks.json", "check_doc_budget.py has a duplicate Codex registration")
+    ]
+
+
+@pytest.mark.parametrize("feature", ["hooks", "codex_hooks"])
+def test_codex_lifecycle_semantics_detect_project_feature_disable(tmp_path, feature):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", f"[features]\n{feature} = false\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert "Codex lifecycle hooks are disabled by the project config" in details
+
+
+def test_codex_lifecycle_semantics_validates_each_present_feature_alias(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(
+        root / ".codex" / "config.toml",
+        "[features]\nhooks = true\ncodex_hooks = 0\n",
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert "Codex project feature codex_hooks must be a boolean" in details
+
+
+def test_invalid_feature_alias_does_not_claim_an_effective_disable(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(
+        root / ".codex" / "config.toml",
+        "[features]\nhooks = false\ncodex_hooks = 0\n",
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert details == ["Codex project feature codex_hooks must be a boolean"]
+
+
+@pytest.mark.parametrize(
+    ("canonical", "deprecated", "disabled"),
+    [
+        (True, False, False),
+        (False, True, True),
+    ],
+)
+def test_canonical_codex_feature_key_takes_precedence(
+    tmp_path, canonical, deprecated, disabled
+):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(
+        root / ".codex" / "config.toml",
+        "[features]\n"
+        f"hooks = {str(canonical).lower()}\n"
+        f"codex_hooks = {str(deprecated).lower()}\n",
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert (
+        "Codex lifecycle hooks are disabled by the project config" in details
+    ) is disabled
+
+
+@pytest.mark.parametrize(
+    ("feature", "value"),
+    [
+        ("hooks", "0"),
+        ("hooks", "0.0"),
+        ("hooks", '"false"'),
+        ("codex_hooks", "0"),
+    ],
+)
+def test_codex_lifecycle_semantics_reject_nonboolean_project_feature(
+    tmp_path, feature, value
+):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", f"[features]\n{feature} = {value}\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert f"Codex project feature {feature} must be a boolean" in details
+
+
+def test_codex_lifecycle_semantics_reject_nontable_project_features(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", "features = 0\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert "Codex project features must be a table" in details
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        "features = 0\n",
+        '[features]\nhooks = "false"\n',
+    ],
+)
+def test_unrelated_codex_feature_shape_is_ignored_without_identified_lifecycle_commands(
+    tmp_path, config
+):
+    root = _fake_repo(tmp_path)
+    _write(root / ".codex" / "config.toml", config)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not [status for status in statuses if status.state == "misconfigured"]
+
+
+def test_codex_lifecycle_semantics_reject_float_inline_timeout(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    invalid = _valid_codex_inline_posttooluse().replace("timeout = 10", "timeout = 10.0")
+    _write(root / ".codex" / "config.toml", invalid)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert "pr_followup_hook.py timeout must be 10 seconds" in details
+
+
+def test_inline_codex_config_is_explicitly_unreadable_without_tomllib(
+    tmp_path, monkeypatch
+):
+    root = _fake_repo(tmp_path)
+    _write(root / ".codex" / "config.toml", _valid_codex_inline_posttooluse())
+    monkeypatch.setattr(kit_doctor, "tomllib", None)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert [
+        (status.state, status.detail)
+        for status in statuses
+        if status.surface == ".codex/config.toml"
+    ] == [("unreadable", "TOML parser unavailable; run kit_doctor through uv")]
+
+
+def test_codex_lifecycle_semantics_validate_inline_project_config(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    invalid = _valid_codex_inline_posttooluse().replace(
+        "--runtime codex", "--runtime claude"
+    )
+    _write(root / ".codex" / "config.toml", invalid)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
+
+
+# Frozen from the fallback-panel probes accumulated on PR #590. These cases are
+# a hostile corpus, not a grammar specification: each mutation must fail to
+# receive the positive ``verified`` result, but the checker does not explain its
+# shell behavior. Altered command strings receive no lifecycle classification;
+# the generic path axis remains independent.
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("doc-matcher", "for open-ended match-all coverage"),
+        ("doc-matcher-container", "for open-ended match-all coverage"),
+        ("doc-matcher-null", "for open-ended match-all coverage"),
+        ("doc-timeout", "check_doc_budget.py timeout must be 15 seconds"),
+        ("doc-timeout-float", "check_doc_budget.py timeout must be 15 seconds"),
+        ("doc-job-skip", "must use the shipped scheduled-run guard"),
+        ("doc-job-reversed", "must use the shipped scheduled-run guard"),
+        ("doc-job-comment", "must use the shipped scheduled-run guard"),
+        ("doc-job-literal", "must use the shipped scheduled-run guard"),
+        ("doc-job-fragmented", "must use the shipped scheduled-run guard"),
+        ("doc-job-escaped", "must use the shipped scheduled-run guard"),
+        ("doc-job-late", "must use the shipped scheduled-run guard"),
+        ("doc-job-echo", "must use the shipped scheduled-run guard"),
+        ("doc-job-disabled", "must use the shipped scheduled-run guard"),
+        ("doc-job-reassigned", "must use the shipped scheduled-run guard"),
+        ("doc-read-job", "must use the shipped Git-root"),
+        ("doc-root-guard-missing", "must use the shipped Git-root"),
+        ("doc-quiet", "must run in quiet mode"),
+        ("doc-quiet-comment", "must run in quiet mode"),
+        ("doc-quiet-unbound", "must run in quiet mode"),
+        ("doc-quiet-json", "quiet mode must not be overridden"),
+        ("doc-quiet-json-equals", "quiet mode must not be overridden"),
+        ("doc-root-option", "must use repository-resolved root and config"),
+        ("doc-config-option", "must use repository-resolved root and config"),
+        ("doc-uv-help", "must use the shipped uv run --script launcher"),
+        ("doc-exec", "must use the shipped uv run --script launcher"),
+        ("doc-root-stderr", "must use the shipped Git-root"),
+        ("doc-stray-argument", "must use only the shipped --quiet argument"),
+        ("doc-redirection", "must not use shell redirection"),
+        ("pr-event", "must be registered under PostToolUse"),
+        ("pr-matcher", 'matcher must be "^Bash$"'),
+        ("pr-timeout", "pr_followup_hook.py timeout must be 10 seconds"),
+        ("pr-timeout-float", "pr_followup_hook.py timeout must be 10 seconds"),
+        ("pr-runtime", "must pass --runtime codex"),
+        ("pr-runtime-comment", "must pass --runtime codex"),
+        ("pr-runtime-unbound", "must pass --runtime codex"),
+        ("pr-runtime-shadowed", "must pass --runtime codex"),
+        ("pr-runtime-expanded", "must pass --runtime codex"),
+        ("pr-runtime-crlf", "must pass --runtime codex"),
+        ("pr-leading-operator", "command must use valid shell syntax"),
+        ("pr-consecutive-operator", "command must use valid shell syntax"),
+        ("pr-nul-sentinel", "command must use valid shell syntax"),
+        ("pr-leading-comment", "must pass --runtime codex"),
+        ("pr-absolute-launcher", "must use the shipped python3 launcher"),
+        ("pr-escaped-space-comment", "must use supported shell control flow"),
+        ("pr-runtime-midword-hash", "must pass --runtime codex"),
+        ("pr-echo-argument", "path must be invoked as the configured kit engine"),
+        ("pr-python-data", "path must be invoked as the configured kit engine"),
+        ("pr-disabled-invocation", "must use supported shell control flow"),
+        ("pr-or-invocation", "must use supported shell control flow"),
+        ("pr-piped-invocation", "must use supported shell control flow"),
+        ("pr-background-invocation", "must use supported shell control flow"),
+        ("pr-exit-before-invocation", "must use supported shell control flow"),
+        ("pr-redirection", "must not use shell redirection"),
+        ("pr-dup-redirection", "must not use shell redirection"),
+        ("pr-group-exit", "must not use compound shell syntax"),
+        ("pr-conditional", "must not use compound shell syntax"),
+        ("pr-heredoc", "path must be invoked as the configured kit engine"),
+        ("pr-command-substitution", "must not use compound shell syntax"),
+        ("pr-inline-root", "must not use compound shell syntax"),
+        ("pr-read-root", "must use the shipped Git-root"),
+        ("pr-root-guard-missing", "must use the shipped Git-root"),
+        ("absolute-dead-prefix", "must use the shipped Git-root"),
+        ("relative-path", "path must not depend on the session working directory"),
+        ("pwd-path", "path must not depend on the session working directory"),
+        ("pwd-command-path", "path must not depend on the session working directory"),
+        ("pwd-parameter-path", "path must not depend on the session working directory"),
+        ("root-pwd-default-path", "path must not depend on the session working directory"),
+        ("root-parameter-path", "path must not depend on the session working directory"),
+        ("root-traversal-path", "path must resolve to the configured kit engine"),
+        ("root-nested-path", "path must resolve to the configured kit engine"),
+        ("disabled-root-path", "path must not depend on the session working directory"),
+        ("dead-root-chain", "path must not depend on the session working directory"),
+        ("root-pwd-alias", "path must not depend on the session working directory"),
+        ("root-overwritten", "path must not depend on the session working directory"),
+        ("root-unquoted-guard", "must use the shipped Git-root"),
+        ("root-single-quoted-path", "path must not depend on the session working directory"),
+        ("root-fragmented-path", "path must not depend on the session working directory"),
+        ("handler-type", "must use a command handler"),
+        ("invalid-shell", "command must use valid shell syntax"),
+    ],
+)
+def test_codex_lifecycle_hostile_corpus_is_never_verified(
+    tmp_path, mutation, expected
+):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    session = document["hooks"]["SessionStart"][0]
+    session_hook = session["hooks"][0]
+    post = document["hooks"]["PostToolUse"][0]
+    post_hook = post["hooks"][0]
+
+    if mutation == "doc-matcher":
+        session["matcher"] = "^startup$"
+    elif mutation == "doc-matcher-container":
+        session["matcher"] = ["startup"]
+    elif mutation == "doc-matcher-null":
+        session["matcher"] = None
+    elif mutation == "doc-timeout":
+        session_hook["timeout"] = 14
+    elif mutation == "doc-timeout-float":
+        session_hook["timeout"] = 15.0
+    elif mutation == "doc-job-skip":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ] || exit 0; ', ""
+        )
+    elif mutation == "doc-job-reversed":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ]', '[ -n "${JOB_NAME:-}" ]'
+        )
+    elif mutation == "doc-job-comment":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ] || exit 0; ', ""
+        ) + ' # [ -z "${JOB_NAME:-}" ] || exit 0'
+    elif mutation == "doc-job-literal":
+        session_hook["command"] = session_hook["command"].replace(
+            '"${JOB_NAME:-}"', "'${JOB_NAME:-}'"
+        )
+    elif mutation == "doc-job-fragmented":
+        session_hook["command"] = session_hook["command"].replace(
+            '"${JOB_NAME:-}"', '"$"\'JOB_NAME\''
+        )
+    elif mutation == "doc-job-escaped":
+        session_hook["command"] = session_hook["command"].replace(
+            '"${JOB_NAME:-}"', r"\${JOB_NAME:-}"
+        )
+    elif mutation == "doc-job-late":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ] || exit 0; ', ""
+        ) + '; [ -z "${JOB_NAME:-}" ] || exit 0'
+    elif mutation == "doc-job-echo":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ]', 'echo [ -z "${JOB_NAME:-}" ]'
+        )
+    elif mutation == "doc-job-disabled":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ]', 'false && [ -z "${JOB_NAME:-}" ]'
+        )
+    elif mutation == "doc-job-reassigned":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ]', 'JOB_NAME=; [ -z "${JOB_NAME:-}" ]'
+        )
+    elif mutation == "doc-read-job":
+        session_hook["command"] = session_hook["command"].replace(
+            '[ -z "${JOB_NAME:-}" ]', 'read JOB_NAME; [ -z "${JOB_NAME:-}" ]'
+        )
+    elif mutation == "doc-root-guard-missing":
+        session_hook["command"] = session_hook["command"].replace(
+            ' || exit 0; [ -n "$root" ] || exit 0;', ";"
+        )
+    elif mutation == "doc-quiet":
+        session_hook["command"] = session_hook["command"].replace(" --quiet", "")
+    elif mutation == "doc-quiet-comment":
+        session_hook["command"] = session_hook["command"].replace(
+            " --quiet", ""
+        ) + " # --quiet"
+    elif mutation == "doc-quiet-unbound":
+        session_hook["command"] = session_hook["command"].replace(
+            " --quiet", ""
+        ) + "; echo --quiet"
+    elif mutation == "doc-quiet-json":
+        session_hook["command"] = session_hook["command"].replace(
+            "--quiet", "--quiet --json"
+        )
+    elif mutation == "doc-quiet-json-equals":
+        session_hook["command"] = session_hook["command"].replace(
+            "--quiet", "--quiet --json=true"
+        )
+    elif mutation == "doc-root-option":
+        session_hook["command"] = session_hook["command"].replace(
+            "--quiet", '--quiet --root "$PWD"'
+        )
+    elif mutation == "doc-config-option":
+        session_hook["command"] = session_hook["command"].replace(
+            "--quiet", "--quiet --config=config/dev-model.yaml"
+        )
+    elif mutation == "doc-uv-help":
+        session_hook["command"] = session_hook["command"].replace(
+            "uv run --script", "uv run --help --script"
+        )
+    elif mutation == "doc-exec":
+        session_hook["command"] = session_hook["command"].replace(
+            "uv run --script", "exec uv run --script"
+        )
+    elif mutation == "doc-root-stderr":
+        session_hook["command"] = session_hook["command"].replace(
+            " --show-toplevel 2>/dev/null", " --show-toplevel"
+        )
+    elif mutation == "doc-stray-argument":
+        session_hook["command"] = session_hook["command"].replace(
+            "--quiet", "--quiet stray-argument"
+        )
+    elif mutation == "doc-redirection":
+        session_hook["command"] = session_hook["command"].replace(
+            "--quiet", "> --quiet"
+        )
+    elif mutation == "pr-event":
+        document["hooks"]["SessionStart"].append(post)
+        document["hooks"]["PostToolUse"] = []
+    elif mutation == "pr-matcher":
+        post["matcher"] = "Bash"
+    elif mutation == "pr-timeout":
+        post_hook["timeout"] = 11
+    elif mutation == "pr-timeout-float":
+        post_hook["timeout"] = 10.0
+    elif mutation == "pr-runtime":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", "--runtime claude"
+        )
+    elif mutation == "pr-runtime-comment":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", "--runtime claude # --runtime codex"
+        )
+    elif mutation == "pr-runtime-unbound":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", "--runtime claude; echo --runtime codex"
+        )
+    elif mutation == "pr-runtime-shadowed":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", "--runtime claude --runtime codex"
+        )
+    elif mutation == "pr-runtime-expanded":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", '"$RUNTIME_ARG" --runtime codex'
+        )
+    elif mutation == "pr-runtime-crlf":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", '--runtime "co\\\r\ndex"'
+        )
+    elif mutation == "pr-leading-operator":
+        post_hook["command"] = "&& " + post_hook["command"]
+    elif mutation == "pr-consecutive-operator":
+        post_hook["command"] = post_hook["command"].replace(
+            " || exit 0", " || || exit 0", 1
+        )
+    elif mutation == "pr-nul-sentinel":
+        post_hook["command"] = post_hook["command"].replace(
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            '"\x00devkit-root\x00/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-leading-comment":
+        post_hook["command"] = "# explanation\n" + post_hook["command"].replace(
+            "--runtime codex", "--runtime claude"
+        )
+    elif mutation == "pr-absolute-launcher":
+        post_hook["command"] = post_hook["command"].replace(
+            "exec python3", "exec /definitely/not-installed/python3"
+        )
+    elif mutation == "pr-escaped-space-comment":
+        post_hook["command"] += r" harmless\ #; false"
+    elif mutation == "pr-runtime-midword-hash":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", "--runtime codex#typo"
+        )
+    elif mutation == "pr-echo-argument":
+        post_hook["command"] = (
+            'root="$(git rev-parse --show-toplevel)"; '
+            'echo "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "pr-python-data":
+        post_hook["command"] = (
+            'root="$(git rev-parse --show-toplevel)"; '
+            'python3 -c pass "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "pr-disabled-invocation":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+            'false && exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-or-invocation":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+            'true || exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-piped-invocation":
+        post_hook["command"] += " | true"
+    elif mutation == "pr-background-invocation":
+        post_hook["command"] += " &"
+    elif mutation == "pr-exit-before-invocation":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+            'exit 0; exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-redirection":
+        post_hook["command"] = post_hook["command"].replace(
+            "--runtime codex", "> --runtime codex"
+        )
+    elif mutation == "pr-dup-redirection":
+        post_hook["command"] += " 1>&2"
+    elif mutation == "pr-group-exit":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+            '{ exit 0; }; exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-conditional":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex',
+            'if false; then :; exec python3 '
+            '"$root/scripts/hooks/pr_followup_hook.py" --runtime codex; fi',
+        )
+    elif mutation == "pr-heredoc":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex',
+            'cat <<EOF\nexec python3 "$root/scripts/hooks/pr_followup_hook.py" '
+            '--runtime codex\nEOF',
+        )
+    elif mutation == "pr-command-substitution":
+        post_hook["command"] += (
+            ' "$(python3 "$root/scripts/hooks/pr_followup_hook.py" '
+            '--runtime claude)"'
+        )
+    elif mutation == "pr-inline-root":
+        post_hook["command"] = post_hook["command"].replace(
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            '"$(git rev-parse --show-toplevel)/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-read-root":
+        post_hook["command"] = post_hook["command"].replace(
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+            'read root; exec python3 "$root/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "pr-root-guard-missing":
+        post_hook["command"] = post_hook["command"].replace(
+            ' || exit 0; [ -n "$root" ] || exit 0;', ";"
+        )
+    elif mutation == "absolute-dead-prefix":
+        post_hook["command"] = (
+            f'set -e; false; exec python3 "{root / HOOK_REL}" --runtime codex'
+        )
+    elif mutation == "relative-path":
+        post_hook["command"] = (
+            "python3 scripts/hooks/pr_followup_hook.py --runtime codex"
+        )
+    elif mutation == "pwd-path":
+        post_hook["command"] = (
+            'python3 "$PWD/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "pwd-command-path":
+        post_hook["command"] = (
+            'python3 "$(pwd)/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "pwd-parameter-path":
+        post_hook["command"] = (
+            'python3 "${PWD:+$PWD}/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "root-pwd-default-path":
+        post_hook["command"] = (
+            'python3 "${root:-$PWD}/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "root-parameter-path":
+        post_hook["command"] = (
+            'python3 "${root:+/definitely/not-the-repo}/scripts/hooks/'
+            'pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "root-traversal-path":
+        post_hook["command"] = post_hook["command"].replace(
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            '"$root/../../sibling/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "root-nested-path":
+        post_hook["command"] = post_hook["command"].replace(
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            '"$root/decoy/scripts/hooks/pr_followup_hook.py"',
+        )
+    elif mutation == "disabled-root-path":
+        post_hook["command"] = (
+            'root="$(git rev-parse --show-toplevel)"; false && cd "$root"; '
+            "python3 scripts/hooks/pr_followup_hook.py --runtime codex"
+        )
+    elif mutation == "dead-root-chain":
+        post_hook["command"] = (
+            'root="$(git rev-parse --show-toplevel)"; false && cd "$root" && '
+            "python3 scripts/hooks/pr_followup_hook.py --runtime codex"
+        )
+    elif mutation == "root-pwd-alias":
+        post_hook["command"] = (
+            'root=$PWD; exec python3 "$root/scripts/hooks/pr_followup_hook.py" '
+            "--runtime codex"
+        )
+    elif mutation == "root-overwritten":
+        post_hook["command"] = (
+            'root="$(git rev-parse --show-toplevel)"; root=$PWD; '
+            'exec python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+        )
+    elif mutation == "root-unquoted-guard":
+        post_hook["command"] = post_hook["command"].replace(
+            '[ -n "$root" ]', "[ -n $root ]"
+        )
+    elif mutation == "root-single-quoted-path":
+        post_hook["command"] = post_hook["command"].replace(
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            "'$root/scripts/hooks/pr_followup_hook.py'",
+        )
+    elif mutation == "root-fragmented-path":
+        post_hook["command"] = post_hook["command"].replace(
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            '"$"\'root/scripts/hooks/pr_followup_hook.py\'',
+        )
+    elif mutation == "handler-type":
+        post_hook["type"] = "prompt"
+    elif mutation == "invalid-shell":
+        post_hook["command"] += ' "'
+
+    _write_codex_lifecycle_fixture(root, document)
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    target = "check_doc_budget.py" if mutation.startswith("doc-") else "pr_followup_hook.py"
+    assert not [
+        status
+        for status in statuses
+        if status.state == "verified" and status.detail.startswith(target)
+    ]
+    rejected = [
+        s
+        for s in statuses
+        if s.state in ("misconfigured", "unverifiable") and target in s.detail
+    ]
+    structurally_invalid = {
+        "doc-matcher",
+        "doc-matcher-container",
+        "doc-matcher-null",
+        "doc-timeout",
+        "doc-timeout-float",
+        "pr-event",
+        "pr-matcher",
+        "pr-timeout",
+        "pr-timeout-float",
+        "handler-type",
+    }
+    if mutation in structurally_invalid:
+        assert rejected, f"{mutation} was neither misconfigured nor unverifiable"
+
+    if rejected:
+        assert any(
+            expected in status.detail or status.state == "unverifiable"
+            for status in rejected
+        ), [(status.state, status.detail) for status in rejected]
+
+
+@pytest.mark.parametrize("runtime_arg", ["--runtime codex", "--runtime=codex"])
+@pytest.mark.parametrize("cd_command", ['cd "$root"', 'cd -P "$root"', 'cd -- "$root"'])
+def test_noncanonical_root_anchored_relative_paths_are_not_verified(
+    tmp_path, runtime_arg, cd_command
+):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] = (
+        'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+        f'[ -n "$root" ] || exit 0; {cd_command} || exit 0; '
+        f"python3 scripts/hooks/pr_followup_hook.py {runtime_arg}"
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
+
+
+@pytest.mark.parametrize(
+    "runtime_args", ["--runtime= --runtime codex", '--runtime "" --runtime=codex']
+)
+def test_noncanonical_repeated_runtime_options_are_not_verified(runtime_args, tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] = post_hook["command"].replace("--runtime codex", runtime_args)
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
+
+
+def test_adjacent_shell_operators_are_not_verified(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] = post_hook["command"].replace(
+        "--runtime codex", "--runtime claude&&echo ignored"
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
+
+
+@pytest.mark.parametrize(
+    "container",
+    ["document", "events", "groups", "group-entry", "handlers", "handler-entry", "command"],
+)
+def test_codex_semantics_reject_malformed_lifecycle_containers(tmp_path, container):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post = document["hooks"]["PostToolUse"][0]
+    post_hook = post["hooks"][0]
+    if container == "document":
+        document = [document]
+    elif container == "events":
+        document["hooks"] = [document["hooks"]]
+    elif container == "groups":
+        document["hooks"]["PostToolUse"] = post
+    elif container == "group-entry":
+        document["hooks"]["PostToolUse"] = [[post]]
+    elif container == "handler-entry":
+        post["hooks"] = [[post_hook]]
+    elif container == "command":
+        post_hook["command"] = [post_hook["command"]]
+    else:
+        post["hooks"] = post_hook
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert any("must be" in detail for detail in details), details
+
+
+def test_codex_semantics_reject_a_nested_command_without_a_handler_command(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["metadata"] = {"command": post_hook.pop("command")}
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    details = [s.detail for s in statuses if s.state == "misconfigured"]
+
+    assert any("command must be a string" in detail for detail in details), details
+
+
+def test_script_word_scan_preserves_equals_options_as_arguments():
+    lexed, words = kit_doctor._script_words(
+        "echo --script=pr_followup_hook.py --runtime=codex"
+    )
+
+    assert lexed
+    assert "--script=pr_followup_hook.py" in words
+    assert "--runtime=codex" in words
+    assert kit_doctor._match_word(words, "pr_followup_hook.py") is None
+
+
+def test_codex_misconfiguration_renders_as_a_failure(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    document["hooks"]["PostToolUse"][0]["matcher"] = "Bash"
+    _write_codex_lifecycle_fixture(root, document)
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    rendered = kit_doctor.render(report)
+
+    assert "✗ .codex/hooks.json [codex]" in rendered
+    assert "lifecycle wiring does not match" in rendered
+
+
+def test_exact_codex_command_with_unsupported_keys_is_an_unverifiable_failure(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    hook["async"] = False
+    _write_codex_lifecycle_fixture(root, document)
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+    rendered = kit_doctor.render(report)
+
+    assert any(s.state == "unverifiable" for s in report.dead_registrations)
+    assert "✗ .codex/hooks.json [codex]" in rendered
+    assert "installer-emitted key set was verified" in rendered
+
+
+@pytest.mark.parametrize(
+    ("container", "key", "value"),
+    [
+        ("handler", "async", False),
+        ("group", "description", "extra metadata"),
+    ],
+)
+def test_unsupported_codex_object_keys_are_unverifiable(
+    tmp_path, container, key, value
+):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    group = document["hooks"]["PostToolUse"][0]
+    target = group["hooks"][0] if container == "handler" else group
+    target[key] = value
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert any(s.state == "unverifiable" for s in statuses)
+    assert not [
+        s
+        for s in statuses
+        if s.state == "verified"
+        and s.detail.startswith("pr_followup_hook.py")
+    ]
+
+
+def test_codex_rejects_the_claude_only_memory_tripwire(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    document["hooks"]["SessionStart"][0]["hooks"].append(
+        {
+            "type": "command",
+            "command": (
+                'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+                '[ -n "$root" ] || exit 0; [ -z "${JOB_NAME:-}" ] || exit 0; '
+                'uv run --script "$root/scripts/check_memory_budget.py" '
+                "--quiet || true"
+            ),
+            "timeout": 15,
+        }
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert any(
+        s.state == "misconfigured" and "Claude-only" in s.detail for s in statuses
+    )
+
+
+def test_duplicate_codex_lifecycle_registration_is_a_finding(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    document["hooks"]["SessionStart"].append(
+        json.loads(json.dumps(document["hooks"]["SessionStart"][0]))
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+
+    assert any(
+        s.state == "misconfigured" and "duplicate" in s.detail
+        for s in report.dead_registrations
+    )
+
+
+def test_multiple_invocations_inside_one_command_are_not_verified(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    hook["command"] = hook["command"].replace("exec python3", "python3")
+    hook["command"] += (
+        '; python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+
+    assert not _has_verified_lifecycle(report.registrations, "pr_followup_hook.py")
+    assert not [s for s in report.dead_registrations if "duplicate" in s.detail]
+
+
+def test_command_after_engine_exec_is_not_assigned_lifecycle_semantics(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    hook["command"] += (
+        '; python3 "$root/scripts/hooks/pr_followup_hook.py" --runtime codex'
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
+    assert not [s for s in statuses if "duplicate" in s.detail]
 
 
 def test_a_declined_pre_push_is_reported_as_declined_not_as_missing(tmp_path, capsys):
@@ -3535,8 +4543,7 @@ def test_a_variable_that_merely_starts_with_root_is_not_expanded(tmp_path):
     report = _inspect(root, {ENGINE: _sha("x")}, None)
     codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
 
-    assert [s.state for s in codex] == ["unresolvable"]
-    assert report.dead_registrations == []
+    assert any(s.state == "unresolvable" for s in codex)
 
 
 def test_only_invocable_scripts_are_candidates_for_a_registration_match(tmp_path):
@@ -3641,11 +4648,9 @@ def test_a_repo_root_containing_a_space_does_not_break_the_path_scan(tmp_path):
     assert report.dead_registrations == []
 
 
-def test_the_inline_rev_parse_form_is_read_as_the_root(tmp_path):
-    """`$(git rev-parse --show-toplevel)` contains spaces of its own, so it has
-    the same hazard as a spaced root and is covered by the same sentinel. An
-    adopter who wrote the registration by hand rather than from `init.sh`'s
-    printed block reaches this shape."""
+def test_inline_rev_parse_resolves_without_getting_lifecycle_semantics(tmp_path):
+    """Path discovery can resolve this form without making it safe lifecycle
+    wiring: a non-repository cwd turns the substitution into an empty root."""
     root = _fake_repo(tmp_path)
     _write(root / HOOK_REL, "print('hook')\n")
     _registration(
@@ -3705,7 +4710,96 @@ def test_a_quoted_absolute_path_containing_a_space_is_one_path(tmp_path):
     report = _inspect(root, {ENGINE: _sha("x")}, None)
     codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
 
-    assert [(s.state, s.detail) for s in codex] == [("resolves", HOOK_REL)]
+    assert any(s.state == "resolves" and s.detail == HOOK_REL for s in codex)
+
+
+def test_an_external_same_basename_hook_is_not_kit_lifecycle_wiring(tmp_path):
+    root = _fake_repo(tmp_path / "repo")
+    external = tmp_path / "external" / "pr_followup_hook.py"
+    _write(external, "print('adopter hook')\n")
+    _registration(
+        root,
+        ".codex/hooks.json",
+        f'exec python3 "{external}" --runtime codex',
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    codex = [s for s in statuses if s.surface == ".codex/hooks.json"]
+
+    assert [(s.state, s.detail) for s in codex] == [("resolves", str(external))]
+
+
+def test_leading_assignment_keeps_an_altered_lifecycle_string_unidentified(tmp_path):
+    root = _fake_repo(tmp_path / "repo")
+    external = tmp_path / "external" / "pr_followup_hook.py"
+    _write(external, "print('adopter hook')\n")
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] = post_hook["command"].replace(
+        "--runtime codex", "--runtime claude"
+    )
+    post_hook["command"] = f'DECOY="{external}"; ' + post_hook["command"]
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    assert not [
+        s
+        for s in statuses
+        if s.state == "verified" and s.detail.startswith("pr_followup_hook.py")
+    ]
+
+
+def test_an_inert_kit_path_does_not_bless_an_external_invocation(tmp_path):
+    root = _fake_repo(tmp_path / "repo")
+    external = tmp_path / "external" / "pr_followup_hook.py"
+    _write(external, "print('adopter hook')\n")
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] = (
+        f'python3 "{external}" --runtime codex '
+        f'"{root / HOOK_REL}"'
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    assert not [
+        s
+        for s in statuses
+        if s.state == "verified" and s.detail.startswith("pr_followup_hook.py")
+    ]
+
+
+@pytest.mark.parametrize(
+    ("event", "from_path", "to_path"),
+    [
+        (
+            "SessionStart",
+            '"$root/scripts/check_doc_budget.py"',
+            '"$root/../../sibling/scripts/check_doc_budget.py"',
+        ),
+        (
+            "PostToolUse",
+            '"$root/scripts/hooks/pr_followup_hook.py"',
+            '"$root/../../sibling/scripts/hooks/pr_followup_hook.py"',
+        ),
+    ],
+)
+def test_codex_lifecycle_paths_cannot_traverse_outside_the_repo(
+    tmp_path, event, from_path, to_path
+):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    handler = document["hooks"][event][0]["hooks"][0]
+    handler["command"] = handler["command"].replace(from_path, to_path)
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    target = "check_doc_budget.py" if event == "SessionStart" else "pr_followup_hook.py"
+    assert not [
+        s
+        for s in statuses
+        if s.state == "verified" and s.detail.startswith(target)
+    ]
 
 
 def test_an_unbalanced_quote_is_reported_as_unjudged_not_as_absent(tmp_path):
@@ -3837,6 +4931,77 @@ def test_a_name_mentioned_in_a_shell_comment_is_not_an_invocation(tmp_path):
     assert [(s.state, s.detail) for s in claude] == [("resolves", HOOK_REL)]
 
 
+@pytest.mark.parametrize(
+    "target",
+    [
+        "scripts/check_doc_budget.py",
+        "scripts/hooks/pr_followup_hook.py",
+        "scripts/check_memory_budget.py",
+    ],
+)
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "echo ok # ",
+        'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+        '[ -n "$root" ] || exit 0; echo ok # ',
+    ],
+)
+def test_codex_lifecycle_name_in_an_unrelated_comment_is_not_a_candidate(
+    tmp_path, target, prefix
+):
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    document = {
+        "hooks": {
+            "PostToolUse": [
+                {
+                    "matcher": "^Bash$",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": f"{prefix}{target}",
+                            "timeout": 10,
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    target_name = PurePosixPath(target).name
+    semantic_failures = [
+        s
+        for s in statuses
+        if s.state in ("misconfigured", "unverifiable")
+        and target_name in s.detail
+    ]
+
+    assert semantic_failures == []
+
+
+def test_inert_prefix_keeps_an_altered_lifecycle_string_on_the_path_axis(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write(root / HOOK_REL, "print('hook')\n")
+    document = _valid_codex_lifecycle_document()
+    hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    hook["command"] = "exit 0; " + hook["command"]
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    semantic = [
+        status
+        for status in statuses
+        if status.state in ("verified", "misconfigured", "unverifiable")
+        and status.detail.startswith("pr_followup_hook.py")
+    ]
+
+    assert semantic == []
+    assert any(status.state == "resolves" and status.detail == HOOK_REL for status in statuses)
+
+
 def test_an_escaped_space_keeps_a_path_whole(tmp_path):
     """`\\ ` is how a shell carries a space without quotes. A split that ignores
     the escape cuts the path in half, which is the same defect as the two the
@@ -3851,7 +5016,68 @@ def test_an_escaped_space_keeps_a_path_whole(tmp_path):
     report = _inspect(root, {ENGINE: _sha("x")}, None)
     codex = [s for s in report.registrations if s.surface == ".codex/hooks.json"]
 
-    assert [(s.state, s.detail) for s in codex] == [("resolves", HOOK_REL)]
+    assert any(s.state == "resolves" and s.detail == HOOK_REL for s in codex)
+
+
+def test_a_shell_line_continuation_is_not_verified(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] = post_hook["command"].replace(
+        "--runtime codex", "--runtime \\\n codex"
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
+
+
+def test_adjacent_path_fragments_are_not_verified(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    session_hook = document["hooks"]["SessionStart"][0]["hooks"][0]
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    session_hook["command"] = session_hook["command"].replace(
+        '"$root/scripts/check_doc_budget.py"', '"$root"/scripts/check_doc_budget.py'
+    )
+    post_hook["command"] = post_hook["command"].replace(
+        '"$root/scripts/hooks/pr_followup_hook.py"',
+        '"$root"/scripts/hooks/pr_followup_hook.py',
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not _has_verified_lifecycle(statuses, "check_doc_budget.py")
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
+
+
+def test_an_escaped_literal_dollar_path_is_not_verified(tmp_path):
+    root = _fake_repo(tmp_path / "$repo")
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    escaped_hook = str(root / HOOK_REL).replace("$", r"\$")
+    post_hook["command"] = post_hook["command"].replace(
+        '"$root/scripts/hooks/pr_followup_hook.py"', f'"{escaped_hook}"'
+    )
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
+
+
+def test_comment_text_makes_the_command_not_exact(tmp_path):
+    root = _fake_repo(tmp_path)
+    document = _valid_codex_lifecycle_document()
+    post_hook = document["hooks"]["PostToolUse"][0]["hooks"][0]
+    post_hook["command"] += " # explanatory $(inactive)"
+    _write_codex_lifecycle_fixture(root, document)
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert not _has_verified_lifecycle(statuses, "pr_followup_hook.py")
 
 
 def test_the_optional_overlay_is_silent_when_it_registers_nothing_too(tmp_path):

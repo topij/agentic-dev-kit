@@ -87,17 +87,35 @@ records broader capability parity that cannot be expressed as an adapter path.
 |---|---|---|---|---|
 | Repository instructions | `AGENTS.md` | `CLAUDE.md` imports it | reads `AGENTS.md` directly | aligned |
 | Workflow adapters | `docs/agentic-dev-kit/workflows/` | `.claude/commands/` | `.agents/skills/` | declaration above is authoritative |
-| Safety-critical doctrine | `docs/agentic-dev-kit/safety-critical-changes.md` | path-scoped `.claude/rules/` binding | broad `AGENTS.md` routing only | gap: add an enforceable Codex binding without forking doctrine |
-| Document-budget tripwire | `check_doc_budget.py` | `SessionStart` | `SessionStart` | gap: repository wiring is present; live trusted-session validation is pending |
+| Safety-critical doctrine | `docs/agentic-dev-kit/safety-critical-changes.md` | path-scoped `.claude/rules/` binding | precise root `AGENTS.md` routing for the merge-authority engines | aligned: runtime bindings load the shared doctrine without copying it |
+| Document-budget tripwire | `check_doc_budget.py` | `SessionStart` | open-ended match-all `SessionStart` with a bounded command timeout | aligned: repository semantics are deterministic and the supported trusted client ran the equivalent lifecycle shape |
 | Runtime memory tripwire | runtime-specific artifact | `check_memory_budget.py` checks Claude's `MEMORY.md` | no corresponding repository artifact | intentional difference: never invoke the Claude engine on Codex |
-| PR follow-through | `pr_followup_hook.py` | `PostToolUse` with Claude runtime mapping | `PostToolUse` with Codex runtime mapping | aligned; trust remains a Codex operator step |
+| PR follow-through | `pr_followup_hook.py` | `PostToolUse` with Claude runtime mapping | `^Bash$` `PostToolUse` with Codex runtime mapping and a bounded command timeout | aligned; current hook definitions still require Codex review and trust |
 | Review fallback | shared panel doctrine and receipt | isolated reviewers where available | isolated reviewers where available | aligned outcome; compute controls remain runtime-specific |
 | Capability tiers | `config/dev-model.yaml` neutral tiers | model mapping | reasoning-effort mapping | gap: calibrate Codex model plus effort mappings |
 | Headless lane isolation | shared lane descriptor and contract | launcher-dependent | launcher-dependent | gap: Codex needs a launcher that can apply worktree and environment fields |
 | Command permissions | repository policy | `.claude/settings.json` permissions | no shipped project rules | gap: decide and ship the Codex policy surface |
 | Tracker and notification tools | backend names in config | runtime client or MCP | runtime client or MCP | gap: declare dependencies and preflight behavior |
 | Adapter upgrade | shared workflow refresh | existing adapter retained | existing adapter retained | gap: runtime-specific fixes can remain stale |
-| Drift inspection | `kit_doctor` | registration paths resolved | registration paths resolved | gap: semantic hook and adapter checks remain |
+| Drift inspection | `kit_doctor` | registration paths resolved | merged project hook sources, project enablement, and structural lifecycle fields checked only for exact repository-owned command strings; altered strings retain generic path diagnostics | gap narrowed: runtime-adapter and general shell semantics remain |
+
+## Lifecycle validation boundary
+
+Repository checks establish that the shipped Codex JSON names the portable engine,
+keeps the Claude-only memory engine out, and exactly matches the canonical event,
+matcher, handler, command, and timeout objects printed by `init.sh`. They also inspect
+additive inline project hooks and each present project hook feature-switch alias. An
+altered command string is not assigned lifecycle semantics or accepted as
+shell-equivalent; it retains the generic registration-path result. Repository
+inspection does not establish that a client trusted or executed the definitions.
+Each present project feature spelling must be boolean; canonical `hooks` supplies the
+effective value when deprecated `codex_hooks` is also present.
+
+The separate trusted-client record is
+[`saved_plans/codex-hooks-live-validation_2026-08-23.md`](../../saved_plans/codex-hooks-live-validation_2026-08-23.md).
+It records the controlled repository, client, commands, revisions, and observed
+`SessionStart` / `PostToolUse` behavior. Interactive `systemMessage` presentation
+remains a gap; the noninteractive event stream and model-visible context were checked.
 
 ## Product surfaces this contract relies on
 

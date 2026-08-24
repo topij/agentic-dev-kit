@@ -2221,6 +2221,18 @@ def test_register_pr_hook_reports_both_runtimes_and_writes_neither(tmp_path: Pat
     assert not (repo / ".claude" / "settings.json").exists()
 
 
+def test_codex_hook_advisories_name_the_additive_project_config(tmp_path: Path) -> None:
+    repo = _with_pr_hook(_with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True)))
+
+    result = _run_init(repo)
+
+    assert ".codex/config.toml" in result.stdout
+    assert "remove any inline registration" in result.stdout
+    assert "Set [features].hooks to true" in result.stdout
+    assert "codex_hooks alias is present" in result.stdout
+    assert "merges inline hooks with hooks.json" in result.stdout
+
+
 @pytest.mark.parametrize("shape", ["directory", "dangling_symlink"])
 def test_no_advisory_when_the_engine_path_is_not_a_file(tmp_path: Path, shape: str) -> None:
     """Kills: `[ ! -f "$_hook_src" ]` weakened to `-e`.
@@ -2408,6 +2420,9 @@ def test_the_advisory_matches_the_registrations_it_describes(tmp_path: Path) -> 
     assert f'matcher "{codex_entry["matcher"]}"' in result.stdout
     assert f'matcher "{claude_entry["matcher"]}"' in result.stdout
     assert f'if: "{claude_hook["if"]}"' in result.stdout
+    assert f'timeout to {codex_hook["timeout"]} seconds' in result.stdout
+    assert "PostToolUse ignores" in result.stdout
+    assert "JSON additionalContext" in result.stdout
     # `if` lives on the hook entry beside `command`, not next to `matcher`, and
     # the advisory has to say so — an adopter who nests it wrong gets no error
     assert "if" not in claude_entry, "shipped file moved `if`; the advisory now lies"
@@ -2495,6 +2510,9 @@ def test_the_shipped_codex_session_start_carries_no_matcher() -> None:
             "the Codex SessionStart entry grew a matcher and no longer covers "
             "every supported start source"
         )
+        for hook in entry["hooks"]:
+            if "check_doc_budget.py" in hook.get("command", ""):
+                assert hook["timeout"] == 15
     commands = _codex_session_start_commands()
     assert len(commands) == 1, (
         "Codex should register only the portable document-budget tripwire"
@@ -2593,8 +2611,23 @@ def test_the_budget_advisory_requires_reviewing_and_trusting_codex_hooks(
     assert "/hooks" in result.stdout
     lowered = result.stdout.lower()
     assert "review and trust" in lowered
-    assert "skipped silently until" in lowered
-    assert "indistinguishable from a broken one" in lowered
+    assert "skipped until trusted" in lowered
+    assert "pending trust from a broken command" in lowered
+    assert "noninteractive run" in lowered
+    assert "diagnostic authority" in lowered
+
+
+def test_the_budget_advisory_explains_timeout_and_output_visibility(
+    tmp_path: Path,
+) -> None:
+    repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    assert "timeout to 15 seconds" in result.stdout
+    assert "SessionStart plain stdout" in result.stdout
+    assert "developer context" in result.stdout
+    assert "quiet flag" in result.stdout
 
 
 def test_the_codex_session_start_match_all_shape_is_explained_by_the_advisory(
@@ -2606,7 +2639,7 @@ def test_the_codex_session_start_match_all_shape_is_explained_by_the_advisory(
     result = _run_init(repo)
 
     assert "omit matcher" in result.stdout
-    assert "every supported start source" in result.stdout
+    assert "open-ended coverage as new start sources are added" in result.stdout
 
 
 def test_the_codex_budget_registration_survives_a_git_less_tree(

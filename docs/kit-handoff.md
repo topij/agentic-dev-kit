@@ -14,9 +14,65 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-23 — the Codex parity baseline and its implementation roadmap shipped.
+Last updated: 2026-08-24 — PR `#590` narrowed Codex lifecycle enforcement to an
+exact-string contract and remains open for exact-head review and operator merge.
 
-## Latest session — 2026-08-23 (the Codex parity baseline and its implementation roadmap shipped)
+## Latest session — 2026-08-24 (Codex lifecycle enforcement bounded by exact strings)
+
+**Theme —** PR `#590` keeps the trusted-client lifecycle evidence and installer wiring,
+while `kit_doctor` now makes only the deterministic claim the repository can support:
+the configured object either matches the installer-emitted canonical form or it does not.
+
+- **The architecture was narrowed in place.** The earlier shell-equivalence parser remains
+  visible in branch history, but the live checker no longer approximates general shell
+  semantics. Exact repository-owned command strings receive structural lifecycle checks;
+  altered strings retain only the generic path-resolution result. Unsupported keys around
+  an exact command report `unverifiable`.
+
+- **The evidence boundary stayed explicit.** The controlled record preserves trusted
+  `SessionStart` and `PostToolUse` execution, additive project-source behavior, definition
+  trust behavior, and the observed output channels. Repository inspection does not claim
+  project trust, current-definition trust, live execution, or interactive-TUI
+  `systemMessage` visibility.
+
+- **The hostile probes became durable behavioral tests.** The corpus rejects the
+  accumulated command mutations without specifying a shell grammar. The fresh fallback
+  panel then exposed alias-precedence, inert-comment, accepted-matcher, and exit-contract
+  regressions; the fix rounds validate each present feature alias, remove noncanonical
+  shell recognition, distinguish supported match-all structures from the printed form,
+  and align the exit documentation.
+
+- **The exact-string panel tightened the remaining surfaces.** Its findings scoped feature
+  validation to repositories with an exactly identified lifecycle command, corrected the
+  README's stale fail-closed claim for altered shell text, and aligned the exit-gate
+  rationale with unsupported lifecycle object keys. The follow-up correctness lens then
+  exposed the bare-Python TOML import and contradictory feature-alias precedence; the fix
+  reports an unavailable TOML parser explicitly and mirrors canonical-key precedence. The
+  next adversarial pass corrected the changelog's breaking-change axis and the README's
+  unconditional bare-Python claim.
+
+- **The runtime contract remains shared.** Installer guidance, the parity matrix,
+  `CHANGELOG.md`, and the live evidence record describe the same bounded result. The
+  safety-critical doctrine remains one runtime-neutral document with runtime bindings,
+  and its merge class makes this PR operator-merge.
+
+**Learned**
+
+- **A positive result needs a syntax the repository owns.** Exact canonical objects have a
+  stable mutation surface; purportedly equivalent shell spellings do not. Unverifiable is
+  reserved for unsupported structure around an exact command; declining to classify an
+  altered command is the honest shell-semantics boundary.
+
+- **Alias type validation and value precedence are separate.** Every present spelling must
+  be boolean, while canonical `hooks` wins when it appears beside deprecated
+  `codex_hooks`; only the effective value establishes whether lifecycle hooks are disabled.
+
+▶ Next: `$pr-watch` PR `#590` — act on any exact-head findings; when CI and the fresh
+adversarial/correctness evidence are clean, hand the operator the authorized merge.
+
+______________________________________________________________________
+
+## Session — 2026-08-23 (the Codex parity baseline and its implementation roadmap shipped)
 
 **Theme —** Codex support moved from scattered compatibility surfaces to an explicit,
 tested parity contract. PR `#588` merged the assessed roadmap and its recommended starting

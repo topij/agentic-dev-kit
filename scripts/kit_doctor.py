@@ -149,7 +149,9 @@ Exit codes:
         a kit release must not turn an adopter's CI red.
     1 — at least one file `differs`, is `stale`, `locally-edited`,
         `stale-and-edited`, `unknown-version`, `missing-required`, or
-        `removed`. The last two are not drift, but they are a broken
+        `removed`, or a hook registration is `broken`, `misconfigured`,
+        `unreadable`, or `unverifiable`. The last two file states are not drift,
+        but they are a broken
         install, and the exit code an adopter gates CI on should not be green
         for a tree whose engines cannot load their own library. `declined` and
         `new-upstream` are NOT in this set and never fail the gate: the first
@@ -178,6 +180,19 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Preserve the pre-tomllib bare-engine route.
+    tomllib = None
+
+_TOML_DECODE_ERRORS = () if tomllib is None else (tomllib.TOMLDecodeError,)
+_REGISTRATION_PARSE_ERRORS = (
+    json.JSONDecodeError,
+    OSError,
+    UnicodeDecodeError,
+    RecursionError,
+) + _TOML_DECODE_ERRORS
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
@@ -738,16 +753,21 @@ class FileStatus:
 
 @dataclass
 class RegistrationStatus:
-    """One hook registration, judged by whether the path it names RESOLVES.
+    """One hook registration, judged by path resolution and bounded semantics.
 
     Not by hash, and the distinction is the whole design (#379). `.claude/
     settings.json` and `.codex/hooks.json` are the adopter's files — `init.sh`
     prints both blocks and writes neither, precisely because their content is
     theirs (#303) — so hashing them would report every adopter permanently
     `locally-edited`, which is #286's failure. What the kit may legitimately
-    assert is narrower and mechanical: a registration that names a path is
-    claiming that path runs, and whether the file is there is checkable without
-    any opinion about the rest of the file.
+    assert is mechanical: a registration that names a path is claiming that
+    path runs. Codex lifecycle semantics are associated with a kit engine only
+    when the command string exactly equals a repository-owned definition; an
+    altered shell string receives only the generic path result rather than an
+    inferred lifecycle meaning. Once identified exactly, event, matcher,
+    timeout, runtime mapping, and object keys are deterministic configuration
+    checks. Neither axis pretends to establish project trust or live client
+    behavior.
 
     That is the check that would have caught #359 and #368, both of which an
     operator experienced as *a hook that silently stopped firing* — a
@@ -862,24 +882,32 @@ class Report:
 
     @property
     def dead_registrations(self) -> list[RegistrationStatus]:
-        """Registrations that cannot fire, by the two routes there are.
+        """Registrations whose configured lifecycle behavior cannot be relied on.
 
-        `broken` — the file it names is not there. `unreadable` — the
+        `broken` — the file it names is not there. `misconfigured` — the
+        runtime event, matcher, timeout, or runtime mapping is not the kit's
+        contract. `unverifiable` — an exactly identified Codex lifecycle command
+        sits in an object with keys outside the supported structural contract.
+        `unreadable` — the
         registration file itself does not parse, so EVERY registration in it is
         unmeasurable, and the runtime that must parse the same JSON is no better
         placed than this check was. Leaving that one out was the shape #379 was
         filed about, one level up: a `⚠` line and exit 0 over a file whose hooks
         nobody can account for (panel, correctness lens, delta round 2).
 
-        The omissions are the point, and they are the other three: `unregistered`
-        and `absent` describe an adopter who has not wired the hook, which is a
+        The omissions are the point. `unregistered` and `absent` describe an
+        adopter who has not wired the hook, which is a
         supported state — `init.sh` only ever PRINTS the block (#303) — and
         failing them would be #286's bug in a third place, a healthy adoption
         failing its own gate forever. `unresolvable` is a registration this check
         could not evaluate; reporting that as broken would be claiming a
         measurement it did not make.
         """
-        return [r for r in self.registrations if r.state in ("broken", "unreadable")]
+        return [
+            r
+            for r in self.registrations
+            if r.state in ("broken", "misconfigured", "unverifiable", "unreadable")
+        ]
 
 
 def sha256_of(path: Path) -> str:
@@ -890,8 +918,8 @@ def sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
-# The two files a runtime reads to learn that the kit's hook exists, plus the
-# overlay Claude Code merges over the first. Literals, for the same reason
+# The project files each runtime reads to learn that the kit's hook exists,
+# plus the Claude Code local overlay. Literals, for the same reason
 # `AGENTS.md` and `CLAUDE.md` are literals in `inspect`: they are the runtime's
 # names, not the adopter's, and there is no config key that could hold them —
 # a repo that renamed `.claude/settings.json` has no hook either way.
@@ -906,6 +934,7 @@ def sha256_of(path: Path) -> str:
 REGISTRATION_SURFACES: tuple[tuple[str, str, bool], ...] = (
     ("claude", ".claude/settings.json", True),
     ("codex", ".codex/hooks.json", True),
+    ("codex", ".codex/config.toml", False),
     ("claude", ".claude/settings.local.json", False),
 )
 
@@ -1013,8 +1042,10 @@ def _hook_commands(node: object, depth: int = 0, inside_hooks: bool = False) -> 
 # ago, and described the mechanism that replaced it as the one it replaced; a
 # lens caught it. Same class as the rest of this session.)
 #
-# NUL cannot appear in a path or in JSON text, so it cannot collide with
-# anything an adopter wrote.
+# A JSON escape can decode to NUL and impersonate this marker on the generic
+# path-resolution axis. The bounded Codex lifecycle check does not rely on that
+# axis for its positive result: only the exact canonical command is `verified`,
+# and a command containing such a decoded marker is not that command.
 _ROOT_SENTINEL = "\x00devkit-root\x00"
 
 
@@ -1071,6 +1102,7 @@ def _script_words(command: str) -> tuple[bool, list[str]]:
     buf: list[str] = []
     state: str | None = None
     escaped = False
+    comment = False
 
     def flush(expandable: bool) -> None:
         if buf:
@@ -1085,6 +1117,11 @@ def _script_words(command: str) -> tuple[bool, list[str]]:
             parts.clear()
 
     for char in command:
+        if comment:
+            if char in "\n\r":
+                comment = False
+                end_word()
+            continue
         if escaped:
             # An escaped character is LITERAL, so it must not be marked: a shell
             # never expands `\$CLAUDE_PROJECT_DIR`, and marking it anyway
@@ -1103,8 +1140,8 @@ def _script_words(command: str) -> tuple[bool, list[str]]:
             # a hook line was read as an invocation — reporting a phantom
             # registration, or a dead one, from a comment (panel, adversarial
             # lens, round 7).
-            break
-        elif state is None and char in " \t\n\r":
+            comment = True
+        elif state is None and (char in " \t\n\r" or char in ";&|<>()"):
             end_word()
         elif state is None and char in "\"'":
             flush(True)
@@ -1118,9 +1155,10 @@ def _script_words(command: str) -> tuple[bool, list[str]]:
 
     cleaned = []
     for word in words:
-        if "=" in word:
+        assignment = re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=(.*)", word, re.DOTALL)
+        if assignment:
             # An assignment form (`HOOK="$root/…"`) should yield the path.
-            word = word.rsplit("=", 1)[-1]
+            word = assignment.group(1)
         # A separator glued to the last word of a statement (`…/hook.py; exec …`).
         cleaned.append(word.rstrip(";&|"))
     # `state` is still set only when a quote never closed. A shell would refuse
@@ -1136,16 +1174,18 @@ _OUT_OF_ROTATION_SUFFIXES = frozenset(
 )
 
 
-def _match_word(words: list[str], name: str) -> str | None:
-    """The word naming `name`, or None.
+def _matching_words(words: list[str], name: str) -> list[str]:
+    """Every word naming `name`.
 
     Matched on the BASENAME rather than by substring: `env_paths.py` ends with
     `paths.py`, and matching that claimed an adopter's own file as the kit's.
     """
+    matches: list[str] = []
     for word in words:
         base = PurePosixPath(word).name
         if base == name:
-            return word
+            matches.append(word)
+            continue
         # A named out-of-rotation suffix, and nothing else. `hook.py.disabled` is
         # the kit's own hook taken out of service and worth reporting dead;
         # `logs/hook.py.log` is an unrelated ARGUMENT, and claiming it produced
@@ -1159,8 +1199,13 @@ def _match_word(words: list[str], name: str) -> str | None:
         # own doctrine — never claim a measurement it did not make.
         suffix = base[len(name) + 1 :].lower() if base.startswith(name + ".") else None
         if suffix in _OUT_OF_ROTATION_SUFFIXES:
-            return word
-    return None
+            matches.append(word)
+    return matches
+
+
+def _match_word(words: list[str], name: str) -> str | None:
+    """The first word naming `name`, or None."""
+    return next(iter(_matching_words(words, name)), None)
 
 
 def _invocable_kit_scripts() -> set[str]:
@@ -1196,6 +1241,192 @@ def _invocable_kit_scripts() -> set[str]:
     }
 
 
+_CODEX_HOOK_CONTRACT: dict[str, tuple[str, frozenset[str], int]] = {
+    "check_doc_budget.py": ("SessionStart", frozenset(("", "*")), 15),
+    "pr_followup_hook.py": ("PostToolUse", frozenset(("^Bash$",)), 10),
+}
+
+
+
+def _codex_registration_semantics(
+    document: object,
+    surface: str,
+    engine_paths: dict[str, str],
+    occurrences: dict[str, dict[str, int]] | None = None,
+) -> list[RegistrationStatus]:
+    """Verify only repository-owned Codex lifecycle strings, never shell equivalence.
+
+    ``/hooks`` remains authoritative for what the client loaded. This check can
+    prove the JSON/TOML structure and exact command string Codex will receive
+    after trust. A different shell spelling is not assigned lifecycle semantics
+    at all; the generic registration-path axis may still report its path.
+    """
+    if surface not in (".codex/hooks.json", ".codex/config.toml"):
+        return []
+
+    statuses: list[RegistrationStatus] = []
+    if occurrences is None:
+        occurrences = {}
+
+    def problem(detail: str) -> None:
+        statuses.append(RegistrationStatus("codex", surface, "misconfigured", detail))
+
+    def unverifiable(detail: str) -> None:
+        statuses.append(RegistrationStatus("codex", surface, "unverifiable", detail))
+
+    expected_commands = {
+        "check_doc_budget.py": (
+            'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+            '[ -n "$root" ] || exit 0; [ -z "${JOB_NAME:-}" ] || exit 0; '
+            f'uv run --script "$root/{engine_paths["check_doc_budget.py"]}" '
+            "--quiet || true"
+        ),
+        "pr_followup_hook.py": (
+            'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+            '[ -n "$root" ] || exit 0; '
+            f'exec python3 "$root/{engine_paths["pr_followup_hook.py"]}" '
+            "--runtime codex"
+        ),
+    }
+
+    forbidden_commands = {
+        "check_memory_budget.py": (
+            'root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; '
+            '[ -n "$root" ] || exit 0; [ -z "${JOB_NAME:-}" ] || exit 0; '
+            f'uv run --script "$root/{engine_paths["check_memory_budget.py"]}" '
+            "--quiet || true"
+        )
+    }
+
+    def command_names(command: str) -> set[str]:
+        """Names assigned only by exact repository-owned command strings."""
+        return {
+            name
+            for name, expected in (expected_commands | forbidden_commands).items()
+            if command == expected
+        }
+
+    def recognized_names(node: object) -> set[str]:
+        names: set[str] = set()
+        pending = [node]
+        while pending:
+            nested = pending.pop()
+            if isinstance(nested, str):
+                names.update(command_names(nested))
+            elif isinstance(nested, dict):
+                pending.extend(nested.values())
+            elif isinstance(nested, list):
+                pending.extend(nested)
+        return names
+
+    if not isinstance(document, dict):
+        for name in recognized_names(document):
+            problem(f"{name} lifecycle document must be an object")
+        return statuses
+
+    events = document.get("hooks")
+    if not isinstance(events, dict):
+        for name in recognized_names(events):
+            problem(f"{name} lifecycle events must be an object")
+        return statuses
+
+    for event, groups in events.items():
+        if not isinstance(groups, list):
+            for name in recognized_names(groups):
+                problem(f"{name} {event} matcher groups must be a list")
+            continue
+        for group in groups:
+            if not isinstance(group, dict):
+                for name in recognized_names(group):
+                    problem(f"{name} matcher group must be an object")
+                continue
+            matcher = group.get("matcher")
+            handlers = group.get("hooks")
+            if not isinstance(handlers, list):
+                for name in recognized_names(handlers):
+                    problem(f"{name} command handlers must be a list")
+                continue
+            for handler in handlers:
+                if not isinstance(handler, dict):
+                    for name in recognized_names(handler):
+                        problem(f"{name} command handler must be an object")
+                    continue
+                command = handler.get("command")
+                if not isinstance(command, str):
+                    for name in recognized_names(handler):
+                        problem(f"{name} command must be a string")
+                    continue
+                for name in sorted(command_names(command)):
+                    if name == "check_memory_budget.py":
+                        problem(
+                            "check_memory_budget.py is Claude-only and must not be "
+                            "referenced by a Codex command hook"
+                        )
+                        continue
+                    expected_event, accepted_matchers, expected_timeout = (
+                        _CODEX_HOOK_CONTRACT[name]
+                    )
+                    surface_occurrences = occurrences.setdefault(surface, {})
+                    surface_occurrences[name] = surface_occurrences.get(name, 0) + 1
+                    if handler.get("type") != "command":
+                        problem(f"{name} must use a command handler")
+                    if event != expected_event:
+                        problem(f"{name} must be registered under {expected_event}")
+                    matcher_is_accepted = (
+                        name == "check_doc_budget.py" and "matcher" not in group
+                    ) or (
+                        isinstance(matcher, str) and matcher in accepted_matchers
+                    )
+                    if not matcher_is_accepted:
+                        if name == "check_doc_budget.py":
+                            problem(
+                                "check_doc_budget.py SessionStart matcher must be omitted, "
+                                'empty, or "*" for open-ended match-all coverage'
+                            )
+                        else:
+                            problem(
+                                'pr_followup_hook.py PostToolUse matcher must be "^Bash$"'
+                            )
+                    timeout = handler.get("timeout")
+                    if type(timeout) is not int or timeout != expected_timeout:
+                        problem(f"{name} timeout must be {expected_timeout} seconds")
+                    canonical_group_keys = {"hooks"}
+                    if name != "check_doc_budget.py" or "matcher" in group:
+                        canonical_group_keys.add("matcher")
+                    object_shape_is_unsupported = (
+                        set(handler) != {"type", "command", "timeout"}
+                        or set(group) != canonical_group_keys
+                    )
+                    if object_shape_is_unsupported:
+                        unverifiable(
+                            f"{name} lifecycle object contains unsupported keys; only "
+                            "the installer-emitted key set was verified"
+                        )
+                    elif (
+                        handler.get("type") == "command"
+                        and event == expected_event
+                        and matcher_is_accepted
+                        and type(timeout) is int
+                        and timeout == expected_timeout
+                    ):
+                        detail = f"{name} canonical lifecycle form verified"
+                        if name == "check_doc_budget.py" and "matcher" in group:
+                            detail = (
+                                "check_doc_budget.py supported match-all lifecycle "
+                                "form verified"
+                            )
+                        statuses.append(
+                            RegistrationStatus(
+                                "codex",
+                                surface,
+                                "verified",
+                                detail,
+                            )
+                        )
+
+    return statuses
+
+
 def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStatus]:
     """Whether each runtime's hook registration names a path that exists.
 
@@ -1213,16 +1444,34 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
     # 1, permanently and with no way for them to know why (panel, adversarial
     # lens, delta round). Anything under a `lib/` is imported, never invoked.
     kit_scripts = _invocable_kit_scripts()
+    engine_paths = {
+        PurePosixPath(rel).name: _remap(rel, engines_dir)
+        for rel, role in KIT_OWNED
+        if PurePosixPath(rel).name in kit_scripts and role not in ("template", "test")
+    }
     statuses: list[RegistrationStatus] = []
+    codex_documents: dict[str, object] = {}
+    codex_occurrences: dict[str, dict[str, int]] = {}
     for runtime, surface, report_absent in REGISTRATION_SURFACES:
         path = root / surface
         if not path.is_file():
             if report_absent:
                 statuses.append(RegistrationStatus(runtime, surface, "absent"))
             continue
+        if path.suffix == ".toml" and tomllib is None:
+            statuses.append(
+                RegistrationStatus(
+                    runtime,
+                    surface,
+                    "unreadable",
+                    "TOML parser unavailable; run kit_doctor through uv",
+                )
+            )
+            continue
         try:
-            document = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError, UnicodeDecodeError, RecursionError) as exc:
+            source = path.read_text(encoding="utf-8")
+            document = tomllib.loads(source) if path.suffix == ".toml" else json.loads(source)
+        except _REGISTRATION_PARSE_ERRORS as exc:
             # Same degrade-don't-abort rule the baseline read follows: a
             # registration file this run could not parse is reported, never
             # raised. A diagnostic that dies on one malformed file tells the
@@ -1236,8 +1485,11 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
             # adversarial lens, PR #389).
             statuses.append(RegistrationStatus(runtime, surface, "unreadable", str(exc)))
             continue
+        registration_document: object = document
+        if surface == ".codex/config.toml" and isinstance(document, dict):
+            registration_document = {"hooks": document.get("hooks")}
         try:
-            commands = _hook_commands(document)
+            commands = _hook_commands(registration_document)
         except (_RegistrationTooDeep, RecursionError) as exc:
             # The walk gets the same treatment as the parse, and for the same
             # reason. `RecursionError` stays beside the cap because the cap is
@@ -1300,6 +1552,88 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                 RegistrationStatus(runtime, surface, "unregistered", f"engines: {engines_dir}")
             )
         statuses.extend(found)
+        if runtime == "codex":
+            codex_documents[surface] = document
+            statuses.extend(
+                _codex_registration_semantics(
+                    document,
+                    surface,
+                    engine_paths,
+                    codex_occurrences,
+                )
+            )
+    occurrence_names = {
+        name for source_counts in codex_occurrences.values() for name in source_counts
+    }
+    for name in sorted(occurrence_names):
+        sources = [
+            surface
+            for surface, source_counts in codex_occurrences.items()
+            if source_counts.get(name, 0)
+        ]
+        total = sum(codex_occurrences[surface].get(name, 0) for surface in sources)
+        if total > 1:
+            duplicate_surface = (
+                ".codex/config.toml" if len(sources) > 1 else sources[0]
+            )
+            suffix = " across project hook sources" if len(sources) > 1 else ""
+            statuses.append(
+                RegistrationStatus(
+                    "codex",
+                    duplicate_surface,
+                    "misconfigured",
+                    f"{name} has a duplicate Codex registration{suffix}",
+                )
+            )
+
+    codex_config = codex_documents.get(".codex/config.toml")
+    if isinstance(codex_config, dict) and occurrence_names:
+        features = codex_config.get("features")
+        if "features" in codex_config and not isinstance(features, dict):
+            statuses.append(
+                RegistrationStatus(
+                    "codex",
+                    ".codex/config.toml",
+                    "misconfigured",
+                    "Codex project features must be a table",
+                )
+            )
+        elif isinstance(features, dict):
+            feature_keys = [
+                key for key in ("hooks", "codex_hooks") if key in features
+            ]
+            for feature_key in feature_keys:
+                feature_value = features[feature_key]
+                if type(feature_value) is bool:
+                    continue
+                statuses.append(
+                    RegistrationStatus(
+                        "codex",
+                        ".codex/config.toml",
+                        "misconfigured",
+                        f"Codex project feature {feature_key} must be a boolean",
+                    )
+                )
+            aliases_are_boolean = all(
+                type(features[key]) is bool for key in feature_keys
+            )
+            # Canonical precedence is deliberate: `hooks` supplies the effective
+            # value when both spellings are present. Type validity is separate; an
+            # invalid losing alias still makes the TOML unacceptable.
+            effective_feature = (
+                features.get("hooks")
+                if "hooks" in features
+                else features.get("codex_hooks")
+            )
+            if aliases_are_boolean and effective_feature is False:
+                statuses.append(
+                    RegistrationStatus(
+                        "codex",
+                        ".codex/config.toml",
+                        "misconfigured",
+                        "Codex lifecycle hooks are disabled by the project config",
+                    )
+                )
     return statuses
 
 
@@ -2084,7 +2418,10 @@ def render(report: Report) -> str:
     for reg in report.registrations:
         mark, text = {
             "resolves": ("✓", f"{reg.detail} resolves"),
+            "verified": ("✓", reg.detail),
             "broken": ("✗", f"{reg.detail} — NO SUCH FILE, so this hook cannot fire"),
+            "misconfigured": ("✗", f"{reg.detail} — lifecycle wiring does not match"),
+            "unverifiable": ("✗", reg.detail),
             "unresolvable": ("⚠", f"{reg.detail} — path not resolvable from here"),
             # The detail names the engines dir the check resolved, which is the
             # useful half when nothing is registered — it was computed and shown
@@ -2831,10 +3168,10 @@ def main(argv: list[str] | None = None) -> int:
                     # consumer reading a bool must keep reading a bool, and the
                     # third state (#381) is what it could not previously see.
                     "hooks_state": report.hooks_state,
-                    # #379. A consumer cannot derive this from `files`: the two
+                    # #379. A consumer cannot derive this from `files`: runtime
                     # registration surfaces are adopter-owned and are in neither
-                    # `KIT_OWNED` nor any manifest, which is exactly why a
-                    # byte-perfect install could report clean with a dead hook.
+                    # `KIT_OWNED` nor any manifest. The state also carries Codex
+                    # semantic mismatches now; a path hash cannot express those.
                     "registrations": [
                         {
                             "runtime": r.runtime,
@@ -2876,11 +3213,11 @@ def main(argv: list[str] | None = None) -> int:
     # `dead_registrations` joins the exit code for the reason #379 was filed:
     # the observable for a registration naming a path that is not there is a
     # hook that silently stopped firing, and until now nothing in the kit's own
-    # instrument reported it. `broken` and `unreadable` reach here — see
-    # `Report.dead_registrations` for why those two and not the other three.
-    # (This said "only `broken`", written before `unreadable` joined the gate a
-    # round later, and a lens caught the sentence still describing the older
-    # behaviour — the same stale-prose class this session spent four PRs on.)
+    # instrument reported it. `broken`, `misconfigured`, and `unreadable` reach
+    # here — see `Report.dead_registrations` for why the supported absent and
+    # unresolvable states do not. `unverifiable` also reaches this gate: an exact
+    # lifecycle command inside an unsupported object shape cannot provide the
+    # bounded structural evidence that a `verified` result promises.
     return 1 if report.drifted or report.broken or report.dead_registrations else 0
 
 

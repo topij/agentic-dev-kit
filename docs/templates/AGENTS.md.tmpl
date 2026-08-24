@@ -22,8 +22,9 @@ doctrine into this runtime; it does not fork it.
 - **Everything project-specific lives in `config/dev-model.yaml`.** Skills and
   engines read it from there; never hardcode a value that belongs in it.
 - **Read the shared contract before changing anything, then the nearest
-  path-scoped rule.** Gates, customer-facing send paths, destructive
-  operations, and kill/recovery paths are governed by
+  path-scoped rule.** Behavioral changes to `{{ENGINE_DIR}}/pr_watch.py` or
+  `{{ENGINE_DIR}}/dev_session.sh`, along with customer-facing send paths,
+  destructive operations, and kill/recovery paths, are governed by
   [`docs/agentic-dev-kit/safety-critical-changes.md`](docs/agentic-dev-kit/safety-critical-changes.md);
   when the configured review bot cannot review, the substitute is the panel in
   [`docs/agentic-dev-kit/fallback-review-panel.md`](docs/agentic-dev-kit/fallback-review-panel.md).

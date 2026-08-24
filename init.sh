@@ -1168,6 +1168,10 @@ register_pr_hook() {
   echo "      Skip whichever you have already done — \`/hooks\` in a session lists"
   echo "      what that runtime actually loaded, which is the authority here."
   echo "      Codex — .codex/hooks.json, under hooks.PostToolUse, matcher \"^Bash\$\":"
+  echo "        First inspect .codex/config.toml: remove any inline registration for"
+  echo "        this engine. Set [features].hooks to true; if only its deprecated"
+  echo "        codex_hooks alias is present, do not leave that alias false. Codex"
+  echo "        merges inline hooks with hooks.json instead of replacing them."
   # The guard clauses are not decoration (#359). A bare
   # `python3 "$(git rev-parse --show-toplevel)/…"` collapses to an absolute path
   # rooted at `/` in a tree with no `.git`, because the substitution yields the
@@ -1207,7 +1211,12 @@ register_pr_hook() {
   # property of the same runtime's hook handling. `exec` is the right call either
   # way (it is strictly fewer processes), so nothing depends on settling it.
   echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; exec python3 \"\$root/${_hook_src}\" --runtime codex"
-  echo "        Codex also needs you to trust the hook via /hooks before it runs."
+  echo "        Keep this exact command form; kit_doctor assigns lifecycle semantics only"
+  echo "        to the repository-owned string and leaves altered strings to path diagnostics."
+  echo "        Set the command handler timeout to 10 seconds. PostToolUse ignores"
+  echo "        plain stdout; this engine returns JSON additionalContext when it fires."
+  echo "        Codex also needs the project and current hook definition trusted"
+  echo "        through /hooks before it runs."
   echo "      Claude — .claude/settings.json, under hooks.PostToolUse, matcher \"Bash\"."
   echo "      \`if\` goes on the hook entry beside \`command\`, not next to \`matcher\`:"
   echo "        python3 \"\$CLAUDE_PROJECT_DIR/${_hook_src}\" --runtime claude"
@@ -1267,11 +1276,19 @@ register_budget_hooks() {
   # and the suggested patch that raised this finding was written in that shape.
   if [ -f "$_doc_budget_src" ]; then
     echo "      Codex — .codex/hooks.json, under hooks.SessionStart; omit matcher"
-    echo "      to cover every supported start source:"
+    echo "      for open-ended coverage as new start sources are added:"
+    echo "        First inspect .codex/config.toml: remove any inline registration for"
+    echo "        this engine. Set [features].hooks to true; if only its deprecated"
+    echo "        codex_hooks alias is present, do not leave that alias false."
     echo "        root=\"\$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"\$root\" ] || exit 0; [ -z \"\${JOB_NAME:-}\" ] || exit 0; uv run --script \"\$root/${_doc_budget_src}\" --quiet || true"
-    echo "        Review and trust the entry via /hooks. New or changed project hooks"
-    echo "        are skipped silently until their current definition is trusted; an"
-    echo "        untrusted hook is therefore indistinguishable from a broken one."
+    echo "        Keep this exact command form; kit_doctor assigns lifecycle semantics only"
+    echo "        to the repository-owned string and leaves altered strings to path diagnostics."
+    echo "        Set the command handler timeout to 15 seconds. SessionStart plain stdout"
+    echo "        becomes developer context, so the quiet flag keeps healthy runs empty."
+    echo "        Review and trust the project and current definition via /hooks."
+    echo "        New or changed definitions are"
+    echo "        skipped until trusted; absence in a noninteractive run does not distinguish"
+    echo "        pending trust from a broken command, so /hooks is the diagnostic authority."
   fi
   echo "      Claude — .claude/settings.json, under hooks.SessionStart, matcher \"startup\":"
   if [ -f "$_doc_budget_src" ]; then

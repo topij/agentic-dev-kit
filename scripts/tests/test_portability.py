@@ -1517,6 +1517,113 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
             _assert_claude_workflow_adapter(name, shared_path, entry["claude"])
 
 
+@pytest.mark.kit_repo_only(
+    "AGENTS.md",
+    "docs/templates/AGENTS.md.tmpl",
+    "docs/AGENTS-sections.md",
+    ".claude/rules/safety-critical-changes.md",
+)
+def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
+    doctrine = "docs/agentic-dev-kit/safety-critical-changes.md"
+    root_agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    template = (REPO_ROOT / "docs" / "templates" / "AGENTS.md.tmpl").read_text(
+        encoding="utf-8"
+    )
+    merge_section = (REPO_ROOT / "docs" / "AGENTS-sections.md").read_text(
+        encoding="utf-8"
+    )
+    claude_rule = (
+        REPO_ROOT / ".claude" / "rules" / "safety-critical-changes.md"
+    ).read_text(encoding="utf-8")
+
+    assert re.search(r"Read and apply\s+`" + re.escape(doctrine) + r"`", root_agents)
+    assert re.search(
+        r"Read the shared contract[\s\S]+governed by[\s\S]+"
+        + re.escape(doctrine),
+        template,
+    )
+    assert re.search(r"read and apply\s+`" + re.escape(doctrine) + r"`", merge_section)
+    assert re.search(
+        r"Read `" + re.escape(doctrine) + r"` completely and apply that\s+doctrine",
+        claude_rule,
+    )
+    claude_frontmatter = yaml.safe_load(claude_rule.split("---", 2)[1])
+    assert set(claude_frontmatter["paths"]) == {
+        "scripts/dev_session.sh",
+        "scripts/devkit/dev_session.sh",
+        "scripts/pr_watch.py",
+        "scripts/devkit/pr_watch.py",
+    }
+    for text in (root_agents, template, merge_section, claude_rule):
+        assert "pr_watch.py" in text
+        assert "dev_session.sh" in text
+
+
+@pytest.mark.kit_repo_only("saved_plans/codex-hooks-live-probe/.codex/hooks.json")
+def test_codex_live_validation_fixture_commands_are_executable(
+    tmp_path: Path,
+) -> None:
+    fixture = REPO_ROOT / "saved_plans" / "codex-hooks-live-probe"
+    probe = tmp_path / "probe"
+    shutil.copytree(fixture, probe)
+    subprocess.run(["git", "init", "-q"], cwd=probe, check=True)
+    hooks = json.loads((probe / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    def command_for(name: str) -> str:
+        commands = [
+            handler["command"]
+            for groups in hooks["hooks"].values()
+            for group in groups
+            for handler in group["hooks"]
+            if handler["command"].endswith(f" {name}")
+        ]
+        assert len(commands) == 1
+        return commands[0]
+
+    def run(name: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            command_for(name),
+            shell=True,
+            executable="/bin/sh",
+            cwd=probe / "subdir",
+            input=json.dumps({"hook_event_name": "test", "cwd": str(probe / "subdir")}),
+            text=True,
+            capture_output=True,
+            check=True,
+            env=os.environ.copy(),
+        )
+
+    names = {
+        handler["command"].rsplit(" ", 1)[1]
+        for groups in hooks["hooks"].values()
+        for group in groups
+        for handler in group["hooks"]
+    }
+    assert names == {
+        "ss-visible",
+        "ss-resume",
+        "ss-omitted",
+        "ss-star",
+        "ss-empty",
+        "ss-timeout",
+        "pt-json",
+        "pt-plain",
+        "pt-timeout",
+        "pt-lowercase",
+        "pt-star",
+        "pt-empty",
+        "pt-omitted",
+    }
+    results = {name: run(name) for name in names}
+    assert results["ss-visible"].stdout.strip() == "SESSION_PLAIN_VISIBLE"
+    post_json = json.loads(results["pt-json"].stdout)
+    assert post_json["systemMessage"] == "POST_SYSTEM_VISIBLE"
+    assert (
+        post_json["hookSpecificOutput"]["additionalContext"]
+        == "POST_CONTEXT_VISIBLE"
+    )
+    assert results["pt-plain"].stdout.strip() == "POST_PLAIN_SHOULD_BE_IGNORED"
+
+
 def _runtime_parity_fixture(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     doctrine_dir = repo / "docs" / "agentic-dev-kit"
@@ -2090,6 +2197,35 @@ def test_engines_avoid_datetime_utc_alias() -> None:
         "use `timezone.utc` — `datetime.UTC` raises ImportError below 3.11:\n"
         + "\n".join(offenders)
     )
+
+
+def test_kit_doctor_help_survives_without_stdlib_tomllib() -> None:
+    """The stdlib-only bare-python route must fail in its TOML result, not import."""
+    probe = """
+import builtins
+import runpy
+import sys
+
+real_import = builtins.__import__
+
+def guarded_import(name, *args, **kwargs):
+    if name == "tomllib":
+        raise ModuleNotFoundError("blocked tomllib compatibility probe")
+    return real_import(name, *args, **kwargs)
+
+builtins.__import__ = guarded_import
+sys.argv = [sys.argv[1], "--help"]
+runpy.run_path(sys.argv[0], run_name="__main__")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", probe, str(ENGINE_DIR / "kit_doctor.py")],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "usage:" in result.stdout
 
 
 def _load_dataclass_module(name: str, path: Path) -> ModuleType:
