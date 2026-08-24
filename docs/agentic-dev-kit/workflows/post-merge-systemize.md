@@ -32,7 +32,7 @@ Every value used below comes from that merged configuration:
   `systemize.tracker_severity`, `systemize.batch_size`,
   `systemize.single_pass_max_prs`, `systemize.max_findings_prs_per_run`,
   `systemize.cache_pattern`, `systemize.digest_cache_pattern`,
-  `systemize.report_pattern`, `systemize.fetch_engine`,
+  `systemize.report_root`, `systemize.report_pattern`, `systemize.fetch_engine`,
   `systemize.digest_engine`, `systemize.heartbeat_engine`,
   `systemize.commit_subject`, and `systemize.pr_draft`. Their values are not
   restated here.
@@ -55,8 +55,19 @@ Validate values as well as presence:
   `pattern_threshold` is no greater than `max_findings_prs_per_run`.
 - `tracker_severity` is one of the canonical severities defined in Step 1.
 - cache, digest, and report patterns are non-empty repository-relative paths;
-  configured engine names and `commit_subject` are non-empty strings; and `pr_draft`
-  is a boolean.
+  `report_root` is a non-empty repository-relative directory other than the repository
+  root; configured engine names and `commit_subject` are non-empty strings; and
+  `pr_draft` is a boolean.
+
+Before any derived write, substitute the selected date and resolve the cache and digest
+paths beneath `state.dirname` and the report path beneath `systemize.report_root`.
+Reject an absolute path, `..` traversal, a parent or target symlink that escapes its
+resolved allowed root, a path outside the repository, a collision among the canonical
+artifact paths, an existing non-regular target, or a target already tracked by Git.
+Also reject a target matching a repository control input such as the merged config or an
+active instruction/workflow, whether tracked or not. Create parents only after every
+target passes this preflight. A configured output label does not make its destination
+safe.
 
 An invalid value is a hard stop naming the failed invariant. Do not coerce a scalar or
 repair relationships in memory: the operator must correct the shared configuration.
@@ -168,7 +179,16 @@ numeric or custom source label, normalize it to `normal`, and record the unmappe
 limitation in the report; do not invent a source-specific mapping. The threshold route
 includes severities at or above `systemize.tracker_severity` in this order.
 
-Write the raw bundle, then normalize the digest to the engine-backed shape needed below:
+From the normalized evidence, form the finding-bearing pull-request candidates. Before
+serializing or accepting a digest, rank them by maximum normalized severity descending,
+then unaddressed finding count descending, then total finding count descending, with
+pull-request identity ascending as the stable tie-breaker. Apply
+`systemize.max_findings_prs_per_run` to that ordered list. The digest's `prs[]` is exactly
+this capped finding-bearing set; preserve the full fetched population in the raw bundle
+and record every omitted pull-request identity plus the uncapped finding-bearing count.
+
+Write the full raw bundle, then normalize the capped digest to the shared shape needed
+below:
 
 - `window`, `forge_repo`, `protected_branch_head`, and `config_fingerprint`;
 - `prs[]`, each with pull-request identity, tracker references, and `findings[]`;
@@ -181,14 +201,11 @@ Write the raw bundle, then normalize the digest to the engine-backed shape neede
   ceil(findings_pr_count / systemize.batch_size)` (zero when the count is zero).
 
 Engine-backed and LLM-only digests obey this same normalized schema. After either path
-produces the digest, recompute the count, recommendation, and batch count from the
-configured values and stop if the artifact disagrees; a digest cannot select its own
-working-set policy.
-
-Rank finding-bearing pull requests by severity, then unaddressed finding presence, then
-finding presence before applying `systemize.max_findings_prs_per_run`. Record both the
-analysed set and omitted identities when the cap applies. A cap is a bounded analysis,
-not permission to describe the whole window as reviewed.
+produces a candidate digest, recompute the ordered capped identities from the raw bundle,
+then recompute the count, recommendation, and batch count from the configured values.
+Stop if the artifact's `prs[]`, cap disclosure, or derived fields disagree; a digest
+cannot select its own evidence or working-set policy. A cap is a bounded analysis, not
+permission to describe the whole window as reviewed.
 
 If the fetched bundle contains no merged pull request, write a complete report saying
 there was nothing to systemize, optionally notify, complete the configured heartbeat in

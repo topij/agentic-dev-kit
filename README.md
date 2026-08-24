@@ -315,7 +315,9 @@ The shared systemize workflow treats the configured engine set atomically: all a
 selects its honest LLM-only path, all present selects engine-backed mode, and a partial
 set stops with an actionable preflight failure. Notification and tracker access have
 explicit degraded paths, and a tracker write still requires payload-specific operator
-confirmation.
+confirmation. Derived cache and digest output stays beneath `state.dirname`; reports
+stay beneath `systemize.report_root`, and preflight rejects traversal, symlink escape,
+artifact collisions, and tracked or control-file targets before writing.
 
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
 behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)

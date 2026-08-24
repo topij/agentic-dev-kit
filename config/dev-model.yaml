@@ -102,6 +102,9 @@ systemize:
   max_findings_prs_per_run: 75
   cache_pattern: "state/cache/merged-prs_{date}.json"
   digest_cache_pattern: "state/cache/merged-prs-digest_{date}.json"
+  # Separate trusted root lets preflight reject a mistaken report_pattern that
+  # points at source or config while keeping the filename configurable.
+  report_root: reports
   report_pattern: "reports/post-merge-systemize_{date}.md"
   # Optional deterministic integration, resolved beneath paths.engines. The
   # shipped kit does not vendor these yet: all absent selects the documented

@@ -49,7 +49,7 @@
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "a4b606ba6c0840d42894fa1d9da031ef46f3aa86626f042ba1799955c8542b4c"
+      "sha256": "28ade15c6c324c8badd2fcb6e3dd0e3de8e9dde2dd4bf6933fa5ad67095899dd"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
@@ -97,7 +97,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "f301e0df20d66022abe54b725f974f24cd7dcab3df30d74af8fee0862c68678a"
+      "sha256": "11fa682eaa6ba36f4fe0788dcc49721ff8eade278099eb456f92f25f72814cf2"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -247,7 +247,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "10c2f43530c332a2981c1495fd57f156f082656f14bea868d872fb88ca68a65e"
+      "sha256": "d45d96800c5e82922c371784eca3594a0f811f4fe61e36d55a5b8c9cb25e5f4d"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

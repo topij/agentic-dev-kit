@@ -549,6 +549,7 @@ migrate_kit_schema() {
   max_findings_prs_per_run: 75
   cache_pattern: "state/cache/merged-prs_{date}.json"
   digest_cache_pattern: "state/cache/merged-prs-digest_{date}.json"
+  report_root: reports
   report_pattern: "reports/post-merge-systemize_{date}.md"
   # Optional deterministic integration, resolved beneath paths.engines.
   fetch_engine: fetch_merged_prs.py

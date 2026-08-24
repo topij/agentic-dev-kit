@@ -1455,10 +1455,28 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     assert "an unrecognized label map to `normal`" in flattened
     assert "do not invent a source-specific mapping" in flattened
     assert (
+        "maximum normalized severity descending, then unaddressed finding count "
+        "descending, then total finding count descending"
+    ) in flattened
+    assert "The digest's `prs[]` is exactly this capped finding-bearing set" in flattened
+    assert (
         "single_pass_recommended = (findings_pr_count <= "
         "systemize.single_pass_max_prs)"
     ) in flattened
-    assert "a digest cannot select its own working-set policy" in flattened
+    assert (
+        "a digest cannot select its own evidence or working-set policy" in flattened
+    )
+    assert "cache and digest paths beneath `state.dirname`" in flattened
+    assert "report path beneath `systemize.report_root`" in flattened
+    assert "Reject an absolute path, `..` traversal" in flattened
+    for rejected_path_shape in (
+        "`..` traversal",
+        "symlink that escapes",
+        "collision among the canonical artifact paths",
+        "target already tracked by Git",
+        "repository control input",
+    ):
+        assert rejected_path_shape in flattened
 
 
 @pytest.mark.kit_repo_only(
@@ -1510,6 +1528,7 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
         "max_findings_prs_per_run",
         "cache_pattern",
         "digest_cache_pattern",
+        "report_root",
         "report_pattern",
         "fetch_engine",
         "digest_engine",
@@ -1538,6 +1557,26 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
     )
     assert systemize["pattern_threshold"] <= systemize["max_findings_prs_per_run"]
     assert type(systemize["pr_draft"]) is bool
+    state_root = Path(config["state"]["dirname"])
+    report_root = Path(systemize["report_root"])
+    cache_path = Path(systemize["cache_pattern"])
+    digest_path = Path(systemize["digest_cache_pattern"])
+    report_path = Path(systemize["report_pattern"])
+    for configured_path in (
+        state_root,
+        report_root,
+        cache_path,
+        digest_path,
+        report_path,
+    ):
+        assert not configured_path.is_absolute()
+        assert ".." not in configured_path.parts
+    assert state_root != Path(".")
+    assert report_root != Path(".")
+    assert cache_path.is_relative_to(state_root)
+    assert digest_path.is_relative_to(state_root)
+    assert report_path.is_relative_to(report_root)
+    assert len({cache_path, digest_path, report_path}) == 3
     for key in systemize:
         assert f"systemize.{key}" in shared, (
             f"systemize.{key} is configured but the shared workflow never names it"
@@ -1634,6 +1673,16 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
             "an unrecognized label map to `critical`",
             workflow,
             count=1,
+        ),
+        workflow.replace(
+            "maximum normalized severity descending",
+            "minimum normalized severity ascending",
+            1,
+        ),
+        workflow.replace(
+            "Reject an absolute path, `..` traversal",
+            "Allow an absolute path and `..` traversal",
+            1,
         ),
     )
     for mutated in mutations:
