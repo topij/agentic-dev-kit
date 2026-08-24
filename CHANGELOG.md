@@ -64,7 +64,9 @@ starts.
   capability is unavailable. Tracker writes additionally require the operator to
   approve the exact payload. Resolve a local change to an intended rule destination
   before retrying that route; it now requires a clean isolated worktree and an exact
-  staged-path set.**
+  staged-path set. Move or repoint any existing artifact target whose declared kind and
+  complete run identity do not match the current run; the workflow will not replace
+  it.**
 - **CHANGED (gate semantics) — the old Claude command directly creates tracker items
   and does not load the shared approval gate** (`#243`). **`/upgrade` ordinarily keeps
   an existing runtime adapter, so replace

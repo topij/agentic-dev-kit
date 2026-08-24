@@ -303,6 +303,31 @@ def test_installer_refuses_block_style_systemize_operator_logins(
     assert _config(repo) == config
 
 
+@pytest.mark.parametrize(
+    "key_line",
+    (
+        "  operator_logins : [topij]\n",
+        '  "operator_logins": [topij]\n',
+        "  'operator_logins': [topij]\n",
+    ),
+)
+def test_installer_refuses_operator_login_keys_it_cannot_rewrite(
+    tmp_path: Path, key_line: str,
+) -> None:
+    config = shipped_config().replace(
+        "  operator_logins: [topij]\n",
+        key_line,
+        1,
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "systemize.operator_logins is not a one-line flow sequence" in result.stderr
+    assert _config(repo) == config
+
+
 # --------------------------------------------------------------------------- #
 # detect_engines_dir — layout detection (#67)
 # --------------------------------------------------------------------------- #

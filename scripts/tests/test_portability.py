@@ -1463,6 +1463,7 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     assert _post_merge_safety_policies(workflow) == {
         "unknown-argument": "stop-before-preflight",
         "unsafe-artifact-target": "stop-before-derived-write",
+        "existing-artifact-identity": "stop-unless-kind-and-run-identity-match",
         "test-mode-route-write": "prohibit-branch-commit-pr-friction-tracker",
         "tracker-without-payload-approval": (
             "flagged-friction-route-no-tracker-write"
@@ -1486,6 +1487,8 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     assert "mapping keys sorted recursively" in flattened
     assert "Hash those exact bytes with SHA-256" in flattened
     assert "`config_fingerprint` as `sha256:<lowercase-hex>`" in flattened
+    assert "post-merge-systemize-run-v1" in flattened
+    assert "The report's first line is an HTML comment" in flattened
     assert "`pattern_threshold` is at least `2`" in flattened
     assert "`low < normal < high < critical`" in flattened
     assert "an unrecognized label map to `normal`" in flattened
@@ -1518,6 +1521,9 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     assert "require a link count of exactly one" in flattened
     assert "compare its device/inode identity" in flattened
     assert "publish derived files by atomic replacement" in flattened
+    assert "An existing regular target is not presumed to be derived output" in flattened
+    assert "Only a validated same-run artifact may be reused" in flattened
+    assert "Do not rotate, delete, or replace it" in flattened
     assert "Reject any unknown argument before preflight" in flattened
     assert "Also reject a target matching a repository control input" in flattened
     assert (
@@ -1751,6 +1757,12 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
         / "post-merge-systemize.md"
     ).read_text(encoding="utf-8")
     mutations = (
+        workflow.replace(
+            "`existing-artifact-identity` | "
+            "`stop-unless-kind-and-run-identity-match`",
+            "`existing-artifact-identity` | `replace-any-untracked-regular-file`",
+            1,
+        ),
         workflow.replace(
             "`runtime-policy-override` | `shared-declaration-wins-and-stop`",
             "`runtime-policy-override` | `runtime-override-wins-and-continues`",

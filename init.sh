@@ -1402,7 +1402,7 @@ migrate_kit_schema
 if awk '
   /^systemize:[[:space:]]*$/ { in_systemize = 1; next }
   in_systemize && /^[^[:space:]]/ { in_systemize = 0 }
-  in_systemize && /^  operator_logins:/ {
+  in_systemize && /^  [^#]*operator_logins[^:]*:/ {
     if ($0 !~ /^  operator_logins:[[:space:]]*\[[^]]*\][[:space:]]*(#.*)?$/) {
       unsafe = 1
     }

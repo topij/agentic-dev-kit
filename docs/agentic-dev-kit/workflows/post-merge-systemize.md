@@ -89,9 +89,17 @@ non-regular target, or a target already tracked by Git. For every existing artif
 target, require a link count of exactly one and compare its device/inode identity with
 the other artifact targets plus tracked and control inputs; reject any alias. Also reject
 a target matching a repository control input such as the merged config or an active
-instruction/workflow, whether tracked or not. Create parents only after every target
-passes this preflight, then publish derived files by atomic replacement. A configured
-output label does not make its destination safe.
+instruction/workflow, whether tracked or not. A configured output label does not make
+its destination safe.
+
+An existing regular target is not presumed to be derived output. Before replacement,
+parse its identity fields without following links and require the expected artifact
+kind, schema version, byte-equal complete run identity, and matching recomputed identity
+digest. An unreadable target, missing or malformed identity, foreign artifact kind, or
+identity mismatch is a hard stop naming the path. Do not rotate, delete, or replace it;
+tell the operator to inspect and move it or select a different configured pattern. Only
+a validated same-run artifact may be reused. Create parents only after every path and
+identity check passes, then publish derived files by atomic replacement.
 
 An invalid value is a hard stop naming the failed invariant. Do not coerce a scalar or
 repair relationships in memory: the operator must correct the shared configuration.
@@ -112,6 +120,15 @@ non-ASCII characters emitted directly. Hash those exact bytes with SHA-256 and r
 runtime-discovered tools, credentials outside the merged config, or a runtime-specific
 subset. A runtime unable to produce that encoding stops before artifact reuse or write.
 
+After forge preflight supplies the repository and protected-branch head, construct the
+run identity as the RFC 8785 canonical JSON object
+`{"schema":"post-merge-systemize-run-v1","forge_repo":<repo>,"window_days":<days>,"protected_branch_head":<sha>,"config_fingerprint":<fingerprint>,"execution_mode":<live-or-test>}`.
+Hash its canonical UTF-8 bytes with SHA-256 as
+`run_identity_digest: sha256:<lowercase-hex>`. Raw and digest JSON artifacts carry
+`artifact_kind`, `schema_version: 1`, the complete `run_identity`, and that digest at
+top level. The report's first line is an HTML comment containing the same fields as one
+RFC 8785 JSON object; its `artifact_kind` is `post-merge-systemize-report`.
+
 ## Authoritative safety declaration
 
 The outcomes in this table are normative and take precedence over all later prose and
@@ -123,6 +140,7 @@ when a safe report path is already available, and perform no disputed write.
 |---|---|
 | `unknown-argument` | `stop-before-preflight` |
 | `unsafe-artifact-target` | `stop-before-derived-write` |
+| `existing-artifact-identity` | `stop-unless-kind-and-run-identity-match` |
 | `test-mode-route-write` | `prohibit-branch-commit-pr-friction-tracker` |
 | `tracker-without-payload-approval` | `flagged-friction-route-no-tracker-write` |
 | `dirty-caller-destination` | `stop-rule-route-preserve-operator-edit` |

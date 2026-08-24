@@ -318,8 +318,10 @@ explicit degraded paths, and a tracker write still requires payload-specific ope
 confirmation. Logical cache and digest paths resolve through the shared state sandbox;
 reports stay beneath `systemize.report_root`. Preflight rejects traversal, symlink or
 hard-link escape, artifact collisions, and tracked or control-file targets before an
-atomic write. A shared-rule proposal is staged only in a clean isolated worktree; local
-changes to an intended destination stop that route instead of riding into its PR.
+atomic write. An existing target must declare the expected artifact kind and complete
+same-run identity; foreign or malformed content stops without replacement. A
+shared-rule proposal is staged only in a clean isolated worktree; local changes to an
+intended destination stop that route instead of riding into its PR.
 Set `systemize.operator_logins` to exact forge identities whose review findings are
 trusted; configured bot identities come from `review.bots` and explicit aliases only.
 The installer prompts for the operator list and never infers it from the repository
