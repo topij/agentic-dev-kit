@@ -582,7 +582,8 @@ Degraded mode's `fallback:<runtime>` (an author-context run the audit trail
 must stay able to tell apart) and never
 `review.fallback_panel.receipt_source` — with `--lenses` naming exactly the
 lenses that ran, which is also what tells the two forms apart on the audit
-trail, and `--head` the polled sha. Expect the poll render to flag a
+trail, `--compose-parent <last-reviewed-sha>` naming the standing receipt the
+pass extends, and `--head` the polled sha. Expect the poll render to flag a
 one-lens receipt; for a sanctioned single-lens delta pass that flag is the
 audit trail speaking, not an instruction to run the panel the pass replaced.
 
@@ -643,11 +644,19 @@ operator-merge, never a self-merge over it. (A lens disputing that boundary
 *downward* — the author drew safety-critical, the lens says not — changes no
 pass: the round already ran at the stricter form, and a receipt carrying
 more coverage than the class needed overclaims nothing. Post the verdict,
-note the disagreement, leave the draw to the operator.) Know also what the
-engine retains: it keeps one receipt per PR, so recording `fallback:delta`
-replaces the panel receipt that evidenced the initial full panel — the
-posted verdicts and the PR record become the surviving evidence that the
-floor was met. A logged disposition that produced no commit needs less
+note the disagreement, leave the draw to the operator.) Record composition
+mechanically: pass `--compose-parent <last-reviewed-sha>` with the
+`fallback:delta` receipt. The engine requires a standing dual-lens receipt at
+that exact parent (or an already-valid composed chain), proves each boundary is
+ancestral, records the exact changed paths, and revalidates the chain and paths
+on every poll. Missing objects, non-ancestry, a broken boundary, or path drift
+invalidates the receipt. Omitting `--compose-parent` preserves the legacy
+current-head receipt shape, but it replaces the prior receipt and therefore is
+not evidence of composed parent-plus-delta coverage. The posted verdict lines
+remain the surviving outside-the-tree evidence for the author-drawn prose and
+safety-critical classifications; the receipt establishes Git boundaries and
+what the recorded passes covered, not that the posted verdicts are honest. A
+logged disposition that produced no commit needs less
 still: there is no new head, so there is nothing to re-review. The
 single-lens form is the second sanctioned single-lens pass, beside Degraded
 mode — conditioned on what the delta contains, not on what the author

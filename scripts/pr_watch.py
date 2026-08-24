@@ -78,6 +78,7 @@ Usage:
     uv run scripts/pr_watch.py 916 --json       # explicit PR, machine-readable
     uv run scripts/pr_watch.py --mark-seen      # ack exactly what the last poll reported
     uv run scripts/pr_watch.py 916 --record-review "fallback:codex" --head <polled-sha>
+    uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:delta" --compose-parent <reviewed-parent> --head <polled-sha>
     uv run scripts/pr_watch.py 916 --assert-draft  # correct a drifted draft bit after `gh pr create --draft`
     uv run scripts/pr_watch.py 916 --assert-ready  # correct a drifted draft bit before `gh pr merge`
 
@@ -3578,6 +3579,7 @@ def record_review(
     *,
     allow_pending_bot: bool = False,
     lenses: str | None = None,
+    compose_parent: str | None = None,
     now: datetime | None = None,
 ) -> dict:
     """Persist independent-review evidence bound to the PR's current head SHA.
@@ -3613,6 +3615,11 @@ def record_review(
     one-lens pass is distinguishable from a panel in the audit trail: the
     doctrine holds that a single-lens verdict is not a green light, and without
     this a degraded `fallback:` receipt reads exactly like a full one.
+
+    ``compose_parent`` is the exact standing receipt head that a
+    ``fallback:delta`` pass extends. The engine preserves that full parent,
+    appends the reviewed boundary and paths, and validates the complete chain
+    against Git before replacing the top-level current-head receipt.
     """
     require_gh_backend("--record-review")
     source = source.strip()
@@ -3684,6 +3691,18 @@ def record_review(
     named_lenses = [part.strip() for part in (lenses or "").split(",") if part.strip()]
     if named_lenses:
         receipt["lenses"] = named_lenses
+    if compose_parent is not None:
+        parent_head = compose_parent.strip()
+        if source != "fallback:delta":
+            raise ValueError("--compose-parent requires review source fallback:delta")
+        if not parent_head:
+            raise ValueError("composed review parent must not be empty")
+        if not named_lenses:
+            raise ValueError("a composed delta receipt must name the lens that ran")
+        previous = state.get("review_receipt")
+        if not isinstance(previous, dict):
+            raise ValueError("no standing review receipt exists to compose with")
+        receipt["coverage"] = _compose_coverage(previous, parent_head, receipt)
     if allow_pending_bot:
         # The escape hatch on a safety gate is the one thing that must leave a
         # trace. Without it, a receipt taken over an active override is
@@ -3730,6 +3749,197 @@ _LENS_NAME_RE = re.compile(r"^[\w.+-]{1,40}$")
 def _countable_lenses(names: list[str]) -> set[str]:
     """Case-folded lens names from ``names``, ignoring prose."""
     return {n.casefold() for n in names if _LENS_NAME_RE.match(n)}
+
+
+_COMPOSED_COVERAGE_VERSION = 1
+
+
+def _receipt_lenses(receipt: dict) -> list[str]:
+    raw = receipt.get("lenses")
+    if not isinstance(raw, list):
+        return []
+    return [lens.strip() for lens in raw if isinstance(lens, str) and lens.strip()]
+
+
+def _delta_paths(base: str, head: str) -> list[str]:
+    """Return the exact changed paths for an ancestor-bound review delta.
+
+    Composition is evidence only when the boundary can be reconstructed. Git is
+    therefore an authority check here, not a convenience: missing objects,
+    non-ancestry, undecodable paths, or a failed diff all refuse the receipt.
+    ``-z`` preserves whitespace and newlines in names; decoding fails closed
+    because JSON cannot carry an opaque byte path without changing its identity.
+    """
+
+    try:
+        ancestor = subprocess.run(  # noqa: S603
+            ["git", "merge-base", "--is-ancestor", base, head],  # noqa: S607
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"could not establish review-delta ancestry: {exc}") from exc
+    if ancestor.returncode == 1:
+        raise ValueError(f"review-delta base {base} is not an ancestor of {head}")
+    if ancestor.returncode != 0:
+        detail = ancestor.stderr.decode("utf-8", errors="replace").strip()
+        raise ValueError(f"could not establish review-delta ancestry: {detail}")
+
+    try:
+        diff = subprocess.run(  # noqa: S603
+            [
+                "git",
+                "diff",
+                "--name-only",
+                "--diff-filter=ACDMRTUXB",
+                "-z",
+                f"{base}...{head}",
+                "--",
+            ],  # noqa: S607
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            timeout=20,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"could not establish review-delta paths: {exc}") from exc
+    if diff.returncode != 0:
+        detail = diff.stderr.decode("utf-8", errors="replace").strip()
+        raise ValueError(f"could not establish review-delta paths: {detail}")
+    try:
+        decoded = diff.stdout.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("could not establish review-delta paths: non-UTF-8 path") from exc
+    return sorted(path for path in decoded.split("\0") if path)
+
+
+def _validate_composed_coverage(receipt: dict, current_head: str) -> tuple[bool, str | None]:
+    """Validate a composed receipt against its exact Git ancestry and paths."""
+
+    if "coverage" not in receipt:
+        return True, None
+    coverage = receipt.get("coverage")
+    if not isinstance(coverage, dict):
+        return False, "coverage is not an object"
+    if coverage.get("version") != _COMPOSED_COVERAGE_VERSION:
+        return False, "coverage version is unsupported"
+    full = coverage.get("full_parent")
+    deltas = coverage.get("deltas")
+    if not isinstance(full, dict):
+        return False, "full_parent is missing or malformed"
+    if not isinstance(deltas, list) or not deltas:
+        return False, "deltas is missing or empty"
+    full_head = full.get("head")
+    full_source = full.get("source")
+    full_lenses = _receipt_lenses(full)
+    if not isinstance(full_head, str) or not full_head:
+        return False, "full_parent.head is missing"
+    if not isinstance(full_source, str) or not full_source.strip():
+        return False, "full_parent.source is missing"
+    if full_source.strip() == "fallback:delta":
+        return False, "full_parent cannot itself be a delta receipt"
+    if len(_countable_lenses(full_lenses)) < 2:
+        return False, "full_parent does not record a dual-lens pass"
+
+    previous = full_head
+    for index, delta in enumerate(deltas):
+        if not isinstance(delta, dict):
+            return False, f"delta entry {index} is malformed"
+        base = delta.get("base")
+        head = delta.get("head")
+        source = delta.get("source")
+        lenses = _receipt_lenses(delta)
+        paths = delta.get("paths")
+        if base != previous:
+            return False, f"delta entry {index} does not continue the coverage chain"
+        if not isinstance(head, str) or not head:
+            return False, f"delta entry {index} has no head"
+        if source != "fallback:delta":
+            return False, f"delta entry {index} has an invalid source"
+        if not _countable_lenses(lenses):
+            return False, f"delta entry {index} records no review lens"
+        if (
+            not isinstance(paths, list)
+            or not all(isinstance(path, str) and path for path in paths)
+            or paths != sorted(set(paths))
+        ):
+            return False, f"delta entry {index} has malformed paths"
+        try:
+            actual_paths = _delta_paths(base, head)
+        except ValueError as exc:
+            return False, str(exc)
+        if paths != actual_paths:
+            return False, f"delta entry {index} paths do not match Git"
+        previous = head
+
+    final_delta = deltas[-1]
+    if receipt.get("source") != final_delta.get("source"):
+        return False, "coverage source does not match the current receipt"
+    if _receipt_lenses(receipt) != _receipt_lenses(final_delta):
+        return False, "coverage lenses do not match the current receipt"
+    if previous != receipt.get("head") or previous != current_head:
+        return False, "coverage does not end at the current receipt head"
+    return True, None
+
+
+def _compose_coverage(previous: dict, parent_head: str, receipt: dict) -> dict:
+    """Extend exact prior evidence with the current ``fallback:delta`` pass."""
+
+    if previous.get("head") != parent_head:
+        raise ValueError(
+            "composed review parent does not match the standing receipt head"
+        )
+    existing = previous.get("coverage")
+    if existing is None:
+        prior_lenses = _receipt_lenses(previous)
+        prior_source = previous.get("source")
+        if not isinstance(prior_source, str) or not prior_source.strip():
+            raise ValueError("standing parent receipt has no review source")
+        if prior_source.strip() == "fallback:delta":
+            raise ValueError("a legacy delta receipt cannot serve as a full parent")
+        if len(_countable_lenses(prior_lenses)) < 2:
+            raise ValueError("standing parent receipt is not a dual-lens full pass")
+        full_parent = {
+            "head": parent_head,
+            "source": prior_source,
+            "lenses": prior_lenses,
+        }
+        if isinstance(previous.get("recorded_at"), str):
+            full_parent["recorded_at"] = previous["recorded_at"]
+        deltas: list[dict] = []
+    else:
+        valid, error = _validate_composed_coverage(previous, parent_head)
+        if not valid:
+            raise ValueError(f"standing composed receipt is invalid: {error}")
+        full_parent = dict(existing["full_parent"])
+        full_parent["lenses"] = list(existing["full_parent"]["lenses"])
+        deltas = [
+            {**delta, "lenses": list(delta["lenses"]), "paths": list(delta["paths"])}
+            for delta in existing["deltas"]
+        ]
+
+    deltas.append(
+        {
+            "base": parent_head,
+            "head": receipt["head"],
+            "source": "fallback:delta",
+            "lenses": list(receipt.get("lenses") or []),
+            "paths": _delta_paths(parent_head, receipt["head"]),
+            "recorded_at": receipt["recorded_at"],
+        }
+    )
+    coverage = {
+        "version": _COMPOSED_COVERAGE_VERSION,
+        "full_parent": full_parent,
+        "deltas": deltas,
+    }
+    candidate = {**receipt, "coverage": coverage}
+    valid, error = _validate_composed_coverage(candidate, receipt["head"])
+    if not valid:
+        raise ValueError(f"could not validate composed review coverage: {error}")
+    return coverage
 
 
 def _flat(text: object, n: int = 120) -> str:
@@ -4002,7 +4212,18 @@ def build_report(
     receipt_head = (
         review_receipt.get("head") if isinstance(review_receipt, dict) else None
     )
-    receipt_valid = bool(head) and receipt_head == head
+    coverage_valid = True
+    coverage_error: str | None = None
+    if (
+        isinstance(review_receipt, dict)
+        and "coverage" in review_receipt
+        and receipt_head == head
+        and isinstance(head, str)
+    ):
+        coverage_valid, coverage_error = _validate_composed_coverage(
+            review_receipt, head
+        )
+    receipt_valid = bool(head) and receipt_head == head and coverage_valid
     # The second route to the same requirement (#350, direction 1). See
     # `qualifying_bot_coverage` for why reading the bot's own review objects is
     # safe where a fourth self-reported receipt literal would not have been, and
@@ -4074,6 +4295,11 @@ def build_report(
             else None
         ),
     }
+    if isinstance(review_receipt, dict) and "coverage" in review_receipt:
+        review_evidence["coverage"] = (
+            review_receipt.get("coverage") if receipt_valid else None
+        )
+        review_evidence["coverage_error"] = coverage_error
     merge_blockers: list[str] = []
     rest_blocker = rest_cannot_authorize_merge(backend)
     if rest_blocker:
@@ -4104,7 +4330,9 @@ def build_report(
             "configured review bot requested changes on current head: "
             + ", ".join(objecting_bots)
         )
-    if not review_evidence["valid"]:
+    if coverage_error:
+        merge_blockers.append(f"composed review coverage is invalid: {coverage_error}")
+    elif not review_evidence["valid"]:
         merge_blockers.append("independent review evidence is missing for current head")
     if not rollup_settled:
         # One prefix, two wordings, because a reader who cannot tell them apart
@@ -4530,6 +4758,21 @@ def render(report: dict) -> str:
         else:
             detail = "no lenses recorded"
         lines.append(f"  review evidence: {source} — {detail}")
+        coverage = evidence.get("coverage")
+        if isinstance(coverage, dict):
+            full = coverage.get("full_parent") or {}
+            lines.append(
+                "    composed coverage: full parent "
+                f"{_flat(full.get('head'), 60)} via {_flat(full.get('source'))}"
+            )
+            for delta in coverage.get("deltas") or []:
+                if not isinstance(delta, dict):
+                    continue
+                lines.append(
+                    "    + delta "
+                    f"{_flat(delta.get('base'), 12)}..{_flat(delta.get('head'), 12)} "
+                    f"({', '.join(_flat(lens, 40) for lens in delta.get('lenses') or [])})"
+                )
         # Both routes hold. `route` says `receipt` because that is the claim
         # someone actively made, but the coverage is the sturdier of the two and
         # a reader weighing a one-lens receipt deserves to know the bot also saw
@@ -4607,6 +4850,21 @@ def render_record_review(report: dict) -> str:
         )
     elif named:
         lines.append(f"  lenses: {', '.join(named)}")
+    coverage = receipt.get("coverage")
+    if isinstance(coverage, dict):
+        full = coverage.get("full_parent") or {}
+        lines.append(
+            "  composed with full parent "
+            f"{_flat(full.get('head'), 60)} via {_flat(full.get('source'))}"
+        )
+        for delta in coverage.get("deltas") or []:
+            if not isinstance(delta, dict):
+                continue
+            lines.append(
+                "    delta "
+                f"{_flat(delta.get('base'), 12)}..{_flat(delta.get('head'), 12)}; "
+                f"paths: {', '.join(_flat(path, 80) for path in delta.get('paths') or []) or '(none)'}"
+            )
     behind_map = receipt.get("bots_behind_head")
     for bot, sha in (behind_map if isinstance(behind_map, dict) else {}).items():
         lines.append(
@@ -4758,6 +5016,15 @@ def main(argv: list[str] | None = None) -> int:
             "docs/agentic-dev-kit/fallback-review-panel.md"
         ),
     )
+    parser.add_argument(
+        "--compose-parent",
+        metavar="REVIEWED_PARENT_SHA",
+        help=(
+            "with --record-review fallback:delta: extend the standing full-review "
+            "receipt at this exact parent; ancestry and changed paths are validated "
+            "and preserved as composed coverage"
+        ),
+    )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--mark-seen",
@@ -4800,6 +5067,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--allow-pending-bot-review is only valid with --record-review")
     if args.lenses and args.record_review is None:
         parser.error("--lenses is only valid with --record-review")
+    if args.compose_parent and args.record_review is None:
+        parser.error("--compose-parent is only valid with --record-review")
+    if args.compose_parent and args.record_review != "fallback:delta":
+        parser.error("--compose-parent requires --record-review fallback:delta")
     if args.no_persist and (
         args.mark_seen
         or args.record_review is not None
@@ -4833,6 +5104,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.head,
                 allow_pending_bot=args.allow_pending_bot_review,
                 lenses=args.lenses,
+                compose_parent=args.compose_parent,
             )
         except (RuntimeError, KeyError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)

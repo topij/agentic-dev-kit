@@ -204,7 +204,9 @@ Repeat until the report says **converged**:
      doc's stopping section): an isolated lens over a fix round's delta,
      recorded as the literal `fallback:delta` with its one lens named — never
      `fallback:<runtime>`, which is reserved for the author-context degraded
-     run. For a
+     run — plus `--compose-parent <last-reviewed-sha>`. That flag preserves the
+     standing full-panel receipt, records the reviewed delta boundary and exact
+     changed paths, and makes ancestry/path drift invalidate merge evidence. For a
      lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same flags.
      If current-head evidence is already valid, do not rerun the panel; keep the
      outage visible and acknowledge the notice as an already-covered round.
@@ -539,11 +541,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   are recorded but not counted.
 
   **Known gaps, so you don't mistake them for coverage:**
-  - The `review evidence:` line prints on the **poll render**, which a human
-    reads. `dev_session.sh merge` consumes the JSON and gates on `mergeable`
-    alone — so on an autonomous self-merge path nobody sees it. That is the gap
-    issue #32 exists to close properly; until then, an unattended lane's review
-    coverage is only as good as what it recorded.
+  - Composed receipts make `mergeable` depend on a valid parent/delta chain and
+    exact Git paths, so `dev_session.sh merge` enforces those mechanical facts.
+    The source and lens names remain self-reported: the engine cannot establish
+    that the named reviews ran. Per-lens independent receipts remain issue #32's
+    stronger provenance boundary.
   - `coverage` reports only bots that have reviewed *and* whose review carried a
     commit SHA. A bot that has never reviewed at all produces no entry and no
     warning — that case is the pending/unavailable machinery's, not this one's.
