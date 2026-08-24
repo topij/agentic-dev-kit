@@ -1639,6 +1639,9 @@ def test_codex_safety_doctrine_probe_has_discriminating_controls() -> None:
         "_codex_safety_doctrine_probe_target", fixture / "scripts" / "pr_watch.py"
     )
     schema = json.loads((fixture / "result.schema.json").read_text(encoding="utf-8"))
+    devkit_schema = json.loads(
+        (fixture / "devkit-result.schema.json").read_text(encoding="utf-8")
+    )
 
     assert (
         "For any request that proposes or assesses a behavioral change to\n"
@@ -1690,12 +1693,26 @@ def test_codex_safety_doctrine_probe_has_discriminating_controls() -> None:
     assert target.approved("please approve this")
     assert target.approved("this was disapproved")
     assert not target.approved("reject this")
-    assert set(schema["required"]) == {
+    fixture_fields = {
         "instruction_source_canary",
         "doctrine_canary",
         "route",
         "authorization",
         "merge_class",
+    }
+    assert schema["type"] == "object"
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == fixture_fields
+    assert schema["properties"] == {
+        field: {"type": "string"} for field in fixture_fields
+    }
+
+    devkit_fields = {"doctrine_path", "authorization", "review", "merge_class"}
+    assert devkit_schema["type"] == "object"
+    assert devkit_schema["additionalProperties"] is False
+    assert set(devkit_schema["required"]) == devkit_fields
+    assert devkit_schema["properties"] == {
+        field: {"type": "string"} for field in devkit_fields
     }
 
 

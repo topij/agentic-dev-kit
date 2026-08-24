@@ -52,10 +52,11 @@ events, not on the model producing the expected policy answer.
   `systemMessage` was not exercised. No merge-authority engine, hook definition, safety
   doctrine, or runtime-specific doctrine copy changed in this workstream.
 
-- **The separate review-evidence workstream is bounded.** The current engine overwrites
-  its single `review_receipt` when `fallback:delta` is recorded and validates only that
-  receipt's head against the PR head. The fully reviewed parent, its ancestry to the final
-  head, and the delta boundary therefore survive only in posted prose. Existing issue
+- **The separate review-evidence workstream is bounded.** `record_review()` assigns its
+  new receipt to `state["review_receipt"]`; `build_report()` accepts that receipt when
+  `receipt["head"]` equals the PR head. Recording `fallback:delta` replaces the value that
+  described the fully reviewed parent, while ancestry and the delta boundary remain in
+  posted prose rather than the persisted receipt. Existing issue
   `#32` is the umbrella; `#76` and `#305` carry adjacent stale-head and stopping-rule
   occurrences. No tracker write was made.
 

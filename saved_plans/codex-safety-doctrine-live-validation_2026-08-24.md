@@ -101,7 +101,15 @@ observed run.
 
 ## Trusted clean devkit runs
 
-The isolated Codex home declared the clean clone trusted. The command was:
+The isolated Codex home declared the clean clone trusted. The temporary output-schema
+path used by both real-devkit commands contained exactly
+[`devkit-result.schema.json`](codex-safety-doctrine-live-probe/devkit-result.schema.json).
+It requires named string fields and forbids additional properties; it does not
+constrain any field to a policy verdict, doctrine path, review rule, or merge class.
+The policy content below therefore came from the observed model result, not an enum or
+constant supplied by the schema.
+
+The `scripts/pr_watch.py` command was:
 
 ```sh
 CODEX_HOME=/private/tmp/codex-devkit-clean-doctrine-home \
