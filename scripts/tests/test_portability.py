@@ -1431,6 +1431,532 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
             _assert_claude_workflow_adapter(name, declared_shared, claude_path)
 
 
+def _post_merge_capabilities(workflow: str) -> dict[str, tuple[str, str]]:
+    rows: dict[str, tuple[str, str]] = {}
+    for line in workflow.splitlines():
+        if not line.startswith("|") or line.startswith("|---"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) == 3 and cells[0] not in {"Capability", ""}:
+            rows[cells[0]] = (cells[1], cells[2])
+    return rows
+
+
+def _post_merge_safety_policies(workflow: str) -> dict[str, str]:
+    rows: dict[str, str] = {}
+    for line in workflow.splitlines():
+        if not line.startswith("|") or line.startswith("|---"):
+            continue
+        cells = [
+            cell.strip().replace("`", "") for cell in line.strip("|").split("|")
+        ]
+        if len(cells) == 2 and cells[0] not in {"Policy id", ""}:
+            rows[cells[0]] = cells[1]
+    return rows
+
+
+def _post_merge_routing(workflow: str) -> dict[str, tuple[str, str, str]]:
+    rows: dict[str, tuple[str, str, str]] = {}
+    for line in workflow.splitlines():
+        if not line.startswith("|") or line.startswith("|---"):
+            continue
+        cells = [
+            cell.strip().replace("`", "") for cell in line.strip("|").split("|")
+        ]
+        if len(cells) == 4 and cells[0] not in {"Route id", ""}:
+            rows[cells[0]] = (cells[1], cells[2], cells[3])
+    return rows
+
+
+def _assert_post_merge_semantics(workflow: str) -> None:
+    flattened = " ".join(workflow.split())
+    assert (
+        "normative and take precedence over all later prose and runtime adapters"
+        in flattened
+    )
+    assert "perform no disputed write" in flattened
+    assert _post_merge_safety_policies(workflow) == {
+        "unknown-argument": "stop-before-preflight",
+        "unsafe-artifact-target": "stop-before-derived-write",
+        "existing-artifact-identity": "stop-unless-kind-and-run-identity-match",
+        "test-mode-route-write": "prohibit-branch-commit-pr-friction-tracker",
+        "tracker-without-payload-approval": (
+            "flagged-friction-route-no-tracker-write"
+        ),
+        "dirty-caller-destination": "stop-rule-route-preserve-operator-edit",
+        "runtime-policy-override": "shared-declaration-wins-and-stop",
+    }
+    assert _post_merge_routing(workflow) == {
+        "covered": (
+            "Existing shared instruction is adequate; no tightening proposed",
+            "any",
+            "report-rule-citation",
+        ),
+        "pattern": (
+            "Distinct PR count meets or exceeds systemize.pattern_threshold",
+            "any",
+            "shared-rule",
+        ),
+        "single-high": (
+            "Below threshold and distinct PR count equals 1",
+            "At or above systemize.tracker_severity",
+            "tracker-approval",
+        ),
+        "below-threshold": (
+            "Below threshold; all remaining clusters",
+            "any",
+            "friction-log",
+        ),
+    }
+    assert "Every cluster receives exactly one route" in flattened
+    assert (
+        "Test mode may write only the derived cache, digest, report, configured "
+        "local heartbeat state in engine-backed mode, and an optional notification "
+        "prefixed `[TEST]`; it must not write a branch, commit, pull request, "
+        "friction-log entry, or tracker item."
+    ) in flattened
+    assert "positive integers, not booleans" in flattened
+    assert "then require uniqueness and compare exactly" in flattened
+    assert "never infer aliases" in flattened
+    assert "Ignore human review or discussion from every other identity" in flattened
+    assert "post-merge-systemize-config-v1" in flattened
+    assert "RFC 8785 JSON canonicalization" in flattened
+    assert "Reject a non-string mapping key" in flattened
+    assert "mapping keys sorted recursively" in flattened
+    assert "Hash those exact bytes with SHA-256" in flattened
+    assert "`config_fingerprint` as `sha256:<lowercase-hex>`" in flattened
+    assert "post-merge-systemize-run-v1" in flattened
+    assert "The report's first line is an HTML comment" in flattened
+    assert "`pattern_threshold` is at least `2`" in flattened
+    assert "`low < normal < high < critical`" in flattened
+    assert "an unrecognized label map to `normal`" in flattened
+    assert "do not invent a source-specific mapping" in flattened
+    assert (
+        "maximum normalized severity descending, then unaddressed finding count "
+        "descending, then total finding count descending"
+    ) in flattened
+    assert "The digest's `prs[]` is exactly this capped finding-bearing set" in flattened
+    assert (
+        "single_pass_recommended = (findings_pr_count <= "
+        "systemize.single_pass_max_prs)"
+    ) in flattened
+    assert (
+        "a digest cannot select its own evidence or working-set policy" in flattened
+    )
+    assert "`<engine-dir>/lib/state_paths`" in flattened
+    assert "absence is a required-capability failure even in LLM-only mode" in flattened
+    assert "call the shared state-path write resolver" in flattened
+    assert "Require `state.dirname` to match that resolver's declared" in flattened
+    assert "with `mkdir=False` during preflight" in flattened
+    assert "honor `DEVKIT_STATE_ROOT` and `.devkit_state_root`" in flattened
+    assert "even when the sandbox is outside the checkout" in flattened
+    assert "through the shared state read resolver" in flattened
+    assert "Resolve the report beneath `systemize.report_root`" in flattened
+    assert (
+        "reject an absolute configured fragment, `..` traversal, a parent or "
+        "target symlink that escapes its resolved allowed root"
+    ) in flattened
+    assert "require a link count of exactly one" in flattened
+    assert "compare its device/inode identity" in flattened
+    assert "publish derived files by atomic replacement" in flattened
+    assert "An existing regular target is not presumed to be derived output" in flattened
+    assert "Only a validated same-run artifact may be reused" in flattened
+    assert "Do not rotate, delete, or replace it" in flattened
+    assert "Reject any unknown argument before preflight" in flattened
+    assert "Also reject a target matching a repository control input" in flattened
+    assert (
+        "with no prior payload-specific approval, take the flagged friction-log route"
+        in flattened
+    )
+    assert "Never switch branches in the caller's checkout" in flattened
+    assert "create a fresh isolated Git worktree" in flattened
+    assert "staged path set equals the intended destination set exactly" in flattened
+    assert (
+        "stop the route and preserve the proposal in the report; do not blend an "
+        "operator's local edit into the systemize patch"
+    ) in flattened
+    for rejected_path_shape in (
+        "`..` traversal",
+        "symlink that escapes",
+        "collision among the canonical artifact paths",
+        "target already tracked by Git",
+        "repository control input",
+    ):
+        assert rejected_path_shape in flattened
+
+
+@pytest.mark.kit_repo_only(
+    "config/dev-model.yaml",
+    "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+    ".claude/commands/post-merge-systemize.md",
+    ".agents/skills/post-merge-systemize",
+)
+def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
+    shared_path = "docs/agentic-dev-kit/workflows/post-merge-systemize.md"
+    shared = (REPO_ROOT / shared_path).read_text(encoding="utf-8")
+    claude = (
+        REPO_ROOT / ".claude" / "commands" / "post-merge-systemize.md"
+    ).read_text(encoding="utf-8")
+    codex_dir = REPO_ROOT / ".agents" / "skills" / "post-merge-systemize"
+    codex = (codex_dir / "SKILL.md").read_text(encoding="utf-8")
+    interface = yaml.safe_load(
+        (codex_dir / "agents" / "openai.yaml").read_text(encoding="utf-8")
+    )["interface"]
+
+    for adapter in (claude, codex):
+        assert shared_path in adapter
+        assert "## Step" not in adapter
+        assert "## Capability contract" not in adapter
+        assert "systemize.pattern_threshold" not in adapter
+        assert "systemize.cache_pattern" not in adapter
+        assert "systemize.tracker_severity" not in adapter
+
+    claude_description = yaml.safe_load(claude.split("---", 2)[1])["description"]
+    codex_description = yaml.safe_load(codex.split("---", 2)[1])["description"]
+    assert claude_description == codex_description
+    assert len(claude.splitlines()) <= 12
+    assert len(codex.splitlines()) <= 16
+    assert interface["display_name"] == "Post-Merge Systemize"
+    assert "$post-merge-systemize" in interface["default_prompt"]
+
+    config = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
+    systemize = config["systemize"]
+    assert set(systemize) == {
+        "analysis_tier",
+        "operator_logins",
+        "lookback_days",
+        "backfill_days",
+        "pattern_threshold",
+        "tracker_severity",
+        "batch_size",
+        "single_pass_max_prs",
+        "max_findings_prs_per_run",
+        "cache_pattern",
+        "digest_cache_pattern",
+        "report_root",
+        "report_pattern",
+        "fetch_engine",
+        "digest_engine",
+        "heartbeat_engine",
+        "commit_subject",
+        "pr_draft",
+    }
+    assert systemize["analysis_tier"] in config["models"]["tiers"]
+    assert isinstance(systemize["operator_logins"], list)
+    assert len(systemize["operator_logins"]) == len(set(systemize["operator_logins"]))
+    assert all(
+        isinstance(login, str) and login.strip()
+        for login in systemize["operator_logins"]
+    )
+    integer_keys = (
+        "lookback_days",
+        "backfill_days",
+        "pattern_threshold",
+        "batch_size",
+        "single_pass_max_prs",
+        "max_findings_prs_per_run",
+    )
+    for key in integer_keys:
+        assert type(systemize[key]) is int
+        assert systemize[key] > 0
+    assert systemize["pattern_threshold"] >= 2
+    assert systemize["backfill_days"] >= systemize["lookback_days"]
+    assert systemize["batch_size"] <= systemize["single_pass_max_prs"]
+    assert (
+        systemize["single_pass_max_prs"]
+        <= systemize["max_findings_prs_per_run"]
+    )
+    assert systemize["pattern_threshold"] <= systemize["max_findings_prs_per_run"]
+    assert type(systemize["pr_draft"]) is bool
+    state_root = Path(config["state"]["dirname"])
+    report_root = Path(systemize["report_root"])
+    cache_path = Path(systemize["cache_pattern"])
+    digest_path = Path(systemize["digest_cache_pattern"])
+    report_path = Path(systemize["report_pattern"])
+    for configured_path in (
+        state_root,
+        report_root,
+        cache_path,
+        digest_path,
+        report_path,
+    ):
+        assert not configured_path.is_absolute()
+        assert ".." not in configured_path.parts
+    assert state_root != Path(".")
+    assert report_root != Path(".")
+    assert cache_path.is_relative_to(state_root)
+    assert digest_path.is_relative_to(state_root)
+    assert report_path.is_relative_to(report_root)
+    assert len({cache_path, digest_path, report_path}) == 3
+    for artifact_pattern in (cache_path, digest_path, report_path):
+        assert all(
+            placeholder in artifact_pattern.parts[-1]
+            for placeholder in ("{date}", "{window}", "{mode}")
+        )
+    resolver = (ENGINE_DIR / "lib" / "state_paths" / "resolver.py").read_text(
+        encoding="utf-8"
+    )
+    declared_state_dir = re.search(
+        r'^STATE_DIRNAME = "([^"]+)"$', resolver, re.MULTILINE
+    )
+    assert declared_state_dir is not None
+    assert config["state"]["dirname"] == declared_state_dir.group(1)
+    for key in systemize:
+        assert f"systemize.{key}" in shared, (
+            f"systemize.{key} is configured but the shared workflow never names it"
+        )
+    _assert_post_merge_semantics(shared)
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/post-merge-systemize.md")
+def test_post_merge_systemize_required_and_degraded_preflights_are_discriminating() -> None:
+    workflow = (
+        REPO_ROOT
+        / "docs"
+        / "agentic-dev-kit"
+        / "workflows"
+        / "post-merge-systemize.md"
+    ).read_text(encoding="utf-8")
+    capabilities = _post_merge_capabilities(workflow)
+
+    forge_class, forge_failure = capabilities["Forge merged-PR read"]
+    assert forge_class == "required"
+    assert "stops the run" in forge_failure
+    assert "incomplete pagination" in forge_failure
+
+    engine_class, engine_behavior = capabilities[
+        "Deterministic fetch/digest/heartbeat set"
+    ]
+    assert engine_class == "optional, atomic"
+    assert "all absent selects LLM-only mode" in engine_behavior
+    assert "a partial set stops" in engine_behavior
+
+    resolver_class, resolver_behavior = capabilities["Shared state-path resolver"]
+    assert resolver_class == "required"
+    assert "<engine-dir>/lib/state_paths" in resolver_behavior
+    assert "stops before any artifact write" in resolver_behavior
+
+    notify_class, notify_behavior = capabilities["Notification"]
+    assert notify_class == "optional"
+    assert "degrades to the report plus final output" in notify_behavior
+
+    tracker_class, tracker_behavior = capabilities["Tracker create"]
+    assert tracker_class == "optional and approval-gated"
+    assert "does not authorize a write" in tracker_behavior
+    assert "payload-specific approval" in workflow
+    assert (
+        "with no prior payload-specific approval, take the flagged friction-log route"
+        in " ".join(workflow.split())
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/post-merge-systemize.md")
+def test_post_merge_systemize_runtime_outcomes_share_durable_artifacts() -> None:
+    workflow = (
+        REPO_ROOT
+        / "docs"
+        / "agentic-dev-kit"
+        / "workflows"
+        / "post-merge-systemize.md"
+    ).read_text(encoding="utf-8")
+
+    for configured_artifact in (
+        "systemize.cache_pattern",
+        "systemize.digest_cache_pattern",
+        "systemize.report_pattern",
+    ):
+        assert configured_artifact in workflow
+    for report_field in (
+        "forge repository",
+        "protected-branch head",
+        "config fingerprint",
+        "capability preflight",
+        "route dispositions",
+        "incomplete actions",
+        "next safe resume step",
+    ):
+        assert report_field in workflow
+    assert "agent-executed rather than engine-verified" in workflow
+    assert re.search(r"Do not merge this rule\s+PR", workflow)
+    assert re.search(
+        r"shared `pr-watch` and\s+fallback-panel doctrine unchanged", workflow
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/post-merge-systemize.md")
+def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
+    workflow = (
+        REPO_ROOT
+        / "docs"
+        / "agentic-dev-kit"
+        / "workflows"
+        / "post-merge-systemize.md"
+    ).read_text(encoding="utf-8")
+    mutations = (
+        workflow.replace(
+            "`below-threshold` | Below threshold; all remaining clusters | any | "
+            "`friction-log`",
+            "`below-threshold` | Below threshold; all remaining clusters | any | "
+            "`drop-without-recording`",
+            1,
+        ),
+        workflow.replace(
+            "`existing-artifact-identity` | "
+            "`stop-unless-kind-and-run-identity-match`",
+            "`existing-artifact-identity` | `replace-any-untracked-regular-file`",
+            1,
+        ),
+        workflow.replace(
+            "`runtime-policy-override` | `shared-declaration-wins-and-stop`",
+            "`runtime-policy-override` | `runtime-override-wins-and-continues`",
+            1,
+        ),
+        workflow.replace("it must not write a branch", "it may write a branch", 1),
+        re.sub(
+            r"Reject any\s+unknown argument before preflight",
+            "Accept any unknown argument before preflight",
+            workflow,
+            count=1,
+        ),
+        workflow.replace("at least `2`", "at least `0`", 1),
+        re.sub(
+            r"findings_pr_count <=\s+systemize\.single_pass_max_prs",
+            "findings_pr_count > systemize.single_pass_max_prs",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"an unrecognized\s+label map to `normal`",
+            "an unrecognized label map to `critical`",
+            workflow,
+            count=1,
+        ),
+        workflow.replace(
+            "maximum normalized severity descending",
+            "minimum normalized severity ascending",
+            1,
+        ),
+        re.sub(
+            r"reject an absolute configured fragment, `\.\.`\s+traversal",
+            "allow an absolute configured fragment and `..` traversal",
+            workflow,
+            count=1,
+        ),
+        workflow.replace(
+            "a parent or target symlink that escapes its resolved allowed root",
+            "a parent or target symlink may escape its resolved allowed root",
+            1,
+        ),
+        re.sub(
+            r"Also reject\s+a target matching a repository control input",
+            "Also permit a target matching a repository control input",
+            workflow,
+            count=1,
+        ),
+        workflow.replace(
+            "require a link count of exactly one",
+            "allow any existing link count",
+            1,
+        ),
+        re.sub(
+            r"must\s+honor `DEVKIT_STATE_ROOT` and\s+`\.devkit_state_root`",
+            "must ignore `DEVKIT_STATE_ROOT` and `.devkit_state_root`",
+            workflow,
+            count=1,
+        ),
+        workflow.replace(
+            "through the shared state read resolver",
+            "directly from the worktree",
+            1,
+        ),
+        re.sub(
+            r"Hash those exact bytes with\s+SHA-256",
+            "Hash implementation-selected bytes with MD5",
+            workflow,
+            count=1,
+        ),
+        workflow.replace(
+            "never infer aliases",
+            "infer aliases by prefix",
+            1,
+        ),
+        re.sub(
+            r"with\s+`mkdir=False` during preflight",
+            "with `mkdir=True` during preflight",
+            workflow,
+            count=1,
+        ),
+        workflow.replace(
+            "create a fresh isolated Git worktree",
+            "switch the caller checkout",
+            1,
+        ),
+        re.sub(
+            r"stop the route and preserve the proposal in the report; do not\s+blend "
+            r"an operator's local edit into the systemize patch",
+            "continue the route and blend an operator's local edit into the "
+            "systemize patch",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"with no prior payload-specific approval, take the flagged\s+friction-log route",
+            "with no prior payload-specific approval, create the tracker item",
+            workflow,
+            count=1,
+        ),
+    )
+    for mutation_index, mutated in enumerate(mutations):
+        assert mutated != workflow, mutation_index
+        with pytest.raises(AssertionError):
+            _assert_post_merge_semantics(mutated)
+
+
+@pytest.mark.kit_repo_only(
+    "CHANGELOG.md",
+    "docs/agentic-dev-kit/workflows/upgrade.md",
+)
+def test_systemize_upgrade_requires_replacing_the_legacy_claude_adapter() -> None:
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    upgrade = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+    ).read_text(encoding="utf-8")
+
+    entry = changelog.split("## #595", 1)[1].split("\n---", 1)[0]
+    assert ".claude/commands/post-merge-systemize.md" in entry
+    assert "replace" in entry
+    assert "does not load the shared approval gate" in entry
+    assert "exception is an adapter migration" in upgrade
+    assert "retaining an adapter that bypasses the new gate" in " ".join(
+        upgrade.split()
+    )
+
+
+def test_runtime_parity_rejects_a_missing_or_stale_systemize_adapter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _runtime_parity_fixture(tmp_path)
+    (repo / "kit-manifest.json").write_text("{}\n", encoding="utf-8")
+    skill = repo / ".agents" / "skills" / "post-merge-systemize" / "SKILL.md"
+    skill.write_text(
+        skill.read_text(encoding="utf-8").replace(
+            "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+            "docs/agentic-dev-kit/workflows/stale-systemize.md",
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
+
+    with pytest.raises(AssertionError):
+        test_runtime_parity_contract_covers_workflows_and_adapters()
+
+    shutil.rmtree(repo / ".agents" / "skills" / "post-merge-systemize")
+    with pytest.raises((AssertionError, FileNotFoundError)):
+        test_runtime_parity_contract_covers_workflows_and_adapters()
+
+
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/runtime-parity.md")
 def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
     parity_doc = REPO_ROOT / "docs" / "agentic-dev-kit" / "runtime-parity.md"

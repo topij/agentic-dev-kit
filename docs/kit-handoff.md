@@ -14,10 +14,48 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-24 — the trusted Codex doctrine-load record and composed
-review-evidence migration are merged; semantic delta routing remains deliberately bounded.
+Last updated: 2026-08-24 — PR `#595` carries the shared post-merge-systemize slice;
+the remaining Phase 3 integration preflights are bounded for a separate branch.
 
-## Latest session — 2026-08-24 (Codex doctrine validation and composed review evidence merged)
+## Latest session — 2026-08-24 (post-merge systemize moved into the shared workflow layer)
+
+**Theme —** Phase 3 now has a bounded parity slice: the retro workflow's behavior lives
+in one runtime-neutral definition, while Claude and Codex expose thin native bindings.
+
+- **PR `#595` carries the extraction.** The shared workflow owns capability preflights,
+  durable cache, digest, report and route artifacts, resumability, external-write approval
+  gates, review follow-through, and stop conditions. Runtime adapters select native
+  invocation and translate configured compute without owning policy.
+
+- **Required and optional capabilities are explicit.** Repository and complete merged-PR
+  history access fail closed. The configured engine set is atomic: an absent set selects
+  a labelled agent-executed path, while a partial set stops. Optional forge writes,
+  tracker, reviewer and notification integrations retain durable report-based degraded
+  paths; tracker writes require approval of the exact payload.
+
+- **The review-evidence boundary is unchanged.** This slice does not modify
+  `scripts/pr_watch.py`, add a record-only classifier, or fork the shared fallback review
+  semantics. Uncertain or disputed delta classification remains on the full-panel route.
+
+- **Adopter surfaces move together.** Installer migration, the manifest, runtime-parity
+  declaration, README and getting-started guidance, sprint plan, and parity tests carry
+  the same workflow contract. Issue `#7` stays open for the optional deterministic
+  engines.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `d8994219def83ece2ba9e4d6ac0f57b459939083` on 2026-08-24 printed
+  `1565 passed, 3 warnings in 178.12s`; the warnings were pytest temporary-directory
+  cleanup warnings.
+
+▶ Next: run
+`git fetch origin && git switch -c feat/shared-integration-preflights origin/main`, then
+inventory tracker and notification dependencies in `session-start`, `wrap-up`, and
+`triage-friction-log`; reuse the shared capability vocabulary, keep both runtime adapters
+thin, and add declaration-derived preflight coverage.
+
+______________________________________________________________________
+
+## Session — 2026-08-24 (Codex doctrine validation and composed review evidence merged)
 
 **Theme —** Phase 2 closed on trusted-client evidence rather than inference, then the
 separate review-evidence workstream replaced the single-current-head receipt limitation

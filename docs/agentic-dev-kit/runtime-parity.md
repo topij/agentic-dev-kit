@@ -36,10 +36,10 @@ workflow_contract:
     claude: .claude/commands/triage-friction-log.md
     codex: .agents/skills/triage-friction-log/SKILL.md
   - name: post-merge-systemize
-    status: gap
-    shared: null
+    status: aligned
+    shared: docs/agentic-dev-kit/workflows/post-merge-systemize.md
     claude: .claude/commands/post-merge-systemize.md
-    codex: null
+    codex: .agents/skills/post-merge-systemize/SKILL.md
   - name: parallel-headless
     status: companion
     shared: docs/agentic-dev-kit/workflows/parallel-headless.md
@@ -95,7 +95,8 @@ records broader capability parity that cannot be expressed as an adapter path.
 | Capability tiers | `config/dev-model.yaml` neutral tiers | model mapping | reasoning-effort mapping | gap: calibrate Codex model plus effort mappings |
 | Headless lane isolation | shared lane descriptor and contract | launcher-dependent | launcher-dependent | gap: Codex needs a launcher that can apply worktree and environment fields |
 | Command permissions | repository policy | `.claude/settings.json` permissions | no shipped project rules | gap: decide and ship the Codex policy surface |
-| Tracker and notification tools | backend names in config | runtime client or MCP | runtime client or MCP | gap: declare dependencies and preflight behavior |
+| Post-merge integrations | shared capability contract and `systemize` config | runtime-native forge, tracker, notify, and repository mechanisms | runtime-native forge, tracker, notify, and repository mechanisms | aligned for workflow outcomes: forge read and config are required; notification, tracker creation, reviewer access, and the atomic engine set have explicit degraded or fail-closed paths. The tracker remains payload-approval-gated and the unvendored engine set remains agent-executed in LLM-only mode |
+| Session-start, wrap-up, and triage integrations | backend names in config | runtime client or MCP | runtime client or MCP | gap: apply the same explicit capability and preflight contract to `session-start`, `wrap-up`, and `triage-friction-log` |
 | Adapter upgrade | shared workflow refresh | existing adapter retained | existing adapter retained | gap: runtime-specific fixes can remain stale |
 | Drift inspection | `kit_doctor` | registration paths resolved | merged project hook sources, project enablement, and structural lifecycle fields checked only for exact repository-owned command strings; altered strings retain generic path diagnostics | gap narrowed: runtime-adapter and general shell semantics remain |
 

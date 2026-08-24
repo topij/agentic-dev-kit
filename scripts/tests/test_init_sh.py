@@ -236,6 +236,214 @@ def _config(repo: Path) -> str:
     return (repo / "config" / "dev-model.yaml").read_text(encoding="utf-8")
 
 
+def _without_systemize(config: str) -> str:
+    stripped, replacements = re.subn(
+        r"\nsystemize:\n.*?(?=\ntracker:)",
+        "\n",
+        config,
+        flags=re.DOTALL,
+    )
+    assert replacements == 1, "shipped config no longer has one systemize section"
+    return stripped
+
+
+def test_installer_adds_the_shared_systemize_config_to_an_existing_schema(
+    tmp_path: Path,
+) -> None:
+    repo = _fixture(tmp_path, config=_without_systemize(shipped_config()))
+
+    result = _run_init(repo)
+
+    parsed = yaml.safe_load(_config(repo))
+    expected_systemize = yaml.safe_load(shipped_config())["systemize"]
+    expected_systemize["operator_logins"] = []
+    assert "added systemize workflow config" in result.stdout
+    assert parsed["systemize"] == expected_systemize
+    assert parsed["kit"]["version"] == 2
+
+
+def test_installer_preserves_an_adopter_owned_partial_systemize_section(
+    tmp_path: Path,
+) -> None:
+    config = _without_systemize(shipped_config()).replace(
+        "\ntracker:\n",
+        "\nsystemize:\n  analysis_tier: custom\n\ntracker:\n",
+        1,
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo)
+
+    assert "added systemize workflow config" not in result.stdout
+    assert yaml.safe_load(_config(repo))["systemize"] == {"analysis_tier": "custom"}
+
+
+@pytest.mark.parametrize(
+    "section_line",
+    (
+        "systemize :\n",
+        '"systemize":\n',
+        "'systemize':\n",
+        "systemize:  # adopter policy\n",
+        "!!str systemize:\n",
+    ),
+)
+def test_installer_refuses_systemize_section_keys_it_cannot_migrate(
+    tmp_path: Path, section_line: str,
+) -> None:
+    config = shipped_config().replace("systemize:\n", section_line, 1)
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "top-level key init.sh cannot migrate safely" in result.stderr
+    assert _config(repo) == config
+
+
+@pytest.mark.parametrize(
+    "key_line",
+    (
+        "  operator_logins:\n",
+        "  operator_logins:  # exact trusted sources\n",
+    ),
+)
+def test_installer_refuses_block_style_systemize_operator_logins(
+    tmp_path: Path, key_line: str,
+) -> None:
+    config = shipped_config().replace(
+        "  operator_logins: []\n",
+        key_line + "    - topij\n    - second-operator\n",
+        1,
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "systemize section contains a key or operator_logins value" in result.stderr
+    assert "operator_logins: [first-login, second-login]" in result.stderr
+    assert _config(repo) == config
+
+
+@pytest.mark.parametrize(
+    "key_line",
+    (
+        "  operator_logins : [topij]\n",
+        '  "operator_logins": [topij]\n',
+        "  'operator_logins': [topij]\n",
+    ),
+)
+def test_installer_refuses_operator_login_keys_it_cannot_rewrite(
+    tmp_path: Path, key_line: str,
+) -> None:
+    config = shipped_config().replace(
+        "  operator_logins: []\n",
+        key_line,
+        1,
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "systemize section contains a key or operator_logins value" in result.stderr
+    assert _config(repo) == config
+
+
+@pytest.mark.parametrize(
+    "systemize_block",
+    (
+        '"systemize":\n  analysis_tier: custom\n',
+        "!!str systemize:\n  analysis_tier: custom\n",
+        "systemize:\n  operator_logins:\n    - topij\n",
+        "systemize:\n    operator_logins: []\n",
+        "systemize:\n  operator_logins: [!!str topij]\n",
+        "systemize:\n  operator_logins: [&operator topij]\n",
+        "systemize:\n  operator_logins: [true]\n",
+        "systemize:\n  operator_logins: [.nan]\n",
+        "systemize:\n  operator_logins: [-1]\n",
+        "systemize:\n  operator_logins: [-1.5]\n",
+        "systemize:\n  operator_logins: [.5]\n",
+        'systemize:\n  operator_logins: ["escaped\\nlogin"]\n',
+        'systemize:\n  operator_logins: ["login # fragment"]\n',
+        'systemize:\n  operator_logins: [" lead"]\n',
+        'systemize:\n  operator_logins: ["trail "]\n',
+        "systemize:\n  operator_logins: [topij]#comment\n",
+        "systemize:\n  analysis_tier: custom\nsystemize:\n  analysis_tier: expensive\n",
+        "systemize:\n  analysis_tier: custom\n  analysis_tier: expensive\n",
+    ),
+)
+def test_installer_rejects_unsafe_systemize_shapes_before_legacy_migration(
+    tmp_path: Path, systemize_block: str,
+) -> None:
+    config = V1_CONFIG.replace("tracker:\n", systemize_block + "tracker:\n", 1)
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "no migration was applied" in result.stderr.lower()
+    assert _config(repo) == config
+
+
+def test_installer_rejects_owned_flow_mapping_before_legacy_migration(
+    tmp_path: Path,
+) -> None:
+    block_paths = """paths:
+  handoff: docs/handoff.md
+  handoff_history: docs/handoff-history.md
+  friction_log: docs/friction-log.md
+  friction_log_archive: docs/friction-log-archive.md
+"""
+    flow_paths = (
+        "paths: {handoff: docs/handoff.md, "
+        "handoff_history: docs/handoff-history.md, "
+        "friction_log: docs/friction-log.md, "
+        "friction_log_archive: docs/friction-log-archive.md}\n"
+    )
+    config = V1_CONFIG.replace(block_paths, flow_paths, 1)
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "no migration was applied" in result.stderr.lower()
+    assert _config(repo) == config
+    assert yaml.safe_load(config)["paths"]["handoff"] == "docs/handoff.md"
+
+
+def test_installer_accepts_unowned_bare_top_level_key_with_hyphen(
+    tmp_path: Path,
+) -> None:
+    config = V1_CONFIG + "external-tools:\n  enabled: true\n"
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+
+    assert yaml.safe_load(_config(repo))["external-tools"] == {"enabled": True}
+
+
+def test_installer_preserves_supported_operator_login_flow_items(
+    tmp_path: Path,
+) -> None:
+    config = shipped_config().replace(
+        "  operator_logins: []\n",
+        "  operator_logins: [topij, \"123\", 'git.lab']  # trusted sources\n",
+        1,
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+
+    assert yaml.safe_load(_config(repo))["systemize"]["operator_logins"] == [
+        "topij",
+        "123",
+        "git.lab",
+    ]
+    assert "# trusted sources" in _config(repo)
+
+
 # --------------------------------------------------------------------------- #
 # detect_engines_dir — layout detection (#67)
 # --------------------------------------------------------------------------- #

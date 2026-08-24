@@ -11,7 +11,7 @@ Workflow names are runtime-neutral below. Invoke them as `/name` in Claude Code 
 The loop you're setting up:
 
 > **`session-start` → work → `pr-watch` → `wrap-up`**, with the **friction
-> flywheel** (`/triage-friction-log`, `/post-merge-systemize`) turning underneath.
+> flywheel** (`triage-friction-log`, `post-merge-systemize`) turning underneath.
 
 See the [README diagram](../README.md#how-it-fits-together) for the whole picture.
 
@@ -196,10 +196,10 @@ next `session-start` reads both the handoff and the inbox, neither thread is los
 
 On a cadence (weekly works well):
 
-- **`/triage-friction-log`** reads the new inbox entries and routes each one: a
+- **`triage-friction-log`** reads the new inbox entries and routes each one: a
   single incident becomes a tracker ticket, then the entry is swept to the archive.
-- **`/post-merge-systemize`** scans recently merged PRs for a pattern that shows up
-  in **two or more** of them — and only *then* promotes it into a standing rule.
+- **`post-merge-systemize`** scans recently merged PRs for a pattern that reaches
+  `systemize.pattern_threshold` — and only *then* proposes a standing shared rule.
 
 Single incidents route **down** (to the tracker); repeated patterns route **up**
 (to a rule). That asymmetry is deliberate — it's what keeps your rule set small
@@ -208,24 +208,36 @@ and your friction log honest instead of ratcheting every week.
 The **down**-route runs on two clocks, not one. `/wrap-up` takes it immediately for
 anything already issue-shaped; `/triage-friction-log` takes it for everything else
 that proves to be a single incident — explicable by now or not. Neither is the
-**up**-route: that is `/post-merge-systemize`'s, over a different corpus entirely
+**up**-route: that is `post-merge-systemize`'s, over a different corpus entirely
 (merged-PR review comments, not inbox entries), which is why a pattern has to show up
 across PRs before it earns a rule. So an inbox that stays small is the system working,
 and one that fills with things you could have filed at session end means `/wrap-up`'s
 friction-routing step is being skipped — not that triage is overdue.
 
-> **Note:** these two skills ship as *doctrine* — the prose and routing rules are
-> here, but their deterministic engines — a tracker client, a notify channel, a
-> merged-PR fetcher, a heartbeat, and `triage-friction-log`'s own parse/finalize
-> scripts — are project-specific and left for you to wire
+> **Note:** these workflows share their doctrine across Claude and Codex. Their
+> deterministic integrations — tracker and notification clients, the merged-PR
+> fetch/digest/heartbeat set, and `triage-friction-log`'s parse/finalize scripts —
+> remain project-specific and left for you to wire
 > ([#6](https://github.com/topij/agentic-dev-kit/issues/6),
-> [#7](https://github.com/topij/agentic-dev-kit/issues/7)). The four core skills
-> (`session-start`, `wrap-up`, `parallel`, `pr-watch`) run out of the box — with one
-> exception worth knowing before you rely on it: `/wrap-up`'s **direct filing** route
+> [#7](https://github.com/topij/agentic-dev-kit/issues/7)). `post-merge-systemize`
+> has an explicit LLM-only path when its configured engine set is wholly absent; a
+> partial set fails closed. Configure exact trusted forge identities in
+> `systemize.operator_logins`; other human reviewers are excluded, while bot sources
+> come only from `review.bots` and its explicit aliases. The installer refuses YAML
+> key forms its shell migrator cannot own before writing: keep top-level keys unique
+> and bare, write a bare `systemize:` section line, and use bare keys at the shipped
+> two-space indentation within it. Keep operator-login items as simple plain login
+> tokens or simple quoted strings; YAML tags, anchors, aliases, typed scalars, escapes,
+> and ambiguous flow syntax are refused before migration writes.
+> `session-start`, `wrap-up`,
+> `parallel`, and `pr-watch`
+> run out of the box — with an exception worth knowing before you rely on it:
+> `wrap-up`'s **direct filing** route
 > reaches your tracker through whatever client your backend gives you, and ships as
-> doctrine like the two skills above rather than as a wired engine. Its consent gate
-> and duplicate check are prose the agent executes, not checks that fail. Everything
-> else in those four skills is engine-backed.
+> doctrine rather than as a wired engine. Its consent gate and duplicate check are
+> prose the agent executes, not checks that fail. The systemize workflow likewise
+> labels agent-executed classification honestly and never treats tracker availability
+> as authorization.
 
 ## That's the loop
 

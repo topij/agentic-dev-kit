@@ -27,10 +27,11 @@ Usage: ./init.sh [--no-clobber] [--help]
 
 Bootstraps the agentic-dev-kit in the current repo:
 
-  1. Prompts for project.name, runtime.default, tracker.backend (+ project name and, for
-     Linear, team/project ids), vcs.protected_branch, notify.user_key, and
-     review.bots — each showing the current value in config/dev-model.yaml
-     as the default. Press Enter to keep the default.
+  1. Prompts for project.name, runtime.default, systemize.operator_logins,
+     tracker.backend (+ project name and, for Linear, team/project ids),
+     vcs.protected_branch, notify.user_key, and review.bots — each showing the
+     current value in config/dev-model.yaml as the default. Press Enter to keep
+     the default.
   2. Stamps the answers into config/dev-model.yaml in place.
   3. Migrates an older config schema forward in place (kit.version) and
      stamps the current generation.
@@ -462,6 +463,84 @@ dev_session.sh"
   printf '%s\n' "${found:-scripts}"
 }
 
+# The migrations below are deliberately line-oriented so init.sh keeps its stated
+# shell-only dependency contract. Validate the shapes they own before either one
+# writes: YAML has equivalent tagged, quoted, explicit, and anchored mapping forms
+# that these helpers must refuse rather than mistake for a missing section.
+preflight_migration_config() {
+  if awk '
+    BEGIN {
+      owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
+      owned["vcs"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
+      owned["notify"] = owned["models"] = 1
+    }
+    /^[[:space:]]*($|#)/ { next }
+    /^[^[:space:]]/ {
+      if ($0 !~ /^[A-Za-z_][A-Za-z0-9_.-]*:/) { unsafe = 1; next }
+      key = $0
+      sub(/:.*/, "", key)
+      if (seen[key]++) unsafe = 1
+      if (owned[key] && $0 !~ ("^" key ":[[:space:]]*$")) unsafe = 1
+    }
+    END { exit(unsafe ? 0 : 1) }
+  ' "$CONFIG_FILE"; then
+    echo "error: config/dev-model.yaml has a top-level key init.sh cannot migrate safely." >&2
+    echo "  Use unique bare mapping keys with no tag, quote, anchor, or explicit-key" >&2
+    echo "  marker; sections read or written by init.sh must use a bare 'section:' line." >&2
+    echo "  No migration was applied." >&2
+    exit 1
+  fi
+
+  if awk '
+    function valid_login_flow(line,   body, n, i, item, first, last, value, lower, sq) {
+      body = line
+      sub(/^  operator_logins:[[:space:]]*\[/, "", body)
+      sub(/\]([[:space:]]*|[[:space:]]+#.*)$/, "", body)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", body)
+      if (body == "") return 1
+      n = split(body, items, ",")
+      sq = sprintf("%c", 39)
+      for (i = 1; i <= n; i++) {
+        item = items[i]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+        if (item == "") return 0
+        first = substr(item, 1, 1)
+        last = substr(item, length(item), 1)
+        if ((first == "\"" && last == "\"") || (first == sq && last == sq)) {
+          value = substr(item, 2, length(item) - 2)
+          if (value == "" || value ~ /[[:space:]\\"#,\[\]]/ || index(value, sq)) return 0
+          continue
+        }
+        if (item !~ /^[A-Za-z_][A-Za-z0-9_.-]*$/) return 0
+        lower = tolower(item)
+        if (lower ~ /^(true|false|null|yes|no|on|off|[-+]?\.(inf|nan))$/) return 0
+      }
+      return 1
+    }
+    /^systemize:[[:space:]]*$/ { in_systemize = 1; next }
+    in_systemize && /^[^[:space:]]/ { in_systemize = 0 }
+    in_systemize && /^[[:space:]]+[^[:space:]#]/ {
+      if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_]*:/) unsafe = 1
+      key = $0
+      sub(/^  /, "", key)
+      sub(/:.*/, "", key)
+      if (seen_child[key]++) unsafe = 1
+      if ($0 ~ /^  operator_logins:/ &&
+          ($0 !~ /^  operator_logins:[[:space:]]*\[[^]]*\]([[:space:]]*|[[:space:]]+#.*)$/ ||
+           !valid_login_flow($0))) {
+        unsafe = 1
+      }
+    }
+    END { exit(unsafe ? 0 : 1) }
+  ' "$CONFIG_FILE"; then
+    echo "error: the systemize section contains a key or operator_logins value init.sh cannot rewrite safely." >&2
+    echo "  Indent bare scalar keys with two spaces and use simple login strings:" >&2
+    echo '    operator_logins: [first-login, second-login]' >&2
+    echo "  No migration was applied." >&2
+    exit 1
+  fi
+}
+
 # Guards are SECTION-scoped, not whole-file `grep '^  key:'`. That form is a bug
 # in two directions at once: it misses the key when the adopter's section uses a
 # different indent (so the migration re-runs forever, appending a duplicate each
@@ -533,6 +612,35 @@ migrate_kit_schema() {
   version: 2
 '
     echo "stamped kit.version=2 in config/dev-model.yaml"
+  fi
+
+  if ! grep -q '^systemize:' "$CONFIG_FILE"; then
+    insert_before_section "tracker:" 'systemize:
+  # Shared post-merge-systemize workflow settings. Runtime adapters translate
+  # invocation and compute controls only; policy stays in the shared workflow.
+  analysis_tier: expensive
+  # Exact forge logins trusted as operator review-finding sources.
+  operator_logins: []
+  lookback_days: 7
+  backfill_days: 28
+  pattern_threshold: 2
+  tracker_severity: high
+  batch_size: 25
+  single_pass_max_prs: 60
+  max_findings_prs_per_run: 75
+  # {window} is the selected lookback in days; {mode} is live or test.
+  cache_pattern: "state/cache/merged-prs_{window}_{mode}_{date}.json"
+  digest_cache_pattern: "state/cache/merged-prs-digest_{window}_{mode}_{date}.json"
+  report_root: reports
+  report_pattern: "reports/post-merge-systemize_{window}_{mode}_{date}.md"
+  # Optional deterministic integration, resolved beneath paths.engines.
+  fetch_engine: fetch_merged_prs.py
+  digest_engine: digest_merged_prs.py
+  heartbeat_engine: heartbeat_cli.py
+  commit_subject: "docs(systemize): promote recurring review patterns"
+  pr_draft: false
+'
+    echo "added systemize workflow config to config/dev-model.yaml"
   fi
 
   ensure_review_key noise_markers '  # Read by pr_watch.py. These used to be literals inside the engine, which meant
@@ -1358,6 +1466,7 @@ if [ ! -t 0 ]; then
   echo "note: no terminal attached — keeping all current config/dev-model.yaml values." >&2
 fi
 
+preflight_migration_config
 migrate_runtime_schema
 migrate_kit_schema
 
@@ -1405,6 +1514,28 @@ set_field "project:" "" "^  name:" "$(yaml_scalar "$name")"
 cur_runtime=$(get_field "runtime:" "" "^  default:")
 runtime=$(ask "Agent runtime (claude | codex | none)" "$cur_runtime")
 set_field "runtime:" "" "^  default:" "$(yaml_scalar "$runtime")"
+
+cur_operator_logins_raw=$(get_field "systemize:" "" "^  operator_logins:")
+cur_operator_logins=$(printf '%s' "$cur_operator_logins_raw" | sed -e 's/^\[//' -e 's/\]$//' -e 's/"//g' -e "s/'//g")
+operator_logins_answer=$(ask "Operator forge logins trusted as review sources (comma-separated, or 'none')" "$cur_operator_logins")
+operator_logins_answer=$(printf '%s' "$operator_logins_answer" | sed -e 's/^[[:space:]]*\[//' -e 's/\][[:space:]]*$//')
+if [ "$operator_logins_answer" = "none" ] || [ -z "$operator_logins_answer" ]; then
+  operator_logins_value="[]"
+else
+  operator_logins_value="[$(printf '%s\n' "$operator_logins_answer" | awk -F',' '{
+    out = ""
+    for (i = 1; i <= NF; i++) {
+      item = $i
+      gsub(/^[ \t]+|[ \t]+$/, "", item)
+      gsub(/^["'\'']|["'\'']$/, "", item)
+      gsub(/["\\]/, "", item)
+      if (item == "") continue
+      out = out (out == "" ? "" : ", ") "\"" item "\""
+    }
+    print out
+  }')]"
+fi
+set_field "systemize:" "" "^  operator_logins:" "$operator_logins_value"
 
 cur_backend=$(get_field "tracker:" "" "^  backend:")
 backend=$(ask "Tracker backend (linear | github-issues | jira | none)" "$cur_backend")
@@ -1781,7 +1912,7 @@ register_budget_hooks
 echo ""
 echo "agentic-dev-kit is bootstrapped (kit schema v2)."
 echo "Review config/dev-model.yaml for any remaining values (paths, doc_budgets,"
-echo "models, review.fallback_panel.lenses) and edit to taste."
+echo "models, systemize, review.fallback_panel.lenses) and edit to taste."
 echo ""
 # The per-file `left untouched (--no-clobber):` lines are printed where the
 # decision happens, hundreds of lines of output earlier. Repeat them here: the

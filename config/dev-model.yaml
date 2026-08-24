@@ -89,6 +89,40 @@ vcs:
   triage_branch_pattern: "chore/triage-{date}"
   systemize_branch_pattern: "chore/systemize-{date}"
 
+systemize:
+  # Shared post-merge-systemize workflow settings. The runtime adapter selects
+  # no policy: Claude and Codex both read this block and the shared workflow.
+  analysis_tier: expensive
+  # Exact forge logins trusted as operator review-finding sources. Empty is the
+  # adopter-safe default; ./init.sh prompts rather than trusting a foreign identity.
+  operator_logins: []
+  lookback_days: 7
+  backfill_days: 28
+  pattern_threshold: 2
+  tracker_severity: high
+  batch_size: 25
+  single_pass_max_prs: 60
+  max_findings_prs_per_run: 75
+  # {window} is the selected lookback in days (for example 7d); {mode} is
+  # live or test. Together they keep same-day entry points from sharing state.
+  cache_pattern: "state/cache/merged-prs_{window}_{mode}_{date}.json"
+  digest_cache_pattern: "state/cache/merged-prs-digest_{window}_{mode}_{date}.json"
+  # Separate trusted root lets preflight reject a mistaken report_pattern that
+  # points at source or config while keeping the filename configurable.
+  report_root: reports
+  report_pattern: "reports/post-merge-systemize_{window}_{mode}_{date}.md"
+  # Optional deterministic integration, resolved beneath paths.engines. The
+  # shipped kit does not vendor these yet: all absent selects the documented
+  # LLM-only path, all present selects engine-backed mode, and a partial set
+  # stops rather than mixing incompatible artifacts.
+  fetch_engine: fetch_merged_prs.py
+  digest_engine: digest_merged_prs.py
+  heartbeat_engine: heartbeat_cli.py
+  commit_subject: "docs(systemize): promote recurring review patterns"
+  # False opens the rule PR ready for configured review. The workflow never
+  # merges it; pr-watch supplies review follow-through and the operator decides.
+  pr_draft: false
+
 tracker:
   # This repo's real values, not placeholders. ADOPTERS: replace all three.
   # `init.sh` prompts with these as defaults and refuses, on a non-interactive run,

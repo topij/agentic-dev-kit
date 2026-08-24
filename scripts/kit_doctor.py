@@ -304,6 +304,12 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # No Codex binding and no shared doc until #243's first slice; both landed
     # together, so this entry and .agents/skills/triage-friction-log/ are a pair.
     ("docs/agentic-dev-kit/workflows/triage-friction-log.md", "workflow"),
+    # Post-merge extraction has the same ownership split as triage above: runtime
+    # adapters are intentionally adopter-owned, while this shared source carries
+    # the behavior that /upgrade must refresh and drift inspection must see.
+    # Issue #7 still owns the optional deterministic engines; their absence does
+    # not make this workflow path optional.
+    ("docs/agentic-dev-kit/workflows/post-merge-systemize.md", "workflow"),
     # The machine-readable front matter is the declared runtime-adapter set, and
     # test_portability derives its coverage from it. Track the declaration so an
     # adopter cannot refresh the adapters or shared workflows while keeping an
