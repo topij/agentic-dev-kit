@@ -7,6 +7,32 @@ safety guarantees, review evidence, lane isolation, and upgrade behavior as Clau
 Code. Runtime-specific files may differ in shape; their observable contract should
 not.
 
+## Sprint status — 2026-08-24
+
+The machine-readable inventory and current capability judgments live in
+[`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
+their delivery order and exit conditions.
+
+- [x] **Phase 1 — Declare the parity contract.** PR `#588` merged on 2026-08-23 with
+  the maintained capability matrix, shared-workflow inventory, explicit exceptions,
+  and declaration-derived structural checks.
+- [x] **Phase 2 — Correct safety and lifecycle hooks.** PR `#588` removed the
+  Claude-only memory checker from Codex and routed shared safety doctrine. PR `#590`
+  merged on 2026-08-24 with trusted-client evidence, canonical installer wiring, and
+  exact-string lifecycle enforcement in `kit_doctor`. Repository inspection remains
+  distinct from trust and execution evidence; interactive-TUI `systemMessage`
+  presentation remains an explicit live-client gap.
+- [ ] **Phase 3 — Complete workflow and integration coverage.** This is the active
+  phase. Start with the bounded `post-merge-systemize` workflow extraction and Codex
+  binding before broadening into external-tool dependency contracts.
+- [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** Codex model and
+  effort calibration, environment-capable lane launching, and live isolation checks
+  remain planned.
+- [ ] **Phase 5 — Align permissions, installation, and upgrades.** Codex project
+  policy, adopter-owned merge surfaces, and adapter refresh behavior remain planned.
+- [ ] **Phase 6 — Gate parity and roll it out.** Adoption fixtures, trusted smoke
+  coverage, historical-status cleanup, and the adopter pilot remain planned.
+
 This plan records the pre-implementation baseline. Its repository observations were
 collected with `rg --files`, targeted `rg`, and
 `uv run scripts/kit_doctor.py --json` at
@@ -151,8 +177,9 @@ behavior or losing local policy.
 Done when the parity matrix is enforced by deterministic checks and confirmed by an
 adopter run.
 
-## Recommended starting slice
+## Current recommended slice
 
-Ship Phase 1 together with the narrow Phase 2 correction that removes the
-Claude-specific memory checker from Codex. This creates the acceptance contract and
-removes the clearest incorrect runtime behavior before broader porting begins.
+Extract `post-merge-systemize` into a runtime-neutral workflow, reduce the Claude
+command to a thin binding, and add the Codex skill with its UI metadata. Keep the
+initial review surface on workflow parity; follow with external integration capability
+and preflight contracts once both runtimes reach the same durable retro artifacts.

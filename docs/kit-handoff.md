@@ -14,12 +14,12 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-24 — PR `#590` narrowed Codex lifecycle enforcement to an
-exact-string contract and remains open for exact-head review and operator merge.
+Last updated: 2026-08-24 — PR `#590` merged the bounded Codex lifecycle contract;
+the Codex sprint now advances to shared workflow and integration coverage.
 
 ## Latest session — 2026-08-24 (Codex lifecycle enforcement bounded by exact strings)
 
-**Theme —** PR `#590` keeps the trusted-client lifecycle evidence and installer wiring,
+**Theme —** PR `#590` merged the trusted-client lifecycle evidence and installer wiring,
 while `kit_doctor` now makes only the deterministic claim the repository can support:
 the configured object either matches the installer-emitted canonical form or it does not.
 
@@ -56,6 +56,10 @@ the configured object either matches the installer-emitted canonical form or it 
   safety-critical doctrine remains one runtime-neutral document with runtime bindings,
   and its merge class makes this PR operator-merge.
 
+- **The sprint plan now reflects the delivery boundary.** The parity declaration and
+  lifecycle phase are recorded as delivered. Shared workflow and integration coverage is
+  active, beginning with the missing `post-merge-systemize` Codex path.
+
 **Learned**
 
 - **A positive result needs a syntax the repository owns.** Exact canonical objects have a
@@ -67,8 +71,9 @@ the configured object either matches the installer-emitted canonical form or it 
   be boolean, while canonical `hooks` wins when it appears beside deprecated
   `codex_hooks`; only the effective value establishes whether lifecycle hooks are disabled.
 
-▶ Next: `$pr-watch` PR `#590` — act on any exact-head findings; when CI and the fresh
-adversarial/correctness evidence are clean, hand the operator the authorized merge.
+▶ Next: implement the bounded Phase 3 slice in
+`saved_plans/codex-parity-plan_2026-08-23.md` — extract `post-merge-systemize` into a
+shared workflow, keep the Claude command thin, and add the Codex skill with UI metadata.
 
 ______________________________________________________________________
 
