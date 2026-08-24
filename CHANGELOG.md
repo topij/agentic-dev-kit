@@ -56,8 +56,8 @@ starts.
   requires its one-line YAML flow-sequence form. Before re-running, rewrite tagged,
   quoted, anchored, explicit, duplicated, or inline-commented top-level section keys
   into unique bare YAML keys; write `systemize:` without an inline comment and keep
-  its child keys bare. The installer refuses unsupported forms before migration
-  writes.**
+  its child keys bare at the shipped two-space indentation. The installer refuses
+  unsupported forms before migration writes.**
 - **CHANGED (gate semantics) — `post-merge-systemize` now fails closed when the
   required repository, config, or complete merged-PR history is unavailable, and
   when only part of the configured engine set is installed; an entirely absent

@@ -469,26 +469,32 @@ dev_session.sh"
 # that these helpers must refuse rather than mistake for a missing section.
 preflight_migration_config() {
   if awk '
+    BEGIN {
+      owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
+      owned["vcs"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
+      owned["notify"] = owned["models"] = 1
+    }
     /^[[:space:]]*($|#)/ { next }
     /^[^[:space:]]/ {
-      if ($0 !~ /^[A-Za-z_][A-Za-z0-9_]*:/) unsafe = 1
+      if ($0 !~ /^[A-Za-z_][A-Za-z0-9_.-]*:/) { unsafe = 1; next }
       key = $0
       sub(/:.*/, "", key)
       if (seen[key]++) unsafe = 1
-      if (key == "systemize" && $0 !~ /^systemize:[[:space:]]*$/) unsafe = 1
+      if (owned[key] && $0 !~ ("^" key ":[[:space:]]*$")) unsafe = 1
     }
     END { exit(unsafe ? 0 : 1) }
   ' "$CONFIG_FILE"; then
     echo "error: config/dev-model.yaml has a top-level key init.sh cannot migrate safely." >&2
     echo "  Use unique bare mapping keys with no tag, quote, anchor, or explicit-key" >&2
-    echo "  marker; write systemize as a bare 'systemize:' line. No migration was applied." >&2
+    echo "  marker; sections read or written by init.sh must use a bare 'section:' line." >&2
+    echo "  No migration was applied." >&2
     exit 1
   fi
 
   if awk '
     /^systemize:[[:space:]]*$/ { in_systemize = 1; next }
     in_systemize && /^[^[:space:]]/ { in_systemize = 0 }
-    in_systemize && /^  [^[:space:]#]/ {
+    in_systemize && /^[[:space:]]+[^[:space:]#]/ {
       if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_]*:/) unsafe = 1
       key = $0
       sub(/^  /, "", key)
@@ -502,7 +508,7 @@ preflight_migration_config() {
     END { exit(unsafe ? 0 : 1) }
   ' "$CONFIG_FILE"; then
     echo "error: the systemize section contains a key or operator_logins value init.sh cannot rewrite safely." >&2
-    echo "  Use bare scalar keys and a one-line operator login sequence:" >&2
+    echo "  Indent bare scalar keys with two spaces and use a one-line login sequence:" >&2
     echo '    operator_logins: [first-login, second-login]' >&2
     echo "  No migration was applied." >&2
     exit 1

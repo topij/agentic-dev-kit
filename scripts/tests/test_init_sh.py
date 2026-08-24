@@ -357,6 +357,7 @@ def test_installer_refuses_operator_login_keys_it_cannot_rewrite(
         '"systemize":\n  analysis_tier: custom\n',
         "!!str systemize:\n  analysis_tier: custom\n",
         "systemize:\n  operator_logins:\n    - topij\n",
+        "systemize:\n    operator_logins: []\n",
         "systemize:\n  analysis_tier: custom\nsystemize:\n  analysis_tier: expensive\n",
         "systemize:\n  analysis_tier: custom\n  analysis_tier: expensive\n",
     ),
@@ -372,6 +373,43 @@ def test_installer_rejects_unsafe_systemize_shapes_before_legacy_migration(
     assert result.returncode != 0
     assert "no migration was applied" in result.stderr.lower()
     assert _config(repo) == config
+
+
+def test_installer_rejects_owned_flow_mapping_before_legacy_migration(
+    tmp_path: Path,
+) -> None:
+    block_paths = """paths:
+  handoff: docs/handoff.md
+  handoff_history: docs/handoff-history.md
+  friction_log: docs/friction-log.md
+  friction_log_archive: docs/friction-log-archive.md
+"""
+    flow_paths = (
+        "paths: {handoff: docs/handoff.md, "
+        "handoff_history: docs/handoff-history.md, "
+        "friction_log: docs/friction-log.md, "
+        "friction_log_archive: docs/friction-log-archive.md}\n"
+    )
+    config = V1_CONFIG.replace(block_paths, flow_paths, 1)
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "no migration was applied" in result.stderr.lower()
+    assert _config(repo) == config
+    assert yaml.safe_load(config)["paths"]["handoff"] == "docs/handoff.md"
+
+
+def test_installer_accepts_unowned_bare_top_level_key_with_hyphen(
+    tmp_path: Path,
+) -> None:
+    config = V1_CONFIG + "external-tools:\n  enabled: true\n"
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+
+    assert yaml.safe_load(_config(repo))["external-tools"] == {"enabled": True}
 
 
 # --------------------------------------------------------------------------- #
