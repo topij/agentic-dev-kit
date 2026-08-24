@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["doctrine_path", "authorization", "review", "merge_class"],
+  "properties": {
+    "doctrine_path": {"type": "string"},
+    "authorization": {"type": "string"},
+    "review": {"type": "string"},
+    "merge_class": {"type": "string"}
+  }
+}

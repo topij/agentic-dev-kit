@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "instruction_source_canary",
+    "doctrine_canary",
+    "route",
+    "authorization",
+    "merge_class"
+  ],
+  "properties": {
+    "instruction_source_canary": {"type": "string"},
+    "doctrine_canary": {"type": "string"},
+    "route": {"type": "string"},
+    "authorization": {"type": "string"},
+    "merge_class": {"type": "string"}
+  }
+}
