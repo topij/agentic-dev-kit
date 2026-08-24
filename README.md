@@ -71,7 +71,7 @@ flowchart TD
 
     K -. friction accrues .-> M[(friction-log)]
     M -. weekly .-> N["/triage-friction-log<br/>single incident → tracker"]
-    M -. weekly .-> O["/post-merge-systemize<br/>2+ occurrences → a rule"]
+    M -. weekly .-> O["post-merge-systemize<br/>configured threshold → a rule"]
     N -. tickets .-> P[(tracker + handoff)]
     O -. new rule .-> Q[(agent rules)]
     P -. seeds next session .-> B
@@ -200,7 +200,7 @@ runtime adapters are intentionally thin:
 | Runtime | Repository adapter | Invocation |
 |---|---|---|
 | Claude Code | `.claude/commands/<name>.md` | `/session-start`, `/wrap-up`, `/pr-watch`, `/parallel`, `/adopt`, `/upgrade`, `/triage-friction-log`, `/post-merge-systemize` |
-| Codex | `.agents/skills/<name>/SKILL.md` | `$session-start`, `$wrap-up`, `$pr-watch`, `$parallel`, `$adopt`, `$upgrade`, `$triage-friction-log` |
+| Codex | `.agents/skills/<name>/SKILL.md` | `$session-start`, `$wrap-up`, `$pr-watch`, `$parallel`, `$adopt`, `$upgrade`, `$triage-friction-log`, `$post-merge-systemize` |
 
 [`docs/agentic-dev-kit/runtime-parity.md`](docs/agentic-dev-kit/runtime-parity.md)
 is the authoritative adapter inventory and records deliberate exceptions and open
@@ -260,7 +260,7 @@ Each piece maps to one or more of the ten principles in
 | `docs/friction-log.md` + `docs/friction-log-archive.md` | #2 Friction flywheel | Append-only inbox for bugs and rough edges, triaged on a cadence: single incidents route down to your tracker, real patterns graduate up into a rule. |
 | `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above, plus both root entry points — `AGENTS.md` (the contract every runtime reads) and `CLAUDE.md` (which imports it, since Claude Code reads only the latter) — on adopt or upgrade. Never overwrites one already in use. |
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
-| `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, `pr-watch`, `triage-friction-log`, `adopt`, and `upgrade` — every workflow except `post-merge-systemize`. |
+| `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, `pr-watch`, `triage-friction-log`, `post-merge-systemize`, `adopt`, and `upgrade`. |
 | `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the `--headless` JSON descriptor, the lane-contract preamble, the fan-out recipe. |
 | `.claude/commands/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows. The authoritative inventory and explicit exceptions live in `docs/agentic-dev-kit/runtime-parity.md`. |
 | `scripts/check_memory_budget.py` | #1, #8 Mechanism over memory | A `SessionStart` hook (wired in `.claude/settings.json`) that warns when an agent-memory file outgrows its budget — the memory-side counterpart to `check_doc_budget.py`. |
@@ -289,29 +289,34 @@ Principle #7 (model/effort tiering) is doctrine actually woven into the pieces
 above, not just described by them: the tier table lives in `config/dev-model.yaml`
 and travels with each lane through `parallel`. **Principle #9 (deterministic
 scaffolding around LLM steps) is only partly real in the shipped kit.**
-`scripts/pr_watch.py`'s seen-set is the one durable intermediate state the kit
-actually ships. The rest of #9's artifacts — a heartbeat, an input cap, resumability,
-map-reduce batching — are *specified* in `.claude/commands/post-merge-systemize.md`,
-but that skill's engine (a tracker client, a merged-PR fetcher, `heartbeat_cli.py`)
-is not shipped, so the doctrine there is aspirational until it's vendored.
-[Issue #7](https://github.com/topij/agentic-dev-kit/issues/7) tracks vendoring those
-engines. Read `PRINCIPLES.md` for both principles' full statement.
+`scripts/pr_watch.py`'s seen-set is a durable intermediate state the kit ships.
+`post-merge-systemize` now specifies its cache, digest, report, input cap,
+resumability, and map-reduce behavior in the shared workflow. It can produce those
+artifacts through either runtime's LLM-only path, while deterministic heartbeat,
+fetch, and digest execution remains unavailable until the configured engines are
+vendored. [Issue #7](https://github.com/topij/agentic-dev-kit/issues/7) owns that
+integration. Read `PRINCIPLES.md` for both principles' full statement.
 
-**Two axes, and they are independent — runtime coverage is not engine wiring.**
-On *runtime coverage*, everything but `post-merge-systemize` now has a runtime-neutral
-definition under `docs/agentic-dev-kit/workflows/` plus thin Claude and Codex adapters
-over it; `post-merge-systemize` is the last workflow whose doctrine still lives only in
-its Claude command, and [issue #243](https://github.com/topij/agentic-dev-kit/issues/243)
-tracks the rest of that split. On *engine wiring*, `session-start`, `wrap-up`, `parallel`,
-and `pr-watch` come with their engine scripts; `triage-friction-log` and
-`post-merge-systemize` document the flywheel's triage and pattern-finding mechanism but
-leave their deterministic engines project-specific and to you — see the banner atop each.
-So `triage-friction-log` reaches both runtimes and is still unwired: the two axes move
-separately, and conflating them is what let its doctrine sit forked in an adopter's tree
-for months. What is missing, precisely — two integrations plus five scripts, every one of the five
-verified absent from `scripts/`: a tracker client, a notify channel, `scripts/fetch_merged_prs.py` (the forge-API fetcher), `scripts/digest_merged_prs.py`
-(the slimmer that consumes it), `scripts/heartbeat_cli.py`, and `triage-friction-log`'s own
-`triage_friction_log.py` + `finalize_triage.py` (under `paths.engines`).
+**Runtime coverage and engine wiring are independent.** The aligned entries in
+`runtime-parity.md` point to a runtime-neutral definition plus thin Claude and Codex
+adapters.
+`session-start`, `wrap-up`, `parallel`, and `pr-watch` ship deterministic engines;
+`triage-friction-log` and `post-merge-systemize` share policy across runtimes while
+their project-specific integrations remain unwired. The absent integration surfaces
+are enumerated here so runtime parity cannot be mistaken for engine availability:
+
+- a tracker client and notification channel;
+- `scripts/fetch_merged_prs.py`, `scripts/digest_merged_prs.py`, and
+  `scripts/heartbeat_cli.py` for `post-merge-systemize`;
+- `triage_friction_log.py` and `finalize_triage.py` beneath `paths.engines` for
+  `triage-friction-log`.
+
+The shared systemize workflow treats the configured engine set atomically: all absent
+selects its honest LLM-only path, all present selects engine-backed mode, and a partial
+set stops with an actionable preflight failure. Notification and tracker access have
+explicit degraded paths, and a tracker write still requires payload-specific operator
+confirmation.
+
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
 behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)
 tracks the systemize side.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Post-Merge Systemize"
+  short_description: "Turn recurring review findings into shared rules"
+  default_prompt: "Use $post-merge-systemize to inspect merged-PR review findings and route recurring root causes safely."

@@ -25,9 +25,11 @@ their delivery order and exit conditions.
   the root route and read and applied the shared doctrine for affected merge-authority
   work. It does not generalize one client observation. Interactive-TUI
   `systemMessage` presentation remains an explicit live-client gap.
-- [ ] **Phase 3 — Complete workflow and integration coverage.** After Phase 2 closes,
-  start with the bounded `post-merge-systemize` workflow extraction and Codex binding
-  before broadening into external-tool dependency contracts.
+- [ ] **Phase 3 — Complete workflow and integration coverage.** The bounded
+  `post-merge-systemize` extraction now has a shared definition, thin runtime bindings,
+  config-owned policy, equivalent durable artifacts, and explicit capability preflights.
+  The phase remains open for applying that integration contract to `session-start`,
+  `wrap-up`, and `triage-friction-log`.
 - [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** Codex model and
   effort calibration, environment-capable lane launching, and live isolation checks
   remain planned.
@@ -125,16 +127,21 @@ loads the safety doctrine for affected work.
 
 ### Phase 3 — Complete workflow and integration coverage
 
-- Extract `post-merge-systemize` into a shared workflow.
-- Replace the Claude implementation with a thin binding and add a Codex skill with
+- [x] Extract `post-merge-systemize` into a shared workflow.
+- [x] Replace the Claude implementation with a thin binding and add a Codex skill with
   UI metadata.
-- Define capability contracts for forge, tracker, reviewer, and notification access.
-- Add explicit preflight behavior for unavailable tools and credentials.
-- Declare stable Codex tool dependencies in `agents/openai.yaml`; keep optional
-  backends as visible degraded paths.
+- [x] Define the workflow's capability contracts for forge, tracker, reviewer, and
+  notification access.
+- [x] Add explicit preflight behavior for unavailable tools and credentials.
+- [x] Keep runtime tool selection in the adapters and capability preflight. Codex UI
+  metadata uses the repository's supported `interface` shape; it does not claim a
+  connector dependency that the client cannot mechanically require.
+- [ ] Apply the capability-contract pattern to `session-start`, `wrap-up`, and
+  `triage-friction-log` without moving their policy into adapters.
 
-Done when either runtime can execute the retro workflow and produce the same durable
-artifacts.
+The bounded workflow slice is done when either runtime can execute the retro workflow
+and produce the same durable artifacts. The phase closes when `session-start`,
+`wrap-up`, and `triage-friction-log` carry equally explicit required and degraded paths.
 
 ### Phase 4 — Make delegation and parallel lanes equivalent
 
@@ -194,6 +201,18 @@ bind posted delta-draw verdicts; Git paths and author-supplied labels cannot est
 either fact. Until such an artifact exists, uncertain classification continues to take
 the full-panel route and issue `#32` remains the provenance boundary.
 
-Continue with the bounded `post-merge-systemize` workflow extraction and Codex binding.
+After the bounded `post-merge-systemize` extraction merges, continue Phase 3 from a
+fresh branch with this starter:
+
+```text
+Create feat/shared-integration-preflights from current origin/main. Inventory the
+tracker and notification dependencies in session-start, wrap-up, and
+triage-friction-log. Reuse post-merge-systemize's runtime-neutral capability vocabulary;
+declare required capabilities, optional degraded paths, payload-specific approval gates,
+durable artifacts, and non-interactive stop behavior in each shared workflow. Keep both
+runtime adapters thin, do not invent connector names or credentials, and add
+declaration-derived tests that fail when a workflow loses its preflight or adapter.
+```
+
 Keep the trusted-client record as an observation at its stamped client and revision; do
 not turn it into a general instruction-loading guarantee.

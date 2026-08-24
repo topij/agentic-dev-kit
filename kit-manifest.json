@@ -29,7 +29,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "b067dca38effbe88ba2b59dbcc3f6bec32354868300d971bcb6cbacee0b9ed94"
+      "sha256": "511d14d0af79d1ee691c653a6301922a599155ef282f8efca7662fc1d9f0fc04"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -46,6 +46,10 @@
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
       "sha256": "d6673d489511ae9c5892efbb48c271d8bad32033ae33743c81e1287fdf4b59d7"
+    },
+    "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
+      "role": "workflow",
+      "sha256": "4e75e49877b0362d89558b11fcff2de413398e79a4fab0941ba41b887ed39c5f"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
@@ -93,7 +97,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "356367a2e4ab0cdf905cb606f2a9ee7c051547bcd2c48d97a7be2acabba8cd37"
+      "sha256": "f301e0df20d66022abe54b725f974f24cd7dcab3df30d74af8fee0862c68678a"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -125,7 +129,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "580856a26c10198c76115d4b63e1b61e27dea0a3f6d1ac2bc167f07c1596b7be"
+      "sha256": "771cec7980245fda41112e798ac10a84e68febfbc5a7b7208e2b71a95ac419d5"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
@@ -219,7 +223,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "3ca10fb469c16b0407de20248ea066459e1638ce8c392d550fa6d6886d1aceb0"
+      "sha256": "e8772cb7772056f79117f5d71a1ba93c9a7e8d26b3ed80f899389212df9b2201"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -243,7 +247,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "31777912891fc345c5bd999d5f9174a1783e9b13ea61ef3dbad116d6e479c736"
+      "sha256": "1a6f56b77cbb7668e5e5771e8aab81f16ad4057debcc8d639358d2fed650cbd6"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

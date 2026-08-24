@@ -236,6 +236,46 @@ def _config(repo: Path) -> str:
     return (repo / "config" / "dev-model.yaml").read_text(encoding="utf-8")
 
 
+def _without_systemize(config: str) -> str:
+    stripped, replacements = re.subn(
+        r"\nsystemize:\n.*?(?=\ntracker:)",
+        "\n",
+        config,
+        flags=re.DOTALL,
+    )
+    assert replacements == 1, "shipped config no longer has one systemize section"
+    return stripped
+
+
+def test_installer_adds_the_shared_systemize_config_to_an_existing_schema(
+    tmp_path: Path,
+) -> None:
+    repo = _fixture(tmp_path, config=_without_systemize(shipped_config()))
+
+    result = _run_init(repo)
+
+    parsed = yaml.safe_load(_config(repo))
+    assert "added systemize workflow config" in result.stdout
+    assert parsed["systemize"] == yaml.safe_load(shipped_config())["systemize"]
+    assert parsed["kit"]["version"] == 2
+
+
+def test_installer_preserves_an_adopter_owned_partial_systemize_section(
+    tmp_path: Path,
+) -> None:
+    config = _without_systemize(shipped_config()).replace(
+        "\ntracker:\n",
+        "\nsystemize:\n  analysis_tier: custom\n\ntracker:\n",
+        1,
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo)
+
+    assert "added systemize workflow config" not in result.stdout
+    assert yaml.safe_load(_config(repo))["systemize"] == {"analysis_tier": "custom"}
+
+
 # --------------------------------------------------------------------------- #
 # detect_engines_dir — layout detection (#67)
 # --------------------------------------------------------------------------- #

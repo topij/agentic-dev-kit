@@ -1431,6 +1431,169 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
             _assert_claude_workflow_adapter(name, declared_shared, claude_path)
 
 
+def _post_merge_capabilities(workflow: str) -> dict[str, tuple[str, str]]:
+    rows: dict[str, tuple[str, str]] = {}
+    for line in workflow.splitlines():
+        if not line.startswith("|") or line.startswith("|---"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) == 3 and cells[0] not in {"Capability", ""}:
+            rows[cells[0]] = (cells[1], cells[2])
+    return rows
+
+
+@pytest.mark.kit_repo_only(
+    "config/dev-model.yaml",
+    "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+    ".claude/commands/post-merge-systemize.md",
+    ".agents/skills/post-merge-systemize",
+)
+def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
+    shared_path = "docs/agentic-dev-kit/workflows/post-merge-systemize.md"
+    shared = (REPO_ROOT / shared_path).read_text(encoding="utf-8")
+    claude = (
+        REPO_ROOT / ".claude" / "commands" / "post-merge-systemize.md"
+    ).read_text(encoding="utf-8")
+    codex_dir = REPO_ROOT / ".agents" / "skills" / "post-merge-systemize"
+    codex = (codex_dir / "SKILL.md").read_text(encoding="utf-8")
+    interface = yaml.safe_load(
+        (codex_dir / "agents" / "openai.yaml").read_text(encoding="utf-8")
+    )["interface"]
+
+    for adapter in (claude, codex):
+        assert shared_path in adapter
+        assert "## Step" not in adapter
+        assert "## Capability contract" not in adapter
+        assert "systemize.pattern_threshold" not in adapter
+        assert "systemize.cache_pattern" not in adapter
+        assert "systemize.tracker_severity" not in adapter
+
+    claude_description = yaml.safe_load(claude.split("---", 2)[1])["description"]
+    codex_description = yaml.safe_load(codex.split("---", 2)[1])["description"]
+    assert claude_description == codex_description
+    assert len(claude.splitlines()) <= 12
+    assert len(codex.splitlines()) <= 16
+    assert interface["display_name"] == "Post-Merge Systemize"
+    assert "$post-merge-systemize" in interface["default_prompt"]
+
+    config = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
+    systemize = config["systemize"]
+    assert set(systemize) == {
+        "analysis_tier",
+        "lookback_days",
+        "backfill_days",
+        "pattern_threshold",
+        "tracker_severity",
+        "batch_size",
+        "single_pass_max_prs",
+        "max_findings_prs_per_run",
+        "cache_pattern",
+        "digest_cache_pattern",
+        "report_pattern",
+        "fetch_engine",
+        "digest_engine",
+        "heartbeat_engine",
+        "commit_subject",
+        "pr_draft",
+    }
+    assert systemize["analysis_tier"] in config["models"]["tiers"]
+    for key in systemize:
+        assert f"systemize.{key}" in shared, (
+            f"systemize.{key} is configured but the shared workflow never names it"
+        )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/post-merge-systemize.md")
+def test_post_merge_systemize_required_and_degraded_preflights_are_discriminating() -> None:
+    workflow = (
+        REPO_ROOT
+        / "docs"
+        / "agentic-dev-kit"
+        / "workflows"
+        / "post-merge-systemize.md"
+    ).read_text(encoding="utf-8")
+    capabilities = _post_merge_capabilities(workflow)
+
+    forge_class, forge_failure = capabilities["Forge merged-PR read"]
+    assert forge_class == "required"
+    assert "stops the run" in forge_failure
+    assert "incomplete pagination" in forge_failure
+
+    engine_class, engine_behavior = capabilities[
+        "Deterministic fetch/digest/heartbeat set"
+    ]
+    assert engine_class == "optional, atomic"
+    assert "all absent selects LLM-only mode" in engine_behavior
+    assert "a partial set stops" in engine_behavior
+
+    notify_class, notify_behavior = capabilities["Notification"]
+    assert notify_class == "optional"
+    assert "degrades to the report plus final output" in notify_behavior
+
+    tracker_class, tracker_behavior = capabilities["Tracker create"]
+    assert tracker_class == "optional and approval-gated"
+    assert "does not authorize a write" in tracker_behavior
+    assert "payload-specific approval" in workflow
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/post-merge-systemize.md")
+def test_post_merge_systemize_runtime_outcomes_share_durable_artifacts() -> None:
+    workflow = (
+        REPO_ROOT
+        / "docs"
+        / "agentic-dev-kit"
+        / "workflows"
+        / "post-merge-systemize.md"
+    ).read_text(encoding="utf-8")
+
+    for configured_artifact in (
+        "systemize.cache_pattern",
+        "systemize.digest_cache_pattern",
+        "systemize.report_pattern",
+    ):
+        assert configured_artifact in workflow
+    for report_field in (
+        "forge repository",
+        "protected-branch head",
+        "config fingerprint",
+        "capability preflight",
+        "route dispositions",
+        "incomplete actions",
+        "next safe resume step",
+    ):
+        assert report_field in workflow
+    assert "agent-executed rather than engine-verified" in workflow
+    assert re.search(r"Do not merge this rule\s+PR", workflow)
+    assert re.search(
+        r"shared `pr-watch` and\s+fallback-panel doctrine unchanged", workflow
+    )
+
+
+def test_runtime_parity_rejects_a_missing_or_stale_systemize_adapter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _runtime_parity_fixture(tmp_path)
+    (repo / "kit-manifest.json").write_text("{}\n", encoding="utf-8")
+    skill = repo / ".agents" / "skills" / "post-merge-systemize" / "SKILL.md"
+    skill.write_text(
+        skill.read_text(encoding="utf-8").replace(
+            "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+            "docs/agentic-dev-kit/workflows/stale-systemize.md",
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
+
+    with pytest.raises(AssertionError):
+        test_runtime_parity_contract_covers_workflows_and_adapters()
+
+    shutil.rmtree(repo / ".agents" / "skills" / "post-merge-systemize")
+    with pytest.raises((AssertionError, FileNotFoundError)):
+        test_runtime_parity_contract_covers_workflows_and_adapters()
+
+
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/runtime-parity.md")
 def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
     parity_doc = REPO_ROOT / "docs" / "agentic-dev-kit" / "runtime-parity.md"

@@ -535,6 +535,31 @@ migrate_kit_schema() {
     echo "stamped kit.version=2 in config/dev-model.yaml"
   fi
 
+  if ! grep -q '^systemize:' "$CONFIG_FILE"; then
+    insert_before_section "tracker:" 'systemize:
+  # Shared post-merge-systemize workflow settings. Runtime adapters translate
+  # invocation and compute controls only; policy stays in the shared workflow.
+  analysis_tier: expensive
+  lookback_days: 7
+  backfill_days: 28
+  pattern_threshold: 2
+  tracker_severity: high
+  batch_size: 25
+  single_pass_max_prs: 60
+  max_findings_prs_per_run: 75
+  cache_pattern: "state/cache/merged-prs_{date}.json"
+  digest_cache_pattern: "state/cache/merged-prs-digest_{date}.json"
+  report_pattern: "reports/post-merge-systemize_{date}.md"
+  # Optional deterministic integration, resolved beneath paths.engines.
+  fetch_engine: fetch_merged_prs.py
+  digest_engine: digest_merged_prs.py
+  heartbeat_engine: heartbeat_cli.py
+  commit_subject: "docs(systemize): promote recurring review patterns"
+  pr_draft: false
+'
+    echo "added systemize workflow config to config/dev-model.yaml"
+  fi
+
   ensure_review_key noise_markers '  # Read by pr_watch.py. These used to be literals inside the engine, which meant
   # adopting required EDITING the engine — and an edited engine can never be
   # replaced by a kit update (Principle #10).
@@ -1781,7 +1806,7 @@ register_budget_hooks
 echo ""
 echo "agentic-dev-kit is bootstrapped (kit schema v2)."
 echo "Review config/dev-model.yaml for any remaining values (paths, doc_budgets,"
-echo "models, review.fallback_panel.lenses) and edit to taste."
+echo "models, systemize, review.fallback_panel.lenses) and edit to taste."
 echo ""
 # The per-file `left untouched (--no-clobber):` lines are printed where the
 # decision happens, hundreds of lines of output earlier. Repeat them here: the
