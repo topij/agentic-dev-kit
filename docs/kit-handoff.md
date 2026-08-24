@@ -14,59 +14,57 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-24 — the controlled trusted Codex doctrine-load record meets
-the Phase 2 exit condition at its stamped client and revision; PR delivery is pending.
+Last updated: 2026-08-24 — the trusted Codex doctrine-load record and composed
+review-evidence migration are merged; semantic delta routing remains deliberately bounded.
 
-## Latest session — 2026-08-24 (Codex safety-doctrine loading observed and bounded)
+## Latest session — 2026-08-24 (Codex doctrine validation and composed review evidence merged)
 
-**Theme —** The remaining Phase 2 question moved from structural routing to a controlled
-trusted-client observation. The positive result rests on model-visible input and command
-events, not on the model producing the expected policy answer.
+**Theme —** Phase 2 closed on trusted-client evidence rather than inference, then the
+separate review-evidence workstream replaced the single-current-head receipt limitation
+without forking review semantics between Claude and Codex.
 
-- **The real route was visible to the model.** In a clean trusted devkit clone,
-  `codex debug prompt-input` emitted the root `AGENTS.md` item containing the precise
-  `scripts/pr_watch.py` / `scripts/dev_session.sh` route to the shared safety doctrine.
+- **PR `#592` merged the bounded live validation.** The controlled fixture separated
+  client-supplied instructions, repository search, prompt guessing, nested precedence,
+  and project trust. The conclusion stays scoped to its stamped client and revisions;
+  interactive-TUI `systemMessage` visibility remains unsupported evidence.
 
-- **The live run followed that route.** Its noninteractive event stream read
-  `docs/agentic-dev-kit/safety-critical-changes.md` completely and the final structured
-  result applied the deterministic-authorization rule, dual-lens review requirement,
-  fix-round re-review requirement, and operator-merge class.
+- **PR `#593` merged composed review receipts.** A standing full-panel parent can now be
+  extended by an exact-head `fallback:delta` pass. The shared engine binds ancestry,
+  parent and final heads, changed paths, recorded lenses, and per-pass review caveats;
+  malformed coverage fails closed while legacy receipts retain their prior behavior.
 
-- **The fixture separates the plausible false positives.** Randomized root and doctrine
-  canaries distinguish client-supplied instructions from filename guesses; a conflicting
-  search decoy distinguishes the routed read from repository search; a no-instruction
-  control produced a sensible safety answer without either canary; a nested override
-  control demonstrated later-file precedence without a tool call.
+- **The review cycle produced material returns, then stopped.** The terminal panel found
+  that Git rename detection could omit a safety-relevant source path and that composition
+  could erase earlier override, unreadable-bot, or behind-head caveats. The bounded fix
+  records rename source and destination and preserves, validates, and renders per-pass
+  caveats.
 
-- **Trust did not become a broader claim.** Strict runs under isolated trusted and
-  untrusted project configurations both received root `AGENTS.md` and followed its route
-  on the observed client. That bounds this client's noninteractive instruction behavior;
-  it says nothing about untrusted project hooks or config and does not generalize forward.
+- **The routing inventory did not justify another classifier.** The shared fallback
+  doctrine and `panel_prompt.py` already carry full re-review for behavior, executed prose,
+  record-prose delta passes, safety-critical lens floors, dispute escalation, exact-head
+  invalidation, finding labels, and behavioral-evidence expectations. Runtime adapters do
+  not own any of those semantics.
 
-- **Phase 2 now meets its stated exit condition.** The prior record supplies trusted
-  lifecycle-hook evidence; repository tests supply the structural route; this record
-  supplies trusted root-input and shared-doctrine events. The parity matrix and sprint
-  plan now mark the capability aligned at the stamped observation.
+- **The remaining gap is precise.** Git can establish the parent, head, ancestry, and path
+  set, but it cannot establish that arbitrary prose is non-operative or that posted draw
+  verdicts are honest. A generic filename or path allowlist cannot distinguish record prose
+  from executed prose when one Markdown surface can contain either. Issue `#32` remains the
+  provenance umbrella; no tracker write was made and no proposed CS-Toolkit policy was copied
+  into the engine.
 
-- **The residual remains explicit.** Interactive-TUI presentation of hook
-  `systemMessage` was not exercised. No merge-authority engine, hook definition, safety
-  doctrine, or runtime-specific doctrine copy changed in this workstream.
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `a23147f44ab9c405c24dced125becbb34bee2b95` on 2026-08-24 printed
+  `1525 passed, 3 warnings in 202.06s`. `make test` in the same directory at
+  `77577274792ac2652a7c618362a7be5bb17df83a` on 2026-08-24 printed
+  `1539 passed, 3 warnings in 191.34s`. The warnings in these runs were pytest
+  temporary-directory cleanup warnings.
 
-- **The separate review-evidence workstream is bounded.** `record_review()` assigns its
-  new receipt to `state["review_receipt"]`; `build_report()` accepts that receipt when
-  `receipt["head"]` equals the PR head. Recording `fallback:delta` replaces the value that
-  described the fully reviewed parent, while ancestry and the delta boundary remain in
-  posted prose rather than the persisted receipt. Existing issue
-  `#32` is the umbrella; `#76` and `#305` carry adjacent stale-head and stopping-rule
-  occurrences. No tracker write was made.
-
-▶ Next: the operator authorized merging Workstream A once exact-head CI and required
-review gates are clean. After it merges, run
-`git fetch origin && git switch -c feat/review-evidence-composition origin/main`; make the
-first PR only the backward-compatible receipt/state/report migration that represents a
-full-panel parent plus an exact-head delta, validates ancestry and coverage fail-closed,
-and adds discriminating `scripts/tests/test_pr_watch.py` mutations. Keep prompt/routing
-policy in a later PR unless that schema cannot be exercised without it.
+▶ Next: run
+`git fetch origin && git switch -c feat/post-merge-systemize-shared origin/main`, then
+extract the bounded shared workflow and add the thin Codex binding. If a future
+review-routing PR starts instead, its first deliverable must be a deterministic artifact
+that proves record-only semantics without inferring them from filenames or prose;
+otherwise keep the current full-review fallback and do not change `pr_watch.py`.
 
 ______________________________________________________________________
 
