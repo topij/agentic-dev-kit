@@ -15,7 +15,7 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
 Last updated: 2026-08-24 — PR `#590` merged the bounded Codex lifecycle contract;
-the Codex sprint now advances to shared workflow and integration coverage.
+the sprint remains in safety and lifecycle work pending trusted doctrine-load evidence.
 
 ## Latest session — 2026-08-24 (Codex lifecycle enforcement bounded by exact strings)
 
@@ -56,9 +56,11 @@ the configured object either matches the installer-emitted canonical form or it 
   safety-critical doctrine remains one runtime-neutral document with runtime bindings,
   and its merge class makes this PR operator-merge.
 
-- **The sprint plan now reflects the delivery boundary.** The parity declaration and
-  lifecycle phase are recorded as delivered. Shared workflow and integration coverage is
-  active, beginning with the missing `post-merge-systemize` Codex path.
+- **The sprint plan now reflects the delivery boundary.** The parity declaration is
+  delivered, while the safety and lifecycle phase remains active. Hook execution has
+  trusted-client evidence; the shared safety-doctrine routing has structural coverage but
+  no trusted Codex load evidence yet. `post-merge-systemize` remains queued behind that
+  exit condition.
 
 **Learned**
 
@@ -71,9 +73,10 @@ the configured object either matches the installer-emitted canonical form or it 
   be boolean, while canonical `hooks` wins when it appears beside deprecated
   `codex_hooks`; only the effective value establishes whether lifecycle hooks are disabled.
 
-▶ Next: implement the bounded Phase 3 slice in
-`saved_plans/codex-parity-plan_2026-08-23.md` — extract `post-merge-systemize` into a
-shared workflow, keep the Claude command thin, and add the Codex skill with UI metadata.
+▶ Next: close the Phase 2 evidence gap in
+`saved_plans/codex-parity-plan_2026-08-23.md` — live-validate that Codex work affecting
+the merge-authority engines loads the shared safety-critical doctrine, and preserve the
+repository-structural versus trusted-client boundary in the resulting record.
 
 ______________________________________________________________________
 

@@ -16,15 +16,16 @@ their delivery order and exit conditions.
 - [x] **Phase 1 — Declare the parity contract.** PR `#588` merged on 2026-08-23 with
   the maintained capability matrix, shared-workflow inventory, explicit exceptions,
   and declaration-derived structural checks.
-- [x] **Phase 2 — Correct safety and lifecycle hooks.** PR `#588` removed the
+- [ ] **Phase 2 — Correct safety and lifecycle hooks.** PR `#588` removed the
   Claude-only memory checker from Codex and routed shared safety doctrine. PR `#590`
-  merged on 2026-08-24 with trusted-client evidence, canonical installer wiring, and
-  exact-string lifecycle enforcement in `kit_doctor`. Repository inspection remains
-  distinct from trust and execution evidence; interactive-TUI `systemMessage`
-  presentation remains an explicit live-client gap.
-- [ ] **Phase 3 — Complete workflow and integration coverage.** This is the active
-  phase. Start with the bounded `post-merge-systemize` workflow extraction and Codex
-  binding before broadening into external-tool dependency contracts.
+  merged on 2026-08-24 with trusted-client hook evidence, canonical installer wiring,
+  and exact-string lifecycle enforcement in `kit_doctor`. The phase remains active
+  until a trusted Codex run establishes that affected merge-authority work loads the
+  shared safety doctrine; structural routing checks do not establish that live fact.
+  Interactive-TUI `systemMessage` presentation remains an explicit live-client gap.
+- [ ] **Phase 3 — Complete workflow and integration coverage.** After Phase 2 closes,
+  start with the bounded `post-merge-systemize` workflow extraction and Codex binding
+  before broadening into external-tool dependency contracts.
 - [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** Codex model and
   effort calibration, environment-capable lane launching, and live isolation checks
   remain planned.
@@ -179,7 +180,8 @@ adopter run.
 
 ## Current recommended slice
 
-Extract `post-merge-systemize` into a runtime-neutral workflow, reduce the Claude
-command to a thin binding, and add the Codex skill with its UI metadata. Keep the
-initial review surface on workflow parity; follow with external integration capability
-and preflight contracts once both runtimes reach the same durable retro artifacts.
+Live-validate Codex instruction discovery for work affecting `scripts/pr_watch.py` or
+`scripts/dev_session.sh`: establish whether the root routing causes the shared
+safety-critical doctrine to load, record the trusted-client evidence without turning it
+into a repository-structural claim, and then decide whether Phase 2 meets its exit
+condition. The bounded `post-merge-systemize` extraction remains the next Phase 3 slice.
