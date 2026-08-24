@@ -14,12 +14,12 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-24 — PR `#590` narrowed Codex lifecycle enforcement to an
-exact-string contract and remains open for exact-head review and operator merge.
+Last updated: 2026-08-24 — PR `#590` merged the bounded Codex lifecycle contract;
+the sprint remains in safety and lifecycle work pending trusted doctrine-load evidence.
 
 ## Latest session — 2026-08-24 (Codex lifecycle enforcement bounded by exact strings)
 
-**Theme —** PR `#590` keeps the trusted-client lifecycle evidence and installer wiring,
+**Theme —** PR `#590` merged the trusted-client lifecycle evidence and installer wiring,
 while `kit_doctor` now makes only the deterministic claim the repository can support:
 the configured object either matches the installer-emitted canonical form or it does not.
 
@@ -51,10 +51,17 @@ the configured object either matches the installer-emitted canonical form or it 
   next adversarial pass corrected the changelog's breaking-change axis and the README's
   unconditional bare-Python claim.
 
-- **The runtime contract remains shared.** Installer guidance, the parity matrix,
-  `CHANGELOG.md`, and the live evidence record describe the same bounded result. The
-  safety-critical doctrine remains one runtime-neutral document with runtime bindings,
-  and its merge class makes this PR operator-merge.
+- **The runtime contract remains shared.** Installer guidance, `CHANGELOG.md`, and the
+  live evidence record preserve the lifecycle boundary. The parity matrix now distinguishes
+  structural safety-doctrine routing from the pending trusted Codex load evidence. The
+  doctrine remains one runtime-neutral document, and its merge class makes this PR
+  operator-merge.
+
+- **The sprint plan now reflects the delivery boundary.** The parity declaration is
+  delivered, while the safety and lifecycle phase remains active. Hook execution has
+  trusted-client evidence; the shared safety-doctrine routing has structural coverage but
+  no trusted Codex load evidence yet. `post-merge-systemize` remains queued behind that
+  exit condition.
 
 **Learned**
 
@@ -67,8 +74,10 @@ the configured object either matches the installer-emitted canonical form or it 
   be boolean, while canonical `hooks` wins when it appears beside deprecated
   `codex_hooks`; only the effective value establishes whether lifecycle hooks are disabled.
 
-▶ Next: `$pr-watch` PR `#590` — act on any exact-head findings; when CI and the fresh
-adversarial/correctness evidence are clean, hand the operator the authorized merge.
+▶ Next: close the Phase 2 evidence gap in
+`saved_plans/codex-parity-plan_2026-08-23.md` — live-validate that Codex work affecting
+the merge-authority engines loads the shared safety-critical doctrine, and preserve the
+repository-structural versus trusted-client boundary in the resulting record.
 
 ______________________________________________________________________
 
