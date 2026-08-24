@@ -5759,6 +5759,20 @@ def test_composition_refuses_a_parent_without_full_panel_coverage(
         _record_composed(monkeypatch, pr_watch, previous)
 
 
+def test_composition_refuses_a_parent_that_is_not_the_standing_receipt_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "different-parent",
+        "source": "fallback:panel",
+        "lenses": ["adversarial", "correctness"],
+    }
+
+    with pytest.raises(ValueError, match="standing receipt head"):
+        _record_composed(monkeypatch, pr_watch, previous)
+
+
 def test_composition_refuses_an_unestablished_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
