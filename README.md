@@ -277,6 +277,14 @@ Each piece maps to one or more of the ten principles in
 | `scripts/dev_session.sh`, `scripts/reconcile_sessions.sh` | #3 | Worktree/lane launcher and reconciler. |
 | `scripts/hooks/pre-push` | #8 Mechanism over memory | A hook, not a memory — refuses a push that would corrupt the narrative files. |
 
+Trusted-client behavior is recorded separately from repository structure. The
+[lifecycle record](saved_plans/codex-hooks-live-validation_2026-08-23.md) covers the
+supported client's hook execution and trust surfaces; the
+[safety-doctrine record](saved_plans/codex-safety-doctrine-live-validation_2026-08-24.md)
+covers model-visible root routing and the resulting shared-doctrine read. Each record
+is bounded to its stamped client and revision. Neither makes a promise about future
+clients, and interactive-TUI `systemMessage` presentation remains unverified.
+
 Principle #7 (model/effort tiering) is doctrine actually woven into the pieces
 above, not just described by them: the tier table lives in `config/dev-model.yaml`
 and travels with each lane through `parallel`. **Principle #9 (deterministic

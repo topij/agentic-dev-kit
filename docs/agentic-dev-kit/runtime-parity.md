@@ -87,7 +87,7 @@ records broader capability parity that cannot be expressed as an adapter path.
 |---|---|---|---|---|
 | Repository instructions | `AGENTS.md` | `CLAUDE.md` imports it | reads `AGENTS.md` directly | aligned |
 | Workflow adapters | `docs/agentic-dev-kit/workflows/` | `.claude/commands/` | `.agents/skills/` | declaration above is authoritative |
-| Safety-critical doctrine | `docs/agentic-dev-kit/safety-critical-changes.md` | path-scoped `.claude/rules/` binding | precise root `AGENTS.md` routing for the merge-authority engines | gap narrowed: repository bindings route to the shared doctrine without copying it; trusted Codex load evidence remains |
+| Safety-critical doctrine | `docs/agentic-dev-kit/safety-critical-changes.md` | path-scoped `.claude/rules/` binding | precise root `AGENTS.md` routing for the merge-authority engines | aligned for the stamped supported-client observation: structure proves the route; prompt input and live events establish that the trusted run supplied it and read and applied the shared doctrine |
 | Document-budget tripwire | `check_doc_budget.py` | `SessionStart` | open-ended match-all `SessionStart` with a bounded command timeout | aligned: repository semantics are deterministic and the supported trusted client ran the equivalent lifecycle shape |
 | Runtime memory tripwire | runtime-specific artifact | `check_memory_budget.py` checks Claude's `MEMORY.md` | no corresponding repository artifact | intentional difference: never invoke the Claude engine on Codex |
 | PR follow-through | `pr_followup_hook.py` | `PostToolUse` with Claude runtime mapping | `^Bash$` `PostToolUse` with Codex runtime mapping and a bounded command timeout | aligned; current hook definitions still require Codex review and trust |
@@ -111,11 +111,20 @@ inspection does not establish that a client trusted or executed the definitions.
 Each present project feature spelling must be boolean; canonical `hooks` supplies the
 effective value when deprecated `codex_hooks` is also present.
 
-The separate trusted-client record is
+The separate lifecycle trusted-client record is
 [`saved_plans/codex-hooks-live-validation_2026-08-23.md`](../../saved_plans/codex-hooks-live-validation_2026-08-23.md).
 It records the controlled repository, client, commands, revisions, and observed
 `SessionStart` / `PostToolUse` behavior. Interactive `systemMessage` presentation
 remains a gap; the noninteractive event stream and model-visible context were checked.
+
+The safety-doctrine trusted-client record is
+[`saved_plans/codex-safety-doctrine-live-validation_2026-08-24.md`](../../saved_plans/codex-safety-doctrine-live-validation_2026-08-24.md).
+It uses the client-visible prompt-input list rather than a correct answer to establish
+that the root route was supplied, then binds the doctrine read and applied result to a
+clean trusted checkout and exact client. The fixture includes a search decoy, a
+no-instruction guess control, nested precedence, and trusted/untrusted project controls.
+Its conclusion is an observation at the stamped client and revision, not a guarantee
+for future clients or other surfaces.
 
 ## Product surfaces this contract relies on
 

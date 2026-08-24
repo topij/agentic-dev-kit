@@ -1624,6 +1624,37 @@ def test_codex_live_validation_fixture_commands_are_executable(
     assert results["pt-plain"].stdout.strip() == "POST_PLAIN_SHOULD_BE_IGNORED"
 
 
+@pytest.mark.kit_repo_only("saved_plans/codex-safety-doctrine-live-probe")
+def test_codex_safety_doctrine_probe_has_discriminating_controls() -> None:
+    fixture = REPO_ROOT / "saved_plans" / "codex-safety-doctrine-live-probe"
+    root = (fixture / "AGENTS.md").read_text(encoding="utf-8")
+    doctrine = (fixture / "docs" / "shared-safety-doctrine.md").read_text(
+        encoding="utf-8"
+    )
+    decoy = (fixture / "docs" / "search-decoy.md").read_text(encoding="utf-8")
+    nested = (fixture / "scripts" / "AGENTS.override.md").read_text(
+        encoding="utf-8"
+    )
+    schema = json.loads((fixture / "result.schema.json").read_text(encoding="utf-8"))
+
+    assert "docs/shared-safety-doctrine.md" in root
+    assert "ROOT_ROUTE_7F3C91B2" in root
+    assert "DOCTRINE_42D8E6A1" in doctrine
+    assert "DECOY_19AA04CE" in decoy
+    assert "self-merging" in decoy
+    assert "operator-merge" in doctrine
+    assert "NESTED_OVERRIDE_6BC20F47" in nested
+    assert "NESTED_SUPPRESSED" in nested
+    assert "Do not use repository tools" in nested
+    assert set(schema["required"]) == {
+        "instruction_source_canary",
+        "doctrine_canary",
+        "route",
+        "authorization",
+        "merge_class",
+    }
+
+
 def _runtime_parity_fixture(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     doctrine_dir = repo / "docs" / "agentic-dev-kit"

@@ -16,13 +16,15 @@ their delivery order and exit conditions.
 - [x] **Phase 1 — Declare the parity contract.** PR `#588` merged on 2026-08-23 with
   the maintained capability matrix, shared-workflow inventory, explicit exceptions,
   and declaration-derived structural checks.
-- [ ] **Phase 2 — Correct safety and lifecycle hooks.** PR `#588` removed the
+- [x] **Phase 2 — Correct safety and lifecycle hooks.** PR `#588` removed the
   Claude-only memory checker from Codex. PR `#590` routed shared safety doctrine and
   merged on 2026-08-24 with trusted-client hook evidence, canonical installer wiring,
-  and exact-string lifecycle enforcement in `kit_doctor`. The phase remains active
-  until a trusted Codex run establishes that affected merge-authority work loads the
-  shared safety doctrine; structural routing checks do not establish that live fact.
-  Interactive-TUI `systemMessage` presentation remains an explicit live-client gap.
+  and exact-string lifecycle enforcement in `kit_doctor`. The controlled record in
+  [`codex-safety-doctrine-live-validation_2026-08-24.md`](codex-safety-doctrine-live-validation_2026-08-24.md)
+  then established, for the stamped trusted client observation, that Codex supplied
+  the root route and read and applied the shared doctrine for affected merge-authority
+  work. It does not generalize one client observation. Interactive-TUI
+  `systemMessage` presentation remains an explicit live-client gap.
 - [ ] **Phase 3 — Complete workflow and integration coverage.** After Phase 2 closes,
   start with the bounded `post-merge-systemize` workflow extraction and Codex binding
   before broadening into external-tool dependency contracts.
@@ -180,8 +182,6 @@ adopter run.
 
 ## Current recommended slice
 
-Live-validate Codex instruction discovery for work affecting `scripts/pr_watch.py` or
-`scripts/dev_session.sh`: establish whether the root routing causes the shared
-safety-critical doctrine to load, record the trusted-client evidence without turning it
-into a repository-structural claim, and then decide whether Phase 2 meets its exit
-condition. The bounded `post-merge-systemize` extraction remains the next Phase 3 slice.
+Start Phase 3 with the bounded `post-merge-systemize` workflow extraction and Codex
+binding. Keep the trusted-client record as an observation at its stamped client and
+revision; do not turn it into a general instruction-loading guarantee.
