@@ -182,6 +182,12 @@ adopter run.
 
 ## Current recommended slice
 
-Start Phase 3 with the bounded `post-merge-systemize` workflow extraction and Codex
-binding. Keep the trusted-client record as an observation at its stamped client and
-revision; do not turn it into a general instruction-loading guarantee.
+Complete the review-evidence composition workstream before starting Phase 3. After
+Workstream A merges, create `feat/review-evidence-composition` from the then-current
+`origin/main`. Keep the receipt-migration PR focused on backward-compatible
+state/report representation for a full-panel parent plus an exact-head delta, with
+ancestry and coverage failing closed; keep prompt and routing changes for a later PR
+unless the schema cannot be exercised without them. Then continue with the bounded
+`post-merge-systemize` workflow extraction and Codex binding. Keep the trusted-client
+record as an observation at its stamped client and revision; do not turn it into a
+general instruction-loading guarantee.

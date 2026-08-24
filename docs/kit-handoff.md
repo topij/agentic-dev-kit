@@ -27,7 +27,7 @@ events, not on the model producing the expected policy answer.
   `codex debug prompt-input` emitted the root `AGENTS.md` item containing the precise
   `scripts/pr_watch.py` / `scripts/dev_session.sh` route to the shared safety doctrine.
 
-- **The live run followed that route.** Its JSONL event stream read
+- **The live run followed that route.** Its noninteractive event stream read
   `docs/agentic-dev-kit/safety-critical-changes.md` completely and the final structured
   result applied the deterministic-authorization rule, dual-lens review requirement,
   fix-round re-review requirement, and operator-merge class.
