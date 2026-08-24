@@ -58,6 +58,12 @@ starts.
   durable degraded path when an optional forge write, tracker, reviewer, or
   notification capability is unavailable. Tracker writes additionally require the
   operator to approve the exact payload.**
+- **CHANGED (gate semantics) — the old Claude command directly creates tracker items
+  and does not load the shared approval gate** (`#243`). **`/upgrade` ordinarily keeps
+  an existing runtime adapter, so replace
+  `.claude/commands/post-merge-systemize.md` with the kit's thin binding during this
+  upgrade after diffing any local changes into config or the shared workflow. Do not
+  schedule the old command against the new config.**
 
 ---
 

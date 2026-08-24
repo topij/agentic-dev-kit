@@ -44,6 +44,23 @@ hard stop that names the key and tells the operator to rerun `./init.sh` or add 
 documented value. Do not silently substitute the shipped default: doing so would make
 the tracked config stop being the effective contract.
 
+Validate values as well as presence:
+
+- `lookback_days`, `backfill_days`, `pattern_threshold`, `batch_size`,
+  `single_pass_max_prs`, and `max_findings_prs_per_run` are positive integers, not
+  booleans; `pattern_threshold` is at least `2` so a single incident cannot become
+  standing doctrine.
+- `backfill_days` is at least `lookback_days`; `batch_size` is no greater than
+  `single_pass_max_prs`, which is no greater than `max_findings_prs_per_run`; and
+  `pattern_threshold` is no greater than `max_findings_prs_per_run`.
+- `tracker_severity` is one of the canonical severities defined in Step 1.
+- cache, digest, and report patterns are non-empty repository-relative paths;
+  configured engine names and `commit_subject` are non-empty strings; and `pr_draft`
+  is a boolean.
+
+An invalid value is a hard stop naming the failed invariant. Do not coerce a scalar or
+repair relationships in memory: the operator must correct the shared configuration.
+
 `systemize.analysis_tier` must name a key under `models.tiers`. Apply the current
 runtime's `models.runtime_mappings` value only when its launcher exposes the relevant
 model or effort control. Otherwise state that the tier is instructed guidance. Never
@@ -57,8 +74,10 @@ unknown argument before preflight.
 - With no `backfill`, use `systemize.lookback_days`.
 - With `backfill`, use `systemize.backfill_days`.
 - With `test`, perform real read-only fetch and analysis, then render the proposed
-  routes in the final output. Do not write cache, digest, report, branch, commit, pull
-  request, friction-log entry, notification, or tracker item.
+  routes in the final output. Test mode may write only the derived cache, digest, and
+  report plus an optional notification prefixed `[TEST]`; it must not write a branch,
+  commit, pull request, friction-log entry, or tracker item. The notification is a real
+  optional external write, not an approval or a simulated receipt.
 
 Non-interactive runs never wait for operator input. If an action requires approval and
 the invocation does not already carry that explicit approval, preserve the proposal in
@@ -100,11 +119,15 @@ notification itself was the failed capability.
 
 ## Durable artifacts
 
-Outside test mode, maintain these artifacts using the configured patterns:
+Every run may maintain the derived artifacts using the configured patterns. In test
+mode they and the optional `[TEST]` notification are the only permitted writes:
 
 - the fetched merged-PR bundle at `systemize.cache_pattern`;
 - the normalized review-finding digest at `systemize.digest_cache_pattern`;
 - the run report at `systemize.report_pattern`;
+
+Outside test mode, routes may additionally produce:
+
 - routed repository changes: a friction-log append or a proposed shared-rule branch and
   pull request;
 - an optional notification that links or points to the report and routed artifacts;
@@ -135,13 +158,32 @@ findings, operator review findings, file paths, source text, source identity, se
 when the source supplies one, addressed state when evidenced, and originating tracker
 references. Plain discussion without a review finding is not evidence for a cluster.
 
+Normalize every source severity before ranking, capping, or routing. Preserve the
+source label beside the normalized value. The canonical order is
+`low < normal < high < critical`: `low`, `minor`, `info`, and `informational` map to
+`low`; `medium`, `moderate`, `normal`, `warning`, an absent label, or an unrecognized
+label map to `normal`; `high` and `major` map to `high`; and `critical` and `blocker`
+map to `critical`. Match labels case-insensitively after trimming whitespace. Retain a
+numeric or custom source label, normalize it to `normal`, and record the unmapped-scale
+limitation in the report; do not invent a source-specific mapping. The threshold route
+includes severities at or above `systemize.tracker_severity` in this order.
+
 Write the raw bundle, then normalize the digest to the engine-backed shape needed below:
 
 - `window`, `forge_repo`, `protected_branch_head`, and `config_fingerprint`;
 - `prs[]`, each with pull-request identity, tracker references, and `findings[]`;
-- each finding's source, path, severity, addressed state, guideline-citation state, and
-  cleaned text;
-- input-cap state and the configured batching values.
+- each finding's source, path, original severity, normalized severity, addressed state,
+  guideline-citation state, and cleaned text;
+- input-cap state and the configured batching values;
+- `findings_pr_count = len(prs)` after the cap,
+  `single_pass_recommended = (findings_pr_count <=
+  systemize.single_pass_max_prs)`, and `n_batches =
+  ceil(findings_pr_count / systemize.batch_size)` (zero when the count is zero).
+
+Engine-backed and LLM-only digests obey this same normalized schema. After either path
+produces the digest, recompute the count, recommendation, and batch count from the
+configured values and stop if the artifact disagrees; a digest cannot select its own
+working-set policy.
 
 Rank finding-bearing pull requests by severity, then unaddressed finding presence, then
 finding presence before applying `systemize.max_findings_prs_per_run`. Record both the
@@ -162,11 +204,12 @@ request rarely needs a single-incident route, but it can still support a recurri
 cause. A guideline citation is evidence that an existing rule participated in review,
 not evidence that a new rule is needed.
 
-Use one analysis pass when the digest recommends it. Otherwise process slices of
-`systemize.batch_size`, record candidate shapes from each slice, and reduce them into a
-single cluster set. In engine-backed mode, tick the configured heartbeat after each
-slice. A slice boundary never changes cluster membership; union distinct pull-request
-identities before comparing a cluster with `systemize.pattern_threshold`.
+Use one analysis pass only when the validated `single_pass_recommended` value is true.
+Otherwise process exactly `n_batches` slices of `systemize.batch_size`, record candidate
+shapes from each slice, and reduce them into a single cluster set. In engine-backed
+mode, tick the configured heartbeat after each slice. A slice boundary never changes
+cluster membership; union distinct pull-request identities before comparing a cluster
+with `systemize.pattern_threshold`.
 
 Cluster by causal shape, not similar wording. For each cluster record:
 

@@ -1442,6 +1442,25 @@ def _post_merge_capabilities(workflow: str) -> dict[str, tuple[str, str]]:
     return rows
 
 
+def _assert_post_merge_semantics(workflow: str) -> None:
+    flattened = " ".join(workflow.split())
+    assert (
+        "Test mode may write only the derived cache, digest, and report plus an "
+        "optional notification prefixed `[TEST]`; it must not write a branch, "
+        "commit, pull request, friction-log entry, or tracker item."
+    ) in flattened
+    assert "positive integers, not booleans" in flattened
+    assert "`pattern_threshold` is at least `2`" in flattened
+    assert "`low < normal < high < critical`" in flattened
+    assert "an unrecognized label map to `normal`" in flattened
+    assert "do not invent a source-specific mapping" in flattened
+    assert (
+        "single_pass_recommended = (findings_pr_count <= "
+        "systemize.single_pass_max_prs)"
+    ) in flattened
+    assert "a digest cannot select its own working-set policy" in flattened
+
+
 @pytest.mark.kit_repo_only(
     "config/dev-model.yaml",
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
@@ -1499,10 +1518,31 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
         "pr_draft",
     }
     assert systemize["analysis_tier"] in config["models"]["tiers"]
+    integer_keys = (
+        "lookback_days",
+        "backfill_days",
+        "pattern_threshold",
+        "batch_size",
+        "single_pass_max_prs",
+        "max_findings_prs_per_run",
+    )
+    for key in integer_keys:
+        assert type(systemize[key]) is int
+        assert systemize[key] > 0
+    assert systemize["pattern_threshold"] >= 2
+    assert systemize["backfill_days"] >= systemize["lookback_days"]
+    assert systemize["batch_size"] <= systemize["single_pass_max_prs"]
+    assert (
+        systemize["single_pass_max_prs"]
+        <= systemize["max_findings_prs_per_run"]
+    )
+    assert systemize["pattern_threshold"] <= systemize["max_findings_prs_per_run"]
+    assert type(systemize["pr_draft"]) is bool
     for key in systemize:
         assert f"systemize.{key}" in shared, (
             f"systemize.{key} is configured but the shared workflow never names it"
         )
+    _assert_post_merge_semantics(shared)
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/post-merge-systemize.md")
@@ -1568,6 +1608,57 @@ def test_post_merge_systemize_runtime_outcomes_share_durable_artifacts() -> None
     assert re.search(r"Do not merge this rule\s+PR", workflow)
     assert re.search(
         r"shared `pr-watch` and\s+fallback-panel doctrine unchanged", workflow
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/post-merge-systemize.md")
+def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
+    workflow = (
+        REPO_ROOT
+        / "docs"
+        / "agentic-dev-kit"
+        / "workflows"
+        / "post-merge-systemize.md"
+    ).read_text(encoding="utf-8")
+    mutations = (
+        workflow.replace("it must not write a branch", "it may write a branch", 1),
+        workflow.replace("at least `2`", "at least `0`", 1),
+        re.sub(
+            r"findings_pr_count <=\s+systemize\.single_pass_max_prs",
+            "findings_pr_count > systemize.single_pass_max_prs",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"an unrecognized\s+label map to `normal`",
+            "an unrecognized label map to `critical`",
+            workflow,
+            count=1,
+        ),
+    )
+    for mutated in mutations:
+        assert mutated != workflow
+        with pytest.raises(AssertionError):
+            _assert_post_merge_semantics(mutated)
+
+
+@pytest.mark.kit_repo_only(
+    "CHANGELOG.md",
+    "docs/agentic-dev-kit/workflows/upgrade.md",
+)
+def test_systemize_upgrade_requires_replacing_the_legacy_claude_adapter() -> None:
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    upgrade = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+    ).read_text(encoding="utf-8")
+
+    entry = changelog.split("## #595", 1)[1].split("\n---", 1)[0]
+    assert ".claude/commands/post-merge-systemize.md" in entry
+    assert "replace" in entry
+    assert "does not load the shared approval gate" in entry
+    assert "exception is an adapter migration" in upgrade
+    assert "retaining an adapter that bypasses the new gate" in " ".join(
+        upgrade.split()
     )
 
 

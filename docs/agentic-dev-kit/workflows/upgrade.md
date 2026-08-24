@@ -660,7 +660,12 @@ entries are exactly where the risk is.
 - **Shared workflows** (`docs/agentic-dev-kit/workflows/`) — same state logic as engines.
   These are prompts an agent reads verbatim; a stale one silently teaches old behavior.
 - **Runtime adapters** (`.claude/commands/`, `.agents/skills/`) — install any the kit has
-  that this repo lacks; keep the adopter's version where one already exists.
+  that this repo lacks; ordinarily keep the adopter's version where one already exists.
+  The exception is an adapter migration that Step 1's selected changelog entry names as
+  required to obtain changed gate semantics. Diff that adapter, move any adopter policy
+  into config or the shared workflow, then take the kit's thin binding. Stop for an
+  irreconcilable local behavior rather than retaining an adapter that bypasses the new
+  gate. PR `#595`'s `post-merge-systemize` entry is the worked instance.
 - **Templates** (`docs/templates/`) — refresh freely; the *rendered* docs are yours and
   are never touched.
 - **`.claude/settings.json`** — if this repo has its own, **merge** the kit's hooks and
