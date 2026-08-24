@@ -60,14 +60,17 @@ Validate values as well as presence:
   `pr_draft` is a boolean.
 
 Before any derived write, substitute the selected date. Treat the configured cache and
-digest patterns as logical `state.dirname` paths: require that lexical prefix, remove it,
-then resolve the remainder through the shared `scripts/lib/state_paths` write resolver.
-That resolver must honor `DEVKIT_STATE_ROOT` and `.devkit_state_root`; its returned state
-root is the allowed cache/digest root even when the sandbox is outside the checkout. Do
-not write those logical paths directly beneath the worktree. Resolve an existing cache
-or digest through the shared state read resolver so its newer sandbox-or-production
-selection remains authoritative, and record the actual resolved paths. Resolve the
-report beneath `systemize.report_root` inside the repository.
+digest patterns as logical `state.dirname` paths. Require `state.dirname` to match the
+shared state resolver's declared `STATE_DIRNAME`; a mismatch is a hard stop because the
+resolver does not take that directory from config. Require the matching lexical prefix,
+remove it, then call the shared `scripts/lib/state_paths` write resolver with
+`mkdir=False` during preflight. That resolver must honor `DEVKIT_STATE_ROOT` and
+`.devkit_state_root`; its returned state root is the allowed cache/digest root even when
+the sandbox is outside the checkout. Do not write those logical paths directly beneath
+the worktree. Resolve an existing cache or digest through the shared state read resolver
+so its newer sandbox-or-production selection remains authoritative, and record the
+actual resolved paths. Resolve the report beneath `systemize.report_root` inside the
+repository.
 
 Against each resolved allowed root, reject an absolute configured fragment, `..`
 traversal, a parent or target symlink that escapes its resolved allowed root, a report
@@ -274,10 +277,24 @@ Add a provenance marker beside each proposed rule:
 <!-- systemize:YYYY-MM-DD pattern; PRs #a,#b -->
 ```
 
-Prepare the edit before changing branches. Then fetch the configured protected branch,
-create `<systemize-branch>` from its origin ref, re-read the destination files, and apply
-the edit to that fresh base. Commit only the intended instruction, workflow, or config
-paths with `systemize.commit_subject`; never commit derived output. Push and create the
+Never switch branches in the caller's checkout or use it as the rule PR's staging area.
+Determine the intended destination paths first. If one is staged, modified, or untracked
+in the caller checkout, stop the route and preserve the proposal in the report; do not
+blend an operator's local edit into the systemize patch. Unrelated caller changes remain
+untouched.
+
+Fetch the configured protected branch, then create a fresh isolated Git worktree and
+`<systemize-branch>` from its current origin ref. If the branch or worktree already
+exists during a resume, verify its base identity, intended patch, and clean status rather
+than recreating or overwriting it. If a clean isolated worktree cannot be established,
+stop the PR route with the patch preserved; branch-switching the caller checkout is not
+a degraded path.
+
+Re-read the destination files in that isolated worktree and apply the proposal to the
+fresh base. Before committing, require a clean index before staging, stage each intended
+path by name, and prove the staged path set equals the intended destination set exactly.
+Any pre-existing change, extra staged path, or missing intended path stops the route.
+Commit with `systemize.commit_subject`; never commit derived output. Push and create the
 pull request using `systemize.pr_draft`.
 
 The pull-request body gives each pattern's shape, evidence pull requests, review sources,

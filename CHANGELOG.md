@@ -57,7 +57,9 @@ starts.
   **Install every configured engine or none of them, and treat the report as the
   durable degraded path when an optional forge write, tracker, reviewer, or
   notification capability is unavailable. Tracker writes additionally require the
-  operator to approve the exact payload.**
+  operator to approve the exact payload. Resolve a local change to an intended rule
+  destination before retrying that route; it now requires a clean isolated worktree and
+  an exact staged-path set.**
 - **CHANGED (gate semantics) — the old Claude command directly creates tracker items
   and does not load the shared approval gate** (`#243`). **`/upgrade` ordinarily keeps
   an existing runtime adapter, so replace

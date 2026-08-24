@@ -1466,10 +1466,9 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     assert (
         "a digest cannot select its own evidence or working-set policy" in flattened
     )
-    assert (
-        "resolve the remainder through the shared `scripts/lib/state_paths`"
-        in flattened
-    )
+    assert "call the shared `scripts/lib/state_paths` write resolver" in flattened
+    assert "`state.dirname` to match the shared state resolver's declared" in flattened
+    assert "with `mkdir=False` during preflight" in flattened
     assert "honor `DEVKIT_STATE_ROOT` and `.devkit_state_root`" in flattened
     assert "even when the sandbox is outside the checkout" in flattened
     assert "through the shared state read resolver" in flattened
@@ -1481,6 +1480,10 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     assert "require a link count of exactly one" in flattened
     assert "compare its device/inode identity" in flattened
     assert "publish derived files by atomic replacement" in flattened
+    assert "Never switch branches in the caller's checkout" in flattened
+    assert "create a fresh isolated Git worktree" in flattened
+    assert "staged path set equals the intended destination set exactly" in flattened
+    assert "local edit into the systemize patch" in flattened
     for rejected_path_shape in (
         "`..` traversal",
         "symlink that escapes",
@@ -1589,6 +1592,14 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
     assert digest_path.is_relative_to(state_root)
     assert report_path.is_relative_to(report_root)
     assert len({cache_path, digest_path, report_path}) == 3
+    resolver = (ENGINE_DIR / "lib" / "state_paths" / "resolver.py").read_text(
+        encoding="utf-8"
+    )
+    declared_state_dir = re.search(
+        r'^STATE_DIRNAME = "([^"]+)"$', resolver, re.MULTILINE
+    )
+    assert declared_state_dir is not None
+    assert config["state"]["dirname"] == declared_state_dir.group(1)
     for key in systemize:
         assert f"systemize.{key}" in shared, (
             f"systemize.{key} is configured but the shared workflow never names it"
@@ -1707,19 +1718,31 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
             "allow any existing link count",
             1,
         ),
-        workflow.replace(
-            "must honor `DEVKIT_STATE_ROOT` and `.devkit_state_root`",
+        re.sub(
+            r"must honor `DEVKIT_STATE_ROOT` and\s+`\.devkit_state_root`",
             "must ignore `DEVKIT_STATE_ROOT` and `.devkit_state_root`",
-            1,
+            workflow,
+            count=1,
         ),
         workflow.replace(
             "through the shared state read resolver",
             "directly from the worktree",
             1,
         ),
+        re.sub(
+            r"with\s+`mkdir=False` during preflight",
+            "with `mkdir=True` during preflight",
+            workflow,
+            count=1,
+        ),
+        workflow.replace(
+            "create a fresh isolated Git worktree",
+            "switch the caller checkout",
+            1,
+        ),
     )
-    for mutated in mutations:
-        assert mutated != workflow
+    for mutation_index, mutated in enumerate(mutations):
+        assert mutated != workflow, mutation_index
         with pytest.raises(AssertionError):
             _assert_post_merge_semantics(mutated)
 

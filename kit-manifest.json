@@ -49,7 +49,7 @@
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "1a7cc995f7c21a9fcfe1789876f7b18faec75a8a4da1a4fec5616dfe19399cce"
+      "sha256": "c2ccb013e7c010fff957a8a77e53126af739b8b292912ff65f95d992f39d1dd7"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
@@ -247,7 +247,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "da21de58e79cc2e38757045fb775f2ee8cf0f71c501983e828077cd5ab8f5fa9"
+      "sha256": "d0a73716e699342494ee5fccd1f74351ac2aa24136d3438c9707b000b36e22c6"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

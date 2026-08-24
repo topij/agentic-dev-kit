@@ -318,7 +318,8 @@ explicit degraded paths, and a tracker write still requires payload-specific ope
 confirmation. Logical cache and digest paths resolve through the shared state sandbox;
 reports stay beneath `systemize.report_root`. Preflight rejects traversal, symlink or
 hard-link escape, artifact collisions, and tracked or control-file targets before an
-atomic write.
+atomic write. A shared-rule proposal is staged only in a clean isolated worktree; local
+changes to an intended destination stop that route instead of riding into its PR.
 
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
 behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)
