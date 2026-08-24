@@ -3691,18 +3691,6 @@ def record_review(
     named_lenses = [part.strip() for part in (lenses or "").split(",") if part.strip()]
     if named_lenses:
         receipt["lenses"] = named_lenses
-    if compose_parent is not None:
-        parent_head = compose_parent.strip()
-        if source != "fallback:delta":
-            raise ValueError("--compose-parent requires review source fallback:delta")
-        if not parent_head:
-            raise ValueError("composed review parent must not be empty")
-        if not named_lenses:
-            raise ValueError("a composed delta receipt must name the lens that ran")
-        previous = state.get("review_receipt")
-        if not isinstance(previous, dict):
-            raise ValueError("no standing review receipt exists to compose with")
-        receipt["coverage"] = _compose_coverage(previous, parent_head, receipt)
     if allow_pending_bot:
         # The escape hatch on a safety gate is the one thing that must leave a
         # trace. Without it, a receipt taken over an active override is
@@ -3727,6 +3715,18 @@ def record_review(
         # now would not stand for the bot's review of this design — and that was
         # printing everywhere except where a receipt is actually taken.
         receipt["bots_behind_head"] = {e["bot"]: e["sha"] for e in behind}
+    if compose_parent is not None:
+        parent_head = compose_parent.strip()
+        if source != "fallback:delta":
+            raise ValueError("--compose-parent requires review source fallback:delta")
+        if not parent_head:
+            raise ValueError("composed review parent must not be empty")
+        if not named_lenses:
+            raise ValueError("a composed delta receipt must name the lens that ran")
+        previous = state.get("review_receipt")
+        if not isinstance(previous, dict):
+            raise ValueError("no standing review receipt exists to compose with")
+        receipt["coverage"] = _compose_coverage(previous, parent_head, receipt)
     state["review_receipt"] = receipt
     save_state(pr, state)
     return {"pr": pr, "recorded_review": True, "review_receipt": receipt}
@@ -3761,6 +3761,31 @@ def _receipt_lenses(receipt: dict) -> list[str]:
     return [lens.strip() for lens in raw if isinstance(lens, str) and lens.strip()]
 
 
+def _receipt_caveats(receipt: dict) -> dict:
+    """Copy the review limitations a composed pass must keep auditable."""
+
+    caveats: dict = {}
+    for key in ("override", "bot_signal"):
+        if key not in receipt:
+            continue
+        value = receipt[key]
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{key} is malformed")
+        caveats[key] = value
+    if "bots_behind_head" in receipt:
+        behind = receipt["bots_behind_head"]
+        if not isinstance(behind, dict) or not all(
+            isinstance(bot, str)
+            and bot.strip()
+            and isinstance(sha, str)
+            and sha.strip()
+            for bot, sha in behind.items()
+        ):
+            raise ValueError("bots_behind_head is malformed")
+        caveats["bots_behind_head"] = dict(behind)
+    return caveats
+
+
 def _delta_paths(base: str, head: str) -> list[str]:
     """Return the exact changed paths for an ancestor-bound review delta.
 
@@ -3791,6 +3816,8 @@ def _delta_paths(base: str, head: str) -> list[str]:
         diff = subprocess.run(  # noqa: S603
             [
                 "git",
+                "-c",
+                "diff.renames=false",
                 "diff",
                 "--name-only",
                 "--diff-filter=ACDMRTUXB",
@@ -3842,6 +3869,10 @@ def _validate_composed_coverage(receipt: dict, current_head: str) -> tuple[bool,
         return False, "full_parent cannot itself be a delta receipt"
     if len(_countable_lenses(full_lenses)) < 2:
         return False, "full_parent does not record a dual-lens pass"
+    try:
+        _receipt_caveats(full)
+    except ValueError as exc:
+        return False, f"full_parent {exc}"
 
     previous = full_head
     for index, delta in enumerate(deltas):
@@ -3860,6 +3891,10 @@ def _validate_composed_coverage(receipt: dict, current_head: str) -> tuple[bool,
             return False, f"delta entry {index} has an invalid source"
         if not _countable_lenses(lenses):
             return False, f"delta entry {index} records no review lens"
+        try:
+            _receipt_caveats(delta)
+        except ValueError as exc:
+            return False, f"delta entry {index} {exc}"
         if (
             not isinstance(paths, list)
             or not all(isinstance(path, str) and path for path in paths)
@@ -3879,6 +3914,11 @@ def _validate_composed_coverage(receipt: dict, current_head: str) -> tuple[bool,
         return False, "coverage source does not match the current receipt"
     if _receipt_lenses(receipt) != _receipt_lenses(final_delta):
         return False, "coverage lenses do not match the current receipt"
+    try:
+        if _receipt_caveats(receipt) != _receipt_caveats(final_delta):
+            return False, "coverage caveats do not match the current receipt"
+    except ValueError as exc:
+        return False, f"current receipt {exc}"
     if previous != receipt.get("head") or previous != current_head:
         return False, "coverage does not end at the current receipt head"
     return True, None
@@ -3906,6 +3946,7 @@ def _compose_coverage(previous: dict, parent_head: str, receipt: dict) -> dict:
             "source": prior_source,
             "lenses": prior_lenses,
         }
+        full_parent.update(_receipt_caveats(previous))
         if isinstance(previous.get("recorded_at"), str):
             full_parent["recorded_at"] = previous["recorded_at"]
         deltas: list[dict] = []
@@ -3915,21 +3956,27 @@ def _compose_coverage(previous: dict, parent_head: str, receipt: dict) -> dict:
             raise ValueError(f"standing composed receipt is invalid: {error}")
         full_parent = dict(existing["full_parent"])
         full_parent["lenses"] = list(existing["full_parent"]["lenses"])
+        full_parent.update(_receipt_caveats(existing["full_parent"]))
         deltas = [
-            {**delta, "lenses": list(delta["lenses"]), "paths": list(delta["paths"])}
+            {
+                **delta,
+                "lenses": list(delta["lenses"]),
+                "paths": list(delta["paths"]),
+                **_receipt_caveats(delta),
+            }
             for delta in existing["deltas"]
         ]
 
-    deltas.append(
-        {
-            "base": parent_head,
-            "head": receipt["head"],
-            "source": "fallback:delta",
-            "lenses": list(receipt.get("lenses") or []),
-            "paths": _delta_paths(parent_head, receipt["head"]),
-            "recorded_at": receipt["recorded_at"],
-        }
-    )
+    current_delta = {
+        "base": parent_head,
+        "head": receipt["head"],
+        "source": "fallback:delta",
+        "lenses": list(receipt.get("lenses") or []),
+        "paths": _delta_paths(parent_head, receipt["head"]),
+        "recorded_at": receipt["recorded_at"],
+    }
+    current_delta.update(_receipt_caveats(receipt))
+    deltas.append(current_delta)
     coverage = {
         "version": _COMPOSED_COVERAGE_VERSION,
         "full_parent": full_parent,
@@ -3964,6 +4011,30 @@ def _flat(text: object, n: int = 120) -> str:
     cleaned = "".join(" " if unicodedata.category(c) == "Cc" else c for c in str(text))
     flat = " ".join(cleaned.split())
     return flat if len(flat) <= n else flat[: n - 1] + "…"
+
+
+def _render_receipt_caveats(entry: dict, label: str, indent: str) -> list[str]:
+    """Render the limitations preserved on one composed review pass."""
+
+    lines: list[str] = []
+    if entry.get("override"):
+        lines.append(
+            f"{indent}⚠ {label} used an active override "
+            f"({_flat(entry['override'])})"
+        )
+    if entry.get("bot_signal"):
+        lines.append(
+            f"{indent}⚠ {label} had unreadable review-bot state "
+            f"({_flat(entry['bot_signal'])})"
+        )
+    behind = entry.get("bots_behind_head")
+    if isinstance(behind, dict):
+        for bot, sha in behind.items():
+            lines.append(
+                f"{indent}⚠ {label}: {_flat(bot)} last reviewed {_flat(sha, 12)}, "
+                "not that pass's head"
+            )
+    return lines
 
 
 def _excerpt(body: str, n: int = 140) -> str:
@@ -4765,6 +4836,7 @@ def render(report: dict) -> str:
                 "    composed coverage: full parent "
                 f"{_flat(full.get('head'), 60)} via {_flat(full.get('source'))}"
             )
+            lines.extend(_render_receipt_caveats(full, "full parent", "      "))
             for delta in coverage.get("deltas") or []:
                 if not isinstance(delta, dict):
                     continue
@@ -4772,6 +4844,13 @@ def render(report: dict) -> str:
                     "    + delta "
                     f"{_flat(delta.get('base'), 12)}..{_flat(delta.get('head'), 12)} "
                     f"({', '.join(_flat(lens, 40) for lens in delta.get('lenses') or [])})"
+                )
+                lines.extend(
+                    _render_receipt_caveats(
+                        delta,
+                        f"delta {_flat(delta.get('head'), 12)}",
+                        "      ",
+                    )
                 )
         # Both routes hold. `route` says `receipt` because that is the claim
         # someone actively made, but the coverage is the sturdier of the two and
@@ -4857,6 +4936,7 @@ def render_record_review(report: dict) -> str:
             "  composed with full parent "
             f"{_flat(full.get('head'), 60)} via {_flat(full.get('source'))}"
         )
+        lines.extend(_render_receipt_caveats(full, "full parent", "    "))
         for delta in coverage.get("deltas") or []:
             if not isinstance(delta, dict):
                 continue
@@ -4864,6 +4944,13 @@ def render_record_review(report: dict) -> str:
                 "    delta "
                 f"{_flat(delta.get('base'), 12)}..{_flat(delta.get('head'), 12)}; "
                 f"paths: {', '.join(_flat(path, 80) for path in delta.get('paths') or []) or '(none)'}"
+            )
+            lines.extend(
+                _render_receipt_caveats(
+                    delta,
+                    f"delta {_flat(delta.get('head'), 12)}",
+                    "      ",
+                )
             )
     behind_map = receipt.get("bots_behind_head")
     for bot, sha in (behind_map if isinstance(behind_map, dict) else {}).items():

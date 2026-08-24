@@ -542,7 +542,10 @@ Self-pace on a bounded cadence — don't busy-wait:
 
   **Known gaps, so you don't mistake them for coverage:**
   - Composed receipts make `mergeable` depend on a valid parent/delta chain and
-    exact Git paths, so `dev_session.sh merge` enforces those mechanical facts.
+    exact Git paths, including both sides of a rename, and retain the override,
+    unreadable-bot, and behind-head caveats of each recorded pass. The poll
+    revalidates those mechanical facts before `dev_session.sh merge` can rely on
+    them.
     The source and lens names remain self-reported: the engine cannot establish
     that the named reviews ran. Per-lens independent receipts remain issue #32's
     stronger provenance boundary.

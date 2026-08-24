@@ -53,9 +53,10 @@ starts.
   receipts and delta recording without the flag retain their prior shape.
 - **CHANGED (gate semantics) — a composed current-head receipt no longer authorizes
   merge when its full parent, delta chain, Git ancestry, final head, recorded lenses,
-  or exact changed paths cannot be re-established.** **Fetch the missing objects or
-  rerun the required review at the current head; do not hand-edit the persisted
-  receipt to bypass the failed validation.**
+  exact changed paths (including both sides of a rename), or preserved per-pass
+  review caveats cannot be re-established.** **Fetch the missing objects or rerun the
+  required review at the current head; do not hand-edit the persisted receipt to
+  bypass the failed validation.**
 
 ---
 

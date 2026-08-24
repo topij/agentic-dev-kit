@@ -5639,6 +5639,7 @@ def _record_composed(
     parent: str = "parent-head",
     paths: list[str] | None = None,
     lenses: str = "correctness",
+    allow_pending_bot: bool = False,
 ) -> tuple[dict, dict]:
     monkeypatch.setattr(pr_watch, "require_gh_backend", lambda operation: None)
     monkeypatch.setattr(
@@ -5661,6 +5662,7 @@ def _record_composed(
         9,
         "fallback:delta",
         head,
+        allow_pending_bot=allow_pending_bot,
         lenses=lenses,
         compose_parent=parent,
         now=NOW,
@@ -5847,6 +5849,39 @@ def test_delta_paths_binds_real_git_ancestry_and_changed_paths(
         pr_watch._delta_paths(head, parent)
 
 
+def test_delta_paths_preserves_both_sides_of_a_rename(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args], cwd=repo, text=True, capture_output=True, check=True
+        )
+        return result.stdout.strip()
+
+    git("init", "-q")
+    git("config", "user.name", "Review Evidence Test")
+    git("config", "user.email", "review-evidence@example.test")
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "runtime.py").write_text("value = 1\n", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-qm", "parent")
+    parent = git("rev-parse", "HEAD")
+    (repo / "docs").mkdir()
+    git("mv", "scripts/runtime.py", "docs/record.md")
+    git("commit", "-qm", "rename")
+    head = git("rev-parse", "HEAD")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    assert pr_watch._delta_paths(parent, head) == [
+        "docs/record.md",
+        "scripts/runtime.py",
+    ]
+
+
 def test_composed_coverage_invalidates_when_recorded_paths_do_not_match_git(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -5941,6 +5976,20 @@ def test_composed_coverage_binds_the_full_parent_and_final_receipt_identity(
     assert valid is False
     assert error == "coverage is not an object"
 
+    malformed_caveat = json.loads(json.dumps(baseline))
+    malformed_caveat["coverage"]["full_parent"]["override"] = []
+    valid, error = pr_watch._validate_composed_coverage(
+        malformed_caveat, "abc123"
+    )
+    assert valid is False
+    assert error == "full_parent override is malformed"
+
+    caveat_mismatch = json.loads(json.dumps(baseline))
+    caveat_mismatch["coverage"]["deltas"][-1]["override"] = "pending-bot"
+    valid, error = pr_watch._validate_composed_coverage(caveat_mismatch, "abc123")
+    assert valid is False
+    assert error == "coverage caveats do not match the current receipt"
+
 
 def test_compose_rejects_malformed_standing_coverage(
     monkeypatch: pytest.MonkeyPatch,
@@ -6027,6 +6076,84 @@ def test_composed_coverage_can_extend_across_reviewed_delta_heads(
         "middle-head",
         "final-head",
     ]
+
+
+def test_composed_coverage_preserves_and_renders_each_pass_caveat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "middle-head",
+        "source": "fallback:delta",
+        "lenses": ["correctness"],
+        "bot_signal": "unavailable",
+        "bots_behind_head": {"coderabbit": "old-head"},
+        "coverage": {
+            "version": 1,
+            "full_parent": {
+                "head": "parent-head",
+                "source": "fallback:panel",
+                "lenses": ["adversarial", "correctness"],
+                "override": "pending-bot",
+            },
+            "deltas": [
+                {
+                    "base": "parent-head",
+                    "head": "middle-head",
+                    "source": "fallback:delta",
+                    "lenses": ["correctness"],
+                    "paths": ["docs/review-record.md"],
+                    "bot_signal": "unavailable",
+                    "bots_behind_head": {"coderabbit": "old-head"},
+                }
+            ],
+        },
+    }
+
+    receipt, report = _record_composed(
+        monkeypatch, pr_watch, previous, parent="middle-head"
+    )
+
+    full = receipt["coverage"]["full_parent"]
+    first_delta = receipt["coverage"]["deltas"][0]
+    assert full["override"] == "pending-bot"
+    assert first_delta["bot_signal"] == "unavailable"
+    assert first_delta["bots_behind_head"] == {"coderabbit": "old-head"}
+    rendered = pr_watch.render_record_review(report)
+    assert "full parent used an active override (pending-bot)" in rendered
+    assert "delta middle-head had unreadable review-bot state (unavailable)" in rendered
+    assert "coderabbit last reviewed old-head" in rendered
+    view = _green_view(headRefOid="final-head")
+    poll_report = pr_watch.build_report(
+        view, [], set(), review_receipt=receipt, **_settled(view)
+    )
+    poll_rendered = pr_watch.render(poll_report)
+    assert "full parent used an active override (pending-bot)" in poll_rendered
+    assert "delta middle-head had unreadable review-bot state" in poll_rendered
+    assert "coderabbit last reviewed old-head" in poll_rendered
+
+
+def test_composed_coverage_records_the_current_pass_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    previous = {
+        "head": "parent-head",
+        "source": "fallback:panel",
+        "lenses": ["adversarial", "correctness"],
+    }
+
+    receipt, _ = _record_composed(
+        monkeypatch,
+        pr_watch,
+        previous,
+        allow_pending_bot=True,
+    )
+
+    assert receipt["override"] == "pending-bot"
+    assert receipt["coverage"]["deltas"][-1]["override"] == "pending-bot"
+
+
 def test_the_poll_render_surfaces_override_and_unreadable_bot_state() -> None:
     """Same argument that moved `lenses` to the poll render applies to its
     siblings: a caveat printed only at record time is not visible when a merge
