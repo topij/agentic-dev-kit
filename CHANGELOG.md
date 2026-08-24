@@ -42,6 +42,25 @@ starts.
 
 ---
 
+## #595 — 2026-08-24
+
+- **ADDED (config keys) — `config/dev-model.yaml` now declares the shared
+  `systemize.*` workflow policy** (`#243`; `#7` stays open). **Re-run `./init.sh`
+  after taking this kit update to add the shipped block. If your config already
+  contains a partial `systemize:` block, the installer preserves it rather than
+  guessing your policy; merge the missing shipped keys manually before invoking the
+  workflow.**
+- **CHANGED (gate semantics) — `post-merge-systemize` now fails closed when the
+  required repository, config, or complete merged-PR history is unavailable, and
+  when only part of the configured engine set is installed; an entirely absent
+  engine set selects the labelled agent-executed path** (`#243`; `#7` stays open).
+  **Install every configured engine or none of them, and treat the report as the
+  durable degraded path when an optional forge write, tracker, reviewer, or
+  notification capability is unavailable. Tracker writes additionally require the
+  operator to approve the exact payload.**
+
+---
+
 ## #593 — 2026-08-24
 
 - **ADDED (engine CLI, report shape) — `pr_watch.py --record-review

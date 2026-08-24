@@ -26,10 +26,10 @@ their delivery order and exit conditions.
   work. It does not generalize one client observation. Interactive-TUI
   `systemMessage` presentation remains an explicit live-client gap.
 - [ ] **Phase 3 — Complete workflow and integration coverage.** The bounded
-  `post-merge-systemize` extraction now has a shared definition, thin runtime bindings,
-  config-owned policy, equivalent durable artifacts, and explicit capability preflights.
-  The phase remains open for applying that integration contract to `session-start`,
-  `wrap-up`, and `triage-friction-log`.
+  `post-merge-systemize` extraction in PR `#595` has a shared definition, thin runtime
+  bindings, config-owned policy, equivalent durable artifacts, and explicit capability
+  preflights. The phase remains open for applying that integration contract to
+  `session-start`, `wrap-up`, and `triage-friction-log`.
 - [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** Codex model and
   effort calibration, environment-capable lane launching, and live isolation checks
   remain planned.
@@ -201,8 +201,7 @@ bind posted delta-draw verdicts; Git paths and author-supplied labels cannot est
 either fact. Until such an artifact exists, uncertain classification continues to take
 the full-panel route and issue `#32` remains the provenance boundary.
 
-After the bounded `post-merge-systemize` extraction merges, continue Phase 3 from a
-fresh branch with this starter:
+After PR `#595` merges, continue Phase 3 from a fresh branch with this starter:
 
 ```text
 Create feat/shared-integration-preflights from current origin/main. Inventory the
