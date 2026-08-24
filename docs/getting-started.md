@@ -226,7 +226,9 @@ friction-routing step is being skipped — not that triage is overdue.
 > come only from `review.bots` and its explicit aliases. The installer refuses YAML
 > key forms its shell migrator cannot own before writing: keep top-level keys unique
 > and bare, write a bare `systemize:` section line, and use bare keys at the shipped
-> two-space indentation within it.
+> two-space indentation within it. Keep operator-login items as simple plain login
+> tokens or simple quoted strings; YAML tags, anchors, aliases, typed scalars, escapes,
+> and ambiguous flow syntax are refused before migration writes.
 > `session-start`, `wrap-up`,
 > `parallel`, and `pr-watch`
 > run out of the box — with an exception worth knowing before you rely on it:

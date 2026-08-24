@@ -492,6 +492,31 @@ preflight_migration_config() {
   fi
 
   if awk '
+    function valid_login_flow(line,   body, n, i, item, first, last, value, lower, sq) {
+      body = line
+      sub(/^  operator_logins:[[:space:]]*\[/, "", body)
+      sub(/\][[:space:]]*(#.*)?$/, "", body)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", body)
+      if (body == "") return 1
+      n = split(body, items, ",")
+      sq = sprintf("%c", 39)
+      for (i = 1; i <= n; i++) {
+        item = items[i]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+        if (item == "") return 0
+        first = substr(item, 1, 1)
+        last = substr(item, length(item), 1)
+        if ((first == "\"" && last == "\"") || (first == sq && last == sq)) {
+          value = substr(item, 2, length(item) - 2)
+          if (value == "" || value ~ /[\\"#,\[\]]/ || index(value, sq)) return 0
+          continue
+        }
+        if (item !~ /^[A-Za-z0-9_.-]+$/ || item ~ /^[0-9]/) return 0
+        lower = tolower(item)
+        if (lower ~ /^(true|false|null|yes|no|on|off|[-+]?\.(inf|nan))$/) return 0
+      }
+      return 1
+    }
     /^systemize:[[:space:]]*$/ { in_systemize = 1; next }
     in_systemize && /^[^[:space:]]/ { in_systemize = 0 }
     in_systemize && /^[[:space:]]+[^[:space:]#]/ {
@@ -501,14 +526,15 @@ preflight_migration_config() {
       sub(/:.*/, "", key)
       if (seen_child[key]++) unsafe = 1
       if ($0 ~ /^  operator_logins:/ &&
-          $0 !~ /^  operator_logins:[[:space:]]*\[[^]]*\][[:space:]]*(#.*)?$/) {
+          ($0 !~ /^  operator_logins:[[:space:]]*\[[^]]*\][[:space:]]*(#.*)?$/ ||
+           !valid_login_flow($0))) {
         unsafe = 1
       }
     }
     END { exit(unsafe ? 0 : 1) }
   ' "$CONFIG_FILE"; then
     echo "error: the systemize section contains a key or operator_logins value init.sh cannot rewrite safely." >&2
-    echo "  Indent bare scalar keys with two spaces and use a one-line login sequence:" >&2
+    echo "  Indent bare scalar keys with two spaces and use simple login strings:" >&2
     echo '    operator_logins: [first-login, second-login]' >&2
     echo "  No migration was applied." >&2
     exit 1

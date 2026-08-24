@@ -358,6 +358,12 @@ def test_installer_refuses_operator_login_keys_it_cannot_rewrite(
         "!!str systemize:\n  analysis_tier: custom\n",
         "systemize:\n  operator_logins:\n    - topij\n",
         "systemize:\n    operator_logins: []\n",
+        "systemize:\n  operator_logins: [!!str topij]\n",
+        "systemize:\n  operator_logins: [&operator topij]\n",
+        "systemize:\n  operator_logins: [true]\n",
+        "systemize:\n  operator_logins: [.nan]\n",
+        'systemize:\n  operator_logins: ["escaped\\nlogin"]\n',
+        'systemize:\n  operator_logins: ["login # fragment"]\n',
         "systemize:\n  analysis_tier: custom\nsystemize:\n  analysis_tier: expensive\n",
         "systemize:\n  analysis_tier: custom\n  analysis_tier: expensive\n",
     ),
@@ -410,6 +416,25 @@ def test_installer_accepts_unowned_bare_top_level_key_with_hyphen(
     _run_init(repo)
 
     assert yaml.safe_load(_config(repo))["external-tools"] == {"enabled": True}
+
+
+def test_installer_preserves_supported_operator_login_flow_items(
+    tmp_path: Path,
+) -> None:
+    config = shipped_config().replace(
+        "  operator_logins: []\n",
+        "  operator_logins: [topij, \"123\", 'git.lab']\n",
+        1,
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+
+    assert yaml.safe_load(_config(repo))["systemize"]["operator_logins"] == [
+        "topij",
+        "123",
+        "git.lab",
+    ]
 
 
 # --------------------------------------------------------------------------- #

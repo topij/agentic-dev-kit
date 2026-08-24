@@ -97,7 +97,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "a50f9666f2069bb5bdb2c60bb18d6e15bfe0798af77d5fda92a0287bd3f1c630"
+      "sha256": "01c5e8e452763fbf2290b441feb63075276bcb3d089c84f898ef39fec597f312"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -223,7 +223,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "768d5e58f5d2e213c78a1275a86a327199154d97d62ff74f218df36b0ff4ffcb"
+      "sha256": "30a5a178097a94849255694af7c8604a3fe09f0c2ea9f119293c5e4982d1dad1"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",

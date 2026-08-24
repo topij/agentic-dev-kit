@@ -331,7 +331,9 @@ Because the installer migrates YAML with shell text tools, its preflight also re
 unique bare top-level keys, a bare `systemize:` section line, and bare keys inside that
 section at the shipped two-space indentation. Rewrite tagged, quoted, anchored,
 explicit, duplicated, alternate-indented, or inline-commented section-key forms before
-retrying; the refusal happens before migration writes.
+retrying. Operator-login items must be simple plain login tokens or simple quoted
+strings; tags, anchors, aliases, typed scalars, escapes, and ambiguous flow syntax are
+refused before migration writes.
 
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
 behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)
