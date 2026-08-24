@@ -43,8 +43,8 @@ in one runtime-neutral definition, while Claude and Codex expose thin native bin
   engines.
 
 - **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `661246c3088f54c3eb399f3ee1df276ccaec2520` on 2026-08-24 printed
-  `1548 passed, 3 warnings in 195.37s`; the warnings were pytest temporary-directory
+  `d8994219def83ece2ba9e4d6ac0f57b459939083` on 2026-08-24 printed
+  `1565 passed, 3 warnings in 178.12s`; the warnings were pytest temporary-directory
   cleanup warnings.
 
 ▶ Next: run
