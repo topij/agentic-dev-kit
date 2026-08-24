@@ -182,12 +182,18 @@ adopter run.
 
 ## Current recommended slice
 
-Complete the review-evidence composition workstream before starting Phase 3. After
-Workstream A merges, create `feat/review-evidence-composition` from the then-current
-`origin/main`. Keep the receipt-migration PR focused on backward-compatible
-state/report representation for a full-panel parent plus an exact-head delta, with
-ancestry and coverage failing closed; keep prompt and routing changes for a later PR
-unless the schema cannot be exercised without them. Then continue with the bounded
-`post-merge-systemize` workflow extraction and Codex binding. Keep the trusted-client
-record as an observation at its stamped client and revision; do not turn it into a
-general instruction-loading guarantee.
+PR `#593` delivered the review-evidence composition workstream separately from the
+trusted-client validation: the shared engine now preserves a full-panel parent plus an
+exact-head delta, validates ancestry, paths, heads, lenses, and pass caveats, and keeps
+legacy receipts compatible. The shared fallback doctrine and prompt builder already
+carry the full-versus-delta routing rules; Claude and Codex consume those same semantics.
+
+Do not add a generic path or prose classifier as the next slice. The remaining review
+gap is a deterministic artifact that can prove record-only semantics and independently
+bind posted delta-draw verdicts; Git paths and author-supplied labels cannot establish
+either fact. Until such an artifact exists, uncertain classification continues to take
+the full-panel route and issue `#32` remains the provenance boundary.
+
+Continue with the bounded `post-merge-systemize` workflow extraction and Codex binding.
+Keep the trusted-client record as an observation at its stamped client and revision; do
+not turn it into a general instruction-loading guarantee.
