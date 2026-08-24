@@ -1466,9 +1466,21 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     assert (
         "a digest cannot select its own evidence or working-set policy" in flattened
     )
-    assert "cache and digest paths beneath `state.dirname`" in flattened
-    assert "report path beneath `systemize.report_root`" in flattened
-    assert "Reject an absolute path, `..` traversal" in flattened
+    assert (
+        "resolve the remainder through the shared `scripts/lib/state_paths`"
+        in flattened
+    )
+    assert "honor `DEVKIT_STATE_ROOT` and `.devkit_state_root`" in flattened
+    assert "even when the sandbox is outside the checkout" in flattened
+    assert "through the shared state read resolver" in flattened
+    assert "Resolve the report beneath `systemize.report_root`" in flattened
+    assert (
+        "reject an absolute configured fragment, `..` traversal, a parent or "
+        "target symlink that escapes its resolved allowed root"
+    ) in flattened
+    assert "require a link count of exactly one" in flattened
+    assert "compare its device/inode identity" in flattened
+    assert "publish derived files by atomic replacement" in flattened
     for rejected_path_shape in (
         "`..` traversal",
         "symlink that escapes",
@@ -1679,9 +1691,30 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
             "minimum normalized severity ascending",
             1,
         ),
+        re.sub(
+            r"reject an absolute configured fragment, `\.\.`\s+traversal",
+            "allow an absolute configured fragment and `..` traversal",
+            workflow,
+            count=1,
+        ),
         workflow.replace(
-            "Reject an absolute path, `..` traversal",
-            "Allow an absolute path and `..` traversal",
+            "a parent or target symlink that escapes its resolved allowed root",
+            "a parent or target symlink may escape its resolved allowed root",
+            1,
+        ),
+        workflow.replace(
+            "require a link count of exactly one",
+            "allow any existing link count",
+            1,
+        ),
+        workflow.replace(
+            "must honor `DEVKIT_STATE_ROOT` and `.devkit_state_root`",
+            "must ignore `DEVKIT_STATE_ROOT` and `.devkit_state_root`",
+            1,
+        ),
+        workflow.replace(
+            "through the shared state read resolver",
+            "directly from the worktree",
             1,
         ),
     )

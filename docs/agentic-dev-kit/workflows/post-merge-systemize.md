@@ -59,15 +59,26 @@ Validate values as well as presence:
   root; configured engine names and `commit_subject` are non-empty strings; and
   `pr_draft` is a boolean.
 
-Before any derived write, substitute the selected date and resolve the cache and digest
-paths beneath `state.dirname` and the report path beneath `systemize.report_root`.
-Reject an absolute path, `..` traversal, a parent or target symlink that escapes its
-resolved allowed root, a path outside the repository, a collision among the canonical
-artifact paths, an existing non-regular target, or a target already tracked by Git.
-Also reject a target matching a repository control input such as the merged config or an
-active instruction/workflow, whether tracked or not. Create parents only after every
-target passes this preflight. A configured output label does not make its destination
-safe.
+Before any derived write, substitute the selected date. Treat the configured cache and
+digest patterns as logical `state.dirname` paths: require that lexical prefix, remove it,
+then resolve the remainder through the shared `scripts/lib/state_paths` write resolver.
+That resolver must honor `DEVKIT_STATE_ROOT` and `.devkit_state_root`; its returned state
+root is the allowed cache/digest root even when the sandbox is outside the checkout. Do
+not write those logical paths directly beneath the worktree. Resolve an existing cache
+or digest through the shared state read resolver so its newer sandbox-or-production
+selection remains authoritative, and record the actual resolved paths. Resolve the
+report beneath `systemize.report_root` inside the repository.
+
+Against each resolved allowed root, reject an absolute configured fragment, `..`
+traversal, a parent or target symlink that escapes its resolved allowed root, a report
+path outside the repository, a collision among the canonical artifact paths, an existing
+non-regular target, or a target already tracked by Git. For every existing artifact
+target, require a link count of exactly one and compare its device/inode identity with
+the other artifact targets plus tracked and control inputs; reject any alias. Also reject
+a target matching a repository control input such as the merged config or an active
+instruction/workflow, whether tracked or not. Create parents only after every target
+passes this preflight, then publish derived files by atomic replacement. A configured
+output label does not make its destination safe.
 
 An invalid value is a hard stop naming the failed invariant. Do not coerce a scalar or
 repair relationships in memory: the operator must correct the shared configuration.
