@@ -71,9 +71,10 @@ kit-owned engines, configuration in `config/dev-model.yaml`, and adapters thin; 
 upstream cs-toolkit's operator-only merge policy or `CS_TOOLKIT_*` namespace. Because
 the shared lane engines form one safety-critical primitive, use a single operator-merge
 implementation lane unless the inventory proves disjoint file ownership. Add semantic
-and mutation matrices, adopter upgrade coverage, and exact-head review evidence. Leave
-cs-toolkit consumption to a later kit upgrade, and preserve the deferred
-`feat/triage-integration-preflights` starter in the parity plan.
+and mutation matrices, adopter upgrade coverage, and exact-head review evidence. Treat
+cs-toolkit as read-only in this branch, leave its consumption to a later kit upgrade,
+and preserve the deferred `feat/triage-integration-preflights` starter in the parity
+plan.
 
 ______________________________________________________________________
 
