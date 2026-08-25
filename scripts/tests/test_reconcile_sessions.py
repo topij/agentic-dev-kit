@@ -1009,17 +1009,26 @@ def test_portable_bounded_runner_reaps_term_ignoring_descendants(
 def test_portable_bounded_runner_delivers_term_during_grace(tmp_path: Path) -> None:
     helper = _bounded_run_helper_source()
     marker = tmp_path / "term-delivered"
-    command = tmp_path / "term-observer.sh"
+    command = tmp_path / "term_observer.py"
     command.write_text(
-        "#!/bin/sh\n"
-        f"marker={shlex.quote(str(marker))}\n"
-        "trap 'printf delivered > \"$marker\"; exit 0' TERM\n"
-        "printf started > \"$marker\"\n"
-        "while :; do sleep 1; done\n",
+        "from pathlib import Path\n"
+        "import signal\n"
+        f"marker = Path({str(marker)!r})\n"
+        "def on_term(_signum, _frame):\n"
+        "    marker.write_text('delivered', encoding='utf-8')\n"
+        "    raise SystemExit(0)\n"
+        "signal.signal(signal.SIGTERM, on_term)\n"
+        "marker.write_text('started', encoding='utf-8')\n"
+        "while True:\n"
+        "    signal.pause()\n",
         encoding="utf-8",
     )
-    command.chmod(0o755)
-    invocation = f"{helper}\n_bounded_run 30 {shlex.quote(str(command))}\n"
+    python = shutil.which("python3")
+    assert python is not None
+    invocation = (
+        f"{helper}\n_bounded_run 30 {shlex.quote(python)} "
+        f"{shlex.quote(str(command))}\n"
+    )
     runner = subprocess.Popen(
         ["bash", "-c", invocation],
         stdout=subprocess.PIPE,
@@ -1029,9 +1038,16 @@ def test_portable_bounded_runner_delivers_term_during_grace(tmp_path: Path) -> N
     )
 
     deadline = time.monotonic() + 3
-    while not marker.exists() and time.monotonic() < deadline:
+    observed = None
+    while time.monotonic() < deadline:
+        try:
+            observed = marker.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            pass
+        if observed == "started":
+            break
         time.sleep(0.01)
-    assert marker.read_text(encoding="utf-8") == "started"
+    assert observed == "started"
     os.killpg(runner.pid, signal.SIGTERM)
     runner.communicate(timeout=3)
 
