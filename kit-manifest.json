@@ -203,7 +203,7 @@
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
-      "sha256": "eec6a88a0512fe8c1d32fdeed2f254b28772aed655a91ef7eb77c7c47ba5a6df"
+      "sha256": "76967731a053ddbdb34f61ea305c759f1bba6d0742c7167d938536f3af422797"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",

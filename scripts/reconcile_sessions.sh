@@ -98,7 +98,7 @@ _bounded_run() {
     local seconds="$1"
     shift
     python3 -c '
-import os, signal, subprocess, sys
+import os, signal, subprocess, sys, time
 
 seconds = float(sys.argv[1])
 shim = r"""
@@ -152,11 +152,9 @@ def stop_group(first_signal):
     except ProcessLookupError:
         pass
     # The shim holds the process group open even if the launcher exits after a
-    # signal, so leader exit cannot be mistaken for descendant cleanup.
-    try:
-        process.wait(timeout=1)
-    except subprocess.TimeoutExpired:
-        pass
+    # signal. Give every descendant the full grace period; leader exit neither
+    # shortens that grace nor becomes cleanup evidence.
+    time.sleep(1)
     try:
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
