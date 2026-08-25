@@ -14,8 +14,8 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-25 — PR `#596` merged the shared bookend contract; the triage
-pipeline remains the Phase 3 exit.
+Last updated: 2026-08-25 — PR `#596` merged the shared bookend contract; parallel
+ownership harmonization is next, while the triage pipeline remains the Phase 3 exit.
 
 ## Latest session — 2026-08-25 (shared integration preflights bounded at the lifecycle bookends)
 
@@ -56,14 +56,24 @@ their Claude and Codex bindings remain invocation-only adapters.
   cross outcomes, live evidence, authority, write mechanism, and state root before the
   first fallback panel.
 
-▶ Next: create `feat/triage-integration-preflights` from current `origin/main`; first
-build the semantic input matrix for a `config/dev-model.yaml`-owned triage block and its
-installer/upgrade migration, then declare required repository and frozen-state
-capabilities, atomic engine modes, interactive versus scheduled approval paths, exact
-tracker authority, durable resume evidence, test-mode writes, and
-stop/degraded/completion outcomes in the shared workflow. Keep the Claude and Codex
-adapters thin; update runtime parity, README/getting-started, upgrade guidance, the
-manifest, and declaration-derived mutation tests in the same PR.
+▶ Next: create `feat/parallel-kit-ownership` from current `origin/main`. Run
+`$session-start`, then use `$parallel` first for a read-only inventory and plan: compare
+the kit-owned parallel workflow, bindings, engines, manifest, config, and tests with
+cs-toolkit commit `4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) and its parent. Classify
+each delta as reusable kit behavior, cs-toolkit policy, or unrelated application code.
+In particular, test inherited state-root precedence and descriptor environment
+replacement; durable branch/base/merge-class identity; exact repository, PR, base,
+head, and fork binding; fail-closed forge reads; operator-held terminal state; and
+cleanup/resume behavior. Read and apply
+`docs/agentic-dev-kit/safety-critical-changes.md` before changing
+`scripts/dev_session.sh`. Keep shared behavior in runtime-neutral workflows and
+kit-owned engines, configuration in `config/dev-model.yaml`, and adapters thin; do not
+upstream cs-toolkit's operator-only merge policy or `CS_TOOLKIT_*` namespace. Because
+the shared lane engines form one safety-critical primitive, use a single operator-merge
+implementation lane unless the inventory proves disjoint file ownership. Add semantic
+and mutation matrices, adopter upgrade coverage, and exact-head review evidence. Leave
+cs-toolkit consumption to a later kit upgrade, and preserve the deferred
+`feat/triage-integration-preflights` starter in the parity plan.
 
 ______________________________________________________________________
 

@@ -136,6 +136,36 @@ helpers named by each definition without adding a dedicated pipeline configurati
 did not add a partial triage config, pretend the missing engines are ready, or duplicate
 approval policy in an adapter.
 
+The next cockpit slice temporarily advances the shared lane primitive before returning
+to the Phase 3 exit. cs-toolkit commit
+`4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) fixed failures in a descendant of
+the kit's parallel implementation. Leaving those fixes downstream would preserve split
+behavioral authority for a safety-critical engine. The next slice therefore compares
+that commit with its parent, ports only reusable mechanisms into the kit-owned source,
+and leaves cs-toolkit-specific merge policy and namespace translation downstream.
+
+```text
+Create feat/parallel-kit-ownership from current origin/main. Run $session-start, then
+use $parallel first for a read-only inventory and plan. Compare the kit-owned parallel
+workflow, Claude and Codex bindings, scripts/dev_session.sh,
+scripts/reconcile_sessions.sh, config, manifest, and tests with cs-toolkit commit
+4cf1ca914361b9912cd6bb1389e985d6e97ab3a0 (#2086) and its parent. Classify every delta
+as reusable kit behavior, cs-toolkit policy, or unrelated application code. Exercise
+inherited state-root precedence and descriptor environment replacement; durable
+branch/base/merge-class identity; exact repository, PR, base, head, and fork binding;
+fail-closed forge reads; operator-held terminal state; and cleanup/resume behavior.
+Read and apply docs/agentic-dev-kit/safety-critical-changes.md before changing
+scripts/dev_session.sh. Keep behavior in shared runtime-neutral workflows and kit-owned
+engines, keep configuration in config/dev-model.yaml, and keep adapters thin. Do not
+upstream cs-toolkit's operator-only merge policy or CS_TOOLKIT_* namespace. Treat the
+shared lane engines as one operator-merge implementation lane unless the inventory
+proves disjoint file ownership. Add semantic and mutation matrices, adopter upgrade
+coverage, and exact-head review evidence. Leave cs-toolkit consumption to a later kit
+upgrade; do not edit the downstream repo in this branch.
+```
+
+After that slice lands, resume the Phase 3 exit with this preserved starter:
+
 ```text
 Create feat/triage-integration-preflights from current origin/main. Build the semantic
 input matrix for a config/dev-model.yaml-owned triage block and its init/upgrade
