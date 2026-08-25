@@ -123,9 +123,10 @@ that revision; the delivery slices below are expected to change them.
 ### Slice boundary and next starter
 
 This branch applies the shared contract to `session-start` and `wrap-up`, whose
-integration surface is already carried by shipped repository engines and existing
-config. It does not add a partial triage config, pretend the missing engines are ready,
-or duplicate approval policy in an adapter.
+integration surface can use existing config, runtime-native mechanisms, and the shipped
+helpers named by each definition without adding a dedicated pipeline configuration. It
+does not add a partial triage config, pretend the missing engines are ready, or duplicate
+approval policy in an adapter.
 
 ```text
 Create feat/triage-integration-preflights from current origin/main. Build the semantic

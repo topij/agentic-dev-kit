@@ -300,10 +300,12 @@ integration. Read `PRINCIPLES.md` for both principles' full statement.
 **Runtime coverage and engine wiring are independent.** The aligned entries in
 `runtime-parity.md` point to a runtime-neutral definition plus thin Claude and Codex
 adapters.
-`session-start`, `wrap-up`, `parallel`, and `pr-watch` ship deterministic engines;
-`triage-friction-log` and `post-merge-systemize` share policy across runtimes while
-their project-specific integrations remain unwired. The absent integration surfaces
-are enumerated here so runtime parity cannot be mistaken for engine availability:
+`parallel` and `pr-watch` ship deterministic engines. `session-start` and `wrap-up` use
+shared workflow doctrine, configured runtime-native integrations, and the particular
+shipped helpers each definition names. `triage-friction-log` and
+`post-merge-systemize` share policy across runtimes while their project-specific
+integrations remain unwired. The absent integration surfaces are enumerated here so
+runtime parity cannot be mistaken for engine availability:
 
 - a tracker client and notification channel;
 - `scripts/fetch_merged_prs.py`, `scripts/digest_merged_prs.py`, and

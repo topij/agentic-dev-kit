@@ -48,10 +48,12 @@ starts.
   briefing when repository/config or repository-state reads fail; unavailable forge,
   CI/cron, tracker, configured drift, or candidate-remediation reads produce explicit
   degraded results instead of empty, clean, or `Now` claims.** **Refresh
-  `docs/agentic-dev-kit/workflows/session-start.md`. Keep the existing runtime adapter;
-  it loads the shared declaration and needs no new config key or connector name. Resolve
-  config through `kitconfig.load_config()` or your equivalent merged-view mechanism so
-  the local overlay is not ignored. Treat the workflow as read-only, and let
+  `docs/agentic-dev-kit/workflows/session-start.md` and the corresponding Claude/Codex
+  thin adapter. If the adapter is locally customized, reconcile it so it delegates
+  merged-config resolution to the shared workflow; do not retain an instruction to read
+  only tracked `config/dev-model.yaml`. No new config key or connector name is needed.
+  Resolve config through `kitconfig.load_config()` or your equivalent merged-view
+  mechanism so the local overlay is not ignored. Treat the workflow as read-only, and let
   non-interactive invocations render once and exit. Always attempt and classify the
   forge, CI/cron, and tracker sources; only an explicitly unconfigured or untriggered
   declaration may be omitted. Any degraded applicable source yields
@@ -69,8 +71,10 @@ starts.
   capabilities are classified when triggered rather than claimed ready before the
   handoff edit. An unavailable forge path or unavailable/unsettled `pr-watch` returns
   `incomplete-resumable` with the exact preserved diff, commit, branch, or PR evidence.** **Refresh
-  `docs/agentic-dev-kit/workflows/wrap-up.md`. Keep the existing runtime adapter and
-  config. Resolve the merged config view, and do not treat a configured tracker, prior
+  `docs/agentic-dev-kit/workflows/wrap-up.md` and the corresponding Claude/Codex thin
+  adapter. If the adapter is locally customized, reconcile it so merged-config
+  resolution delegates to the shared workflow; do not retain tracked-config-only
+  wording. No config migration is needed. Do not treat a configured tracker, prior
   approval, or standing autonomous authority as approval for a create, modification,
   or occurrence-comment payload, or as authority to merge.**
 
