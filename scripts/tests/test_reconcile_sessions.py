@@ -35,8 +35,11 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -313,6 +316,13 @@ def _tally(stdout: str) -> str:
         if line.startswith("launched "):
             return line
     raise AssertionError(f"no tally line in:\n{stdout}")
+
+
+def _bounded_run_helper_source() -> str:
+    script = (ENGINE_DIR / "reconcile_sessions.sh").read_text(encoding="utf-8")
+    start = script.index("_bounded_run() {")
+    end = script.index("\n}\n", start) + len("\n}\n")
+    return script[start:end]
 
 
 # --------------------------------------------------------------------------- #
@@ -901,6 +911,61 @@ def test_live_origin_reads_use_the_portable_bounded_runner(harness: Harness) -> 
     logged = timeout_log.read_text(encoding="utf-8")
     assert logged.startswith(f"10 git -C {harness.repo} ls-remote --heads origin ")
     assert logged.rstrip().endswith(f"refs/heads/{branch}")
+
+
+def test_portable_bounded_runner_reaps_term_ignoring_descendants(
+    tmp_path: Path,
+) -> None:
+    helper = _bounded_run_helper_source()
+    hostile = tmp_path / "term-ignoring-descendant.sh"
+    hostile.write_text(
+        "#!/bin/sh\n"
+        "trap 'exit 0' TERM\n"
+        "sh -c 'trap \"\" TERM; while :; do sleep 1; done' &\n"
+        "wait\n",
+        encoding="utf-8",
+    )
+    hostile.chmod(0o755)
+    command = f"{helper}\n_bounded_run 0.1 {shlex.quote(str(hostile))}\n"
+
+    started = time.monotonic()
+    result = subprocess.run(
+        ["bash", "-c", command],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=3,
+    )
+
+    assert result.returncode == 124
+    assert time.monotonic() - started < 2.5
+
+
+def test_portable_bounded_runner_reaps_on_operator_interrupt(tmp_path: Path) -> None:
+    helper = _bounded_run_helper_source()
+    hostile = tmp_path / "signal-ignoring-descendant.sh"
+    hostile.write_text(
+        "#!/bin/sh\n"
+        "trap 'exit 0' HUP INT TERM\n"
+        "sh -c 'trap \"\" HUP INT TERM; while :; do sleep 1; done' &\n"
+        "wait\n",
+        encoding="utf-8",
+    )
+    hostile.chmod(0o755)
+    command = f"{helper}\n_bounded_run 30 {shlex.quote(str(hostile))}\n"
+    runner = subprocess.Popen(
+        ["bash", "-c", command],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+
+    time.sleep(0.2)
+    os.killpg(runner.pid, signal.SIGINT)
+    runner.communicate(timeout=3)
+
+    assert runner.returncode in {-signal.SIGINT, 128 + signal.SIGINT}
 
 
 @pytest.mark.parametrize("direction", ["expected-to-new", "new-to-expected"])

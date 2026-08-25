@@ -101,27 +101,75 @@ _bounded_run() {
 import os, signal, subprocess, sys
 
 seconds = float(sys.argv[1])
+shim = r"""
+import signal, subprocess, sys
+
+term_received = False
+
+def hold_group_open(_signum, _frame):
+    global term_received
+    term_received = True
+
+for held_signal in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
+    signal.signal(held_signal, hold_group_open)
 try:
-    process = subprocess.Popen(sys.argv[2:], start_new_session=True)
+    child = subprocess.Popen(sys.argv[1:])
+except OSError as exc:
+    print(f"could not start {sys.argv[1]}: {exc}", file=sys.stderr)
+    sys.exit(127)
+
+returncode = child.wait()
+if term_received:
+    while True:
+        signal.pause()
+sys.exit(returncode if returncode >= 0 else 128 - returncode)
+"""
+try:
+    process = subprocess.Popen(
+        [sys.executable, "-c", shim, *sys.argv[2:]],
+        start_new_session=True,
+    )
 except OSError as exc:
     print(f"could not start {sys.argv[2]}: {exc}", file=sys.stderr)
     sys.exit(127)
 
-try:
-    returncode = process.wait(timeout=seconds)
-except subprocess.TimeoutExpired:
+class Cancelled(Exception):
+    def __init__(self, signum):
+        self.signum = signum
+
+def cancel(signum, _frame):
+    raise Cancelled(signum)
+
+handled_signals = (signal.SIGHUP, signal.SIGINT, signal.SIGTERM)
+for handled_signal in handled_signals:
+    signal.signal(handled_signal, cancel)
+
+def stop_group(first_signal):
+    for handled_signal in handled_signals:
+        signal.signal(handled_signal, signal.SIG_IGN)
     try:
-        os.killpg(process.pid, signal.SIGTERM)
+        os.killpg(process.pid, first_signal)
     except ProcessLookupError:
         pass
+    # The shim holds the process group open even if the launcher exits after a
+    # signal, so leader exit cannot be mistaken for descendant cleanup.
     try:
         process.wait(timeout=1)
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        process.wait()
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    process.wait()
+
+try:
+    returncode = process.wait(timeout=seconds)
+except Cancelled as exc:
+    stop_group(exc.signum)
+    sys.exit(128 + exc.signum)
+except subprocess.TimeoutExpired:
+    stop_group(signal.SIGTERM)
     sys.exit(124)
 
 sys.exit(returncode if returncode >= 0 else 128 - returncode)
