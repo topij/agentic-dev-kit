@@ -71,8 +71,9 @@ For work using the fallback panel:
   tracker write is not a no-op, an ambiguous merge that read-back verifies is not
   incomplete, and acknowledgement state is not proof that a review finding was resolved.
 - Cross product each abstract external-write capability with the repository's existing
-  safety wrappers: authority to merge does not authorize bypassing a mandatory lane
-  wrapper, so test authority class × write mechanism as well as the terminal outcome.
+  safety wrappers: authority to merge does not authorize bypassing mandatory paired
+  review/merge wrappers or their shared state sandbox, so test authority class × write
+  mechanism × state root as well as the terminal outcome.
 - Exercise parser and installer changes with valid alternate syntax, comments, missing
   values, partial configuration, and upgrade/idempotency paths before opening the PR.
 - Ask each lens for a novel failure hypothesis tied to an observable outcome. A new

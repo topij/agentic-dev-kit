@@ -34,8 +34,9 @@ their Claude and Codex bindings remain invocation-only adapters.
   search and an exact-payload decision before parking; the friction log remains the
   route for incomplete or accumulating findings and unavailable, declined, or ambiguous
   tracker writes. Missing or insufficient merge authority holds the exact reviewed head
-  for the operator; an isolated self-merge stays on the cockpit's deterministic lane
-  wrapper, and a policy-less non-lane pull request defaults to the operator route.
+  for the operator; isolated review and self-merge stay on the cockpit's paired lane
+  wrappers and shared state sandbox, while a policy-less non-lane pull request defaults
+  to the operator route.
   Conditional capabilities classify at their trigger rather than claiming future
   readiness before the handoff edit. First-match outcome precedence keeps a degraded
   integration from masking an incomplete forge or merge path; a changed existing

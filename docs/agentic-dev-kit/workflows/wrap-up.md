@@ -46,7 +46,7 @@ Once a condition occurs, `not-triggered` is invalid and cannot satisfy completio
 | `handoff-archive` | conditional | Required only when the budget checker directs a sweep. Resolve `<engine-dir>/archive_plan_sessions.py` and `<handoff-history>` before invoking it. Unavailability or a non-success outcome stops before staging, with both documents preserved as the helper reports. |
 | `tracker-search-and-write` | conditional and approval-gated | Required when a finding is issue-shaped and its point is not accumulation. Search first, then in an interactive session present the exact create/comment payload for an operator decision; do not park merely to avoid asking. Missing config, client, credential, operator presence, payload-specific approval, or a declined/silent decision degrades to a complete `<friction-log>` entry. Tracker availability never authorizes a write. |
 | `forge-pr-write` | conditional | Required when the wrap-up changes any repository artifact, including an existing project-status artifact. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step. |
-| `pr-watch` | conditional | Required after a wrap-up pull request exists. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete. |
+| `pr-watch` | conditional | Required after a wrap-up pull request exists. For an isolated lane, the cockpit must invoke `<engine-dir>/dev_session.sh pr-watch <scope>` so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete. |
 | `merge-authority` | conditional and authority-gated | Required only after `pr-watch` says the exact head is mergeable. For an isolated lane, resolve its persisted merge class; for a non-lane pull request, resolve the project's declared merge policy and default to `operator` when none exists. A `self` route still needs project and current-request authority; an `operator` route needs current operator authorization for the exact pull request. Unknown lane metadata or insufficient authority leaves the mergeable pull request in `successful-operator-handoff`; it never authorizes a merge. |
 | `forge-merge-write` | conditional and authority-gated | Required only when the exact head is mergeable and `merge-authority` permits this workflow to merge it. For an isolated lane whose persisted class is `self`, the cockpit must invoke `<engine-dir>/dev_session.sh merge <scope>`; a direct runtime-native forge write does not satisfy this capability. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward `successful-completion`; if it proves failure or remains ambiguous, preserve the exact head and report `incomplete-resumable`. |
 | `project-status-write` | optional enhancement | Update only a project status artifact that already exists and is in scope. Its absence is an honest skip, not a reason to invent one. |
@@ -63,6 +63,7 @@ Once a condition occurs, `not-triggered` is invalid and cannot satisfy completio
 | `operator-owned-repository-change` | `preserve-and-stage-only-declared-paths` |
 | `required-engine-unavailable` | `stop-before-staging-preserve-record-edit` |
 | `merge-without-predeclared-and-current-authority` | `hold-mergeable-pr-for-operator` |
+| `isolated-review-follow-through` | `cockpit-dev-session-pr-watch-wrapper-only` |
 | `isolated-self-merge-write` | `cockpit-dev-session-merge-wrapper-only` |
 | `operator-merge-class-without-exact-pr-authorization` | `hold-mergeable-pr-for-operator` |
 | `non-lane-without-project-merge-policy` | `default-operator-require-exact-pr-authorization` |
@@ -460,8 +461,10 @@ failure makes the overall outcome `incomplete-resumable`.
    its already-reviewed commits into the new PR too, defeating the point of
    keeping the handoff separate. Branch first (`chore/update-handoff-<date>`)
    before committing, then push and open a PR. Either way, once there's
-   nothing left to push, **mark the PR ready** so it gets reviewed, and run
-   the watch-and-fix loop (`pr-watch`) until the exact head is settled. Then resolve
+   nothing left to push, **mark the PR ready** so it gets reviewed. For an isolated
+   lane, the cockpit runs `<engine-dir>/dev_session.sh pr-watch <scope>` until the exact
+   head is settled, keeping the receipt in the lane sandbox; for a non-lane PR, run the
+   normal watch-and-fix loop (`pr-watch`). Then resolve
    `merge-authority`: invoke `forge-merge-write` only when the declared class and
    current request authorize it. For an isolated `self` lane, the cockpit invokes
    `<engine-dir>/dev_session.sh merge <scope>` so the deterministic wrapper re-polls

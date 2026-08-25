@@ -1673,7 +1673,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "pr-watch": (
                 "conditional",
-                "Required after a wrap-up pull request exists. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete.",
+                "Required after a wrap-up pull request exists. For an isolated lane, the cockpit must invoke <engine-dir>/dev_session.sh pr-watch <scope> so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete.",
             ),
             "merge-authority": (
                 "conditional and authority-gated",
@@ -1712,6 +1712,9 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "merge-without-predeclared-and-current-authority": (
                 "hold-mergeable-pr-for-operator",
+            ),
+            "isolated-review-follow-through": (
+                "cockpit-dev-session-pr-watch-wrapper-only",
             ),
             "isolated-self-merge-write": (
                 "cockpit-dev-session-merge-wrapper-only",
@@ -1770,6 +1773,11 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "also stage any existing project-status artifact" in flattened
         assert "no repository-artifact changes" in flattened
         assert "actually returned and verified from the tracker" in flattened
+        assert (
+            "the cockpit runs `<engine-dir>/dev_session.sh pr-watch <scope>`"
+            in flattened
+        )
+        assert "keeping the receipt in the lane sandbox" in flattened
         assert (
             "the cockpit invokes `<engine-dir>/dev_session.sh merge <scope>`"
             in flattened
@@ -2105,6 +2113,14 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("wrap-up", wrap, wrap.replace(
             "If read-back verifies the merge landed, continue toward `successful-completion`",
             "If read-back verifies the merge landed, report `incomplete-resumable`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "the cockpit must invoke `<engine-dir>/dev_session.sh pr-watch <scope>` so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability",
+            "the runtime may invoke a direct watcher outside the lane state sandbox", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`isolated-review-follow-through` | `cockpit-dev-session-pr-watch-wrapper-only`",
+            "`isolated-review-follow-through` | `runtime-native-direct-watch-allowed`", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "the cockpit must invoke `<engine-dir>/dev_session.sh merge <scope>`; a direct runtime-native forge write does not satisfy this capability",
