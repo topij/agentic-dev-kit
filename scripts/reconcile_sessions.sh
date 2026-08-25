@@ -90,25 +90,49 @@ _die() {
     exit 64
 }
 
-# Timeout prefix (possibly empty) so no probe here can hang the wrap-up on a
-# slow network — same idiom as dev_session.sh's list. Factored out because the
-# `held` probe needs the same guard with a longer budget than a single `gh` call.
-_timeout_prefix() {
-    if command -v timeout >/dev/null 2>&1; then
-        echo "timeout $1"
-    elif command -v gtimeout >/dev/null 2>&1; then
-        echo "gtimeout $1"
-    fi
+# Python is already a hard dependency of this engine. Use it to enforce the
+# deadline on every supported platform instead of silently dropping the bound
+# when the optional GNU `timeout` / `gtimeout` utility is absent. A new process
+# group lets the timeout reap transport helpers spawned beneath gh, git, or uv.
+_bounded_run() {
+    local seconds="$1"
+    shift
+    python3 -c '
+import os, signal, subprocess, sys
+
+seconds = float(sys.argv[1])
+try:
+    process = subprocess.Popen(sys.argv[2:], start_new_session=True)
+except OSError as exc:
+    print(f"could not start {sys.argv[2]}: {exc}", file=sys.stderr)
+    sys.exit(127)
+
+try:
+    returncode = process.wait(timeout=seconds)
+except subprocess.TimeoutExpired:
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+    sys.exit(124)
+
+sys.exit(returncode if returncode >= 0 else 128 - returncode)
+' "$seconds" "$@"
 }
 
 # Bounded `gh` with a short timeout. Callers preserve its status: an
 # authentication, transport, or timeout failure is unknown state, never an
 # authoritative empty response.
 _gh() {
-    local to
-    to="$(_timeout_prefix 10)"
-    # shellcheck disable=SC2086
-    $to gh "$@"
+    _bounded_run 10 gh "$@"
 }
 
 # Pick the CURRENT same-repository PR (newest by number — a reused branch can
@@ -322,10 +346,8 @@ _surviving_tip_mismatch() {
 }
 
 _live_origin_tip() {
-    local branch="$1" reply to
-    to="$(_timeout_prefix 10)"
-    # shellcheck disable=SC2086
-    reply="$($to git -C "$REPO_ROOT" ls-remote --heads origin "refs/heads/$branch" 2>/dev/null)" \
+    local branch="$1" reply
+    reply="$(_bounded_run 10 git -C "$REPO_ROOT" ls-remote --heads origin "refs/heads/$branch" 2>/dev/null)" \
         || return 2
     printf '%s' "$reply" | python3 -c '
 import string, sys
@@ -390,8 +412,7 @@ _resolve_repo_nwo() {
 #    baseline, or review receipt.
 _held_check() {
     local session_dir="$1" branch="$2" pr="$3" base="$4" head_oid="$5"
-    local merge_class recorded_base to report
-    local probe_env
+    local merge_class recorded_base report
 
     [[ -n "$session_dir" ]] || return 1
     [[ -d "$session_dir/state" && -s "$session_dir/base" && -s "$session_dir/merge_class" ]] || return 1
@@ -407,13 +428,13 @@ _held_check() {
     # all of them mean the one thing: the probe did not run, so rc 2 and the
     # caller's stderr note. Repository identity was resolved before row output;
     # this check only preserves the helper's fail-closed contract.
-    to="$(_timeout_prefix 60)"
     _resolve_repo_nwo
     [[ -n "$REPO_NWO" ]] || return 2
-    probe_env=(env "DEVKIT_STATE_ROOT=$session_dir/state" "DEVKIT_ROOT=$REPO_ROOT" "GH_REPO=$REPO_NWO")
-    # shellcheck disable=SC2086
-    report="$("${probe_env[@]}" \
-        $to uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist 2>/dev/null)" || return 2
+    report="$(_bounded_run 60 env \
+        "DEVKIT_STATE_ROOT=$session_dir/state" \
+        "DEVKIT_ROOT=$REPO_ROOT" \
+        "GH_REPO=$REPO_NWO" \
+        uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist 2>/dev/null)" || return 2
 
     # `mergeable` is the merge-authorization verdict; `converged` confirms that
     # the observed forge state is internally settled. Both fail closed when

@@ -870,25 +870,28 @@ def test_unknown_live_origin_state_stops_without_a_lane_board(
     assert result.stdout == ""
 
 
-def test_live_origin_reads_use_the_bounded_network_timeout(harness: Harness) -> None:
+def test_live_origin_reads_use_the_portable_bounded_runner(harness: Harness) -> None:
     branch = "lane/live-origin-timeout"
     harness.branch(branch)
     head = _git(harness.repo, "rev-parse", branch)
     harness.pr(branch, 590, "MERGED", head=head)
     harness.session("live-origin-timeout", branch, "operator")
     timeout_log = harness.tmp / "timeout-argv.log"
-    fake_timeout = harness.bin / "timeout"
-    fake_timeout.write_text(
+    real_python = shutil.which("python3")
+    assert real_python is not None
+    fake_python = harness.bin / "python3"
+    fake_python.write_text(
         "#!/bin/sh\n"
-        "if [ \"$2\" = \"git\" ] && [ \"$5\" = \"ls-remote\" ]; then\n"
+        "if [ \"$1\" = \"-c\" ] && [ \"$4\" = \"git\" ] && "
+        "[ \"$7\" = \"ls-remote\" ]; then\n"
+        "  shift 2\n"
         f"  printf '%s\\n' \"$*\" >> \"{timeout_log}\"\n"
         "  exit 124\n"
         "fi\n"
-        "shift\n"
-        "exec \"$@\"\n",
+        f"exec \"{real_python}\" \"$@\"\n",
         encoding="utf-8",
     )
-    fake_timeout.chmod(0o755)
+    fake_python.chmod(0o755)
 
     result = harness.run("live-origin-timeout")
 
