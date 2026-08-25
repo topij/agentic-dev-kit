@@ -288,9 +288,11 @@ def test_installer_completes_a_partial_triage_section_without_replacing_policy(
 
     first = _config(repo)
     triage = yaml.safe_load(first)["triage"]
-    assert set(triage) == set(yaml.safe_load(shipped_config())["triage"])
-    assert triage["analysis_tier"] == "expensive"
-    assert triage["state_path"] == "state/custom_{mode}.json"
+    expected = yaml.safe_load(shipped_config())["triage"] | {
+        "analysis_tier": "expensive",
+        "state_path": "state/custom_{mode}.json",
+    }
+    assert triage == expected
     assert "    analysis_tier: expensive  # adopter choice" in first
     assert '    state_path: "state/custom_{mode}.json"  # retained' in first
     assert "\n    frozen_inbox_pattern:" in first
@@ -330,6 +332,7 @@ def test_installer_refuses_triage_section_keys_it_cannot_migrate(
         'triage:\n  "analysis_tier": default\n',
         "triage:\n  !!str analysis_tier: default\n",
         "triage:\n  analysis_tier: default\n  analysis_tier: expensive\n",
+        "triage:\n  analysis_tier:: expensive\n",
         "triage:\n  analysis_tier: default\n    nested: unsafe\n",
         "triage:\n\tanalysis_tier: default\n",
     ),

@@ -563,7 +563,7 @@ preflight_migration_config() {
     in_triage && /^[^[:space:]]/ { in_triage = 0 }
     in_triage && /^[[:space:]]*($|#)/ { next }
     in_triage {
-      if ($0 ~ /\t/ || $0 !~ /^ +[A-Za-z_][A-Za-z0-9_]*:/) {
+      if ($0 ~ /\t/ || $0 !~ /^ +[A-Za-z_][A-Za-z0-9_]*:([[:space:]]|$)/) {
         unsafe = 1
         next
       }

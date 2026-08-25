@@ -37,12 +37,16 @@ instructed guidance. `triage.pr_draft` is a boolean. Engine names and the commit
 are non-empty strings. Artifact patterns are non-empty repository-relative paths.
 `triage.state_path` contains `{mode}`; the frozen-inbox and report patterns contain
 `{mode}`, `{date}`, and `{session}`. Live and test state must resolve to different
-paths. The state and frozen snapshot are logical children of `<state-dir>`; the report
-is a child of `triage.report_root`, which is neither empty nor the repository root.
+paths. The state and frozen snapshot are logical `state.dirname` paths; the report is a
+child of `triage.report_root`, which is neither empty nor the repository root.
 
-Resolve state reads and writes through `<engine-dir>/lib/state_paths`, including
-`DEVKIT_STATE_ROOT` and `.devkit_state_root`; never write logical state paths directly
-beneath the worktree. Preflight with non-creating resolution. Reject absolute fragments,
+Resolve state reads and writes through `<engine-dir>/lib/state_paths`. Require
+`state.dirname` to match that resolver's declared `STATE_DIRNAME`; a mismatch hard-stops
+because the resolver does not take the directory from config. Require the matching
+lexical prefix on `triage.state_path` and `triage.frozen_inbox_pattern`, remove it, then
+pass only the remaining fragment to the resolver. Honor `DEVKIT_STATE_ROOT` and
+`.devkit_state_root`; never write logical state paths directly beneath the worktree.
+Preflight with non-creating resolution. Reject absolute fragments,
 `..` traversal, path collisions, tracked artifact targets, control-input targets,
 non-regular existing targets, escaping symlinks, and existing targets whose link count
 is not exactly one. Compare existing targets by device/inode with one another and with
@@ -77,7 +81,7 @@ Evaluate the input before capability-dependent work.
 | Scheduled or unattended invocation with notification unavailable | Hard-stop before creating a new approval session; preserve an existing session as operator-held. |
 | Missing, malformed, or identity-mismatched frozen snapshot/state | Hard-stop before tracker writes; after a verified write, preserve operator-held evidence and never whole-sweep. |
 | Tracker or finalization write fails or is ambiguous | Read back before retry; unresolved state is operator-held. |
-| Test mode | Permit declared local artifacts and optional `[TEST]` notification only; prohibit tracker and repository writes. |
+| Test mode | Permit declared local artifacts and optional `[TEST]` notification only; prohibit tracker, source-document, and forge writes. |
 
 ## Authoritative integration declaration
 
@@ -190,14 +194,20 @@ already-accounted tracker entries. Freeze the exact inbox bytes before proposing
 snapshot metadata contains the run identity and digest; the report contains every
 candidate id, its exact source-block digest, and the proposed tracker payload.
 
-Each tracker body includes a non-rendering idempotency marker binding session id,
-candidate id, and payload digest. Canonicalize `{title, body, project, labels}` and hash
-it. The marker is part of the body and therefore part of the exact payload the operator
-reviews. In engine-backed mode invoke `triage.draft_engine`; in LLM-only mode draft with
-the configured analysis tier and record `agent-executed`.
+Build the idempotency marker without a recursive digest. First canonicalize
+`{title, body_without_marker, project, labels}` and hash it as `payload_core_digest`.
+The non-rendering marker binds session id, candidate id, and that core digest. Append the
+marker to the body, then canonicalize the final `{title, body, project, labels}` and hash
+it separately as `payload_digest`. State and report store both digests; exact-payload
+approval binds the final digest, and marker read-back uses the core digest before
+requiring the complete final payload to match. The marker is therefore part of the exact
+payload the operator reviews without attempting to hash a digest into itself. In
+engine-backed mode invoke `triage.draft_engine`; in LLM-only mode draft with the
+configured analysis tier and record `agent-executed`.
 
 If parsing fails, hard-stop without state. If there are no candidates, write the report
-and complete without notification, state, tracker, or repository writes. Otherwise
+and complete without notification, approval state, tracker, source-document, or forge
+writes. Otherwise
 atomically write state in `awaiting-approval` before presenting proposals.
 
 With notification, send the numbered exact-payload summary and persist the returned

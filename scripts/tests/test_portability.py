@@ -2554,9 +2554,17 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert "never whole-sweep" in inputs[
         "Missing, malformed, or identity-mismatched frozen snapshot/state"
     ][0]
+    assert "prohibit tracker, source-document, and forge writes" in inputs[
+        "Test mode"
+    ][0]
     for required_phrase in (
         "kitconfig.load_config()",
         "RFC 8785 JSON",
+        "Require `state.dirname` to match that resolver's declared `STATE_DIRNAME`",
+        "pass only the remaining fragment to the resolver",
+        "body_without_marker",
+        "hash it separately as `payload_digest`",
+        "without attempting to hash a digest into itself",
         "Process termination or a missing final chat summary never authorizes repeating a write",
         "Parse complete commands, never keyword substrings",
         "Unmentioned items default to `park`, never archive",
@@ -2566,6 +2574,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "an older helper that whole-sweeps the frozen snapshot is not ready",
         "Never switch the caller checkout",
         "This workflow never merges the sweep pull request",
+        "without notification, approval state, tracker, source-document, or forge writes",
     ):
         assert required_phrase in flattened
 
@@ -2616,6 +2625,8 @@ def test_triage_integration_is_config_owned_shared_and_thin() -> None:
         path = Path(triage[key])
         assert not path.is_absolute()
         assert ".." not in path.parts
+    for key in ("state_path", "frozen_inbox_pattern"):
+        assert Path(triage[key]).parts[0] == config["state"]["dirname"]
     assert "{mode}" in triage["state_path"]
     for placeholder in ("{mode}", "{date}", "{session}"):
         assert placeholder in triage["frozen_inbox_pattern"]
@@ -2655,6 +2666,19 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             "hold-before-archive-sweep", "sweep-successes-and-drop-failures", 1
         ),
         workflow.replace("never whole-sweep", "whole-sweep", 1),
+        workflow.replace(
+            "pass only the remaining fragment to the resolver",
+            "pass the complete logical path to the resolver",
+            1,
+        ),
+        workflow.replace(
+            "body_without_marker", "body_with_marker", 1
+        ),
+        workflow.replace(
+            "prohibit tracker, source-document, and forge writes",
+            "prohibit tracker and repository writes",
+            1,
+        ),
         workflow.replace("It does not edit", "It may edit", 1),
         workflow.replace("operator-held` |", "successful-completion` |", 1),
     )
