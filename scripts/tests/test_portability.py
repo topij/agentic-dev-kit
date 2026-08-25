@@ -1537,7 +1537,18 @@ def _assert_bookend_adapter_semantics(
 
 def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
     flattened = " ".join(workflow.split())
-    assert "take precedence over later explanatory prose" in flattened
+    normative_sentence = {
+        "session-start": (
+            "The capability, authority, and completion rows below are normative. "
+            "They take precedence over later explanatory prose and over runtime adapters."
+        ),
+        "wrap-up": (
+            "The capability, authority, artifact, and completion rows below are "
+            "normative. They take precedence over later explanatory prose and runtime "
+            "adapters."
+        ),
+    }[name]
+    assert normative_sentence in flattened
     assert "runtime adapters" in flattened
     capabilities = _integration_table(workflow, "Capability contract", 3)
     policies = _integration_table(workflow, "Authority contract", 2)
@@ -1560,7 +1571,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "forge-pr-read": (
                 "optional",
-                "Prove authenticated, complete pagination for open pull requests and a complete review-health read that includes review threads/comments and configured bot findings for every returned pull request. List metadata alone is not ready. Unavailability or suspected truncation at either layer degrades to PRs unavailable: <reason> and must never render as an empty list.",
+                "Prove authenticated, complete pagination for open pull requests and run the configured review-health read for every returned pull request, exposing the actionable reviews/comments and configured bot state available to that mechanism. List metadata alone is not ready. Unavailability or suspected truncation at either layer degrades to PRs unavailable: <reason> and must never render as an empty list.",
             ),
             "ci-cron-read": (
                 "optional",
@@ -1624,7 +1635,12 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "`git symbolic-ref --short -q HEAD`" in flattened
         assert "report `DETACHED at <sha>` rather than a blank branch" in flattened
         assert "`uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist`" in flattened
-        assert "Do not mark `forge-pr-read` ready from list metadata alone" in flattened
+        assert (
+            "equivalent read-only forge mechanism that exposes actionable "
+            "reviews/comments and configured bot state"
+        ) in flattened
+        assert "Do not claim thread-resolution" in flattened
+        assert "do not mark `forge-pr-read` ready from list metadata alone" in flattened
     else:
         assert capabilities == {
             "repository-config-read": (
@@ -1898,6 +1914,10 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "`kitconfig.load_config()`", "`config/dev-model.yaml`", 1
         )),
         ("session-start", session, session.replace(
+            "rows below are normative. They take\nprecedence over later explanatory prose",
+            "rows below are advisory. They do not take\nprecedence over later explanatory prose", 1
+        )),
+        ("session-start", session, session.replace(
             "`repository-state-read` | required", "`repository-state-read` | optional", 1
         )),
         ("session-start", session, session.replace(
@@ -1945,11 +1965,19 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "`true`", 1
         )),
         ("session-start", session, session.replace(
-            "Do not mark `forge-pr-read` ready from list metadata\n  alone",
-            "Mark `forge-pr-read` ready from list metadata\n  alone", 1
+            "do not mark `forge-pr-read` ready from\n  list metadata alone",
+            "mark `forge-pr-read` ready from\n  list metadata alone", 1
+        )),
+        ("session-start", session, session.replace(
+            "exposes actionable reviews/comments and\n  configured bot state",
+            "may omit actionable reviews/comments and\n  configured bot state", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "`kitconfig.load_config()`", "`config/dev-model.yaml`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "rows below are normative. They\ntake precedence over later explanatory prose",
+            "rows below are advisory. They do not\ntake precedence over later explanatory prose", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "Before editing `<handoff>`, classify",

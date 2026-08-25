@@ -59,9 +59,10 @@ starts.
   declaration may be omitted. Any degraded applicable source yields
   `degraded-success`; `successful-completion` requires applicable sources to be
   ready.**
-  **Treat a PR-list response as discovery only: read configured review findings for each
-  returned pull request before calling the forge source ready. Represent detached HEAD
-  as `DETACHED at <sha>` rather than accepting an empty branch value.**
+  **Treat a PR-list response as discovery only: read configured actionable review
+  evidence for each returned pull request before calling the forge source ready, without
+  claiming thread-resolution state the selected mechanism does not expose. Represent
+  detached HEAD as `DETACHED at <sha>` rather than accepting an empty branch value.**
 - **CHANGED (gate semantics) — `wrap-up` now stops before staging when required
   repository/config, record-write, or document-budget capabilities fail; tracker
   unavailability, silence, decline, or missing exact-payload approval parks the complete

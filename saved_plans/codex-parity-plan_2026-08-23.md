@@ -56,7 +56,8 @@ that revision; the delivery slices below are expected to change them.
   effort mapping only when its launcher actually exposes that control.
 - **Capabilities:** repository/config and repository-state reads are required. Forge,
   CI/cron, and tracker reads are always attempted and degrade visibly; forge readiness
-  includes configured review findings, and detached HEAD is represented explicitly.
+  includes configured actionable review evidence without claiming unsupported thread
+  resolution, and detached HEAD is represented explicitly.
   Configured drift reads degrade visibly when applicable. Archive and resolved-
   tracker reads are conditional before a `Now` promotion. Runtime compute selection is
   an optional enhancement.

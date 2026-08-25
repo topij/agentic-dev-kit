@@ -65,6 +65,8 @@ For work using the fallback panel:
   guard to run after the edit, replace a required gather with an exit-zero empty result,
   and remove the second-layer read behind any source whose classification promises more
   than list metadata exposes.
+- Negate the complete normative-precedence sentence, not just one keyword, and mutate a
+  declared source to promise evidence its recommended helper cannot actually return.
 - Exercise parser and installer changes with valid alternate syntax, comments, missing
   values, partial configuration, and upgrade/idempotency paths before opening the PR.
 - Ask each lens for a novel failure hypothesis tied to an observable outcome. A new

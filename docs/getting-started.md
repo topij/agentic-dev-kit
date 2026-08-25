@@ -243,8 +243,8 @@ friction-routing step is being skipped — not that triage is overdue.
 > applies in Claude and Codex. Missing required repository/config or record capabilities
 > stop before a false briefing or commit. Optional session-start sources render as
 > unavailable rather than empty and cannot be silently skipped. PR readiness includes
-> configured review findings, and detached HEAD is explicit rather than a blank branch;
-> wrap-up presents an
+> configured actionable review evidence, and detached HEAD is explicit rather than a
+> blank branch; wrap-up presents an
 > interactive issue-shaped finding
 > for an exact-payload tracker decision before parking, while unavailable, declined,
 > ambiguous, incomplete, or accumulating routes go to the friction log. Non-interactive
