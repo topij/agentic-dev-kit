@@ -78,6 +78,8 @@ missing, or unverifiable transition hard-stops before tracker or repository writ
 ## Semantic input matrix
 
 Evaluate the input before capability-dependent work.
+Here, `valid active state` means an ordinary live-run state, never a gate-only recovery
+intent or held receipt.
 
 | Input or state | Required result |
 |---|---|
@@ -85,11 +87,15 @@ Evaluate the input before capability-dependent work.
 | No argument, no active state | Start a new live draft. |
 | No argument, valid active state | Resume the recorded phase and mode. |
 | `resume`, no valid active state | Hard-stop without an external write. |
+| `resume`, valid active state | Resume the recorded phase and mode; never replace the active session. |
+| `new`, no active state | Start a new live draft. |
 | `new`, active live state | Refuse; never overwrite an approval-bound session. |
-| Interactive `recover`, active live state | Under the single-writer gate, capture raw bytes and filesystem observations before parsing the captured copy; valid state then refuses and directs to `resume`, while invalid state enters recovery. Recovery never authorizes a tracker, source, or forge write. |
-| Interactive `recover`, blocking gate | Capture the complete published gate and its filesystem observations; prove owner termination and require exact operator approval before quarantining the unchanged gate, whether or not active state exists. When state is absent, persist the gate-only bundle and a `gate-only-operator-held` receipt; never infer safe restart. |
+| Interactive `recover`, active live state and no blocking gate | Under the single-writer gate, capture raw bytes and filesystem observations before parsing the captured copy; valid state then refuses and directs to `resume`, while invalid state enters recovery. Recovery never authorizes a tracker, source, or forge write. |
+| Interactive `recover`, blocking gate without a gate-only receipt | Capture the complete published gate and its filesystem observations; prove owner termination and require exact operator approval before quarantining the unchanged gate, whether or not active state exists. When state is absent, publish a blocking `gate-only-recovery-intent` before gate quarantine; never infer safe restart. |
+| Interactive `recover`, `gate-only-recovery-intent` present | Resume only the recorded bundle and digest-checked gate-only transition; never restart or reconstruct the draft. |
 | Interactive `recover`, no active live state and no gate | Hard-stop without creating a recovery bundle or performing an external write. |
-| Any invocation with a `gate-only-operator-held` receipt | Preserve the receipt, quarantined gate, and bundle; report operator-held and never start, resume, or reconstruct a draft automatically. |
+| Non-recover live invocation with a gate-only intent | Preserve the intent and bundle; report operator-held and never start, resume, or reconstruct a draft automatically. |
+| Any live invocation with a gate-only held receipt | Preserve the receipt, quarantined gate, and bundle; report operator-held and never start, resume, or reconstruct a draft automatically. |
 | Scheduled or unattended `recover` | Report operator-held without acquiring the single-writer gate, capturing state, or changing an artifact. |
 | `test` | Use test identity and test state; never replace or resume live state. |
 | Scheduled or unattended non-recovery invocation with active state | Resume or report operator-held; never start another draft. |
@@ -104,7 +110,8 @@ Evaluate the input before capability-dependent work.
 
 ## Authoritative integration declaration
 
-The capability, authority, artifact, input, and completion rows in this document are
+The capability, authority, artifact, input, recovery-transition, and completion rows in
+this document are
 normative. They take precedence over later explanatory prose and runtime adapters. If a
 runtime-specific instruction conflicts, stop before the disputed action, record
 `workflow safety contradiction` when a safe report already exists, and perform no
@@ -140,7 +147,7 @@ conditional capability ready before its trigger.
 | `invalid-state-recovery` | `preserve-before-classify-never-abandon-uncertain-attempt` |
 | `state-or-frozen-identity-mismatch` | `stop-before-tracker-write-never-whole-sweep` |
 | `protected-branch-advance` | `allow-fast-forward-preserve-draft-identity-hold-divergence` |
-| `gate-only-recovery` | `preserve-gate-and-state-absence-evidence-remain-operator-held` |
+| `gate-only-recovery` | `preserve-evidence-publish-intent-before-quarantine-remain-operator-held` |
 | `partial-engine-set` | `stop-never-mix-engine-and-llm-artifacts` |
 | `unattended-without-notification` | `stop-before-new-approval-session` |
 | `tracker-without-exact-payload-approval` | `prohibit-create-update-comment` |
@@ -150,6 +157,7 @@ conditional capability ready before its trigger.
 | `test-mode-external-write` | `prohibit-tracker-friction-archive-branch-commit-push-pr` |
 | `archive-sweep-boundary` | `sweep-only-approved-accounted-byte-identical-frozen-blocks` |
 | `merged-pr-completion` | `require-merged-final-head-equals-reviewed-head-else-operator-held` |
+| `reviewed-head-persistence` | `persist-exact-pr-watch-head-before-operator-hold-or-merge` |
 | `runtime-policy-override` | `shared-declaration-wins-and-stop` |
 
 ### Durable artifacts, resumability, and completion
@@ -158,7 +166,8 @@ The report is load-bearing and is written before any external attempt. The state
 act-time gate. It records the run/config/frozen identities, selected engine mode, exact
 canonical proposal payloads and digests, approval source and approver identity,
 notification thread reference when used, normalized per-item decisions, attempt state,
-verified tracker identifiers, and branch/commit/PR identity. Never record an external
+verified tracker identifiers, branch/commit/PR identity, and the exact `reviewed_head`
+plus its PR-watch receipt after review becomes terminal. Never record an external
 identifier not returned authoritatively or verified by read-back.
 
 Before an external write, atomically persist `attempting` with the exact operation and
@@ -189,6 +198,10 @@ new-run claim is a digest-checked replacement of an exact
 transition reads the current bytes under the gate and records their digest, then
 immediately before atomic replacement requires the same digest, run identity, and gate
 owner token. A mismatch stops operator-held without replacing either version.
+The gate-only intent has no live-run identity or new gate owner token. Its sole permitted
+replacement is the digest-checked gate-only finalization below, which verifies the
+bundle digest, repository identity, and newly acquired gate token before adding that
+token to the held receipt.
 
 Hold the gate across an external create and its authoritative read-back so a second
 invocation cannot act on `attempting` concurrently. On normal or handled-failure
@@ -214,6 +227,7 @@ Select the first matching row and report exactly one overall outcome.
 | Precedence id | Condition | Outcome |
 |---|---|---|
 | `required-or-safety-failure` | A required preflight/state/safety check failed before a disputed action, or shared/runtime policy conflicts. | `hard-stop` |
+| `gate-only-recovery-held` | A valid `gate-only-recovery-intent` or `gate-only-operator-held` receipt exists. | `operator-held` |
 | `approval-or-triggered-write-not-terminal` | Approval is pending or a triggered notification, tracker, repository, or review path lacks an authoritative terminal state. | `operator-held` |
 | `optional-degradation-after-terminal-work` | Required and triggered work is terminal, but an optional interactive notification or compute enhancement degraded. | `degraded-success` |
 | `all-triggered-contracts-terminal` | No prior row matches and every triggered capability is terminal. | `successful-completion` |
@@ -238,14 +252,29 @@ rule above; this route remains available when active state is absent. Never remo
 gate first. When active state is absent, the immutable capture also records repeated
 non-creating resolution and filesystem observations proving that absence. After proving
 owner termination and obtaining exact operator approval of the bundle digest,
-quarantine every unchanged name for the old gate, acquire a new recovery gate, and
-re-prove state absence. Atomically claim the absent state path with a
-`gate-only-operator-held` receipt that binds the bundle digest, old gate owner record,
-quarantine paths, absence observations, repository identity, and new gate owner token.
-Release the new gate only after that receipt is durable. This terminal recovery result
+atomically claim the absent state path by exclusive creation of a
+`gate-only-recovery-intent` that binds the bundle digest, old gate owner record,
+approved capture, absence observations, and repository identity. Flush that intent and
+its directory before revalidating and quarantining every unchanged name for the old
+gate. The durable intent is the blocking state if the process stops or another
+invocation arrives after quarantine. Acquire a new recovery gate, re-prove state
+absence apart from the exact intent, then digest-check and atomically replace the intent
+with a `gate-only-operator-held` receipt that adds quarantine paths and the new gate
+owner token. Release the new gate only after that receipt is durable. This terminal recovery result
 does not create a restart receipt, make `new` available, or infer that no external
 attempt occurred; every later invocation preserves it as operator-held. The gate-only
 route does not enter the raw-state capture path below.
+
+### Gate-only recovery transition
+
+| Gate-only step | Required state transition |
+|---|---|
+| `capture-old-gate` | Old gate present, active state absent; persist the immutable evidence bundle and exact approval. |
+| `publish-recovery-intent` | Old gate still present; exclusively create and flush `gate-only-recovery-intent`. |
+| `quarantine-old-gate` | Intent present; revalidate and quarantine every unchanged old-gate name. |
+| `acquire-recovery-gate` | Intent present; atomically acquire a new complete recovery gate. |
+| `finalize-held-receipt` | New gate present; digest-check and atomically replace intent with `gate-only-operator-held`. |
+| `release-recovery-gate` | Held receipt durable; release only the matching new recovery gate. |
 
 Otherwise, locate active state in its own sandbox with
 `resolve_write_path(fragment, mkdir=False)` and inspect the path itself without parsing
@@ -415,10 +444,15 @@ and changed paths. A failed or ambiguous response triggers read-back before retr
 otherwise remains operator-held.
 
 Run `pr-watch` for the exact head. This workflow never merges the sweep pull request.
+When `pr-watch` reports terminal exact-head review evidence, authoritatively read back
+the PR and require its current `headRefOid` to equal the head in that evidence. Before
+reporting operator-held or allowing merge, atomically persist that head as
+`reviewed_head` with the PR-watch receipt. Any later head movement invalidates the
+receipt and requires a new exact-head PR-watch cycle before replacing `reviewed_head`.
 When review is unsettled or the operator still owns the merge decision, report
-`operator-held` with the PR URL and exact head. On a later resume, authoritative PR
-read-back must prove both that the pull request merged and that its final `headRefOid`
-equals the exact reviewed head recorded in state. A missing or mismatched final head is
+`operator-held` with the PR URL and persisted reviewed head. On a later resume,
+authoritative PR read-back must prove both that the pull request merged and that its final `headRefOid`
+equals `reviewed_head` recorded in state. A missing or mismatched final head is
 operator-held; never mark an unreviewed replacement head complete. Only then write
 completion to the report and state before optionally deleting active state; the
 completed report remains durable.

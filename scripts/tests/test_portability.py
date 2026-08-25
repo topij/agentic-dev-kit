@@ -1710,6 +1710,7 @@ def _integration_table(
             "Outcome",
             "Precedence id",
             "Input or state",
+            "Gate-only step",
             "",
         }:
             continue
@@ -2463,7 +2464,7 @@ def _assert_triage_adapter(adapter: str, runtime: str) -> None:
 def _assert_triage_semantics(workflow: str) -> None:
     flattened = " ".join(workflow.split())
     assert (
-        "The capability, authority, artifact, input, and completion rows in this "
+        "The capability, authority, artifact, input, recovery-transition, and completion rows in this "
         "document are normative. They take precedence over later explanatory prose "
         "and runtime adapters."
     ) in flattened
@@ -2527,7 +2528,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "allow-fast-forward-preserve-draft-identity-hold-divergence",
         ),
         "gate-only-recovery": (
-            "preserve-gate-and-state-absence-evidence-remain-operator-held",
+            "preserve-evidence-publish-intent-before-quarantine-remain-operator-held",
         ),
         "partial-engine-set": ("stop-never-mix-engine-and-llm-artifacts",),
         "unattended-without-notification": ("stop-before-new-approval-session",),
@@ -2545,6 +2546,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         ),
         "merged-pr-completion": (
             "require-merged-final-head-equals-reviewed-head-else-operator-held",
+        ),
+        "reviewed-head-persistence": (
+            "persist-exact-pr-watch-head-before-operator-hold-or-merge",
         ),
         "runtime-policy-override": ("shared-declaration-wins-and-stop",),
     }
@@ -2566,23 +2570,33 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert "gate-only recovery cannot establish prior state" in outcomes[
         "operator-held"
     ][0]
-    assert list(_integration_table(workflow, "Overall outcome precedence", 3)) == [
+    precedence = _integration_table(workflow, "Overall outcome precedence", 3)
+    assert list(precedence) == [
         "required-or-safety-failure",
+        "gate-only-recovery-held",
         "approval-or-triggered-write-not-terminal",
         "optional-degradation-after-terminal-work",
         "all-triggered-contracts-terminal",
     ]
+    assert precedence["gate-only-recovery-held"] == (
+        "A valid gate-only-recovery-intent or gate-only-operator-held receipt exists.",
+        "operator-held",
+    )
     inputs = _integration_table(workflow, "Semantic input matrix", 2)
     assert set(inputs) == {
         "Unknown or combined entry keyword",
         "No argument, no active state",
         "No argument, valid active state",
         "resume, no valid active state",
+        "resume, valid active state",
+        "new, no active state",
         "new, active live state",
-        "Interactive recover, active live state",
-        "Interactive recover, blocking gate",
+        "Interactive recover, active live state and no blocking gate",
+        "Interactive recover, blocking gate without a gate-only receipt",
+        "Interactive recover, gate-only-recovery-intent present",
         "Interactive recover, no active live state and no gate",
-        "Any invocation with a gate-only-operator-held receipt",
+        "Non-recover live invocation with a gate-only intent",
+        "Any live invocation with a gate-only held receipt",
         "Scheduled or unattended recover",
         "test",
         "Scheduled or unattended non-recovery invocation with active state",
@@ -2604,16 +2618,24 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Test mode"
     ][0]
     assert "capture raw bytes and filesystem observations before parsing" in inputs[
-        "Interactive recover, active live state"
+        "Interactive recover, active live state and no blocking gate"
     ][0]
+    assert "Resume the recorded phase and mode" in inputs[
+        "No argument, valid active state"
+    ][0]
+    assert "never replace the active session" in inputs["resume, valid active state"][0]
+    assert "Start a new live draft" in inputs["new, no active state"][0]
     assert "whether or not active state exists" in inputs[
-        "Interactive recover, blocking gate"
+        "Interactive recover, blocking gate without a gate-only receipt"
     ][0]
     assert "never infer safe restart" in inputs[
-        "Interactive recover, blocking gate"
+        "Interactive recover, blocking gate without a gate-only receipt"
     ][0]
     assert "never start, resume, or reconstruct a draft automatically" in inputs[
-        "Any invocation with a gate-only-operator-held receipt"
+        "Non-recover live invocation with a gate-only intent"
+    ][0]
+    assert "never start, resume, or reconstruct a draft automatically" in inputs[
+        "Any live invocation with a gate-only held receipt"
     ][0]
     assert "without creating a recovery bundle" in inputs[
         "Interactive recover, no active live state and no gate"
@@ -2621,6 +2643,47 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert "without acquiring the single-writer gate" in inputs[
         "Scheduled or unattended recover"
     ][0]
+    gate_only_steps = _integration_table(workflow, "Gate-only recovery transition", 2)
+    assert gate_only_steps == {
+        "capture-old-gate": (
+            "Old gate present, active state absent; persist the immutable evidence bundle and exact approval.",
+        ),
+        "publish-recovery-intent": (
+            "Old gate still present; exclusively create and flush gate-only-recovery-intent.",
+        ),
+        "quarantine-old-gate": (
+            "Intent present; revalidate and quarantine every unchanged old-gate name.",
+        ),
+        "acquire-recovery-gate": (
+            "Intent present; atomically acquire a new complete recovery gate.",
+        ),
+        "finalize-held-receipt": (
+            "New gate present; digest-check and atomically replace intent with gate-only-operator-held.",
+        ),
+        "release-recovery-gate": (
+            "Held receipt durable; release only the matching new recovery gate.",
+        ),
+    }
+    gate_present = True
+    state_kind: str | None = None
+    for step in gate_only_steps:
+        if step == "publish-recovery-intent":
+            assert gate_present and state_kind is None
+            state_kind = "intent"
+        elif step == "quarantine-old-gate":
+            assert gate_present and state_kind == "intent"
+            gate_present = False
+        elif step == "acquire-recovery-gate":
+            assert not gate_present and state_kind == "intent"
+            gate_present = True
+        elif step == "finalize-held-receipt":
+            assert gate_present and state_kind == "intent"
+            state_kind = "held"
+        elif step == "release-recovery-gate":
+            assert gate_present and state_kind == "held"
+            gate_present = False
+        assert gate_present or state_kind in {"intent", "held"}
+    assert not gate_present and state_kind == "held"
     for required_phrase in (
         "kitconfig.load_config()",
         "RFC 8785 JSON",
@@ -2633,7 +2696,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Never use `resolve_read_path` for either artifact",
         "An absolute, traversing, escaping, or non-regular engine target hard-stops",
         "published gate therefore never exists without its complete owner record",
-        "gate-only-operator-held` receipt that binds the bundle digest",
+        "gate-only-recovery-intent` that binds the bundle digest",
+        "Flush that intent and its directory before",
+        "The durable intent is the blocking state",
+        "digest-check and atomically replace the intent",
+        "The gate-only intent has no live-run identity or new gate owner token",
         "Release the new gate only after that receipt is durable",
         "does not create a restart receipt, make `new` available",
         "Parse under the held gate before creating the `reserved` state",
@@ -2669,8 +2736,10 @@ def _assert_triage_semantics(workflow: str) -> None:
         "an older helper that whole-sweeps the frozen snapshot is not ready",
         "Never switch the caller checkout",
         "This workflow never merges the sweep pull request",
+        "atomically persist that head as `reviewed_head` with the PR-watch receipt",
+        "Any later head movement invalidates the receipt",
         "authoritative PR read-back must prove both that the pull request merged",
-        "final `headRefOid` equals the exact reviewed head recorded in state",
+        "final `headRefOid` equals `reviewed_head` recorded in state",
         "never mark an unreviewed replacement head complete",
         "A missing or mismatched final head is operator-held",
         "without notification, approval state, tracker, source-document, or forge writes",
@@ -2801,8 +2870,28 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
-            "preserve-gate-and-state-absence-evidence-remain-operator-held",
+            "preserve-evidence-publish-intent-before-quarantine-remain-operator-held",
             "discard-gate-and-start-new-without-state-evidence",
+            1,
+        ),
+        workflow.replace(
+            "persist-exact-pr-watch-head-before-operator-hold-or-merge",
+            "leave-reviewed-head-implicit-until-after-merge",
+            1,
+        ),
+        workflow.replace(
+            "| No argument, valid active state | Resume the recorded phase and mode. |",
+            "| No argument, valid active state | Start a new live draft and replace the active session. |",
+            1,
+        ),
+        workflow.replace(
+            "Old gate still present; exclusively create and flush `gate-only-recovery-intent`.",
+            "Old gate already quarantined; then create `gate-only-recovery-intent`.",
+            1,
+        ),
+        workflow.replace(
+            "| `gate-only-recovery-held` | A valid `gate-only-recovery-intent` or `gate-only-operator-held` receipt exists. | `operator-held` |",
+            "| `gate-only-recovery-held` | A valid gate-only receipt exists. | `successful-completion` |",
             1,
         ),
         workflow.replace(
@@ -2880,8 +2969,8 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         ),
         workflow.replace("It does not edit", "It may edit", 1),
         workflow.replace(
-            "final `headRefOid`\nequals the exact reviewed head recorded in state",
-            "final `headRefOid` may differ from the exact reviewed head recorded in state",
+            "final `headRefOid`\nequals `reviewed_head` recorded in state",
+            "final `headRefOid` may differ from `reviewed_head` recorded in state",
             1,
         ),
         workflow.replace(

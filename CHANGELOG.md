@@ -69,11 +69,12 @@ starts.
   the interactive `recover` entry point for invalid live state; it preserves a recovery
   bundle and prohibits abandonment when prior external-write absence is uncertain.
   Before completing a merged sweep, read back its final `headRefOid` and require it to
-  equal the exact reviewed head retained in state; a replacement head remains
-  operator-held even when the PR is merged.
-  When stale-gate recovery finds no active state, retain its
+  equal the exact PR-watch head persisted as `reviewed_head`; a replacement head
+  invalidates the receipt and remains operator-held even when the PR is merged.
+  When stale-gate recovery finds no active state, publish
+  `gate-only-recovery-intent` before quarantining the old gate, then retain its
   `gate-only-operator-held` receipt and evidence bundle; do not treat gate quarantine
-  as proof that a new draft is safe.
+  or a crash between transition steps as proof that a new draft is safe.
   Treat an existing single-writer gate or an act-time state-digest mismatch as
   operator-held; never replace, steal, or retry through it. Keep configured draft and
   finalize engine fragments canonically beneath `paths.engines`; an absolute,
