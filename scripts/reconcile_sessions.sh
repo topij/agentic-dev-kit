@@ -115,8 +115,10 @@ _gh() {
 # back several PRs over time) from the forge response. The `--head` query alone
 # is not identity evidence because a fork can reuse the branch name. Every row
 # must have the declared shape; well-formed foreign rows are ignored before
-# ranking. Prints `<STATE> TAB <number> TAB <title> TAB <head OID>`, or `NONE`
-# only for an authoritative response with no matching row.
+# ranking. Base eligibility is checked only after the newest same-repository
+# branch PR is chosen: a newer wrong-base reuse must not uncover an older merged
+# PR. Prints `<STATE> TAB <number> TAB <title> TAB <head OID>`, or `NONE` only
+# for an authoritative response with no eligible current row.
 _classify_pr() {
     local repo_owner="$1" branch="$2" base="$3"
     python3 -c '
@@ -130,7 +132,7 @@ if not isinstance(rows, list):
     raise SystemExit(1)
 if not all(isinstance(row, dict) for row in rows):
     raise SystemExit(1)
-matching = []
+candidates = []
 for row in rows:
     if type(row.get("number")) is not int:
         raise SystemExit(1)
@@ -154,18 +156,19 @@ for row in rows:
         row["isCrossRepository"] is False
         and owner["login"].casefold() == expected_owner.casefold()
         and row["headRefName"] == expected_branch
-        and row["baseRefName"] == expected_base
     ):
-        matching.append(row)
-if not matching:
+        candidates.append(row)
+if not candidates:
     print("NONE"); sys.exit(0)
 # A branch can back multiple PRs over time (e.g. a scope reused after rm). The
 # CURRENT PR is the newest, so pick by descending PR number and report ITS
 # state. Ranking by state (merged-always-wins) would let a stale merged PR mask
 # the current in-flight one and falsely report "shipped" — the exact failure
 # this guards against; over-flagging parked is the safe direction here.
-matching.sort(key=lambda row: row["number"], reverse=True)
-top = matching[0]
+candidates.sort(key=lambda row: row["number"], reverse=True)
+top = candidates[0]
+if top["baseRefName"] != expected_base:
+    print("NONE"); sys.exit(0)
 state = top.get("state") or "?"
 num = top.get("number")
 title = (top.get("title") or "").replace("\t", " ").replace("\n", " ").strip()

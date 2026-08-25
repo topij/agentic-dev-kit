@@ -695,6 +695,50 @@ def test_foreign_pr_identity_cannot_terminalize_a_lane(
     assert "merged" not in _status_of(result.stdout, "foreign"), label
 
 
+def test_newer_wrong_base_reuse_cannot_expose_an_older_matching_merge(
+    harness: Harness,
+) -> None:
+    branch = "lane/base-reused"
+    harness.branch(branch)
+    head = _git(harness.repo, "rev-parse", branch)
+    harness.session("base-reused", branch, "operator")
+    harness.pr_payload(
+        branch,
+        json.dumps(
+            [
+                {
+                    "number": 500,
+                    "title": "older trunk work",
+                    "state": "MERGED",
+                    "baseRefName": "trunk",
+                    "headRefName": branch,
+                    "headRefOid": head,
+                    "headRepositoryOwner": {"login": "acme"},
+                    "isCrossRepository": False,
+                },
+                {
+                    "number": 501,
+                    "title": "newer release reuse",
+                    "state": "MERGED",
+                    "baseRefName": "release",
+                    "headRefName": branch,
+                    "headRefOid": head,
+                    "headRepositoryOwner": {"login": "acme"},
+                    "isCrossRepository": False,
+                },
+            ]
+        ),
+    )
+    _git(harness.repo, "push", "origin", "--delete", branch)
+    _git(harness.repo, "branch", "-D", branch)
+
+    result = harness.run("base-reused")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "base-reused") == "parked"
+    assert "older trunk work" not in result.stdout
+
+
 @pytest.mark.parametrize(
     "report_changes",
     [
@@ -795,6 +839,77 @@ def test_newer_live_origin_tip_is_not_hidden_by_stale_local_caches(
     assert result.returncode == 3
     assert _status_of(result.stdout, "live-origin") == "open"
     assert "origin tip differs from PR head" in result.stdout
+
+
+@pytest.mark.parametrize("mode", ["failure", "malformed"])
+def test_unknown_live_origin_state_stops_without_a_lane_board(
+    harness: Harness, mode: str
+) -> None:
+    branch = "lane/live-origin-read"
+    harness.branch(branch)
+    head = _git(harness.repo, "rev-parse", branch)
+    harness.pr(branch, 588, "MERGED", head=head)
+    harness.session("live-origin-read", branch, "operator")
+    real_git = shutil.which("git")
+    assert real_git is not None
+    fake_git = harness.bin / "git"
+    response = "exit 17" if mode == "failure" else "printf 'malformed\\n'"
+    fake_git.write_text(
+        "#!/bin/sh\n"
+        f"if [ \"$1\" = \"-C\" ] && [ \"$3\" = \"ls-remote\" ] && "
+        f"[ \"$6\" = \"refs/heads/{branch}\" ]; then {response}; fi\n"
+        f"exec \"{real_git}\" \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+
+    result = harness.run("live-origin-read")
+
+    assert result.returncode == 64
+    assert "could not resolve surviving branch tips" in result.stderr
+    assert result.stdout == ""
+
+
+@pytest.mark.parametrize("direction", ["expected-to-new", "new-to-expected"])
+def test_live_origin_movement_between_snapshot_reads_cannot_terminalize(
+    harness: Harness, direction: str
+) -> None:
+    branch = "lane/live-origin-race"
+    harness.branch(branch)
+    old_head = _git(harness.repo, "rev-parse", branch)
+    harness.pr(branch, 589, "MERGED", head=old_head)
+    harness.session("live-origin-race", branch, "operator")
+    new_head = harness.advance_branch(branch)
+    _git(harness.repo, "update-ref", f"refs/heads/{branch}", old_head)
+    _git(harness.repo, "update-ref", f"refs/remotes/origin/{branch}", old_head)
+    _git(harness.repo, "push", "--force", "origin", f"{old_head}:refs/heads/{branch}")
+    first, second = (
+        (old_head, new_head)
+        if direction == "expected-to-new"
+        else (new_head, old_head)
+    )
+    real_git = shutil.which("git")
+    assert real_git is not None
+    marker = harness.tmp / "live-origin-read-once"
+    fake_git = harness.bin / "git"
+    fake_git.write_text(
+        "#!/bin/sh\n"
+        f"if [ \"$1\" = \"-C\" ] && [ \"$3\" = \"ls-remote\" ] && "
+        f"[ \"$6\" = \"refs/heads/{branch}\" ]; then\n"
+        f"  if [ ! -e \"{marker}\" ]; then printf '%s\\t%s\\n' {first} refs/heads/{branch}; "
+        f": > \"{marker}\"; else printf '%s\\t%s\\n' {second} refs/heads/{branch}; fi\n"
+        "  exit 0\n"
+        "fi\n"
+        f"exec \"{real_git}\" \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+
+    result = harness.run("live-origin-race")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "live-origin-race") == "open"
+    assert "origin tip moved during reconciliation" in result.stdout
 
 
 def test_a_tip_that_moves_between_snapshot_reads_cannot_terminalize(
