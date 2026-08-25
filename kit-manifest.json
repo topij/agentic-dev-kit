@@ -29,7 +29,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "7fd5f9ac4908a21f3c36aa37c6f434e97764d899cd339274faceae9b13dbe829"
+      "sha256": "9fe8ef10f3b1152c3c269e4d43fc8541bcf1cad17c62a59f1a3a457a56053e72"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -37,7 +37,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "cdfe937ae58d582fe0d145b42318369f75482881736059341efaf14cb788c768"
+      "sha256": "3c21b46e6e07aa631088734bdc136a220825ba864efd92a0936886e9ab68601b"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -61,11 +61,11 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "a757dcaf73ad67fc1289f7de4a1b09a4f96b69f28404ff014da6dad66b1a1cc1"
+      "sha256": "9bfc474e1a3edf3b18c358d4c381a2ba0f286422438eab907df85f1d405973c1"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "8393a16096b985558616c2e847cbfdb335a96296399405fd2c3928ec71e0c004"
+      "sha256": "3f68eb2e635c64b56ebdf1d0dba2c938d8a2bb4d4565dd4bbc817dc4f9f99435"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -97,7 +97,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "63e6f4486c033ea76b86ac666bc610c4d302c26386b18359f6e0125686b71eb1"
+      "sha256": "3498d1d809915345075ebe76a42212c12b9b2cbfef20c9ed885244aab9d7c4d2"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -223,7 +223,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "7831e3a0372effc13baf20fc0b27ab66bdfb98a4ede2beb3f31cfffeb0b1b62b"
+      "sha256": "de96c8b8a25e69b146b5c4d0e63921a11151ceac0073e6d718126bde3fad7e6e"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -247,7 +247,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "74faf30cc728c72bca6052d3fa1ea3dd68f52632cad0aa79dfd9b87172e348a7"
+      "sha256": "403f6c3abdd0ea2f163311e9f5e4e8f882bc5b30e40460e7db40234e5908dd45"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

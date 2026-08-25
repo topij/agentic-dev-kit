@@ -1565,6 +1565,9 @@ state:
     assert config["runtime"]["default"] == "claude"
     assert config["runtime"]["launchers"]["codex"] == "codex"
     assert config["review"]["fallback_commands"]["codex"] == "/review"
+    assert config["triage"] == yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )["triage"]
     # The panel is what the fallback actually IS now; deleting its whole
     # migration block from init.sh previously passed the entire suite.
     panel = config["review"]["fallback_panel"]
@@ -1682,8 +1685,15 @@ def _post_merge_routing(workflow: str) -> dict[str, tuple[str, str, str]]:
 def _integration_table(
     workflow: str, heading: str, width: int
 ) -> dict[str, tuple[str, ...]]:
-    marker = f"### {heading}\n"
-    assert workflow.count(marker) == 1
+    markers = (f"### {heading}\n", f"## {heading}\n")
+    matches = [
+        candidate
+        for candidate in markers
+        if re.search(rf"(?m)^{re.escape(candidate.rstrip())}$", workflow)
+    ]
+    assert len(matches) == 1
+    marker = matches[0]
+    assert len(re.findall(rf"(?m)^{re.escape(marker.rstrip())}$", workflow)) == 1
     section = workflow.split(marker, 1)[1]
     section = re.split(r"\n#{2,3} ", section, maxsplit=1)[0]
     rows: dict[str, tuple[str, ...]] = {}
@@ -1695,7 +1705,12 @@ def _integration_table(
         ]
         assert len(cells) == width, cells[0]
         if cells[0] in {
-            "Capability id", "Policy id", "Outcome", "Precedence id", ""
+            "Capability id",
+            "Policy id",
+            "Outcome",
+            "Precedence id",
+            "Input or state",
+            "",
         }:
             continue
         assert cells[0] not in rows, cells[0]
@@ -2423,6 +2438,273 @@ def test_runtime_parity_rejects_missing_or_stale_bookend_adapter(
     skill.unlink()
     with pytest.raises((AssertionError, FileNotFoundError)):
         test_runtime_parity_contract_covers_workflows_and_adapters()
+
+
+def _triage_adapter_body(runtime: str) -> str:
+    argument = "`$ARGUMENTS`" if runtime == "claude" else "the user's argument"
+    heading = "# Triage Friction Log " if runtime == "codex" else ""
+    return " ".join(
+        (
+            f"{heading}Read `docs/agentic-dev-kit/workflows/triage-friction-log.md` "
+            f"completely and follow it. Treat {argument} as the entry point. Resolve "
+            "configured paths from the repository root and merged configuration "
+            "defined by the shared workflow; translate only runtime-native invocation "
+            "and available mechanisms."
+        ).split()
+    )
+
+
+def _assert_triage_adapter(adapter: str, runtime: str) -> None:
+    parts = adapter.split("---", 2)
+    assert len(parts) == 3
+    assert " ".join(parts[2].split()) == _triage_adapter_body(runtime)
+
+
+def _assert_triage_semantics(workflow: str) -> None:
+    flattened = " ".join(workflow.split())
+    assert (
+        "The capability, authority, artifact, input, and completion rows in this "
+        "document are normative. They take precedence over later explanatory prose "
+        "and runtime adapters."
+    ) in flattened
+    capabilities = _integration_table(workflow, "Capability contract", 3)
+    assert {key: value[0] for key, value in capabilities.items()} == {
+        "repository-config-read": "required",
+        "shared-state-resolver": "required",
+        "frozen-inbox-state": "required",
+        "draft-finalize-engine-set": "optional, atomic",
+        "notification-thread": "conditional by execution context",
+        "tracker-write-readback": "conditional and payload-approval-gated",
+        "forge-pr-write-readback": "conditional",
+        "pr-watch": "conditional",
+        "runtime-compute-selection": "optional enhancement",
+    }
+    assert "hard-stops before state, snapshot, or report writes" in capabilities[
+        "shared-state-resolver"
+    ][1]
+    assert "forbids a whole-inbox fallback" in capabilities["frozen-inbox-state"][1]
+    assert "all absent selects LLM-only mode" in capabilities["draft-finalize-engine-set"][1]
+    assert "a partial pair hard-stops" in capabilities["draft-finalize-engine-set"][1]
+    assert (
+        "scheduled or unattended draft requires notification send and thread read"
+        in capabilities["notification-thread"][1]
+    )
+    assert "availability alone never authorizes a write" in capabilities[
+        "tracker-write-readback"
+    ][1]
+
+    assert _integration_table(workflow, "Authority contract", 2) == {
+        "unknown-or-combined-argument": ("stop-before-capability-probe",),
+        "new-over-active-state": ("refuse-preserve-active-session",),
+        "state-or-frozen-identity-mismatch": (
+            "stop-before-tracker-write-never-whole-sweep",
+        ),
+        "partial-engine-set": ("stop-never-mix-engine-and-llm-artifacts",),
+        "unattended-without-notification": ("stop-before-new-approval-session",),
+        "tracker-without-exact-payload-approval": (
+            "prohibit-create-update-comment",
+        ),
+        "approved-payload-changed": ("require-new-exact-payload-approval",),
+        "ambiguous-external-write": ("read-back-before-retry-or-operator-hold",),
+        "partial-tracker-batch": ("hold-before-archive-sweep",),
+        "test-mode-external-write": (
+            "prohibit-tracker-friction-archive-branch-commit-push-pr",
+        ),
+        "archive-sweep-boundary": (
+            "sweep-only-approved-accounted-byte-identical-frozen-blocks",
+        ),
+        "runtime-policy-override": ("shared-declaration-wins-and-stop",),
+    }
+    outcomes = _integration_table(
+        workflow, "Durable artifacts, resumability, and completion", 3
+    )
+    assert set(outcomes) == {
+        "hard-stop",
+        "operator-held",
+        "degraded-success",
+        "successful-completion",
+    }
+    assert "never use degradation to mask an unresolved required write" in outcomes[
+        "degraded-success"
+    ][1]
+    assert list(_integration_table(workflow, "Overall outcome precedence", 3)) == [
+        "required-or-safety-failure",
+        "approval-or-triggered-write-not-terminal",
+        "optional-degradation-after-terminal-work",
+        "all-triggered-contracts-terminal",
+    ]
+    inputs = _integration_table(workflow, "Semantic input matrix", 2)
+    assert set(inputs) == {
+        "Unknown or combined entry keyword",
+        "No argument, no active state",
+        "No argument, valid active state",
+        "resume, no valid active state",
+        "new, active live state",
+        "test",
+        "Scheduled or unattended invocation with active state",
+        "Both configured engines present",
+        "Both configured engines absent",
+        "Only one configured engine present",
+        "Interactive invocation with notification unavailable",
+        "Scheduled or unattended invocation with notification unavailable",
+        "Missing, malformed, or identity-mismatched frozen snapshot/state",
+        "Tracker or finalization write fails or is ambiguous",
+        "Test mode",
+    }
+    assert "never whole-sweep" in inputs[
+        "Missing, malformed, or identity-mismatched frozen snapshot/state"
+    ][0]
+    for required_phrase in (
+        "kitconfig.load_config()",
+        "RFC 8785 JSON",
+        "Process termination or a missing final chat summary never authorizes repeating a write",
+        "Parse complete commands, never keyword substrings",
+        "Unmentioned items default to `park`, never archive",
+        "read back by the exact marker before any retry",
+        "Every approved proposal must be verified or the batch remains held",
+        "does not edit `<friction-log>` or `<friction-log-archive>` on disk",
+        "an older helper that whole-sweeps the frozen snapshot is not ready",
+        "Never switch the caller checkout",
+        "This workflow never merges the sweep pull request",
+    ):
+        assert required_phrase in flattened
+
+
+@pytest.mark.kit_repo_only(
+    "config/dev-model.yaml",
+    "docs/agentic-dev-kit/workflows/triage-friction-log.md",
+    ".claude/commands/triage-friction-log.md",
+    ".agents/skills/triage-friction-log",
+)
+def test_triage_integration_is_config_owned_shared_and_thin() -> None:
+    workflow = (
+        REPO_ROOT / "docs/agentic-dev-kit/workflows/triage-friction-log.md"
+    ).read_text(encoding="utf-8")
+    claude = (REPO_ROOT / ".claude/commands/triage-friction-log.md").read_text(
+        encoding="utf-8"
+    )
+    codex = (
+        REPO_ROOT / ".agents/skills/triage-friction-log/SKILL.md"
+    ).read_text(encoding="utf-8")
+    for runtime, adapter in (("claude", claude), ("codex", codex)):
+        _assert_triage_adapter(adapter, runtime)
+        assert "### Capability contract" not in adapter
+        assert "exact-payload" not in adapter
+        assert "Session A" not in adapter
+    assert yaml.safe_load(claude.split("---", 2)[1])["description"] == yaml.safe_load(
+        codex.split("---", 2)[1]
+    )["description"]
+
+    config = yaml.safe_load(
+        (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
+    )
+    triage = config["triage"]
+    assert set(triage) == {
+        "analysis_tier",
+        "state_path",
+        "frozen_inbox_pattern",
+        "report_root",
+        "report_pattern",
+        "draft_engine",
+        "finalize_engine",
+        "commit_subject",
+        "pr_draft",
+    }
+    assert triage["analysis_tier"] in config["models"]["tiers"]
+    assert type(triage["pr_draft"]) is bool
+    for key in ("state_path", "frozen_inbox_pattern", "report_pattern"):
+        path = Path(triage[key])
+        assert not path.is_absolute()
+        assert ".." not in path.parts
+    assert "{mode}" in triage["state_path"]
+    for placeholder in ("{mode}", "{date}", "{session}"):
+        assert placeholder in triage["frozen_inbox_pattern"]
+        assert placeholder in triage["report_pattern"]
+    for key in triage:
+        assert f"triage.{key}" in workflow
+    _assert_triage_semantics(workflow)
+
+
+@pytest.mark.kit_repo_only(
+    "docs/agentic-dev-kit/workflows/triage-friction-log.md",
+    ".claude/commands/triage-friction-log.md",
+    ".agents/skills/triage-friction-log",
+)
+def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
+    workflow = (
+        REPO_ROOT / "docs/agentic-dev-kit/workflows/triage-friction-log.md"
+    ).read_text(encoding="utf-8")
+    mutations = (
+        workflow.replace(
+            "repository-config-read` | required",
+            "repository-config-read` | optional",
+            1,
+        ),
+        workflow.replace(
+            "a partial pair hard-stops", "a partial pair selects LLM-only mode", 1
+        ),
+        workflow.replace("refuse-preserve-active-session", "overwrite-active-session", 1),
+        workflow.replace("stop-before-new-approval-session", "fall-back-to-console", 1),
+        workflow.replace(
+            "prohibit-create-update-comment", "standing-request-authorizes-create", 1
+        ),
+        workflow.replace(
+            "read-back-before-retry-or-operator-hold", "retry-without-read-back", 1
+        ),
+        workflow.replace(
+            "hold-before-archive-sweep", "sweep-successes-and-drop-failures", 1
+        ),
+        workflow.replace("never whole-sweep", "whole-sweep", 1),
+        workflow.replace("It does not edit", "It may edit", 1),
+        workflow.replace("operator-held` |", "successful-completion` |", 1),
+    )
+    for mutation_index, mutated in enumerate(mutations):
+        assert mutated != workflow, mutation_index
+        with pytest.raises(AssertionError):
+            _assert_triage_semantics(mutated)
+
+    paths = (
+        ("claude", REPO_ROOT / ".claude/commands/triage-friction-log.md"),
+        ("codex", REPO_ROOT / ".agents/skills/triage-friction-log/SKILL.md"),
+    )
+    for runtime, path in paths:
+        adapter = path.read_text(encoding="utf-8")
+        for mutated in (
+            adapter.replace("follow it", "ignore it", 1),
+            adapter.replace("merged configuration", "tracked configuration", 1),
+            adapter + "\nTracker availability authorizes writes.\n",
+        ):
+            assert mutated != adapter
+            with pytest.raises(AssertionError):
+                _assert_triage_adapter(mutated, runtime)
+
+
+@pytest.mark.kit_repo_only(
+    "CHANGELOG.md",
+    "docs/agentic-dev-kit/workflows/upgrade.md",
+    "docs/agentic-dev-kit/workflows/adopt.md",
+)
+def test_triage_config_and_adapter_migration_reaches_adopters() -> None:
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    first_entry = changelog.split("\n## ", 1)[1].split("\n---", 1)[0]
+    upgrade = (
+        REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md"
+    ).read_text(encoding="utf-8")
+    adopt = (REPO_ROOT / "docs/agentic-dev-kit/workflows/adopt.md").read_text(
+        encoding="utf-8"
+    )
+
+    for required in (
+        "triage.state_path",
+        "./init.sh --no-clobber",
+        ".claude/commands/triage-friction-log.md",
+        ".agents/skills/triage-friction-log/SKILL.md",
+        "Replace both old adapters",
+    ):
+        assert required in first_entry
+    assert "adds only missing keys to a partial block" in upgrade
+    assert "replace both adapters" in upgrade
+    assert "do not create a separate friction-triage config" in adopt
 
 
 def _assert_post_merge_semantics(workflow: str) -> None:

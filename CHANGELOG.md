@@ -42,6 +42,33 @@ starts.
 
 ---
 
+## #599 — 2026-08-25
+
+- **ADDED (config keys) — `triage` now owns the friction-triage analysis tier,
+  `triage.state_path`, frozen-inbox and report patterns, optional draft/finalize engine
+  names, commit subject, and PR draft policy.** **Refresh `init.sh`, then run
+  `./init.sh --no-clobber`. The additive migration installs the block or missing flat
+  keys without replacing adopter values. Remove any separate
+  `config/friction-triage.yaml`; keep source/archive, engine directory, tracker,
+  notification, state root, branch pattern, and model mappings in their existing shared
+  config sections.**
+- **CHANGED (gate semantics) — `triage-friction-log` now requires merged config,
+  sandbox-aware atomic state, and an exact frozen inbox; treats its configured engine
+  pair atomically; requires notification send/thread read when unattended; permits an
+  explicit degraded interactive approval path; binds tracker authority to the exact
+  payload; reads back failed or ambiguous external writes; holds partial tracker
+  batches before finalization; sweeps only accounted byte-identical frozen blocks; and
+  prohibits tracker, source-document, and forge writes in test mode.** **Refresh
+  `docs/agentic-dev-kit/workflows/triage-friction-log.md`,
+  `.claude/commands/triage-friction-log.md`, and
+  `.agents/skills/triage-friction-log/SKILL.md` together. Replace both old adapters even
+  when locally retained: their runtime-specific approval/notification instructions do
+  not load the new shared gate. Preserve an operator-held state/report until approval,
+  tracker, sweep PR, and exact-head review evidence reach the terminal state named by
+  the workflow; never retry an ambiguous write or whole-sweep an older snapshot.**
+
+---
+
 ## #598 — 2026-08-25
 
 - **BREAKING (gate semantics, engine CLI exit contract) — parallel reconciliation no

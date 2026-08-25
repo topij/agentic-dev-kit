@@ -367,6 +367,24 @@ ensure_review_key() {
   fi
 }
 
+# Add one flat `triage:` key if the section does not already define it. Existing
+# values are adopter policy and remain untouched; preflight proves the section is
+# a shape this line-oriented writer can extend without changing its meaning.
+ensure_triage_key() {
+  key="$1"
+  block="$2"
+  if [ -n "$(section_lines triage: "$CONFIG_FILE" | grep -E "^[[:space:]]+$key:")" ]; then
+    return 0
+  fi
+  append_to_section "triage:" "$block"
+  if [ -n "$(section_lines triage: "$CONFIG_FILE" | grep -E "^[[:space:]]+$key:")" ]; then
+    echo "added triage.$key to config/dev-model.yaml"
+  else
+    echo "error: could not add triage.$key to $CONFIG_FILE." >&2
+    return 1
+  fi
+}
+
 # The 1-based line range [start end] of a top-level section's body, or "0 0" if
 # the section is absent. A section runs from its header to the next line that
 # starts in column 1 with a key.
@@ -471,7 +489,7 @@ preflight_migration_config() {
   if awk '
     BEGIN {
       owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
-      owned["vcs"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
+      owned["vcs"] = owned["triage"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
       owned["notify"] = owned["models"] = 1
     }
     /^[[:space:]]*($|#)/ { next }
@@ -536,6 +554,32 @@ preflight_migration_config() {
     echo "error: the systemize section contains a key or operator_logins value init.sh cannot rewrite safely." >&2
     echo "  Indent bare scalar keys with two spaces and use simple login strings:" >&2
     echo '    operator_logins: [first-login, second-login]' >&2
+    echo "  No migration was applied." >&2
+    exit 1
+  fi
+
+  if awk '
+    /^triage:[[:space:]]*$/ { in_triage = 1; next }
+    in_triage && /^[^[:space:]]/ { in_triage = 0 }
+    in_triage && /^[[:space:]]*($|#)/ { next }
+    in_triage {
+      if ($0 ~ /\t/ || $0 !~ /^ +[A-Za-z_][A-Za-z0-9_]*:/) {
+        unsafe = 1
+        next
+      }
+      match($0, /^ */)
+      if (!child_indent) child_indent = RLENGTH
+      if (RLENGTH != child_indent) unsafe = 1
+      key = $0
+      sub(/^ +/, "", key)
+      sub(/:.*/, "", key)
+      if (seen_child[key]++) unsafe = 1
+    }
+    END { exit(unsafe ? 0 : 1) }
+  ' "$CONFIG_FILE"; then
+    echo "error: the triage section contains a key init.sh cannot migrate safely." >&2
+    echo "  Use unique bare scalar keys at one consistent indentation; do not use" >&2
+    echo "  quoted, tagged, anchored, explicit, duplicated, or nested key forms." >&2
     echo "  No migration was applied." >&2
     exit 1
   fi
@@ -613,6 +657,34 @@ migrate_kit_schema() {
 '
     echo "stamped kit.version=2 in config/dev-model.yaml"
   fi
+
+  if ! grep -q '^triage:' "$CONFIG_FILE"; then
+    insert_before_section "systemize:" 'triage:
+  # Shared triage-friction-log workflow settings. Runtime adapters translate
+  # invocation and available mechanisms only; policy stays in the shared workflow.
+  analysis_tier: default
+  state_path: "state/triage/triage-pipeline-state_{mode}.json"
+  frozen_inbox_pattern: "state/triage/frozen-inbox_{mode}_{date}_{session}.json"
+  report_root: reports
+  report_pattern: "reports/triage_{mode}_{date}_{session}.md"
+  # Optional deterministic integration, resolved beneath paths.engines.
+  draft_engine: triage_friction_log.py
+  finalize_engine: finalize_triage.py
+  commit_subject: "docs(triage): graduate friction-log entries"
+  pr_draft: false
+'
+    echo "added triage workflow config to config/dev-model.yaml"
+  fi
+
+  ensure_triage_key analysis_tier '  analysis_tier: default'
+  ensure_triage_key state_path '  state_path: "state/triage/triage-pipeline-state_{mode}.json"'
+  ensure_triage_key frozen_inbox_pattern '  frozen_inbox_pattern: "state/triage/frozen-inbox_{mode}_{date}_{session}.json"'
+  ensure_triage_key report_root '  report_root: reports'
+  ensure_triage_key report_pattern '  report_pattern: "reports/triage_{mode}_{date}_{session}.md"'
+  ensure_triage_key draft_engine '  draft_engine: triage_friction_log.py'
+  ensure_triage_key finalize_engine '  finalize_engine: finalize_triage.py'
+  ensure_triage_key commit_subject '  commit_subject: "docs(triage): graduate friction-log entries"'
+  ensure_triage_key pr_draft '  pr_draft: false'
 
   if ! grep -q '^systemize:' "$CONFIG_FILE"; then
     insert_before_section "tracker:" 'systemize:

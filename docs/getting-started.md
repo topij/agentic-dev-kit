@@ -214,14 +214,15 @@ across PRs before it earns a rule. So an inbox that stays small is the system wo
 and one that fills with things you could have filed at session end means `/wrap-up`'s
 friction-routing step is being skipped — not that triage is overdue.
 
-> **Note:** these workflows share their doctrine across Claude and Codex. Their
-> deterministic integrations — tracker and notification clients, the merged-PR
-> fetch/digest/heartbeat set, and `triage-friction-log`'s parse/finalize scripts —
-> remain project-specific and left for you to wire
+> **Note:** these workflows share their doctrine across Claude and Codex. External
+> tracker and notification clients remain runtime-native, and the optional deterministic
+> engines remain project-specific and left for you to wire
 > ([#6](https://github.com/topij/agentic-dev-kit/issues/6),
-> [#7](https://github.com/topij/agentic-dev-kit/issues/7)). `post-merge-systemize`
-> has an explicit LLM-only path when its configured engine set is wholly absent; a
-> partial set fails closed. Configure exact trusted forge identities in
+> [#7](https://github.com/topij/agentic-dev-kit/issues/7)). Both recurring workflows
+> have explicit LLM-only paths when their configured engine sets are wholly absent;
+> a partial set fails closed. `triage-friction-log` reads its additive `triage` block
+> from merged `config/dev-model.yaml`; rerunning refreshed `init.sh --no-clobber`
+> installs missing keys without replacing adopter values. Configure exact trusted forge identities in
 > `systemize.operator_logins`; other human reviewers are excluded, while bot sources
 > come only from `review.bots` and its explicit aliases. The installer refuses YAML
 > key forms its shell migrator cannot own before writing: keep top-level keys unique
@@ -257,9 +258,12 @@ friction-routing step is being skipped — not that triage is overdue.
 > Overall outcome precedence makes a later repository or merge failure incomplete even
 > when an earlier optional integration degraded.
 > Their thin adapters select runtime-native mechanisms but cannot change those outcomes.
-> No new config key or installer step is needed for this bookend contract. The triage
-> workflow still needs its pipeline configuration and engine-mode precedence moved into
-> the shared config before it can claim the same integration coverage.
+> No new config key or installer step is needed for the bookend contract. Triage adds
+> the `triage` config block and the same shared outcome discipline: frozen state is
+> required, scheduled approval requires notification send/thread read, interactive
+> approval may fall back to the current session, tracker writes require exact-payload
+> approval plus read-back, and only accounted byte-identical blocks may be swept. Test
+> mode cannot edit the source documents or create tracker/forge state.
 
 ## That's the loop
 

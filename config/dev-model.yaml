@@ -89,6 +89,26 @@ vcs:
   triage_branch_pattern: "chore/triage-{date}"
   systemize_branch_pattern: "chore/systemize-{date}"
 
+triage:
+  # Shared triage-friction-log workflow settings. Runtime adapters translate
+  # invocation and available mechanisms only; approval and write policy stays in
+  # the shared workflow.
+  analysis_tier: default
+  # Live and test approval sessions never share state. Frozen inputs and reports
+  # also carry a generated session id so a later same-day run cannot replace the
+  # evidence an earlier approval bound.
+  state_path: "state/triage/triage-pipeline-state_{mode}.json"
+  frozen_inbox_pattern: "state/triage/frozen-inbox_{mode}_{date}_{session}.json"
+  report_root: reports
+  report_pattern: "reports/triage_{mode}_{date}_{session}.md"
+  # Optional deterministic integration, resolved beneath paths.engines. Both
+  # present selects engine-backed mode, both absent selects honest LLM-only mode,
+  # and a partial pair is a configuration failure.
+  draft_engine: triage_friction_log.py
+  finalize_engine: finalize_triage.py
+  commit_subject: "docs(triage): graduate friction-log entries"
+  pr_draft: false
+
 systemize:
   # Shared post-merge-systemize workflow settings. The runtime adapter selects
   # no policy: Claude and Codex both read this block and the shared workflow.

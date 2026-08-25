@@ -247,6 +247,110 @@ def _without_systemize(config: str) -> str:
     return stripped
 
 
+def _without_triage(config: str) -> str:
+    stripped, replacements = re.subn(
+        r"\ntriage:\n.*?(?=\nsystemize:)",
+        "\n",
+        config,
+        flags=re.DOTALL,
+    )
+    assert replacements == 1, "shipped config no longer has one triage section"
+    return stripped
+
+
+def test_installer_adds_the_shared_triage_config_to_an_existing_schema(
+    tmp_path: Path,
+) -> None:
+    repo = _fixture(tmp_path, config=_without_triage(shipped_config()))
+
+    result = _run_init(repo)
+
+    parsed = yaml.safe_load(_config(repo))
+    assert "added triage workflow config" in result.stdout
+    assert parsed["triage"] == yaml.safe_load(shipped_config())["triage"]
+    assert parsed["kit"]["version"] == 2
+
+
+def test_installer_completes_a_partial_triage_section_without_replacing_policy(
+    tmp_path: Path,
+) -> None:
+    config = _without_triage(shipped_config()).replace(
+        "\nsystemize:\n",
+        "\ntriage:\n"
+        "    analysis_tier: expensive  # adopter choice\n"
+        '    state_path: "state/custom_{mode}.json"  # retained\n\n'
+        "systemize:\n",
+        1,
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+
+    first = _config(repo)
+    triage = yaml.safe_load(first)["triage"]
+    assert set(triage) == set(yaml.safe_load(shipped_config())["triage"])
+    assert triage["analysis_tier"] == "expensive"
+    assert triage["state_path"] == "state/custom_{mode}.json"
+    assert "    analysis_tier: expensive  # adopter choice" in first
+    assert '    state_path: "state/custom_{mode}.json"  # retained' in first
+    assert "\n    frozen_inbox_pattern:" in first
+
+    _run_init(repo)
+
+    assert _config(repo) == first
+
+
+@pytest.mark.parametrize(
+    "section_line",
+    (
+        "triage :\n",
+        '"triage":\n',
+        "'triage':\n",
+        "triage:  # adopter policy\n",
+        "!!str triage:\n",
+    ),
+)
+def test_installer_refuses_triage_section_keys_it_cannot_migrate(
+    tmp_path: Path,
+    section_line: str,
+) -> None:
+    config = shipped_config().replace("triage:\n", section_line, 1)
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "top-level key init.sh cannot migrate safely" in result.stderr
+    assert _config(repo) == config
+
+
+@pytest.mark.parametrize(
+    "triage_block",
+    (
+        'triage:\n  "analysis_tier": default\n',
+        "triage:\n  !!str analysis_tier: default\n",
+        "triage:\n  analysis_tier: default\n  analysis_tier: expensive\n",
+        "triage:\n  analysis_tier: default\n    nested: unsafe\n",
+        "triage:\n\tanalysis_tier: default\n",
+    ),
+)
+def test_installer_rejects_unsafe_triage_children_before_migration(
+    tmp_path: Path,
+    triage_block: str,
+) -> None:
+    config = _without_triage(shipped_config()).replace(
+        "systemize:\n", triage_block + "systemize:\n", 1
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "triage section contains a key" in result.stderr
+    assert "no migration was applied" in result.stderr.lower()
+    assert _config(repo) == config
+
+
 def test_installer_adds_the_shared_systemize_config_to_an_existing_schema(
     tmp_path: Path,
 ) -> None:
@@ -3719,6 +3823,18 @@ def test_upgrade_workflows_init_invocation_still_seeds_a_genuinely_absent_file(
 
     assert (repo / "AGENTS.md").exists()
     assert template_marker() not in (repo / "AGENTS.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_workflows_init_invocation_adds_the_triage_config(
+    tmp_path: Path,
+) -> None:
+    repo = _fixture(tmp_path, config=_without_triage(shipped_config()))
+
+    result = _run_init(repo, *_upgrade_init_argv())
+
+    assert "added triage workflow config" in result.stdout
+    assert yaml.safe_load(_config(repo))["triage"] == yaml.safe_load(shipped_config())["triage"]
 
 
 # --------------------------------------------------------------------------- #
