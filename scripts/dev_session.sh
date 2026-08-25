@@ -317,14 +317,29 @@ cmd_new() {
         fi
     fi
 
+    # Headless descriptors, markers, and activation exports are one path
+    # contract. Resolve them before writing any artifact: DEVKIT_SESSIONS_DIR
+    # may be relative, and an explicit relative root outranks (and therefore
+    # suppresses) an otherwise-valid absolute marker.
+    local activate_worktree="$worktree" activate_sandbox="$sandbox" activate_repo_root="$REPO_ROOT"
+    local worktree_abs="" sandbox_abs="" repo_root_abs=""
+    if [[ "$HEADLESS" -eq 1 ]]; then
+        worktree_abs="$(cd "$worktree" && pwd -P)" || _die "could not resolve worktree path"
+        sandbox_abs="$(cd "$sandbox" && pwd -P)" || _die "could not resolve sandbox path"
+        repo_root_abs="$(cd "$REPO_ROOT" && pwd -P)" || _die "could not resolve repo root"
+        activate_worktree="$worktree_abs"
+        activate_sandbox="$sandbox_abs"
+        activate_repo_root="$repo_root_abs"
+    fi
+
     # Activation snippet: the sandbox is this session's state/ (writes isolate
     # here); DEVKIT_ROOT points the read-cascade's prod twin at the MAIN
     # checkout so the session can still reuse its fresh caches read-only.
     cat > "$session_dir/activate" <<ACTIVATE
 # source this to enter the '$scope' dev session
-cd "$worktree" || return 1
-export DEVKIT_STATE_ROOT="$sandbox"
-export DEVKIT_ROOT="$REPO_ROOT"
+cd "$activate_worktree" || return 1
+export DEVKIT_STATE_ROOT="$activate_sandbox"
+export DEVKIT_ROOT="$activate_repo_root"
 echo "[dev-session] $scope active — branch $branch, sandbox \$DEVKIT_STATE_ROOT"
 ACTIVATE
 
@@ -349,19 +364,6 @@ ACTIVATE
     printf '%s\n' "$merge_class" > "$session_dir/merge_class"
 
     if [[ "$HEADLESS" -eq 1 ]]; then
-        # Resolve to ABSOLUTE paths before writing the marker/descriptor. $sandbox
-        # and $worktree inherit DEVKIT_SESSIONS_DIR, which may be relative; a
-        # relative marker is rejected by state_paths's marker resolver (and a
-        # relative DEVKIT_STATE_ROOT by state_paths's state_root()), so the lane
-        # would be created but its later state/ writes would fail instead of
-        # sandboxing. The dirs exist by now (worktree add + mkdir above), so
-        # `cd … && pwd -P` is safe and also normalizes symlinks for a durable
-        # on-disk marker.
-        local worktree_abs sandbox_abs repo_root_abs
-        worktree_abs="$(cd "$worktree" && pwd -P)" || _die "could not resolve worktree path"
-        sandbox_abs="$(cd "$sandbox" && pwd -P)" || _die "could not resolve sandbox path"
-        repo_root_abs="$(cd "$REPO_ROOT" && pwd -P)" || _die "could not resolve repo root"
-
         # Sticky marker: makes the sandbox a property of the worktree on disk, so
         # a background agent's stateless Bash calls (no shared shell, no surviving
         # `export`) resolve it via the state-paths resolver with no env gymnastics
@@ -676,7 +678,7 @@ cmd_print_contract() {
 _resolve_lane_pr() {
     local branch="$1" base="$2"
     local repo_json repo_nwo repo_owner pr_json pr_meta
-    local pr listed_base listed_branch listed_head listed_owner
+    local pr listed_base listed_branch listed_head listed_owner listed_cross
 
     # GH_REPO overrides local checkout discovery. Unset it for identity
     # resolution, then explicitly pin that resolved repository everywhere else.
@@ -684,13 +686,19 @@ _resolve_lane_pr() {
         || _die "could not resolve the GitHub repository for $REPO_ROOT"
     repo_nwo="$(printf '%s' "$repo_json" | python3 -c '
 import json, sys
-print(json.load(sys.stdin).get("nameWithOwner") or "")
-')"
-    [[ "$repo_nwo" == */* ]] || _die "GitHub returned an invalid repository identity"
+try:
+    row = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(1)
+value = row.get("nameWithOwner") if isinstance(row, dict) else None
+if not isinstance(value, str) or value.count("/") != 1 or not all(value.split("/")):
+    raise SystemExit(1)
+print(value)
+')" || _die "GitHub returned an invalid repository identity"
     repo_owner="${repo_nwo%%/*}"
 
     pr_json="$(cd "$REPO_ROOT" && GH_REPO="$repo_nwo" gh pr list --repo "$repo_nwo" --head "$branch" --state open \
-        --json number,baseRefName,headRefName,headRefOid,headRepositoryOwner --limit 2)" \
+        --json number,baseRefName,headRefName,headRefOid,headRepositoryOwner,isCrossRepository --limit 2)" \
         || _die "could not resolve an open PR for '$branch'"
     pr_meta="$(printf '%s' "$pr_json" | python3 -c '
 import json, sys
@@ -698,6 +706,13 @@ rows = json.load(sys.stdin)
 if len(rows) != 1:
     raise SystemExit(2)
 row = rows[0]
+if type(row.get("number")) is not int:
+    raise SystemExit(2)
+for key in ("baseRefName", "headRefName", "headRefOid"):
+    if not isinstance(row.get(key), str) or not row[key]:
+        raise SystemExit(2)
+if type(row.get("isCrossRepository")) is not bool:
+    raise SystemExit(2)
 owner = row.get("headRepositoryOwner") or {}
 if isinstance(owner, dict):
     owner = owner.get("login") or owner.get("name") or ""
@@ -718,9 +733,9 @@ def f(v):
     # NB: no apostrophes in this block -- it lives inside python3 -c SINGLE
     # quotes, so one would terminate the string and break the extraction.
     return "".join(" " if ch < "\x20" or ch == "\x7f" else ch for ch in str(v))
-print("\t".join(f(row.get(k) or "") for k in ("number", "baseRefName", "headRefName", "headRefOid")) + "\t" + f(owner))
+print("\t".join(f(row.get(k) or "") for k in ("number", "baseRefName", "headRefName", "headRefOid")) + "\t" + f(owner) + "\t" + ("true" if row["isCrossRepository"] else "false"))
 ')" || _die "expected exactly one open PR for '$branch'"
-    IFS=$'\t' read -r pr listed_base listed_branch listed_head listed_owner <<< "$pr_meta"
+    IFS=$'\t' read -r pr listed_base listed_branch listed_head listed_owner listed_cross <<< "$pr_meta"
     [[ -n "$pr" ]] || _die "open PR metadata for '$branch' has no number"
     [[ "$listed_base" == "$base" ]] \
         || _die "PR #$pr targets '$listed_base', not recorded base '$base'"
@@ -728,8 +743,10 @@ print("\t".join(f(row.get(k) or "") for k in ("number", "baseRefName", "headRefN
         || _die "PR #$pr head '$listed_branch' does not match recorded branch '$branch'"
     [[ "$listed_owner" == "$repo_owner" ]] \
         || _die "PR #$pr head owner '$listed_owner' does not match repository owner '$repo_owner'"
+    [[ "$listed_cross" == "false" ]] \
+        || _die "PR #$pr is cross-repository; same-repository lane required"
     [[ -n "$listed_head" ]] || _die "PR #$pr has no head commit"
-    printf '%s\t%s\n' "$repo_nwo" "$pr"
+    printf '%s\t%s\t%s\n' "$repo_nwo" "$pr" "$listed_head"
 }
 
 # Scope-aware front door for the PR watcher. Cockpit review happens outside the
@@ -740,17 +757,19 @@ cmd_pr_watch() {
     [[ -n "$scope" ]] || _die "usage: dev_session.sh pr-watch <scope> [pr-watch options]"
     shift
     _slug_ok "$scope" || _die "scope must be a lowercase slug ([a-z0-9-]): got '$scope'"
-    local session_dir="$SESSIONS_DIR/$scope" branch="" base="$DEFAULT_BASE" resolved repo_nwo pr
+    local session_dir="$SESSIONS_DIR/$scope" branch="" base="$DEFAULT_BASE" resolved repo_nwo pr listed_head
     [[ -d "$session_dir" ]] || _die "no session '$scope' at $session_dir"
+    session_dir="$(cd "$session_dir" && pwd -P)" \
+        || _die "could not resolve session '$scope' at $SESSIONS_DIR/$scope"
     [[ -s "$session_dir/branch" ]] && branch="$(cat "$session_dir/branch")"
     [[ -s "$session_dir/base" ]] && base="$(cat "$session_dir/base")"
     [[ -n "$branch" ]] || _die "session '$scope' has no recorded branch"
     _is_protected_branch "$branch" "$base" \
         && _die "refusing to watch protected branch '$branch' as a lane"
     resolved="$(_resolve_lane_pr "$branch" "$base")" || return
-    IFS=$'\t' read -r repo_nwo pr <<< "$resolved"
+    IFS=$'\t' read -r repo_nwo pr listed_head <<< "$resolved"
     [[ -n "$repo_nwo" && -n "$pr" ]] || _die "could not resolve lane PR identity"
-    GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" \
+    GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" DEVKIT_ROOT="$REPO_ROOT" \
         uv run "$SCRIPT_DIR/pr_watch.py" "$pr" "$@"
 }
 
@@ -763,9 +782,11 @@ cmd_merge() {
     _slug_ok "$scope" || _die "scope must be a lowercase slug ([a-z0-9-]): got '$scope'"
     local session_dir="$SESSIONS_DIR/$scope"
     [[ -d "$session_dir" ]] || _die "no session '$scope' at $session_dir"
+    session_dir="$(cd "$session_dir" && pwd -P)" \
+        || _die "could not resolve session '$scope' at $SESSIONS_DIR/$scope"
 
     local merge_class="operator" branch="" base="$DEFAULT_BASE"
-    local resolved repo_nwo pr
+    local resolved repo_nwo pr listed_head
     local report mergeable validated_pr validated_base validated_head
     [[ -s "$session_dir/merge_class" ]] && merge_class="$(cat "$session_dir/merge_class")"
     [[ "$merge_class" == "self" ]] \
@@ -778,10 +799,10 @@ cmd_merge() {
     fi
 
     resolved="$(_resolve_lane_pr "$branch" "$base")" || return
-    IFS=$'\t' read -r repo_nwo pr <<< "$resolved"
+    IFS=$'\t' read -r repo_nwo pr listed_head <<< "$resolved"
     [[ -n "$repo_nwo" && -n "$pr" ]] || _die "could not resolve lane PR identity"
 
-    report="$(GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" \
+    report="$(GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" DEVKIT_ROOT="$REPO_ROOT" \
         uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist)" \
         || _die "pr-watch failed for PR #$pr"
     # Gate on `mergeable`: converged AND no deterministic merge blocker AND
@@ -834,6 +855,8 @@ print("\t".join(("true" if d.get("mergeable") is True else "false", f(d.get("pr"
     [[ "$validated_base" == "$base" ]] \
         || _die "validated PR #$pr targets '$validated_base', not recorded base '$base'"
     [[ -n "$validated_head" ]] || _die "pr-watch returned no validated head for PR #$pr"
+    [[ "$validated_head" == "$listed_head" ]] \
+        || _die "PR #$pr head changed during validation; retry against the current head"
 
     (cd "$REPO_ROOT" && GH_REPO="$repo_nwo" gh pr merge --repo "$repo_nwo" "$pr" --squash --delete-branch \
         --match-head-commit "$validated_head") \

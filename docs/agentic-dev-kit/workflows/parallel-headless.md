@@ -44,6 +44,13 @@ block it:
    hard-errors on a `state/` write instead of silently landing in prod. Interactive
    `new` and cron/CI never set either field.
 
+   Replacement is per descriptor key, not replacement of the entire process
+   environment: begin with the launcher's permitted/scrubbed environment, then assign
+   every key from `env` unconditionally. Do not use `setdefault`, skip a key because it
+   is already present, or rely on the marker to beat an inherited root. Unrelated
+   permitted variables remain available; the descriptor map is complete for lane-root
+   identity, not a complete process environment.
+
 ### The lane-contract preamble (inject this verbatim)
 
 Every mechanism that hands a task prompt to a headless lane — a multi-agent

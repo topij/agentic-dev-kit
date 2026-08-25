@@ -83,6 +83,7 @@ if [ "$1" = "repo" ] && [ "$2" = "view" ]; then
   printf '%s\\n' "${GH_FAKE_NWO:-}"
   exit 0
 fi
+if [ "${GH_PR_LIST_FAIL:-0}" = "1" ]; then exit 17; fi
 head=""
 prev=""
 for a in "$@"; do
@@ -116,8 +117,10 @@ exit 2
 """
 
 
-def _git(cwd: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+def _git(cwd: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 class Harness:
@@ -160,6 +163,7 @@ class Harness:
         self.uv_argv_log.write_text("", encoding="utf-8")
         self.gh_argv_log = tmp_path / "gh-argv.log"
         self.gh_argv_log.write_text("", encoding="utf-8")
+        self.pr_heads: dict[int, str] = {}
 
         self.bin = tmp_path / "fake-bin"
         self.bin.mkdir()
@@ -184,11 +188,53 @@ class Harness:
             _git(self.repo, "push", "-u", "origin", name)
         _git(self.repo, "checkout", "trunk")
 
-    def pr(self, branch: str, number: int, state: str, title: str = "some work") -> None:
+    def pr(
+        self,
+        branch: str,
+        number: int,
+        state: str,
+        title: str = "some work",
+        *,
+        base: str = "trunk",
+        owner: str = "acme",
+        cross_repository: bool = False,
+        head: str | None = None,
+    ) -> None:
+        head = head or _git(self.repo, "rev-parse", branch)
+        self.pr_heads[number] = head
         (self.gh_prs / f"{branch.replace('/', '_')}.json").write_text(
-            json.dumps([{"number": number, "title": title, "state": state}]),
+            json.dumps(
+                [
+                    {
+                        "number": number,
+                        "title": title,
+                        "state": state,
+                        "baseRefName": base,
+                        "headRefName": branch,
+                        "headRefOid": head,
+                        "headRepositoryOwner": {"login": owner},
+                        "isCrossRepository": cross_repository,
+                    }
+                ]
+            ),
             encoding="utf-8",
         )
+
+    def pr_payload(self, branch: str, payload: str) -> None:
+        (self.gh_prs / f"{branch.replace('/', '_')}.json").write_text(
+            payload, encoding="utf-8"
+        )
+
+    def advance_branch(self, branch: str) -> str:
+        _git(self.repo, "checkout", branch)
+        leaf = f"{branch.replace('/', '_')}-later.txt"
+        (self.repo / leaf).write_text("later\n", encoding="utf-8")
+        _git(self.repo, "add", leaf)
+        _git(self.repo, "commit", "-m", f"advance {branch}")
+        _git(self.repo, "push", "origin", branch)
+        head = _git(self.repo, "rev-parse", "HEAD")
+        _git(self.repo, "checkout", "trunk")
+        return head
 
     def session(self, scope: str, branch: str, merge_class: str | None) -> Path:
         d = self.sessions / scope
@@ -201,7 +247,15 @@ class Harness:
         return d
 
     def watch_report(self, number: int, **fields: object) -> None:
-        report = {"pr": number, "base": "trunk", "head": "deadbeef", **fields}
+        report = {
+            "pr": number,
+            "base": "trunk",
+            "head": self.pr_heads[number],
+            "merge_blockers": [],
+            **fields,
+        }
+        if fields.get("mergeable") is True:
+            report.setdefault("converged", True)
         (self.uv_reports / f"{number}.json").write_text(json.dumps(report), encoding="utf-8")
 
     # ------------------------------------------------------------------ runner
@@ -509,22 +563,10 @@ def test_the_forge_repo_is_resolved_once_per_run_not_once_per_lane(
         pytest.param("acmewidgets", id="no-separator"),
     ],
 )
-def test_a_malformed_repo_reply_is_not_taken_as_a_resolution(
+def test_a_malformed_repo_reply_stops_reconciliation(
     harness: Harness, reply: str
 ) -> None:
-    """Rounds 6 and 7, and the reason this check is exact rather than a heuristic.
-
-    `_gh` swallows exit status by design, so "resolved" was first defined as
-    "non-empty reply" — a lens executed a `gh repo view` printing a single space,
-    watched it cached as a permanent success, and watched the previous round's
-    retry stop happening. The replacement asked only "has a slash, has no space",
-    and the NEXT round got `/`, `acme/` and `a/b/c` straight past it — with the
-    same consequence, reached by a false-positive success instead of a poisoned
-    failure. `gh repo view --json nameWithOwner` returns `OWNER/REPO` and nothing
-    else, so every one of these is a non-resolution.
-
-    Two lanes, so the assertion covers the part that made the defect matter: a
-    non-resolution must also leave the retry alive for the next lane."""
+    """A malformed repository identity cannot produce a partial lane board."""
     for scope, pr in (("m1", 570), ("m2", 571)):
         harness.branch(f"lane/{scope}")
         harness.pr(f"lane/{scope}", pr, "OPEN")
@@ -533,27 +575,17 @@ def test_a_malformed_repo_reply_is_not_taken_as_a_resolution(
 
     result = harness.run("m1", "m2", nwo=reply)
 
-    assert _status_of(result.stdout, "m1") == "open"
-    assert _status_of(result.stdout, "m2") == "open"
-    assert harness.uv_calls() == [], "a malformed repo must never be probed"
-    assert harness.gh_repo_view_calls() == 2, "a non-resolution must not end retries"
-    assert result.returncode == 3
+    assert result.returncode == 64
+    assert "invalid repository identity" in result.stderr
+    assert "launched " not in result.stdout
+    assert harness.uv_calls() == []
+    assert harness.gh_repo_view_calls() == 1
 
 
-def test_an_unresolvable_repo_refuses_to_classify_rather_than_probing(
+def test_an_unresolvable_repo_stops_before_classification(
     harness: Harness,
 ) -> None:
-    """Round 4's HIGH, and the reason resolution is a precondition rather than an
-    optimisation. The first version simply omitted the pin when `gh repo view`
-    failed — but `env` only ADDS to the environment, so the probe then inherited
-    whatever `$GH_REPO` the operator's shell already had. The lens executed that:
-    resolution failing plus a stale ambient `$GH_REPO` produced `held` on a probe
-    that ran against an unrelated repository, silently, because rc 0 from the
-    wrong repo looks exactly like rc 0 from the right one.
-
-    So an unresolvable repo must not probe at all. It is rc 2 — reported `open`,
-    named on stderr — never a lane classified from a repository nobody
-    identified."""
+    """Repository resolution is a batch precondition, not a parked lane."""
     harness.branch("lane/omega")
     harness.pr("lane/omega", 541, "OPEN")
     harness.session("omega", "lane/omega", "operator")
@@ -561,24 +593,16 @@ def test_an_unresolvable_repo_refuses_to_classify_rather_than_probing(
 
     result = harness.run("omega", nwo="", GH_REPO="someone-else/unrelated")
 
-    assert _status_of(result.stdout, "omega") == "open"
-    assert result.returncode == 3
-    assert harness.uv_calls() == [], "an unidentified repo must never be probed"
-    assert "could not evaluate for 'held'" in result.stderr
-    # The note's parenthetical enumerates the rc-2 causes. This one is not "probe
-    # failed" — the probe was never invoked — so it has to be named there, or an
-    # operator debugging exactly this reads the note as somebody else's case.
-    assert "repo unidentified, so the probe was not run" in result.stderr
+    assert result.returncode == 64
+    assert "invalid repository identity" in result.stderr
+    assert "launched " not in result.stdout
+    assert harness.uv_calls() == []
 
 
-def test_a_transient_repo_resolution_failure_does_not_poison_the_batch(
+def test_a_transient_repo_resolution_failure_stops_the_batch(
     harness: Harness,
 ) -> None:
-    """Round 5's regression. The memo used to record "already tried" on failure
-    too, so one blip on `gh repo view` cost every remaining lane its `held` for
-    the rest of the run — a lens executed exactly that, with `gh pr list`
-    succeeding throughout, and watched a second lane whose own call would have
-    worked report `open`. Only success is cached now."""
+    """A failed repository read cannot yield a mixed authoritative/unknown board."""
     for scope, pr in (("aa", 560), ("zz", 561)):
         harness.branch(f"lane/{scope}")
         harness.pr(f"lane/{scope}", pr, "OPEN")
@@ -587,20 +611,16 @@ def test_a_transient_repo_resolution_failure_does_not_poison_the_batch(
 
     result = harness.run("aa", "zz", GH_NWO_FAIL_FIRST="1")
 
-    # The lane that hit the blip refuses, as it must; the next one recovers.
-    assert _status_of(result.stdout, "aa") == "open"
-    assert _status_of(result.stdout, "zz") == "held"
-    assert harness.gh_repo_view_calls() == 2, "a failed resolution must be retried"
-    assert result.returncode == 3
+    assert result.returncode == 64
+    assert "could not resolve the GitHub repository" in result.stderr
+    assert "launched " not in result.stdout
+    assert harness.gh_repo_view_calls() == 1
 
 
-def test_the_forge_repo_is_not_resolved_when_no_lane_reaches_the_probe(
+def test_the_forge_repo_is_resolved_before_any_lane_classification(
     harness: Harness,
 ) -> None:
-    """Round 4's LOW: resolution is lazy, sits behind the merge-class gate, and
-    nothing pinned that. A lens moved the call in front of the gate and all 26
-    tests stayed green — so a batch of `self`-class lanes would silently start
-    paying a `gh repo view` round trip it never needs."""
+    """Self-class lanes still need authoritative PR state for reconciliation."""
     harness.branch("lane/sigma2")
     harness.pr("lane/sigma2", 543, "OPEN")
     harness.session("sigma2", "lane/sigma2", "self")
@@ -608,7 +628,110 @@ def test_the_forge_repo_is_not_resolved_when_no_lane_reaches_the_probe(
     result = harness.run("sigma2")
 
     assert _status_of(result.stdout, "sigma2") == "open"
-    assert harness.gh_repo_view_calls() == 0
+    assert harness.gh_repo_view_calls() == 1
+
+
+def test_a_failed_pr_list_stops_without_rendering_a_partial_board(harness: Harness) -> None:
+    harness.branch("lane/forge-fail")
+    harness.session("forge-fail", "lane/forge-fail", "operator")
+
+    result = harness.run("forge-fail", GH_PR_LIST_FAIL="1")
+
+    assert result.returncode == 64
+    assert "could not resolve PR state" in result.stderr
+    assert "launched " not in result.stdout
+    assert "EMPTY" not in result.stdout
+
+
+@pytest.mark.parametrize("payload", ["not-json", "{}", '[{"number":"8"}]'])
+def test_a_malformed_pr_list_stops_instead_of_becoming_no_pr(
+    harness: Harness, payload: str
+) -> None:
+    harness.branch("lane/malformed")
+    harness.session("malformed", "lane/malformed", "operator")
+    harness.pr_payload("lane/malformed", payload)
+
+    result = harness.run("malformed")
+
+    assert result.returncode == 64
+    assert "invalid PR state" in result.stderr
+    assert "launched " not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("pr_kwargs", "label"),
+    [
+        ({"cross_repository": True}, "fork"),
+        ({"base": "other"}, "wrong-base"),
+        ({"owner": "someone-else"}, "foreign-owner"),
+    ],
+)
+def test_foreign_pr_identity_cannot_terminalize_a_lane(
+    harness: Harness, pr_kwargs: dict[str, object], label: str
+) -> None:
+    harness.branch("lane/foreign")
+    harness.pr("lane/foreign", 580, "MERGED", **pr_kwargs)  # type: ignore[arg-type]
+    harness.session("foreign", "lane/foreign", "operator")
+
+    result = harness.run("foreign")
+
+    assert result.returncode == 3, label
+    assert _status_of(result.stdout, "foreign") == "parked", label
+    assert "merged" not in _status_of(result.stdout, "foreign"), label
+
+
+@pytest.mark.parametrize(
+    "report_changes",
+    [
+        {"pr": 999},
+        {"base": "other"},
+        {"head": "f" * 40},
+        {"converged": False},
+        {"merge_blockers": ["pending review"]},
+    ],
+)
+def test_held_requires_the_exact_pr_base_head_and_clean_report(
+    harness: Harness, report_changes: dict[str, object]
+) -> None:
+    harness.branch("lane/exact-report")
+    harness.pr("lane/exact-report", 581, "OPEN")
+    harness.session("exact-report", "lane/exact-report", "operator")
+    harness.watch_report(581, mergeable=True, **report_changes)
+
+    result = harness.run("exact-report")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "exact-report") == "open"
+
+
+def test_recorded_lane_base_overrides_the_reconcile_default(harness: Harness) -> None:
+    _git(harness.repo, "branch", "release", "trunk")
+    _git(harness.repo, "push", "origin", "release")
+    harness.branch("lane/release-base")
+    harness.pr("lane/release-base", 582, "OPEN", base="release")
+    session = harness.session("release-base", "lane/release-base", "operator")
+    (session / "base").write_text("release\n", encoding="utf-8")
+    harness.watch_report(582, mergeable=True, base="release")
+
+    result = harness.run("release-base")
+
+    assert result.returncode == 4
+    assert _status_of(result.stdout, "release-base") == "held"
+
+
+def test_newer_surviving_branch_tip_keeps_an_older_merged_pr_open(harness: Harness) -> None:
+    harness.branch("lane/reused")
+    old_head = _git(harness.repo, "rev-parse", "lane/reused")
+    harness.pr("lane/reused", 583, "MERGED", head=old_head)
+    harness.session("reused", "lane/reused", "operator")
+    new_head = harness.advance_branch("lane/reused")
+    assert new_head != old_head
+
+    result = harness.run("reused")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "reused") == "open"
+    assert "tip differs from merged PR head" in result.stdout
 
 
 def test_a_lane_reached_by_branch_name_still_resolves_its_session(harness: Harness) -> None:

@@ -23,6 +23,37 @@ references, each lane worktree then holds a copy of them — which is why `init.
 `.mcp.json` to `.gitignore` when it detects that shape. Prefer `${ENV_VAR}` references
 so the file can stay tracked and the lane copies carry no secret.
 
+## Lane authority and resume matrix
+
+The engine artifacts below are one identity chain. Runtime adapters translate how a
+command is invoked; they do not replace, relax, or reconstruct this chain.
+
+| Surface | Authoritative inputs | Durable evidence | Failure / resume result |
+| --- | --- | --- | --- |
+| `new` | configured protected branch and lane prefix; requested branch, base, and merge class | session `branch`, `base`, and `merge_class`; worktree and sandbox | creation failure is not a lane; retry only after accounting for any branch or worktree the failed Git operation left behind |
+| `new --headless` | the same identity plus resolved absolute worktree, sandbox, and repository roots | marker, descriptor, and activation file agree on the resolved roots; descriptor `env` carries the complete lane-root override | an env-incapable launcher cannot resume this as an unattended state-writing lane; use an env-capable launcher or attended activation |
+| scope `pr-watch` | one intact session; exact checkout repository; same-repository open PR whose base, head branch, owner, and fork flag match the persisted lane | acknowledgements and review receipt in that session's state root | missing, ambiguous, foreign, or malformed identity refuses before the review engine runs |
+| `merge` | persisted `self` class plus the scope-watch identity chain; act-time report for the same PR, base, and head | forge merge pinned to the validated head | any identity movement or failed/ambiguous forge result refuses; re-poll and resume from the exact current head |
+| reconciliation | exact checkout repository; authoritative PR list; persisted base/class when a session survives; surviving local or remote branch tip | `merged`, `held`, `open`, or `parked` row plus the batch exit contract | repository/read/shape failure stops the whole result; an older PR cannot terminalize a newer surviving branch tip |
+| `rm` | persisted branch and base, never the worktree's current branch | merged PR head or ancestor relation before branch deletion | dirty or undeterminable worktree refuses without `--force`; unlanded or identity-mismatched branch is kept for recovery |
+
+### Semantic mutation matrix
+
+These are the hostile changes the kit test surfaces must kill. When extending the
+lane engines, add the new invariant here and its executable mutation in the same PR.
+
+| Mutation | Required observable result |
+| --- | --- |
+| inherit a cockpit `DEVKIT_STATE_ROOT` instead of applying descriptor `env` | child still receives the descriptor's absolute lane roots, or launch refuses |
+| drop or alter persisted branch, base, or merge class | merge refuses; reconciliation cannot widen the lane to `held` |
+| inherit ambient `GH_REPO`, fail a forge read, or return malformed JSON | the engine stops before rendering or authorizing an empty/clean result |
+| return a fork, foreign owner, wrong base, or wrong head branch under the requested head name | row is not eligible to identify or terminalize the lane |
+| move the PR head between identity read and act-time review | merge refuses before the forge write and asks for a retry |
+| return a held probe for another PR, base, or head, or with blockers / non-convergence | lane remains `open` |
+| keep a local or remote branch tip newer than the newest merged PR | lane remains `open`; the older PR cannot claim the new work shipped |
+| tear down the session before an operator-held decision | the open PR remains `open`; absent class/state evidence is never reconstructed |
+| remove a landed session or attempt to remove a dirty/unlanded one | landed worktree cleanup succeeds; dirty work refuses and unlanded branch remains recoverable |
+
 ## Default action — show the board
 
 With no argument (or `parallel list`), run and render the table of active sessions:

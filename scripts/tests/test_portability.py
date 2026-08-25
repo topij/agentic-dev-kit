@@ -207,7 +207,12 @@ def test_real_headless_lane_uses_configured_base_and_replaces_inherited_state(
     fake_bin = tmp_path / "fake-bin"
     fake_bin.mkdir()
     fake_gh = fake_bin / "gh"
-    fake_gh.write_text("#!/bin/sh\nprintf '[]\\n'\n", encoding="utf-8")
+    fake_gh.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1 $2\" = \"repo view\" ]; then printf 'owner/project\\n'; "
+        "else printf '[]\\n'; fi\n",
+        encoding="utf-8",
+    )
     fake_gh.chmod(0o755)
     reconcile = subprocess.run(
         ["bash", str(engine_dir / "reconcile_sessions.sh"), "probe"],
@@ -234,6 +239,59 @@ def test_real_headless_lane_uses_configured_base_and_replaces_inherited_state(
         text=True,
     )
     assert not (sessions / "probe").exists()
+
+
+def test_relative_headless_sessions_activate_with_absolute_descriptor_roots(
+    tmp_path: Path,
+) -> None:
+    repo, engine_dir, _sessions = _install_real_trunk_repo(tmp_path)
+    relative_sessions = Path("relative-sessions")
+    inherited = tmp_path / "other-lane-state"
+    env = {
+        **os.environ,
+        "DEVKIT_SESSIONS_DIR": str(relative_sessions),
+        "DEVKIT_STATE_ROOT": str(inherited),
+        "DEVKIT_ROOT": str(tmp_path / "other-repo"),
+    }
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(engine_dir / "dev_session.sh"),
+            "new",
+            "relative",
+            "--headless",
+        ],
+        cwd=repo,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    descriptor = json.loads(result.stdout)
+    activate = repo / relative_sessions / "relative" / "activate"
+
+    sourced = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; printf "%s\\t%s\\t%s\\n" "$PWD" "$DEVKIT_STATE_ROOT" "$DEVKIT_ROOT"',
+            "bash",
+            str(activate),
+        ],
+        cwd=repo,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    cwd, state_root, repo_root = sourced.stdout.splitlines()[-1].split("\t")
+
+    assert Path(cwd) == Path(descriptor["worktree"])
+    assert state_root == descriptor["state_root"]
+    assert repo_root == descriptor["repo_root"]
+    assert state_root != str(inherited)
+    assert all(Path(value).is_absolute() for value in (cwd, state_root, repo_root))
 
 
 def test_force_recreate_refuses_configured_protected_branch_before_mutation(
@@ -462,6 +520,7 @@ def test_self_merge_refuses_wrong_base_and_binds_gh_to_repo(tmp_path: Path) -> N
                     "headRefName": "lane/probe",
                     "headRefOid": "listed-head",
                     "headRepositoryOwner": {"login": "owner"},
+                    "isCrossRepository": False,
                 }
             ]
         ),
@@ -487,6 +546,45 @@ def test_self_merge_refuses_wrong_base_and_binds_gh_to_repo(tmp_path: Path) -> N
     calls = call_log.read_text(encoding="utf-8")
     assert f"{repo}|unset|repo view" in calls
     assert f"{repo}|owner/project|pr list" in calls
+
+
+def test_self_merge_refuses_a_cross_repository_pr_before_review(tmp_path: Path) -> None:
+    _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
+    _prepare_self_merge_session(sessions)
+    fake_bin, call_log, uv_log = _install_fake_merge_tools(tmp_path)
+
+    result = subprocess.run(
+        ["bash", str(engine_dir / "dev_session.sh"), "merge", "probe"],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "DEVKIT_SESSIONS_DIR": str(sessions),
+            "CALL_LOG": str(call_log),
+            "UV_LOG": str(uv_log),
+            "PR_JSON": json.dumps(
+                [
+                    {
+                        "number": 8,
+                        "baseRefName": "trunk",
+                        "headRefName": "lane/probe",
+                        "headRefOid": "reviewed-head",
+                        "headRepositoryOwner": {"login": "owner"},
+                        "isCrossRepository": True,
+                    }
+                ]
+            ),
+            "REPORT_JSON": "{}",
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "cross-repository" in result.stderr
+    assert not uv_log.exists()
+    assert "pr merge" not in call_log.read_text(encoding="utf-8")
 
 
 def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
@@ -517,6 +615,7 @@ def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
                 "headRefName": "lane/probe",
                 "headRefOid": "reviewed-head",
                 "headRepositoryOwner": {"login": "owner"},
+                "isCrossRepository": False,
             }
         ]
     )
@@ -589,6 +688,7 @@ def test_self_merge_refuses_a_report_whose_fields_carry_tabs(tmp_path: Path) -> 
                         "headRefName": "lane/probe",
                         "headRefOid": "reviewed-head",
                         "headRepositoryOwner": {"login": "owner"},
+                        "isCrossRepository": False,
                     }
                 ]
             ),
@@ -619,11 +719,11 @@ def test_lane_pr_resolution_refuses_metadata_whose_fields_carry_tabs(
 ) -> None:
     """The same field-shift, one step earlier — `_resolve_lane_pr` (`#537`).
 
-    This extraction tab-joins FIVE fields and the four checks that follow are
+    This extraction tab-joins six fields and the identity checks that follow are
     what keep a wrong-base PR, a wrong-branch PR, or a fork PR off the merge
-    path. The owner check reads the LAST name, which absorbs the remainder, so
-    a naive injection trips it — but emptying the four real fields makes the
-    tail collapse and all four checks pass on values read out of `number`.
+    path. The fork flag and owner complete the repository binding, so empty or
+    shifted fields must refuse rather than being reinterpreted as adjacent
+    values.
 
     The report served here is fully valid, so nothing downstream would refuse:
     against the unscrubbed extraction this run merges.
@@ -649,6 +749,7 @@ def test_lane_pr_resolution_refuses_metadata_whose_fields_carry_tabs(
                         "headRefName": "",
                         "headRefOid": "",
                         "headRepositoryOwner": {},
+                        "isCrossRepository": False,
                     }
                 ]
             ),
@@ -668,7 +769,7 @@ def test_lane_pr_resolution_refuses_metadata_whose_fields_carry_tabs(
     )
 
     assert result.returncode != 0
-    assert "not recorded base 'trunk'" in result.stderr
+    assert "expected exactly one open PR" in result.stderr
     # Refused before pr-watch was ever polled, and before any merge call.
     assert not uv_log.exists()
     assert "pr merge" not in call_log.read_text(encoding="utf-8")
@@ -727,6 +828,7 @@ def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
                     "headRefName": "b",
                     "headRefOid": "h",
                     "headRepositoryOwner": {"login": "o"},
+                    "isCrossRepository": False,
                 }
             ]
         )
@@ -760,7 +862,9 @@ def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
         assert emitted(block, payload("tr-unk"), field) == "tr-unk", label
 
 
-def test_self_merge_pins_validated_head_so_push_race_is_refused(tmp_path: Path) -> None:
+def test_self_merge_refuses_when_identity_read_and_review_poll_disagree_on_head(
+    tmp_path: Path,
+) -> None:
     repo, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
     session = _prepare_self_merge_session(sessions)
     fake_bin, call_log, uv_log = _install_fake_merge_tools(tmp_path)
@@ -778,6 +882,7 @@ def test_self_merge_pins_validated_head_so_push_race_is_refused(tmp_path: Path) 
                     "headRefName": "lane/probe",
                     "headRefOid": "listed-head",
                     "headRepositoryOwner": {"login": "owner"},
+                    "isCrossRepository": False,
                 }
             ]
         ),
@@ -790,9 +895,6 @@ def test_self_merge_pins_validated_head_so_push_race_is_refused(tmp_path: Path) 
                 "mergeable": True,
             }
         ),
-        # Simulate GitHub rejecting --match-head-commit because a new push won
-        # the race after the act-time poll.
-        "MERGE_EXIT": "17",
         "GH_REPO": "attacker/other",
     }
 
@@ -806,15 +908,11 @@ def test_self_merge_pins_validated_head_so_push_race_is_refused(tmp_path: Path) 
     )
 
     assert result.returncode != 0
-    assert "GitHub merge failed" in result.stderr
+    assert "head changed during validation" in result.stderr
     calls = call_log.read_text(encoding="utf-8")
     assert f"{repo}|unset|repo view" in calls
     assert f"{repo}|owner/project|pr list" in calls
-    assert f"{repo}|owner/project|pr merge" in calls
-    assert (
-        "pr merge --repo owner/project 8 --squash --delete-branch --match-head-commit reviewed-head"
-        in calls
-    )
+    assert "pr merge" not in calls
     assert uv_log.read_text(encoding="utf-8").startswith(f"{session / 'state'}|")
 
 
@@ -838,6 +936,7 @@ def test_scope_pr_watch_and_merge_share_lane_state_and_pinned_repo(
                     "headRefName": "lane/probe",
                     "headRefOid": "reviewed-head",
                     "headRepositoryOwner": {"login": "owner"},
+                    "isCrossRepository": False,
                 }
             ]
         ),
@@ -891,6 +990,65 @@ def test_scope_pr_watch_and_merge_share_lane_state_and_pinned_repo(
     assert "|attacker/other|" not in gh_calls
     assert f"{repo}|unset|repo view" in gh_calls
     assert f"{repo}|owner/project|pr merge" in gh_calls
+
+
+def test_scope_wrappers_canonicalize_a_relative_session_state_root(tmp_path: Path) -> None:
+    _, engine_dir, _sessions = _install_real_trunk_repo(tmp_path)
+    relative_sessions = Path("scope-sessions")
+    session = _prepare_self_merge_session(tmp_path / relative_sessions)
+    fake_bin, call_log, uv_log = _install_fake_merge_tools(tmp_path)
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "DEVKIT_SESSIONS_DIR": str(relative_sessions),
+        "DEVKIT_STATE_ROOT": str(tmp_path / "inherited-state"),
+        "DEVKIT_ROOT": str(tmp_path / "inherited-repo"),
+        "CALL_LOG": str(call_log),
+        "UV_LOG": str(uv_log),
+        "PR_JSON": json.dumps(
+            [
+                {
+                    "number": 8,
+                    "baseRefName": "trunk",
+                    "headRefName": "lane/probe",
+                    "headRefOid": "reviewed-head",
+                    "headRepositoryOwner": {"login": "owner"},
+                    "isCrossRepository": False,
+                }
+            ]
+        ),
+        "REPORT_JSON": json.dumps(
+            {
+                "pr": 8,
+                "base": "trunk",
+                "head": "reviewed-head",
+                "mergeable": True,
+            }
+        ),
+    }
+
+    watch = subprocess.run(
+        ["bash", str(engine_dir / "dev_session.sh"), "pr-watch", "probe", "--json"],
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    merge = subprocess.run(
+        ["bash", str(engine_dir / "dev_session.sh"), "merge", "probe"],
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert watch.returncode == 0, watch.stderr
+    assert merge.returncode == 0, merge.stderr
+    roots = [line.split("|", 1)[0] for line in uv_log.read_text().splitlines()]
+    assert roots == [str(session / "state"), str(session / "state")]
+    assert all(Path(root).is_absolute() for root in roots)
 
 
 def test_archive_defaults_follow_configured_paths(tmp_path: Path) -> None:
@@ -1881,6 +2039,40 @@ def test_bookend_integrations_are_shared_thin_declared_and_manifested() -> None:
         assert re.search(rf"(?m)^\s+- name: {re.escape(name)}$", parity)
         assert f"    claude: {claude_path}" in parity
         assert f"    codex: {codex_path}" in parity
+
+
+@pytest.mark.kit_repo_only(
+    "scripts/dev_session.sh",
+    "scripts/reconcile_sessions.sh",
+    "scripts/tests/test_portability.py",
+    "scripts/tests/test_reconcile_sessions.py",
+    "docs/agentic-dev-kit/workflows/parallel.md",
+    "docs/agentic-dev-kit/workflows/parallel-headless.md",
+    "docs/agentic-dev-kit/workflows/upgrade.md",
+    "kit-manifest.json",
+)
+def test_parallel_identity_chain_is_one_adopter_upgrade_bundle() -> None:
+    manifest = json.loads(
+        (REPO_ROOT / "kit-manifest.json").read_text(encoding="utf-8")
+    )["files"]
+    upgrade = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+    ).read_text(encoding="utf-8")
+    expected_roles = {
+        "scripts/dev_session.sh": "engine",
+        "scripts/reconcile_sessions.sh": "engine",
+        "scripts/tests/test_portability.py": "test",
+        "scripts/tests/test_reconcile_sessions.py": "test",
+        "docs/agentic-dev-kit/workflows/parallel.md": "workflow",
+        "docs/agentic-dev-kit/workflows/parallel-headless.md": "workflow",
+    }
+
+    assert {
+        path: manifest[path]["role"] for path in expected_roles
+    } == expected_roles
+    assert "**`STALE`** → replace it" in upgrade
+    assert "Never batch-replace the whole list" in upgrade
+    assert "Engines are **kit-owned**; config is **adopter-owned**" in upgrade
 
 
 @pytest.mark.kit_repo_only(
