@@ -7,7 +7,7 @@ safety guarantees, review evidence, lane isolation, and upgrade behavior as Clau
 Code. Runtime-specific files may differ in shape; their observable contract should
 not.
 
-## Sprint status — 2026-08-24
+## Sprint status — 2026-08-25
 
 The machine-readable inventory and current capability judgments live in
 [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
@@ -25,10 +25,10 @@ their delivery order and exit conditions.
   the root route and read and applied the shared doctrine for affected merge-authority
   work. It does not generalize one client observation. Interactive-TUI
   `systemMessage` presentation remains an explicit live-client gap.
-- [ ] **Phase 3 — Complete workflow and integration coverage.** The bounded
-  `post-merge-systemize` extraction in PR `#595` has a shared definition, thin runtime
+- [ ] **Phase 3 — Complete workflow and integration coverage.** PR `#595` merged the
+  bounded `post-merge-systemize` extraction with a shared definition, thin runtime
   bindings, config-owned policy, equivalent durable artifacts, and explicit capability
-  preflights. PR `#596` carries the same structured contract for `session-start` and
+  preflights. PR `#596` merged the same structured contract for `session-start` and
   `wrap-up`; `triage-friction-log` remains the Phase 3 exit.
 - [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** Codex model and
   effort calibration, environment-capable lane launching, and live isolation checks
@@ -66,7 +66,7 @@ that revision; the delivery slices below are expected to change them.
   retry evidence. Non-interactive use renders once and exits.
 - **Stops and mismatch:** required-source failure is a hard stop; optional-source gaps
   produce degraded success without false empty/clean claims. The Codex adapter repeated
-  read-only and compute policy that belongs in the shared definition; this slice removes
+  read-only and compute policy that belongs in the shared definition; this slice removed
   that duplicate.
 
 ### `wrap-up`
@@ -104,7 +104,7 @@ that revision; the delivery slices below are expected to change them.
   is successful completion, not a no-op, and isolated review plus self-merge stay on
   the cockpit's paired lane wrappers and shared state sandbox. The
   Codex adapter's generic external-mutation wording was weaker than the shared payload-
-  specific gate; this slice removes that duplicate.
+  specific gate; this slice removed that duplicate.
 
 ### `triage-friction-log`
 
@@ -130,11 +130,43 @@ that revision; the delivery slices below are expected to change them.
 
 ### Slice boundary and next starter
 
-This branch applies the shared contract to `session-start` and `wrap-up`, whose
+PR `#596` merged the shared contract for `session-start` and `wrap-up`, whose
 integration surface can use existing config, runtime-native mechanisms, and the shipped
 helpers named by each definition without adding a dedicated pipeline configuration. It
-does not add a partial triage config, pretend the missing engines are ready, or duplicate
+did not add a partial triage config, pretend the missing engines are ready, or duplicate
 approval policy in an adapter.
+
+The next cockpit slice temporarily advances the shared lane primitive before returning
+to the Phase 3 exit. cs-toolkit commit
+`4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) exposed reusable safety fixes in
+repo-owned parallel engines that diverged before the kit implementation existed.
+Leaving those fixes downstream would preserve split behavioral authority for a
+safety-critical engine. The next slice therefore compares that commit with its parent,
+ports only reusable mechanisms into the kit-owned source, and leaves cs-toolkit-specific
+merge policy, namespace translation, and later engine adaptation downstream.
+
+```text
+Create feat/parallel-kit-ownership from current origin/main. Run $session-start, then
+use $parallel first for a read-only inventory and plan. Compare the kit-owned parallel
+workflow, Claude and Codex bindings, scripts/dev_session.sh,
+scripts/reconcile_sessions.sh, config, manifest, and tests with cs-toolkit commit
+4cf1ca914361b9912cd6bb1389e985d6e97ab3a0 (#2086) and its parent. Classify every delta
+as reusable kit behavior, cs-toolkit policy, or unrelated application code. Exercise
+inherited state-root precedence and descriptor environment replacement; durable
+branch/base/merge-class identity; exact repository, PR, base, head, and fork binding;
+fail-closed forge reads; operator-held terminal state; and cleanup/resume behavior.
+Read and apply docs/agentic-dev-kit/safety-critical-changes.md before changing
+scripts/dev_session.sh. Keep behavior in shared runtime-neutral workflows and kit-owned
+engines, keep configuration in config/dev-model.yaml, and keep adapters thin. Do not
+upstream cs-toolkit's operator-only merge policy or CS_TOOLKIT_* namespace. Treat the
+shared lane engines as one operator-merge implementation lane unless the inventory
+proves disjoint file ownership. Add semantic and mutation matrices, adopter upgrade
+coverage, and exact-head review evidence. Do not edit the downstream repo in this
+branch; leave its repo-owned engine adaptation to a later explicit cs-toolkit
+reconciliation PR rather than assuming a kit upgrade will overwrite those files.
+```
+
+After that slice lands, resume the Phase 3 exit with this preserved starter:
 
 ```text
 Create feat/triage-integration-preflights from current origin/main. Build the semantic
@@ -240,8 +272,10 @@ loads the safety doctrine for affected work.
 - [x] Keep runtime tool selection in the adapters and capability preflight. Codex UI
   metadata uses the repository's supported `interface` shape; it does not claim a
   connector dependency that the client cannot mechanically require.
-- [ ] Apply the capability-contract pattern to `session-start`, `wrap-up`, and
-  `triage-friction-log` without moving their policy into adapters.
+- [x] Apply the capability-contract pattern to `session-start` and `wrap-up` without
+  moving their policy into adapters.
+- [ ] Apply the capability-contract pattern to `triage-friction-log` without moving its
+  policy into adapters.
 
 The bounded workflow slice is done when either runtime can execute the retro workflow
 and produce the same durable artifacts. The phase closes when `session-start`,
@@ -291,7 +325,7 @@ behavior or losing local policy.
 Done when the parity matrix is enforced by deterministic checks and confirmed by an
 adopter run.
 
-## Current recommended slice
+## Completed review and shared-integration slices
 
 PR `#593` delivered the review-evidence composition workstream separately from the
 trusted-client validation: the shared engine now preserves a full-panel parent plus an
@@ -305,17 +339,10 @@ bind posted delta-draw verdicts; Git paths and author-supplied labels cannot est
 either fact. Until such an artifact exists, uncertain classification continues to take
 the full-panel route and issue `#32` remains the provenance boundary.
 
-After PR `#595` merges, continue Phase 3 from a fresh branch with this starter:
-
-```text
-Create feat/shared-integration-preflights from current origin/main. Inventory the
-tracker and notification dependencies in session-start, wrap-up, and
-triage-friction-log. Reuse post-merge-systemize's runtime-neutral capability vocabulary;
-declare required capabilities, optional degraded paths, payload-specific approval gates,
-durable artifacts, and non-interactive stop behavior in each shared workflow. Keep both
-runtime adapters thin, do not invent connector names or credentials, and add
-declaration-derived tests that fail when a workflow loses its preflight or adapter.
-```
+PR `#596` then merged the shared integration contract for the lifecycle bookends. The
+remaining Phase 3 starter is the `feat/triage-integration-preflights` block under
+“Slice boundary and next starter” above and is mirrored in the latest handoff; update
+both together if its scope changes.
 
 Keep the trusted-client record as an observation at its stamped client and revision; do
 not turn it into a general instruction-loading guarantee.
