@@ -1058,6 +1058,44 @@ def test_portable_bounded_runner_reaps_on_operator_interrupt(tmp_path: Path) -> 
     assert runner.returncode in {-signal.SIGINT, 128 + signal.SIGINT}
 
 
+def test_portable_bounded_runner_reaps_on_post_result_interrupt(
+    tmp_path: Path,
+) -> None:
+    marker = tmp_path / "result-ready"
+    helper = _bounded_run_helper_source().replace(
+        "    reply = os.read(result_fd, 64)",
+        f"    open({json.dumps(str(marker))}, \"w\").close()\n"
+        "    time.sleep(30)\n"
+        "    reply = os.read(result_fd, 64)",
+    )
+    assert str(marker) in helper
+    hostile = tmp_path / "successful-launcher-with-retained-pipe.sh"
+    hostile.write_text(
+        "#!/bin/sh\n"
+        "sh -c 'trap \"\" HUP INT TERM; while :; do sleep 1; done' &\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    hostile.chmod(0o755)
+    command = f"{helper}\n_bounded_run 30 {shlex.quote(str(hostile))}\n"
+    runner = subprocess.Popen(
+        ["bash", "-c", command],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+
+    deadline = time.monotonic() + 3
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert marker.exists()
+    os.killpg(runner.pid, signal.SIGINT)
+    runner.communicate(timeout=3)
+
+    assert runner.returncode in {-signal.SIGINT, 128 + signal.SIGINT}
+
+
 @pytest.mark.parametrize("direction", ["expected-to-new", "new-to-expected"])
 def test_live_origin_movement_between_snapshot_reads_cannot_terminalize(
     harness: Harness, direction: str

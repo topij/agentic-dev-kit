@@ -171,18 +171,22 @@ def stop_group(first_signal=None):
 
 try:
     ready, _, _ = select.select([result_fd], [], [], seconds)
+    if not ready:
+        stop_group(signal.SIGTERM)
+        os.close(result_fd)
+        sys.exit(124)
+
+    reply = os.read(result_fd, 64)
+    os.close(result_fd)
+    stop_group()
 except Cancelled as exc:
     stop_group(exc.signum)
-    os.close(result_fd)
+    try:
+        os.close(result_fd)
+    except OSError:
+        pass
     sys.exit(128 + exc.signum)
-if not ready:
-    stop_group(signal.SIGTERM)
-    os.close(result_fd)
-    sys.exit(124)
 
-reply = os.read(result_fd, 64)
-os.close(result_fd)
-stop_group()
 try:
     returncode = int(reply.strip())
 except ValueError:
