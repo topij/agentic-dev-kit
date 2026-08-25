@@ -1,8 +1,8 @@
 # Review-process learnings — 2026-08-24
 
-Status: evidence record from the Codex–Claude parity work in PR `#595`. This is not
-shared gate doctrine. Promote a lesson to `docs/agentic-dev-kit/` only after a later
-change defines and tests the reusable contract.
+Status: evidence record from the Codex–Claude parity work in PR `#595` and PR `#596`.
+This is not shared gate doctrine. Promote a lesson to `docs/agentic-dev-kit/` only after
+a later change defines and tests the reusable contract.
 
 ## What paid off
 
@@ -48,6 +48,17 @@ For work using the fallback panel:
 ## Design guidance for future review surfaces
 
 - Define structured policy and precedence before writing explanatory prose.
+- Before the first panel for a structured workflow contract, build a semantic matrix
+  from the declarations. For each capability, record applicability, trigger point,
+  unavailable result, authority, durable evidence, resume route, and overall outcome.
+  Make terminal outcomes total and mutually exclusive before turning the matrix into
+  prose.
+- Build hostile mutations from that matrix, including a required capability becoming
+  optional, an unavailable result becoming success, a fixed live source being skipped,
+  a conditional being claimed ready before its trigger, an interrupted integration with
+  no resumable outcome, a duplicate declaration identifier, and a thin adapter changing
+  `follow` to `ignore`. Run those mutations before asking a panel to rediscover them
+  serially.
 - Exercise parser and installer changes with valid alternate syntax, comments, missing
   values, partial configuration, and upgrade/idempotency paths before opening the PR.
 - Ask each lens for a novel failure hypothesis tied to an observable outcome. A new
