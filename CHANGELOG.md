@@ -81,7 +81,9 @@ starts.
   so does a failed or ambiguous authorized merge. First-match outcome precedence keeps
   an earlier integration degradation from masking that incomplete repository path. A
   verified tracker-only write is successful completion rather than a no-op, and a merge
-  response that read-back verifies as landed is successful rather than incomplete.** **Refresh
+  response that read-back verifies as landed is successful rather than incomplete.
+  Isolated `self` lanes merge only through the cockpit's deterministic
+  `dev_session.sh merge <scope>` wrapper.** **Refresh
   `docs/agentic-dev-kit/workflows/wrap-up.md` and the corresponding Claude/Codex thin
   adapter. If the adapter is locally customized, reconcile it so merged-config
   resolution delegates to the shared workflow; do not retain tracked-config-only

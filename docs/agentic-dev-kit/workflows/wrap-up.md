@@ -48,7 +48,7 @@ Once a condition occurs, `not-triggered` is invalid and cannot satisfy completio
 | `forge-pr-write` | conditional | Required when the wrap-up changes any repository artifact, including an existing project-status artifact. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step. |
 | `pr-watch` | conditional | Required after a wrap-up pull request exists. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete. |
 | `merge-authority` | conditional and authority-gated | Required only after `pr-watch` says the exact head is mergeable. For an isolated lane, resolve its persisted merge class; for a non-lane pull request, resolve the project's declared merge policy and default to `operator` when none exists. A `self` route still needs project and current-request authority; an `operator` route needs current operator authorization for the exact pull request. Unknown lane metadata or insufficient authority leaves the mergeable pull request in `successful-operator-handoff`; it never authorizes a merge. |
-| `forge-merge-write` | conditional and authority-gated | Required only when the exact head is mergeable and `merge-authority` permits this workflow to merge it. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward `successful-completion`; if it proves failure or remains ambiguous, preserve the exact head and report `incomplete-resumable`. |
+| `forge-merge-write` | conditional and authority-gated | Required only when the exact head is mergeable and `merge-authority` permits this workflow to merge it. For an isolated lane whose persisted class is `self`, the cockpit must invoke `<engine-dir>/dev_session.sh merge <scope>`; a direct runtime-native forge write does not satisfy this capability. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward `successful-completion`; if it proves failure or remains ambiguous, preserve the exact head and report `incomplete-resumable`. |
 | `project-status-write` | optional enhancement | Update only a project status artifact that already exists and is in scope. Its absence is an honest skip, not a reason to invent one. |
 
 ### Authority contract
@@ -63,6 +63,7 @@ Once a condition occurs, `not-triggered` is invalid and cannot satisfy completio
 | `operator-owned-repository-change` | `preserve-and-stage-only-declared-paths` |
 | `required-engine-unavailable` | `stop-before-staging-preserve-record-edit` |
 | `merge-without-predeclared-and-current-authority` | `hold-mergeable-pr-for-operator` |
+| `isolated-self-merge-write` | `cockpit-dev-session-merge-wrapper-only` |
 | `operator-merge-class-without-exact-pr-authorization` | `hold-mergeable-pr-for-operator` |
 | `non-lane-without-project-merge-policy` | `default-operator-require-exact-pr-authorization` |
 | `runtime-policy-override` | `shared-declaration-wins-and-stop` |
@@ -462,7 +463,10 @@ failure makes the overall outcome `incomplete-resumable`.
    nothing left to push, **mark the PR ready** so it gets reviewed, and run
    the watch-and-fix loop (`pr-watch`) until the exact head is settled. Then resolve
    `merge-authority`: invoke `forge-merge-write` only when the declared class and
-   current request authorize it; otherwise hold the exact head unmerged under
+   current request authorize it. For an isolated `self` lane, the cockpit invokes
+   `<engine-dir>/dev_session.sh merge <scope>` so the deterministic wrapper re-polls
+   and pins the reviewed head; a runtime-native direct merge is forbidden. Otherwise
+   use the authorized non-lane mechanism or hold the exact head unmerged under
    `successful-operator-handoff`.
 
    **Keep tracker identifiers out of the title and body unless this PR is really

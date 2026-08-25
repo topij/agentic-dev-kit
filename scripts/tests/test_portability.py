@@ -1681,7 +1681,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "forge-merge-write": (
                 "conditional and authority-gated",
-                "Required only when the exact head is mergeable and merge-authority permits this workflow to merge it. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward successful-completion; if it proves failure or remains ambiguous, preserve the exact head and report incomplete-resumable.",
+                "Required only when the exact head is mergeable and merge-authority permits this workflow to merge it. For an isolated lane whose persisted class is self, the cockpit must invoke <engine-dir>/dev_session.sh merge <scope>; a direct runtime-native forge write does not satisfy this capability. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward successful-completion; if it proves failure or remains ambiguous, preserve the exact head and report incomplete-resumable.",
             ),
             "project-status-write": (
                 "optional enhancement",
@@ -1712,6 +1712,9 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "merge-without-predeclared-and-current-authority": (
                 "hold-mergeable-pr-for-operator",
+            ),
+            "isolated-self-merge-write": (
+                "cockpit-dev-session-merge-wrapper-only",
             ),
             "operator-merge-class-without-exact-pr-authorization": (
                 "hold-mergeable-pr-for-operator",
@@ -1767,6 +1770,11 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "also stage any existing project-status artifact" in flattened
         assert "no repository-artifact changes" in flattened
         assert "actually returned and verified from the tracker" in flattened
+        assert (
+            "the cockpit invokes `<engine-dir>/dev_session.sh merge <scope>`"
+            in flattened
+        )
+        assert "a runtime-native direct merge is forbidden" in flattened
         precedence = list(
             _integration_table(workflow, "Overall outcome precedence", 3).items()
         )
@@ -1818,8 +1826,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "Report exactly one overall outcome" in flattened
         assert (
             "Then resolve `merge-authority`: invoke `forge-merge-write` only when "
-            "the declared class and current request authorize it; otherwise hold the "
-            "exact head unmerged under `successful-operator-handoff`"
+            "the declared class and current request authorize it"
         ) in flattened
 
 
@@ -2100,10 +2107,18 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "If read-back verifies the merge landed, report `incomplete-resumable`", 1
         )),
         ("wrap-up", wrap, wrap.replace(
+            "the cockpit must invoke `<engine-dir>/dev_session.sh merge <scope>`; a direct runtime-native forge write does not satisfy this capability",
+            "the runtime may invoke a direct forge write instead of the lane wrapper", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`isolated-self-merge-write` | `cockpit-dev-session-merge-wrapper-only`",
+            "`isolated-self-merge-write` | `runtime-native-direct-merge-allowed`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
             "invoke `forge-merge-write` only when the declared class and\n"
-            "   current request authorize it; otherwise hold the exact head unmerged under",
+            "   current request authorize it. For an isolated `self` lane, the cockpit invokes",
             "invoke `forge-merge-write` without resolving authority and ignore the\n"
-            "   declared class; always merge instead of holding the exact head under", 1
+            "   declared class. For an isolated `self` lane, the cockpit invokes", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "Never repeat a tracker create",

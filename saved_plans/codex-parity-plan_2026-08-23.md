@@ -101,7 +101,8 @@ that revision; the delivery slices below are expected to change them.
   unsettled review paths preserve exact resume evidence as incomplete. First-match
   terminal precedence also keeps a degraded integration from masking an incomplete
   repository path or a failed or still-ambiguous authorized merge; a tracker-only write
-  is successful completion, not a no-op. The
+  is successful completion, not a no-op, and an isolated self-merge stays on the
+  cockpit's deterministic lane wrapper. The
   Codex adapter's generic external-mutation wording was weaker than the shared payload-
   specific gate; this slice removes that duplicate.
 
