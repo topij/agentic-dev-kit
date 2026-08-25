@@ -52,7 +52,9 @@ starts.
   it loads the shared declaration and needs no new config key or connector name. Resolve
   config through `kitconfig.load_config()` or your equivalent merged-view mechanism so
   the local overlay is not ignored. Treat the workflow as read-only, and let
-  non-interactive invocations render once and exit.**
+  non-interactive invocations render once and exit. Always attempt and classify the
+  forge, CI/cron, and tracker sources; only an explicitly unconfigured or untriggered
+  declaration may be omitted.**
 - **CHANGED (gate semantics) — `wrap-up` now stops before staging when required
   repository/config, record-write, or document-budget capabilities fail; tracker
   unavailability, silence, decline, or missing exact-payload approval parks the complete

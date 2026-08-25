@@ -34,8 +34,12 @@ write, or invent a durable artifact.
 
 ### Capability contract
 
-Report every attempted capability as `ready`, `degraded`, or `stop`, with its
-runtime-native mechanism or an actionable reason. Finish required preflight before
+Report every applicable declared capability as `ready`, `degraded`, or `stop`, with
+its runtime-native mechanism or an actionable reason. `forge-pr-read`, `ci-cron-read`,
+and `tracker-read` are always applicable: missing configuration, mechanism, or
+credentials degrades them rather than making them disappear. Omit a capability only
+when its own row makes it explicitly inapplicable, and name why: an unconfigured drift
+read or an untriggered conditional remediation read. Finish required preflight before
 classifying candidates; a required failure must not produce a briefing that looks
 complete.
 
@@ -74,7 +78,7 @@ source that failed on the retry.
 |---|---|---|
 | `hard-stop` | A required capability is unavailable or shared/runtime policy conflicts. | Name the failed capability and remediation; do not render the normal briefing or recommendation. |
 | `degraded-success` | Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a `Now` promotion. | Render the briefing once, label every gap at its normal display location, and make no write. |
-| `successful-completion` | Required capabilities are ready and every attempted optional source is either ready or honestly degraded. | Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this read-only workflow completes. |
+| `successful-completion` | Required capabilities are ready and every applicable optional or triggered conditional source was attempted and is ready or honestly degraded; every explicitly inapplicable source is named. | Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this read-only workflow completes. |
 
 ## What it reads
 

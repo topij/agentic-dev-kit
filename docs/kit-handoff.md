@@ -29,7 +29,8 @@ their Claude and Codex bindings remain invocation-only adapters.
 
 - **The lifecycle bookends are the coherent slice.** Required repository/config and
   record capabilities fail closed. Optional session-start sources stay visible as
-  degraded gaps. Wrap-up sends an interactive issue-shaped finding through tracker
+  degraded gaps and fixed live sources cannot be silently skipped. Wrap-up sends an
+  interactive issue-shaped finding through tracker
   search and an exact-payload decision before parking; the friction log remains the
   route for incomplete or accumulating findings and unavailable, declined, or ambiguous
   tracker writes. Missing or insufficient merge authority holds the exact reviewed head
@@ -42,8 +43,9 @@ their Claude and Codex bindings remain invocation-only adapters.
 
 - **The adapters own translation, not policy.** The Codex bookend bindings no longer
   duplicate read-only, compute, repository-safety, or generic external-mutation rules;
-  declaration-derived mutation tests pin the full shared outcome rows, merged-config
-  route, resumability evidence, merge hold, and runtime registration.
+  declaration-derived mutation tests pin the full shared capability and outcome rows,
+  merged-config route, resumability evidence, adapter delegation imperative, merge hold,
+  and runtime registration.
 
 ▶ Next: create `feat/triage-integration-preflights` from current `origin/main`; first
 build the semantic input matrix for a `config/dev-model.yaml`-owned triage block and its

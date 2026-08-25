@@ -242,7 +242,8 @@ friction-routing step is being skipped — not that triage is overdue.
 > The shared session-start and wrap-up workflows declare the preflight boundary that
 > applies in Claude and Codex. Missing required repository/config or record capabilities
 > stop before a false briefing or commit. Optional session-start sources render as
-> unavailable rather than empty; wrap-up presents an interactive issue-shaped finding
+> unavailable rather than empty and cannot be silently skipped; wrap-up presents an
+> interactive issue-shaped finding
 > for an exact-payload tracker decision before parking, while unavailable, declined,
 > ambiguous, incomplete, or accumulating routes go to the friction log. Non-interactive
 > runs never wait for approval, and merge authority that is absent or insufficient holds

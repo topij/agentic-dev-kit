@@ -1489,6 +1489,12 @@ def _integration_table(
     return rows
 
 
+def _assert_bookend_adapter_semantics(adapter: str, shared_path: str) -> None:
+    flattened = " ".join(adapter.split())
+    assert f"Read `{shared_path}` completely and follow it." in flattened
+    assert "merged configuration defined by the shared workflow" in flattened
+
+
 def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
     flattened = " ".join(workflow.split())
     assert "take precedence over later explanatory prose" in flattened
@@ -1503,16 +1509,43 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
     outcomes = _integration_table(workflow, outcome_heading, 3)
 
     if name == "session-start":
-        assert {key: row[0] for key, row in capabilities.items()} == {
-            "repository-config-read": "required",
-            "repository-state-read": "required",
-            "forge-pr-read": "optional",
-            "ci-cron-read": "optional",
-            "tracker-read": "optional",
-            "config-drift-read": "optional when configured",
-            "archive-remediation-read": "conditional",
-            "resolved-tracker-remediation-read": "conditional",
-            "runtime-compute-selection": "optional enhancement",
+        assert capabilities == {
+            "repository-config-read": (
+                "required",
+                "Prove the repository root and read the merged config, <handoff>, and <friction-log>. Missing or unreadable input is a hard stop; name it and do not render a briefing.",
+            ),
+            "repository-state-read": (
+                "required",
+                "Read the current branch and working-tree state. Failure is a hard stop because unfinished local work would otherwise disappear from classification.",
+            ),
+            "forge-pr-read": (
+                "optional",
+                "Prove authenticated, complete pagination for open pull requests. Unavailability or suspected truncation degrades to PRs unavailable: <reason> and must never render as an empty list.",
+            ),
+            "ci-cron-read": (
+                "optional",
+                "Use the configured or project-native health mechanism. Unavailability degrades to CI/cron: unavailable: <reason>; it is not an all-clear.",
+            ),
+            "tracker-read": (
+                "optional",
+                "Read a complete field-limited backlog from <tracker>. Missing config, credentials, client, or complete pagination degrades to an explicit tracker gap; discard partial payloads and continue.",
+            ),
+            "config-drift-read": (
+                "optional when configured",
+                "Run only when the project defines an apply/verify mechanism. Failure renders config drift: unavailable (<reason>); absence of such a project mechanism omits the capability entirely.",
+            ),
+            "archive-remediation-read": (
+                "conditional",
+                "Required before promoting a candidate to Now. If the scoped archive lookup cannot run, keep that candidate out of Now, name the remediation gap, and continue with a degraded briefing.",
+            ),
+            "resolved-tracker-remediation-read": (
+                "conditional",
+                "Required when a candidate implicates a tracker item whose live state may hide a false resolution. If the item and its claimed resolution cannot be read, do not promote that candidate to Now; name the gap.",
+            ),
+            "runtime-compute-selection": (
+                "optional enhancement",
+                "Apply models.runtime_mappings only when the current runtime mechanically exposes the requested control. Otherwise retain the neutral tier as instructed guidance and do not claim a switch.",
+            ),
         }
         assert policies == {
             "source-failure": ("report-unavailable-never-empty-or-clean",),
@@ -1534,27 +1567,58 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "Render the briefing once, label every gap at its normal display location, and make no write.",
             ),
             "successful-completion": (
-                "Required capabilities are ready and every attempted optional source is either ready or honestly degraded.",
+                "Required capabilities are ready and every applicable optional or triggered conditional source was attempted and is ready or honestly degraded; every explicitly inapplicable source is named.",
                 "Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this read-only workflow completes.",
             ),
         }
         assert "kitconfig.load_config()" in flattened
         assert "do not fall back to reading only the tracked file" in flattened
+        assert (
+            "`forge-pr-read`, `ci-cron-read`, and `tracker-read` are always applicable"
+            in flattened
+        )
         assert "creates no repository, forge, tracker, notification, or local-state" in flattened
         assert "A previous chat response is not resume evidence" in flattened
         assert "must never render as an empty list" in flattened
         assert "keep that candidate out of `Now`" in flattened
     else:
-        assert {key: row[0] for key, row in capabilities.items()} == {
-            "repository-config-read": "required",
-            "handoff-record-write": "required",
-            "document-budget-check": "required",
-            "handoff-archive": "conditional",
-            "tracker-search-and-write": "conditional and approval-gated",
-            "forge-pr-write": "conditional",
-            "pr-watch": "conditional",
-            "merge-authority": "conditional and authority-gated",
-            "project-status-write": "optional enhancement",
+        assert capabilities == {
+            "repository-config-read": (
+                "required",
+                "Prove the repository root and read the merged config, <handoff>, <friction-log>, branch, status, diff, and relevant log. Missing or unreadable input is a hard stop before any edit.",
+            ),
+            "handoff-record-write": (
+                "required",
+                "Prove that <handoff> can be changed without overwriting an unrelated operator edit. Unavailable or overlapping ownership is a hard stop; preserve the existing tree.",
+            ),
+            "document-budget-check": (
+                "required",
+                "Resolve and run <engine-dir>/check_doc_budget.py. A missing engine, usage/config failure, or unreadable result stops before staging; preserve the record edit for repair.",
+            ),
+            "handoff-archive": (
+                "conditional",
+                "Required only when the budget checker directs a sweep. Resolve <engine-dir>/archive_plan_sessions.py and <handoff-history> before invoking it. Unavailability or a non-success outcome stops before staging, with both documents preserved as the helper reports.",
+            ),
+            "tracker-search-and-write": (
+                "conditional and approval-gated",
+                "Required when a finding is issue-shaped and its point is not accumulation. Search first, then in an interactive session present the exact create/comment payload for an operator decision; do not park merely to avoid asking. Missing config, client, credential, operator presence, payload-specific approval, or a declined/silent decision degrades to a complete <friction-log> entry. Tracker availability never authorizes a write.",
+            ),
+            "forge-pr-write": (
+                "conditional",
+                "Required when the wrap-up changes a repository record. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step.",
+            ),
+            "pr-watch": (
+                "conditional",
+                "Required after a wrap-up pull request exists. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete.",
+            ),
+            "merge-authority": (
+                "conditional and authority-gated",
+                "Required only after pr-watch says the exact head is mergeable. Resolve the project's predeclared merge class and the current request's authority before acting. A self class still needs project and current-request authority; an operator class needs current operator authorization for the exact pull request. Missing, unknown, or insufficient authority leaves the mergeable pull request in successful-operator-handoff; it never authorizes a merge.",
+            ),
+            "project-status-write": (
+                "optional enhancement",
+                "Update only a project status artifact that already exists and is in scope. Its absence is an honest skip, not a reason to invent one.",
+            ),
         }
         assert policies == {
             "tracker-without-exact-payload-approval": (
@@ -1648,6 +1712,7 @@ def test_bookend_integrations_are_shared_thin_declared_and_manifested() -> None:
         _assert_bookend_integration_semantics(name, shared)
         for adapter in (claude, codex):
             assert shared_path in adapter
+            _assert_bookend_adapter_semantics(adapter, shared_path)
             assert "### Capability contract" not in adapter
             assert "### Authority contract" not in adapter
             assert "tracker-without-exact-payload-approval" not in adapter
@@ -1661,6 +1726,35 @@ def test_bookend_integrations_are_shared_thin_declared_and_manifested() -> None:
         assert re.search(rf"(?m)^\s+- name: {re.escape(name)}$", parity)
         assert f"    claude: {claude_path}" in parity
         assert f"    codex: {codex_path}" in parity
+
+
+@pytest.mark.kit_repo_only(
+    ".claude/commands/session-start.md",
+    ".claude/commands/wrap-up.md",
+    ".agents/skills/session-start",
+    ".agents/skills/wrap-up",
+)
+def test_bookend_adapter_hostile_mutations_are_rejected() -> None:
+    for name in ("session-start", "wrap-up"):
+        shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
+        paths = (
+            REPO_ROOT / ".claude" / "commands" / f"{name}.md",
+            REPO_ROOT / ".agents" / "skills" / name / "SKILL.md",
+        )
+        for path in paths:
+            adapter = path.read_text(encoding="utf-8")
+            mutations = (
+                adapter.replace("follow it", "ignore it", 1),
+                adapter.replace(
+                    "merged configuration",
+                    "tracked configuration",
+                    1,
+                ),
+            )
+            for mutated in mutations:
+                assert mutated != adapter
+                with pytest.raises(AssertionError):
+                    _assert_bookend_adapter_semantics(mutated, shared_path)
 
 
 @pytest.mark.kit_repo_only(
@@ -1698,6 +1792,14 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "omit unavailable gaps", 1
         )),
         ("session-start", session, session.replace(
+            "every applicable optional or triggered conditional source was attempted",
+            "every attempted optional source", 1
+        )),
+        ("session-start", session, session.replace(
+            "must never render as an empty list",
+            "may render as an empty list", 1
+        )),
+        ("session-start", session, session.replace(
             "A previous chat response is not resume evidence",
             "A previous chat response is resume evidence", 1
         )),
@@ -1710,6 +1812,10 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("wrap-up", wrap, wrap.replace(
             "`tracker-search-and-write` | conditional and approval-gated",
             "`tracker-search-and-write` | optional", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Tracker availability never authorizes a write",
+            "Tracker availability authorizes a write", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "`tracker-without-exact-payload-approval` | "
