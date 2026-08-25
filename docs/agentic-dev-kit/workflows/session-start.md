@@ -8,7 +8,11 @@ with one recommendation.
 
 ## Resolve configuration
 
-Read `config/dev-model.yaml` first. In this workflow:
+Resolve the merged configuration first with `kitconfig.load_config()` (or the
+repository's equivalent configured merged-view mechanism), so a gitignored
+`config/dev-model.local.yaml` overlay is applied per leaf rather than ignored. A
+missing loader or invalid merged view is a `repository-config-read` failure; do not
+fall back to reading only the tracked file. In this workflow:
 
 - `<handoff>` and `<friction-log>` mean `paths.handoff` and `paths.friction_log`;
   `<handoff-history>` and `<friction-log-archive>` mean `paths.handoff_history` and
@@ -20,6 +24,62 @@ Read `config/dev-model.yaml` first. In this workflow:
 - A workflow invocation means the current agent's native adapter: `/name` for the
   shipped Claude commands or `$name` for the shipped Codex skills.
 
+## Authoritative integration declaration
+
+The capability, authority, and completion rows below are normative. They take
+precedence over later explanatory prose and over runtime adapters. An adapter may
+translate an invocation, launcher, model, effort, or available mechanism; it may not
+weaken a required failure, turn an unavailable source into an empty result, authorize a
+write, or invent a durable artifact.
+
+### Capability contract
+
+Report every applicable declared capability as `ready`, `degraded`, or `stop`, with
+its runtime-native mechanism or an actionable reason. `forge-pr-read`, `ci-cron-read`,
+and `tracker-read` are always applicable: missing configuration, mechanism, or
+credentials degrades them rather than making them disappear. Omit a capability only
+when its own row makes it explicitly inapplicable, and name why: an unconfigured drift
+read or an untriggered conditional remediation read. Finish required preflight before
+classifying candidates; a required failure must not produce a briefing that looks
+complete.
+
+| Capability id | Class | Preflight and unavailable outcome |
+|---|---|---|
+| `repository-config-read` | required | Prove the repository root and read the merged config, `<handoff>`, and `<friction-log>`. Missing or unreadable input is a hard stop; name it and do not render a briefing. |
+| `repository-state-read` | required | Read the current symbolic branch or explicitly classify detached HEAD, plus working-tree state. Empty branch output is not ready: when no symbolic branch exists, resolve the exact commit and report `DETACHED at <sha>`. Failure to establish either state is a hard stop because unfinished local work would otherwise disappear from classification. |
+| `forge-pr-read` | optional | Prove authenticated, complete pagination for open pull requests and for each pull request's review submissions, issue comments, and inline comments, independent of any local acknowledgement or seen-set. List metadata or an acknowledgement-filtered view alone is not ready. If the forge cannot prove thread resolution, keep an actionable finding as a candidate and label resolution unverified. Unavailability or suspected truncation at either layer degrades to `PRs unavailable: <reason>` and must never render as an empty list. |
+| `ci-cron-read` | optional | Use the configured or project-native health mechanism. Unavailability degrades to `CI/cron: unavailable: <reason>`; it is not an all-clear. |
+| `tracker-read` | optional | Read a complete field-limited backlog from `<tracker>`. Missing config, credentials, client, or complete pagination degrades to an explicit tracker gap; discard partial payloads and continue. |
+| `config-drift-read` | optional when configured | Run only when the project defines an apply/verify mechanism. Failure renders `config drift: unavailable (<reason>)`; absence of such a project mechanism omits the capability entirely. |
+| `archive-remediation-read` | conditional | Required before promoting a candidate to `Now`. If the scoped archive lookup cannot run, keep that candidate out of `Now`, name the remediation gap, and continue with a degraded briefing. |
+| `resolved-tracker-remediation-read` | conditional | Required when a candidate implicates a tracker item whose live state may hide a false resolution. If the item and its claimed resolution cannot be read, do not promote that candidate to `Now`; name the gap. |
+| `runtime-compute-selection` | optional enhancement | Apply `models.runtime_mappings` only when the current runtime mechanically exposes the requested control. Otherwise retain the neutral tier as instructed guidance and do not claim a switch. |
+
+### Authority contract
+
+| Policy id | Required outcome |
+|---|---|
+| `source-failure` | `report-unavailable-never-empty-or-clean` |
+| `incomplete-pagination` | `report-unavailable-or-page-to-completion` |
+| `remediation-unavailable` | `no-now-promotion-for-that-candidate` |
+| `session-start-write` | `prohibited-read-only-workflow` |
+| `non-interactive-invocation` | `render-once-and-exit-without-wait-or-write` |
+| `runtime-policy-override` | `shared-declaration-wins-and-stop` |
+
+### Durable result, resumability, and completion
+
+`session-start` creates no repository, forge, tracker, notification, or local-state
+artifact. Its load-bearing result is the briefing returned to the invoker; the live
+sources remain authoritative. A previous chat response is not resume evidence. Retry by
+gathering the sources again, and never reuse an earlier empty or clean verdict for a
+source that failed on the retry.
+
+| Outcome | Condition | Required result |
+|---|---|---|
+| `hard-stop` | A required capability is unavailable or shared/runtime policy conflicts. | Name the failed capability and remediation; do not render the normal briefing or recommendation. |
+| `degraded-success` | Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a `Now` promotion. | Render the briefing once, label every gap at its normal display location, and make no write. |
+| `successful-completion` | Required capabilities and every applicable optional or triggered conditional source are ready; every explicitly inapplicable source is named. | Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this read-only workflow completes. |
+
 ## What it reads
 
 | Source          | How                                                                                                                                     |
@@ -27,8 +87,8 @@ Read `config/dev-model.yaml` first. In this workflow:
 | Living handoff   | `<handoff>` — latest session block + every "Next:" / "Follow-ups:" trail                                                              |
 | Friction inbox   | `<friction-log>` — entries since the last "Backlog migrated" marker                                                                  |
 | Tracker backlog  | your tracker's list-issues command/script — project `tracker.project_name` (open only — drop `completed`/`canceled`). Pass an explicit row limit *and* select fields; see the gather for why these are two separate limits and why a full page must be treated as truncated |
-| Open PRs         | `gh pr list` — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Pass an explicit `--limit`; see the gather for why a full page must be treated as truncated |
-| Working tree     | `git status --short` + `git branch --show-current` — unfinished business from last session                                              |
+| Open PRs         | `gh pr list` plus the configured read-only review-health mechanism — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Page both the list and review findings completely |
+| Working tree     | `git status --short` plus a symbolic-branch read or explicit `DETACHED at <sha>` classification — unfinished business from last session |
 | CI/cron health   | your cron/CI runner's status command (adapt to your infra — e.g. a wrapper script that logs recent job outcomes)                         |
 | Config drift     | your host config-apply step, if you have one (e.g. a `verify --json`-style check comparing committed config against applied host state) — drop this bullet entirely if it doesn't generalize to your setup |
 | Narrative archives | `<handoff-history>` + `<friction-log-archive>` — deliberately **not** part of the gather and never read whole; grepped per-candidate in *Remediation check*, and only for a candidate you are about to promote to 🔴 |
@@ -51,7 +111,9 @@ instead, and reports its gap in the briefing text rather than in a fixed field.
 The two narrative-file reads are not in this set: a failed read there does not look
 like good news, it looks like a missing handoff.
 
-- `git status --short` and `git branch --show-current`
+- `git status --short`, plus `git symbolic-ref --short -q HEAD`. If the symbolic read
+  returns empty, run `git rev-parse --verify HEAD` and report `DETACHED at <sha>` rather
+  than a blank branch. If neither establishes state, stop under `repository-state-read`.
 - `gh pr list --state open --json number,title,isDraft,reviewDecision,statusCheckRollup,author --limit 100`
   — **the explicit limit matters, and so does treating a full page as suspect.**
   `gh pr list` silently defaults to 30 (`--limit int … (default 30)`, verified on
@@ -68,6 +130,19 @@ like good news, it looks like a missing handoff.
   **failed** `gh pr list` returns nothing and is caught by the unavailable rule; a
   **truncated** one returns valid JSON with fewer rows than exist, which no exit
   code reveals and only the full-page check catches.
+
+  The list response is discovery, not complete review health. For every returned pull
+  request, page review submissions, issue comments, and inline review comments through
+  the forge API, independent of `pr-watch` acknowledgement or seen state. With `gh`, use
+  `gh api --paginate` against the pull request's `/reviews`, `/issues/<PR#>/comments`,
+  and `/pulls/<PR#>/comments` endpoints; another runtime may translate those reads but
+  must preserve their full unfiltered content. If the selected mechanism does not expose
+  thread resolution, keep an actionable finding as a candidate and label its resolution
+  unverified. Do not mark `forge-pr-read` ready from list metadata or an
+  acknowledgement-filtered view alone. If this second layer is missing, fails, or may be
+  truncated, render
+  `PRs unavailable: review findings <reason>` rather than silently omitting unresolved
+  bot feedback.
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>` (focus: the **"Latest session"** block and its `Next:` / `Follow-ups:` lines, plus the top-of-file "Last updated" trail for the active sprint)
@@ -159,7 +234,9 @@ pointer**.
   needs recovery; an open PR that's CI-red or has unaddressed review (opening/pushing
   a PR isn't done — watch-and-fix is the same task) — **including a cron/automation-
   opened PR** (identified by `author` in the gather) with a changes-requested decision
-  or unresolved bot findings: your cron runner's job-name guard means `pr-watch`
+  or actionable bot findings from the unfiltered review evidence, including findings
+  whose resolution cannot be verified: your
+  cron runner's job-name guard means `pr-watch`
   never watched it, so adopting it (run `pr-watch <PR#>`) is this session's job;
   uncommitted work from last session that should be finished or committed; the
   handoff's explicit current `Next:` **iff** it's the active sprint's blocking step;
@@ -342,15 +419,18 @@ What to do next
   concern — mention it only under 🟢 Whenever if present, never conflated with the 🔴
   line above.
 
-### 4 · Recommend one, then wait
+### 4 · Recommend one, then wait or exit
 
-End with a single pick and a one-line why, then **stop** — let the operator choose. Do
-not auto-start the work.
+End with a single pick and a one-line why. In an interactive invocation, then **stop**
+and let the operator choose; do not auto-start the work. In a non-interactive
+invocation, omit the question and exit after rendering the recommendation. When the
+outer request already and separately authorizes follow-on work, complete this read-only
+workflow first, then continue under that authority.
 
 ```text
 👉 My pick: <item>   [<S/M/L> · <model> · <inline/delegate>] — <one-line rationale: why this, now>
    <delegate ⇒ "I'll hand it to an isolated task and review the result here." | inline ⇒ "We'll run it in this session so you can steer it.">
-   Want me to start it, or pick another?
+   Want me to start it, or pick another?   # interactive only
 ```
 
 Rationale heuristics: prefer 🔴 Now if the bucket is non-empty; otherwise the active

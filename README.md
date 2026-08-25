@@ -300,16 +300,44 @@ integration. Read `PRINCIPLES.md` for both principles' full statement.
 **Runtime coverage and engine wiring are independent.** The aligned entries in
 `runtime-parity.md` point to a runtime-neutral definition plus thin Claude and Codex
 adapters.
-`session-start`, `wrap-up`, `parallel`, and `pr-watch` ship deterministic engines;
-`triage-friction-log` and `post-merge-systemize` share policy across runtimes while
-their project-specific integrations remain unwired. The absent integration surfaces
-are enumerated here so runtime parity cannot be mistaken for engine availability:
+`parallel` and `pr-watch` ship deterministic engines. `session-start` and `wrap-up` use
+shared workflow doctrine, configured runtime-native integrations, and the particular
+shipped helpers each definition names. `triage-friction-log` and
+`post-merge-systemize` share policy across runtimes while their project-specific
+integrations remain unwired. The absent integration surfaces are enumerated here so
+runtime parity cannot be mistaken for engine availability:
 
 - a tracker client and notification channel;
 - `scripts/fetch_merged_prs.py`, `scripts/digest_merged_prs.py`, and
   `scripts/heartbeat_cli.py` for `post-merge-systemize`;
 - `triage_friction_log.py` and `finalize_triage.py` beneath `paths.engines` for
   `triage-friction-log`.
+
+The shared `session-start` and `wrap-up` definitions also declare their integration
+preflights and outcomes directly. Session start fails closed on missing repository,
+config, handoff, friction-log, or repository-state reads; unavailable forge, CI,
+tracker, and configured drift sources stay visible as degraded gaps rather than false
+empty or clean results. Forge, CI/cron, and tracker sources are always attempted and
+classified; forge readiness includes unfiltered review evidence rather than list metadata
+or locally acknowledged comments alone, and detached HEAD is named instead of rendered
+as a blank branch. Only explicitly
+unconfigured or untriggered declarations may be omitted.
+Wrap-up requires the configured document-budget engine, preserves
+operator-owned changes, sends an interactive issue-shaped finding through tracker search
+and an exact-payload decision before parking, and reserves the friction log for incomplete
+or accumulating findings and unavailable, declined, or ambiguous tracker routes. Its
+changed repository artifacts, including an updated existing project-status artifact,
+reach a terminal state only after the conditional branch/PR/review path settles
+and declared merge authority either permits the merge or holds the exact head for the
+operator. A non-lane PR without project merge policy defaults to the operator route, and
+conditional capabilities are classified only when their trigger occurs. Non-interactive
+runs never wait for tracker approval. A blocked forge or unsettled review path reports
+an incomplete resumable result with exact repository/PR evidence. Claude and Codex
+adapters only translate invocation and available mechanisms. Wrap-up selects one
+overall outcome by shared precedence, so an optional-integration degradation cannot
+mask an incomplete repository path or ambiguous authorized merge.
+These bookend declarations use existing config and upgrade through the shared workflow
+refresh; they add no installer migration or runtime-specific connector requirement.
 
 The shared systemize workflow treats the configured engine set atomically: all absent
 selects its honest LLM-only path, all present selects engine-backed mode, and a partial

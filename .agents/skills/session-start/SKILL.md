@@ -5,9 +5,8 @@ description: Build a concise start-of-session briefing from the living handoff, 
 
 # Session Start
 
-1. Work from the repository root.
-2. Read `config/dev-model.yaml` and resolve configured paths from it.
-3. Read `docs/agentic-dev-kit/workflows/session-start.md` completely.
-4. Follow that workflow using the user's request as additional session context.
-5. Use the current runtime's available tools for independent reads and delegation. Treat configured model names as capability guidance; do not claim a model switch the runtime cannot perform.
-6. Keep the briefing read-only unless the user explicitly asks to begin the recommended work.
+Read `docs/agentic-dev-kit/workflows/session-start.md` completely and follow it.
+
+Treat the user's request as additional session context. Resolve all configured paths
+from the repository root and merged configuration defined by the shared workflow;
+translate only runtime-native invocation and available mechanisms.

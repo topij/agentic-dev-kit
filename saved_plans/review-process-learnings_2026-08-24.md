@@ -1,8 +1,8 @@
 # Review-process learnings — 2026-08-24
 
-Status: evidence record from the Codex–Claude parity work in PR `#595`. This is not
-shared gate doctrine. Promote a lesson to `docs/agentic-dev-kit/` only after a later
-change defines and tests the reusable contract.
+Status: evidence record from the Codex–Claude parity work in PR `#595` and PR `#596`.
+This is not shared gate doctrine. Promote a lesson to `docs/agentic-dev-kit/` only after
+a later change defines and tests the reusable contract.
 
 ## What paid off
 
@@ -48,6 +48,32 @@ For work using the fallback panel:
 ## Design guidance for future review surfaces
 
 - Define structured policy and precedence before writing explanatory prose.
+- Before the first panel for a structured workflow contract, build a semantic matrix
+  from the declarations. For each capability, record applicability, trigger point,
+  unavailable result, authority, durable evidence, resume route, and overall outcome.
+  Make terminal outcomes total and mutually exclusive before turning the matrix into
+  prose. Test the outcome cross-product too: an optional degradation followed by a
+  required downstream failure, and an authorized external write that fails or returns
+  ambiguously, must each resolve to one declared terminal outcome.
+- Build hostile mutations from that matrix, including a required capability becoming
+  optional, an unavailable result becoming success, a fixed live source being skipped,
+  a conditional being claimed ready before its trigger, an interrupted integration with
+  no resumable outcome, duplicate or wrong-width declaration rows, and a thin adapter
+  changing `follow` to `ignore` or appending a contradictory executable instruction. Run
+  those mutations before asking a panel to rediscover them serially.
+- Connect each required declaration to its later operational prose: mutate a pre-edit
+  guard to run after the edit, replace a required gather with an exit-zero empty result,
+  and remove the second-layer read behind any source whose classification promises more
+  than list metadata exposes.
+- Negate the complete normative-precedence sentence, not just one keyword, and mutate a
+  declared source to promise evidence its recommended helper cannot actually return.
+- Cross product external writes with an otherwise empty repository result: a verified
+  tracker write is not a no-op, an ambiguous merge that read-back verifies is not
+  incomplete, and acknowledgement state is not proof that a review finding was resolved.
+- Cross product each abstract external-write capability with the repository's existing
+  safety wrappers: authority to merge does not authorize bypassing mandatory paired
+  review/merge wrappers or their shared state sandbox, so test authority class × write
+  mechanism × state root as well as the terminal outcome.
 - Exercise parser and installer changes with valid alternate syntax, comments, missing
   values, partial configuration, and upgrade/idempotency paths before opening the PR.
 - Ask each lens for a novel failure hypothesis tied to an observable outcome. A new

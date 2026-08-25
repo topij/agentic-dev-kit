@@ -28,8 +28,8 @@ their delivery order and exit conditions.
 - [ ] **Phase 3 — Complete workflow and integration coverage.** The bounded
   `post-merge-systemize` extraction in PR `#595` has a shared definition, thin runtime
   bindings, config-owned policy, equivalent durable artifacts, and explicit capability
-  preflights. The phase remains open for applying that integration contract to
-  `session-start`, `wrap-up`, and `triage-friction-log`.
+  preflights. PR `#596` carries the same structured contract for `session-start` and
+  `wrap-up`; `triage-friction-log` remains the Phase 3 exit.
 - [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** Codex model and
   effort calibration, environment-capable lane launching, and live isolation checks
   remain planned.
@@ -43,6 +43,110 @@ collected with `rg --files`, targeted `rg`, and
 `uv run scripts/kit_doctor.py --json` at
 `9c4969687f9adbec1eca55cbfb47955d85025026` on 2026-08-23. They intentionally describe
 that revision; the delivery slices below are expected to change them.
+
+## Phase 3 integration inventory — 2026-08-25
+
+### `session-start`
+
+- **Shared semantics:** gather the handoff, friction inbox, tracker, pull requests,
+  repository state, CI/cron health, and project drift; classify traceable candidates;
+  remediate false `Now` promotions; render one briefing and recommendation.
+- **Runtime translation:** Claude passes `$ARGUMENTS`; Codex passes the user's request.
+  Each runtime selects its own read mechanisms and may apply the configured model or
+  effort mapping only when its launcher actually exposes that control.
+- **Capabilities:** repository/config and repository-state reads are required. Forge,
+  CI/cron, and tracker reads are always attempted and degrade visibly; forge readiness
+  uses unfiltered review evidence, labels resolution the forge cannot prove, and
+  represents detached HEAD explicitly.
+  Configured drift reads degrade visibly when applicable. Archive and resolved-
+  tracker reads are conditional before a `Now` promotion. Runtime compute selection is
+  an optional enhancement.
+- **Authority and artifacts:** the workflow is read-only and creates no durable state.
+  The returned briefing is load-bearing; live sources, not an earlier response, are
+  retry evidence. Non-interactive use renders once and exits.
+- **Stops and mismatch:** required-source failure is a hard stop; optional-source gaps
+  produce degraded success without false empty/clean claims. The Codex adapter repeated
+  read-only and compute policy that belongs in the shared definition; this slice removes
+  that duplicate.
+
+### `wrap-up`
+
+- **Shared semantics:** author and validate the living record, route session friction,
+  preserve a next starter, enforce document budgets, stage named paths, and carry the
+  record pull request through shared review follow-through.
+- **Runtime translation:** Claude and Codex select native repository, forge, review, and
+  tracker mechanisms. Invocation itself remains runtime-specific; capability policy and
+  approval semantics do not.
+- **Capabilities:** repository/config read and handoff write are required. The document-
+  budget checker is required; the archive helper is conditional on its result. Forge PR
+  write and `pr-watch` are conditional on any changed repository artifact. Tracker
+  search/write is
+  conditional and payload-approval-gated for an issue-shaped finding; an existing
+  project-status artifact is an optional enhancement. Merge authority is conditional
+  after the exact head becomes mergeable.
+- **Authority and artifacts:** invocation authorizes the scoped repository record and its
+  branch/PR path, not a merge. Tracker creates, modifications, and occurrence comments
+  require the exact payload to be confirmed by the operator in the current interactive
+  session. An interactive issue-shaped finding is searched and presented for that
+  decision before parking. Durable evidence is every changed repository artifact,
+  including an existing project-status artifact, its reviewed merge
+  or exact operator-held head when changed, a parked friction entry, or an identifier
+  actually returned and read back from the tracker.
+- **Stops and mismatch:** a required failure preserves the record and stops before a
+  false completion. Tracker unavailability, decline, silence, or ambiguity degrades to
+  the friction inbox; incomplete and accumulating findings also take that route. Missing
+  or insufficient merge authority holds a mergeable pull request for the operator; a
+  policy-less non-lane pull request takes the operator default. Conditional capabilities
+  classify at their trigger rather than before the record edit; unavailable forge or
+  unsettled review paths preserve exact resume evidence as incomplete. First-match
+  terminal precedence also keeps a degraded integration from masking an incomplete
+  repository path or a failed or still-ambiguous authorized merge; a tracker-only write
+  is successful completion, not a no-op, and isolated review plus self-merge stay on
+  the cockpit's paired lane wrappers and shared state sandbox. The
+  Codex adapter's generic external-mutation wording was weaker than the shared payload-
+  specific gate; this slice removes that duplicate.
+
+### `triage-friction-log`
+
+- **Shared semantics:** draft proposals from a frozen inbox, obtain exact operator
+  decisions, persist an approval session, file approved tracker payloads, and finalize a
+  no-data-loss archive sweep on a reviewable branch.
+- **Runtime translation:** Claude accepts `$ARGUMENTS`; Codex accepts the skill argument.
+  Each runtime needs native tracker and notification clients, but neither adapter should
+  choose their policy.
+- **Capabilities:** repository/config and inbox reads are required. Live Session B needs
+  tracker write access after payload-specific approval. Scheduled approval collection
+  needs notification thread read/write. Parser/finalizer availability must be treated as
+  an atomic engine mode rather than assumed.
+- **Authority and artifacts:** the frozen inbox, proposal report, approval-bound state,
+  returned tracker identifiers, source/archive diff, and PR are resume evidence. Tracker
+  writes require exact-payload approval; a standing workflow request is not approval.
+- **Stops and mismatch:** the current shared workflow names a dedicated pipeline config
+  that is absent from `config/dev-model.yaml`, assumes unvendored engines, and makes the
+  notification channel an unconditional stop even when the operator is present in the
+  interactive session. Its Codex adapter also states only a generic external-mutation
+  gate. Resolving those together requires a config/installer migration and the semantic
+  input matrix, so it is deliberately outside the bookend slice.
+
+### Slice boundary and next starter
+
+This branch applies the shared contract to `session-start` and `wrap-up`, whose
+integration surface can use existing config, runtime-native mechanisms, and the shipped
+helpers named by each definition without adding a dedicated pipeline configuration. It
+does not add a partial triage config, pretend the missing engines are ready, or duplicate
+approval policy in an adapter.
+
+```text
+Create feat/triage-integration-preflights from current origin/main. Build the semantic
+input matrix for a config/dev-model.yaml-owned triage block and its init/upgrade
+migration first. Then make triage-friction-log declare required repository and frozen-
+state capabilities, atomic engine-backed versus honest LLM-only behavior, interactive
+approval when notification is unavailable, scheduled notification requirements,
+payload-specific tracker authority, durable resume evidence, test-mode write limits,
+and hard-stop/degraded-success/completion outcomes. Keep the Claude and Codex adapters
+thin; update runtime parity, README/getting-started, upgrade guidance, manifest, and
+declaration-derived mutation tests in the same PR.
+```
 
 ## Pre-implementation assessment
 

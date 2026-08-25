@@ -42,6 +42,58 @@ starts.
 
 ---
 
+## #596 — 2026-08-25
+
+- **CHANGED (gate semantics) — `session-start` now stops before rendering its normal
+  briefing when repository/config or repository-state reads fail; unavailable forge,
+  CI/cron, tracker, configured drift, or candidate-remediation reads produce explicit
+  degraded results instead of empty, clean, or `Now` claims.** **Refresh
+  `docs/agentic-dev-kit/workflows/session-start.md` and the corresponding Claude/Codex
+  thin adapter. If the adapter is locally customized, reconcile it so it delegates
+  merged-config resolution to the shared workflow; do not retain an instruction to read
+  only tracked `config/dev-model.yaml`. No new config key or connector name is needed.
+  Resolve config through `kitconfig.load_config()` or your equivalent merged-view
+  mechanism so the local overlay is not ignored. Treat the workflow as read-only, and let
+  non-interactive invocations render once and exit. Always attempt and classify the
+  forge, CI/cron, and tracker sources; only an explicitly unconfigured or untriggered
+  declaration may be omitted. Any degraded applicable source yields
+  `degraded-success`; `successful-completion` requires applicable sources to be
+  ready.**
+  **Treat a PR-list response as discovery only: page unfiltered review submissions,
+  issue comments, and inline comments for each returned pull request before calling the
+  forge source ready. Do not use a local acknowledgement/seen-set as resolution evidence;
+  label resolution unverified when the forge cannot prove it. Represent
+  detached HEAD as `DETACHED at <sha>` rather than accepting an empty branch value.**
+- **CHANGED (gate semantics) — `wrap-up` now stops before staging when required
+  repository/config, record-write, or document-budget capabilities fail; tracker
+  unavailability, silence, decline, or missing exact-payload approval parks the complete
+  finding in the friction log, while an interactive issue-shaped finding must be
+  searched and presented for an exact-payload decision instead of parked by default.
+  Any changed repository artifact, including an existing project-status artifact,
+  reaches a terminal state only after its branch/PR/`pr-watch` path settles and merge
+  authority either permits the merge or holds the exact head for the operator. A
+  status-only edit is not a successful no-op. Non-lane pull requests without a project
+  merge policy default to operator-authorized merge; they never default to autonomous
+  merge. Conditional
+  capabilities are classified when triggered rather than claimed ready before the
+  handoff edit. An unavailable forge path or unavailable/unsettled `pr-watch` returns
+  `incomplete-resumable` with the exact preserved diff, commit, branch, or PR evidence;
+  so does a failed or ambiguous authorized merge. First-match outcome precedence keeps
+  an earlier integration degradation from masking that incomplete repository path. A
+  verified tracker-only write is successful completion rather than a no-op, and a merge
+  response that read-back verifies as landed is successful rather than incomplete.
+  Isolated lanes run review follow-through through `dev_session.sh pr-watch <scope>`,
+  and `self` lanes merge only through `dev_session.sh merge <scope>`, keeping the
+  review receipt and merge gate in the same lane state sandbox.** **Refresh
+  `docs/agentic-dev-kit/workflows/wrap-up.md` and the corresponding Claude/Codex thin
+  adapter. If the adapter is locally customized, reconcile it so merged-config
+  resolution delegates to the shared workflow; do not retain tracked-config-only
+  wording. No config migration is needed. Do not treat a configured tracker, prior
+  approval, or standing autonomous authority as approval for a create, modification,
+  or occurrence-comment payload, or as authority to merge.**
+
+---
+
 ## #595 — 2026-08-24
 
 - **ADDED (config keys) — `config/dev-model.yaml` now declares the shared

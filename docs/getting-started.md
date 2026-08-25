@@ -238,6 +238,28 @@ friction-routing step is being skipped — not that triage is overdue.
 > prose the agent executes, not checks that fail. The systemize workflow likewise
 > labels agent-executed classification honestly and never treats tracker availability
 > as authorization.
+>
+> The shared session-start and wrap-up workflows declare the preflight boundary that
+> applies in Claude and Codex. Missing required repository/config or record capabilities
+> stop before a false briefing or commit. Optional session-start sources render as
+> unavailable rather than empty and cannot be silently skipped. PR readiness includes
+> unfiltered review evidence rather than locally acknowledged comments alone, and
+> detached HEAD is explicit rather than a blank branch; wrap-up presents an
+> interactive issue-shaped finding
+> for an exact-payload tracker decision before parking, while unavailable, declined,
+> ambiguous, incomplete, or accumulating routes go to the friction log. Non-interactive
+> runs never wait for approval, and merge authority that is absent or insufficient holds
+> the exact mergeable head for the operator. A non-lane PR with no project policy
+> defaults to operator authorization, never autonomous merge. An unavailable forge or
+> unsettled review path preserves exact resume evidence and reports incomplete.
+> Any existing project-status artifact changed by wrap-up takes that same commit/PR path;
+> a status-only edit is not a successful no-op.
+> Overall outcome precedence makes a later repository or merge failure incomplete even
+> when an earlier optional integration degraded.
+> Their thin adapters select runtime-native mechanisms but cannot change those outcomes.
+> No new config key or installer step is needed for this bookend contract. The triage
+> workflow still needs its pipeline configuration and engine-mode precedence moved into
+> the shared config before it can claim the same integration coverage.
 
 ## That's the loop
 
