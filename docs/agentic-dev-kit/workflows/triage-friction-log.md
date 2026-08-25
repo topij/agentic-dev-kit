@@ -87,8 +87,9 @@ Evaluate the input before capability-dependent work.
 | `resume`, no valid active state | Hard-stop without an external write. |
 | `new`, active live state | Refuse; never overwrite an approval-bound session. |
 | Interactive `recover`, active live state | Under the single-writer gate, capture raw bytes and filesystem observations before parsing the captured copy; valid state then refuses and directs to `resume`, while invalid state enters recovery. Recovery never authorizes a tracker, source, or forge write. |
-| Interactive `recover`, blocking gate | Capture the complete published gate and its filesystem observations; prove owner termination and require exact operator approval before quarantining the unchanged gate, whether or not active state exists. |
+| Interactive `recover`, blocking gate | Capture the complete published gate and its filesystem observations; prove owner termination and require exact operator approval before quarantining the unchanged gate, whether or not active state exists. When state is absent, persist the gate-only bundle and a `gate-only-operator-held` receipt; never infer safe restart. |
 | Interactive `recover`, no active live state and no gate | Hard-stop without creating a recovery bundle or performing an external write. |
+| Any invocation with a `gate-only-operator-held` receipt | Preserve the receipt, quarantined gate, and bundle; report operator-held and never start, resume, or reconstruct a draft automatically. |
 | Scheduled or unattended `recover` | Report operator-held without acquiring the single-writer gate, capturing state, or changing an artifact. |
 | `test` | Use test identity and test state; never replace or resume live state. |
 | Scheduled or unattended non-recovery invocation with active state | Resume or report operator-held; never start another draft. |
@@ -139,6 +140,7 @@ conditional capability ready before its trigger.
 | `invalid-state-recovery` | `preserve-before-classify-never-abandon-uncertain-attempt` |
 | `state-or-frozen-identity-mismatch` | `stop-before-tracker-write-never-whole-sweep` |
 | `protected-branch-advance` | `allow-fast-forward-preserve-draft-identity-hold-divergence` |
+| `gate-only-recovery` | `preserve-gate-and-state-absence-evidence-remain-operator-held` |
 | `partial-engine-set` | `stop-never-mix-engine-and-llm-artifacts` |
 | `unattended-without-notification` | `stop-before-new-approval-session` |
 | `tracker-without-exact-payload-approval` | `prohibit-create-update-comment` |
@@ -147,6 +149,7 @@ conditional capability ready before its trigger.
 | `partial-tracker-batch` | `hold-before-archive-sweep` |
 | `test-mode-external-write` | `prohibit-tracker-friction-archive-branch-commit-push-pr` |
 | `archive-sweep-boundary` | `sweep-only-approved-accounted-byte-identical-frozen-blocks` |
+| `merged-pr-completion` | `require-merged-final-head-equals-reviewed-head-else-operator-held` |
 | `runtime-policy-override` | `shared-declaration-wins-and-stop` |
 
 ### Durable artifacts, resumability, and completion
@@ -200,7 +203,7 @@ before acquiring a new recovery gate. Uncertain ownership remains operator-held.
 | Outcome | Condition | Required result |
 |---|---|---|
 | `hard-stop` | A required preflight, state/frozen safety check, engine atomicity check, or shared/runtime policy check fails before the disputed action. | Name the failed capability and remediation; preserve every pre-existing artifact and perform no disputed write. |
-| `operator-held` | Approval is pending; a triggered tracker, repository, review, or unattended-notification capability is unavailable; or an attempted write remains failed or ambiguous after read-back. | Preserve exact state, report, payload digests, verified identifiers, and repository/PR evidence; name one safe resume action and do not sweep or delete state. |
+| `operator-held` | Approval is pending; a triggered tracker, repository, review, or unattended-notification capability is unavailable; an attempted write remains failed or ambiguous after read-back; a merged PR's final head is missing or mismatched; or gate-only recovery cannot establish prior state. | Preserve exact state, report, recovery bundle, payload digests, verified identifiers, and repository/PR evidence; name the safe operator action and do not sweep or delete state. |
 | `degraded-success` | Every required and triggered write completed authoritatively, but an optional interactive notification or runtime-compute enhancement was unavailable. | Report completed durable artifacts and the degraded capability; never use degradation to mask an unresolved required write. |
 | `successful-completion` | No candidates or no sweep/write was approved, or every approved payload and sweep reached an authoritative terminal state without degradation. | Report actual artifacts and identifiers. Write a durable completed receipt before optionally removing active state. |
 
@@ -232,7 +235,19 @@ an external write. Acquire the mode's single-writer gate before state capture. I
 existing gate blocks acquisition, capture its complete owner record, every same-inode
 temporary name, and filesystem observations before following the stale-gate recovery
 rule above; this route remains available when active state is absent. Never remove the
-gate first. Locate any active state in its own sandbox with
+gate first. When active state is absent, the immutable capture also records repeated
+non-creating resolution and filesystem observations proving that absence. After proving
+owner termination and obtaining exact operator approval of the bundle digest,
+quarantine every unchanged name for the old gate, acquire a new recovery gate, and
+re-prove state absence. Atomically claim the absent state path with a
+`gate-only-operator-held` receipt that binds the bundle digest, old gate owner record,
+quarantine paths, absence observations, repository identity, and new gate owner token.
+Release the new gate only after that receipt is durable. This terminal recovery result
+does not create a restart receipt, make `new` available, or infer that no external
+attempt occurred; every later invocation preserves it as operator-held. The gate-only
+route does not enter the raw-state capture path below.
+
+Otherwise, locate active state in its own sandbox with
 `resolve_write_path(fragment, mkdir=False)` and inspect the path itself without parsing
 its content. Reject a symlink, non-regular file, or link count other than one. Before
 validity classification, rename, or repair, atomically create a unique initial recovery

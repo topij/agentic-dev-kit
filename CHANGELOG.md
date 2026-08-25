@@ -71,6 +71,9 @@ starts.
   Before completing a merged sweep, read back its final `headRefOid` and require it to
   equal the exact reviewed head retained in state; a replacement head remains
   operator-held even when the PR is merged.
+  When stale-gate recovery finds no active state, retain its
+  `gate-only-operator-held` receipt and evidence bundle; do not treat gate quarantine
+  as proof that a new draft is safe.
   Treat an existing single-writer gate or an act-time state-digest mismatch as
   operator-held; never replace, steal, or retry through it. Keep configured draft and
   finalize engine fragments canonically beneath `paths.engines`; an absolute,

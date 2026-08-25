@@ -2526,6 +2526,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         "protected-branch-advance": (
             "allow-fast-forward-preserve-draft-identity-hold-divergence",
         ),
+        "gate-only-recovery": (
+            "preserve-gate-and-state-absence-evidence-remain-operator-held",
+        ),
         "partial-engine-set": ("stop-never-mix-engine-and-llm-artifacts",),
         "unattended-without-notification": ("stop-before-new-approval-session",),
         "tracker-without-exact-payload-approval": (
@@ -2539,6 +2542,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         ),
         "archive-sweep-boundary": (
             "sweep-only-approved-accounted-byte-identical-frozen-blocks",
+        ),
+        "merged-pr-completion": (
+            "require-merged-final-head-equals-reviewed-head-else-operator-held",
         ),
         "runtime-policy-override": ("shared-declaration-wins-and-stop",),
     }
@@ -2554,6 +2560,12 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert "never use degradation to mask an unresolved required write" in outcomes[
         "degraded-success"
     ][1]
+    assert "merged PR's final head is missing or mismatched" in outcomes[
+        "operator-held"
+    ][0]
+    assert "gate-only recovery cannot establish prior state" in outcomes[
+        "operator-held"
+    ][0]
     assert list(_integration_table(workflow, "Overall outcome precedence", 3)) == [
         "required-or-safety-failure",
         "approval-or-triggered-write-not-terminal",
@@ -2570,6 +2582,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Interactive recover, active live state",
         "Interactive recover, blocking gate",
         "Interactive recover, no active live state and no gate",
+        "Any invocation with a gate-only-operator-held receipt",
         "Scheduled or unattended recover",
         "test",
         "Scheduled or unattended non-recovery invocation with active state",
@@ -2596,6 +2609,12 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert "whether or not active state exists" in inputs[
         "Interactive recover, blocking gate"
     ][0]
+    assert "never infer safe restart" in inputs[
+        "Interactive recover, blocking gate"
+    ][0]
+    assert "never start, resume, or reconstruct a draft automatically" in inputs[
+        "Any invocation with a gate-only-operator-held receipt"
+    ][0]
     assert "without creating a recovery bundle" in inputs[
         "Interactive recover, no active live state and no gate"
     ][0]
@@ -2614,6 +2633,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Never use `resolve_read_path` for either artifact",
         "An absolute, traversing, escaping, or non-regular engine target hard-stops",
         "published gate therefore never exists without its complete owner record",
+        "gate-only-operator-held` receipt that binds the bundle digest",
+        "Release the new gate only after that receipt is durable",
+        "does not create a restart receipt, make `new` available",
         "Parse under the held gate before creating the `reserved` state",
         "proven pre-reservation parse-failure path",
         "After successful parsing, a new run claims the absent state path with "
@@ -2650,6 +2672,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "authoritative PR read-back must prove both that the pull request merged",
         "final `headRefOid` equals the exact reviewed head recorded in state",
         "never mark an unreviewed replacement head complete",
+        "A missing or mismatched final head is operator-held",
         "without notification, approval state, tracker, source-document, or forge writes",
     ):
         assert required_phrase in flattened
@@ -2778,6 +2801,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
+            "preserve-gate-and-state-absence-evidence-remain-operator-held",
+            "discard-gate-and-start-new-without-state-evidence",
+            1,
+        ),
+        workflow.replace(
             "Refresh the remote ref read-only on resume",
             "Do not refresh the remote ref on resume; use the locally cached ref",
             1,
@@ -2854,6 +2882,16 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "final `headRefOid`\nequals the exact reviewed head recorded in state",
             "final `headRefOid` may differ from the exact reviewed head recorded in state",
+            1,
+        ),
+        workflow.replace(
+            "require-merged-final-head-equals-reviewed-head-else-operator-held",
+            "merged-pr-is-successful-completion-regardless-of-final-head",
+            1,
+        ),
+        workflow.replace(
+            "A missing or mismatched final head is\noperator-held",
+            "A missing or mismatched final head is successful-completion",
             1,
         ),
         workflow.replace("operator-held` |", "successful-completion` |", 1),
