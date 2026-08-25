@@ -36,9 +36,9 @@ their Claude and Codex bindings remain invocation-only adapters.
   tracker writes. Missing or insufficient merge authority holds the exact reviewed head
   for the operator; a policy-less non-lane pull request defaults to the operator route.
   Conditional capabilities classify at their trigger rather than claiming future
-  readiness before the handoff edit; blocked forge or unsettled review paths preserve
-  exact evidence under `incomplete-resumable`; a changed existing project-status
-  artifact takes that same path and cannot be called a no-op.
+  readiness before the handoff edit. First-match outcome precedence keeps a degraded
+  integration from masking an incomplete forge or merge path; a changed existing
+  project-status artifact takes that path and cannot be called a no-op.
 
 - **The triage workflow is bounded separately.** Its shared definition still assumes a
   dedicated pipeline config absent from `config/dev-model.yaml`, unvendored parse/finalize

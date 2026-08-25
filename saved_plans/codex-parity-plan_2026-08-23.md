@@ -96,7 +96,9 @@ that revision; the delivery slices below are expected to change them.
   or insufficient merge authority holds a mergeable pull request for the operator; a
   policy-less non-lane pull request takes the operator default. Conditional capabilities
   classify at their trigger rather than before the record edit; unavailable forge or
-  unsettled review paths preserve exact resume evidence as incomplete. The
+  unsettled review paths preserve exact resume evidence as incomplete. First-match
+  terminal precedence also keeps a degraded integration from masking an incomplete
+  repository path or a failed or ambiguous authorized merge. The
   Codex adapter's generic external-mutation wording was weaker than the shared payload-
   specific gate; this slice removes that duplicate.
 

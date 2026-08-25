@@ -330,8 +330,9 @@ operator. A non-lane PR without project merge policy defaults to the operator ro
 conditional capabilities are classified only when their trigger occurs. Non-interactive
 runs never wait for tracker approval. A blocked forge or unsettled review path reports
 an incomplete resumable result with exact repository/PR evidence. Claude and Codex
-adapters
-only translate invocation and available mechanisms.
+adapters only translate invocation and available mechanisms. Wrap-up selects one
+overall outcome by shared precedence, so an optional-integration degradation cannot
+mask an incomplete repository path or ambiguous authorized merge.
 These bookend declarations use existing config and upgrade through the shared workflow
 refresh; they add no installer migration or runtime-specific connector requirement.
 

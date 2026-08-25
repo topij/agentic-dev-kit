@@ -1483,7 +1483,7 @@ def _integration_table(
             cell.strip().replace("`", "") for cell in line.strip("|").split("|")
         ]
         if len(cells) == width and cells[0] not in {
-            "Capability id", "Policy id", "Outcome", ""
+            "Capability id", "Policy id", "Outcome", "Precedence id", ""
         }:
             assert cells[0] not in rows, cells[0]
             rows[cells[0]] = tuple(cells[1:])
@@ -1616,6 +1616,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "conditional and authority-gated",
                 "Required only after pr-watch says the exact head is mergeable. For an isolated lane, resolve its persisted merge class; for a non-lane pull request, resolve the project's declared merge policy and default to operator when none exists. A self route still needs project and current-request authority; an operator route needs current operator authorization for the exact pull request. Unknown lane metadata or insufficient authority leaves the mergeable pull request in successful-operator-handoff; it never authorizes a merge.",
             ),
+            "forge-merge-write": (
+                "conditional and authority-gated",
+                "Required only when the exact head is mergeable and merge-authority permits this workflow to merge it. If the authorized merge fails or its result is ambiguous, read back repository and forge state before any retry, preserve the exact head, and report incomplete-resumable.",
+            ),
             "project-status-write": (
                 "optional enhancement",
                 "Update only a project status artifact that already exists and is in scope. Its absence is an honest skip, not a reason to invent one.",
@@ -1660,16 +1664,16 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "Preserve existing and newly authored record data, name the failed capability, and provide the next safe resume step.",
             ),
             "degraded-success": (
-                "Tracker or optional project-status integration is unavailable while the repository record path remains safe.",
-                "Park the full finding in <friction-log> or skip the absent optional status artifact, then continue the repository record path.",
+                "A triggered tracker route or an in-scope existing project-status integration is unavailable, and every changed repository artifact reached its authoritative terminal state.",
+                "Park the full finding in <friction-log> or preserve the existing status artifact, then complete the repository path while reporting the degraded capability.",
             ),
             "successful-noop": (
                 "The session produced no change to any repository artifact and no friction artifact is owed.",
                 "Say so and create no commit or pull request.",
             ),
             "incomplete-resumable": (
-                "A changed repository artifact cannot reach a mergeable exact head because branch/push/pull-request creation is unavailable or ambiguous, or pr-watch is unavailable or unsettled.",
-                "Do not claim completion. Preserve and report the exact working-tree diff or commit, branch, pull-request URL and exact head when present, the failed or unsettled capability, and a copy-pasteable safe resume step.",
+                "A changed repository artifact has not reached an authoritative terminal state because branch/push/pull-request creation is unavailable or ambiguous, pr-watch is unavailable or unsettled, or an authorized merge failed or remains ambiguous after read-back.",
+                "Do not claim completion. Preserve and report the exact working-tree diff or commit, branch, pull-request URL and exact head when present, the failed, unsettled, or ambiguous capability, and a copy-pasteable safe resume step.",
             ),
             "successful-operator-handoff": (
                 "The pull request carrying the repository artifacts is mergeable at an exact reviewed head, but the declared merge class or current authority requires an operator to act.",
@@ -1698,6 +1702,55 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "name it in validation and staging" in flattened
         assert "also stage any existing project-status artifact" in flattened
         assert "no repository-artifact changes" in flattened
+        precedence = list(
+            _integration_table(workflow, "Overall outcome precedence", 3).items()
+        )
+        assert precedence == [
+            (
+                "required-or-safety-failure",
+                (
+                    "A required capability or repository-safety validation failed, or shared/runtime policy conflicts.",
+                    "hard-stop",
+                ),
+            ),
+            (
+                "changed-artifact-not-terminal",
+                (
+                    "A changed repository artifact lacks an authoritative merged or operator-held terminal state, including after a failed or ambiguous authorized merge.",
+                    "incomplete-resumable",
+                ),
+            ),
+            (
+                "mergeable-head-needs-operator",
+                (
+                    "The exact head is mergeable but current merge authority requires operator action.",
+                    "successful-operator-handoff",
+                ),
+            ),
+            (
+                "degraded-integration-repository-terminal",
+                (
+                    "A triggered optional or approval-gated integration degraded, and the repository artifact path is authoritatively complete.",
+                    "degraded-success",
+                ),
+            ),
+            (
+                "no-artifact-change",
+                (
+                    "No repository artifact changed and no friction artifact is owed.",
+                    "successful-noop",
+                ),
+            ),
+            (
+                "all-contracts-complete",
+                (
+                    "Every required and triggered conditional capability completed without a degraded integration.",
+                    "successful-completion",
+                ),
+            ),
+        ]
+        assert "select the first match" in flattened
+        assert "Report exactly one overall outcome" in flattened
 
 
 @pytest.mark.kit_repo_only(
@@ -1896,7 +1949,7 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "unverified pull request when one was required", 1
         )),
         ("wrap-up", wrap, wrap.replace(
-            "A changed repository artifact cannot reach a mergeable exact head",
+            "A changed repository artifact has not reached an authoritative terminal state",
             "A changed repository artifact reached successful completion", 1
         )),
         ("wrap-up", wrap, wrap.replace(
@@ -1918,6 +1971,14 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("wrap-up", wrap, wrap.replace(
             "no repository-artifact changes",
             "no handoff-relevant changes", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`changed-artifact-not-terminal` | A changed repository artifact lacks an authoritative merged or operator-held terminal state, including after a failed or ambiguous authorized merge. | `incomplete-resumable`",
+            "`changed-artifact-not-terminal` | A changed repository artifact lacks an authoritative merged or operator-held terminal state, including after a failed or ambiguous authorized merge. | `degraded-success`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "If the authorized merge fails or its result is ambiguous",
+            "If the authorized merge fails, claim completion; if its result is ambiguous", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "Never repeat a tracker create",

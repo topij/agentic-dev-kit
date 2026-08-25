@@ -72,7 +72,9 @@ starts.
   merge. Conditional
   capabilities are classified when triggered rather than claimed ready before the
   handoff edit. An unavailable forge path or unavailable/unsettled `pr-watch` returns
-  `incomplete-resumable` with the exact preserved diff, commit, branch, or PR evidence.** **Refresh
+  `incomplete-resumable` with the exact preserved diff, commit, branch, or PR evidence;
+  so does a failed or ambiguous authorized merge. First-match outcome precedence keeps
+  an earlier integration degradation from masking that incomplete repository path.** **Refresh
   `docs/agentic-dev-kit/workflows/wrap-up.md` and the corresponding Claude/Codex thin
   adapter. If the adapter is locally customized, reconcile it so merged-config
   resolution delegates to the shared workflow; do not retain tracked-config-only

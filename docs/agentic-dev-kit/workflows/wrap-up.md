@@ -48,6 +48,7 @@ Once a condition occurs, `not-triggered` is invalid and cannot satisfy completio
 | `forge-pr-write` | conditional | Required when the wrap-up changes any repository artifact, including an existing project-status artifact. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step. |
 | `pr-watch` | conditional | Required after a wrap-up pull request exists. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete. |
 | `merge-authority` | conditional and authority-gated | Required only after `pr-watch` says the exact head is mergeable. For an isolated lane, resolve its persisted merge class; for a non-lane pull request, resolve the project's declared merge policy and default to `operator` when none exists. A `self` route still needs project and current-request authority; an `operator` route needs current operator authorization for the exact pull request. Unknown lane metadata or insufficient authority leaves the mergeable pull request in `successful-operator-handoff`; it never authorizes a merge. |
+| `forge-merge-write` | conditional and authority-gated | Required only when the exact head is mergeable and `merge-authority` permits this workflow to merge it. If the authorized merge fails or its result is ambiguous, read back repository and forge state before any retry, preserve the exact head, and report `incomplete-resumable`. |
 | `project-status-write` | optional enhancement | Update only a project status artifact that already exists and is in scope. Its absence is an honest skip, not a reason to invent one. |
 
 ### Authority contract
@@ -102,11 +103,27 @@ summary; read the destination first.
 | Outcome | Condition | Required result |
 |---|---|---|
 | `hard-stop` | A required capability fails, record validation fails, an operator-owned edit overlaps, or shared/runtime policy conflicts. | Preserve existing and newly authored record data, name the failed capability, and provide the next safe resume step. |
-| `degraded-success` | Tracker or optional project-status integration is unavailable while the repository record path remains safe. | Park the full finding in `<friction-log>` or skip the absent optional status artifact, then continue the repository record path. |
+| `degraded-success` | A triggered tracker route or an in-scope existing project-status integration is unavailable, and every changed repository artifact reached its authoritative terminal state. | Park the full finding in `<friction-log>` or preserve the existing status artifact, then complete the repository path while reporting the degraded capability. |
 | `successful-noop` | The session produced no change to any repository artifact and no friction artifact is owed. | Say so and create no commit or pull request. |
-| `incomplete-resumable` | A changed repository artifact cannot reach a mergeable exact head because branch/push/pull-request creation is unavailable or ambiguous, or `pr-watch` is unavailable or unsettled. | Do not claim completion. Preserve and report the exact working-tree diff or commit, branch, pull-request URL and exact head when present, the failed or unsettled capability, and a copy-pasteable safe resume step. |
+| `incomplete-resumable` | A changed repository artifact has not reached an authoritative terminal state because branch/push/pull-request creation is unavailable or ambiguous, `pr-watch` is unavailable or unsettled, or an authorized merge failed or remains ambiguous after read-back. | Do not claim completion. Preserve and report the exact working-tree diff or commit, branch, pull-request URL and exact head when present, the failed, unsettled, or ambiguous capability, and a copy-pasteable safe resume step. |
 | `successful-operator-handoff` | The pull request carrying the repository artifacts is mergeable at an exact reviewed head, but the declared merge class or current authority requires an operator to act. | Leave the pull request unmerged; report its URL, exact head, merge class or authority gap, durable record paths, and the command or operator action that safely resumes it. |
 | `successful-completion` | Every required and triggered conditional capability completed, each external identifier was read back or returned authoritatively, and any merge was authorized by the declared class plus the current request. | Report the durable record paths, verified merged pull request when one was required, actual tracker identifiers when approved, and one next-session starter or an explicit no-follow-up result. |
+
+### Overall outcome precedence
+
+Evaluate these rows from top to bottom and select the first match. Report exactly one
+overall outcome, while still listing every capability's terminal status. In particular,
+a degraded tracker or project-status capability remains visible when a later repository
+failure makes the overall outcome `incomplete-resumable`.
+
+| Precedence id | First matching condition | Overall outcome |
+|---|---|---|
+| `required-or-safety-failure` | A required capability or repository-safety validation failed, or shared/runtime policy conflicts. | `hard-stop` |
+| `changed-artifact-not-terminal` | A changed repository artifact lacks an authoritative merged or operator-held terminal state, including after a failed or ambiguous authorized merge. | `incomplete-resumable` |
+| `mergeable-head-needs-operator` | The exact head is mergeable but current merge authority requires operator action. | `successful-operator-handoff` |
+| `degraded-integration-repository-terminal` | A triggered optional or approval-gated integration degraded, and the repository artifact path is authoritatively complete. | `degraded-success` |
+| `no-artifact-change` | No repository artifact changed and no friction artifact is owed. | `successful-noop` |
+| `all-contracts-complete` | Every required and triggered conditional capability completed without a degraded integration. | `successful-completion` |
 
 ## Steps
 

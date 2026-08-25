@@ -252,6 +252,8 @@ friction-routing step is being skipped — not that triage is overdue.
 > unsettled review path preserves exact resume evidence and reports incomplete.
 > Any existing project-status artifact changed by wrap-up takes that same commit/PR path;
 > a status-only edit is not a successful no-op.
+> Overall outcome precedence makes a later repository or merge failure incomplete even
+> when an earlier optional integration degraded.
 > Their thin adapters select runtime-native mechanisms but cannot change those outcomes.
 > No new config key or installer step is needed for this bookend contract. The triage
 > workflow still needs its pipeline configuration and engine-mode precedence moved into

@@ -52,7 +52,9 @@ For work using the fallback panel:
   from the declarations. For each capability, record applicability, trigger point,
   unavailable result, authority, durable evidence, resume route, and overall outcome.
   Make terminal outcomes total and mutually exclusive before turning the matrix into
-  prose.
+  prose. Test the outcome cross-product too: an optional degradation followed by a
+  required downstream failure, and an authorized external write that fails or returns
+  ambiguously, must each resolve to one declared terminal outcome.
 - Build hostile mutations from that matrix, including a required capability becoming
   optional, an unavailable result becoming success, a fixed live source being skipped,
   a conditional being claimed ready before its trigger, an interrupted integration with

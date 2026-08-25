@@ -29,7 +29,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "8520cc823766108fc88ea68adaff2f931cb0bd6a9727957298e7d8bbc139cc8e"
+      "sha256": "abf518473aef2c02f475273fc19eda749c6d838ef28b2e60dc57c12a485538de"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -69,7 +69,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "5b4244eb263e4cac270d273997a95a7fd7b2ea00ab4d679a8f323a837e09b4b7"
+      "sha256": "b8b7d01a4b6ce3ef547607f6c943def79be296138ebbbd511bc236f58ade8e29"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
@@ -247,7 +247,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "6a2e31f49affa4e5aef115d0e556f3723df72b4642fc2e0363a8c214bcc794f3"
+      "sha256": "c72baee46edc272d04649035dfbcd1eb49e75a1d706b735dd7ec22b8c5f7cc29"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
