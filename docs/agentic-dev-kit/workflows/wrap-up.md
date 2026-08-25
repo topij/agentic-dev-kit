@@ -460,8 +460,10 @@ failure makes the overall outcome `incomplete-resumable`.
    keeping the handoff separate. Branch first (`chore/update-handoff-<date>`)
    before committing, then push and open a PR. Either way, once there's
    nothing left to push, **mark the PR ready** so it gets reviewed, and run
-   the watch-and-fix loop (`pr-watch`) to merge — per your project's
-   branching convention.
+   the watch-and-fix loop (`pr-watch`) until the exact head is settled. Then resolve
+   `merge-authority`: invoke `forge-merge-write` only when the declared class and
+   current request authorize it; otherwise hold the exact head unmerged under
+   `successful-operator-handoff`.
 
    **Keep tracker identifiers out of the title and body unless this PR is really
    about that ticket.** Trackers parse titles and bodies; they do not parse diffs.

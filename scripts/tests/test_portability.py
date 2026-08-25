@@ -1751,6 +1751,11 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         ]
         assert "select the first match" in flattened
         assert "Report exactly one overall outcome" in flattened
+        assert (
+            "Then resolve `merge-authority`: invoke `forge-merge-write` only when "
+            "the declared class and current request authorize it; otherwise hold the "
+            "exact head unmerged under `successful-operator-handoff`"
+        ) in flattened
 
 
 @pytest.mark.kit_repo_only(
@@ -1979,6 +1984,12 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("wrap-up", wrap, wrap.replace(
             "If the authorized merge fails or its result is ambiguous",
             "If the authorized merge fails, claim completion; if its result is ambiguous", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "invoke `forge-merge-write` only when the declared class and\n"
+            "   current request authorize it; otherwise hold the exact head unmerged under",
+            "invoke `forge-merge-write` without resolving authority and ignore the\n"
+            "   declared class; always merge instead of holding the exact head under", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "Never repeat a tracker create",
