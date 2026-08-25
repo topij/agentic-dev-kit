@@ -259,7 +259,7 @@
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
-      "sha256": "5d0d2169542e5ac7d6f6ea9b3339771a255bb6e2b8057d666927a19dab13e114"
+      "sha256": "a12ddfbb4636376a07b3c047242a499226f47bc58a3668f1eb5a76fe1259b260"
     },
     "scripts/tests/test_repo_layout.py": {
       "role": "test",

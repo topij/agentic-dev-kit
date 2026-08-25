@@ -1048,7 +1048,7 @@ def test_portable_bounded_runner_delivers_term_during_grace(tmp_path: Path) -> N
         time.sleep(0.01)
     if observed != "started":
         with contextlib.suppress(ProcessLookupError):
-            os.killpg(runner.pid, signal.SIGKILL)
+            os.killpg(runner.pid, signal.SIGTERM)
         runner.communicate(timeout=3)
         pytest.fail(f"TERM observer did not become ready: {observed!r}")
     os.killpg(runner.pid, signal.SIGTERM)
