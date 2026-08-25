@@ -291,7 +291,7 @@ behavior or losing local policy.
 Done when the parity matrix is enforced by deterministic checks and confirmed by an
 adopter run.
 
-## Current recommended slice
+## Completed review and shared-integration slices
 
 PR `#593` delivered the review-evidence composition workstream separately from the
 trusted-client validation: the shared engine now preserves a full-panel parent plus an
@@ -305,17 +305,9 @@ bind posted delta-draw verdicts; Git paths and author-supplied labels cannot est
 either fact. Until such an artifact exists, uncertain classification continues to take
 the full-panel route and issue `#32` remains the provenance boundary.
 
-After PR `#595` merges, continue Phase 3 from a fresh branch with this starter:
-
-```text
-Create feat/shared-integration-preflights from current origin/main. Inventory the
-tracker and notification dependencies in session-start, wrap-up, and
-triage-friction-log. Reuse post-merge-systemize's runtime-neutral capability vocabulary;
-declare required capabilities, optional degraded paths, payload-specific approval gates,
-durable artifacts, and non-interactive stop behavior in each shared workflow. Keep both
-runtime adapters thin, do not invent connector names or credentials, and add
-declaration-derived tests that fail when a workflow loses its preflight or adapter.
-```
+PR `#596` then applied the shared integration contract to the lifecycle bookends. The
+remaining Phase 3 starter is the `feat/triage-integration-preflights` block under
+“Slice boundary and next starter” above; keep that single copy authoritative.
 
 Keep the trusted-client record as an observation at its stamped client and revision; do
 not turn it into a general instruction-loading guarantee.
