@@ -60,7 +60,9 @@ their Claude and Codex bindings remain invocation-only adapters.
 build the semantic input matrix for a `config/dev-model.yaml`-owned triage block and its
 installer/upgrade migration, then declare atomic engine modes, interactive versus
 scheduled approval paths, exact tracker authority, durable resume evidence, test-mode
-writes, and stop/degraded/completion outcomes in the shared workflow.
+writes, and stop/degraded/completion outcomes in the shared workflow. Keep the Claude
+and Codex adapters thin; update runtime parity, README/getting-started, upgrade guidance,
+the manifest, and declaration-derived mutation tests in the same PR.
 
 ______________________________________________________________________
 

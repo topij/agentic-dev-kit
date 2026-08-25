@@ -309,7 +309,8 @@ the full-panel route and issue `#32` remains the provenance boundary.
 
 PR `#596` then merged the shared integration contract for the lifecycle bookends. The
 remaining Phase 3 starter is the `feat/triage-integration-preflights` block under
-“Slice boundary and next starter” above; keep that single copy authoritative.
+“Slice boundary and next starter” above and is mirrored in the latest handoff; update
+both together if its scope changes.
 
 Keep the trusted-client record as an observation at its stamped client and revision; do
 not turn it into a general instruction-loading guarantee.
