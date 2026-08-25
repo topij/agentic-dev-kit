@@ -88,6 +88,10 @@ DEFAULT_PREFIX="${DEV_SESSION_PREFIX:-${CONFIGURED_PREFIX:-dev}}"
 # Sessions container (sibling of the repo by default). Each session is one
 # subdir holding wt/ (worktree) + state/ (sandbox) + activate (env snippet).
 SESSIONS_DIR="${DEVKIT_SESSIONS_DIR:-$(dirname "$REPO_ROOT")/dev-model-sessions}"
+case "$SESSIONS_DIR" in
+    /*) ;;
+    *) SESSIONS_DIR="$(python3 -c 'import os, sys; print(os.path.abspath(sys.argv[1]))' "$SESSIONS_DIR")" ;;
+esac
 
 # Sticky sandbox marker written at the worktree root by `new --headless`. MUST
 # match scripts/lib/state_paths's STATE_ROOT_MARKER — the resolver reads it to
@@ -908,8 +912,16 @@ cmd_rm() {
     fi
 
     echo "[dev-session] removing worktree $worktree"
-    git -C "$REPO_ROOT" worktree remove ${force:+--force} "$worktree" 2>/dev/null \
-        || git -C "$REPO_ROOT" worktree remove --force "$worktree"
+    if [[ "$force" -eq 1 ]]; then
+        git -C "$REPO_ROOT" worktree remove --force "$worktree" \
+            || _die "forced worktree removal failed; session preserved at $session_dir"
+    else
+        # Git repeats the cleanliness check at removal time. Do not add --force
+        # here or in a fallback: a file can arrive after the status probe above,
+        # and the remove command is the last guard against discarding it.
+        git -C "$REPO_ROOT" worktree remove "$worktree" \
+            || _die "worktree changed or could not be removed; session preserved (retry, or use --force to discard)"
+    fi
     rm -rf "$session_dir"
 
     if [[ "$keep_branch" -eq 0 ]]; then

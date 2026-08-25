@@ -771,6 +771,32 @@ def test_newer_remote_tip_is_not_hidden_by_a_stale_matching_local_tip(
     assert "remote-tracking tip differs from PR head" in result.stdout
 
 
+def test_newer_live_origin_tip_is_not_hidden_by_stale_local_caches(
+    harness: Harness,
+) -> None:
+    harness.branch("lane/live-origin")
+    old_head = _git(harness.repo, "rev-parse", "lane/live-origin")
+    harness.pr("lane/live-origin", 587, "MERGED", head=old_head)
+    harness.session("live-origin", "lane/live-origin", "operator")
+    new_head = harness.advance_branch("lane/live-origin")
+    _git(harness.repo, "update-ref", "refs/heads/lane/live-origin", old_head)
+    _git(
+        harness.repo,
+        "update-ref",
+        "refs/remotes/origin/lane/live-origin",
+        old_head,
+    )
+    assert _git(
+        harness.repo, "ls-remote", "origin", "refs/heads/lane/live-origin"
+    ).startswith(new_head)
+
+    result = harness.run("live-origin")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "live-origin") == "open"
+    assert "origin tip differs from PR head" in result.stdout
+
+
 def test_a_tip_that_moves_between_snapshot_reads_cannot_terminalize(
     harness: Harness,
 ) -> None:
@@ -779,8 +805,9 @@ def test_a_tip_that_moves_between_snapshot_reads_cannot_terminalize(
     harness.pr("lane/race", 586, "MERGED", head=old_head)
     harness.session("race", "lane/race", "operator")
     new_head = harness.advance_branch("lane/race")
-    _git(harness.repo, "update-ref", "refs/heads/lane/race", old_head)
+    _git(harness.repo, "update-ref", "refs/heads/lane/race", new_head)
     _git(harness.repo, "update-ref", "-d", "refs/remotes/origin/lane/race")
+    _git(harness.repo, "push", "origin", "--delete", "lane/race")
 
     real_git = shutil.which("git")
     assert real_git is not None
@@ -793,7 +820,7 @@ def test_a_tip_that_moves_between_snapshot_reads_cannot_terminalize(
         "[ \"$5\" = \"refs/heads/lane/race^{commit}\" ] && "
         f"[ ! -e \"{marker}\" ]; then\n"
         f"  \"{real_git}\" -C \"$2\" rev-parse --verify \"$5\"\n"
-        f"  \"{real_git}\" -C \"$2\" update-ref refs/heads/lane/race {new_head}\n"
+        f"  \"{real_git}\" -C \"$2\" update-ref refs/heads/lane/race {old_head}\n"
         f"  : > \"{marker}\"\n"
         "  exit 0\n"
         "fi\n"

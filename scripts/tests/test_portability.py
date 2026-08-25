@@ -262,14 +262,14 @@ def test_relative_headless_sessions_activate_with_absolute_descriptor_roots(
             "relative",
             "--headless",
         ],
-        cwd=repo,
+        cwd=repo.parent,
         env=env,
         check=True,
         capture_output=True,
         text=True,
     )
     descriptor = json.loads(result.stdout)
-    activate = repo / relative_sessions / "relative" / "activate"
+    activate = repo.parent / relative_sessions / "relative" / "activate"
 
     sourced = subprocess.run(
         [
@@ -279,7 +279,7 @@ def test_relative_headless_sessions_activate_with_absolute_descriptor_roots(
             "bash",
             str(activate),
         ],
-        cwd=repo,
+        cwd=repo.parent,
         env=env,
         check=True,
         capture_output=True,
@@ -292,6 +292,59 @@ def test_relative_headless_sessions_activate_with_absolute_descriptor_roots(
     assert repo_root == descriptor["repo_root"]
     assert state_root != str(inherited)
     assert all(Path(value).is_absolute() for value in (cwd, state_root, repo_root))
+
+
+def test_remove_without_force_preserves_a_worktree_that_turns_dirty_after_probe(
+    tmp_path: Path,
+) -> None:
+    repo, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
+    env = {**os.environ, "DEVKIT_SESSIONS_DIR": str(sessions)}
+    subprocess.run(
+        ["bash", str(engine_dir / "dev_session.sh"), "new", "remove-race"],
+        cwd=repo,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    worktree = sessions / "remove-race" / "wt"
+    raced = worktree / "raced.txt"
+    real_git = shutil.which("git")
+    assert real_git is not None
+    fake_bin = tmp_path / "remove-race-bin"
+    fake_bin.mkdir()
+    fake_git = fake_bin / "git"
+    fake_git.write_text(
+        "#!/bin/sh\n"
+        f"if [ \"$1\" = \"-C\" ] && [ \"$2\" = \"{worktree}\" ] && "
+        "[ \"$3\" = \"status\" ] && [ \"$4\" = \"--porcelain\" ]; then\n"
+        f"  : > \"{raced}\"\n"
+        "  exit 0\n"
+        "fi\n"
+        f"exec \"{real_git}\" \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(engine_dir / "dev_session.sh"),
+            "rm",
+            "remove-race",
+            "--keep-branch",
+        ],
+        cwd=repo,
+        env={**env, "PATH": f"{fake_bin}:{env['PATH']}"},
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "session preserved" in result.stderr
+    assert worktree.is_dir()
+    assert raced.is_file()
 
 
 def test_force_recreate_refuses_configured_protected_branch_before_mutation(

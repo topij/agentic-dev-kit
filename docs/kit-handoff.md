@@ -34,7 +34,9 @@ cs-toolkit's repo-owned translation remains downstream work.
   and exact repository, PR, base, head, owner, and fork identity. A head change refuses
   before the forge write. Reconciliation stops on failed or malformed forge reads,
   requires the exact act-time report before classifying an operator lane as held, and
-  keeps newer surviving branch work open rather than letting an older PR terminalize it.
+  checks local, cached remote-tracking, and live origin tips before terminalizing a lane.
+  Non-force cleanup repeats its dirty guard in the Git removal itself, and relative
+  session containers are anchored before any worktree write.
 
 - **The upgrade boundary is explicit.** The engines, shared workflow definitions, and
   regression surfaces move as a coupled kit-owned bundle in `kit-manifest.json`.

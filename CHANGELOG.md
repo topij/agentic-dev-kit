@@ -58,12 +58,17 @@ starts.
   forks through a normal kit upgrade; reconcile them explicitly against the refreshed
   kit engines. No config migration is needed.**
 - **CHANGED (gate semantics) — headless activation and descriptor lane roots are
-  canonical absolute paths; scope review and self-merge replace inherited state/repository
+  canonical absolute paths, including a relative sessions container anchored before any
+  worktree write; scope review and self-merge replace inherited state/repository
   roots, reject cross-repository PRs, and refuse before the forge write when the listed
-  PR head differs from the act-time reviewed head.** **Launch unattended lanes by
+  PR head differs from the act-time reviewed head. Non-force `rm` now preserves a
+  worktree that becomes dirty after its initial status probe rather than retrying the
+  removal with force.** **Launch unattended lanes by
   unconditionally applying every descriptor `env` key over the permitted inherited
   environment. Keep runtime adapters as invocation-only bindings; do not reconstruct
-  identity or merge policy in a Claude or Codex adapter.**
+  identity or merge policy in a Claude or Codex adapter. Treat relative
+  `DEVKIT_SESSIONS_DIR` as relative to each invocation's working directory, and invoke
+  later scope commands from the same directory or pass an absolute value.**
 
 ---
 

@@ -272,7 +272,7 @@ _session_dir_for_branch() {
 # every surviving ref is stable at the expected head, and 2 on a Git read error.
 _surviving_tip_mismatch() {
     local branch="$1" expected_head="$2"
-    local refs labels i ref label first second ref_rc
+    local refs labels i ref label first second ref_rc remote_first remote_second
     refs=("refs/heads/$branch" "refs/remotes/origin/$branch")
     labels=("local" "remote-tracking")
     for i in 0 1; do
@@ -298,7 +298,46 @@ _surviving_tip_mismatch() {
             [[ "$ref_rc" -eq 1 ]] || return 2
         fi
     done
+    # A remote-tracking ref is only a cache. Read the live origin branch twice
+    # as part of the same quiescent snapshot so unseen pushed work cannot be
+    # terminalized by an older local cache. A missing remote branch is a valid
+    # empty result (normal after --delete-branch); a failed or malformed read is
+    # unknown state and stops the batch.
+    remote_first="$(_live_origin_tip "$branch")" || return 2
+    remote_second="$(_live_origin_tip "$branch")" || return 2
+    if [[ "$remote_first" != "$remote_second" ]]; then
+        printf 'origin tip moved during reconciliation (%s != %s)' \
+            "${remote_first:0:12}" "${remote_second:0:12}"
+        return 0
+    fi
+    if [[ -n "$remote_second" && "$remote_second" != "$expected_head" ]]; then
+        printf 'origin tip differs from PR head (%s != %s)' \
+            "${remote_second:0:12}" "${expected_head:0:12}"
+        return 0
+    fi
     return 1
+}
+
+_live_origin_tip() {
+    local branch="$1" reply
+    reply="$(git -C "$REPO_ROOT" ls-remote --heads origin "refs/heads/$branch" 2>/dev/null)" \
+        || return 2
+    printf '%s' "$reply" | python3 -c '
+import string, sys
+expected = sys.argv[1]
+lines = sys.stdin.read().splitlines()
+if not lines:
+    raise SystemExit(0)
+if len(lines) != 1:
+    raise SystemExit(2)
+parts = lines[0].split("\t")
+if len(parts) != 2 or parts[1] != expected:
+    raise SystemExit(2)
+oid = parts[0]
+if len(oid) != 40 or any(ch not in string.hexdigits for ch in oid):
+    raise SystemExit(2)
+print(oid)
+' "refs/heads/$branch"
 }
 
 # Resolve the checkout's repository once, with ambient GH_REPO removed, before
