@@ -47,7 +47,7 @@ complete.
 |---|---|---|
 | `repository-config-read` | required | Prove the repository root and read the merged config, `<handoff>`, and `<friction-log>`. Missing or unreadable input is a hard stop; name it and do not render a briefing. |
 | `repository-state-read` | required | Read the current symbolic branch or explicitly classify detached HEAD, plus working-tree state. Empty branch output is not ready: when no symbolic branch exists, resolve the exact commit and report `DETACHED at <sha>`. Failure to establish either state is a hard stop because unfinished local work would otherwise disappear from classification. |
-| `forge-pr-read` | optional | Prove authenticated, complete pagination for open pull requests and run the configured review-health read for every returned pull request, exposing the actionable reviews/comments and configured bot state available to that mechanism. List metadata alone is not ready. Unavailability or suspected truncation at either layer degrades to `PRs unavailable: <reason>` and must never render as an empty list. |
+| `forge-pr-read` | optional | Prove authenticated, complete pagination for open pull requests and for each pull request's review submissions, issue comments, and inline comments, independent of any local acknowledgement or seen-set. List metadata or an acknowledgement-filtered view alone is not ready. If the forge cannot prove thread resolution, keep an actionable finding as a candidate and label resolution unverified. Unavailability or suspected truncation at either layer degrades to `PRs unavailable: <reason>` and must never render as an empty list. |
 | `ci-cron-read` | optional | Use the configured or project-native health mechanism. Unavailability degrades to `CI/cron: unavailable: <reason>`; it is not an all-clear. |
 | `tracker-read` | optional | Read a complete field-limited backlog from `<tracker>`. Missing config, credentials, client, or complete pagination degrades to an explicit tracker gap; discard partial payloads and continue. |
 | `config-drift-read` | optional when configured | Run only when the project defines an apply/verify mechanism. Failure renders `config drift: unavailable (<reason>)`; absence of such a project mechanism omits the capability entirely. |
@@ -132,11 +132,15 @@ like good news, it looks like a missing handoff.
   code reveals and only the full-page check catches.
 
   The list response is discovery, not complete review health. For every returned pull
-  request, run `uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist` or an
-  equivalent read-only forge mechanism that exposes actionable reviews/comments and
-  configured bot state. Do not claim thread-resolution or other finding surfaces that
-  the selected mechanism does not provide, and do not mark `forge-pr-read` ready from
-  list metadata alone. If this second layer is missing, fails, or may be truncated, render
+  request, page review submissions, issue comments, and inline review comments through
+  the forge API, independent of `pr-watch` acknowledgement or seen state. With `gh`, use
+  `gh api --paginate` against the pull request's `/reviews`, `/issues/<PR#>/comments`,
+  and `/pulls/<PR#>/comments` endpoints; another runtime may translate those reads but
+  must preserve their full unfiltered content. If the selected mechanism does not expose
+  thread resolution, keep an actionable finding as a candidate and label its resolution
+  unverified. Do not mark `forge-pr-read` ready from list metadata or an
+  acknowledgement-filtered view alone. If this second layer is missing, fails, or may be
+  truncated, render
   `PRs unavailable: review findings <reason>` rather than silently omitting unresolved
   bot feedback.
 - your cron/CI health command (adapt to your infra)
@@ -230,7 +234,8 @@ pointer**.
   needs recovery; an open PR that's CI-red or has unaddressed review (opening/pushing
   a PR isn't done — watch-and-fix is the same task) — **including a cron/automation-
   opened PR** (identified by `author` in the gather) with a changes-requested decision
-  or unresolved bot findings visible to the configured review-health mechanism: your
+  or actionable bot findings from the unfiltered review evidence, including findings
+  whose resolution cannot be verified: your
   cron runner's job-name guard means `pr-watch`
   never watched it, so adopting it (run `pr-watch <PR#>`) is this session's job;
   uncommitted work from last session that should be finished or committed; the

@@ -56,8 +56,8 @@ that revision; the delivery slices below are expected to change them.
   effort mapping only when its launcher actually exposes that control.
 - **Capabilities:** repository/config and repository-state reads are required. Forge,
   CI/cron, and tracker reads are always attempted and degrade visibly; forge readiness
-  includes configured actionable review evidence without claiming unsupported thread
-  resolution, and detached HEAD is represented explicitly.
+  uses unfiltered review evidence, labels resolution the forge cannot prove, and
+  represents detached HEAD explicitly.
   Configured drift reads degrade visibly when applicable. Archive and resolved-
   tracker reads are conditional before a `Now` promotion. Runtime compute selection is
   an optional enhancement.
@@ -100,7 +100,8 @@ that revision; the delivery slices below are expected to change them.
   classify at their trigger rather than before the record edit; unavailable forge or
   unsettled review paths preserve exact resume evidence as incomplete. First-match
   terminal precedence also keeps a degraded integration from masking an incomplete
-  repository path or a failed or ambiguous authorized merge. The
+  repository path or a failed or still-ambiguous authorized merge; a tracker-only write
+  is successful completion, not a no-op. The
   Codex adapter's generic external-mutation wording was weaker than the shared payload-
   specific gate; this slice removes that duplicate.
 

@@ -1571,7 +1571,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "forge-pr-read": (
                 "optional",
-                "Prove authenticated, complete pagination for open pull requests and run the configured review-health read for every returned pull request, exposing the actionable reviews/comments and configured bot state available to that mechanism. List metadata alone is not ready. Unavailability or suspected truncation at either layer degrades to PRs unavailable: <reason> and must never render as an empty list.",
+                "Prove authenticated, complete pagination for open pull requests and for each pull request's review submissions, issue comments, and inline comments, independent of any local acknowledgement or seen-set. List metadata or an acknowledgement-filtered view alone is not ready. If the forge cannot prove thread resolution, keep an actionable finding as a candidate and label resolution unverified. Unavailability or suspected truncation at either layer degrades to PRs unavailable: <reason> and must never render as an empty list.",
             ),
             "ci-cron-read": (
                 "optional",
@@ -1634,13 +1634,17 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "keep that candidate out of `Now`" in flattened
         assert "`git symbolic-ref --short -q HEAD`" in flattened
         assert "report `DETACHED at <sha>` rather than a blank branch" in flattened
-        assert "`uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist`" in flattened
         assert (
-            "equivalent read-only forge mechanism that exposes actionable "
-            "reviews/comments and configured bot state"
+            "`gh api --paginate` against the pull request's `/reviews`, "
+            "`/issues/<PR#>/comments`, and `/pulls/<PR#>/comments` endpoints"
         ) in flattened
-        assert "Do not claim thread-resolution" in flattened
-        assert "do not mark `forge-pr-read` ready from list metadata alone" in flattened
+        assert "independent of `pr-watch` acknowledgement or seen state" in flattened
+        assert "must preserve their full unfiltered content" in flattened
+        assert "keep an actionable finding as a candidate" in flattened
+        assert (
+            "Do not mark `forge-pr-read` ready from list metadata or an "
+            "acknowledgement-filtered view alone"
+        ) in flattened
     else:
         assert capabilities == {
             "repository-config-read": (
@@ -1677,7 +1681,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "forge-merge-write": (
                 "conditional and authority-gated",
-                "Required only when the exact head is mergeable and merge-authority permits this workflow to merge it. If the authorized merge fails or its result is ambiguous, read back repository and forge state before any retry, preserve the exact head, and report incomplete-resumable.",
+                "Required only when the exact head is mergeable and merge-authority permits this workflow to merge it. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward successful-completion; if it proves failure or remains ambiguous, preserve the exact head and report incomplete-resumable.",
             ),
             "project-status-write": (
                 "optional enhancement",
@@ -1727,7 +1731,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "Park the full finding in <friction-log> or preserve the existing status artifact, then complete the repository path while reporting the degraded capability.",
             ),
             "successful-noop": (
-                "The session produced no change to any repository artifact and no friction artifact is owed.",
+                "The session produced no change to any repository artifact, no friction artifact is owed, and no tracker write occurred.",
                 "Say so and create no commit or pull request.",
             ),
             "incomplete-resumable": (
@@ -1762,6 +1766,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "name it in validation and staging" in flattened
         assert "also stage any existing project-status artifact" in flattened
         assert "no repository-artifact changes" in flattened
+        assert "actually returned and verified from the tracker" in flattened
         precedence = list(
             _integration_table(workflow, "Overall outcome precedence", 3).items()
         )
@@ -1797,7 +1802,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             (
                 "no-artifact-change",
                 (
-                    "No repository artifact changed and no friction artifact is owed.",
+                    "No repository artifact changed, no friction artifact is owed, and no tracker write occurred.",
                     "successful-noop",
                 ),
             ),
@@ -1965,12 +1970,14 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "`true`", 1
         )),
         ("session-start", session, session.replace(
-            "do not mark `forge-pr-read` ready from\n  list metadata alone",
-            "mark `forge-pr-read` ready from\n  list metadata alone", 1
+            "Do not mark `forge-pr-read` ready from list metadata or an\n"
+            "  acknowledgement-filtered view alone",
+            "Mark `forge-pr-read` ready from list metadata or an\n"
+            "  acknowledgement-filtered view alone", 1
         )),
         ("session-start", session, session.replace(
-            "exposes actionable reviews/comments and\n  configured bot state",
-            "may omit actionable reviews/comments and\n  configured bot state", 1
+            "must preserve their full unfiltered content",
+            "may filter content through local acknowledgement state", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "`kitconfig.load_config()`", "`config/dev-model.yaml`", 1
@@ -2076,12 +2083,21 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "no handoff-relevant changes", 1
         )),
         ("wrap-up", wrap, wrap.replace(
+            "and no tracker write occurred",
+            "even when a tracker write occurred", 2
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "A successful tracker route additionally records only an identifier\n"
+            "actually returned and verified from the tracker",
+            "A successful tracker route records no durable identifier", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
             "`changed-artifact-not-terminal` | A changed repository artifact lacks an authoritative merged or operator-held terminal state, including after a failed or ambiguous authorized merge. | `incomplete-resumable`",
             "`changed-artifact-not-terminal` | A changed repository artifact lacks an authoritative merged or operator-held terminal state, including after a failed or ambiguous authorized merge. | `degraded-success`", 1
         )),
         ("wrap-up", wrap, wrap.replace(
-            "If the authorized merge fails or its result is ambiguous",
-            "If the authorized merge fails, claim completion; if its result is ambiguous", 1
+            "If read-back verifies the merge landed, continue toward `successful-completion`",
+            "If read-back verifies the merge landed, report `incomplete-resumable`", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "invoke `forge-merge-write` only when the declared class and\n"

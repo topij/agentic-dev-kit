@@ -59,9 +59,10 @@ starts.
   declaration may be omitted. Any degraded applicable source yields
   `degraded-success`; `successful-completion` requires applicable sources to be
   ready.**
-  **Treat a PR-list response as discovery only: read configured actionable review
-  evidence for each returned pull request before calling the forge source ready, without
-  claiming thread-resolution state the selected mechanism does not expose. Represent
+  **Treat a PR-list response as discovery only: page unfiltered review submissions,
+  issue comments, and inline comments for each returned pull request before calling the
+  forge source ready. Do not use a local acknowledgement/seen-set as resolution evidence;
+  label resolution unverified when the forge cannot prove it. Represent
   detached HEAD as `DETACHED at <sha>` rather than accepting an empty branch value.**
 - **CHANGED (gate semantics) — `wrap-up` now stops before staging when required
   repository/config, record-write, or document-budget capabilities fail; tracker
@@ -78,7 +79,9 @@ starts.
   handoff edit. An unavailable forge path or unavailable/unsettled `pr-watch` returns
   `incomplete-resumable` with the exact preserved diff, commit, branch, or PR evidence;
   so does a failed or ambiguous authorized merge. First-match outcome precedence keeps
-  an earlier integration degradation from masking that incomplete repository path.** **Refresh
+  an earlier integration degradation from masking that incomplete repository path. A
+  verified tracker-only write is successful completion rather than a no-op, and a merge
+  response that read-back verifies as landed is successful rather than incomplete.** **Refresh
   `docs/agentic-dev-kit/workflows/wrap-up.md` and the corresponding Claude/Codex thin
   adapter. If the adapter is locally customized, reconcile it so merged-config
   resolution delegates to the shared workflow; do not retain tracked-config-only

@@ -67,6 +67,9 @@ For work using the fallback panel:
   than list metadata exposes.
 - Negate the complete normative-precedence sentence, not just one keyword, and mutate a
   declared source to promise evidence its recommended helper cannot actually return.
+- Cross product external writes with an otherwise empty repository result: a verified
+  tracker write is not a no-op, an ambiguous merge that read-back verifies is not
+  incomplete, and acknowledgement state is not proof that a review finding was resolved.
 - Exercise parser and installer changes with valid alternate syntax, comments, missing
   values, partial configuration, and upgrade/idempotency paths before opening the PR.
 - Ask each lens for a novel failure hypothesis tied to an observable outcome. A new

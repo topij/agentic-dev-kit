@@ -318,8 +318,9 @@ preflights and outcomes directly. Session start fails closed on missing reposito
 config, handoff, friction-log, or repository-state reads; unavailable forge, CI,
 tracker, and configured drift sources stay visible as degraded gaps rather than false
 empty or clean results. Forge, CI/cron, and tracker sources are always attempted and
-classified; forge readiness includes configured actionable review evidence rather than
-list metadata alone, and detached HEAD is named instead of rendered as a blank branch. Only explicitly
+classified; forge readiness includes unfiltered review evidence rather than list metadata
+or locally acknowledged comments alone, and detached HEAD is named instead of rendered
+as a blank branch. Only explicitly
 unconfigured or untriggered declarations may be omitted.
 Wrap-up requires the configured document-budget engine, preserves
 operator-owned changes, sends an interactive issue-shaped finding through tracker search

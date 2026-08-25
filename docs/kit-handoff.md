@@ -28,7 +28,7 @@ their Claude and Codex bindings remain invocation-only adapters.
   definitions; no config or installer migration is part of this slice.
 
 - **The lifecycle bookends are the coherent slice.** Required repository/config and
-  record capabilities fail closed. Optional session-start gaps, actionable PR review
+  record capabilities fail closed. Optional session-start gaps, unfiltered PR review
   findings, and detached state stay explicit. Wrap-up sends an
   interactive issue-shaped finding through tracker
   search and an exact-payload decision before parking; the friction log remains the
