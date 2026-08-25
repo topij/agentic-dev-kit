@@ -42,6 +42,31 @@ starts.
 
 ---
 
+## #598 — 2026-08-25
+
+- **BREAKING (gate semantics, engine CLI exit contract) — parallel reconciliation no
+  longer turns a missing `gh`, failed repository or PR read, or malformed forge payload
+  into a partial `open` / `parked` lane board; it stops with exit `64`. Operator-held
+  classification now additionally requires persisted operator class and base plus an
+  act-time `pr_watch` report for the exact repository, PR, base, head, and empty blocker
+  set. Surviving branch tips that differ from the selected PR head remain resumable
+  `open` work.** **Refresh `scripts/dev_session.sh`,
+  `scripts/reconcile_sessions.sh`, the parallel shared workflows, and their shipped
+  regression tests as a coupled kit-owned bundle. Ensure reconciliation callers provide
+  authenticated `gh` access, preserve exit `64` as an unknown-forge hard stop, and do
+  not parse a partial board after that exit. Do not replace repo-owned downstream engine
+  forks through a normal kit upgrade; reconcile them explicitly against the refreshed
+  kit engines. No config migration is needed.**
+- **CHANGED (gate semantics) — headless activation and descriptor lane roots are
+  canonical absolute paths; scope review and self-merge replace inherited state/repository
+  roots, reject cross-repository PRs, and refuse before the forge write when the listed
+  PR head differs from the act-time reviewed head.** **Launch unattended lanes by
+  unconditionally applying every descriptor `env` key over the permitted inherited
+  environment. Keep runtime adapters as invocation-only bindings; do not reconstruct
+  identity or merge policy in a Claude or Codex adapter.**
+
+---
+
 ## #596 — 2026-08-25
 
 - **CHANGED (gate semantics) — `session-start` now stops before rendering its normal

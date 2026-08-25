@@ -30,9 +30,11 @@ their delivery order and exit conditions.
   bindings, config-owned policy, equivalent durable artifacts, and explicit capability
   preflights. PR `#596` merged the same structured contract for `session-start` and
   `wrap-up`; `triage-friction-log` remains the Phase 3 exit.
-- [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** Codex model and
-  effort calibration, environment-capable lane launching, and live isolation checks
-  remain planned.
+- [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivers
+  the kit-owned engine boundary for absolute descriptor roots, exact lane/forge
+  identity, fail-closed reconciliation, operator-held evidence, and adopter upgrade
+  ownership. Codex model and effort calibration, an environment-capable launcher, and
+  live runtime isolation checks remain planned.
 - [ ] **Phase 5 — Align permissions, installation, and upgrades.** Codex project
   policy, adopter-owned merge surfaces, and adapter refresh behavior remain planned.
 - [ ] **Phase 6 — Gate parity and roll it out.** Adoption fixtures, trusted smoke
@@ -136,37 +138,19 @@ helpers named by each definition without adding a dedicated pipeline configurati
 did not add a partial triage config, pretend the missing engines are ready, or duplicate
 approval policy in an adapter.
 
-The next cockpit slice temporarily advances the shared lane primitive before returning
-to the Phase 3 exit. cs-toolkit commit
-`4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) exposed reusable safety fixes in
-repo-owned parallel engines that diverged before the kit implementation existed.
-Leaving those fixes downstream would preserve split behavioral authority for a
-safety-critical engine. The next slice therefore compares that commit with its parent,
-ports only reusable mechanisms into the kit-owned source, and leaves cs-toolkit-specific
-merge policy, namespace translation, and later engine adaptation downstream.
+PR `#598` advances the shared lane primitive without claiming the Phase 3 exit. Its
+read-only comparison of cs-toolkit commit
+`4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) and its parent separated reusable
+engine behavior from cs-toolkit policy/translation and unrelated application code. The
+kit receives absolute headless roots, descriptor environment replacement, durable
+lane/base/class identity, exact repository/PR/base/head/fork binding, fail-closed forge
+reads, operator-held evidence, resume-aware branch-tip checks, semantic/mutation
+matrices, and adopter upgrade coverage. It does not receive cs-toolkit's operator-only
+merge policy or `CS_TOOLKIT_*` namespace. The downstream checkout remains unchanged;
+its repo-owned engines require a later explicit reconciliation PR rather than a normal
+kit upgrade.
 
-```text
-Create feat/parallel-kit-ownership from current origin/main. Run $session-start, then
-use $parallel first for a read-only inventory and plan. Compare the kit-owned parallel
-workflow, Claude and Codex bindings, scripts/dev_session.sh,
-scripts/reconcile_sessions.sh, config, manifest, and tests with cs-toolkit commit
-4cf1ca914361b9912cd6bb1389e985d6e97ab3a0 (#2086) and its parent. Classify every delta
-as reusable kit behavior, cs-toolkit policy, or unrelated application code. Exercise
-inherited state-root precedence and descriptor environment replacement; durable
-branch/base/merge-class identity; exact repository, PR, base, head, and fork binding;
-fail-closed forge reads; operator-held terminal state; and cleanup/resume behavior.
-Read and apply docs/agentic-dev-kit/safety-critical-changes.md before changing
-scripts/dev_session.sh. Keep behavior in shared runtime-neutral workflows and kit-owned
-engines, keep configuration in config/dev-model.yaml, and keep adapters thin. Do not
-upstream cs-toolkit's operator-only merge policy or CS_TOOLKIT_* namespace. Treat the
-shared lane engines as one operator-merge implementation lane unless the inventory
-proves disjoint file ownership. Add semantic and mutation matrices, adopter upgrade
-coverage, and exact-head review evidence. Do not edit the downstream repo in this
-branch; leave its repo-owned engine adaptation to a later explicit cs-toolkit
-reconciliation PR rather than assuming a kit upgrade will overwrite those files.
-```
-
-After that slice lands, resume the Phase 3 exit with this preserved starter:
+Resume the Phase 3 exit with this preserved starter:
 
 ```text
 Create feat/triage-integration-preflights from current origin/main. Build the semantic
@@ -343,6 +327,12 @@ PR `#596` then merged the shared integration contract for the lifecycle bookends
 remaining Phase 3 starter is the `feat/triage-integration-preflights` block under
 “Slice boundary and next starter” above and is mirrored in the latest handoff; update
 both together if its scope changes.
+
+PR `#598` then moved the reusable lane-identity and forge-safety behavior exposed by
+cs-toolkit `#2086` into kit-owned engines and shared workflows. It deliberately leaves
+runtime launcher mechanics and downstream repo-owned engine adaptation outside the
+slice. The Phase 3 starter remains `feat/triage-integration-preflights`; this Phase 4
+slice neither replaces nor completes it.
 
 Keep the trusted-client record as an observation at its stamped client and revision; do
 not turn it into a general instruction-loading guarantee.
