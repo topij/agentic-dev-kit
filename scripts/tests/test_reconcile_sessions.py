@@ -1001,8 +1001,34 @@ def test_portable_bounded_runner_reaps_term_ignoring_descendants(
         timeout=3,
     )
 
+    elapsed = time.monotonic() - started
     assert result.returncode == 124
-    assert time.monotonic() - started < 2.5
+    assert 1 <= elapsed < 2.5
+
+
+def test_portable_bounded_runner_reaps_descendants_after_launcher_success(
+    tmp_path: Path,
+) -> None:
+    helper = _bounded_run_helper_source()
+    hostile = tmp_path / "successful-launcher-with-descendant.sh"
+    hostile.write_text(
+        "#!/bin/sh\n"
+        "sh -c 'trap \"\" HUP INT TERM; while :; do sleep 1; done' &\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    hostile.chmod(0o755)
+    command = f"{helper}\n_bounded_run 30 {shlex.quote(str(hostile))}\n"
+
+    result = subprocess.run(
+        ["bash", "-c", command],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=3,
+    )
+
+    assert result.returncode == 0
 
 
 def test_portable_bounded_runner_reaps_on_operator_interrupt(tmp_path: Path) -> None:

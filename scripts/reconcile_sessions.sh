@@ -98,40 +98,48 @@ _bounded_run() {
     local seconds="$1"
     shift
     python3 -c '
-import os, signal, subprocess, sys, time
+import os, select, signal, subprocess, sys, time
 
 seconds = float(sys.argv[1])
 shim = r"""
-import signal, subprocess, sys
+import os, signal, subprocess, sys
 
-term_received = False
+result_fd = int(sys.argv[1])
 
 def hold_group_open(_signum, _frame):
-    global term_received
-    term_received = True
+    pass
 
 for held_signal in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
     signal.signal(held_signal, hold_group_open)
 try:
-    child = subprocess.Popen(sys.argv[1:])
+    child = subprocess.Popen(sys.argv[2:])
 except OSError as exc:
-    print(f"could not start {sys.argv[1]}: {exc}", file=sys.stderr)
-    sys.exit(127)
+    print(f"could not start {sys.argv[2]}: {exc}", file=sys.stderr)
+    returncode = 127
+else:
+    child_returncode = child.wait()
+    returncode = (
+        child_returncode if child_returncode >= 0 else 128 - child_returncode
+    )
 
-returncode = child.wait()
-if term_received:
-    while True:
-        signal.pause()
-sys.exit(returncode if returncode >= 0 else 128 - returncode)
+os.write(result_fd, f"{returncode}\n".encode("ascii"))
+os.close(result_fd)
+while True:
+    signal.pause()
 """
+result_fd, shim_result_fd = os.pipe()
 try:
     process = subprocess.Popen(
-        [sys.executable, "-c", shim, *sys.argv[2:]],
+        [sys.executable, "-c", shim, str(shim_result_fd), *sys.argv[2:]],
+        pass_fds=(shim_result_fd,),
         start_new_session=True,
     )
 except OSError as exc:
+    os.close(result_fd)
     print(f"could not start {sys.argv[2]}: {exc}", file=sys.stderr)
     sys.exit(127)
+finally:
+    os.close(shim_result_fd)
 
 class Cancelled(Exception):
     def __init__(self, signum):
@@ -144,17 +152,17 @@ handled_signals = (signal.SIGHUP, signal.SIGINT, signal.SIGTERM)
 for handled_signal in handled_signals:
     signal.signal(handled_signal, cancel)
 
-def stop_group(first_signal):
+def stop_group(first_signal=None):
     for handled_signal in handled_signals:
         signal.signal(handled_signal, signal.SIG_IGN)
-    try:
-        os.killpg(process.pid, first_signal)
-    except ProcessLookupError:
-        pass
-    # The shim holds the process group open even if the launcher exits after a
-    # signal. Give every descendant the full grace period; leader exit neither
-    # shortens that grace nor becomes cleanup evidence.
-    time.sleep(1)
+    if first_signal is not None:
+        try:
+            os.killpg(process.pid, first_signal)
+        except ProcessLookupError:
+            pass
+        # The shim always remains the group leader. Give every descendant the
+        # full grace period before unconditional group-wide escalation.
+        time.sleep(1)
     try:
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
@@ -162,15 +170,24 @@ def stop_group(first_signal):
     process.wait()
 
 try:
-    returncode = process.wait(timeout=seconds)
+    ready, _, _ = select.select([result_fd], [], [], seconds)
 except Cancelled as exc:
     stop_group(exc.signum)
+    os.close(result_fd)
     sys.exit(128 + exc.signum)
-except subprocess.TimeoutExpired:
+if not ready:
     stop_group(signal.SIGTERM)
+    os.close(result_fd)
     sys.exit(124)
 
-sys.exit(returncode if returncode >= 0 else 128 - returncode)
+reply = os.read(result_fd, 64)
+os.close(result_fd)
+stop_group()
+try:
+    returncode = int(reply.strip())
+except ValueError:
+    sys.exit(127)
+sys.exit(returncode)
 ' "$seconds" "$@"
 }
 
