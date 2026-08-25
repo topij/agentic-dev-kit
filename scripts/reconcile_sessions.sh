@@ -265,6 +265,42 @@ _session_dir_for_branch() {
     printf '%s' "$found"
 }
 
+# Print the first surviving ref that is not a stable snapshot of the PR head.
+# Local and remote-tracking refs are independent resume evidence: a stale local
+# ref must not hide newer pushed work, and a ref that moves between reads must
+# not be treated as a terminal snapshot. Return 0 for a mismatch/move, 1 when
+# every surviving ref is stable at the expected head, and 2 on a Git read error.
+_surviving_tip_mismatch() {
+    local branch="$1" expected_head="$2"
+    local refs labels i ref label first second ref_rc
+    refs=("refs/heads/$branch" "refs/remotes/origin/$branch")
+    labels=("local" "remote-tracking")
+    for i in 0 1; do
+        ref="${refs[$i]}"
+        label="${labels[$i]}"
+        if git -C "$REPO_ROOT" show-ref --verify --quiet "$ref"; then
+            first="$(git -C "$REPO_ROOT" rev-parse --verify "$ref^{commit}" 2>/dev/null)" \
+                || return 2
+            second="$(git -C "$REPO_ROOT" rev-parse --verify "$ref^{commit}" 2>/dev/null)" \
+                || return 2
+            if [[ "$first" != "$second" ]]; then
+                printf '%s tip moved during reconciliation (%s != %s)' \
+                    "$label" "${first:0:12}" "${second:0:12}"
+                return 0
+            fi
+            if [[ "$second" != "$expected_head" ]]; then
+                printf '%s tip differs from PR head (%s != %s)' \
+                    "$label" "${second:0:12}" "${expected_head:0:12}"
+                return 0
+            fi
+        else
+            ref_rc=$?
+            [[ "$ref_rc" -eq 1 ]] || return 2
+        fi
+    done
+    return 1
+}
+
 # Resolve the checkout's repository once, with ambient GH_REPO removed, before
 # rendering any row. Every later forge read and review probe is pinned to that
 # exact nameWithOwner. A missing command, failed request, or malformed identity
@@ -472,13 +508,10 @@ cmd_reconcile() {
         || _die "GitHub returned an invalid repository identity for $REPO_ROOT"
     local repo_owner="${REPO_NWO%%/*}"
 
-    printf '%-28s %-8s %-6s %s\n' "LANE" "STATUS" "PR" "DETAIL"
-    printf '%-28s %-8s %-6s %s\n' "----------------------------" "--------" "------" "------"
-
     local launched="${#LANE_BR[@]}"
-    local merged=0 open=0 parked=0 held=0 parked_notes="" held_notes="" unknown_notes=""
+    local merged=0 open=0 parked=0 held=0 parked_notes="" held_notes="" unknown_notes="" rows="" row=""
     local i disp branch lane_base session_dir pr_json classified state rest num title head_oid status detail pr_disp reason
-    local held_rc branch_tip_oid branch_tip_label tip_differs
+    local held_rc tip_detail tip_rc tip_differs
 
     for i in "${!LANE_BR[@]}"; do
         disp="${LANE_DISP[$i]}"
@@ -507,23 +540,21 @@ cmd_reconcile() {
             head_oid="${rest#*$'\t'}"
         fi
 
-        # The PR record survives branch deletion. When a local or remote-tracking
-        # ref still exists, however, its tip is durable resume evidence and must
-        # equal the PR head before that PR can terminalize the lane.
-        branch_tip_oid=""
-        branch_tip_label=""
+        # The PR record survives branch deletion. Observe every surviving local
+        # and remote-tracking ref twice: either ref can carry resume work, and a
+        # move during reconciliation is not a terminal snapshot. Callers must
+        # still keep launched refs quiescent for the duration of this snapshot;
+        # Git offers no lock shared with an unrelated pusher.
+        tip_detail=""
         tip_differs=0
-        if git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
-            branch_tip_label="local"
-            branch_tip_oid="$(git -C "$REPO_ROOT" rev-parse --verify "refs/heads/$branch^{commit}" 2>/dev/null)" \
-                || _die "could not resolve local branch tip for '$branch'"
-        elif git -C "$REPO_ROOT" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
-            branch_tip_label="remote-tracking"
-            branch_tip_oid="$(git -C "$REPO_ROOT" rev-parse --verify "refs/remotes/origin/$branch^{commit}" 2>/dev/null)" \
-                || _die "could not resolve origin branch tip for '$branch'"
-        fi
-        if [[ -n "$branch_tip_oid" && -n "$head_oid" && "$branch_tip_oid" != "$head_oid" ]]; then
-            tip_differs=1
+        if [[ "$state" == "MERGED" || "$state" == "OPEN" ]]; then
+            if tip_detail="$(_surviving_tip_mismatch "$branch" "$head_oid")"; then
+                tip_differs=1
+            else
+                tip_rc=$?
+                [[ "$tip_rc" -eq 1 ]] \
+                    || _die "could not resolve surviving branch tips for '$branch'"
+            fi
         fi
 
         pr_disp="—"
@@ -532,7 +563,7 @@ cmd_reconcile() {
                 pr_disp="#$num"
                 if [[ "$tip_differs" -eq 1 ]]; then
                     open=$((open + 1)); status="open"
-                    detail="$branch_tip_label tip differs from merged PR head (${branch_tip_oid:0:12} != ${head_oid:0:12}) — $title"
+                    detail="$tip_detail — $title"
                 else
                     merged=$((merged + 1)); status="merged"; detail="$title"
                 fi ;;
@@ -540,7 +571,7 @@ cmd_reconcile() {
                 pr_disp="#$num"
                 if [[ "$tip_differs" -eq 1 ]]; then
                     open=$((open + 1)); status="open"
-                    detail="$branch_tip_label tip differs from open PR head (${branch_tip_oid:0:12} != ${head_oid:0:12}) — $title"
+                    detail="$tip_detail — $title"
                     held_rc=1
                 else
                     held_rc=0
@@ -570,9 +601,15 @@ cmd_reconcile() {
                 parked_notes="${parked_notes}  • ${disp}: ${reason}"$'\n' ;;
         esac
 
-        printf '%-28s %-8s %-6s %s\n' "$disp" "$status" "$pr_disp" "$detail"
+        printf -v row '%-28s %-8s %-6s %s' "$disp" "$status" "$pr_disp" "$detail"
+        rows="${rows}${row}"$'\n'
     done
 
+    # Forge/read/shape failures abort above before any authoritative-looking
+    # row is emitted. Render only after the whole requested snapshot succeeded.
+    printf '%-28s %-8s %-6s %s\n' "LANE" "STATUS" "PR" "DETAIL"
+    printf '%-28s %-8s %-6s %s\n' "----------------------------" "--------" "------" "------"
+    printf '%s' "$rows"
     echo
     # `held H` and `open O` are appended only when non-zero, so a batch with
     # neither prints the exact line it always has. `held` sits before `open`:
@@ -598,10 +635,9 @@ cmd_reconcile() {
         {
             # The parenthetical is an enumeration of the rc-2 causes, so it has to
             # grow with them — a cause missing from it reads to the operator as
-            # "not my case". "repo unidentified" earns its own item rather than
-            # folding into "probe failed": there the probe is never invoked at all.
+            # "not my case".
             echo "⚠ could not evaluate for 'held' (no uv / no pr_watch.py /"
-            echo "  repo unidentified, so the probe was not run / probe failed) —"
+            echo "  probe failed or returned malformed state) —"
             echo "  reported OPEN, which may understate them:"
             printf '%s' "$unknown_notes"
         } >&2

@@ -29,8 +29,8 @@ cs-toolkit's repo-owned translation remains downstream work.
   translation and unrelated application code. The downstream checkout was not edited.
 
 - **The identity chain is durable and exact.** Headless activation, markers, and
-  descriptors use canonical absolute roots; descriptor environment keys replace
-  inherited lane roots. Scope review and self-merge use the persisted branch/base/class
+  descriptors use canonical absolute roots; the shared launcher contract requires
+  descriptor environment keys to replace inherited lane roots. Scope review and self-merge use the persisted branch/base/class
   and exact repository, PR, base, head, owner, and fork identity. A head change refuses
   before the forge write. Reconciliation stops on failed or malformed forge reads,
   requires the exact act-time report before classifying an operator lane as held, and

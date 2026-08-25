@@ -658,6 +658,21 @@ def test_a_malformed_pr_list_stops_instead_of_becoming_no_pr(
     assert "launched " not in result.stdout
 
 
+def test_a_later_malformed_pr_discards_every_preceding_lane_row(harness: Harness) -> None:
+    harness.branch("lane/valid-first")
+    harness.pr("lane/valid-first", 584, "MERGED")
+    harness.session("valid-first", "lane/valid-first", "operator")
+    harness.branch("lane/malformed-later")
+    harness.session("malformed-later", "lane/malformed-later", "operator")
+    harness.pr_payload("lane/malformed-later", "not-json")
+
+    result = harness.run("valid-first", "malformed-later")
+
+    assert result.returncode == 64
+    assert "invalid PR state" in result.stderr
+    assert result.stdout == ""
+
+
 @pytest.mark.parametrize(
     ("pr_kwargs", "label"),
     [
@@ -731,7 +746,67 @@ def test_newer_surviving_branch_tip_keeps_an_older_merged_pr_open(harness: Harne
 
     assert result.returncode == 3
     assert _status_of(result.stdout, "reused") == "open"
-    assert "tip differs from merged PR head" in result.stdout
+    assert "tip differs from PR head" in result.stdout
+
+
+def test_newer_remote_tip_is_not_hidden_by_a_stale_matching_local_tip(
+    harness: Harness,
+) -> None:
+    harness.branch("lane/remote-reused")
+    old_head = _git(harness.repo, "rev-parse", "lane/remote-reused")
+    harness.pr("lane/remote-reused", 585, "MERGED", head=old_head)
+    harness.session("remote-reused", "lane/remote-reused", "operator")
+    new_head = harness.advance_branch("lane/remote-reused")
+    _git(harness.repo, "update-ref", "refs/heads/lane/remote-reused", old_head)
+    assert _git(harness.repo, "rev-parse", "refs/heads/lane/remote-reused") == old_head
+    assert (
+        _git(harness.repo, "rev-parse", "refs/remotes/origin/lane/remote-reused")
+        == new_head
+    )
+
+    result = harness.run("remote-reused")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "remote-reused") == "open"
+    assert "remote-tracking tip differs from PR head" in result.stdout
+
+
+def test_a_tip_that_moves_between_snapshot_reads_cannot_terminalize(
+    harness: Harness,
+) -> None:
+    harness.branch("lane/race")
+    old_head = _git(harness.repo, "rev-parse", "lane/race")
+    harness.pr("lane/race", 586, "MERGED", head=old_head)
+    harness.session("race", "lane/race", "operator")
+    new_head = harness.advance_branch("lane/race")
+    _git(harness.repo, "update-ref", "refs/heads/lane/race", old_head)
+    _git(harness.repo, "update-ref", "-d", "refs/remotes/origin/lane/race")
+
+    real_git = shutil.which("git")
+    assert real_git is not None
+    marker = harness.tmp / "moved-tip"
+    fake_git = harness.bin / "git"
+    fake_git.write_text(
+        "#!/bin/sh\n"
+        f"if [ \"$1\" = \"-C\" ] && [ \"$3\" = \"rev-parse\" ] && "
+        "[ \"$4\" = \"--verify\" ] && "
+        "[ \"$5\" = \"refs/heads/lane/race^{commit}\" ] && "
+        f"[ ! -e \"{marker}\" ]; then\n"
+        f"  \"{real_git}\" -C \"$2\" rev-parse --verify \"$5\"\n"
+        f"  \"{real_git}\" -C \"$2\" update-ref refs/heads/lane/race {new_head}\n"
+        f"  : > \"{marker}\"\n"
+        "  exit 0\n"
+        "fi\n"
+        f"exec \"{real_git}\" \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+
+    result = harness.run("race")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "race") == "open"
+    assert "local tip moved during reconciliation" in result.stdout
 
 
 def test_a_lane_reached_by_branch_name_still_resolves_its_session(harness: Harness) -> None:

@@ -31,7 +31,8 @@ their delivery order and exit conditions.
   preflights. PR `#596` merged the same structured contract for `session-start` and
   `wrap-up`; `triage-friction-log` remains the Phase 3 exit.
 - [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivers
-  the kit-owned engine boundary for absolute descriptor roots, exact lane/forge
+  the kit-owned engine boundary for absolute descriptor roots, the environment
+  replacement contract, exact lane/forge
   identity, fail-closed reconciliation, operator-held evidence, and adopter upgrade
   ownership. Codex model and effort calibration, an environment-capable launcher, and
   live runtime isolation checks remain planned.
@@ -142,7 +143,7 @@ PR `#598` advances the shared lane primitive without claiming the Phase 3 exit. 
 read-only comparison of cs-toolkit commit
 `4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) and its parent separated reusable
 engine behavior from cs-toolkit policy/translation and unrelated application code. The
-kit receives absolute headless roots, descriptor environment replacement, durable
+kit receives absolute headless roots, the descriptor environment replacement contract, durable
 lane/base/class identity, exact repository/PR/base/head/fork binding, fail-closed forge
 reads, operator-held evidence, resume-aware branch-tip checks, semantic/mutation
 matrices, and adopter upgrade coverage. It does not receive cs-toolkit's operator-only

@@ -843,8 +843,8 @@ def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
         )
         return proc.stdout.rstrip("\n").split("\t")[field]
 
-    # `base` sits at index 2 of the gate's four fields, `baseRefName` at index 1
-    # of the lane-PR block's five.
+    # `base` sits at index 2 of the gate extraction, `baseRefName` at index 1 of
+    # the lane-PR extraction.
     sites = (
         ("merge gate", gate[0], gate_payload, 2),
         ("lane PR metadata", meta[0], meta_payload, 1),
@@ -2058,6 +2058,9 @@ def test_parallel_identity_chain_is_one_adopter_upgrade_bundle() -> None:
     upgrade = (
         REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
     ).read_text(encoding="utf-8")
+    headless = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "parallel-headless.md"
+    ).read_text(encoding="utf-8")
     expected_roles = {
         "scripts/dev_session.sh": "engine",
         "scripts/reconcile_sessions.sh": "engine",
@@ -2073,6 +2076,8 @@ def test_parallel_identity_chain_is_one_adopter_upgrade_bundle() -> None:
     assert "**`STALE`** → replace it" in upgrade
     assert "Never batch-replace the whole list" in upgrade
     assert "Engines are **kit-owned**; config is **adopter-owned**" in upgrade
+    assert re.search(r"assign\s+every key from `env` unconditionally", headless)
+    assert "Do not use `setdefault`" in headless
 
 
 @pytest.mark.kit_repo_only(

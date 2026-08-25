@@ -718,13 +718,12 @@ if isinstance(owner, dict):
     owner = owner.get("login") or owner.get("name") or ""
 def f(v):
     # Same scrub, same reason as the merge gate further down this file. These
-    # five fields are tab-joined and the shell splits them, so a control
+    # extracted fields are tab-joined and the shell splits them, so a control
     # character in an EARLIER field shifts every later one -- and the checks
-    # that follow (base, branch, head-repo owner) are what keep a wrong-base PR
-    # or a fork PR off the merge path. Measured on the equivalent shape: a
-    # number of "8<TAB>trunk<TAB>lane/probe<TAB>reviewed-head<TAB>owner" with
-    # the other four fields empty satisfies ALL FOUR checks, because the last
-    # name in a `read` absorbs the remainder and the emptied tail collapses.
+    # that follow (base, branch, head-repo owner, fork status, and head) are what
+    # keep a wrong-repository or wrong-revision PR off the merge path. Measured
+    # on the equivalent shape, empty trailing fields can collapse while the last
+    # name in a `read` absorbs a shifted remainder.
     # A control character becomes a SPACE, never deleted, so a scrubbed value
     # cannot fuse into a legitimate ref name; every comparison fails CLOSED.
     # Unreachable through gh today -- a PR number is an int, and ref names and
