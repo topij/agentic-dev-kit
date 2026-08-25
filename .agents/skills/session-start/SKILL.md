@@ -8,5 +8,5 @@ description: Build a concise start-of-session briefing from the living handoff, 
 Read `docs/agentic-dev-kit/workflows/session-start.md` completely and follow it.
 
 Treat the user's request as additional session context. Resolve all configured paths
-from the repository root and `config/dev-model.yaml`; translate only runtime-native
-invocation and available mechanisms.
+from the repository root and merged configuration defined by the shared workflow;
+translate only runtime-native invocation and available mechanisms.

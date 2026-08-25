@@ -8,7 +8,11 @@ with one recommendation.
 
 ## Resolve configuration
 
-Read `config/dev-model.yaml` first. In this workflow:
+Resolve the merged configuration first with `kitconfig.load_config()` (or the
+repository's equivalent configured merged-view mechanism), so a gitignored
+`config/dev-model.local.yaml` overlay is applied per leaf rather than ignored. A
+missing loader or invalid merged view is a `repository-config-read` failure; do not
+fall back to reading only the tracked file. In this workflow:
 
 - `<handoff>` and `<friction-log>` mean `paths.handoff` and `paths.friction_log`;
   `<handoff-history>` and `<friction-log-archive>` mean `paths.handoff_history` and

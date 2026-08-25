@@ -316,10 +316,13 @@ preflights and outcomes directly. Session start fails closed on missing reposito
 config, handoff, friction-log, or repository-state reads; unavailable forge, CI,
 tracker, and configured drift sources stay visible as degraded gaps rather than false
 empty or clean results. Wrap-up requires the configured document-budget engine, preserves
-operator-owned changes, parks a complete friction entry when tracker access or exact-
-payload approval is unavailable, and treats its record as complete only after the
-conditional branch/PR/review path settles. Non-interactive runs never wait for tracker
-approval. Claude and Codex adapters only translate invocation and available mechanisms.
+operator-owned changes, sends an interactive issue-shaped finding through tracker search
+and an exact-payload decision before parking, and reserves the friction log for incomplete
+or accumulating findings and unavailable, declined, or ambiguous tracker routes. Its
+record reaches a terminal state only after the conditional branch/PR/review path settles
+and declared merge authority either permits the merge or holds the exact head for the
+operator. Non-interactive runs never wait for tracker approval. Claude and Codex adapters
+only translate invocation and available mechanisms.
 These bookend declarations use existing config and upgrade through the shared workflow
 refresh; they add no installer migration or runtime-specific connector requirement.
 

@@ -1524,9 +1524,22 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "runtime-policy-override": ("shared-declaration-wins-and-stop",),
         }
-        assert set(outcomes) == {
-            "hard-stop", "degraded-success", "successful-completion"
+        assert outcomes == {
+            "hard-stop": (
+                "A required capability is unavailable or shared/runtime policy conflicts.",
+                "Name the failed capability and remediation; do not render the normal briefing or recommendation.",
+            ),
+            "degraded-success": (
+                "Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a Now promotion.",
+                "Render the briefing once, label every gap at its normal display location, and make no write.",
+            ),
+            "successful-completion": (
+                "Required capabilities are ready and every attempted optional source is either ready or honestly degraded.",
+                "Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this read-only workflow completes.",
+            ),
         }
+        assert "kitconfig.load_config()" in flattened
+        assert "do not fall back to reading only the tracked file" in flattened
         assert "creates no repository, forge, tracker, notification, or local-state" in flattened
         assert "A previous chat response is not resume evidence" in flattened
         assert "must never render as an empty list" in flattened
@@ -1537,14 +1550,21 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "handoff-record-write": "required",
             "document-budget-check": "required",
             "handoff-archive": "conditional",
-            "tracker-search-and-write": "optional and approval-gated",
+            "tracker-search-and-write": "conditional and approval-gated",
             "forge-pr-write": "conditional",
             "pr-watch": "conditional",
+            "merge-authority": "conditional and authority-gated",
             "project-status-write": "optional enhancement",
         }
         assert policies == {
             "tracker-without-exact-payload-approval": (
                 "park-complete-friction-entry-no-tracker-write",
+            ),
+            "interactive-issue-shaped-finding": (
+                "search-and-request-exact-payload-decision-before-park",
+            ),
+            "friction-log-route": (
+                "only-incomplete-accumulating-unavailable-declined-or-ambiguous",
             ),
             "non-interactive-tracker-route": (
                 "park-complete-friction-entry-never-wait",
@@ -1558,13 +1578,41 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "required-engine-unavailable": (
                 "stop-before-staging-preserve-record-edit",
             ),
+            "merge-without-predeclared-and-current-authority": (
+                "hold-mergeable-pr-for-operator",
+            ),
+            "operator-merge-class-without-exact-pr-authorization": (
+                "hold-mergeable-pr-for-operator",
+            ),
             "runtime-policy-override": ("shared-declaration-wins-and-stop",),
         }
-        assert set(outcomes) == {
-            "hard-stop", "degraded-success", "successful-noop",
-            "successful-completion",
+        assert outcomes == {
+            "hard-stop": (
+                "A required capability fails, record validation fails, an operator-owned edit overlaps, or shared/runtime policy conflicts.",
+                "Preserve existing and newly authored record data, name the failed capability, and provide the next safe resume step.",
+            ),
+            "degraded-success": (
+                "Tracker or optional project-status integration is unavailable while the repository record path remains safe.",
+                "Park the full finding in <friction-log> or skip the absent optional status artifact, then continue the repository record path.",
+            ),
+            "successful-noop": (
+                "The session produced no handoff-relevant change and no friction artifact is owed.",
+                "Say so and create no commit or pull request.",
+            ),
+            "successful-operator-handoff": (
+                "The record pull request is mergeable at an exact reviewed head, but the declared merge class or current authority requires an operator to act.",
+                "Leave the pull request unmerged; report its URL, exact head, merge class or authority gap, durable record paths, and the command or operator action that safely resumes it.",
+            ),
+            "successful-completion": (
+                "Every required and triggered conditional capability completed, each external identifier was read back or returned authoritatively, and any merge was authorized by the declared class plus the current request.",
+                "Report the durable record paths, verified merged pull request when one was required, actual tracker identifiers when approved, and one next-session starter or an explicit no-follow-up result.",
+            ),
         }
+        assert "kitconfig.load_config()" in flattened
+        assert "do not fall back to reading only the tracked file" in flattened
         assert "confirm the exact title/body/project/labels or exact comment payload" in flattened
+        assert "it does not authorize merging that pull request" in flattened
+        assert "do not park merely to avoid asking" in flattened
         assert "Non-interactive runs never wait for approval" in flattened
         assert (
             "Never repeat a tracker create, tracker comment, push, or pull request creation"
@@ -1628,6 +1676,9 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
     ).read_text(encoding="utf-8")
     mutations = (
         ("session-start", session, session.replace(
+            "`kitconfig.load_config()`", "`config/dev-model.yaml`", 1
+        )),
+        ("session-start", session, session.replace(
             "`repository-state-read` | required", "`repository-state-read` | optional", 1
         )),
         ("session-start", session, session.replace(
@@ -1638,11 +1689,26 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "`remediation-unavailable` | `no-now-promotion-for-that-candidate`",
             "`remediation-unavailable` | `promote-anyway`", 1
         )),
+        ("session-start", session, session.replace(
+            "do not render the normal briefing or recommendation",
+            "render the normal briefing and recommendation", 1
+        )),
+        ("session-start", session, session.replace(
+            "label every gap at its normal display location",
+            "omit unavailable gaps", 1
+        )),
+        ("session-start", session, session.replace(
+            "A previous chat response is not resume evidence",
+            "A previous chat response is resume evidence", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`kitconfig.load_config()`", "`config/dev-model.yaml`", 1
+        )),
         ("wrap-up", wrap, wrap.replace(
             "`document-budget-check` | required", "`document-budget-check` | optional", 1
         )),
         ("wrap-up", wrap, wrap.replace(
-            "`tracker-search-and-write` | optional and approval-gated",
+            "`tracker-search-and-write` | conditional and approval-gated",
             "`tracker-search-and-write` | optional", 1
         )),
         ("wrap-up", wrap, wrap.replace(
@@ -1655,7 +1721,37 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "`non-interactive-tracker-route` | `wait-for-approval`", 1
         )),
         ("wrap-up", wrap, wrap.replace(
+            "`interactive-issue-shaped-finding` | "
+            "`search-and-request-exact-payload-decision-before-park`",
+            "`interactive-issue-shaped-finding` | `park-without-asking`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`merge-without-predeclared-and-current-authority` | "
+            "`hold-mergeable-pr-for-operator`",
+            "`merge-without-predeclared-and-current-authority` | `merge`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
             "`pr-watch` | conditional", "`pr-watch` | optional", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "name the failed capability, and provide the next safe resume step",
+            "continue without naming the failed capability", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Leave the pull request unmerged; report its URL, exact head",
+            "Merge the pull request; report its URL, exact head", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Park the full finding in `<friction-log>`",
+            "Discard the finding", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "verified merged pull request when one was required",
+            "unverified pull request when one was required", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Never repeat a tracker create",
+            "Repeat a tracker create", 1
         )),
     )
     for mutation_index, (name, original, mutated) in enumerate(mutations):

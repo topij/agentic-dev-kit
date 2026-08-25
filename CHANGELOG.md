@@ -49,16 +49,22 @@ starts.
   CI/cron, tracker, configured drift, or candidate-remediation reads produce explicit
   degraded results instead of empty, clean, or `Now` claims.** **Refresh
   `docs/agentic-dev-kit/workflows/session-start.md`. Keep the existing runtime adapter;
-  it loads the shared declaration and needs no new config key or connector name. Treat
-  the workflow as read-only, and let non-interactive invocations render once and exit.**
+  it loads the shared declaration and needs no new config key or connector name. Resolve
+  config through `kitconfig.load_config()` or your equivalent merged-view mechanism so
+  the local overlay is not ignored. Treat the workflow as read-only, and let
+  non-interactive invocations render once and exit.**
 - **CHANGED (gate semantics) — `wrap-up` now stops before staging when required
   repository/config, record-write, or document-budget capabilities fail; tracker
   unavailability, silence, decline, or missing exact-payload approval parks the complete
-  finding in the friction log, while a changed record is incomplete until its
-  branch/PR/`pr-watch` path settles.** **Refresh
+  finding in the friction log, while an interactive issue-shaped finding must be
+  searched and presented for an exact-payload decision instead of parked by default.
+  A changed record reaches a terminal state only after its branch/PR/`pr-watch` path
+  settles and merge authority either permits the merge or holds the exact head for the
+  operator.** **Refresh
   `docs/agentic-dev-kit/workflows/wrap-up.md`. Keep the existing runtime adapter and
-  config. Do not treat a configured tracker, prior approval, or standing autonomous
-  authority as approval for a create, modification, or occurrence-comment payload.**
+  config. Resolve the merged config view, and do not treat a configured tracker, prior
+  approval, or standing autonomous authority as approval for a create, modification,
+  or occurrence-comment payload, or as authority to merge.**
 
 ---
 

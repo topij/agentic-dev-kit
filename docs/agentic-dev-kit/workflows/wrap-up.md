@@ -4,7 +4,11 @@ End-of-session wrap-up. Update the living handoff and commit.
 
 ## Resolve configuration
 
-Read `config/dev-model.yaml` first. In this workflow, `<handoff>`,
+Resolve the merged configuration first with `kitconfig.load_config()` (or the
+repository's equivalent configured merged-view mechanism), so a gitignored
+`config/dev-model.local.yaml` overlay is applied per leaf rather than ignored. A
+missing loader or invalid merged view is a `repository-config-read` failure; do not
+fall back to reading only the tracked file. In this workflow, `<handoff>`,
 `<handoff-history>`, and `<friction-log>` mean the corresponding values under
 `paths`; `<engine-dir>` means `paths.engines`; `<handoff-budget>` means the
 `budget` field of `<handoff>`'s entry under `doc_budgets`. `<tracker>` means the
@@ -34,9 +38,10 @@ Finish this preflight before editing `<handoff>`. Report each capability as `rea
 | `handoff-record-write` | required | Prove that `<handoff>` can be changed without overwriting an unrelated operator edit. Unavailable or overlapping ownership is a hard stop; preserve the existing tree. |
 | `document-budget-check` | required | Resolve and run `<engine-dir>/check_doc_budget.py`. A missing engine, usage/config failure, or unreadable result stops before staging; preserve the record edit for repair. |
 | `handoff-archive` | conditional | Required only when the budget checker directs a sweep. Resolve `<engine-dir>/archive_plan_sessions.py` and `<handoff-history>` before invoking it. Unavailability or a non-success outcome stops before staging, with both documents preserved as the helper reports. |
-| `tracker-search-and-write` | optional and approval-gated | Search before proposing a create or occurrence comment. Missing config, client, credential, payload-specific approval, or a declined/silent approval degrades to a complete `<friction-log>` entry; tracker availability never authorizes a write. |
+| `tracker-search-and-write` | conditional and approval-gated | Required when a finding is issue-shaped and its point is not accumulation. Search first, then in an interactive session present the exact create/comment payload for an operator decision; do not park merely to avoid asking. Missing config, client, credential, operator presence, payload-specific approval, or a declined/silent decision degrades to a complete `<friction-log>` entry. Tracker availability never authorizes a write. |
 | `forge-pr-write` | conditional | Required when the wrap-up changes a repository record. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step. |
 | `pr-watch` | conditional | Required after a wrap-up pull request exists. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete. |
+| `merge-authority` | conditional and authority-gated | Required only after `pr-watch` says the exact head is mergeable. Resolve the project's predeclared merge class and the current request's authority before acting. A `self` class still needs project and current-request authority; an `operator` class needs current operator authorization for the exact pull request. Missing, unknown, or insufficient authority leaves the mergeable pull request in `successful-operator-handoff`; it never authorizes a merge. |
 | `project-status-write` | optional enhancement | Update only a project status artifact that already exists and is in scope. Its absence is an honest skip, not a reason to invent one. |
 
 ### Authority contract
@@ -44,28 +49,39 @@ Finish this preflight before editing `<handoff>`. Report each capability as `rea
 | Policy id | Required outcome |
 |---|---|
 | `tracker-without-exact-payload-approval` | `park-complete-friction-entry-no-tracker-write` |
+| `interactive-issue-shaped-finding` | `search-and-request-exact-payload-decision-before-park` |
+| `friction-log-route` | `only-incomplete-accumulating-unavailable-declined-or-ambiguous` |
 | `non-interactive-tracker-route` | `park-complete-friction-entry-never-wait` |
 | `ambiguous-external-write` | `read-back-before-retry-or-park-as-ambiguous` |
 | `operator-owned-repository-change` | `preserve-and-stage-only-declared-paths` |
 | `required-engine-unavailable` | `stop-before-staging-preserve-record-edit` |
+| `merge-without-predeclared-and-current-authority` | `hold-mergeable-pr-for-operator` |
+| `operator-merge-class-without-exact-pr-authorization` | `hold-mergeable-pr-for-operator` |
 | `runtime-policy-override` | `shared-declaration-wins-and-stop` |
 
 Invoking `wrap-up` authorizes its scoped repository record, branch, push, and
-pull-request work. It does not authorize a tracker create, tracker modification, or
-occurrence comment. That external write requires the operator, in the current
-interactive session, to confirm the exact title/body/project/labels or exact comment
-payload. A configured tracker, prior approval, standing autonomous authority, or
-approval of another payload is not sufficient. Non-interactive runs never wait for
-approval and always take the declared park route.
+pull-request work; it does not authorize merging that pull request. A merge
+additionally requires the project's predeclared merge class and authority from the
+current request: project-authorized autonomous merge for `self`, or current operator
+authorization for the exact pull request for `operator`. Missing or ambiguous class or
+authority takes the declared hold route. Invocation also does not authorize a tracker
+create, tracker modification, or occurrence comment. That external write requires the
+operator, in the current interactive session, to confirm the exact
+title/body/project/labels or exact comment payload. A configured tracker, prior
+approval, standing autonomous authority, or approval of another payload is not
+sufficient. Non-interactive runs never wait for approval and always take the declared
+park route.
 
 ### Durable artifacts, resumability, and completion
 
 The repository record is load-bearing: `<handoff>` and, when applicable,
 `<handoff-history>` and `<friction-log>`. A successful tracker route additionally
 records only an identifier actually returned and verified from the tracker. A changed
-record is complete only when its exact diff is committed on a non-protected branch,
-its pull request has settled under `pr-watch`, and the repository state supports the
-claim that it merged. A no-change session may complete without a commit.
+record reaches a terminal state only when its exact diff is committed on a
+non-protected branch and its pull request has settled under `pr-watch`: either
+repository state supports the claim that an authorized merge landed, or the exact
+mergeable head is held for the operator under `successful-operator-handoff`. A
+no-change session may complete without a commit.
 
 Resume from the durable evidence already present: the preserved working-tree diff,
 named branch and commit, pull-request URL and exact head, parked friction entry, or
@@ -78,7 +94,8 @@ summary; read the destination first.
 | `hard-stop` | A required capability fails, record validation fails, an operator-owned edit overlaps, or shared/runtime policy conflicts. | Preserve existing and newly authored record data, name the failed capability, and provide the next safe resume step. |
 | `degraded-success` | Tracker or optional project-status integration is unavailable while the repository record path remains safe. | Park the full finding in `<friction-log>` or skip the absent optional status artifact, then continue the repository record path. |
 | `successful-noop` | The session produced no handoff-relevant change and no friction artifact is owed. | Say so and create no commit or pull request. |
-| `successful-completion` | Every required and triggered conditional capability completed and each external identifier was read back or returned authoritatively. | Report the durable record paths, merged pull request when one was required, actual tracker identifiers when approved, and one next-session starter or an explicit no-follow-up result. |
+| `successful-operator-handoff` | The record pull request is mergeable at an exact reviewed head, but the declared merge class or current authority requires an operator to act. | Leave the pull request unmerged; report its URL, exact head, merge class or authority gap, durable record paths, and the command or operator action that safely resumes it. |
+| `successful-completion` | Every required and triggered conditional capability completed, each external identifier was read back or returned authoritatively, and any merge was authorized by the declared class plus the current request. | Report the durable record paths, verified merged pull request when one was required, actual tracker identifiers when approved, and one next-session starter or an explicit no-follow-up result. |
 
 ## Steps
 
@@ -142,7 +159,9 @@ summary; read the destination first.
    - a **proposed fix**.
 
    Three parts means it is issue-shaped already, and a triage pass can add nothing to
-   it but latency.
+   it but latency. In an interactive session with a configured tracker, take that route
+   through search and an exact-payload approval request; do not put the finding in
+   `<friction-log>` merely because filing would require asking the operator.
 
    **Search the tracker for the finding before filing**, on its mechanism rather than
    on your own wording. Be honest about what that buys: it is a plain search with none

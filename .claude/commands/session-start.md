@@ -5,4 +5,4 @@ description: Build a concise start-of-session briefing from the living handoff, 
 Read `docs/agentic-dev-kit/workflows/session-start.md` completely and follow it.
 
 Treat `$ARGUMENTS` as additional session context. Resolve all configured paths from
-the repository root and `config/dev-model.yaml`.
+the repository root and merged configuration defined by the shared workflow.

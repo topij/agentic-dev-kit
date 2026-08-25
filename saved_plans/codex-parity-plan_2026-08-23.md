@@ -77,17 +77,22 @@ that revision; the delivery slices below are expected to change them.
 - **Capabilities:** repository/config read and handoff write are required. The document-
   budget checker is required; the archive helper is conditional on its result. Forge PR
   write and `pr-watch` are conditional on a changed record. Tracker search/write is
-  optional and payload-approval-gated; an existing project-status artifact is an optional
-  enhancement.
+  conditional and payload-approval-gated for an issue-shaped finding; an existing
+  project-status artifact is an optional enhancement. Merge authority is conditional
+  after the exact head becomes mergeable.
 - **Authority and artifacts:** invocation authorizes the scoped repository record and its
-  branch/PR path. Tracker creates, modifications, and occurrence comments require the
-  exact payload to be confirmed by the operator in the current interactive session.
-  Durable evidence is the repository record, its reviewed merge when changed, a parked
-  friction entry, or an identifier actually returned and read back from the tracker.
+  branch/PR path, not a merge. Tracker creates, modifications, and occurrence comments
+  require the exact payload to be confirmed by the operator in the current interactive
+  session. An interactive issue-shaped finding is searched and presented for that
+  decision before parking. Durable evidence is the repository record, its reviewed merge
+  or exact operator-held head when changed, a parked friction entry, or an identifier
+  actually returned and read back from the tracker.
 - **Stops and mismatch:** a required failure preserves the record and stops before a
-  false completion. Tracker unavailability or absent approval degrades to the friction
-  inbox. The Codex adapter's generic external-mutation wording was weaker than the shared
-  payload-specific gate; this slice removes that duplicate.
+  false completion. Tracker unavailability, decline, silence, or ambiguity degrades to
+  the friction inbox; incomplete and accumulating findings also take that route. Missing
+  or insufficient merge authority holds a mergeable pull request for the operator. The
+  Codex adapter's generic external-mutation wording was weaker than the shared payload-
+  specific gate; this slice removes that duplicate.
 
 ### `triage-friction-log`
 

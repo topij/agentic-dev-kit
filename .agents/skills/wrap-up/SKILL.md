@@ -8,5 +8,5 @@ description: Close a meaningful development session by updating the living hando
 Read `docs/agentic-dev-kit/workflows/wrap-up.md` completely and follow it.
 
 Treat the current conversation and repository diff as session context. Resolve all
-configured paths from the repository root and `config/dev-model.yaml`; translate only
-runtime-native invocation and available mechanisms.
+configured paths from the repository root and merged configuration defined by the
+shared workflow; translate only runtime-native invocation and available mechanisms.

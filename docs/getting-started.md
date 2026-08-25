@@ -242,8 +242,11 @@ friction-routing step is being skipped — not that triage is overdue.
 > The shared session-start and wrap-up workflows declare the preflight boundary that
 > applies in Claude and Codex. Missing required repository/config or record capabilities
 > stop before a false briefing or commit. Optional session-start sources render as
-> unavailable rather than empty; wrap-up parks friction when tracker access or exact-
-> payload approval is absent, and non-interactive runs never wait for that approval.
+> unavailable rather than empty; wrap-up presents an interactive issue-shaped finding
+> for an exact-payload tracker decision before parking, while unavailable, declined,
+> ambiguous, incomplete, or accumulating routes go to the friction log. Non-interactive
+> runs never wait for approval, and merge authority that is absent or insufficient holds
+> the exact mergeable head for the operator.
 > Their thin adapters select runtime-native mechanisms but cannot change those outcomes.
 > No new config key or installer step is needed for this bookend contract. The triage
 > workflow still needs its pipeline configuration and engine-mode precedence moved into
