@@ -34,7 +34,11 @@ contract.
 `triage.analysis_tier` must name a key under `models.tiers`. Apply a runtime mapping
 only when the current runtime mechanically exposes that control; otherwise label it
 instructed guidance. `triage.pr_draft` is a boolean. Engine names and the commit subject
-are non-empty strings. Artifact patterns are non-empty repository-relative paths.
+are non-empty strings. Each engine name is a relative path fragment with no `..`
+component. Resolve it beneath the canonical `<engine-dir>` and require any existing
+target to remain canonically contained there, including through symlinks, and to be a
+regular file. An absolute, traversing, escaping, or non-regular engine target hard-stops
+before engine-mode selection. Artifact patterns are non-empty repository-relative paths.
 `triage.state_path` contains `{mode}`; the frozen-inbox and report patterns contain
 `{mode}`, `{date}`, and `{session}`. Live and test state must resolve to different
 paths. The state and frozen snapshot are logical `state.dirname` paths; the report is a
@@ -78,7 +82,8 @@ Evaluate the input before capability-dependent work.
 | `resume`, no valid active state | Hard-stop without an external write. |
 | `new`, active live state | Refuse; never overwrite an approval-bound session. |
 | Interactive `recover`, active live state | Under the single-writer gate, capture raw bytes and filesystem observations before parsing the captured copy; valid state then refuses and directs to `resume`, while invalid state enters recovery. Recovery never authorizes a tracker, source, or forge write. |
-| Interactive `recover`, no active live state | Hard-stop without creating a recovery bundle or performing an external write. |
+| Interactive `recover`, blocking gate | Capture the complete published gate and its filesystem observations; prove owner termination and require exact operator approval before quarantining the unchanged gate, whether or not active state exists. |
+| Interactive `recover`, no active live state and no gate | Hard-stop without creating a recovery bundle or performing an external write. |
 | Scheduled or unattended `recover` | Report operator-held without acquiring the single-writer gate, capturing state, or changing an artifact. |
 | `test` | Use test identity and test state; never replace or resume live state. |
 | Scheduled or unattended non-recovery invocation with active state | Resume or report operator-held; never start another draft. |
@@ -109,7 +114,7 @@ conditional capability ready before its trigger.
 |---|---|---|
 | `repository-config-read` | required | Prove the repository root; read the merged config, protected branch, `<friction-log>`, and `<friction-log-archive>`; and establish caller branch/status. Missing, unreadable, or unsafe input hard-stops before artifact creation. |
 | `shared-state-resolver` | required | Resolve `<engine-dir>/lib/state_paths`; prove own-session reads and preflights use `resolve_write_path(fragment, mkdir=False)`, writes use `resolve_write_path(fragment)`, and neither state nor frozen snapshots use the shared-cache `resolve_read_path`; honor the lane sandbox. Unavailability hard-stops before state, snapshot, or report writes. |
-| `single-writer-state-gate` | required | Resolve a mode-specific sibling lock under the same state root. Acquire it by exclusive atomic creation before observing or changing active state; hold the owner token across every state transition and external-write/read-back sequence; require the expected state digest at act time. An existing, lost, or mismatched lock is operator-held and never permits overwrite, retry, or automatic stale-lock removal. |
+| `single-writer-state-gate` | required | Resolve a mode-specific sibling lock file under the same state root. Acquire it by atomically publishing a complete pre-populated owner record at an absent path before observing or changing active state; hold the owner token across every state transition and external-write/read-back sequence; require the expected state digest at act time. An existing, lost, or mismatched lock is operator-held and never permits overwrite, retry, or automatic stale-lock removal. |
 | `frozen-inbox-state` | required | Create and later verify atomic state, report, and exact-byte frozen snapshot artifacts bound to one run identity. Missing, malformed, foreign, aliased, or mismatched evidence hard-stops before tracker writes; after a verified write it becomes operator-held and forbids a whole-inbox fallback. |
 | `draft-finalize-engine-set` | optional, atomic | Resolve both configured engines under `<engine-dir>`. All present selects engine-backed mode; all absent selects LLM-only mode; a partial pair hard-stops. Persist the selected mode and never switch it during resume. |
 | `notification-thread` | conditional by execution context | A scheduled or unattended draft requires notification send and thread read; missing backend, target, credential, or either operation hard-stops before the approval session. Interactive use may degrade to the current session. An existing unattended session whose notification path later fails is operator-held with state intact. |
@@ -152,22 +157,35 @@ payload digest. After response/read-back, atomically persist `verified`, `failed
 `ambiguous`. A retry must inspect that state and the destination. Process termination or
 a missing final chat summary never authorizes repeating a write.
 
-Every live or test mode has one single-writer gate beside its active state path. Acquire
-the gate by exclusive atomic directory creation before testing state presence, reading
-state for a transition, or creating the first run reservation. Store an opaque owner
-token and run identity in the gate. A new run claims the absent state path with exclusive
-creation of a minimal `reserved` record while holding the gate; it never publishes its
-first state by replacement over an expected absence. The only non-absent new-run claim
-is a digest-checked replacement of an exact `recovered-safe-to-restart` receipt whose
-recovery bundle remains present. Every later transition reads the current bytes under
-the gate and records their digest, then immediately before atomic replacement requires
-the same digest, run identity, and gate owner token. A mismatch stops operator-held
-without replacing either version.
+Every live or test mode has one single-writer gate file beside its active state path.
+Prepare a complete owner record in a unique same-directory temporary file: opaque owner
+token, run identity when allocated, host, process identifier, process-start observation,
+and creation time. Flush the file, then acquire the absent gate with an atomic hard-link
+publication of that inode; a pre-existing destination loses without replacement. The
+published gate therefore never exists without its complete owner record. Flush the
+directory, then unlink the temporary name. Process loss before publication leaves no
+gate; process loss after publication leaves a complete gate, even when its temporary
+name is still linked. Recovery verifies and quarantines every name for that inode rather
+than treating the transient extra link as unknown authority.
+
+Acquire the gate before testing state presence, reading state for a transition, or
+parsing a new inbox. Parse under the held gate before creating the `reserved` state. If
+parsing fails before reservation, prove the active state remains absent and that no run
+artifact or external write occurred, then release only the matching gate and hard-stop
+without state. After successful parsing, a new run claims the absent state path with
+exclusive creation of a minimal `reserved` record while still holding the gate; it never
+publishes its first state by replacement over an expected absence. The only non-absent
+new-run claim is a digest-checked replacement of an exact
+`recovered-safe-to-restart` receipt whose recovery bundle remains present. Every later
+transition reads the current bytes under the gate and records their digest, then
+immediately before atomic replacement requires the same digest, run identity, and gate
+owner token. A mismatch stops operator-held without replacing either version.
 
 Hold the gate across an external create and its authoritative read-back so a second
 invocation cannot act on `attempting` concurrently. On normal or handled-failure
 teardown, release only a gate whose owner token still matches and only after the terminal
-or held state is durable. Process loss leaves the gate and state as operator-held. Never
+or held state is durable, except for the proven pre-reservation parse-failure path above.
+Process loss leaves the gate and state as operator-held. Never
 delete or steal an unknown gate: interactive `recover` must first capture its exact
 bytes and filesystem observations, prove the recorded owner is no longer executing,
 obtain exact operator approval of that capture digest, and quarantine the unchanged gate
@@ -197,15 +215,18 @@ Accept exactly one of `resume`, `new`, `recover`, or `test`, or no argument. `te
 test draft or resumes the separate test state; it never selects live state. No argument
 resumes valid live state when present and otherwise starts a live draft. `new` refuses
 when live state exists. `resume` requires valid live state. `recover` is interactive and
-requires an active live-state file; it does not decide whether that state is valid until
-after raw capture. Scheduled or unattended recovery holds without changing an artifact.
+requires an active live-state file or a blocking live gate; it does not decide whether
+state is valid until after raw capture. Scheduled or unattended recovery holds without
+changing an artifact.
 
 ## Invalid-state recovery
 
 Recovery is a state-preservation transition, not approval to discard a session or repeat
-an external write. Acquire the mode's single-writer gate before capture; if an existing
-gate blocks acquisition, follow the captured stale-gate recovery rule above rather than
-removing it. Locate the active state in its own sandbox with
+an external write. Acquire the mode's single-writer gate before state capture. If an
+existing gate blocks acquisition, capture its complete owner record, every same-inode
+temporary name, and filesystem observations before following the stale-gate recovery
+rule above; this route remains available when active state is absent. Never remove the
+gate first. Locate any active state in its own sandbox with
 `resolve_write_path(fragment, mkdir=False)` and inspect the path itself without parsing
 its content. Reject a symlink, non-regular file, or link count other than one. Before
 validity classification, rename, or repair, atomically create a unique initial recovery
@@ -287,7 +308,8 @@ payload the operator reviews without attempting to hash a digest into itself. In
 engine-backed mode invoke `triage.draft_engine`; in LLM-only mode draft with the
 configured analysis tier and record `agent-executed`.
 
-If parsing fails, hard-stop without state. If there are no candidates, write the report
+If parsing fails under the held gate before reservation, follow the proven
+pre-reservation teardown and hard-stop without state. If there are no candidates, write the report
 and complete without notification, approval state, tracker, source-document, or forge
 writes. Otherwise
 atomically write state in `awaiting-approval` before presenting proposals.

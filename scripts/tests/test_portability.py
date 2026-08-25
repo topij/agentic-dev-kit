@@ -2490,7 +2490,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "neither state nor frozen snapshots use the shared-cache resolve_read_path"
         in capabilities["shared-state-resolver"][1]
     )
-    assert "Acquire it by exclusive atomic creation" in capabilities[
+    assert "atomically publishing a complete pre-populated owner record" in capabilities[
         "single-writer-state-gate"
     ][1]
     assert "require the expected state digest at act time" in capabilities[
@@ -2562,7 +2562,8 @@ def _assert_triage_semantics(workflow: str) -> None:
         "resume, no valid active state",
         "new, active live state",
         "Interactive recover, active live state",
-        "Interactive recover, no active live state",
+        "Interactive recover, blocking gate",
+        "Interactive recover, no active live state and no gate",
         "Scheduled or unattended recover",
         "test",
         "Scheduled or unattended non-recovery invocation with active state",
@@ -2586,8 +2587,11 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert "capture raw bytes and filesystem observations before parsing" in inputs[
         "Interactive recover, active live state"
     ][0]
+    assert "whether or not active state exists" in inputs[
+        "Interactive recover, blocking gate"
+    ][0]
     assert "without creating a recovery bundle" in inputs[
-        "Interactive recover, no active live state"
+        "Interactive recover, no active live state and no gate"
     ][0]
     assert "without acquiring the single-writer gate" in inputs[
         "Scheduled or unattended recover"
@@ -2598,8 +2602,12 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Require `state.dirname` to match that resolver's declared `STATE_DIRNAME`",
         "pass only the remaining fragment to the resolver",
         "Never use `resolve_read_path` for either artifact",
-        "A new run claims the absent state path with exclusive creation of a minimal "
-        "`reserved` record",
+        "An absolute, traversing, escaping, or non-regular engine target hard-stops",
+        "published gate therefore never exists without its complete owner record",
+        "Parse under the held gate before creating the `reserved` state",
+        "proven pre-reservation parse-failure path",
+        "After successful parsing, a new run claims the absent state path with "
+        "exclusive creation of a minimal `reserved` record",
         "immediately before atomic replacement requires the same digest, run identity, "
         "and gate owner token",
         "Hold the gate across an external create and its authoritative read-back",
@@ -2682,6 +2690,10 @@ def test_triage_integration_is_config_owned_shared_and_thin() -> None:
         assert ".." not in path.parts
     for key in ("state_path", "frozen_inbox_pattern"):
         assert Path(triage[key]).parts[0] == config["state"]["dirname"]
+    for key in ("draft_engine", "finalize_engine"):
+        engine_path = Path(triage[key])
+        assert not engine_path.is_absolute()
+        assert ".." not in engine_path.parts
     assert "{mode}" in triage["state_path"]
     for placeholder in ("{mode}", "{date}", "{session}"):
         assert placeholder in triage["frozen_inbox_pattern"]
@@ -2729,6 +2741,21 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "neither state nor frozen snapshots use the shared-cache `resolve_read_path`",
             "state and frozen snapshots may use the shared-cache `resolve_read_path`",
+            1,
+        ),
+        workflow.replace(
+            "An absolute, traversing, escaping, or non-regular engine target hard-stops",
+            "An escaping engine target selects engine-backed mode",
+            1,
+        ),
+        workflow.replace(
+            "published gate therefore never exists without its complete owner record",
+            "gate may exist before its owner record is written",
+            1,
+        ),
+        workflow.replace(
+            "Parse under the held gate before creating the `reserved` state",
+            "Create the `reserved` state before parsing under the held gate",
             1,
         ),
         workflow.replace(
