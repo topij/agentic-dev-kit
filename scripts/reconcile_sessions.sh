@@ -127,19 +127,6 @@ os.close(result_fd)
 while True:
     signal.pause()
 """
-result_fd, shim_result_fd = os.pipe()
-try:
-    process = subprocess.Popen(
-        [sys.executable, "-c", shim, str(shim_result_fd), *sys.argv[2:]],
-        pass_fds=(shim_result_fd,),
-        start_new_session=True,
-    )
-except OSError as exc:
-    os.close(result_fd)
-    print(f"could not start {sys.argv[2]}: {exc}", file=sys.stderr)
-    sys.exit(127)
-finally:
-    os.close(shim_result_fd)
 
 class Cancelled(Exception):
     def __init__(self, signum):
@@ -149,6 +136,22 @@ def cancel(signum, _frame):
     raise Cancelled(signum)
 
 handled_signals = (signal.SIGHUP, signal.SIGINT, signal.SIGTERM)
+previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, handled_signals)
+result_fd, shim_result_fd = os.pipe()
+try:
+    process = subprocess.Popen(
+        [sys.executable, "-c", shim, str(shim_result_fd), *sys.argv[2:]],
+        pass_fds=(shim_result_fd,),
+        start_new_session=True,
+    )
+except OSError as exc:
+    os.close(result_fd)
+    signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+    print(f"could not start {sys.argv[2]}: {exc}", file=sys.stderr)
+    sys.exit(127)
+finally:
+    os.close(shim_result_fd)
+
 for handled_signal in handled_signals:
     signal.signal(handled_signal, cancel)
 
@@ -170,6 +173,7 @@ def stop_group(first_signal=None):
     process.wait()
 
 try:
+    signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
     ready, _, _ = select.select([result_fd], [], [], seconds)
     if not ready:
         stop_group(signal.SIGTERM)

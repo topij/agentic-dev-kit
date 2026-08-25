@@ -1058,6 +1058,46 @@ def test_portable_bounded_runner_reaps_on_operator_interrupt(tmp_path: Path) -> 
     assert runner.returncode in {-signal.SIGINT, 128 + signal.SIGINT}
 
 
+def test_portable_bounded_runner_reaps_on_startup_interrupt(tmp_path: Path) -> None:
+    marker = tmp_path / "shim-started"
+    install_handlers = (
+        "for handled_signal in handled_signals:\n"
+        "    signal.signal(handled_signal, cancel)"
+    )
+    helper = _bounded_run_helper_source().replace(
+        install_handlers,
+        f"open({json.dumps(str(marker))}, \"w\").close()\n"
+        "time.sleep(0.5)\n"
+        f"{install_handlers}",
+    )
+    assert str(marker) in helper
+    hostile = tmp_path / "startup-signal-descendant.sh"
+    hostile.write_text(
+        "#!/bin/sh\n"
+        "sh -c 'trap \"\" HUP INT TERM; while :; do sleep 1; done' &\n"
+        "wait\n",
+        encoding="utf-8",
+    )
+    hostile.chmod(0o755)
+    command = f"{helper}\n_bounded_run 30 {shlex.quote(str(hostile))}\n"
+    runner = subprocess.Popen(
+        ["bash", "-c", command],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+
+    deadline = time.monotonic() + 3
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert marker.exists()
+    os.killpg(runner.pid, signal.SIGINT)
+    runner.communicate(timeout=3)
+
+    assert runner.returncode in {-signal.SIGINT, 128 + signal.SIGINT}
+
+
 def test_portable_bounded_runner_reaps_on_post_result_interrupt(
     tmp_path: Path,
 ) -> None:
