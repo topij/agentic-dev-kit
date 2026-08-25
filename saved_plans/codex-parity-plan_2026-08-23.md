@@ -77,7 +77,8 @@ that revision; the delivery slices below are expected to change them.
   approval semantics do not.
 - **Capabilities:** repository/config read and handoff write are required. The document-
   budget checker is required; the archive helper is conditional on its result. Forge PR
-  write and `pr-watch` are conditional on a changed record. Tracker search/write is
+  write and `pr-watch` are conditional on any changed repository artifact. Tracker
+  search/write is
   conditional and payload-approval-gated for an issue-shaped finding; an existing
   project-status artifact is an optional enhancement. Merge authority is conditional
   after the exact head becomes mergeable.
@@ -85,7 +86,8 @@ that revision; the delivery slices below are expected to change them.
   branch/PR path, not a merge. Tracker creates, modifications, and occurrence comments
   require the exact payload to be confirmed by the operator in the current interactive
   session. An interactive issue-shaped finding is searched and presented for that
-  decision before parking. Durable evidence is the repository record, its reviewed merge
+  decision before parking. Durable evidence is every changed repository artifact,
+  including an existing project-status artifact, its reviewed merge
   or exact operator-held head when changed, a parked friction entry, or an identifier
   actually returned and read back from the tracker.
 - **Stops and mismatch:** a required failure preserves the record and stops before a

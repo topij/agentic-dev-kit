@@ -64,10 +64,12 @@ starts.
   unavailability, silence, decline, or missing exact-payload approval parks the complete
   finding in the friction log, while an interactive issue-shaped finding must be
   searched and presented for an exact-payload decision instead of parked by default.
-  A changed record reaches a terminal state only after its branch/PR/`pr-watch` path
-  settles and merge authority either permits the merge or holds the exact head for the
-  operator. Non-lane pull requests without a project merge policy default to
-  operator-authorized merge; they never default to autonomous merge. Conditional
+  Any changed repository artifact, including an existing project-status artifact,
+  reaches a terminal state only after its branch/PR/`pr-watch` path settles and merge
+  authority either permits the merge or holds the exact head for the operator. A
+  status-only edit is not a successful no-op. Non-lane pull requests without a project
+  merge policy default to operator-authorized merge; they never default to autonomous
+  merge. Conditional
   capabilities are classified when triggered rather than claimed ready before the
   handoff edit. An unavailable forge path or unavailable/unsettled `pr-watch` returns
   `incomplete-resumable` with the exact preserved diff, commit, branch, or PR evidence.** **Refresh

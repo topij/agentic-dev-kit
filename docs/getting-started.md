@@ -250,6 +250,8 @@ friction-routing step is being skipped — not that triage is overdue.
 > the exact mergeable head for the operator. A non-lane PR with no project policy
 > defaults to operator authorization, never autonomous merge. An unavailable forge or
 > unsettled review path preserves exact resume evidence and reports incomplete.
+> Any existing project-status artifact changed by wrap-up takes that same commit/PR path;
+> a status-only edit is not a successful no-op.
 > Their thin adapters select runtime-native mechanisms but cannot change those outcomes.
 > No new config key or installer step is needed for this bookend contract. The triage
 > workflow still needs its pipeline configuration and engine-mode precedence moved into

@@ -37,7 +37,8 @@ their Claude and Codex bindings remain invocation-only adapters.
   for the operator; a policy-less non-lane pull request defaults to the operator route.
   Conditional capabilities classify at their trigger rather than claiming future
   readiness before the handoff edit; blocked forge or unsettled review paths preserve
-  exact evidence under `incomplete-resumable`.
+  exact evidence under `incomplete-resumable`; a changed existing project-status
+  artifact takes that same path and cannot be called a no-op.
 
 - **The triage workflow is bounded separately.** Its shared definition still assumes a
   dedicated pipeline config absent from `config/dev-model.yaml`, unvendored parse/finalize

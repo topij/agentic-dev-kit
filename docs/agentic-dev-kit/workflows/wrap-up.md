@@ -33,7 +33,7 @@ Before editing `<handoff>`, classify `repository-config-read`,
 `handoff-record-write`, and the availability of `document-budget-check` as `ready`,
 `degraded`, or `stop`, with the mechanism used or an actionable reason. Do not claim a
 future conditional is ready. Reclassify each conditional at its trigger point: the
-post-edit budget result, an issue-shaped finding, a changed record, an opened pull
+post-edit budget result, an issue-shaped finding, a changed repository artifact, an opened pull
 request, or a mergeable exact head. In the final report, list every declaration with
 its terminal status; use `not-triggered` only when its stated condition never occurred.
 Once a condition occurs, `not-triggered` is invalid and cannot satisfy completion.
@@ -45,7 +45,7 @@ Once a condition occurs, `not-triggered` is invalid and cannot satisfy completio
 | `document-budget-check` | required | Resolve and run `<engine-dir>/check_doc_budget.py`. A missing engine, usage/config failure, or unreadable result stops before staging; preserve the record edit for repair. |
 | `handoff-archive` | conditional | Required only when the budget checker directs a sweep. Resolve `<engine-dir>/archive_plan_sessions.py` and `<handoff-history>` before invoking it. Unavailability or a non-success outcome stops before staging, with both documents preserved as the helper reports. |
 | `tracker-search-and-write` | conditional and approval-gated | Required when a finding is issue-shaped and its point is not accumulation. Search first, then in an interactive session present the exact create/comment payload for an operator decision; do not park merely to avoid asking. Missing config, client, credential, operator presence, payload-specific approval, or a declined/silent decision degrades to a complete `<friction-log>` entry. Tracker availability never authorizes a write. |
-| `forge-pr-write` | conditional | Required when the wrap-up changes a repository record. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step. |
+| `forge-pr-write` | conditional | Required when the wrap-up changes any repository artifact, including an existing project-status artifact. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step. |
 | `pr-watch` | conditional | Required after a wrap-up pull request exists. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete. |
 | `merge-authority` | conditional and authority-gated | Required only after `pr-watch` says the exact head is mergeable. For an isolated lane, resolve its persisted merge class; for a non-lane pull request, resolve the project's declared merge policy and default to `operator` when none exists. A `self` route still needs project and current-request authority; an `operator` route needs current operator authorization for the exact pull request. Unknown lane metadata or insufficient authority leaves the mergeable pull request in `successful-operator-handoff`; it never authorizes a merge. |
 | `project-status-write` | optional enhancement | Update only a project status artifact that already exists and is in scope. Its absence is an honest skip, not a reason to invent one. |
@@ -66,7 +66,7 @@ Once a condition occurs, `not-triggered` is invalid and cannot satisfy completio
 | `non-lane-without-project-merge-policy` | `default-operator-require-exact-pr-authorization` |
 | `runtime-policy-override` | `shared-declaration-wins-and-stop` |
 
-Invoking `wrap-up` authorizes its scoped repository record, branch, push, and
+Invoking `wrap-up` authorizes its scoped repository artifacts, branch, push, and
 pull-request work; it does not authorize merging that pull request. A merge
 additionally requires the project's predeclared merge class and authority from the
 current request: project-authorized autonomous merge for `self`, or current operator
@@ -83,10 +83,11 @@ park route.
 
 ### Durable artifacts, resumability, and completion
 
-The repository record is load-bearing: `<handoff>` and, when applicable,
-`<handoff-history>` and `<friction-log>`. A successful tracker route additionally
-records only an identifier actually returned and verified from the tracker. A changed
-record reaches a terminal state only when its exact diff is committed on a
+The repository artifact set is load-bearing: `<handoff>` and, when applicable,
+`<handoff-history>`, `<friction-log>`, and an existing project-status artifact changed
+by this workflow. A successful tracker route additionally records only an identifier
+actually returned and verified from the tracker. A changed repository artifact reaches a terminal
+state only when its exact diff is committed on a
 non-protected branch and its pull request has settled under `pr-watch`: either
 repository state supports the claim that an authorized merge landed, or the exact
 mergeable head is held for the operator under `successful-operator-handoff`. A
@@ -102,9 +103,9 @@ summary; read the destination first.
 |---|---|---|
 | `hard-stop` | A required capability fails, record validation fails, an operator-owned edit overlaps, or shared/runtime policy conflicts. | Preserve existing and newly authored record data, name the failed capability, and provide the next safe resume step. |
 | `degraded-success` | Tracker or optional project-status integration is unavailable while the repository record path remains safe. | Park the full finding in `<friction-log>` or skip the absent optional status artifact, then continue the repository record path. |
-| `successful-noop` | The session produced no handoff-relevant change and no friction artifact is owed. | Say so and create no commit or pull request. |
-| `incomplete-resumable` | A changed record cannot reach a mergeable exact head because branch/push/pull-request creation is unavailable or ambiguous, or `pr-watch` is unavailable or unsettled. | Do not claim completion. Preserve and report the exact working-tree diff or commit, branch, pull-request URL and exact head when present, the failed or unsettled capability, and a copy-pasteable safe resume step. |
-| `successful-operator-handoff` | The record pull request is mergeable at an exact reviewed head, but the declared merge class or current authority requires an operator to act. | Leave the pull request unmerged; report its URL, exact head, merge class or authority gap, durable record paths, and the command or operator action that safely resumes it. |
+| `successful-noop` | The session produced no change to any repository artifact and no friction artifact is owed. | Say so and create no commit or pull request. |
+| `incomplete-resumable` | A changed repository artifact cannot reach a mergeable exact head because branch/push/pull-request creation is unavailable or ambiguous, or `pr-watch` is unavailable or unsettled. | Do not claim completion. Preserve and report the exact working-tree diff or commit, branch, pull-request URL and exact head when present, the failed or unsettled capability, and a copy-pasteable safe resume step. |
+| `successful-operator-handoff` | The pull request carrying the repository artifacts is mergeable at an exact reviewed head, but the declared merge class or current authority requires an operator to act. | Leave the pull request unmerged; report its URL, exact head, merge class or authority gap, durable record paths, and the command or operator action that safely resumes it. |
 | `successful-completion` | Every required and triggered conditional capability completed, each external identifier was read back or returned authoritatively, and any merge was authorized by the declared class plus the current request. | Report the durable record paths, verified merged pull request when one was required, actual tracker identifiers when approved, and one next-session starter or an explicit no-follow-up result. |
 
 ## Steps
@@ -302,7 +303,9 @@ summary; read the destination first.
 
 1. **Update any project-status doc** (e.g. a dashboard snapshot) if any metrics
    changed this session — adapt this step to whatever presentation artifact your
-   project keeps; skip if you don't have one.
+   project keeps; skip if you don't have one. A changed status doc is a repository
+   artifact: name it in validation and staging, and take the same branch/PR/`pr-watch`
+   path as any other changed repository artifact.
 
 1. **Keep the handoff docs lean.** After adding this session's block, run
    `uv run <engine-dir>/check_doc_budget.py`. If it warns that `<handoff>` is over
@@ -426,7 +429,8 @@ summary; read the destination first.
 1. **Commit + PR the handoff update — never commit to your protected branch
    directly.** Commit as `chore: update handoff — [one-line summary of session work]`
    (stage `<friction-log>` too if you added an inbox entry this session, and
-   `<handoff-history>` if the archive sweep ran). If you're already on the
+   `<handoff-history>` if the archive sweep ran; also stage any existing project-status
+   artifact this workflow changed). If you're already on the
    session's feature branch, this is just another commit on that branch's PR —
    **unless that PR already carries a current-head independent-review receipt**
    (per `pr-watch`); a push there would move the head and invalidate it,
@@ -462,4 +466,4 @@ summary; read the destination first.
   and a single `▶ Next:` starter line at the end of the latest session block are both
   documented additions, not structure changes, so do them without asking
 - If a backlog item was promoted to a sprint epic, move it (don't duplicate)
-- If the session produced no handoff-relevant changes, say so and skip the commit
+- If the session produced no repository-artifact changes, say so and skip the commit

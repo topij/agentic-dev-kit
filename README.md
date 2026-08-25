@@ -323,7 +323,8 @@ Wrap-up requires the configured document-budget engine, preserves
 operator-owned changes, sends an interactive issue-shaped finding through tracker search
 and an exact-payload decision before parking, and reserves the friction log for incomplete
 or accumulating findings and unavailable, declined, or ambiguous tracker routes. Its
-record reaches a terminal state only after the conditional branch/PR/review path settles
+changed repository artifacts, including an updated existing project-status artifact,
+reach a terminal state only after the conditional branch/PR/review path settles
 and declared merge authority either permits the merge or holds the exact head for the
 operator. A non-lane PR without project merge policy defaults to the operator route, and
 conditional capabilities are classified only when their trigger occurs. Non-interactive
