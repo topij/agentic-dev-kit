@@ -65,7 +65,9 @@ starts.
   when locally retained: their runtime-specific approval/notification instructions do
   not load the new shared gate. Preserve an operator-held state/report until approval,
   tracker, sweep PR, and exact-head review evidence reach the terminal state named by
-  the workflow; never retry an ambiguous write or whole-sweep an older snapshot.**
+  the workflow; never retry an ambiguous write or whole-sweep an older snapshot. Use
+  the interactive `recover` entry point for invalid live state; it preserves a recovery
+  bundle and prohibits abandonment when prior external-write absence is uncertain.**
 
 ---
 

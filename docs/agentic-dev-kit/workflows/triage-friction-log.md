@@ -40,7 +40,12 @@ are non-empty strings. Artifact patterns are non-empty repository-relative paths
 paths. The state and frozen snapshot are logical `state.dirname` paths; the report is a
 child of `triage.report_root`, which is neither empty nor the repository root.
 
-Resolve state reads and writes through `<engine-dir>/lib/state_paths`. Require
+Resolve state reads and writes through `<engine-dir>/lib/state_paths`. State and frozen
+snapshots are own-session evidence, not the shared cache surface: resolve every read
+and non-creating preflight with `resolve_write_path(fragment, mkdir=False)`, and resolve
+every write with `resolve_write_path(fragment)`. Never use `resolve_read_path` for
+either artifact; its newer-of sandbox/production cascade can import another session's
+approval authority. Require
 `state.dirname` to match that resolver's declared `STATE_DIRNAME`; a mismatch hard-stops
 because the resolver does not take the directory from config. Require the matching
 lexical prefix on `triage.state_path` and `triage.frozen_inbox_pattern`, remove it, then
@@ -72,6 +77,8 @@ Evaluate the input before capability-dependent work.
 | No argument, valid active state | Resume the recorded phase and mode. |
 | `resume`, no valid active state | Hard-stop without an external write. |
 | `new`, active live state | Refuse; never overwrite an approval-bound session. |
+| `recover`, valid active state | Refuse and direct the operator to `resume`; recovery never bypasses a valid approval-bound session. |
+| `recover`, invalid active live state | Enter the interactive recovery transition; preserve raw evidence before classification and never authorize a tracker, source, or forge write. |
 | `test` | Use test identity and test state; never replace or resume live state. |
 | Scheduled or unattended invocation with active state | Resume or report operator-held; never start another draft. |
 | Both configured engines present | Select engine-backed mode and persist it. |
@@ -79,7 +86,7 @@ Evaluate the input before capability-dependent work.
 | Only one configured engine present | Hard-stop before artifact or external write. |
 | Interactive invocation with notification unavailable | Present exact payloads in-session and persist exact decisions; record degradation. |
 | Scheduled or unattended invocation with notification unavailable | Hard-stop before creating a new approval session; preserve an existing session as operator-held. |
-| Missing, malformed, or identity-mismatched frozen snapshot/state | Hard-stop before tracker writes; after a verified write, preserve operator-held evidence and never whole-sweep. |
+| Missing, malformed, or identity-mismatched frozen snapshot/state outside `recover` | Hard-stop before tracker writes; name `recover` as the safe interactive transition; after an attempted or verified write, preserve operator-held evidence and never whole-sweep. |
 | Tracker or finalization write fails or is ambiguous | Read back before retry; unresolved state is operator-held. |
 | Test mode | Permit declared local artifacts and optional `[TEST]` notification only; prohibit tracker, source-document, and forge writes. |
 
@@ -100,7 +107,7 @@ conditional capability ready before its trigger.
 | Capability id | Class | Preflight and unavailable behavior |
 |---|---|---|
 | `repository-config-read` | required | Prove the repository root; read the merged config, protected branch, `<friction-log>`, and `<friction-log-archive>`; and establish caller branch/status. Missing, unreadable, or unsafe input hard-stops before artifact creation. |
-| `shared-state-resolver` | required | Resolve `<engine-dir>/lib/state_paths`, prove non-creating write resolution plus existing-artifact read resolution, and honor the lane sandbox. Unavailability hard-stops before state, snapshot, or report writes. |
+| `shared-state-resolver` | required | Resolve `<engine-dir>/lib/state_paths`; prove own-session reads and preflights use `resolve_write_path(fragment, mkdir=False)`, writes use `resolve_write_path(fragment)`, and neither state nor frozen snapshots use the shared-cache `resolve_read_path`; honor the lane sandbox. Unavailability hard-stops before state, snapshot, or report writes. |
 | `frozen-inbox-state` | required | Create and later verify atomic state, report, and exact-byte frozen snapshot artifacts bound to one run identity. Missing, malformed, foreign, aliased, or mismatched evidence hard-stops before tracker writes; after a verified write it becomes operator-held and forbids a whole-inbox fallback. |
 | `draft-finalize-engine-set` | optional, atomic | Resolve both configured engines under `<engine-dir>`. All present selects engine-backed mode; all absent selects LLM-only mode; a partial pair hard-stops. Persist the selected mode and never switch it during resume. |
 | `notification-thread` | conditional by execution context | A scheduled or unattended draft requires notification send and thread read; missing backend, target, credential, or either operation hard-stops before the approval session. Interactive use may degrade to the current session. An existing unattended session whose notification path later fails is operator-held with state intact. |
@@ -115,6 +122,8 @@ conditional capability ready before its trigger.
 |---|---|
 | `unknown-or-combined-argument` | `stop-before-capability-probe` |
 | `new-over-active-state` | `refuse-preserve-active-session` |
+| `recover-over-valid-state` | `refuse-and-resume-valid-session` |
+| `invalid-state-recovery` | `preserve-before-classify-never-abandon-uncertain-attempt` |
 | `state-or-frozen-identity-mismatch` | `stop-before-tracker-write-never-whole-sweep` |
 | `partial-engine-set` | `stop-never-mix-engine-and-llm-artifacts` |
 | `unattended-without-notification` | `stop-before-new-approval-session` |
@@ -160,10 +169,44 @@ Select the first matching row and report exactly one overall outcome.
 
 ## Entry points and context
 
-Accept exactly one of `resume`, `new`, or `test`, or no argument. `test` starts a new
+Accept exactly one of `resume`, `new`, `recover`, or `test`, or no argument. `test` starts a new
 test draft or resumes the separate test state; it never selects live state. No argument
 resumes valid live state when present and otherwise starts a live draft. `new` refuses
-when live state exists. `resume` requires valid live state.
+when live state exists. `resume` requires valid live state. `recover` is interactive and
+requires an invalid live state; scheduled or unattended recovery holds without changing
+an artifact.
+
+## Invalid-state recovery
+
+Recovery is a state-preservation transition, not approval to discard a session or repeat
+an external write. Read the active state from its own sandbox path with
+`resolve_write_path(fragment, mkdir=False)`. Before parsing, classification, rename, or
+repair, atomically create a unique recovery bundle under that same resolved state root.
+The bundle contains the exact raw state bytes, their SHA-256 digest, the active path,
+repository identity, current and recorded identities when readable, and exact paths,
+bytes/digests, and device/inode observations for every safely identifiable report or
+frozen snapshot. It also carries an append-only recovery journal. Never follow an
+unvalidated path from malformed state; unresolved artifacts are named as unresolved.
+
+Classify conservatively. Only a readable state that proves it never reached
+`attempting` and contains no verified tracker identifier or repository/PR evidence may
+offer `abandon <recovery-bundle-digest>` to the present interactive operator. Persist
+that exact approval in the bundle, atomically move the invalid active state to a unique
+quarantine path, and leave a `recovered-safe-to-restart` receipt before permitting a
+later new draft to replace only that receipt. The bundle, quarantined bytes, and receipt
+remain durable.
+
+If any external attempt or verified identifier is present, or absence of either cannot
+be proved from readable evidence, abandonment is prohibited. Persist an
+`operator-held` recovery receipt without moving or deleting the active bytes. Reconcile
+only with authoritative tracker/forge read-backs keyed by the preserved exact marker,
+payload digest, returned identifier, repository, branch, and head evidence. A
+reconstructed state must preserve all verified and ambiguous operations and requires
+exact operator approval of its recovery-bundle digest before it can replace the invalid
+active state. Recovery itself performs no tracker create, update, or comment, no source
+edit, and no branch, commit, push, PR, or merge. When evidence cannot be reconciled,
+keep the recovery bundle and active state operator-held and name the missing evidence;
+never make `new` available by manual deletion.
 
 Classify execution as interactive or scheduled/unattended from the actual invocation,
 not a branch name or worktree path. Non-interactive runs never wait for input. A

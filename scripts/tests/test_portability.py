@@ -2482,6 +2482,13 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert "hard-stops before state, snapshot, or report writes" in capabilities[
         "shared-state-resolver"
     ][1]
+    assert "resolve_write_path(fragment, mkdir=False)" in capabilities[
+        "shared-state-resolver"
+    ][1]
+    assert (
+        "neither state nor frozen snapshots use the shared-cache resolve_read_path"
+        in capabilities["shared-state-resolver"][1]
+    )
     assert "forbids a whole-inbox fallback" in capabilities["frozen-inbox-state"][1]
     assert "all absent selects LLM-only mode" in capabilities["draft-finalize-engine-set"][1]
     assert "a partial pair hard-stops" in capabilities["draft-finalize-engine-set"][1]
@@ -2496,6 +2503,10 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert _integration_table(workflow, "Authority contract", 2) == {
         "unknown-or-combined-argument": ("stop-before-capability-probe",),
         "new-over-active-state": ("refuse-preserve-active-session",),
+        "recover-over-valid-state": ("refuse-and-resume-valid-session",),
+        "invalid-state-recovery": (
+            "preserve-before-classify-never-abandon-uncertain-attempt",
+        ),
         "state-or-frozen-identity-mismatch": (
             "stop-before-tracker-write-never-whole-sweep",
         ),
@@ -2540,6 +2551,8 @@ def _assert_triage_semantics(workflow: str) -> None:
         "No argument, valid active state",
         "resume, no valid active state",
         "new, active live state",
+        "recover, valid active state",
+        "recover, invalid active live state",
         "test",
         "Scheduled or unattended invocation with active state",
         "Both configured engines present",
@@ -2547,12 +2560,14 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Only one configured engine present",
         "Interactive invocation with notification unavailable",
         "Scheduled or unattended invocation with notification unavailable",
-        "Missing, malformed, or identity-mismatched frozen snapshot/state",
+        "Missing, malformed, or identity-mismatched frozen snapshot/state "
+        "outside recover",
         "Tracker or finalization write fails or is ambiguous",
         "Test mode",
     }
     assert "never whole-sweep" in inputs[
-        "Missing, malformed, or identity-mismatched frozen snapshot/state"
+        "Missing, malformed, or identity-mismatched frozen snapshot/state "
+        "outside recover"
     ][0]
     assert "prohibit tracker, source-document, and forge writes" in inputs[
         "Test mode"
@@ -2562,6 +2577,12 @@ def _assert_triage_semantics(workflow: str) -> None:
         "RFC 8785 JSON",
         "Require `state.dirname` to match that resolver's declared `STATE_DIRNAME`",
         "pass only the remaining fragment to the resolver",
+        "Never use `resolve_read_path` for either artifact",
+        "Before parsing, classification, rename, or repair, atomically create a "
+        "unique recovery bundle",
+        "Only a readable state that proves it never reached `attempting`",
+        "abandonment is prohibited",
+        "never make `new` available by manual deletion",
         "body_without_marker",
         "hash it separately as `payload_digest`",
         "without attempting to hash a digest into itself",
@@ -2671,6 +2692,26 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "pass only the remaining fragment to the resolver",
             "pass the complete logical path to the resolver",
+            1,
+        ),
+        workflow.replace(
+            "neither state nor frozen snapshots use the shared-cache `resolve_read_path`",
+            "state and frozen snapshots may use the shared-cache `resolve_read_path`",
+            1,
+        ),
+        workflow.replace(
+            "preserve-before-classify-never-abandon-uncertain-attempt",
+            "delete-invalid-state-and-start-new",
+            1,
+        ),
+        workflow.replace(
+            "Only a readable state that proves it never reached",
+            "Any state that might not have reached",
+            1,
+        ),
+        workflow.replace(
+            "abandonment is prohibited",
+            "abandonment is permitted",
             1,
         ),
         workflow.replace(
