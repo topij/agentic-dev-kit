@@ -2647,7 +2647,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         "an older helper that whole-sweeps the frozen snapshot is not ready",
         "Never switch the caller checkout",
         "This workflow never merges the sweep pull request",
-        "verify the pull request merged before marking the run complete",
+        "authoritative PR read-back must prove both that the pull request merged",
+        "final `headRefOid` equals the exact reviewed head recorded in state",
+        "never mark an unreviewed replacement head complete",
         "without notification, approval state, tracker, source-document, or forge writes",
     ):
         assert required_phrase in flattened
@@ -2850,8 +2852,8 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         ),
         workflow.replace("It does not edit", "It may edit", 1),
         workflow.replace(
-            "verify the pull\nrequest merged before marking the run complete",
-            "assume the pull request merged and mark the run complete",
+            "final `headRefOid`\nequals the exact reviewed head recorded in state",
+            "final `headRefOid` may differ from the exact reviewed head recorded in state",
             1,
         ),
         workflow.replace("operator-held` |", "successful-completion` |", 1),

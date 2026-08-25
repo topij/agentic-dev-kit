@@ -401,9 +401,12 @@ otherwise remains operator-held.
 
 Run `pr-watch` for the exact head. This workflow never merges the sweep pull request.
 When review is unsettled or the operator still owns the merge decision, report
-`operator-held` with the PR URL and exact head. On a later resume, verify the pull
-request merged before marking the run complete. Write completion to the report and
-state before optionally deleting active state; the completed report remains durable.
+`operator-held` with the PR URL and exact head. On a later resume, authoritative PR
+read-back must prove both that the pull request merged and that its final `headRefOid`
+equals the exact reviewed head recorded in state. A missing or mismatched final head is
+operator-held; never mark an unreviewed replacement head complete. Only then write
+completion to the report and state before optionally deleting active state; the
+completed report remains durable.
 
 ## Final output
 
