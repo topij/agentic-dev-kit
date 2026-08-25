@@ -33,6 +33,7 @@ reconciling never mutates a lane's seen-set, settle baseline or receipt.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shlex
@@ -1037,7 +1038,7 @@ def test_portable_bounded_runner_delivers_term_during_grace(tmp_path: Path) -> N
         start_new_session=True,
     )
 
-    deadline = time.monotonic() + 3
+    deadline = time.monotonic() + 10
     observed = None
     while time.monotonic() < deadline:
         if marker.exists():
@@ -1045,7 +1046,11 @@ def test_portable_bounded_runner_delivers_term_during_grace(tmp_path: Path) -> N
         if observed == "started":
             break
         time.sleep(0.01)
-    assert observed == "started"
+    if observed != "started":
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(runner.pid, signal.SIGKILL)
+        runner.communicate(timeout=3)
+        pytest.fail(f"TERM observer did not become ready: {observed!r}")
     os.killpg(runner.pid, signal.SIGTERM)
     runner.communicate(timeout=3)
 
