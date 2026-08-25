@@ -77,8 +77,8 @@ Evaluate the input before capability-dependent work.
 | No argument, valid active state | Resume the recorded phase and mode. |
 | `resume`, no valid active state | Hard-stop without an external write. |
 | `new`, active live state | Refuse; never overwrite an approval-bound session. |
-| `recover`, valid active state | Refuse and direct the operator to `resume`; recovery never bypasses a valid approval-bound session. |
-| `recover`, invalid active live state | Enter the interactive recovery transition; preserve raw evidence before classification and never authorize a tracker, source, or forge write. |
+| `recover`, active live state | Capture raw bytes and filesystem observations before parsing the captured copy; valid state then refuses and directs to `resume`, while invalid state enters recovery. Recovery never authorizes a tracker, source, or forge write. |
+| `recover`, no active live state | Hard-stop without creating a recovery bundle or performing an external write. |
 | `test` | Use test identity and test state; never replace or resume live state. |
 | Scheduled or unattended invocation with active state | Resume or report operator-held; never start another draft. |
 | Both configured engines present | Select engine-backed mode and persist it. |
@@ -173,20 +173,30 @@ Accept exactly one of `resume`, `new`, `recover`, or `test`, or no argument. `te
 test draft or resumes the separate test state; it never selects live state. No argument
 resumes valid live state when present and otherwise starts a live draft. `new` refuses
 when live state exists. `resume` requires valid live state. `recover` is interactive and
-requires an invalid live state; scheduled or unattended recovery holds without changing
-an artifact.
+requires an active live-state file; it does not decide whether that state is valid until
+after raw capture. Scheduled or unattended recovery holds without changing an artifact.
 
 ## Invalid-state recovery
 
 Recovery is a state-preservation transition, not approval to discard a session or repeat
-an external write. Read the active state from its own sandbox path with
-`resolve_write_path(fragment, mkdir=False)`. Before parsing, classification, rename, or
-repair, atomically create a unique recovery bundle under that same resolved state root.
-The bundle contains the exact raw state bytes, their SHA-256 digest, the active path,
-repository identity, current and recorded identities when readable, and exact paths,
-bytes/digests, and device/inode observations for every safely identifiable report or
-frozen snapshot. It also carries an append-only recovery journal. Never follow an
-unvalidated path from malformed state; unresolved artifacts are named as unresolved.
+an external write. Locate the active state in its own sandbox with
+`resolve_write_path(fragment, mkdir=False)` and inspect the path itself without parsing
+its content. Reject a symlink, non-regular file, or link count other than one. Before
+validity classification, rename, or repair, atomically create a unique initial recovery
+bundle under that same resolved state root. Its immutable capture contains the exact raw
+state bytes, their SHA-256 digest, the active path, repository identity, and the path's
+device, inode, mode, link count, size, and modification time observed around the read;
+changed observations abort the capture and leave the active file untouched.
+
+Parse and validate only the captured bytes, never the still-live path. Append the parse
+result and current and recorded identities when readable to the recovery journal. For
+each report or frozen-snapshot path obtained from validated captured fields, apply the
+same path, alias, and atomic-read checks before appending exact paths, bytes/digests, and
+filesystem observations. Never follow an unvalidated path from malformed state;
+unresolved artifacts are named as unresolved. If the captured state is valid, record
+that result, leave the active state byte-identical, refuse recovery, and direct the
+operator to `resume`. Only an invalid captured state proceeds to recovery
+classification.
 
 Classify conservatively. Only a readable state that proves it never reached
 `attempting` and contains no verified tracker identifier or repository/PR evidence may

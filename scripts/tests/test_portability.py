@@ -2551,8 +2551,8 @@ def _assert_triage_semantics(workflow: str) -> None:
         "No argument, valid active state",
         "resume, no valid active state",
         "new, active live state",
-        "recover, valid active state",
-        "recover, invalid active live state",
+        "recover, active live state",
+        "recover, no active live state",
         "test",
         "Scheduled or unattended invocation with active state",
         "Both configured engines present",
@@ -2578,8 +2578,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Require `state.dirname` to match that resolver's declared `STATE_DIRNAME`",
         "pass only the remaining fragment to the resolver",
         "Never use `resolve_read_path` for either artifact",
-        "Before parsing, classification, rename, or repair, atomically create a "
-        "unique recovery bundle",
+        "Before validity classification, rename, or repair, atomically create a "
+        "unique initial recovery bundle",
+        "Parse and validate only the captured bytes, never the still-live path",
+        "If the captured state is valid, record that result, leave the active state "
+        "byte-identical",
         "Only a readable state that proves it never reached `attempting`",
         "abandonment is prohibited",
         "never make `new` available by manual deletion",
@@ -2623,9 +2626,10 @@ def test_triage_integration_is_config_owned_shared_and_thin() -> None:
         assert "### Capability contract" not in adapter
         assert "exact-payload" not in adapter
         assert "Session A" not in adapter
-    assert yaml.safe_load(claude.split("---", 2)[1])["description"] == yaml.safe_load(
-        codex.split("---", 2)[1]
-    )["description"]
+    claude_frontmatter = yaml.safe_load(claude.split("---", 2)[1])
+    codex_frontmatter = yaml.safe_load(codex.split("---", 2)[1])
+    assert claude_frontmatter["description"] == codex_frontmatter["description"]
+    assert claude_frontmatter["argument-hint"] == "[resume|new|recover|test]"
 
     config = yaml.safe_load(
         (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
@@ -2707,6 +2711,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "Only a readable state that proves it never reached",
             "Any state that might not have reached",
+            1,
+        ),
+        workflow.replace(
+            "Parse and validate only the captured bytes, never the still-live path",
+            "Parse and validate the still-live path before capturing its bytes",
             1,
         ),
         workflow.replace(
