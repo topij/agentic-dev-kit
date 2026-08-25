@@ -14,67 +14,47 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-25 — PR `#596` merged the shared bookend contract; parallel
-ownership harmonization is next, while the triage pipeline remains the Phase 3 exit.
+Last updated: 2026-08-25 — PR `#598` delivers the kit-owned parallel identity boundary;
+the triage pipeline remains the following Phase 3 slice.
 
-## Latest session — 2026-08-25 (shared integration preflights bounded at the lifecycle bookends)
+## Latest session — 2026-08-25 (parallel lane ownership returns to the kit)
 
-**Theme —** The `session-start` and `wrap-up` definitions now own explicit capability,
-authority, artifact, resumability, non-interactive, and completion declarations, while
-their Claude and Codex bindings remain invocation-only adapters.
+**Theme —** Reusable lane identity, forge safety, and resume behavior now live in the
+kit-owned engines and shared workflows, while runtime adapters remain thin and
+cs-toolkit's repo-owned translation remains downstream work.
 
-- **PR `#596` merged the bookend contract.** The runtime-parity matrix, adopter
-  guidance, release manifest, and declaration-derived tests moved with the shared
-  definitions; no config or installer migration is part of this slice.
+- **PR `#598` is the bounded shared-engine slice.** The read-only inventory compared
+  cs-toolkit commit `4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) with its
+  parent and classified reusable engine behavior separately from cs-toolkit policy and
+  translation and unrelated application code. The downstream checkout was not edited.
 
-- **The lifecycle bookends are the coherent slice.** Required repository/config and
-  record capabilities fail closed. Optional session-start gaps, unfiltered PR review
-  findings, and detached state stay explicit. Wrap-up sends an
-  interactive issue-shaped finding through tracker
-  search and an exact-payload decision before parking; the friction log remains the
-  route for incomplete or accumulating findings and unavailable, declined, or ambiguous
-  tracker writes. Missing or insufficient merge authority holds the exact reviewed head
-  for the operator; isolated review and self-merge stay on the cockpit's paired lane
-  wrappers and shared state sandbox, while a policy-less non-lane pull request defaults
-  to the operator route.
-  Conditional capabilities classify at their trigger rather than claiming future
-  readiness before the handoff edit. First-match outcome precedence keeps a degraded
-  integration from masking an incomplete forge or merge path; a changed existing
-  project-status artifact takes that path and cannot be called a no-op.
+- **The identity chain is durable and exact.** Headless activation, markers, and
+  descriptors use canonical absolute roots; the shared launcher contract requires
+  descriptor environment keys to replace inherited lane roots. Scope review and self-merge use the persisted branch/base/class
+  and exact repository, PR, base, head, owner, and fork identity. A head change refuses
+  before the forge write. Reconciliation stops on failed or malformed forge reads,
+  requires the exact act-time report before classifying an operator lane as held, and
+  checks local, cached remote-tracking, and live origin tips before terminalizing a lane.
+  Non-force cleanup repeats its dirty guard in the Git removal itself, and relative
+  session containers are anchored before any worktree write.
 
-- **The triage workflow is bounded separately.** Its shared definition still assumes a
-  dedicated pipeline config absent from `config/dev-model.yaml`, unvendored parse/finalize
-  engines, and unconditional notification availability. Resolving those together needs
-  the installer/upgrade semantic matrix rather than a partial prose-only config.
+- **The upgrade boundary is explicit.** The engines, shared workflow definitions, and
+  regression surfaces are individually kit-owned entries in `kit-manifest.json`; the
+  `#598` changelog entry names the coordinated refresh set explicitly.
+  Existing config already owns the protected branch, lane prefix, and per-lane merge
+  class, so no config or installer migration is needed. cs-toolkit's operator-only merge
+  policy and `CS_TOOLKIT_*` namespace did not move; its repo-owned engines require a
+  later explicit downstream reconciliation PR.
 
-- **The adapters own translation, not policy.** The Codex bookend bindings no longer
-  duplicate read-only, compute, repository-safety, or generic external-mutation rules;
-  declaration-derived mutation tests pin the full shared capability and outcome rows,
-  merged-config route, resumability evidence, adapter delegation imperative, merge hold,
-  unique declaration identifiers, and runtime registration. Degraded session-start
-  sources cannot also claim clean completion. This session added review guidance to
-  cross outcomes, live evidence, authority, write mechanism, and state root before the
-  first fallback panel.
+- **The Phase 4 boundary remains honest.** This establishes the shared engine primitive,
+  not an environment-capable Codex launcher or live runtime-isolation proof. Model and
+  effort calibration and launcher mechanics remain planned.
 
-▶ Next: create `feat/parallel-kit-ownership` from current `origin/main`. Run
-`$session-start`, then use `$parallel` first for a read-only inventory and plan: compare
-the kit-owned parallel workflow, bindings, engines, manifest, config, and tests with
-cs-toolkit commit `4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) and its parent. Classify
-each delta as reusable kit behavior, cs-toolkit policy, or unrelated application code.
-In particular, test inherited state-root precedence and descriptor environment
-replacement; durable branch/base/merge-class identity; exact repository, PR, base,
-head, and fork binding; fail-closed forge reads; operator-held terminal state; and
-cleanup/resume behavior. Read and apply
-`docs/agentic-dev-kit/safety-critical-changes.md` before changing
-`scripts/dev_session.sh`. Keep shared behavior in runtime-neutral workflows and
-kit-owned engines, configuration in `config/dev-model.yaml`, and adapters thin; do not
-upstream cs-toolkit's operator-only merge policy or `CS_TOOLKIT_*` namespace. Because
-the shared lane engines form one safety-critical primitive, use a single operator-merge
-implementation lane unless the inventory proves disjoint file ownership. Add semantic
-and mutation matrices, adopter upgrade coverage, and exact-head review evidence. Treat
-cs-toolkit as read-only in this branch, leave its repo-owned engine adaptation to a
-later explicit reconciliation PR, and preserve the deferred
-`feat/triage-integration-preflights` starter in the parity plan.
+▶ Next: create `feat/triage-integration-preflights` from current `origin/main` and use
+the preserved starter in
+[`codex-parity-plan_2026-08-23.md`](../saved_plans/codex-parity-plan_2026-08-23.md).
+Build the config-owned semantic input matrix and init/upgrade migration before changing
+the shared triage workflow; keep both runtime adapters thin.
 
 ______________________________________________________________________
 

@@ -33,10 +33,14 @@ reconciling never mutates a lane's seen-set, settle baseline or receipt.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import shlex
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -83,6 +87,7 @@ if [ "$1" = "repo" ] && [ "$2" = "view" ]; then
   printf '%s\\n' "${GH_FAKE_NWO:-}"
   exit 0
 fi
+if [ "${GH_PR_LIST_FAIL:-0}" = "1" ]; then exit 17; fi
 head=""
 prev=""
 for a in "$@"; do
@@ -116,8 +121,10 @@ exit 2
 """
 
 
-def _git(cwd: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+def _git(cwd: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 class Harness:
@@ -160,6 +167,7 @@ class Harness:
         self.uv_argv_log.write_text("", encoding="utf-8")
         self.gh_argv_log = tmp_path / "gh-argv.log"
         self.gh_argv_log.write_text("", encoding="utf-8")
+        self.pr_heads: dict[int, str] = {}
 
         self.bin = tmp_path / "fake-bin"
         self.bin.mkdir()
@@ -184,11 +192,53 @@ class Harness:
             _git(self.repo, "push", "-u", "origin", name)
         _git(self.repo, "checkout", "trunk")
 
-    def pr(self, branch: str, number: int, state: str, title: str = "some work") -> None:
+    def pr(
+        self,
+        branch: str,
+        number: int,
+        state: str,
+        title: str = "some work",
+        *,
+        base: str = "trunk",
+        owner: str = "acme",
+        cross_repository: bool = False,
+        head: str | None = None,
+    ) -> None:
+        head = head or _git(self.repo, "rev-parse", branch)
+        self.pr_heads[number] = head
         (self.gh_prs / f"{branch.replace('/', '_')}.json").write_text(
-            json.dumps([{"number": number, "title": title, "state": state}]),
+            json.dumps(
+                [
+                    {
+                        "number": number,
+                        "title": title,
+                        "state": state,
+                        "baseRefName": base,
+                        "headRefName": branch,
+                        "headRefOid": head,
+                        "headRepositoryOwner": {"login": owner},
+                        "isCrossRepository": cross_repository,
+                    }
+                ]
+            ),
             encoding="utf-8",
         )
+
+    def pr_payload(self, branch: str, payload: str) -> None:
+        (self.gh_prs / f"{branch.replace('/', '_')}.json").write_text(
+            payload, encoding="utf-8"
+        )
+
+    def advance_branch(self, branch: str) -> str:
+        _git(self.repo, "checkout", branch)
+        leaf = f"{branch.replace('/', '_')}-later.txt"
+        (self.repo / leaf).write_text("later\n", encoding="utf-8")
+        _git(self.repo, "add", leaf)
+        _git(self.repo, "commit", "-m", f"advance {branch}")
+        _git(self.repo, "push", "origin", branch)
+        head = _git(self.repo, "rev-parse", "HEAD")
+        _git(self.repo, "checkout", "trunk")
+        return head
 
     def session(self, scope: str, branch: str, merge_class: str | None) -> Path:
         d = self.sessions / scope
@@ -201,7 +251,15 @@ class Harness:
         return d
 
     def watch_report(self, number: int, **fields: object) -> None:
-        report = {"pr": number, "base": "trunk", "head": "deadbeef", **fields}
+        report = {
+            "pr": number,
+            "base": "trunk",
+            "head": self.pr_heads[number],
+            "merge_blockers": [],
+            **fields,
+        }
+        if fields.get("mergeable") is True:
+            report.setdefault("converged", True)
         (self.uv_reports / f"{number}.json").write_text(json.dumps(report), encoding="utf-8")
 
     # ------------------------------------------------------------------ runner
@@ -259,6 +317,13 @@ def _tally(stdout: str) -> str:
         if line.startswith("launched "):
             return line
     raise AssertionError(f"no tally line in:\n{stdout}")
+
+
+def _bounded_run_helper_source() -> str:
+    script = (ENGINE_DIR / "reconcile_sessions.sh").read_text(encoding="utf-8")
+    start = script.index("_bounded_run() {")
+    end = script.index("\n}\n", start) + len("\n}\n")
+    return script[start:end]
 
 
 # --------------------------------------------------------------------------- #
@@ -509,22 +574,10 @@ def test_the_forge_repo_is_resolved_once_per_run_not_once_per_lane(
         pytest.param("acmewidgets", id="no-separator"),
     ],
 )
-def test_a_malformed_repo_reply_is_not_taken_as_a_resolution(
+def test_a_malformed_repo_reply_stops_reconciliation(
     harness: Harness, reply: str
 ) -> None:
-    """Rounds 6 and 7, and the reason this check is exact rather than a heuristic.
-
-    `_gh` swallows exit status by design, so "resolved" was first defined as
-    "non-empty reply" — a lens executed a `gh repo view` printing a single space,
-    watched it cached as a permanent success, and watched the previous round's
-    retry stop happening. The replacement asked only "has a slash, has no space",
-    and the NEXT round got `/`, `acme/` and `a/b/c` straight past it — with the
-    same consequence, reached by a false-positive success instead of a poisoned
-    failure. `gh repo view --json nameWithOwner` returns `OWNER/REPO` and nothing
-    else, so every one of these is a non-resolution.
-
-    Two lanes, so the assertion covers the part that made the defect matter: a
-    non-resolution must also leave the retry alive for the next lane."""
+    """A malformed repository identity cannot produce a partial lane board."""
     for scope, pr in (("m1", 570), ("m2", 571)):
         harness.branch(f"lane/{scope}")
         harness.pr(f"lane/{scope}", pr, "OPEN")
@@ -533,27 +586,17 @@ def test_a_malformed_repo_reply_is_not_taken_as_a_resolution(
 
     result = harness.run("m1", "m2", nwo=reply)
 
-    assert _status_of(result.stdout, "m1") == "open"
-    assert _status_of(result.stdout, "m2") == "open"
-    assert harness.uv_calls() == [], "a malformed repo must never be probed"
-    assert harness.gh_repo_view_calls() == 2, "a non-resolution must not end retries"
-    assert result.returncode == 3
+    assert result.returncode == 64
+    assert "invalid repository identity" in result.stderr
+    assert "launched " not in result.stdout
+    assert harness.uv_calls() == []
+    assert harness.gh_repo_view_calls() == 1
 
 
-def test_an_unresolvable_repo_refuses_to_classify_rather_than_probing(
+def test_an_unresolvable_repo_stops_before_classification(
     harness: Harness,
 ) -> None:
-    """Round 4's HIGH, and the reason resolution is a precondition rather than an
-    optimisation. The first version simply omitted the pin when `gh repo view`
-    failed — but `env` only ADDS to the environment, so the probe then inherited
-    whatever `$GH_REPO` the operator's shell already had. The lens executed that:
-    resolution failing plus a stale ambient `$GH_REPO` produced `held` on a probe
-    that ran against an unrelated repository, silently, because rc 0 from the
-    wrong repo looks exactly like rc 0 from the right one.
-
-    So an unresolvable repo must not probe at all. It is rc 2 — reported `open`,
-    named on stderr — never a lane classified from a repository nobody
-    identified."""
+    """Repository resolution is a batch precondition, not a parked lane."""
     harness.branch("lane/omega")
     harness.pr("lane/omega", 541, "OPEN")
     harness.session("omega", "lane/omega", "operator")
@@ -561,24 +604,16 @@ def test_an_unresolvable_repo_refuses_to_classify_rather_than_probing(
 
     result = harness.run("omega", nwo="", GH_REPO="someone-else/unrelated")
 
-    assert _status_of(result.stdout, "omega") == "open"
-    assert result.returncode == 3
-    assert harness.uv_calls() == [], "an unidentified repo must never be probed"
-    assert "could not evaluate for 'held'" in result.stderr
-    # The note's parenthetical enumerates the rc-2 causes. This one is not "probe
-    # failed" — the probe was never invoked — so it has to be named there, or an
-    # operator debugging exactly this reads the note as somebody else's case.
-    assert "repo unidentified, so the probe was not run" in result.stderr
+    assert result.returncode == 64
+    assert "invalid repository identity" in result.stderr
+    assert "launched " not in result.stdout
+    assert harness.uv_calls() == []
 
 
-def test_a_transient_repo_resolution_failure_does_not_poison_the_batch(
+def test_a_transient_repo_resolution_failure_stops_the_batch(
     harness: Harness,
 ) -> None:
-    """Round 5's regression. The memo used to record "already tried" on failure
-    too, so one blip on `gh repo view` cost every remaining lane its `held` for
-    the rest of the run — a lens executed exactly that, with `gh pr list`
-    succeeding throughout, and watched a second lane whose own call would have
-    worked report `open`. Only success is cached now."""
+    """A failed repository read cannot yield a mixed authoritative/unknown board."""
     for scope, pr in (("aa", 560), ("zz", 561)):
         harness.branch(f"lane/{scope}")
         harness.pr(f"lane/{scope}", pr, "OPEN")
@@ -587,20 +622,16 @@ def test_a_transient_repo_resolution_failure_does_not_poison_the_batch(
 
     result = harness.run("aa", "zz", GH_NWO_FAIL_FIRST="1")
 
-    # The lane that hit the blip refuses, as it must; the next one recovers.
-    assert _status_of(result.stdout, "aa") == "open"
-    assert _status_of(result.stdout, "zz") == "held"
-    assert harness.gh_repo_view_calls() == 2, "a failed resolution must be retried"
-    assert result.returncode == 3
+    assert result.returncode == 64
+    assert "could not resolve the GitHub repository" in result.stderr
+    assert "launched " not in result.stdout
+    assert harness.gh_repo_view_calls() == 1
 
 
-def test_the_forge_repo_is_not_resolved_when_no_lane_reaches_the_probe(
+def test_the_forge_repo_is_resolved_before_any_lane_classification(
     harness: Harness,
 ) -> None:
-    """Round 4's LOW: resolution is lazy, sits behind the merge-class gate, and
-    nothing pinned that. A lens moved the call in front of the gate and all 26
-    tests stayed green — so a batch of `self`-class lanes would silently start
-    paying a `gh repo view` round trip it never needs."""
+    """Self-class lanes still need authoritative PR state for reconciliation."""
     harness.branch("lane/sigma2")
     harness.pr("lane/sigma2", 543, "OPEN")
     harness.session("sigma2", "lane/sigma2", "self")
@@ -608,7 +639,684 @@ def test_the_forge_repo_is_not_resolved_when_no_lane_reaches_the_probe(
     result = harness.run("sigma2")
 
     assert _status_of(result.stdout, "sigma2") == "open"
-    assert harness.gh_repo_view_calls() == 0
+    assert harness.gh_repo_view_calls() == 1
+
+
+def test_a_failed_pr_list_stops_without_rendering_a_partial_board(harness: Harness) -> None:
+    harness.branch("lane/forge-fail")
+    harness.session("forge-fail", "lane/forge-fail", "operator")
+
+    result = harness.run("forge-fail", GH_PR_LIST_FAIL="1")
+
+    assert result.returncode == 64
+    assert "could not resolve PR state" in result.stderr
+    assert "launched " not in result.stdout
+    assert "EMPTY" not in result.stdout
+
+
+@pytest.mark.parametrize("payload", ["not-json", "{}", '[{"number":"8"}]'])
+def test_a_malformed_pr_list_stops_instead_of_becoming_no_pr(
+    harness: Harness, payload: str
+) -> None:
+    harness.branch("lane/malformed")
+    harness.session("malformed", "lane/malformed", "operator")
+    harness.pr_payload("lane/malformed", payload)
+
+    result = harness.run("malformed")
+
+    assert result.returncode == 64
+    assert "invalid PR state" in result.stderr
+    assert "launched " not in result.stdout
+
+
+def test_a_later_malformed_pr_discards_every_preceding_lane_row(harness: Harness) -> None:
+    harness.branch("lane/valid-first")
+    harness.pr("lane/valid-first", 584, "MERGED")
+    harness.session("valid-first", "lane/valid-first", "operator")
+    harness.branch("lane/malformed-later")
+    harness.session("malformed-later", "lane/malformed-later", "operator")
+    harness.pr_payload("lane/malformed-later", "not-json")
+
+    result = harness.run("valid-first", "malformed-later")
+
+    assert result.returncode == 64
+    assert "invalid PR state" in result.stderr
+    assert result.stdout == ""
+
+
+@pytest.mark.parametrize(
+    ("pr_kwargs", "label"),
+    [
+        ({"cross_repository": True}, "fork"),
+        ({"base": "other"}, "wrong-base"),
+        ({"owner": "someone-else"}, "foreign-owner"),
+    ],
+)
+def test_foreign_pr_identity_cannot_terminalize_a_lane(
+    harness: Harness, pr_kwargs: dict[str, object], label: str
+) -> None:
+    harness.branch("lane/foreign")
+    harness.pr("lane/foreign", 580, "MERGED", **pr_kwargs)  # type: ignore[arg-type]
+    harness.session("foreign", "lane/foreign", "operator")
+
+    result = harness.run("foreign")
+
+    assert result.returncode == 3, label
+    assert _status_of(result.stdout, "foreign") == "parked", label
+    assert "merged" not in _status_of(result.stdout, "foreign"), label
+
+
+def test_newer_wrong_base_reuse_cannot_expose_an_older_matching_merge(
+    harness: Harness,
+) -> None:
+    branch = "lane/base-reused"
+    harness.branch(branch)
+    head = _git(harness.repo, "rev-parse", branch)
+    harness.session("base-reused", branch, "operator")
+    harness.pr_payload(
+        branch,
+        json.dumps(
+            [
+                {
+                    "number": 500,
+                    "title": "older trunk work",
+                    "state": "MERGED",
+                    "baseRefName": "trunk",
+                    "headRefName": branch,
+                    "headRefOid": head,
+                    "headRepositoryOwner": {"login": "acme"},
+                    "isCrossRepository": False,
+                },
+                {
+                    "number": 501,
+                    "title": "newer release reuse",
+                    "state": "MERGED",
+                    "baseRefName": "release",
+                    "headRefName": branch,
+                    "headRefOid": head,
+                    "headRepositoryOwner": {"login": "acme"},
+                    "isCrossRepository": False,
+                },
+            ]
+        ),
+    )
+    _git(harness.repo, "push", "origin", "--delete", branch)
+    _git(harness.repo, "branch", "-D", branch)
+
+    result = harness.run("base-reused")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "base-reused") == "parked"
+    assert "older trunk work" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "report_changes",
+    [
+        {"pr": 999},
+        {"base": "other"},
+        {"head": "f" * 40},
+        {"converged": False},
+        {"merge_blockers": ["pending review"]},
+    ],
+)
+def test_held_requires_the_exact_pr_base_head_and_clean_report(
+    harness: Harness, report_changes: dict[str, object]
+) -> None:
+    harness.branch("lane/exact-report")
+    harness.pr("lane/exact-report", 581, "OPEN")
+    harness.session("exact-report", "lane/exact-report", "operator")
+    harness.watch_report(581, mergeable=True, **report_changes)
+
+    result = harness.run("exact-report")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "exact-report") == "open"
+
+
+def test_recorded_lane_base_overrides_the_reconcile_default(harness: Harness) -> None:
+    _git(harness.repo, "branch", "release", "trunk")
+    _git(harness.repo, "push", "origin", "release")
+    harness.branch("lane/release-base")
+    harness.pr("lane/release-base", 582, "OPEN", base="release")
+    session = harness.session("release-base", "lane/release-base", "operator")
+    (session / "base").write_text("release\n", encoding="utf-8")
+    harness.watch_report(582, mergeable=True, base="release")
+
+    result = harness.run("release-base")
+
+    assert result.returncode == 4
+    assert _status_of(result.stdout, "release-base") == "held"
+
+
+def test_newer_surviving_branch_tip_keeps_an_older_merged_pr_open(harness: Harness) -> None:
+    harness.branch("lane/reused")
+    old_head = _git(harness.repo, "rev-parse", "lane/reused")
+    harness.pr("lane/reused", 583, "MERGED", head=old_head)
+    harness.session("reused", "lane/reused", "operator")
+    new_head = harness.advance_branch("lane/reused")
+    assert new_head != old_head
+
+    result = harness.run("reused")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "reused") == "open"
+    assert "tip differs from PR head" in result.stdout
+
+
+def test_newer_remote_tip_is_not_hidden_by_a_stale_matching_local_tip(
+    harness: Harness,
+) -> None:
+    harness.branch("lane/remote-reused")
+    old_head = _git(harness.repo, "rev-parse", "lane/remote-reused")
+    harness.pr("lane/remote-reused", 585, "MERGED", head=old_head)
+    harness.session("remote-reused", "lane/remote-reused", "operator")
+    new_head = harness.advance_branch("lane/remote-reused")
+    _git(harness.repo, "update-ref", "refs/heads/lane/remote-reused", old_head)
+    assert _git(harness.repo, "rev-parse", "refs/heads/lane/remote-reused") == old_head
+    assert (
+        _git(harness.repo, "rev-parse", "refs/remotes/origin/lane/remote-reused")
+        == new_head
+    )
+
+    result = harness.run("remote-reused")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "remote-reused") == "open"
+    assert "remote-tracking tip differs from PR head" in result.stdout
+
+
+def test_newer_live_origin_tip_is_not_hidden_by_stale_local_caches(
+    harness: Harness,
+) -> None:
+    harness.branch("lane/live-origin")
+    old_head = _git(harness.repo, "rev-parse", "lane/live-origin")
+    harness.pr("lane/live-origin", 587, "MERGED", head=old_head)
+    harness.session("live-origin", "lane/live-origin", "operator")
+    new_head = harness.advance_branch("lane/live-origin")
+    _git(harness.repo, "update-ref", "refs/heads/lane/live-origin", old_head)
+    _git(
+        harness.repo,
+        "update-ref",
+        "refs/remotes/origin/lane/live-origin",
+        old_head,
+    )
+    assert _git(
+        harness.repo, "ls-remote", "origin", "refs/heads/lane/live-origin"
+    ).startswith(new_head)
+
+    result = harness.run("live-origin")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "live-origin") == "open"
+    assert "origin tip differs from PR head" in result.stdout
+
+
+@pytest.mark.parametrize("mode", ["failure", "malformed"])
+def test_unknown_live_origin_state_stops_without_a_lane_board(
+    harness: Harness, mode: str
+) -> None:
+    branch = "lane/live-origin-read"
+    harness.branch(branch)
+    head = _git(harness.repo, "rev-parse", branch)
+    harness.pr(branch, 588, "MERGED", head=head)
+    harness.session("live-origin-read", branch, "operator")
+    real_git = shutil.which("git")
+    assert real_git is not None
+    fake_git = harness.bin / "git"
+    response = "exit 17" if mode == "failure" else "printf 'malformed\\n'"
+    fake_git.write_text(
+        "#!/bin/sh\n"
+        f"if [ \"$1\" = \"-C\" ] && [ \"$3\" = \"ls-remote\" ] && "
+        f"[ \"$6\" = \"refs/heads/{branch}\" ]; then {response}; fi\n"
+        f"exec \"{real_git}\" \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+
+    result = harness.run("live-origin-read")
+
+    assert result.returncode == 64
+    assert "could not resolve surviving branch tips" in result.stderr
+    assert result.stdout == ""
+
+
+def test_live_origin_reads_use_the_portable_bounded_runner(harness: Harness) -> None:
+    branch = "lane/live-origin-timeout"
+    harness.branch(branch)
+    head = _git(harness.repo, "rev-parse", branch)
+    harness.pr(branch, 590, "MERGED", head=head)
+    harness.session("live-origin-timeout", branch, "operator")
+    timeout_log = harness.tmp / "timeout-argv.log"
+    real_python = shutil.which("python3")
+    assert real_python is not None
+    fake_python = harness.bin / "python3"
+    fake_python.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"-c\" ] && [ \"$4\" = \"git\" ] && "
+        "[ \"$7\" = \"ls-remote\" ]; then\n"
+        "  shift 2\n"
+        f"  printf '%s\\n' \"$*\" >> \"{timeout_log}\"\n"
+        "  exit 124\n"
+        "fi\n"
+        f"exec \"{real_python}\" \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+
+    result = harness.run("live-origin-timeout")
+
+    assert result.returncode == 64
+    assert "could not resolve surviving branch tips" in result.stderr
+    assert result.stdout == ""
+    logged = timeout_log.read_text(encoding="utf-8")
+    assert logged.startswith(f"10 git -C {harness.repo} ls-remote --heads origin ")
+    assert logged.rstrip().endswith(f"refs/heads/{branch}")
+
+
+def test_forge_reads_use_the_portable_bounded_runner(harness: Harness) -> None:
+    branch = "lane/forge-timeout"
+    harness.branch(branch)
+    harness.pr(branch, 591, "OPEN")
+    harness.session("forge-timeout", branch, "operator")
+    timeout_log = harness.tmp / "forge-timeout-argv.log"
+    real_python = shutil.which("python3")
+    assert real_python is not None
+    fake_python = harness.bin / "python3"
+    fake_python.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"-c\" ] && [ \"$3\" = \"10\" ] && "
+        "[ \"$4\" = \"gh\" ]; then\n"
+        "  shift 2\n"
+        f"  printf '%s\\n' \"$*\" >> \"{timeout_log}\"\n"
+        "  exit 124\n"
+        "fi\n"
+        f"exec \"{real_python}\" \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+
+    result = harness.run("forge-timeout")
+
+    assert result.returncode == 64
+    assert "could not resolve the GitHub repository" in result.stderr
+    assert result.stdout == ""
+    assert timeout_log.read_text(encoding="utf-8").startswith("10 gh repo view ")
+
+
+def test_held_probe_uses_the_portable_bounded_runner(harness: Harness) -> None:
+    branch = "lane/held-timeout"
+    harness.branch(branch)
+    harness.pr(branch, 592, "OPEN")
+    harness.session("held-timeout", branch, "operator")
+    harness.watch_report(592, mergeable=True, converged=True)
+    timeout_log = harness.tmp / "held-timeout-argv.log"
+    real_python = shutil.which("python3")
+    assert real_python is not None
+    fake_python = harness.bin / "python3"
+    fake_python.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"-c\" ] && [ \"$3\" = \"60\" ] && "
+        "[ \"$4\" = \"env\" ]; then\n"
+        "  shift 2\n"
+        f"  printf '%s\\n' \"$*\" >> \"{timeout_log}\"\n"
+        "  exit 124\n"
+        "fi\n"
+        f"exec \"{real_python}\" \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+
+    result = harness.run("held-timeout")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "held-timeout") == "open"
+    assert "could not evaluate for 'held'" in result.stderr
+    logged = timeout_log.read_text(encoding="utf-8")
+    assert logged.startswith("60 env DEVKIT_STATE_ROOT=")
+    assert " uv run " in f" {logged} "
+    assert " --json --no-persist" in logged
+
+
+def test_portable_bounded_runner_reaps_term_ignoring_descendants(
+    tmp_path: Path,
+) -> None:
+    helper = _bounded_run_helper_source()
+    hostile = tmp_path / "term-ignoring-descendant.sh"
+    hostile.write_text(
+        "#!/bin/sh\n"
+        "trap 'exit 0' TERM\n"
+        "sh -c 'trap \"\" TERM; while :; do sleep 1; done' &\n"
+        "wait\n",
+        encoding="utf-8",
+    )
+    hostile.chmod(0o755)
+    command = f"{helper}\n_bounded_run 0.1 {shlex.quote(str(hostile))}\n"
+
+    started = time.monotonic()
+    result = subprocess.run(
+        ["bash", "-c", command],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=3,
+    )
+
+    elapsed = time.monotonic() - started
+    assert result.returncode == 124
+    assert 1 <= elapsed < 2.5
+
+
+def test_portable_bounded_runner_delivers_term_during_grace(tmp_path: Path) -> None:
+    helper = _bounded_run_helper_source()
+    marker = tmp_path / "term-delivered"
+    command = tmp_path / "term_observer.py"
+    command.write_text(
+        "from pathlib import Path\n"
+        "import signal\n"
+        f"marker = Path({str(marker)!r})\n"
+        "def on_term(_signum, _frame):\n"
+        "    marker.write_text('delivered', encoding='utf-8')\n"
+        "    raise SystemExit(0)\n"
+        "signal.signal(signal.SIGTERM, on_term)\n"
+        "marker.write_text('started', encoding='utf-8')\n"
+        "while True:\n"
+        "    signal.pause()\n",
+        encoding="utf-8",
+    )
+    python = shutil.which("python3")
+    assert python is not None
+    invocation = (
+        f"{helper}\n_bounded_run 30 {shlex.quote(python)} "
+        f"{shlex.quote(str(command))}\n"
+    )
+    runner = subprocess.Popen(
+        ["bash", "-c", invocation],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+
+    deadline = time.monotonic() + 10
+    observed = None
+    while time.monotonic() < deadline:
+        if marker.exists():
+            observed = marker.read_text(encoding="utf-8")
+        if observed == "started":
+            break
+        time.sleep(0.01)
+    if observed != "started":
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(runner.pid, signal.SIGTERM)
+        runner.communicate(timeout=3)
+        pytest.fail(f"TERM observer did not become ready: {observed!r}")
+    os.killpg(runner.pid, signal.SIGTERM)
+    runner.communicate(timeout=3)
+
+    assert runner.returncode in {-signal.SIGTERM, 128 + signal.SIGTERM}
+    assert marker.read_text(encoding="utf-8") == "delivered"
+
+
+def test_portable_bounded_runner_reaps_descendants_after_launcher_success(
+    tmp_path: Path,
+) -> None:
+    helper = _bounded_run_helper_source()
+    hostile = tmp_path / "successful-launcher-with-descendant.sh"
+    hostile.write_text(
+        "#!/bin/sh\n"
+        "sh -c 'trap \"\" HUP INT TERM; while :; do sleep 1; done' &\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    hostile.chmod(0o755)
+    command = f"{helper}\n_bounded_run 30 {shlex.quote(str(hostile))}\n"
+
+    result = subprocess.run(
+        ["bash", "-c", command],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=3,
+    )
+
+    assert result.returncode == 0
+
+
+def test_portable_bounded_runner_reaps_on_operator_interrupt(tmp_path: Path) -> None:
+    helper = _bounded_run_helper_source()
+    hostile = tmp_path / "signal-ignoring-descendant.sh"
+    hostile.write_text(
+        "#!/bin/sh\n"
+        "trap 'exit 0' HUP INT TERM\n"
+        "sh -c 'trap \"\" HUP INT TERM; while :; do sleep 1; done' &\n"
+        "wait\n",
+        encoding="utf-8",
+    )
+    hostile.chmod(0o755)
+    command = f"{helper}\n_bounded_run 30 {shlex.quote(str(hostile))}\n"
+    runner = subprocess.Popen(
+        ["bash", "-c", command],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+
+    time.sleep(0.2)
+    os.killpg(runner.pid, signal.SIGINT)
+    runner.communicate(timeout=3)
+
+    assert runner.returncode in {-signal.SIGINT, 128 + signal.SIGINT}
+
+
+def test_portable_bounded_runner_reaps_on_startup_interrupt(tmp_path: Path) -> None:
+    marker = tmp_path / "shim-started"
+    install_handlers = (
+        "for handled_signal in handled_signals:\n"
+        "    signal.signal(handled_signal, cancel)"
+    )
+    helper = _bounded_run_helper_source().replace(
+        install_handlers,
+        f"open({json.dumps(str(marker))}, \"w\").close()\n"
+        "time.sleep(0.5)\n"
+        f"{install_handlers}",
+    )
+    assert str(marker) in helper
+    hostile = tmp_path / "startup-signal-descendant.sh"
+    hostile.write_text(
+        "#!/bin/sh\n"
+        "sh -c 'trap \"\" HUP INT TERM; while :; do sleep 1; done' &\n"
+        "wait\n",
+        encoding="utf-8",
+    )
+    hostile.chmod(0o755)
+    command = f"{helper}\n_bounded_run 30 {shlex.quote(str(hostile))}\n"
+    runner = subprocess.Popen(
+        ["bash", "-c", command],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+
+    deadline = time.monotonic() + 3
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert marker.exists()
+    os.killpg(runner.pid, signal.SIGINT)
+    runner.communicate(timeout=3)
+
+    assert runner.returncode in {-signal.SIGINT, 128 + signal.SIGINT}
+
+
+def test_portable_bounded_runner_reaps_on_post_result_interrupt(
+    tmp_path: Path,
+) -> None:
+    marker = tmp_path / "result-ready"
+    helper = _bounded_run_helper_source().replace(
+        "    reply = os.read(result_fd, 64)",
+        f"    open({json.dumps(str(marker))}, \"w\").close()\n"
+        "    time.sleep(30)\n"
+        "    reply = os.read(result_fd, 64)",
+    )
+    assert str(marker) in helper
+    hostile = tmp_path / "successful-launcher-with-retained-pipe.sh"
+    hostile.write_text(
+        "#!/bin/sh\n"
+        "sh -c 'trap \"\" HUP INT TERM; while :; do sleep 1; done' &\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    hostile.chmod(0o755)
+    command = f"{helper}\n_bounded_run 30 {shlex.quote(str(hostile))}\n"
+    runner = subprocess.Popen(
+        ["bash", "-c", command],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+
+    deadline = time.monotonic() + 3
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert marker.exists()
+    os.killpg(runner.pid, signal.SIGINT)
+    runner.communicate(timeout=3)
+
+    assert runner.returncode in {-signal.SIGINT, 128 + signal.SIGINT}
+
+
+def test_portable_bounded_runner_reaps_after_repeated_operator_signals(
+    tmp_path: Path,
+) -> None:
+    ready_marker = tmp_path / "command-ready"
+    catch_marker = tmp_path / "cancel-caught"
+    helper = _bounded_run_helper_source().replace(
+        "except Cancelled as exc:\n    stop_group(exc.signum)",
+        "except Cancelled as exc:\n"
+        f"    open({json.dumps(str(catch_marker))}, \"w\").close()\n"
+        "    time.sleep(0.5)\n"
+        "    stop_group(exc.signum)",
+    )
+    assert str(catch_marker) in helper
+    hostile = tmp_path / "repeated-signal-descendant.sh"
+    hostile.write_text(
+        "#!/bin/sh\n"
+        f"printf ready > {shlex.quote(str(ready_marker))}\n"
+        "sh -c 'trap \"\" HUP INT TERM; while :; do sleep 1; done' &\n"
+        "wait\n",
+        encoding="utf-8",
+    )
+    hostile.chmod(0o755)
+    invocation = f"{helper}\n_bounded_run 30 {shlex.quote(str(hostile))}\n"
+    runner = subprocess.Popen(
+        ["bash", "-c", invocation],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+
+    deadline = time.monotonic() + 3
+    while not ready_marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert ready_marker.exists()
+    os.killpg(runner.pid, signal.SIGINT)
+    while not catch_marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert catch_marker.exists()
+    os.killpg(runner.pid, signal.SIGTERM)
+    runner.communicate(timeout=3)
+
+    assert runner.returncode in {
+        -signal.SIGINT,
+        128 + signal.SIGINT,
+        -signal.SIGTERM,
+        128 + signal.SIGTERM,
+    }
+
+
+@pytest.mark.parametrize("direction", ["expected-to-new", "new-to-expected"])
+def test_live_origin_movement_between_snapshot_reads_cannot_terminalize(
+    harness: Harness, direction: str
+) -> None:
+    branch = "lane/live-origin-race"
+    harness.branch(branch)
+    old_head = _git(harness.repo, "rev-parse", branch)
+    harness.pr(branch, 589, "MERGED", head=old_head)
+    harness.session("live-origin-race", branch, "operator")
+    new_head = harness.advance_branch(branch)
+    _git(harness.repo, "update-ref", f"refs/heads/{branch}", old_head)
+    _git(harness.repo, "update-ref", f"refs/remotes/origin/{branch}", old_head)
+    _git(harness.repo, "push", "--force", "origin", f"{old_head}:refs/heads/{branch}")
+    first, second = (
+        (old_head, new_head)
+        if direction == "expected-to-new"
+        else (new_head, old_head)
+    )
+    real_git = shutil.which("git")
+    assert real_git is not None
+    marker = harness.tmp / "live-origin-read-once"
+    fake_git = harness.bin / "git"
+    fake_git.write_text(
+        "#!/bin/sh\n"
+        f"if [ \"$1\" = \"-C\" ] && [ \"$3\" = \"ls-remote\" ] && "
+        f"[ \"$6\" = \"refs/heads/{branch}\" ]; then\n"
+        f"  if [ ! -e \"{marker}\" ]; then printf '%s\\t%s\\n' {first} refs/heads/{branch}; "
+        f": > \"{marker}\"; else printf '%s\\t%s\\n' {second} refs/heads/{branch}; fi\n"
+        "  exit 0\n"
+        "fi\n"
+        f"exec \"{real_git}\" \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+
+    result = harness.run("live-origin-race")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "live-origin-race") == "open"
+    assert "origin tip moved during reconciliation" in result.stdout
+
+
+def test_a_tip_that_moves_between_snapshot_reads_cannot_terminalize(
+    harness: Harness,
+) -> None:
+    harness.branch("lane/race")
+    old_head = _git(harness.repo, "rev-parse", "lane/race")
+    harness.pr("lane/race", 586, "MERGED", head=old_head)
+    harness.session("race", "lane/race", "operator")
+    new_head = harness.advance_branch("lane/race")
+    _git(harness.repo, "update-ref", "refs/heads/lane/race", new_head)
+    _git(harness.repo, "update-ref", "-d", "refs/remotes/origin/lane/race")
+    _git(harness.repo, "push", "origin", "--delete", "lane/race")
+
+    real_git = shutil.which("git")
+    assert real_git is not None
+    marker = harness.tmp / "moved-tip"
+    fake_git = harness.bin / "git"
+    fake_git.write_text(
+        "#!/bin/sh\n"
+        f"if [ \"$1\" = \"-C\" ] && [ \"$3\" = \"rev-parse\" ] && "
+        "[ \"$4\" = \"--verify\" ] && "
+        "[ \"$5\" = \"refs/heads/lane/race^{commit}\" ] && "
+        f"[ ! -e \"{marker}\" ]; then\n"
+        f"  \"{real_git}\" -C \"$2\" rev-parse --verify \"$5\"\n"
+        f"  \"{real_git}\" -C \"$2\" update-ref refs/heads/lane/race {old_head}\n"
+        f"  : > \"{marker}\"\n"
+        "  exit 0\n"
+        "fi\n"
+        f"exec \"{real_git}\" \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+
+    result = harness.run("race")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "race") == "open"
+    assert "local tip moved during reconciliation" in result.stdout
 
 
 def test_a_lane_reached_by_branch_name_still_resolves_its_session(harness: Harness) -> None:

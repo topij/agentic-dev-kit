@@ -23,6 +23,39 @@ references, each lane worktree then holds a copy of them — which is why `init.
 `.mcp.json` to `.gitignore` when it detects that shape. Prefer `${ENV_VAR}` references
 so the file can stay tracked and the lane copies carry no secret.
 
+## Lane authority and resume matrix
+
+The engine artifacts below are one identity chain. Runtime adapters translate how a
+command is invoked; they do not replace, relax, or reconstruct this chain.
+
+| Surface | Authoritative inputs | Durable evidence | Failure / resume result |
+| --- | --- | --- | --- |
+| `new` | configured protected branch and lane prefix; requested branch, base, and merge class | session `branch`, `base`, and `merge_class`; worktree and sandbox | creation failure is not a lane; retry only after accounting for any branch or worktree the failed Git operation left behind |
+| `new --headless` | the same identity plus resolved absolute worktree, sandbox, and repository roots; a relative sessions container is anchored to the invocation directory before any write | marker, descriptor, and activation file agree on the resolved roots; descriptor `env` carries the complete lane-root override | an env-incapable launcher cannot resume this as an unattended state-writing lane; use an env-capable launcher or attended activation |
+| scope `pr-watch` | one intact session; exact checkout repository; same-repository open PR whose base, head branch, owner, and fork flag match the persisted lane | acknowledgements and review receipt in that session's state root | missing, ambiguous, foreign, or malformed identity refuses before the review engine runs |
+| `merge` | persisted `self` class plus the scope-watch identity chain; act-time report for the same PR, base, and head | forge merge pinned to the validated head | any identity movement or failed/ambiguous forge result refuses; re-poll and resume from the exact current head |
+| reconciliation | exact checkout repository; authoritative PR list; persisted base/class when a session survives; stable snapshots of every surviving local ref, remote-tracking ref, and live origin branch | `merged`, `held`, `open`, or `parked` row plus the batch exit contract | repository/read/shape failure emits no board and stops; an observed newer or moving branch tip keeps the lane resumable |
+| `rm` | persisted branch and base, never the worktree's current branch | merged PR head or ancestor relation before branch deletion | dirty or undeterminable worktree refuses without `--force`; the removal command repeats that guard at act time; unlanded or identity-mismatched branch is kept for recovery |
+
+### Semantic mutation matrix
+
+These are the hostile changes the kit verification surfaces must reject. Engine
+branches need behavioral mutations; executed launcher instructions without a shipped
+launcher need semantic assertions until an integration surface exists. Add that live
+launcher mutation with the environment-capable launcher rather than simulating one here.
+
+| Mutation | Required observable result |
+| --- | --- |
+| inherit a cockpit `DEVKIT_STATE_ROOT` instead of applying descriptor `env` | descriptor emission replaces the inherited root, and the shared launcher contract rejects `setdefault`; live child-process coverage remains part of the environment-capable launcher slice |
+| drop or alter persisted branch, base, or merge class | merge refuses; reconciliation cannot widen the lane to `held` |
+| inherit ambient `GH_REPO`, fail a forge read, or return malformed JSON | the engine stops before rendering or authorizing an empty/clean result |
+| return a fork, foreign owner, wrong base, or wrong head branch under the requested head name | row is not eligible to identify or terminalize the lane |
+| move the PR head between identity read and act-time review | merge refuses before the forge write and asks for a retry |
+| return a held probe for another PR, base, or head, or with blockers / non-convergence | lane remains `open` |
+| keep a local, cached remote-tracking, or live origin branch tip newer than the selected merged PR, or move a ref in either direction during its snapshot reads | lane remains `open`; the older PR cannot claim the observed work shipped |
+| tear down the session before an operator-held decision | the open PR remains `open`; absent class/state evidence is never reconstructed |
+| create worktree content after `rm`'s status probe, or remove a dirty/unlanded lane | the non-force Git removal refuses at act time, the session survives, and unlanded branch work remains recoverable |
+
 ## Default action — show the board
 
 With no argument (or `parallel list`), run and render the table of active sessions:
@@ -265,7 +298,10 @@ wrap-up **from this cockpit session**:
    unmerged`, `N commit(s), no PR opened`); or **open** (still in flight). It then
    prints the `launched N, merged M, parked K` tally, which grows a `held H` term when
    any scope is held — exit 3 if any scope is open or parked, **4** if every scope is
-   merged or held with at least one held, 0 only when all merged. **Do not write the
+   merged or held with at least one held, 0 only when all merged, and **64** when a
+   required forge or identity read fails. Exit 64 invalidates the snapshot: the engine
+   emits no lane board, and callers must stop rather than infer an empty or partial
+   result. **Do not write the
    wrap-up block until every launched scope is merged, consciously parked, or held.** A
    scope that reconciles to **open** means the batch isn't closeable — finish or park it
    first. A scope that reconciles to **parked** gets named as parked in the block, never
@@ -287,6 +323,13 @@ wrap-up **from this cockpit session**:
    With no args it discovers in-flight lanes from **both** session dirs and live `git
    worktree`s (deduped by branch), so a background-sub-agent worktree gets the same
    `launched/merged/parked` net that catches a dead session.
+
+   Reconciliation is a quiescent snapshot, not a lock against another pusher. It reads
+   every surviving local ref, cached remote-tracking ref, and live origin branch
+   repeatedly and keeps a lane open when a ref differs from the PR head or moves during
+   those reads. A failed live-origin read invalidates the snapshot like a failed forge
+   read. Do not mutate the launched refs while the snapshot runs; work that begins after
+   its final ref read belongs to the next reconciliation.
 
 1. Read each **merged** and **held** PR's narrative: `gh pr view <n> --json title,body`
    per merged or held batch PR (parked scopes have no landed narrative to read; a held

@@ -55,8 +55,8 @@
 # Exit: 0 = every launched lane merged; 4 = every launched lane merged or held,
 # at least one held (nothing left for the batch — the operator owes a merge
 # decision); 3 = at least one lane open or parked (review each before writing
-# the block); 64 = usage error. 0 still means MERGED and nothing else — see the
-# rationale at the return statements.
+# the block); 64 = usage or forge-resolution error. 0 still means MERGED and
+# nothing else — see the rationale at the return statements.
 
 set -euo pipefail
 
@@ -90,55 +90,191 @@ _die() {
     exit 64
 }
 
-# Timeout prefix (possibly empty) so no probe here can hang the wrap-up on a
-# slow network — same idiom as dev_session.sh's list. Factored out because the
-# `held` probe needs the same guard with a longer budget than a single `gh` call.
-_timeout_prefix() {
-    if command -v timeout >/dev/null 2>&1; then
-        echo "timeout $1"
-    elif command -v gtimeout >/dev/null 2>&1; then
-        echo "gtimeout $1"
-    fi
-}
-
-# Best-effort `gh` with a short timeout. A timeout/auth failure yields an
-# empty string, which classifies as "no PR" (conservative: leans toward flagging
-# a scope as parked rather than silently asserting it merged).
-_gh() {
-    local to
-    to="$(_timeout_prefix 10)"
-    # shellcheck disable=SC2086
-    $to gh "$@" 2>/dev/null || true
-}
-
-# Pick the CURRENT PR (newest by number — a reused branch can back several PRs
-# over time) from a `gh pr list --json number,title,state` array on stdin and
-# report ITS state. Prints a single tab-separated "<STATE>\t<number>\t<title>"
-# line, or "NONE" if no PR exists. Robust to empty/garbage input (gh down → NONE).
-_classify_pr() {
+# Python is already a hard dependency of this engine. Use it to enforce the
+# deadline on every supported platform instead of silently dropping the bound
+# when the optional GNU `timeout` / `gtimeout` utility is absent. A new process
+# group lets the timeout reap transport helpers spawned beneath gh, git, or uv.
+_bounded_run() {
+    local seconds="$1"
+    shift
     python3 -c '
-import sys, json
+import os, select, signal, subprocess, sys, time
+
+seconds = float(sys.argv[1])
+shim = r"""
+import os, signal, subprocess, sys
+
+result_fd = int(sys.argv[1])
+
+def hold_group_open(_signum, _frame):
+    pass
+
+held_signals = (signal.SIGHUP, signal.SIGINT, signal.SIGTERM)
+for held_signal in held_signals:
+    signal.signal(held_signal, hold_group_open)
+# The outer process blocks these signals across session creation. The shim must
+# release the inherited mask after installing its hold handlers so the command
+# it launches receives normal signal delivery during the grace period.
+signal.pthread_sigmask(signal.SIG_UNBLOCK, held_signals)
+try:
+    child = subprocess.Popen(sys.argv[2:])
+except OSError as exc:
+    print(f"could not start {sys.argv[2]}: {exc}", file=sys.stderr)
+    returncode = 127
+else:
+    child_returncode = child.wait()
+    returncode = (
+        child_returncode if child_returncode >= 0 else 128 - child_returncode
+    )
+
+os.write(result_fd, f"{returncode}\n".encode("ascii"))
+os.close(result_fd)
+while True:
+    signal.pause()
+"""
+
+class Cancelled(Exception):
+    def __init__(self, signum):
+        self.signum = signum
+
+def cancel(signum, _frame):
+    signal.pthread_sigmask(signal.SIG_BLOCK, handled_signals)
+    raise Cancelled(signum)
+
+handled_signals = (signal.SIGHUP, signal.SIGINT, signal.SIGTERM)
+previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, handled_signals)
+result_fd, shim_result_fd = os.pipe()
+try:
+    process = subprocess.Popen(
+        [sys.executable, "-c", shim, str(shim_result_fd), *sys.argv[2:]],
+        pass_fds=(shim_result_fd,),
+        start_new_session=True,
+    )
+except OSError as exc:
+    os.close(result_fd)
+    signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+    print(f"could not start {sys.argv[2]}: {exc}", file=sys.stderr)
+    sys.exit(127)
+finally:
+    os.close(shim_result_fd)
+
+for handled_signal in handled_signals:
+    signal.signal(handled_signal, cancel)
+
+def stop_group(first_signal=None):
+    for handled_signal in handled_signals:
+        signal.signal(handled_signal, signal.SIG_IGN)
+    if first_signal is not None:
+        try:
+            os.killpg(process.pid, first_signal)
+        except ProcessLookupError:
+            pass
+        # The shim always remains the group leader. Give every descendant the
+        # full grace period before unconditional group-wide escalation.
+        time.sleep(1)
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    process.wait()
+
+try:
+    signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+    ready, _, _ = select.select([result_fd], [], [], seconds)
+    if not ready:
+        stop_group(signal.SIGTERM)
+        os.close(result_fd)
+        sys.exit(124)
+
+    reply = os.read(result_fd, 64)
+    os.close(result_fd)
+    stop_group()
+except Cancelled as exc:
+    stop_group(exc.signum)
+    try:
+        os.close(result_fd)
+    except OSError:
+        pass
+    sys.exit(128 + exc.signum)
+
+try:
+    returncode = int(reply.strip())
+except ValueError:
+    sys.exit(127)
+sys.exit(returncode)
+' "$seconds" "$@"
+}
+
+# Bounded `gh` with a short timeout. Callers preserve its status: an
+# authentication, transport, or timeout failure is unknown state, never an
+# authoritative empty response.
+_gh() {
+    _bounded_run 10 gh "$@"
+}
+
+# Pick the CURRENT same-repository PR (newest by number — a reused branch can
+# back several PRs over time) from the forge response. The `--head` query alone
+# is not identity evidence because a fork can reuse the branch name. Every row
+# must have the declared shape; well-formed foreign rows are ignored before
+# ranking. Base eligibility is checked only after the newest same-repository
+# branch PR is chosen: a newer wrong-base reuse must not uncover an older merged
+# PR. Prints `<STATE> TAB <number> TAB <title> TAB <head OID>`, or `NONE` only
+# for an authoritative response with no eligible current row.
+_classify_pr() {
+    local repo_owner="$1" branch="$2" base="$3"
+    python3 -c '
+import json, string, sys
+expected_owner, expected_branch, expected_base = sys.argv[1:4]
 try:
     rows = json.load(sys.stdin)
 except Exception:
-    print("NONE"); sys.exit(0)
+    raise SystemExit(1)
 if not isinstance(rows, list):
-    print("NONE"); sys.exit(0)
-rows = [r for r in rows if isinstance(r, dict)]
-if not rows:
+    raise SystemExit(1)
+if not all(isinstance(row, dict) for row in rows):
+    raise SystemExit(1)
+candidates = []
+for row in rows:
+    if type(row.get("number")) is not int:
+        raise SystemExit(1)
+    if row.get("state") not in {"OPEN", "CLOSED", "MERGED"}:
+        raise SystemExit(1)
+    if not isinstance(row.get("title"), str):
+        raise SystemExit(1)
+    for key in ("baseRefName", "headRefName"):
+        value = row.get(key)
+        if not isinstance(value, str) or not value or value != value.strip():
+            raise SystemExit(1)
+    head_oid = row.get("headRefOid")
+    if not isinstance(head_oid, str) or len(head_oid) != 40 or any(ch not in string.hexdigits for ch in head_oid):
+        raise SystemExit(1)
+    owner = row.get("headRepositoryOwner")
+    if not isinstance(owner, dict) or not isinstance(owner.get("login"), str) or not owner["login"]:
+        raise SystemExit(1)
+    if type(row.get("isCrossRepository")) is not bool:
+        raise SystemExit(1)
+    if (
+        row["isCrossRepository"] is False
+        and owner["login"].casefold() == expected_owner.casefold()
+        and row["headRefName"] == expected_branch
+    ):
+        candidates.append(row)
+if not candidates:
     print("NONE"); sys.exit(0)
 # A branch can back multiple PRs over time (e.g. a scope reused after rm). The
 # CURRENT PR is the newest, so pick by descending PR number and report ITS
 # state. Ranking by state (merged-always-wins) would let a stale merged PR mask
 # the current in-flight one and falsely report "shipped" — the exact failure
 # this guards against; over-flagging parked is the safe direction here.
-rows.sort(key=lambda r: r.get("number") if isinstance(r.get("number"), int) else -1, reverse=True)
-top = rows[0]
+candidates.sort(key=lambda row: row["number"], reverse=True)
+top = candidates[0]
+if top["baseRefName"] != expected_base:
+    print("NONE"); sys.exit(0)
 state = top.get("state") or "?"
 num = top.get("number")
 title = (top.get("title") or "").replace("\t", " ").replace("\n", " ").strip()
-print("\t".join([str(state), str(num), title]))
-' 2>/dev/null || echo "NONE"
+print("\t".join([str(state), str(num), title, top["headRefOid"]]))
+' "$repo_owner" "$branch" "$base" 2>/dev/null
 }
 
 # Reason a no-PR scope is parked. Distinguishes a dead/empty session from
@@ -233,69 +369,90 @@ _session_dir_for_branch() {
     printf '%s' "$found"
 }
 
-# The forge repo this run is talking to, resolved lazily (only a run that reaches
-# the probe pays for it) and then pinned onto the probe. Resolved ONCE per run
-# when it succeeds — but see the memo note below for the case where it does not,
-# because "once" is the property that keeps drifting out of true here.
-#
-# `_gh` inherits the caller's cwd and any ambient $GH_REPO; pr_watch.py pins its
-# own subprocess cwd to ITS $REPO_ROOT and separately honours $GH_REPO. Those two
-# resolutions can differ — a reconcile run started outside the repo, or a shell
-# with GH_REPO exported for another repo, which this repo's own "Working across
-# two trees" note says operators do routinely. The PR number would then come from
-# one repository and the merge-readiness verdict from another. Mostly that fails
-# safe (no such PR → rc 2 → `open`); the case that does not is a same-numbered
-# green PR in the other repo, which would report `held` about a PR nobody looked
-# at. Resolving through `_gh` means this IS whatever `gh pr list` resolved,
-# ambient override included — the point is that both agree, not which one wins.
-#
-# Resolving is therefore a PRECONDITION of the probe, not an optimisation of it.
-# An earlier version simply omitted the pin when resolution failed, and that
-# reopened the hazard from the other side: `env` only ADDS to the environment, so
-# an unpinned probe inherits whatever $GH_REPO the operator's shell already had —
-# and unlike the case above, nothing then agrees with anything. Executed by a
-# review lens: with resolution failing and a stale ambient $GH_REPO, a lane
-# reported `held` on a probe that ran against an unrelated repository, with no
-# warning anywhere, because rc 0 from the wrong repo is indistinguishable from rc
-# 0 from the right one. Unresolvable is now a refusal (rc 2 → `open`, named on
-# stderr). In a `gh` outage that costs nothing — `gh pr list` shares the failure,
-# so those lanes are already classifying as parked — but a TRANSIENT failure of
-# this one call is a different case, which is why the memo below caches only
-# success.
-#
-# Sets $REPO_NWO rather than printing it, and callers run it as a plain command:
-# `nwo="$(_repo_nwo)"` would evaluate the body in a SUBSHELL, so the memo it sets
-# would die with that subshell and every lane would pay another `gh repo view`.
-# `_held_check` runs in the current shell, so a global assignment there survives
-# — which is what makes the memo real rather than merely stated.
-#
-# CACHES ONLY SUCCESS, and the emptiness of $REPO_NWO is itself the memo. A
-# separate "already tried" flag, set on failure too, made one transient blip
-# poison the WHOLE batch: a review lens executed it — `repo view` failing on its
-# first call only, `gh pr list` succeeding throughout — and both operator lanes
-# lost `held` for the rest of the run, including the one whose own call would
-# have succeeded. So the run makes ONE `gh repo view` when it succeeds, and up to
-# one per operator-class open lane when it keeps failing — the same order as the
-# `gh pr list` each of those lanes already makes, each behind the same short
-# timeout. Say it that way wherever it is said: this cardinality was written down
-# as a flat "once per run" and two consecutive review rounds found that stale.
-#
-# What counts as a resolution is the SHAPE, not merely a non-empty reply. `_gh`
-# swallows exit status by design, so a garbage-but-non-empty stdout would be
-# cached as a permanent success and would silently defeat the retry above for the
-# rest of the run — a review lens executed exactly that with a `repo view` that
-# printed a single space, and the round after it got in with `/`, `acme/` and
-# `a/b/c` past a check that only asked for "contains a slash, contains no space".
-#
-# So the test is EXACT, not a heuristic: `gh repo view --json nameWithOwner`
-# returns `OWNER/REPO` and nothing else, so anything that is not two non-empty
-# whitespace-free segments is not a resolution and must not end the retries.
-# Reject-first ordering, because every near-miss shape has to fall into a reject
-# arm rather than out of an accept arm's edge.
+# Print the first surviving ref that is not a stable snapshot of the PR head.
+# Local and remote-tracking refs are independent resume evidence: a stale local
+# ref must not hide newer pushed work, and a ref that moves between reads must
+# not be treated as a terminal snapshot. Return 0 for a mismatch/move, 1 when
+# every surviving ref is stable at the expected head, and 2 on a Git read error.
+_surviving_tip_mismatch() {
+    local branch="$1" expected_head="$2"
+    local refs labels i ref label first second ref_rc remote_first remote_second
+    refs=("refs/heads/$branch" "refs/remotes/origin/$branch")
+    labels=("local" "remote-tracking")
+    for i in 0 1; do
+        ref="${refs[$i]}"
+        label="${labels[$i]}"
+        if git -C "$REPO_ROOT" show-ref --verify --quiet "$ref"; then
+            first="$(git -C "$REPO_ROOT" rev-parse --verify "$ref^{commit}" 2>/dev/null)" \
+                || return 2
+            second="$(git -C "$REPO_ROOT" rev-parse --verify "$ref^{commit}" 2>/dev/null)" \
+                || return 2
+            if [[ "$first" != "$second" ]]; then
+                printf '%s tip moved during reconciliation (%s != %s)' \
+                    "$label" "${first:0:12}" "${second:0:12}"
+                return 0
+            fi
+            if [[ "$second" != "$expected_head" ]]; then
+                printf '%s tip differs from PR head (%s != %s)' \
+                    "$label" "${second:0:12}" "${expected_head:0:12}"
+                return 0
+            fi
+        else
+            ref_rc=$?
+            [[ "$ref_rc" -eq 1 ]] || return 2
+        fi
+    done
+    # A remote-tracking ref is only a cache. Read the live origin branch twice
+    # as part of the same quiescent snapshot so unseen pushed work cannot be
+    # terminalized by an older local cache. A missing remote branch is a valid
+    # empty result (normal after --delete-branch); a failed or malformed read is
+    # unknown state and stops the batch.
+    remote_first="$(_live_origin_tip "$branch")" || return 2
+    remote_second="$(_live_origin_tip "$branch")" || return 2
+    if [[ "$remote_first" != "$remote_second" ]]; then
+        printf 'origin tip moved during reconciliation (%s != %s)' \
+            "${remote_first:0:12}" "${remote_second:0:12}"
+        return 0
+    fi
+    if [[ -n "$remote_second" && "$remote_second" != "$expected_head" ]]; then
+        printf 'origin tip differs from PR head (%s != %s)' \
+            "${remote_second:0:12}" "${expected_head:0:12}"
+        return 0
+    fi
+    return 1
+}
+
+_live_origin_tip() {
+    local branch="$1" reply
+    reply="$(_bounded_run 10 git -C "$REPO_ROOT" ls-remote --heads origin "refs/heads/$branch" 2>/dev/null)" \
+        || return 2
+    printf '%s' "$reply" | python3 -c '
+import string, sys
+expected = sys.argv[1]
+lines = sys.stdin.read().splitlines()
+if not lines:
+    raise SystemExit(0)
+if len(lines) != 1:
+    raise SystemExit(2)
+parts = lines[0].split("\t")
+if len(parts) != 2 or parts[1] != expected:
+    raise SystemExit(2)
+oid = parts[0]
+if len(oid) != 40 or any(ch not in string.hexdigits for ch in oid):
+    raise SystemExit(2)
+print(oid)
+' "refs/heads/$branch"
+}
+
+# Resolve the checkout's repository once, with ambient GH_REPO removed, before
+# rendering any row. Every later forge read and review probe is pinned to that
+# exact nameWithOwner. A missing command, failed request, or malformed identity
+# stops reconciliation; none may degrade into an invented no-PR lane.
 REPO_NWO=""
 _resolve_repo_nwo() {
     [[ -z "$REPO_NWO" ]] || return 0
-    REPO_NWO="$(_gh repo view --json nameWithOwner --jq .nameWithOwner)"
+    REPO_NWO="$(cd "$REPO_ROOT" && unset GH_REPO && _gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)" \
+        || return 1
     REPO_NWO="${REPO_NWO%%$'\n'*}"
     case "$REPO_NWO" in
         ""|/*|*/|*/*/*|*[[:space:]]*) REPO_NWO="" ;;
@@ -304,13 +461,14 @@ _resolve_repo_nwo() {
     esac
 }
 
-# _held_check <branch> <pr> — is this open PR's lane HELD for the operator?
+# _held_check <session-dir> <branch> <pr> <base> <head> — is this open PR's
+# lane HELD for the operator?
 #
 #   0 — held: operator-class lane, and the PR is merge-ready
 #   1 — not held (lane is genuinely still open)
 #   2 — could not be determined; caller reports `open` and says why
 #
-# Two pieces of evidence, both already on disk or already reachable:
+# The durable identity and the act-time report must agree:
 #
 # 1. The PERSISTED merge class (`<session>/merge_class`, written by
 #    `dev_session.sh new`). Note the asymmetry with dev_session.sh's `merge`,
@@ -320,24 +478,23 @@ _resolve_repo_nwo() {
 #    state, so absent metadata must mean "not held". Same value, opposite
 #    default, because the safe direction is opposite.
 #
-# 2. `mergeable` from a non-persisting pr_watch poll against the lane's own
-#    state sandbox — the engine's own predicate for "green, review-clean, and
-#    carrying an independent-review receipt bound to the current head". Read,
-#    never re-derived: a rollup verdict recomputed here would be a second copy
-#    of a contract that can drift from the engine's (the same reason
-#    dev_session.sh's merge gate reads the flag instead of rebuilding it), and
-#    unacked review findings are not visible in `gh pr list` output at all — so
-#    a locally-derived "looks green" would call a lane with open findings
-#    finished. `--no-persist` keeps this probe read-only: reconciliation must
-#    never mutate a lane's seen-set, settle baseline or receipt.
+# 2. The persisted base must match the authoritative PR base. A missing base is
+#    incomplete session identity and therefore cannot widen the lane to held.
+#
+# 3. A non-persisting pr_watch poll against the lane's own state sandbox must
+#    report `mergeable` and `converged` for this exact PR, base, and head, with
+#    an explicit empty blocker list. Read the engine verdicts; do not rebuild
+#    their predicates from forge rollups. `--no-persist` keeps this probe
+#    read-only: reconciliation must never mutate a lane's seen-set, settle
+#    baseline, or review receipt.
 _held_check() {
-    local branch="$1" pr="$2"
-    local session_dir merge_class to report
-    local probe_env
+    local session_dir="$1" branch="$2" pr="$3" base="$4" head_oid="$5"
+    local merge_class recorded_base report
 
-    session_dir="$(_session_dir_for_branch "$branch")"
     [[ -n "$session_dir" ]] || return 1
-    [[ -s "$session_dir/merge_class" ]] || return 1
+    [[ -d "$session_dir/state" && -s "$session_dir/base" && -s "$session_dir/merge_class" ]] || return 1
+    recorded_base="$(cat "$session_dir/base")"
+    [[ "$recorded_base" == "$base" ]] || return 1
     merge_class="$(cat "$session_dir/merge_class")"
     [[ "$merge_class" == "operator" ]] || return 1
 
@@ -346,30 +503,42 @@ _held_check() {
     # absent engine, a timeout, a transport failure and an empty reply all end at
     # the same place — a non-zero invocation, or a parse below that raises — and
     # all of them mean the one thing: the probe did not run, so rc 2 and the
-    # caller's stderr note. An unresolvable forge repo joins them, but needs its
-    # own line because it is the one that would otherwise SUCCEED, against the
-    # wrong repository.
-    to="$(_timeout_prefix 60)"
+    # caller's stderr note. Repository identity was resolved before row output;
+    # this check only preserves the helper's fail-closed contract.
     _resolve_repo_nwo
     [[ -n "$REPO_NWO" ]] || return 2
-    probe_env=(env "DEVKIT_STATE_ROOT=$session_dir/state" "GH_REPO=$REPO_NWO")
-    # shellcheck disable=SC2086
-    report="$("${probe_env[@]}" \
-        $to uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist 2>/dev/null)" || return 2
+    report="$(_bounded_run 60 env \
+        "DEVKIT_STATE_ROOT=$session_dir/state" \
+        "DEVKIT_ROOT=$REPO_ROOT" \
+        "GH_REPO=$REPO_NWO" \
+        uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist 2>/dev/null)" || return 2
 
-    # `mergeable` is the precise name and fails CLOSED when absent; `done` is its
-    # unchanged legacy alias. `converged` must NEVER be read here — it is true on
-    # a green, comment-clean PR carrying no review receipt.
+    # `mergeable` is the merge-authorization verdict; `converged` confirms that
+    # the observed forge state is internally settled. Both fail closed when
+    # absent, and exact identity plus an explicit blocker list prevent a valid
+    # report for another head from terminalizing this lane.
     printf '%s' "$report" | python3 -c '
 import json, sys
+expected_pr, expected_base, expected_head = sys.argv[1:4]
 try:
     d = json.load(sys.stdin)
 except Exception:
     sys.exit(2)
 if not isinstance(d, dict):
     sys.exit(2)
-sys.exit(0 if d.get("mergeable") is True else 1)
-' || return $?
+blockers = d.get("merge_blockers")
+if not isinstance(blockers, list):
+    sys.exit(2)
+ready = (
+    d.get("mergeable") is True
+    and d.get("converged") is True
+    and str(d.get("pr")) == expected_pr
+    and d.get("base") == expected_base
+    and d.get("head") == expected_head
+    and not blockers
+)
+sys.exit(0 if ready else 1)
+' "$pr" "$base" "$head_oid" || return $?
     return 0
 }
 
@@ -473,46 +642,88 @@ cmd_reconcile() {
     # or only the base branch) is still a usage error, never a quiet all-clear.
     [[ "${#LANE_BR[@]}" -gt 0 ]] || _die "nothing to reconcile (scopes/--match matched no branches)"
 
-    if ! command -v gh >/dev/null 2>&1; then
-        echo "⚠ gh not found — PR state unavailable; classifying by local branch only." >&2
-    fi
-
-    printf '%-28s %-8s %-6s %s\n' "LANE" "STATUS" "PR" "DETAIL"
-    printf '%-28s %-8s %-6s %s\n' "----------------------------" "--------" "------" "------"
+    command -v gh >/dev/null 2>&1 \
+        || _die "gh is required to reconcile pull-request state"
+    _resolve_repo_nwo \
+        || _die "could not resolve the GitHub repository for $REPO_ROOT"
+    [[ -n "$REPO_NWO" ]] \
+        || _die "GitHub returned an invalid repository identity for $REPO_ROOT"
+    local repo_owner="${REPO_NWO%%/*}"
 
     local launched="${#LANE_BR[@]}"
-    local merged=0 open=0 parked=0 held=0 parked_notes="" held_notes="" unknown_notes=""
-    local i disp branch pr_json classified state rest num title status detail pr_disp reason
-    local held_rc
+    local merged=0 open=0 parked=0 held=0 parked_notes="" held_notes="" unknown_notes="" rows="" row=""
+    local i disp branch lane_base session_dir pr_json classified state rest num title head_oid status detail pr_disp reason
+    local held_rc tip_detail tip_rc tip_differs
 
     for i in "${!LANE_BR[@]}"; do
         disp="${LANE_DISP[$i]}"
         branch="${LANE_BR[$i]}"
+        lane_base="$base"
+        session_dir="$(_session_dir_for_branch "$branch")"
+        if [[ -n "$session_dir" && -s "$session_dir/base" ]]; then
+            lane_base="$(cat "$session_dir/base")"
+        fi
 
-        pr_json="$(_gh pr list --head "$branch" --state all --json number,title,state --limit 30)"
-        classified="$(printf '%s' "$pr_json" | _classify_pr)"
+        pr_json="$(GH_REPO="$REPO_NWO" _gh pr list --repo "$REPO_NWO" --head "$branch" --state all \
+            --json number,title,state,baseRefName,headRefName,headRefOid,headRepositoryOwner,isCrossRepository \
+            --limit 100 2>/dev/null)" \
+            || _die "could not resolve PR state for '$branch' in '$REPO_NWO'"
+        classified="$(printf '%s' "$pr_json" | _classify_pr "$repo_owner" "$branch" "$lane_base")" \
+            || _die "GitHub returned invalid PR state for '$branch' in '$REPO_NWO'"
         state="${classified%%$'\t'*}"
         num=""
         title=""
+        head_oid=""
         if [[ "$state" == "MERGED" || "$state" == "OPEN" || "$state" == "CLOSED" ]]; then
             rest="${classified#*$'\t'}"
             num="${rest%%$'\t'*}"
-            title="${rest#*$'\t'}"
+            rest="${rest#*$'\t'}"
+            title="${rest%%$'\t'*}"
+            head_oid="${rest#*$'\t'}"
+        fi
+
+        # The PR record survives branch deletion. Observe every surviving local
+        # and remote-tracking ref twice: either ref can carry resume work, and a
+        # move during reconciliation is not a terminal snapshot. Callers must
+        # still keep launched refs quiescent for the duration of this snapshot;
+        # Git offers no lock shared with an unrelated pusher.
+        tip_detail=""
+        tip_differs=0
+        if [[ "$state" == "MERGED" || "$state" == "OPEN" ]]; then
+            if tip_detail="$(_surviving_tip_mismatch "$branch" "$head_oid")"; then
+                tip_differs=1
+            else
+                tip_rc=$?
+                [[ "$tip_rc" -eq 1 ]] \
+                    || _die "could not resolve surviving branch tips for '$branch'"
+            fi
         fi
 
         pr_disp="—"
         case "$state" in
             MERGED)
-                merged=$((merged + 1)); status="merged"; pr_disp="#$num"; detail="$title" ;;
+                pr_disp="#$num"
+                if [[ "$tip_differs" -eq 1 ]]; then
+                    open=$((open + 1)); status="open"
+                    detail="$tip_detail — $title"
+                else
+                    merged=$((merged + 1)); status="merged"; detail="$title"
+                fi ;;
             OPEN)
                 pr_disp="#$num"
-                held_rc=0
-                _held_check "$branch" "$num" || held_rc=$?
-                if [[ "$held_rc" -eq 0 ]]; then
+                if [[ "$tip_differs" -eq 1 ]]; then
+                    open=$((open + 1)); status="open"
+                    detail="$tip_detail — $title"
+                    held_rc=1
+                else
+                    held_rc=0
+                    _held_check "$session_dir" "$branch" "$num" "$lane_base" "$head_oid" || held_rc=$?
+                fi
+                if [[ "$tip_differs" -eq 0 && "$held_rc" -eq 0 ]]; then
                     held=$((held + 1)); status="held"
                     detail="awaiting operator merge — $title"
                     held_notes="${held_notes}  • ${disp}: PR #${num} — ${title}"$'\n'
-                else
+                elif [[ "$tip_differs" -eq 0 ]]; then
                     open=$((open + 1)); status="open"; detail="in flight — $title"
                     # rc 1 is the ordinary "not held" answer and must stay silent.
                     # Anything else means the probe could not run (no uv, no
@@ -527,14 +738,20 @@ cmd_reconcile() {
                 parked_notes="${parked_notes}  • ${disp}: PR #${num} closed unmerged"$'\n' ;;
             *)
                 parked=$((parked + 1)); status="parked"
-                reason="$(_branch_reason "$branch" "$base")"
+                reason="$(_branch_reason "$branch" "$lane_base")"
                 detail="$reason"
                 parked_notes="${parked_notes}  • ${disp}: ${reason}"$'\n' ;;
         esac
 
-        printf '%-28s %-8s %-6s %s\n' "$disp" "$status" "$pr_disp" "$detail"
+        printf -v row '%-28s %-8s %-6s %s' "$disp" "$status" "$pr_disp" "$detail"
+        rows="${rows}${row}"$'\n'
     done
 
+    # Forge/read/shape failures abort above before any authoritative-looking
+    # row is emitted. Render only after the whole requested snapshot succeeded.
+    printf '%-28s %-8s %-6s %s\n' "LANE" "STATUS" "PR" "DETAIL"
+    printf '%-28s %-8s %-6s %s\n' "----------------------------" "--------" "------" "------"
+    printf '%s' "$rows"
     echo
     # `held H` and `open O` are appended only when non-zero, so a batch with
     # neither prints the exact line it always has. `held` sits before `open`:
@@ -560,10 +777,9 @@ cmd_reconcile() {
         {
             # The parenthetical is an enumeration of the rc-2 causes, so it has to
             # grow with them — a cause missing from it reads to the operator as
-            # "not my case". "repo unidentified" earns its own item rather than
-            # folding into "probe failed": there the probe is never invoked at all.
+            # "not my case".
             echo "⚠ could not evaluate for 'held' (no uv / no pr_watch.py /"
-            echo "  repo unidentified, so the probe was not run / probe failed) —"
+            echo "  probe failed or returned malformed state) —"
             echo "  reported OPEN, which may understate them:"
             printf '%s' "$unknown_notes"
         } >&2

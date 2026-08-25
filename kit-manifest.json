@@ -29,7 +29,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "19e7262d53b4cb754f545d8064a1d93b6e3687f0e4c2e81d5fd73840c1c58ab6"
+      "sha256": "7fd5f9ac4908a21f3c36aa37c6f434e97764d899cd339274faceae9b13dbe829"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -41,11 +41,11 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "4c4aa6fa0564fd4d4433dc9c6f05f3a23742706ba00fee285fa44673c72cee08"
+      "sha256": "c1529476516ddeeacdc338888dd55a8aaad841aba87d271979d09fc531412016"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "d6673d489511ae9c5892efbb48c271d8bad32033ae33743c81e1287fdf4b59d7"
+      "sha256": "20eb845cfada0fb89da423aacf79c42a5ae89396db30e6ba1625d101338eec50"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
@@ -117,7 +117,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "e2b6b12592b079c505036bc7714d100c2d46b13ab8b301c40bf33c260da3a629"
+      "sha256": "314c250b795c9ca339c302b898bec7ea6fc7cdfe8b72fa4f360a43a567cd6c34"
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
@@ -203,7 +203,7 @@
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
-      "sha256": "215591bc3bd4b933f4db74d359a5614b990da7dbdbb31805d3ec01b1dada1702"
+      "sha256": "75d29491cf65b61d385bb7bbb1c2cd39b3f557bef05b1dfa4a049737e8937573"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -247,7 +247,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "a4f38920a9fdcfad6c0fa4256e57d702514f2b756c07dfcd2c77cfa15c55f4f0"
+      "sha256": "74faf30cc728c72bca6052d3fa1ea3dd68f52632cad0aa79dfd9b87172e348a7"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -259,7 +259,7 @@
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
-      "sha256": "b9c3bef8e5a414a8a612af35374e2bdfeb0b1c486299322d30e53671218a3b7f"
+      "sha256": "a12ddfbb4636376a07b3c047242a499226f47bc58a3668f1eb5a76fe1259b260"
     },
     "scripts/tests/test_repo_layout.py": {
       "role": "test",

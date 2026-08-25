@@ -42,6 +42,40 @@ starts.
 
 ---
 
+## #598 — 2026-08-25
+
+- **BREAKING (gate semantics, engine CLI exit contract) — parallel reconciliation no
+  longer turns a missing `gh`, failed repository or PR read, or malformed forge payload
+  into a partial `open` / `parked` lane board; it stops with exit `64`. Operator-held
+  classification now additionally requires persisted operator class and base plus an
+  act-time `pr_watch` report for the exact repository, PR, base, head, and empty blocker
+  set. Surviving branch tips that differ from the selected PR head remain resumable
+  `open` work.** **Refresh `scripts/dev_session.sh`,
+  `scripts/reconcile_sessions.sh`,
+  `docs/agentic-dev-kit/workflows/parallel.md`,
+  `docs/agentic-dev-kit/workflows/parallel-headless.md`,
+  `scripts/tests/test_portability.py`, and
+  `scripts/tests/test_reconcile_sessions.py` as the coordinated kit-owned set for this
+  change. Ensure reconciliation callers provide
+  authenticated `gh` access, preserve exit `64` as an unknown-forge hard stop, and do
+  not parse a partial board after that exit. Do not replace repo-owned downstream engine
+  forks through a normal kit upgrade; reconcile them explicitly against the refreshed
+  kit engines. No config migration is needed.**
+- **CHANGED (gate semantics) — headless activation and descriptor lane roots are
+  canonical absolute paths, including a relative sessions container anchored before any
+  worktree write; scope review and self-merge replace inherited state/repository
+  roots, reject cross-repository PRs, and refuse before the forge write when the listed
+  PR head differs from the act-time reviewed head. Non-force `rm` now preserves a
+  worktree that becomes dirty after its initial status probe rather than retrying the
+  removal with force.** **Launch unattended lanes by
+  unconditionally applying every descriptor `env` key over the permitted inherited
+  environment. Keep runtime adapters as invocation-only bindings; do not reconstruct
+  identity or merge policy in a Claude or Codex adapter. Treat relative
+  `DEVKIT_SESSIONS_DIR` as relative to each invocation's working directory, and invoke
+  later scope commands from the same directory or pass an absolute value.**
+
+---
+
 ## #596 — 2026-08-25
 
 - **CHANGED (gate semantics) — `session-start` now stops before rendering its normal
