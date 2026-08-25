@@ -2606,6 +2606,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "kitconfig.load_config()",
         "RFC 8785 JSON",
         "recorded protected-branch head is immutable draft provenance",
+        "Refresh the remote ref read-only on resume",
         "recorded head must remain an ancestor of the current protected head",
         "persist it as `finalize_base_head`, and never rewrite the draft run identity",
         "Require `state.dirname` to match that resolver's declared `STATE_DIRNAME`",
@@ -2646,6 +2647,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "an older helper that whole-sweeps the frozen snapshot is not ready",
         "Never switch the caller checkout",
         "This workflow never merges the sweep pull request",
+        "verify the pull request merged before marking the run complete",
         "without notification, approval state, tracker, source-document, or forge writes",
     ):
         assert required_phrase in flattened
@@ -2774,6 +2776,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
+            "Refresh the remote ref read-only on resume",
+            "Do not refresh the remote ref on resume; use the locally cached ref",
+            1,
+        ),
+        workflow.replace(
             "Parse under the held gate before creating the `reserved` state",
             "Create the `reserved` state before parsing under the held gate",
             1,
@@ -2842,6 +2849,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace("It does not edit", "It may edit", 1),
+        workflow.replace(
+            "verify the pull\nrequest merged before marking the run complete",
+            "assume the pull request merged and mark the run complete",
+            1,
+        ),
         workflow.replace("operator-held` |", "successful-completion` |", 1),
     )
     for mutation_index, mutated in enumerate(mutations):
