@@ -1468,6 +1468,226 @@ def _post_merge_routing(workflow: str) -> dict[str, tuple[str, str, str]]:
     return rows
 
 
+def _integration_table(
+    workflow: str, heading: str, width: int
+) -> dict[str, tuple[str, ...]]:
+    marker = f"### {heading}\n"
+    assert workflow.count(marker) == 1
+    section = workflow.split(marker, 1)[1]
+    section = re.split(r"\n#{2,3} ", section, maxsplit=1)[0]
+    rows: dict[str, tuple[str, ...]] = {}
+    for line in section.splitlines():
+        if not line.startswith("|") or line.startswith("|---"):
+            continue
+        cells = [
+            cell.strip().replace("`", "") for cell in line.strip("|").split("|")
+        ]
+        if len(cells) == width and cells[0] not in {
+            "Capability id", "Policy id", "Outcome", ""
+        }:
+            rows[cells[0]] = tuple(cells[1:])
+    return rows
+
+
+def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
+    flattened = " ".join(workflow.split())
+    assert "take precedence over later explanatory prose" in flattened
+    assert "runtime adapters" in flattened
+    capabilities = _integration_table(workflow, "Capability contract", 3)
+    policies = _integration_table(workflow, "Authority contract", 2)
+    outcome_heading = (
+        "Durable result, resumability, and completion"
+        if name == "session-start"
+        else "Durable artifacts, resumability, and completion"
+    )
+    outcomes = _integration_table(workflow, outcome_heading, 3)
+
+    if name == "session-start":
+        assert {key: row[0] for key, row in capabilities.items()} == {
+            "repository-config-read": "required",
+            "repository-state-read": "required",
+            "forge-pr-read": "optional",
+            "ci-cron-read": "optional",
+            "tracker-read": "optional",
+            "config-drift-read": "optional when configured",
+            "archive-remediation-read": "conditional",
+            "resolved-tracker-remediation-read": "conditional",
+            "runtime-compute-selection": "optional enhancement",
+        }
+        assert policies == {
+            "source-failure": ("report-unavailable-never-empty-or-clean",),
+            "incomplete-pagination": ("report-unavailable-or-page-to-completion",),
+            "remediation-unavailable": ("no-now-promotion-for-that-candidate",),
+            "session-start-write": ("prohibited-read-only-workflow",),
+            "non-interactive-invocation": (
+                "render-once-and-exit-without-wait-or-write",
+            ),
+            "runtime-policy-override": ("shared-declaration-wins-and-stop",),
+        }
+        assert set(outcomes) == {
+            "hard-stop", "degraded-success", "successful-completion"
+        }
+        assert "creates no repository, forge, tracker, notification, or local-state" in flattened
+        assert "A previous chat response is not resume evidence" in flattened
+        assert "must never render as an empty list" in flattened
+        assert "keep that candidate out of `Now`" in flattened
+    else:
+        assert {key: row[0] for key, row in capabilities.items()} == {
+            "repository-config-read": "required",
+            "handoff-record-write": "required",
+            "document-budget-check": "required",
+            "handoff-archive": "conditional",
+            "tracker-search-and-write": "optional and approval-gated",
+            "forge-pr-write": "conditional",
+            "pr-watch": "conditional",
+            "project-status-write": "optional enhancement",
+        }
+        assert policies == {
+            "tracker-without-exact-payload-approval": (
+                "park-complete-friction-entry-no-tracker-write",
+            ),
+            "non-interactive-tracker-route": (
+                "park-complete-friction-entry-never-wait",
+            ),
+            "ambiguous-external-write": (
+                "read-back-before-retry-or-park-as-ambiguous",
+            ),
+            "operator-owned-repository-change": (
+                "preserve-and-stage-only-declared-paths",
+            ),
+            "required-engine-unavailable": (
+                "stop-before-staging-preserve-record-edit",
+            ),
+            "runtime-policy-override": ("shared-declaration-wins-and-stop",),
+        }
+        assert set(outcomes) == {
+            "hard-stop", "degraded-success", "successful-noop",
+            "successful-completion",
+        }
+        assert "confirm the exact title/body/project/labels or exact comment payload" in flattened
+        assert "Non-interactive runs never wait for approval" in flattened
+        assert (
+            "Never repeat a tracker create, tracker comment, push, or pull request creation"
+            in flattened
+        )
+        assert "do not call the wrap-up complete" in flattened
+
+
+@pytest.mark.kit_repo_only(
+    "docs/agentic-dev-kit/workflows/session-start.md",
+    "docs/agentic-dev-kit/workflows/wrap-up.md",
+    ".claude/commands/session-start.md",
+    ".claude/commands/wrap-up.md",
+    ".agents/skills/session-start",
+    ".agents/skills/wrap-up",
+    "docs/agentic-dev-kit/runtime-parity.md",
+    "kit-manifest.json",
+)
+def test_bookend_integrations_are_shared_thin_declared_and_manifested() -> None:
+    manifest = json.loads(
+        (REPO_ROOT / "kit-manifest.json").read_text(encoding="utf-8")
+    )["files"]
+    parity = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "runtime-parity.md"
+    ).read_text(encoding="utf-8")
+    for name in ("session-start", "wrap-up"):
+        shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
+        claude_path = f".claude/commands/{name}.md"
+        codex_path = f".agents/skills/{name}/SKILL.md"
+        shared = (REPO_ROOT / shared_path).read_text(encoding="utf-8")
+        claude = (REPO_ROOT / claude_path).read_text(encoding="utf-8")
+        codex = (REPO_ROOT / codex_path).read_text(encoding="utf-8")
+        _assert_bookend_integration_semantics(name, shared)
+        for adapter in (claude, codex):
+            assert shared_path in adapter
+            assert "### Capability contract" not in adapter
+            assert "### Authority contract" not in adapter
+            assert "tracker-without-exact-payload-approval" not in adapter
+            assert "non-interactive" not in adapter.lower()
+        assert len(claude.splitlines()) <= 12
+        assert len(codex.splitlines()) <= 14
+        claude_description = yaml.safe_load(claude.split("---", 2)[1])["description"]
+        codex_description = yaml.safe_load(codex.split("---", 2)[1])["description"]
+        assert claude_description == codex_description
+        assert manifest[shared_path]["role"] == "workflow"
+        assert re.search(rf"(?m)^\s+- name: {re.escape(name)}$", parity)
+        assert f"    claude: {claude_path}" in parity
+        assert f"    codex: {codex_path}" in parity
+
+
+@pytest.mark.kit_repo_only(
+    "docs/agentic-dev-kit/workflows/session-start.md",
+    "docs/agentic-dev-kit/workflows/wrap-up.md",
+)
+def test_bookend_integration_semantic_mutations_are_rejected() -> None:
+    session = (
+        REPO_ROOT / "docs/agentic-dev-kit/workflows/session-start.md"
+    ).read_text(encoding="utf-8")
+    wrap = (
+        REPO_ROOT / "docs/agentic-dev-kit/workflows/wrap-up.md"
+    ).read_text(encoding="utf-8")
+    mutations = (
+        ("session-start", session, session.replace(
+            "`repository-state-read` | required", "`repository-state-read` | optional", 1
+        )),
+        ("session-start", session, session.replace(
+            "`session-start-write` | `prohibited-read-only-workflow`",
+            "`session-start-write` | `writes-allowed`", 1
+        )),
+        ("session-start", session, session.replace(
+            "`remediation-unavailable` | `no-now-promotion-for-that-candidate`",
+            "`remediation-unavailable` | `promote-anyway`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`document-budget-check` | required", "`document-budget-check` | optional", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`tracker-search-and-write` | optional and approval-gated",
+            "`tracker-search-and-write` | optional", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`tracker-without-exact-payload-approval` | "
+            "`park-complete-friction-entry-no-tracker-write`",
+            "`tracker-without-exact-payload-approval` | `create-tracker-item`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`non-interactive-tracker-route` | `park-complete-friction-entry-never-wait`",
+            "`non-interactive-tracker-route` | `wait-for-approval`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`pr-watch` | conditional", "`pr-watch` | optional", 1
+        )),
+    )
+    for mutation_index, (name, original, mutated) in enumerate(mutations):
+        assert mutated != original, mutation_index
+        with pytest.raises(AssertionError):
+            _assert_bookend_integration_semantics(name, mutated)
+
+
+@pytest.mark.parametrize("name", ("session-start", "wrap-up"))
+def test_runtime_parity_rejects_missing_or_stale_bookend_adapter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    repo = _runtime_parity_fixture(tmp_path)
+    (repo / "kit-manifest.json").write_text("{}\n", encoding="utf-8")
+    skill = repo / ".agents" / "skills" / name / "SKILL.md"
+    original = skill.read_text(encoding="utf-8")
+    shared = f"docs/agentic-dev-kit/workflows/{name}.md"
+    skill.write_text(
+        original.replace(shared, f"docs/agentic-dev-kit/workflows/stale-{name}.md"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
+
+    with pytest.raises(AssertionError):
+        test_runtime_parity_contract_covers_workflows_and_adapters()
+
+    skill.write_text(original, encoding="utf-8")
+    skill.unlink()
+    with pytest.raises((AssertionError, FileNotFoundError)):
+        test_runtime_parity_contract_covers_workflows_and_adapters()
+
+
 def _assert_post_merge_semantics(workflow: str) -> None:
     flattened = " ".join(workflow.split())
     assert (

@@ -238,6 +238,16 @@ friction-routing step is being skipped — not that triage is overdue.
 > prose the agent executes, not checks that fail. The systemize workflow likewise
 > labels agent-executed classification honestly and never treats tracker availability
 > as authorization.
+>
+> The shared session-start and wrap-up workflows declare the preflight boundary that
+> applies in Claude and Codex. Missing required repository/config or record capabilities
+> stop before a false briefing or commit. Optional session-start sources render as
+> unavailable rather than empty; wrap-up parks friction when tracker access or exact-
+> payload approval is absent, and non-interactive runs never wait for that approval.
+> Their thin adapters select runtime-native mechanisms but cannot change those outcomes.
+> No new config key or installer step is needed for this bookend contract. The triage
+> workflow still needs its pipeline configuration and engine-mode precedence moved into
+> the shared config before it can claim the same integration coverage.
 
 ## That's the loop
 

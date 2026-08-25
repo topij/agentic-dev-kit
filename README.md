@@ -311,6 +311,18 @@ are enumerated here so runtime parity cannot be mistaken for engine availability
 - `triage_friction_log.py` and `finalize_triage.py` beneath `paths.engines` for
   `triage-friction-log`.
 
+The shared `session-start` and `wrap-up` definitions also declare their integration
+preflights and outcomes directly. Session start fails closed on missing repository,
+config, handoff, friction-log, or repository-state reads; unavailable forge, CI,
+tracker, and configured drift sources stay visible as degraded gaps rather than false
+empty or clean results. Wrap-up requires the configured document-budget engine, preserves
+operator-owned changes, parks a complete friction entry when tracker access or exact-
+payload approval is unavailable, and treats its record as complete only after the
+conditional branch/PR/review path settles. Non-interactive runs never wait for tracker
+approval. Claude and Codex adapters only translate invocation and available mechanisms.
+These bookend declarations use existing config and upgrade through the shared workflow
+refresh; they add no installer migration or runtime-specific connector requirement.
+
 The shared systemize workflow treats the configured engine set atomically: all absent
 selects its honest LLM-only path, all present selects engine-backed mode, and a partial
 set stops with an actionable preflight failure. Notification and tracker access have

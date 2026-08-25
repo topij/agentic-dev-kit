@@ -14,44 +14,34 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-24 — PR `#595` carries the shared post-merge-systemize slice;
-the remaining Phase 3 integration preflights are bounded for a separate branch.
+Last updated: 2026-08-25 — `feat/shared-integration-preflights` carries the shared
+bookend contract; the triage pipeline remains the Phase 3 exit.
 
-## Latest session — 2026-08-24 (post-merge systemize moved into the shared workflow layer)
+## Latest session — 2026-08-25 (shared integration preflights bounded at the lifecycle bookends)
 
-**Theme —** Phase 3 now has a bounded parity slice: the retro workflow's behavior lives
-in one runtime-neutral definition, while Claude and Codex expose thin native bindings.
+**Theme —** The `session-start` and `wrap-up` definitions now own explicit capability,
+authority, artifact, resumability, non-interactive, and completion declarations, while
+their Claude and Codex bindings remain invocation-only adapters.
 
-- **PR `#595` carries the extraction.** The shared workflow owns capability preflights,
-  durable cache, digest, report and route artifacts, resumability, external-write approval
-  gates, review follow-through, and stop conditions. Runtime adapters select native
-  invocation and translate configured compute without owning policy.
+- **The lifecycle bookends are the coherent slice.** Required repository/config and
+  record capabilities fail closed. Optional session-start sources stay visible as
+  degraded gaps, and wrap-up parks complete friction evidence when tracker access or
+  exact-payload approval is unavailable.
 
-- **Required and optional capabilities are explicit.** Repository and complete merged-PR
-  history access fail closed. The configured engine set is atomic: an absent set selects
-  a labelled agent-executed path, while a partial set stops. Optional forge writes,
-  tracker, reviewer and notification integrations retain durable report-based degraded
-  paths; tracker writes require approval of the exact payload.
+- **The triage workflow is bounded separately.** Its shared definition still assumes a
+  dedicated pipeline config absent from `config/dev-model.yaml`, unvendored parse/finalize
+  engines, and unconditional notification availability. Resolving those together needs
+  the installer/upgrade semantic matrix rather than a partial prose-only config.
 
-- **The review-evidence boundary is unchanged.** This slice does not modify
-  `scripts/pr_watch.py`, add a record-only classifier, or fork the shared fallback review
-  semantics. Uncertain or disputed delta classification remains on the full-panel route.
+- **The adapters own translation, not policy.** The Codex bookend bindings no longer
+  duplicate read-only, compute, repository-safety, or generic external-mutation rules;
+  declaration-derived mutation tests cover the shared outcomes and runtime registration.
 
-- **Adopter surfaces move together.** Installer migration, the manifest, runtime-parity
-  declaration, README and getting-started guidance, sprint plan, and parity tests carry
-  the same workflow contract. Issue `#7` stays open for the optional deterministic
-  engines.
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `d8994219def83ece2ba9e4d6ac0f57b459939083` on 2026-08-24 printed
-  `1565 passed, 3 warnings in 178.12s`; the warnings were pytest temporary-directory
-  cleanup warnings.
-
-▶ Next: run
-`git fetch origin && git switch -c feat/shared-integration-preflights origin/main`, then
-inventory tracker and notification dependencies in `session-start`, `wrap-up`, and
-`triage-friction-log`; reuse the shared capability vocabulary, keep both runtime adapters
-thin, and add declaration-derived preflight coverage.
+▶ Next: create `feat/triage-integration-preflights` from current `origin/main`; first
+build the semantic input matrix for a `config/dev-model.yaml`-owned triage block and its
+installer/upgrade migration, then declare atomic engine modes, interactive versus
+scheduled approval paths, exact tracker authority, durable resume evidence, test-mode
+writes, and stop/degraded/completion outcomes in the shared workflow.
 
 ______________________________________________________________________
 

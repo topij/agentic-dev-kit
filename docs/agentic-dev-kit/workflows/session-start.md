@@ -20,6 +20,58 @@ Read `config/dev-model.yaml` first. In this workflow:
 - A workflow invocation means the current agent's native adapter: `/name` for the
   shipped Claude commands or `$name` for the shipped Codex skills.
 
+## Authoritative integration declaration
+
+The capability, authority, and completion rows below are normative. They take
+precedence over later explanatory prose and over runtime adapters. An adapter may
+translate an invocation, launcher, model, effort, or available mechanism; it may not
+weaken a required failure, turn an unavailable source into an empty result, authorize a
+write, or invent a durable artifact.
+
+### Capability contract
+
+Report every attempted capability as `ready`, `degraded`, or `stop`, with its
+runtime-native mechanism or an actionable reason. Finish required preflight before
+classifying candidates; a required failure must not produce a briefing that looks
+complete.
+
+| Capability id | Class | Preflight and unavailable outcome |
+|---|---|---|
+| `repository-config-read` | required | Prove the repository root and read the merged config, `<handoff>`, and `<friction-log>`. Missing or unreadable input is a hard stop; name it and do not render a briefing. |
+| `repository-state-read` | required | Read the current branch and working-tree state. Failure is a hard stop because unfinished local work would otherwise disappear from classification. |
+| `forge-pr-read` | optional | Prove authenticated, complete pagination for open pull requests. Unavailability or suspected truncation degrades to `PRs unavailable: <reason>` and must never render as an empty list. |
+| `ci-cron-read` | optional | Use the configured or project-native health mechanism. Unavailability degrades to `CI/cron: unavailable: <reason>`; it is not an all-clear. |
+| `tracker-read` | optional | Read a complete field-limited backlog from `<tracker>`. Missing config, credentials, client, or complete pagination degrades to an explicit tracker gap; discard partial payloads and continue. |
+| `config-drift-read` | optional when configured | Run only when the project defines an apply/verify mechanism. Failure renders `config drift: unavailable (<reason>)`; absence of such a project mechanism omits the capability entirely. |
+| `archive-remediation-read` | conditional | Required before promoting a candidate to `Now`. If the scoped archive lookup cannot run, keep that candidate out of `Now`, name the remediation gap, and continue with a degraded briefing. |
+| `resolved-tracker-remediation-read` | conditional | Required when a candidate implicates a tracker item whose live state may hide a false resolution. If the item and its claimed resolution cannot be read, do not promote that candidate to `Now`; name the gap. |
+| `runtime-compute-selection` | optional enhancement | Apply `models.runtime_mappings` only when the current runtime mechanically exposes the requested control. Otherwise retain the neutral tier as instructed guidance and do not claim a switch. |
+
+### Authority contract
+
+| Policy id | Required outcome |
+|---|---|
+| `source-failure` | `report-unavailable-never-empty-or-clean` |
+| `incomplete-pagination` | `report-unavailable-or-page-to-completion` |
+| `remediation-unavailable` | `no-now-promotion-for-that-candidate` |
+| `session-start-write` | `prohibited-read-only-workflow` |
+| `non-interactive-invocation` | `render-once-and-exit-without-wait-or-write` |
+| `runtime-policy-override` | `shared-declaration-wins-and-stop` |
+
+### Durable result, resumability, and completion
+
+`session-start` creates no repository, forge, tracker, notification, or local-state
+artifact. Its load-bearing result is the briefing returned to the invoker; the live
+sources remain authoritative. A previous chat response is not resume evidence. Retry by
+gathering the sources again, and never reuse an earlier empty or clean verdict for a
+source that failed on the retry.
+
+| Outcome | Condition | Required result |
+|---|---|---|
+| `hard-stop` | A required capability is unavailable or shared/runtime policy conflicts. | Name the failed capability and remediation; do not render the normal briefing or recommendation. |
+| `degraded-success` | Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a `Now` promotion. | Render the briefing once, label every gap at its normal display location, and make no write. |
+| `successful-completion` | Required capabilities are ready and every attempted optional source is either ready or honestly degraded. | Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this read-only workflow completes. |
+
 ## What it reads
 
 | Source          | How                                                                                                                                     |
@@ -342,15 +394,18 @@ What to do next
   concern — mention it only under 🟢 Whenever if present, never conflated with the 🔴
   line above.
 
-### 4 · Recommend one, then wait
+### 4 · Recommend one, then wait or exit
 
-End with a single pick and a one-line why, then **stop** — let the operator choose. Do
-not auto-start the work.
+End with a single pick and a one-line why. In an interactive invocation, then **stop**
+and let the operator choose; do not auto-start the work. In a non-interactive
+invocation, omit the question and exit after rendering the recommendation. When the
+outer request already and separately authorizes follow-on work, complete this read-only
+workflow first, then continue under that authority.
 
 ```text
 👉 My pick: <item>   [<S/M/L> · <model> · <inline/delegate>] — <one-line rationale: why this, now>
    <delegate ⇒ "I'll hand it to an isolated task and review the result here." | inline ⇒ "We'll run it in this session so you can steer it.">
-   Want me to start it, or pick another?
+   Want me to start it, or pick another?   # interactive only
 ```
 
 Rationale heuristics: prefer 🔴 Now if the bucket is non-empty; otherwise the active
