@@ -569,6 +569,7 @@ preflight_migration_config() {
       }
       match($0, /^ */)
       if (!child_indent) child_indent = RLENGTH
+      if (RLENGTH < 2) unsafe = 1
       if (RLENGTH != child_indent) unsafe = 1
       key = $0
       sub(/^ +/, "", key)

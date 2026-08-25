@@ -239,15 +239,18 @@ state and report the same outcome without pretending the reminder was sent.
 
 ## Tracker writes and accounting
 
-Trigger tracker access only for approved items. Before each create, search for the exact
-idempotency marker and record the complete pre-existing match set. Recompute the payload
-digest, compare it with the approval record, and persist `attempting` before the create.
-After a success response, read back the item and require exact project, title, body,
-labels, marker, and returned identifier before recording `verified`.
+Trigger tracker access only for approved items. Recompute the payload digest and compare
+it with the approval record before any tracker action. Search for the exact idempotency
+marker and record the complete pre-existing match set. One authoritative pre-existing
+exact payload match records `verified` with its read-back identifier without a create.
+Any multiple or non-exact marker match is ambiguous and stops operator-held. Only an
+authoritative empty match set permits persisting `attempting` and calling create. After a
+success response, read back the item and require exact project, title, body, labels,
+marker, and returned identifier before recording `verified`.
 
 If the create fails or returns ambiguously, read back by the exact marker before any
-retry. One new exact match verifies the write. No match proves no landing only when the
-tracker read is complete and authoritative; multiple or non-exact matches remain
+retry. One exact payload match verifies the write. No match proves no landing only when
+the tracker read is complete and authoritative; multiple or non-exact matches remain
 ambiguous. Preserve state and stop operator-held. Continue to later creates only after
 the current item is verified; never turn a partially attempted batch into an archive
 sweep. Every approved proposal must be verified or the batch remains held.

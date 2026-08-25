@@ -2568,6 +2568,8 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Process termination or a missing final chat summary never authorizes repeating a write",
         "Parse complete commands, never keyword substrings",
         "Unmentioned items default to `park`, never archive",
+        "One authoritative pre-existing exact payload match records `verified` with its read-back identifier without a create",
+        "Only an authoritative empty match set permits persisting `attempting` and calling create",
         "read back by the exact marker before any retry",
         "Every approved proposal must be verified or the batch remains held",
         "does not edit `<friction-log>` or `<friction-log-archive>` on disk",
@@ -2677,6 +2679,16 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "prohibit tracker, source-document, and forge writes",
             "prohibit tracker and repository writes",
+            1,
+        ),
+        workflow.replace(
+            "without a create",
+            "and then permits a create",
+            1,
+        ),
+        workflow.replace(
+            "authoritative empty match set permits persisting",
+            "non-authoritative marker result permits persisting",
             1,
         ),
         workflow.replace("It does not edit", "It may edit", 1),

@@ -333,6 +333,7 @@ def test_installer_refuses_triage_section_keys_it_cannot_migrate(
         "triage:\n  !!str analysis_tier: default\n",
         "triage:\n  analysis_tier: default\n  analysis_tier: expensive\n",
         "triage:\n  analysis_tier:: expensive\n",
+        "triage:\n analysis_tier: expensive\n",
         "triage:\n  analysis_tier: default\n    nested: unsafe\n",
         "triage:\n\tanalysis_tier: default\n",
     ),
