@@ -322,8 +322,10 @@ _surviving_tip_mismatch() {
 }
 
 _live_origin_tip() {
-    local branch="$1" reply
-    reply="$(git -C "$REPO_ROOT" ls-remote --heads origin "refs/heads/$branch" 2>/dev/null)" \
+    local branch="$1" reply to
+    to="$(_timeout_prefix 10)"
+    # shellcheck disable=SC2086
+    reply="$($to git -C "$REPO_ROOT" ls-remote --heads origin "refs/heads/$branch" 2>/dev/null)" \
         || return 2
     printf '%s' "$reply" | python3 -c '
 import string, sys

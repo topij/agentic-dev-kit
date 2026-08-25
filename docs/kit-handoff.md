@@ -39,7 +39,8 @@ cs-toolkit's repo-owned translation remains downstream work.
   session containers are anchored before any worktree write.
 
 - **The upgrade boundary is explicit.** The engines, shared workflow definitions, and
-  regression surfaces move as a coupled kit-owned bundle in `kit-manifest.json`.
+  regression surfaces are individually kit-owned entries in `kit-manifest.json`; the
+  `#598` changelog entry names the coordinated refresh set explicitly.
   Existing config already owns the protected branch, lane prefix, and per-lane merge
   class, so no config or installer migration is needed. cs-toolkit's operator-only merge
   policy and `CS_TOOLKIT_*` namespace did not move; its repo-owned engines require a

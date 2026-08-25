@@ -870,6 +870,36 @@ def test_unknown_live_origin_state_stops_without_a_lane_board(
     assert result.stdout == ""
 
 
+def test_live_origin_reads_use_the_bounded_network_timeout(harness: Harness) -> None:
+    branch = "lane/live-origin-timeout"
+    harness.branch(branch)
+    head = _git(harness.repo, "rev-parse", branch)
+    harness.pr(branch, 590, "MERGED", head=head)
+    harness.session("live-origin-timeout", branch, "operator")
+    timeout_log = harness.tmp / "timeout-argv.log"
+    fake_timeout = harness.bin / "timeout"
+    fake_timeout.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$2\" = \"git\" ] && [ \"$5\" = \"ls-remote\" ]; then\n"
+        f"  printf '%s\\n' \"$*\" >> \"{timeout_log}\"\n"
+        "  exit 124\n"
+        "fi\n"
+        "shift\n"
+        "exec \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_timeout.chmod(0o755)
+
+    result = harness.run("live-origin-timeout")
+
+    assert result.returncode == 64
+    assert "could not resolve surviving branch tips" in result.stderr
+    assert result.stdout == ""
+    logged = timeout_log.read_text(encoding="utf-8")
+    assert logged.startswith(f"10 git -C {harness.repo} ls-remote --heads origin ")
+    assert logged.rstrip().endswith(f"refs/heads/{branch}")
+
+
 @pytest.mark.parametrize("direction", ["expected-to-new", "new-to-expected"])
 def test_live_origin_movement_between_snapshot_reads_cannot_terminalize(
     harness: Harness, direction: str

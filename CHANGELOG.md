@@ -51,8 +51,12 @@ starts.
   act-time `pr_watch` report for the exact repository, PR, base, head, and empty blocker
   set. Surviving branch tips that differ from the selected PR head remain resumable
   `open` work.** **Refresh `scripts/dev_session.sh`,
-  `scripts/reconcile_sessions.sh`, the parallel shared workflows, and their shipped
-  regression tests as a coupled kit-owned bundle. Ensure reconciliation callers provide
+  `scripts/reconcile_sessions.sh`,
+  `docs/agentic-dev-kit/workflows/parallel.md`,
+  `docs/agentic-dev-kit/workflows/parallel-headless.md`,
+  `scripts/tests/test_portability.py`, and
+  `scripts/tests/test_reconcile_sessions.py` as the coordinated kit-owned set for this
+  change. Ensure reconciliation callers provide
   authenticated `gh` access, preserve exit `64` as an unknown-forge hard stop, and do
   not parse a partial board after that exit. Do not replace repo-owned downstream engine
   forks through a normal kit upgrade; reconcile them explicitly against the refreshed

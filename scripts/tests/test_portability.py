@@ -2102,9 +2102,10 @@ def test_bookend_integrations_are_shared_thin_declared_and_manifested() -> None:
     "docs/agentic-dev-kit/workflows/parallel.md",
     "docs/agentic-dev-kit/workflows/parallel-headless.md",
     "docs/agentic-dev-kit/workflows/upgrade.md",
+    "CHANGELOG.md",
     "kit-manifest.json",
 )
-def test_parallel_identity_chain_is_one_adopter_upgrade_bundle() -> None:
+def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() -> None:
     manifest = json.loads(
         (REPO_ROOT / "kit-manifest.json").read_text(encoding="utf-8")
     )["files"]
@@ -2114,6 +2115,8 @@ def test_parallel_identity_chain_is_one_adopter_upgrade_bundle() -> None:
     headless = (
         REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "parallel-headless.md"
     ).read_text(encoding="utf-8")
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    release_entry = changelog.split("## #598", 1)[1].split("\n---", 1)[0]
     expected_roles = {
         "scripts/dev_session.sh": "engine",
         "scripts/reconcile_sessions.sh": "engine",
@@ -2131,6 +2134,7 @@ def test_parallel_identity_chain_is_one_adopter_upgrade_bundle() -> None:
     assert "Engines are **kit-owned**; config is **adopter-owned**" in upgrade
     assert re.search(r"assign\s+every key from `env` unconditionally", headless)
     assert "Do not use `setdefault`" in headless
+    assert all(path in release_entry for path in expected_roles)
 
 
 @pytest.mark.kit_repo_only(
