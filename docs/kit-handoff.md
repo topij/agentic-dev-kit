@@ -47,7 +47,8 @@ their Claude and Codex bindings remain invocation-only adapters.
   duplicate read-only, compute, repository-safety, or generic external-mutation rules;
   declaration-derived mutation tests pin the full shared capability and outcome rows,
   merged-config route, resumability evidence, adapter delegation imperative, merge hold,
-  and runtime registration.
+  unique declaration identifiers, and runtime registration. Degraded session-start
+  sources cannot also claim clean completion.
 
 ▶ Next: create `feat/triage-integration-preflights` from current `origin/main`; first
 build the semantic input matrix for a `config/dev-model.yaml`-owned triage block and its

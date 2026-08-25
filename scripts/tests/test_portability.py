@@ -1485,6 +1485,7 @@ def _integration_table(
         if len(cells) == width and cells[0] not in {
             "Capability id", "Policy id", "Outcome", ""
         }:
+            assert cells[0] not in rows, cells[0]
             rows[cells[0]] = tuple(cells[1:])
     return rows
 
@@ -1567,7 +1568,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "Render the briefing once, label every gap at its normal display location, and make no write.",
             ),
             "successful-completion": (
-                "Required capabilities are ready and every applicable optional or triggered conditional source was attempted and is ready or honestly degraded; every explicitly inapplicable source is named.",
+                "Required capabilities and every applicable optional or triggered conditional source are ready; every explicitly inapplicable source is named.",
                 "Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this read-only workflow completes.",
             ),
         }
@@ -1798,8 +1799,14 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "omit unavailable gaps", 1
         )),
         ("session-start", session, session.replace(
-            "every applicable optional or triggered conditional source was attempted",
-            "every attempted optional source", 1
+            "every applicable optional or triggered conditional source are ready",
+            "every attempted optional source is ready or degraded", 1
+        )),
+        ("session-start", session, session.replace(
+            "| `repository-state-read` | required |",
+            "| `repository-state-read` | optional | A duplicate hostile row. |\n"
+            "| `repository-state-read` | required |",
+            1,
         )),
         ("session-start", session, session.replace(
             "must never render as an empty list",
@@ -1827,6 +1834,12 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "`tracker-without-exact-payload-approval` | "
             "`park-complete-friction-entry-no-tracker-write`",
             "`tracker-without-exact-payload-approval` | `create-tracker-item`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "| `tracker-without-exact-payload-approval` |",
+            "| `tracker-without-exact-payload-approval` | `create-without-approval` |\n"
+            "| `tracker-without-exact-payload-approval` |",
+            1,
         )),
         ("wrap-up", wrap, wrap.replace(
             "`non-interactive-tracker-route` | `park-complete-friction-entry-never-wait`",

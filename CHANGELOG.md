@@ -54,7 +54,9 @@ starts.
   the local overlay is not ignored. Treat the workflow as read-only, and let
   non-interactive invocations render once and exit. Always attempt and classify the
   forge, CI/cron, and tracker sources; only an explicitly unconfigured or untriggered
-  declaration may be omitted.**
+  declaration may be omitted. Any degraded applicable source yields
+  `degraded-success`; `successful-completion` requires applicable sources to be
+  ready.**
 - **CHANGED (gate semantics) — `wrap-up` now stops before staging when required
   repository/config, record-write, or document-budget capabilities fail; tracker
   unavailability, silence, decline, or missing exact-payload approval parks the complete

@@ -78,7 +78,7 @@ source that failed on the retry.
 |---|---|---|
 | `hard-stop` | A required capability is unavailable or shared/runtime policy conflicts. | Name the failed capability and remediation; do not render the normal briefing or recommendation. |
 | `degraded-success` | Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a `Now` promotion. | Render the briefing once, label every gap at its normal display location, and make no write. |
-| `successful-completion` | Required capabilities are ready and every applicable optional or triggered conditional source was attempted and is ready or honestly degraded; every explicitly inapplicable source is named. | Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this read-only workflow completes. |
+| `successful-completion` | Required capabilities and every applicable optional or triggered conditional source are ready; every explicitly inapplicable source is named. | Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this read-only workflow completes. |
 
 ## What it reads
 
