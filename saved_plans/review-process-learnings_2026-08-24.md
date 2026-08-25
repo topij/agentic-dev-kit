@@ -58,9 +58,9 @@ For work using the fallback panel:
 - Build hostile mutations from that matrix, including a required capability becoming
   optional, an unavailable result becoming success, a fixed live source being skipped,
   a conditional being claimed ready before its trigger, an interrupted integration with
-  no resumable outcome, a duplicate declaration identifier, and a thin adapter changing
-  `follow` to `ignore`. Run those mutations before asking a panel to rediscover them
-  serially.
+  no resumable outcome, duplicate or wrong-width declaration rows, and a thin adapter
+  changing `follow` to `ignore` or appending a contradictory executable instruction. Run
+  those mutations before asking a panel to rediscover them serially.
 - Exercise parser and installer changes with valid alternate syntax, comments, missing
   values, partial configuration, and upgrade/idempotency paths before opening the PR.
 - Ask each lens for a novel failure hypothesis tied to an observable outcome. A new

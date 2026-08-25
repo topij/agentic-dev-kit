@@ -247,7 +247,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "c36e9107fbbaba8c0479d1375d5cb276845e3be42867184b584efd642a33a05f"
+      "sha256": "616db103e21842cc98370f3408a12a2623c5ab981139e618b940c3b384792542"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
