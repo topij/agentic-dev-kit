@@ -913,6 +913,70 @@ def test_live_origin_reads_use_the_portable_bounded_runner(harness: Harness) -> 
     assert logged.rstrip().endswith(f"refs/heads/{branch}")
 
 
+def test_forge_reads_use_the_portable_bounded_runner(harness: Harness) -> None:
+    branch = "lane/forge-timeout"
+    harness.branch(branch)
+    harness.pr(branch, 591, "OPEN")
+    harness.session("forge-timeout", branch, "operator")
+    timeout_log = harness.tmp / "forge-timeout-argv.log"
+    real_python = shutil.which("python3")
+    assert real_python is not None
+    fake_python = harness.bin / "python3"
+    fake_python.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"-c\" ] && [ \"$3\" = \"10\" ] && "
+        "[ \"$4\" = \"gh\" ]; then\n"
+        "  shift 2\n"
+        f"  printf '%s\\n' \"$*\" >> \"{timeout_log}\"\n"
+        "  exit 124\n"
+        "fi\n"
+        f"exec \"{real_python}\" \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+
+    result = harness.run("forge-timeout")
+
+    assert result.returncode == 64
+    assert "could not resolve the GitHub repository" in result.stderr
+    assert result.stdout == ""
+    assert timeout_log.read_text(encoding="utf-8").startswith("10 gh repo view ")
+
+
+def test_held_probe_uses_the_portable_bounded_runner(harness: Harness) -> None:
+    branch = "lane/held-timeout"
+    harness.branch(branch)
+    harness.pr(branch, 592, "OPEN")
+    harness.session("held-timeout", branch, "operator")
+    harness.watch_report(592, mergeable=True, converged=True)
+    timeout_log = harness.tmp / "held-timeout-argv.log"
+    real_python = shutil.which("python3")
+    assert real_python is not None
+    fake_python = harness.bin / "python3"
+    fake_python.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"-c\" ] && [ \"$3\" = \"60\" ] && "
+        "[ \"$4\" = \"env\" ]; then\n"
+        "  shift 2\n"
+        f"  printf '%s\\n' \"$*\" >> \"{timeout_log}\"\n"
+        "  exit 124\n"
+        "fi\n"
+        f"exec \"{real_python}\" \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+
+    result = harness.run("held-timeout")
+
+    assert result.returncode == 3
+    assert _status_of(result.stdout, "held-timeout") == "open"
+    assert "could not evaluate for 'held'" in result.stderr
+    logged = timeout_log.read_text(encoding="utf-8")
+    assert logged.startswith("60 env DEVKIT_STATE_ROOT=")
+    assert " uv run " in f" {logged} "
+    assert " --json --no-persist" in logged
+
+
 def test_portable_bounded_runner_reaps_term_ignoring_descendants(
     tmp_path: Path,
 ) -> None:
