@@ -67,7 +67,9 @@ starts.
   tracker, sweep PR, and exact-head review evidence reach the terminal state named by
   the workflow; never retry an ambiguous write or whole-sweep an older snapshot. Use
   the interactive `recover` entry point for invalid live state; it preserves a recovery
-  bundle and prohibits abandonment when prior external-write absence is uncertain.**
+  bundle and prohibits abandonment when prior external-write absence is uncertain.
+  Treat an existing single-writer gate or an act-time state-digest mismatch as
+  operator-held; never replace, steal, or retry through it.**
 
 ---
 

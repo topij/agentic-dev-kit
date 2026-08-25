@@ -2471,6 +2471,7 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert {key: value[0] for key, value in capabilities.items()} == {
         "repository-config-read": "required",
         "shared-state-resolver": "required",
+        "single-writer-state-gate": "required",
         "frozen-inbox-state": "required",
         "draft-finalize-engine-set": "optional, atomic",
         "notification-thread": "conditional by execution context",
@@ -2489,6 +2490,12 @@ def _assert_triage_semantics(workflow: str) -> None:
         "neither state nor frozen snapshots use the shared-cache resolve_read_path"
         in capabilities["shared-state-resolver"][1]
     )
+    assert "Acquire it by exclusive atomic creation" in capabilities[
+        "single-writer-state-gate"
+    ][1]
+    assert "require the expected state digest at act time" in capabilities[
+        "single-writer-state-gate"
+    ][1]
     assert "forbids a whole-inbox fallback" in capabilities["frozen-inbox-state"][1]
     assert "all absent selects LLM-only mode" in capabilities["draft-finalize-engine-set"][1]
     assert "a partial pair hard-stops" in capabilities["draft-finalize-engine-set"][1]
@@ -2503,6 +2510,9 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert _integration_table(workflow, "Authority contract", 2) == {
         "unknown-or-combined-argument": ("stop-before-capability-probe",),
         "new-over-active-state": ("refuse-preserve-active-session",),
+        "concurrent-state-transition": (
+            "exclusive-reservation-and-digest-checked-replacement",
+        ),
         "recover-over-valid-state": ("refuse-and-resume-valid-session",),
         "invalid-state-recovery": (
             "preserve-before-classify-never-abandon-uncertain-attempt",
@@ -2551,10 +2561,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         "No argument, valid active state",
         "resume, no valid active state",
         "new, active live state",
-        "recover, active live state",
-        "recover, no active live state",
+        "Interactive recover, active live state",
+        "Interactive recover, no active live state",
+        "Scheduled or unattended recover",
         "test",
-        "Scheduled or unattended invocation with active state",
+        "Scheduled or unattended non-recovery invocation with active state",
         "Both configured engines present",
         "Both configured engines absent",
         "Only one configured engine present",
@@ -2572,17 +2583,34 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert "prohibit tracker, source-document, and forge writes" in inputs[
         "Test mode"
     ][0]
+    assert "capture raw bytes and filesystem observations before parsing" in inputs[
+        "Interactive recover, active live state"
+    ][0]
+    assert "without creating a recovery bundle" in inputs[
+        "Interactive recover, no active live state"
+    ][0]
+    assert "without acquiring the single-writer gate" in inputs[
+        "Scheduled or unattended recover"
+    ][0]
     for required_phrase in (
         "kitconfig.load_config()",
         "RFC 8785 JSON",
         "Require `state.dirname` to match that resolver's declared `STATE_DIRNAME`",
         "pass only the remaining fragment to the resolver",
         "Never use `resolve_read_path` for either artifact",
+        "A new run claims the absent state path with exclusive creation of a minimal "
+        "`reserved` record",
+        "immediately before atomic replacement requires the same digest, run identity, "
+        "and gate owner token",
+        "Hold the gate across an external create and its authoritative read-back",
         "Before validity classification, rename, or repair, atomically create a "
         "unique initial recovery bundle",
         "Parse and validate only the captured bytes, never the still-live path",
         "If the captured state is valid, record that result, leave the active state "
         "byte-identical",
+        "Immediately before quarantine, while holding the same gate, re-read and "
+        "re-stat the active path",
+        "any mismatch is operator-held and creates no receipt",
         "Only a readable state that proves it never reached `attempting`",
         "abandonment is prohibited",
         "never make `new` available by manual deletion",
@@ -2709,6 +2737,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
+            "exclusive-reservation-and-digest-checked-replacement",
+            "last-writer-wins-replacement",
+            1,
+        ),
+        workflow.replace(
             "Only a readable state that proves it never reached",
             "Any state that might not have reached",
             1,
@@ -2716,6 +2749,21 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "Parse and validate only the captured bytes, never the still-live path",
             "Parse and validate the still-live path before capturing its bytes",
+            1,
+        ),
+        workflow.replace(
+            "capture raw bytes and filesystem observations before parsing",
+            "parse live state before capture",
+            1,
+        ),
+        workflow.replace(
+            "without acquiring the single-writer gate",
+            "after acquiring the single-writer gate and capturing state",
+            1,
+        ),
+        workflow.replace(
+            "any mismatch is operator-held and creates no receipt",
+            "a mismatch may still create the restart receipt",
             1,
         ),
         workflow.replace(
