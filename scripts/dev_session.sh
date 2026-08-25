@@ -677,8 +677,8 @@ cmd_print_contract() {
 }
 
 # Resolve exactly one same-repository open PR for a recorded lane branch/base.
-# Prints `<repo-nwo> TAB <pr-number>`; every caller then invokes gh/pr-watch in
-# that same repository and the lane's own state sandbox.
+# Prints `<repo-nwo> TAB <pr-number> TAB <listed-head>`; every caller then invokes
+# gh/pr-watch in that same repository and the lane's own state sandbox.
 _resolve_lane_pr() {
     local branch="$1" base="$2"
     local repo_json repo_nwo repo_owner pr_json pr_meta

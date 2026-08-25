@@ -117,7 +117,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "2b0c9a0f82d739bac8b993de7ecc5745dd66ae809b4541f01c312ed688bc186c"
+      "sha256": "314c250b795c9ca339c302b898bec7ea6fc7cdfe8b72fa4f360a43a567cd6c34"
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
