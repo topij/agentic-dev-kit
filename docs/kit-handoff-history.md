@@ -4,6 +4,78 @@ Archived session narratives from [`kit-handoff.md`](kit-handoff.md). Keep active
 and the next step there; this file is append-only history.
 
 ## Session log
+
+## Session — 2026-08-22 · afternoon (a field report acted on, and a remedy moved out of the document it was about)
+
+**Theme —** `#577`, a cs-toolkit field report that is explicitly not a defect report, read
+and acted on rather than triaged. Its headline item shipped as `#580`; the rest went to the
+tracker. Squash on `main`: `#580`. The one correction this session made to the report ran
+in the kit's favour, and only running it in this tree could establish that — which is the
+report's own thesis, demonstrated on the report.
+
+- **A remedy written inside the document it is about cannot reach the reader who needs
+  it.** `upgrade.md` Step 1 told an operator to diff `$KIT`'s copy of that file against
+  theirs; a reader whose copy is out of date is reading the out-of-date copy. `#580`
+  moves it to surfaces a stale reader can reach and leaves the paragraph in place saying
+  it cannot be the one that saves anyone, so a later pass does not tidy the others away
+  as duplicates.
+
+- **The report proposed the adapter or the engine, and neither closes the class alone.**
+  A runtime adapter is adopter-owned and Step 4 keeps the adopter's version, so a kit fix
+  there never reaches an already-adopted repo; `kit_doctor` reaches every adopter, but
+  only from their *next* upgrade, because the copy running Step 1 today is the one
+  installed last time. They fail in opposite directions. `#580` ships them and states the
+  gap each leaves.
+
+- **`#560` shaped what the new engine block may not say.** It prescribes *reading* the
+  fetched copy — safe in every state it fires on — and leaves keep-or-replace to the drift
+  list, rather than repeating the blanket "take the kit's copy" that is wrong for a
+  `LOCALLY EDITED` one. `test_the_block_does_not_prescribe_replacing_the_file` fails if a
+  prescriptive form returns. `#560` stays open; the paragraph it is about is unchanged.
+
+- **A brief's inherited claim reached a commit message as fact, and the report inherited
+  it too.** `#558` hardened `_resolve_lane_pr` and the merge gate. The adopter's fork has
+  the scrub at the merge gate and not at `_resolve_lane_pr`; the kit's own copy has it at
+  each — checked here before relaying it. `#582` is the general form.
+
+- **The configured reviewer answered by editing its earlier skip comment in place.**
+  `#509`'s shape. The doctrine's read-the-body-not-the-count rule caught it, and
+  `pr_watch`'s `ⓘ review reported:` line named the reviewed sha without being asked. The
+  verdict was clean and the merge still rested on the panel receipt, which is the split
+  `#350` and `#44` describe working as intended.
+
+- **Filed this session:** `#581`, `#582`, `#583`. Occurrence comments on `#576`, `#507`,
+  `#578`. `#577` closed.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` on merged `main` at
+  `fabf554` printed `1362 passed`, and `kit_doctor` at the same sha in the same directory
+  printed `56 unchanged, 0 differ, 0 missing, 0 unknown`. Before the commit, the new
+  render block was mutation-checked with `upgrade_doc` forced to `None` — the mutation
+  asserted applied by hash change and marker presence, tests failed, file restored to its
+  pre-mutation hash — and each review lens repeated that independently in its own clone
+  with the `driftcheck` self-check deselected.
+
+**Learned**
+
+- **Inlining the rendered panel prompt into the lens's own prompt is what made the
+  operational parameters bind.** `#578` says a parameter binds where the agent's
+  instructions live, not where the prompt points from. This panel passed
+  `panel_prompt.py`'s output as the agent prompt itself rather than as a file to go read,
+  with the timeout and the no-subagents rule at the top; the `adversarial` and
+  `correctness` lenses each ran `make test` to completion, and no lens stalled. Recorded on `#578` as the predicted remedy holding.
+
+- **A field report that says which item matters most is worth taking at its word.** `#577`
+  named its own headline and ranked the rest, and that ranking survived contact — the
+  headline was the one with a structural fix, and the others were each a defect a careful
+  reader eventually catches. The ranking came from the reporter having run the thing.
+
+▶ Next: `#576` item 1 — Step 0's clone is not re-runnable, and the invocations that name
+the kit path hardcode it instead of using the `KIT` that Step 0 binds. Re-derive where
+those sit; the line numbers in the issue body predate this session's squash. `#580` raised
+this item's value rather than touching it — the clone is now also the source of the
+*workflow the operator is told to follow*, so a reaped or stale clone mis-sources
+instructions and not only files.
+
 ## Session — 2026-08-22 · overnight and morning (the batch landed, and a panel that kept finding the narration wrong)
 
 **Theme —** An autonomous overnight batch of isolated lanes, all merged the next
@@ -4829,4 +4901,3 @@ written down rules it was itself violating.**
 gate → receipts behind a flag → wire the fixer → flip) was replaced: the flag existed to
 defer a breakage caused by `done` conflating two predicates, so splitting them removed the
 need for it.
-
