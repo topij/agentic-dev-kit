@@ -1040,10 +1040,8 @@ def test_portable_bounded_runner_delivers_term_during_grace(tmp_path: Path) -> N
     deadline = time.monotonic() + 3
     observed = None
     while time.monotonic() < deadline:
-        try:
+        if marker.exists():
             observed = marker.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            pass
         if observed == "started":
             break
         time.sleep(0.01)
