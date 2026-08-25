@@ -1006,6 +1006,39 @@ def test_portable_bounded_runner_reaps_term_ignoring_descendants(
     assert 1 <= elapsed < 2.5
 
 
+def test_portable_bounded_runner_delivers_term_during_grace(tmp_path: Path) -> None:
+    helper = _bounded_run_helper_source()
+    marker = tmp_path / "term-delivered"
+    command = tmp_path / "term-observer.sh"
+    command.write_text(
+        "#!/bin/sh\n"
+        f"marker={shlex.quote(str(marker))}\n"
+        "trap 'printf delivered > \"$marker\"; exit 0' TERM\n"
+        "printf started > \"$marker\"\n"
+        "while :; do sleep 1; done\n",
+        encoding="utf-8",
+    )
+    command.chmod(0o755)
+    invocation = f"{helper}\n_bounded_run 30 {shlex.quote(str(command))}\n"
+    runner = subprocess.Popen(
+        ["bash", "-c", invocation],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+
+    deadline = time.monotonic() + 3
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert marker.read_text(encoding="utf-8") == "started"
+    os.killpg(runner.pid, signal.SIGTERM)
+    runner.communicate(timeout=3)
+
+    assert runner.returncode in {-signal.SIGTERM, 128 + signal.SIGTERM}
+    assert marker.read_text(encoding="utf-8") == "delivered"
+
+
 def test_portable_bounded_runner_reaps_descendants_after_launcher_success(
     tmp_path: Path,
 ) -> None:
@@ -1134,6 +1167,56 @@ def test_portable_bounded_runner_reaps_on_post_result_interrupt(
     runner.communicate(timeout=3)
 
     assert runner.returncode in {-signal.SIGINT, 128 + signal.SIGINT}
+
+
+def test_portable_bounded_runner_reaps_after_repeated_operator_signals(
+    tmp_path: Path,
+) -> None:
+    ready_marker = tmp_path / "command-ready"
+    catch_marker = tmp_path / "cancel-caught"
+    helper = _bounded_run_helper_source().replace(
+        "except Cancelled as exc:\n    stop_group(exc.signum)",
+        "except Cancelled as exc:\n"
+        f"    open({json.dumps(str(catch_marker))}, \"w\").close()\n"
+        "    time.sleep(0.5)\n"
+        "    stop_group(exc.signum)",
+    )
+    assert str(catch_marker) in helper
+    hostile = tmp_path / "repeated-signal-descendant.sh"
+    hostile.write_text(
+        "#!/bin/sh\n"
+        f"printf ready > {shlex.quote(str(ready_marker))}\n"
+        "sh -c 'trap \"\" HUP INT TERM; while :; do sleep 1; done' &\n"
+        "wait\n",
+        encoding="utf-8",
+    )
+    hostile.chmod(0o755)
+    invocation = f"{helper}\n_bounded_run 30 {shlex.quote(str(hostile))}\n"
+    runner = subprocess.Popen(
+        ["bash", "-c", invocation],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+
+    deadline = time.monotonic() + 3
+    while not ready_marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert ready_marker.exists()
+    os.killpg(runner.pid, signal.SIGINT)
+    while not catch_marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert catch_marker.exists()
+    os.killpg(runner.pid, signal.SIGTERM)
+    runner.communicate(timeout=3)
+
+    assert runner.returncode in {
+        -signal.SIGINT,
+        128 + signal.SIGINT,
+        -signal.SIGTERM,
+        128 + signal.SIGTERM,
+    }
 
 
 @pytest.mark.parametrize("direction", ["expected-to-new", "new-to-expected"])

@@ -109,8 +109,13 @@ result_fd = int(sys.argv[1])
 def hold_group_open(_signum, _frame):
     pass
 
-for held_signal in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
+held_signals = (signal.SIGHUP, signal.SIGINT, signal.SIGTERM)
+for held_signal in held_signals:
     signal.signal(held_signal, hold_group_open)
+# The outer process blocks these signals across session creation. The shim must
+# release the inherited mask after installing its hold handlers so the command
+# it launches receives normal signal delivery during the grace period.
+signal.pthread_sigmask(signal.SIG_UNBLOCK, held_signals)
 try:
     child = subprocess.Popen(sys.argv[2:])
 except OSError as exc:
@@ -133,6 +138,7 @@ class Cancelled(Exception):
         self.signum = signum
 
 def cancel(signum, _frame):
+    signal.pthread_sigmask(signal.SIG_BLOCK, handled_signals)
     raise Cancelled(signum)
 
 handled_signals = (signal.SIGHUP, signal.SIGINT, signal.SIGTERM)
