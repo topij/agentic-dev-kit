@@ -61,6 +61,10 @@ For work using the fallback panel:
   no resumable outcome, duplicate or wrong-width declaration rows, and a thin adapter
   changing `follow` to `ignore` or appending a contradictory executable instruction. Run
   those mutations before asking a panel to rediscover them serially.
+- Connect each required declaration to its later operational prose: mutate a pre-edit
+  guard to run after the edit, replace a required gather with an exit-zero empty result,
+  and remove the second-layer read behind any source whose classification promises more
+  than list metadata exposes.
 - Exercise parser and installer changes with valid alternate syntax, comments, missing
   values, partial configuration, and upgrade/idempotency paths before opening the PR.
 - Ask each lens for a novel failure hypothesis tied to an observable outcome. A new

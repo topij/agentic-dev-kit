@@ -55,8 +55,9 @@ that revision; the delivery slices below are expected to change them.
   Each runtime selects its own read mechanisms and may apply the configured model or
   effort mapping only when its launcher actually exposes that control.
 - **Capabilities:** repository/config and repository-state reads are required. Forge,
-  CI/cron, and tracker reads are always attempted and degrade visibly; configured drift
-  reads degrade visibly when applicable. Archive and resolved-
+  CI/cron, and tracker reads are always attempted and degrade visibly; forge readiness
+  includes configured review findings, and detached HEAD is represented explicitly.
+  Configured drift reads degrade visibly when applicable. Archive and resolved-
   tracker reads are conditional before a `Now` promotion. Runtime compute selection is
   an optional enhancement.
 - **Authority and artifacts:** the workflow is read-only and creates no durable state.

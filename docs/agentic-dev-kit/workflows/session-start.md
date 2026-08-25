@@ -46,8 +46,8 @@ complete.
 | Capability id | Class | Preflight and unavailable outcome |
 |---|---|---|
 | `repository-config-read` | required | Prove the repository root and read the merged config, `<handoff>`, and `<friction-log>`. Missing or unreadable input is a hard stop; name it and do not render a briefing. |
-| `repository-state-read` | required | Read the current branch and working-tree state. Failure is a hard stop because unfinished local work would otherwise disappear from classification. |
-| `forge-pr-read` | optional | Prove authenticated, complete pagination for open pull requests. Unavailability or suspected truncation degrades to `PRs unavailable: <reason>` and must never render as an empty list. |
+| `repository-state-read` | required | Read the current symbolic branch or explicitly classify detached HEAD, plus working-tree state. Empty branch output is not ready: when no symbolic branch exists, resolve the exact commit and report `DETACHED at <sha>`. Failure to establish either state is a hard stop because unfinished local work would otherwise disappear from classification. |
+| `forge-pr-read` | optional | Prove authenticated, complete pagination for open pull requests and a complete review-health read that includes review threads/comments and configured bot findings for every returned pull request. List metadata alone is not ready. Unavailability or suspected truncation at either layer degrades to `PRs unavailable: <reason>` and must never render as an empty list. |
 | `ci-cron-read` | optional | Use the configured or project-native health mechanism. Unavailability degrades to `CI/cron: unavailable: <reason>`; it is not an all-clear. |
 | `tracker-read` | optional | Read a complete field-limited backlog from `<tracker>`. Missing config, credentials, client, or complete pagination degrades to an explicit tracker gap; discard partial payloads and continue. |
 | `config-drift-read` | optional when configured | Run only when the project defines an apply/verify mechanism. Failure renders `config drift: unavailable (<reason>)`; absence of such a project mechanism omits the capability entirely. |
@@ -87,8 +87,8 @@ source that failed on the retry.
 | Living handoff   | `<handoff>` — latest session block + every "Next:" / "Follow-ups:" trail                                                              |
 | Friction inbox   | `<friction-log>` — entries since the last "Backlog migrated" marker                                                                  |
 | Tracker backlog  | your tracker's list-issues command/script — project `tracker.project_name` (open only — drop `completed`/`canceled`). Pass an explicit row limit *and* select fields; see the gather for why these are two separate limits and why a full page must be treated as truncated |
-| Open PRs         | `gh pr list` — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Pass an explicit `--limit`; see the gather for why a full page must be treated as truncated |
-| Working tree     | `git status --short` + `git branch --show-current` — unfinished business from last session                                              |
+| Open PRs         | `gh pr list` plus the configured read-only review-health mechanism — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Page both the list and review findings completely |
+| Working tree     | `git status --short` plus a symbolic-branch read or explicit `DETACHED at <sha>` classification — unfinished business from last session |
 | CI/cron health   | your cron/CI runner's status command (adapt to your infra — e.g. a wrapper script that logs recent job outcomes)                         |
 | Config drift     | your host config-apply step, if you have one (e.g. a `verify --json`-style check comparing committed config against applied host state) — drop this bullet entirely if it doesn't generalize to your setup |
 | Narrative archives | `<handoff-history>` + `<friction-log-archive>` — deliberately **not** part of the gather and never read whole; grepped per-candidate in *Remediation check*, and only for a candidate you are about to promote to 🔴 |
@@ -111,7 +111,9 @@ instead, and reports its gap in the briefing text rather than in a fixed field.
 The two narrative-file reads are not in this set: a failed read there does not look
 like good news, it looks like a missing handoff.
 
-- `git status --short` and `git branch --show-current`
+- `git status --short`, plus `git symbolic-ref --short -q HEAD`. If the symbolic read
+  returns empty, run `git rev-parse --verify HEAD` and report `DETACHED at <sha>` rather
+  than a blank branch. If neither establishes state, stop under `repository-state-read`.
 - `gh pr list --state open --json number,title,isDraft,reviewDecision,statusCheckRollup,author --limit 100`
   — **the explicit limit matters, and so does treating a full page as suspect.**
   `gh pr list` silently defaults to 30 (`--limit int … (default 30)`, verified on
@@ -128,6 +130,14 @@ like good news, it looks like a missing handoff.
   **failed** `gh pr list` returns nothing and is caught by the unavailable rule; a
   **truncated** one returns valid JSON with fewer rows than exist, which no exit
   code reveals and only the full-page check catches.
+
+  The list response is discovery, not complete review health. For every returned pull
+  request, run `uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist` or an
+  equivalent read-only forge mechanism that pages review threads/comments and includes
+  the configured bot findings. Do not mark `forge-pr-read` ready from list metadata
+  alone. If this second layer is missing, fails, or may be truncated, render
+  `PRs unavailable: review findings <reason>` rather than silently omitting unresolved
+  bot feedback.
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>` (focus: the **"Latest session"** block and its `Next:` / `Follow-ups:` lines, plus the top-of-file "Last updated" trail for the active sprint)

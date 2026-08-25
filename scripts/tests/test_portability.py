@@ -1556,11 +1556,11 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "repository-state-read": (
                 "required",
-                "Read the current branch and working-tree state. Failure is a hard stop because unfinished local work would otherwise disappear from classification.",
+                "Read the current symbolic branch or explicitly classify detached HEAD, plus working-tree state. Empty branch output is not ready: when no symbolic branch exists, resolve the exact commit and report DETACHED at <sha>. Failure to establish either state is a hard stop because unfinished local work would otherwise disappear from classification.",
             ),
             "forge-pr-read": (
                 "optional",
-                "Prove authenticated, complete pagination for open pull requests. Unavailability or suspected truncation degrades to PRs unavailable: <reason> and must never render as an empty list.",
+                "Prove authenticated, complete pagination for open pull requests and a complete review-health read that includes review threads/comments and configured bot findings for every returned pull request. List metadata alone is not ready. Unavailability or suspected truncation at either layer degrades to PRs unavailable: <reason> and must never render as an empty list.",
             ),
             "ci-cron-read": (
                 "optional",
@@ -1621,6 +1621,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "A previous chat response is not resume evidence" in flattened
         assert "must never render as an empty list" in flattened
         assert "keep that candidate out of `Now`" in flattened
+        assert "`git symbolic-ref --short -q HEAD`" in flattened
+        assert "report `DETACHED at <sha>` rather than a blank branch" in flattened
+        assert "`uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist`" in flattened
+        assert "Do not mark `forge-pr-read` ready from list metadata alone" in flattened
     else:
         assert capabilities == {
             "repository-config-read": (
@@ -1737,6 +1741,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             in flattened
         )
         assert "do not call the wrap-up complete" in flattened
+        assert "Before editing `<handoff>`, classify" in flattened
         assert "A changed status doc is a repository artifact" in flattened
         assert "name it in validation and staging" in flattened
         assert "also stage any existing project-status artifact" in flattened
@@ -1935,8 +1940,20 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "A previous chat response is not resume evidence",
             "A previous chat response is resume evidence", 1
         )),
+        ("session-start", session, session.replace(
+            "`git symbolic-ref --short -q HEAD`",
+            "`true`", 1
+        )),
+        ("session-start", session, session.replace(
+            "Do not mark `forge-pr-read` ready from list metadata\n  alone",
+            "Mark `forge-pr-read` ready from list metadata\n  alone", 1
+        )),
         ("wrap-up", wrap, wrap.replace(
             "`kitconfig.load_config()`", "`config/dev-model.yaml`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Before editing `<handoff>`, classify",
+            "After editing `<handoff>`, classify", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "`document-budget-check` | required", "`document-budget-check` | optional", 1
