@@ -72,9 +72,9 @@ upstream cs-toolkit's operator-only merge policy or `CS_TOOLKIT_*` namespace. Be
 the shared lane engines form one safety-critical primitive, use a single operator-merge
 implementation lane unless the inventory proves disjoint file ownership. Add semantic
 and mutation matrices, adopter upgrade coverage, and exact-head review evidence. Treat
-cs-toolkit as read-only in this branch, leave its consumption to a later kit upgrade,
-and preserve the deferred `feat/triage-integration-preflights` starter in the parity
-plan.
+cs-toolkit as read-only in this branch, leave its repo-owned engine adaptation to a
+later explicit reconciliation PR, and preserve the deferred
+`feat/triage-integration-preflights` starter in the parity plan.
 
 ______________________________________________________________________
 

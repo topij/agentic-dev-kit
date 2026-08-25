@@ -138,11 +138,12 @@ approval policy in an adapter.
 
 The next cockpit slice temporarily advances the shared lane primitive before returning
 to the Phase 3 exit. cs-toolkit commit
-`4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) fixed failures in a descendant of
-the kit's parallel implementation. Leaving those fixes downstream would preserve split
-behavioral authority for a safety-critical engine. The next slice therefore compares
-that commit with its parent, ports only reusable mechanisms into the kit-owned source,
-and leaves cs-toolkit-specific merge policy and namespace translation downstream.
+`4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) exposed reusable safety fixes in
+repo-owned parallel engines that diverged before the kit implementation existed.
+Leaving those fixes downstream would preserve split behavioral authority for a
+safety-critical engine. The next slice therefore compares that commit with its parent,
+ports only reusable mechanisms into the kit-owned source, and leaves cs-toolkit-specific
+merge policy, namespace translation, and later engine adaptation downstream.
 
 ```text
 Create feat/parallel-kit-ownership from current origin/main. Run $session-start, then
@@ -160,8 +161,9 @@ engines, keep configuration in config/dev-model.yaml, and keep adapters thin. Do
 upstream cs-toolkit's operator-only merge policy or CS_TOOLKIT_* namespace. Treat the
 shared lane engines as one operator-merge implementation lane unless the inventory
 proves disjoint file ownership. Add semantic and mutation matrices, adopter upgrade
-coverage, and exact-head review evidence. Leave cs-toolkit consumption to a later kit
-upgrade; do not edit the downstream repo in this branch.
+coverage, and exact-head review evidence. Do not edit the downstream repo in this
+branch; leave its repo-owned engine adaptation to a later explicit cs-toolkit
+reconciliation PR rather than assuming a kit upgrade will overwrite those files.
 ```
 
 After that slice lands, resume the Phase 3 exit with this preserved starter:
