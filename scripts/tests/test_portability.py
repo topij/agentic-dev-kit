@@ -1667,6 +1667,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "The session produced no handoff-relevant change and no friction artifact is owed.",
                 "Say so and create no commit or pull request.",
             ),
+            "incomplete-resumable": (
+                "A changed record cannot reach a mergeable exact head because branch/push/pull-request creation is unavailable or ambiguous, or pr-watch is unavailable or unsettled.",
+                "Do not claim completion. Preserve and report the exact working-tree diff or commit, branch, pull-request URL and exact head when present, the failed or unsettled capability, and a copy-pasteable safe resume step.",
+            ),
             "successful-operator-handoff": (
                 "The record pull request is mergeable at an exact reviewed head, but the declared merge class or current authority requires an operator to act.",
                 "Leave the pull request unmerged; report its URL, exact head, merge class or authority gap, durable record paths, and the command or operator action that safely resumes it.",
@@ -1886,6 +1890,14 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("wrap-up", wrap, wrap.replace(
             "verified merged pull request when one was required",
             "unverified pull request when one was required", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "A changed record cannot reach a mergeable exact head",
+            "A changed record reached successful completion", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Do not claim completion. Preserve and report the exact working-tree diff",
+            "Claim completion and discard the working-tree diff", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "Never repeat a tracker create",

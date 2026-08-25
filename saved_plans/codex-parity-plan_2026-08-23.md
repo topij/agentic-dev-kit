@@ -93,7 +93,8 @@ that revision; the delivery slices below are expected to change them.
   the friction inbox; incomplete and accumulating findings also take that route. Missing
   or insufficient merge authority holds a mergeable pull request for the operator; a
   policy-less non-lane pull request takes the operator default. Conditional capabilities
-  classify at their trigger rather than before the record edit. The
+  classify at their trigger rather than before the record edit; unavailable forge or
+  unsettled review paths preserve exact resume evidence as incomplete. The
   Codex adapter's generic external-mutation wording was weaker than the shared payload-
   specific gate; this slice removes that duplicate.
 

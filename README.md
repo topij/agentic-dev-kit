@@ -325,7 +325,9 @@ record reaches a terminal state only after the conditional branch/PR/review path
 and declared merge authority either permits the merge or holds the exact head for the
 operator. A non-lane PR without project merge policy defaults to the operator route, and
 conditional capabilities are classified only when their trigger occurs. Non-interactive
-runs never wait for tracker approval. Claude and Codex adapters
+runs never wait for tracker approval. A blocked forge or unsettled review path reports
+an incomplete resumable result with exact repository/PR evidence. Claude and Codex
+adapters
 only translate invocation and available mechanisms.
 These bookend declarations use existing config and upgrade through the shared workflow
 refresh; they add no installer migration or runtime-specific connector requirement.

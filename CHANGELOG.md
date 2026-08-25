@@ -67,7 +67,8 @@ starts.
   operator. Non-lane pull requests without a project merge policy default to
   operator-authorized merge; they never default to autonomous merge. Conditional
   capabilities are classified when triggered rather than claimed ready before the
-  handoff edit.** **Refresh
+  handoff edit. An unavailable forge path or unavailable/unsettled `pr-watch` returns
+  `incomplete-resumable` with the exact preserved diff, commit, branch, or PR evidence.** **Refresh
   `docs/agentic-dev-kit/workflows/wrap-up.md`. Keep the existing runtime adapter and
   config. Resolve the merged config view, and do not treat a configured tracker, prior
   approval, or standing autonomous authority as approval for a create, modification,
