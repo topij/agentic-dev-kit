@@ -4901,3 +4901,4 @@ written down rules it was itself violating.**
 gate → receipts behind a flag → wire the fixer → flip) was replaced: the flag existed to
 defer a breakage caused by `done` conflating two predicates, so splitting them removed the
 need for it.
+
