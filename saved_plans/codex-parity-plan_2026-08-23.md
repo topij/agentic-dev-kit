@@ -7,7 +7,7 @@ safety guarantees, review evidence, lane isolation, and upgrade behavior as Clau
 Code. Runtime-specific files may differ in shape; their observable contract should
 not.
 
-## Sprint status — 2026-08-24
+## Sprint status — 2026-08-25
 
 The machine-readable inventory and current capability judgments live in
 [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
@@ -25,10 +25,10 @@ their delivery order and exit conditions.
   the root route and read and applied the shared doctrine for affected merge-authority
   work. It does not generalize one client observation. Interactive-TUI
   `systemMessage` presentation remains an explicit live-client gap.
-- [ ] **Phase 3 — Complete workflow and integration coverage.** The bounded
-  `post-merge-systemize` extraction in PR `#595` has a shared definition, thin runtime
+- [ ] **Phase 3 — Complete workflow and integration coverage.** PR `#595` merged the
+  bounded `post-merge-systemize` extraction with a shared definition, thin runtime
   bindings, config-owned policy, equivalent durable artifacts, and explicit capability
-  preflights. PR `#596` carries the same structured contract for `session-start` and
+  preflights. PR `#596` merged the same structured contract for `session-start` and
   `wrap-up`; `triage-friction-log` remains the Phase 3 exit.
 - [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** Codex model and
   effort calibration, environment-capable lane launching, and live isolation checks
@@ -66,7 +66,7 @@ that revision; the delivery slices below are expected to change them.
   retry evidence. Non-interactive use renders once and exits.
 - **Stops and mismatch:** required-source failure is a hard stop; optional-source gaps
   produce degraded success without false empty/clean claims. The Codex adapter repeated
-  read-only and compute policy that belongs in the shared definition; this slice removes
+  read-only and compute policy that belongs in the shared definition; this slice removed
   that duplicate.
 
 ### `wrap-up`
@@ -104,7 +104,7 @@ that revision; the delivery slices below are expected to change them.
   is successful completion, not a no-op, and isolated review plus self-merge stay on
   the cockpit's paired lane wrappers and shared state sandbox. The
   Codex adapter's generic external-mutation wording was weaker than the shared payload-
-  specific gate; this slice removes that duplicate.
+  specific gate; this slice removed that duplicate.
 
 ### `triage-friction-log`
 
@@ -130,10 +130,10 @@ that revision; the delivery slices below are expected to change them.
 
 ### Slice boundary and next starter
 
-This branch applies the shared contract to `session-start` and `wrap-up`, whose
+PR `#596` merged the shared contract for `session-start` and `wrap-up`, whose
 integration surface can use existing config, runtime-native mechanisms, and the shipped
 helpers named by each definition without adding a dedicated pipeline configuration. It
-does not add a partial triage config, pretend the missing engines are ready, or duplicate
+did not add a partial triage config, pretend the missing engines are ready, or duplicate
 approval policy in an adapter.
 
 ```text
@@ -240,8 +240,10 @@ loads the safety doctrine for affected work.
 - [x] Keep runtime tool selection in the adapters and capability preflight. Codex UI
   metadata uses the repository's supported `interface` shape; it does not claim a
   connector dependency that the client cannot mechanically require.
-- [ ] Apply the capability-contract pattern to `session-start`, `wrap-up`, and
-  `triage-friction-log` without moving their policy into adapters.
+- [x] Apply the capability-contract pattern to `session-start` and `wrap-up` without
+  moving their policy into adapters.
+- [ ] Apply the capability-contract pattern to `triage-friction-log` without moving its
+  policy into adapters.
 
 The bounded workflow slice is done when either runtime can execute the retro workflow
 and produce the same durable artifacts. The phase closes when `session-start`,
@@ -305,7 +307,7 @@ bind posted delta-draw verdicts; Git paths and author-supplied labels cannot est
 either fact. Until such an artifact exists, uncertain classification continues to take
 the full-panel route and issue `#32` remains the provenance boundary.
 
-PR `#596` then applied the shared integration contract to the lifecycle bookends. The
+PR `#596` then merged the shared integration contract for the lifecycle bookends. The
 remaining Phase 3 starter is the `feat/triage-integration-preflights` block under
 “Slice boundary and next starter” above; keep that single copy authoritative.
 
