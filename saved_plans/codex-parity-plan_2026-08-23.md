@@ -28,8 +28,8 @@ their delivery order and exit conditions.
 - [ ] **Phase 3 — Complete workflow and integration coverage.** The bounded
   `post-merge-systemize` extraction in PR `#595` has a shared definition, thin runtime
   bindings, config-owned policy, equivalent durable artifacts, and explicit capability
-  preflights. `session-start` and `wrap-up` now have the same structured contract on
-  `feat/shared-integration-preflights`; `triage-friction-log` remains the Phase 3 exit.
+  preflights. PR `#596` carries the same structured contract for `session-start` and
+  `wrap-up`; `triage-friction-log` remains the Phase 3 exit.
 - [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** Codex model and
   effort calibration, environment-capable lane launching, and live isolation checks
   remain planned.

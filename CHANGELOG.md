@@ -42,6 +42,26 @@ starts.
 
 ---
 
+## #596 — 2026-08-25
+
+- **CHANGED (gate semantics) — `session-start` now stops before rendering its normal
+  briefing when repository/config or repository-state reads fail; unavailable forge,
+  CI/cron, tracker, configured drift, or candidate-remediation reads produce explicit
+  degraded results instead of empty, clean, or `Now` claims.** **Refresh
+  `docs/agentic-dev-kit/workflows/session-start.md`. Keep the existing runtime adapter;
+  it loads the shared declaration and needs no new config key or connector name. Treat
+  the workflow as read-only, and let non-interactive invocations render once and exit.**
+- **CHANGED (gate semantics) — `wrap-up` now stops before staging when required
+  repository/config, record-write, or document-budget capabilities fail; tracker
+  unavailability, silence, decline, or missing exact-payload approval parks the complete
+  finding in the friction log, while a changed record is incomplete until its
+  branch/PR/`pr-watch` path settles.** **Refresh
+  `docs/agentic-dev-kit/workflows/wrap-up.md`. Keep the existing runtime adapter and
+  config. Do not treat a configured tracker, prior approval, or standing autonomous
+  authority as approval for a create, modification, or occurrence-comment payload.**
+
+---
+
 ## #595 — 2026-08-24
 
 - **ADDED (config keys) — `config/dev-model.yaml` now declares the shared

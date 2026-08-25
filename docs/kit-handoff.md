@@ -14,14 +14,18 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-25 — `feat/shared-integration-preflights` carries the shared
-bookend contract; the triage pipeline remains the Phase 3 exit.
+Last updated: 2026-08-25 — PR `#596` carries the shared bookend contract; the triage
+pipeline remains the Phase 3 exit.
 
 ## Latest session — 2026-08-25 (shared integration preflights bounded at the lifecycle bookends)
 
 **Theme —** The `session-start` and `wrap-up` definitions now own explicit capability,
 authority, artifact, resumability, non-interactive, and completion declarations, while
 their Claude and Codex bindings remain invocation-only adapters.
+
+- **PR `#596` carries the bookend contract.** The runtime-parity matrix, adopter
+  guidance, release manifest, and declaration-derived tests move with the shared
+  definitions; no config or installer migration is part of this slice.
 
 - **The lifecycle bookends are the coherent slice.** Required repository/config and
   record capabilities fail closed. Optional session-start sources stay visible as
