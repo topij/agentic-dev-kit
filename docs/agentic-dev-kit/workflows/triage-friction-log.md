@@ -68,7 +68,12 @@ configuration as RFC 8785 JSON and hash its UTF-8 bytes with SHA-256 as
 numbers rather than coercing them. Construct a run identity binding repository identity,
 `<friction-log>`, protected-branch head, execution mode, session id, and config
 fingerprint. Hash the exact frozen inbox bytes separately. State, report, and snapshot
-metadata carry the run identity and frozen digest. A resumed run must match them all.
+metadata carry the run identity and frozen digest. A resumed run must match every
+immutable identity field. The recorded protected-branch head is immutable draft
+provenance, not a requirement that the moving protected ref remain equal forever.
+Refresh the remote ref read-only on resume: the recorded head must remain an ancestor of
+the current protected head. Record the observed current head separately. A non-ancestor,
+missing, or unverifiable transition hard-stops before tracker or repository writes.
 
 ## Semantic input matrix
 
@@ -133,6 +138,7 @@ conditional capability ready before its trigger.
 | `recover-over-valid-state` | `refuse-and-resume-valid-session` |
 | `invalid-state-recovery` | `preserve-before-classify-never-abandon-uncertain-attempt` |
 | `state-or-frozen-identity-mismatch` | `stop-before-tracker-write-never-whole-sweep` |
+| `protected-branch-advance` | `allow-fast-forward-preserve-draft-identity-hold-divergence` |
 | `partial-engine-set` | `stop-never-mix-engine-and-llm-artifacts` |
 | `unattended-without-notification` | `stop-before-new-approval-session` |
 | `tracker-without-exact-payload-approval` | `prohibit-create-update-comment` |
@@ -383,7 +389,10 @@ transformation and label it `agent-executed`.
 
 Never switch the caller checkout. Fetch the protected branch, create a fresh isolated
 worktree and `<triage-branch>` from its current origin ref, and re-read the destination
-documents there. Require a clean index, stage only `<friction-log>` and
+documents there. Require the current origin ref to descend from the immutable draft
+head, persist it as `finalize_base_head`, and never rewrite the draft run identity. A
+permitted fast-forward advance still must pass the byte-identical frozen-block check;
+otherwise remain operator-held. Require a clean index, stage only `<friction-log>` and
 `<friction-log-archive>`, and prove the staged path set equals that pair exactly. Commit
 with `triage.commit_subject`, push, and create the pull request with
 `triage.pr_draft`. Read back repository, base, branch, commit, head, draft bit, PR URL,

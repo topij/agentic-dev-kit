@@ -2496,6 +2496,9 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert "require the expected state digest at act time" in capabilities[
         "single-writer-state-gate"
     ][1]
+    assert "never permits overwrite, retry, or automatic stale-lock removal" in capabilities[
+        "single-writer-state-gate"
+    ][1]
     assert "forbids a whole-inbox fallback" in capabilities["frozen-inbox-state"][1]
     assert "all absent selects LLM-only mode" in capabilities["draft-finalize-engine-set"][1]
     assert "a partial pair hard-stops" in capabilities["draft-finalize-engine-set"][1]
@@ -2519,6 +2522,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         ),
         "state-or-frozen-identity-mismatch": (
             "stop-before-tracker-write-never-whole-sweep",
+        ),
+        "protected-branch-advance": (
+            "allow-fast-forward-preserve-draft-identity-hold-divergence",
         ),
         "partial-engine-set": ("stop-never-mix-engine-and-llm-artifacts",),
         "unattended-without-notification": ("stop-before-new-approval-session",),
@@ -2599,6 +2605,9 @@ def _assert_triage_semantics(workflow: str) -> None:
     for required_phrase in (
         "kitconfig.load_config()",
         "RFC 8785 JSON",
+        "recorded protected-branch head is immutable draft provenance",
+        "recorded head must remain an ancestor of the current protected head",
+        "persist it as `finalize_base_head`, and never rewrite the draft run identity",
         "Require `state.dirname` to match that resolver's declared `STATE_DIRNAME`",
         "pass only the remaining fragment to the resolver",
         "Never use `resolve_read_path` for either artifact",
@@ -2628,6 +2637,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Process termination or a missing final chat summary never authorizes repeating a write",
         "Parse complete commands, never keyword substrings",
         "Unmentioned items default to `park`, never archive",
+        "the exact command `cancel` — cancel the batch and keep every source block active",
         "One authoritative pre-existing exact payload match records `verified` with its read-back identifier without a create",
         "Only an authoritative empty match set permits persisting `attempting` and calling create",
         "read back by the exact marker before any retry",
@@ -2754,6 +2764,16 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
+            "never permits overwrite, retry, or automatic stale-lock removal",
+            "permits automatic stale-lock removal and continued execution",
+            1,
+        ),
+        workflow.replace(
+            "allow-fast-forward-preserve-draft-identity-hold-divergence",
+            "require-protected-head-equality",
+            1,
+        ),
+        workflow.replace(
             "Parse under the held gate before creating the `reserved` state",
             "Create the `reserved` state before parsing under the held gate",
             1,
@@ -2796,6 +2816,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "abandonment is prohibited",
             "abandonment is permitted",
+            1,
+        ),
+        workflow.replace(
+            "cancel the batch and keep every source block active",
+            "cancel the batch and archive every source block",
             1,
         ),
         workflow.replace(

@@ -332,7 +332,7 @@ append_to_section() {
       close(blockfile)
     }
     index($0, section) == 1 && $0 ~ /^[A-Za-z_]/ { inside = 1; header = NR }
-    inside && NR != header && $0 ~ /^[A-Za-z_][A-Za-z0-9_]*:/ && !inserted {
+    inside && NR != header && $0 ~ /^[A-Za-z_][A-Za-z0-9_.-]*:/ && !inserted {
       emit()
       inserted = 1
       inside = 0
@@ -399,7 +399,7 @@ section_range() {
     # reader that reported the last one would have the two helpers disagreeing
     # about which block they are talking about on a duplicated section.
     !start && index($0, section) == 1 && $0 ~ /^[A-Za-z_]/ { inside = 1; start = NR; next }
-    inside && /^[A-Za-z_][A-Za-z0-9_]*:/ { print start + 1, NR - 1; found = 1; exit }
+    inside && /^[A-Za-z_][A-Za-z0-9_.-]*:/ { print start + 1, NR - 1; found = 1; exit }
     END { if (!found) print (inside ? start + 1 : 0), (inside ? NR : 0) }
   ' "$2"
 }

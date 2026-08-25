@@ -302,6 +302,34 @@ def test_installer_completes_a_partial_triage_section_without_replacing_policy(
     assert _config(repo) == first
 
 
+def test_installer_completes_triage_before_a_hyphenated_top_level_section(
+    tmp_path: Path,
+) -> None:
+    config = _without_triage(shipped_config()).replace(
+        "\nsystemize:\n",
+        "\ntriage:\n"
+        "  analysis_tier: expensive\n\n"
+        "custom-section:\n"
+        "  retained: adopter-value\n\n"
+        "systemize:\n",
+        1,
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+
+    first = _config(repo)
+    parsed = yaml.safe_load(first)
+    assert parsed["triage"] == yaml.safe_load(shipped_config())["triage"] | {
+        "analysis_tier": "expensive",
+    }
+    assert parsed["custom-section"] == {"retained": "adopter-value"}
+
+    _run_init(repo)
+
+    assert _config(repo) == first
+
+
 @pytest.mark.parametrize(
     "section_line",
     (
