@@ -34,7 +34,9 @@ their Claude and Codex bindings remain invocation-only adapters.
   search and an exact-payload decision before parking; the friction log remains the
   route for incomplete or accumulating findings and unavailable, declined, or ambiguous
   tracker writes. Missing or insufficient merge authority holds the exact reviewed head
-  for the operator.
+  for the operator; a policy-less non-lane pull request defaults to the operator route.
+  Conditional capabilities classify at their trigger rather than claiming future
+  readiness before the handoff edit.
 
 - **The triage workflow is bounded separately.** Its shared definition still assumes a
   dedicated pipeline config absent from `config/dev-model.yaml`, unvendored parse/finalize

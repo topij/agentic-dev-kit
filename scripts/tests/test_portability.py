@@ -1613,7 +1613,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "merge-authority": (
                 "conditional and authority-gated",
-                "Required only after pr-watch says the exact head is mergeable. Resolve the project's predeclared merge class and the current request's authority before acting. A self class still needs project and current-request authority; an operator class needs current operator authorization for the exact pull request. Missing, unknown, or insufficient authority leaves the mergeable pull request in successful-operator-handoff; it never authorizes a merge.",
+                "Required only after pr-watch says the exact head is mergeable. For an isolated lane, resolve its persisted merge class; for a non-lane pull request, resolve the project's declared merge policy and default to operator when none exists. A self route still needs project and current-request authority; an operator route needs current operator authorization for the exact pull request. Unknown lane metadata or insufficient authority leaves the mergeable pull request in successful-operator-handoff; it never authorizes a merge.",
             ),
             "project-status-write": (
                 "optional enhancement",
@@ -1648,6 +1648,9 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "operator-merge-class-without-exact-pr-authorization": (
                 "hold-mergeable-pr-for-operator",
             ),
+            "non-lane-without-project-merge-policy": (
+                "default-operator-require-exact-pr-authorization",
+            ),
             "runtime-policy-override": ("shared-declaration-wins-and-stop",),
         }
         assert outcomes == {
@@ -1674,6 +1677,9 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         }
         assert "kitconfig.load_config()" in flattened
         assert "do not fall back to reading only the tracked file" in flattened
+        assert "Do not claim a future conditional is ready" in flattened
+        assert "use `not-triggered` only when its stated condition never occurred" in flattened
+        assert "In the final report, list every declaration with its terminal status" in flattened
         assert "confirm the exact title/body/project/labels or exact comment payload" in flattened
         assert "it does not authorize merging that pull request" in flattened
         assert "do not park merely to avoid asking" in flattened
@@ -1835,6 +1841,19 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "`merge-without-predeclared-and-current-authority` | "
             "`hold-mergeable-pr-for-operator`",
             "`merge-without-predeclared-and-current-authority` | `merge`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Do not claim a",
+            "Claim a", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "In the final report",
+            "Do not report capability status to the operator", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`non-lane-without-project-merge-policy` | "
+            "`default-operator-require-exact-pr-authorization`",
+            "`non-lane-without-project-merge-policy` | `self-merge`", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "`pr-watch` | conditional", "`pr-watch` | optional", 1

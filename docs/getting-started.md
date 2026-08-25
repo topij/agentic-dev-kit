@@ -247,7 +247,8 @@ friction-routing step is being skipped — not that triage is overdue.
 > for an exact-payload tracker decision before parking, while unavailable, declined,
 > ambiguous, incomplete, or accumulating routes go to the friction log. Non-interactive
 > runs never wait for approval, and merge authority that is absent or insufficient holds
-> the exact mergeable head for the operator.
+> the exact mergeable head for the operator. A non-lane PR with no project policy
+> defaults to operator authorization, never autonomous merge.
 > Their thin adapters select runtime-native mechanisms but cannot change those outcomes.
 > No new config key or installer step is needed for this bookend contract. The triage
 > workflow still needs its pipeline configuration and engine-mode precedence moved into

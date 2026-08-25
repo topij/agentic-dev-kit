@@ -62,7 +62,10 @@ starts.
   searched and presented for an exact-payload decision instead of parked by default.
   A changed record reaches a terminal state only after its branch/PR/`pr-watch` path
   settles and merge authority either permits the merge or holds the exact head for the
-  operator.** **Refresh
+  operator. Non-lane pull requests without a project merge policy default to
+  operator-authorized merge; they never default to autonomous merge. Conditional
+  capabilities are classified when triggered rather than claimed ready before the
+  handoff edit.** **Refresh
   `docs/agentic-dev-kit/workflows/wrap-up.md`. Keep the existing runtime adapter and
   config. Resolve the merged config view, and do not treat a configured tracker, prior
   approval, or standing autonomous authority as approval for a create, modification,

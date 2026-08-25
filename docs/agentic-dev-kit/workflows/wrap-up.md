@@ -29,8 +29,14 @@ or claim completion without the declared durable evidence.
 
 ### Capability contract
 
-Finish this preflight before editing `<handoff>`. Report each capability as `ready`,
-`degraded`, or `stop`, with the mechanism used or an actionable reason.
+Before editing `<handoff>`, classify `repository-config-read`,
+`handoff-record-write`, and the availability of `document-budget-check` as `ready`,
+`degraded`, or `stop`, with the mechanism used or an actionable reason. Do not claim a
+future conditional is ready. Reclassify each conditional at its trigger point: the
+post-edit budget result, an issue-shaped finding, a changed record, an opened pull
+request, or a mergeable exact head. In the final report, list every declaration with
+its terminal status; use `not-triggered` only when its stated condition never occurred.
+Once a condition occurs, `not-triggered` is invalid and cannot satisfy completion.
 
 | Capability id | Class | Preflight and unavailable outcome |
 |---|---|---|
@@ -41,7 +47,7 @@ Finish this preflight before editing `<handoff>`. Report each capability as `rea
 | `tracker-search-and-write` | conditional and approval-gated | Required when a finding is issue-shaped and its point is not accumulation. Search first, then in an interactive session present the exact create/comment payload for an operator decision; do not park merely to avoid asking. Missing config, client, credential, operator presence, payload-specific approval, or a declined/silent decision degrades to a complete `<friction-log>` entry. Tracker availability never authorizes a write. |
 | `forge-pr-write` | conditional | Required when the wrap-up changes a repository record. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step. |
 | `pr-watch` | conditional | Required after a wrap-up pull request exists. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete. |
-| `merge-authority` | conditional and authority-gated | Required only after `pr-watch` says the exact head is mergeable. Resolve the project's predeclared merge class and the current request's authority before acting. A `self` class still needs project and current-request authority; an `operator` class needs current operator authorization for the exact pull request. Missing, unknown, or insufficient authority leaves the mergeable pull request in `successful-operator-handoff`; it never authorizes a merge. |
+| `merge-authority` | conditional and authority-gated | Required only after `pr-watch` says the exact head is mergeable. For an isolated lane, resolve its persisted merge class; for a non-lane pull request, resolve the project's declared merge policy and default to `operator` when none exists. A `self` route still needs project and current-request authority; an `operator` route needs current operator authorization for the exact pull request. Unknown lane metadata or insufficient authority leaves the mergeable pull request in `successful-operator-handoff`; it never authorizes a merge. |
 | `project-status-write` | optional enhancement | Update only a project status artifact that already exists and is in scope. Its absence is an honest skip, not a reason to invent one. |
 
 ### Authority contract
@@ -57,14 +63,17 @@ Finish this preflight before editing `<handoff>`. Report each capability as `rea
 | `required-engine-unavailable` | `stop-before-staging-preserve-record-edit` |
 | `merge-without-predeclared-and-current-authority` | `hold-mergeable-pr-for-operator` |
 | `operator-merge-class-without-exact-pr-authorization` | `hold-mergeable-pr-for-operator` |
+| `non-lane-without-project-merge-policy` | `default-operator-require-exact-pr-authorization` |
 | `runtime-policy-override` | `shared-declaration-wins-and-stop` |
 
 Invoking `wrap-up` authorizes its scoped repository record, branch, push, and
 pull-request work; it does not authorize merging that pull request. A merge
 additionally requires the project's predeclared merge class and authority from the
 current request: project-authorized autonomous merge for `self`, or current operator
-authorization for the exact pull request for `operator`. Missing or ambiguous class or
-authority takes the declared hold route. Invocation also does not authorize a tracker
+authorization for the exact pull request for `operator`. A non-lane pull request with
+no project policy takes the declared `operator` default; missing or ambiguous lane
+metadata or authority takes the declared hold route. Invocation also does not authorize
+a tracker
 create, tracker modification, or occurrence comment. That external write requires the
 operator, in the current interactive session, to confirm the exact
 title/body/project/labels or exact comment payload. A configured tracker, prior
