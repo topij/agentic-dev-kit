@@ -752,9 +752,6 @@ preflight_migration_config() {
       owned["notify"] = owned["models"] = 1
       line_owned["project", "name"] = 1
       line_owned["runtime", "default"] = 1
-      line_owned["parallel", "codex_headless_command"] = 1
-      line_owned["parallel", "descriptor_ttl_seconds"] = 1
-      line_owned["parallel", "observation_timeout_seconds"] = 1
       line_owned["systemize", "operator_logins"] = 1
       line_owned["tracker", "backend"] = 1
       line_owned["tracker", "project_name"] = 1
@@ -773,7 +770,6 @@ preflight_migration_config() {
       line_owned["models", "expensive"] = 1
       sequence_owned["systemize", "operator_logins"] = 1
       sequence_owned["review", "bots"] = 1
-      sequence_owned["parallel", "codex_headless_command"] = 1
       linear_owned["team_id"] = linear_owned["project_id"] = 1
       triage_string["analysis_tier"] = triage_string["state_path"] = 1
       triage_string["gate_path"] = triage_string["recovery_bundle_pattern"] = 1
@@ -1004,12 +1000,14 @@ migrate_parallel_schema() {
   codex_headless_command: [codex, exec]
   descriptor_ttl_seconds: 900
   observation_timeout_seconds: 30
+  termination_grace_seconds: 5
 '
     echo "added parallel launcher config to config/dev-model.yaml"
   fi
   ensure_parallel_key codex_headless_command '  codex_headless_command: [codex, exec]'
   ensure_parallel_key descriptor_ttl_seconds '  descriptor_ttl_seconds: 900'
   ensure_parallel_key observation_timeout_seconds '  observation_timeout_seconds: 30'
+  ensure_parallel_key termination_grace_seconds '  termination_grace_seconds: 5'
 }
 
 # Schema additions introduced after the v2 template release. Same idempotent

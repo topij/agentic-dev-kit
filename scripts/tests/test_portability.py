@@ -71,6 +71,7 @@ parallel:
   codex_headless_command: [codex, exec]
   descriptor_ttl_seconds: 900
   observation_timeout_seconds: 30
+  termination_grace_seconds: 5
 vcs:
   protected_branch: trunk
 """,
@@ -121,6 +122,7 @@ parallel:
   codex_headless_command: [codex, exec]
   descriptor_ttl_seconds: 900
   observation_timeout_seconds: 30
+  termination_grace_seconds: 5
 vcs:
   protected_branch: trunk
   dev_branch_prefix: lane
@@ -1575,14 +1577,46 @@ state:
     config = yaml.safe_load(
         (repo / "config" / "dev-model.yaml").read_text(encoding="utf-8")
     )
+    shipped = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
 
     assert config["paths"]["engines"] == "scripts"
     assert config["runtime"]["default"] == "claude"
     assert config["runtime"]["launchers"]["codex"] == "codex"
+    assert config["parallel"] == shipped["parallel"]
     assert config["review"]["fallback_commands"]["codex"] == "/review"
-    assert config["triage"] == yaml.safe_load(
-        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
-    )["triage"]
+    assert config["triage"] == shipped["triage"]
+
+    config_path = repo / "config" / "dev-model.yaml"
+    partial = re.sub(
+        r"(?m)^parallel:\n(?:  [^\n]*\n)+",
+        "parallel:\n  descriptor_ttl_seconds: 321\n",
+        config_path.read_text(encoding="utf-8"),
+        count=1,
+    )
+    config_path.write_text(partial, encoding="utf-8")
+    subprocess.run(
+        ["sh", "init.sh"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    migrated_partial = yaml.safe_load(
+        config_path.read_text(encoding="utf-8")
+    )["parallel"]
+
+    assert migrated_partial["descriptor_ttl_seconds"] == 321
+    assert {
+        key: value
+        for key, value in migrated_partial.items()
+        if key != "descriptor_ttl_seconds"
+    } == {
+        key: value
+        for key, value in shipped["parallel"].items()
+        if key != "descriptor_ttl_seconds"
+    }
     # The panel is what the fallback actually IS now; deleting its whole
     # migration block from init.sh previously passed the entire suite.
     panel = config["review"]["fallback_panel"]
@@ -1661,15 +1695,23 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
 
 
 def _assert_parallel_adapter_is_translation_only(adapter: str) -> None:
-    assert "docs/agentic-dev-kit/workflows/parallel.md" in adapter
-    assert "docs/agentic-dev-kit/workflows/parallel-headless.md" not in adapter
-    contradictions = (
-        "native agent dispatch may bypass the launcher",
-        "merge descriptor env with inherited values",
-        "ignore the shared contract",
-        "return success before the receipt",
-    )
-    assert not any(contradiction in adapter.lower() for contradiction in contradictions)
+    body = adapter.split("---", 2)[2].strip()
+    allowed_bodies = {
+        """Read `docs/agentic-dev-kit/workflows/parallel.md` completely and follow it.
+
+Treat `$ARGUMENTS` as the requested parallel-development action and arguments.
+Resolve the engine path from the repository root.""",
+        """# Parallel Development
+
+1. Work from the repository root.
+2. Read `config/dev-model.yaml` and `docs/agentic-dev-kit/workflows/parallel.md` completely.
+3. Follow the requested action. With no action, show the read-only lane board.
+4. Resolve engine paths from the repository root; support both `scripts/dev_session.sh` and a namespaced adopted path such as `scripts/devkit/dev_session.sh`.
+5. Use the current runtime's supported parallel-task mechanism. Do not assume peer messaging, model selection, background execution, or automatic terminal launch unless the runtime exposes it.
+6. Preserve the cockpit/lane ownership boundary and require disjoint source-file footprints before launch.
+7. For behavioral changes to lane safety, read and apply `docs/agentic-dev-kit/safety-critical-changes.md`.""",
+    }
+    assert body in allowed_bodies
 
 
 def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
@@ -1679,9 +1721,12 @@ def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
     ):
         adapter = path.read_text(encoding="utf-8")
         _assert_parallel_adapter_is_translation_only(adapter)
-        hostile = adapter + "\nNative agent dispatch may bypass the launcher.\n"
-        with pytest.raises(AssertionError):
-            _assert_parallel_adapter_is_translation_only(hostile)
+        for hostile in (
+            adapter + "\nNative dispatch can launch unattended lanes directly.\n",
+            adapter + "\nThe shared workflow is optional advice.\n",
+        ):
+            with pytest.raises(AssertionError):
+                _assert_parallel_adapter_is_translation_only(hostile)
 
 
 def _post_merge_capabilities(workflow: str) -> dict[str, tuple[str, str]]:
@@ -13308,12 +13353,16 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     assert set(claude_frontmatter["paths"]) == {
         "scripts/dev_session.sh",
         "scripts/devkit/dev_session.sh",
+        "scripts/launch_codex_lane.py",
+        "scripts/devkit/launch_codex_lane.py",
         "scripts/pr_watch.py",
         "scripts/devkit/pr_watch.py",
     }
     for text in (root_agents, template, merge_section, claude_rule):
         assert "pr_watch.py" in text
         assert "dev_session.sh" in text
+    assert "launch_codex_lane.py" in root_agents
+    assert "launch_codex_lane.py" in claude_rule
 
 
 @pytest.mark.kit_repo_only("saved_plans/codex-hooks-live-probe/.codex/hooks.json")

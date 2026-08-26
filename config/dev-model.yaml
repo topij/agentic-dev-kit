@@ -67,6 +67,9 @@ parallel:
   # The parent waits only this long for the child-side Git/filesystem/process
   # observation to become durable before refusing the launch.
   observation_timeout_seconds: 30
+  # An interrupted or rejected launch gets this bounded graceful-stop window
+  # before the wrapper escalates to forced process-group termination.
+  termination_grace_seconds: 5
 
 doc_budgets:
   # Line-count tripwires (the archival mechanism of Principle #1). A file over budget

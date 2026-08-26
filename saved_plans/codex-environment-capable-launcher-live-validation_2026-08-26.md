@@ -7,7 +7,7 @@ synthetic headless lane after replacing hostile inherited lane identity. The wra
 child independently observed one worktree, Git repository, lane branch/base, state
 root, and process before Codex received the prompt. The parent then bound those
 observations to the launch request and did not report success until the Codex final
-message and terminal receipt were durable.
+message was digested into the durable terminal receipt.
 
 This is one trusted-client observation at the stamped client, synthetic commit, date,
 and engine bytes below. It does not establish future-client behavior, the desktop app,
@@ -25,7 +25,7 @@ note entered that fixture.
 ## Stamped surfaces
 
 - `codex --version` and the live run banner at synthetic revision
-  `250bd6f1515f7048b8d42a04b82d7a694d70e9e9` on 2026-08-26 reported
+  `afcdd71e2e427bba348a5697e31351ecf08f1f9d` on 2026-08-26 reported
   `OpenAI Codex v0.149.1`.
 - The official OpenAI developer-command reference on 2026-08-26 described
   `codex exec` as stable and documented `--cd, -C` as setting the workspace root for
@@ -37,7 +37,7 @@ note entered that fixture.
   revision/date printed matching pairs:
   `9ce3a64047f4b5f5377624686ef43abf1b1d7f6b5e8e70a537caab79a1d6f815` for the
   descriptor issuer and
-  `9cbf3c35c838ef7c9d2e3c793491170ea48d89834b4a4bad26b2f60733594399` for the
+  `6087fb00f4eec9a443fca41bf8a4f5e0fd32084148e786b6d9bd9cc6836f3a03` for the
   launcher.
 
 ## Launch request
@@ -45,7 +45,7 @@ note entered that fixture.
 The synthetic lane was issued with:
 
 ```text
-DEVKIT_SESSIONS_DIR=/private/tmp/codex-launcher-synthetic.KKJ7QT/sessions \
+DEVKIT_SESSIONS_DIR=/private/tmp/codex-launcher-synthetic-v2.Y9JBVY/sessions \
   scripts/dev_session.sh new live --headless --runtime codex
 ```
 
@@ -58,8 +58,8 @@ DEVKIT_FOREIGN_LANE=must-not-survive \
 GH_REPO=foreign/synthetic \
 GIT_WORK_TREE=/private/tmp/synthetic-foreign-worktree \
 python3 scripts/launch_codex_lane.py \
-  --descriptor /private/tmp/codex-launcher-synthetic.KKJ7QT/sessions/live/launch-descriptor.json \
-  --prompt-file /private/tmp/codex-launcher-synthetic.KKJ7QT/prompt.txt
+  --descriptor /private/tmp/codex-launcher-synthetic-v2.Y9JBVY/sessions/live/launch-descriptor.json \
+  --prompt-file /private/tmp/codex-launcher-synthetic-v2.Y9JBVY/prompt.txt
 ```
 
 The task limited Codex to local read-only identity observation and prohibited edits,
@@ -68,13 +68,13 @@ commits, pushes, pull requests, browsing, and child agents.
 ## Durable binding
 
 The completed receipt carried descriptor id
-`ab3afdc0-d523-4c22-9af7-ab91770d352c` and these request digests:
+`8425aaf3-8f59-44c4-9cc7-f9874e27d39b` and these request digests:
 
 ```text
-descriptor_sha256=d875836ab17edb1fc2d48872890d4c6853fd03d18d96f6eca960e76be4fc5e7a
-task_sha256=347e9bdb6e8a2d3ebd399e6f13df6c284d8f7a79f84a5f955031a51bf8bc61be
-combined_prompt_sha256=0fbc676753ad3b16ad05fb37492f4c4af18d6821a0d842ce309e2c94a241a5a9
-process_nonce_sha256=cad79cd050315e6f2ff5d87a3132e9b96ac7856ee842b9e168a78b75a61232b3
+descriptor_sha256=eaf7a8d2d927d2009ae2c706a6ac1c06e721cd7282da906dac25c83d42d48a25
+task_sha256=5c31a153281de5c6ac628000c7545e32b998765bdd11aeeb5f800b79410ce832
+combined_prompt_sha256=408f8ec961647675b48577de0d8aa47f449515442ca66adf9a89f76483ba9d91
+process_nonce_sha256=9c453d18e4a8179cb75e0bd2b8ab519de4e7b52e43477667bd8dd9c8bf6f954e
 configured_command=["codex","exec"]
 ```
 
@@ -82,45 +82,47 @@ The child constructed and durably recorded the following observations before `ex
 
 ```text
 scope=live
-worktree=/private/tmp/codex-launcher-synthetic.KKJ7QT/sessions/live/wt
-git_top=/private/tmp/codex-launcher-synthetic.KKJ7QT/sessions/live/wt
-session_dir=/private/tmp/codex-launcher-synthetic.KKJ7QT/sessions/live
-state_root=/private/tmp/codex-launcher-synthetic.KKJ7QT/sessions/live/state
-marker_state_root=/private/tmp/codex-launcher-synthetic.KKJ7QT/sessions/live/state
-repo_root=/private/tmp/codex-launcher-synthetic.KKJ7QT/repo
-origin_url=/private/tmp/codex-launcher-synthetic.KKJ7QT/origin.git
+worktree=/private/tmp/codex-launcher-synthetic-v2.Y9JBVY/sessions/live/wt
+git_top=/private/tmp/codex-launcher-synthetic-v2.Y9JBVY/sessions/live/wt
+session_dir=/private/tmp/codex-launcher-synthetic-v2.Y9JBVY/sessions/live
+state_root=/private/tmp/codex-launcher-synthetic-v2.Y9JBVY/sessions/live/state
+marker_state_root=/private/tmp/codex-launcher-synthetic-v2.Y9JBVY/sessions/live/state
+repo_root=/private/tmp/codex-launcher-synthetic-v2.Y9JBVY/repo
+origin_url=/private/tmp/codex-launcher-synthetic-v2.Y9JBVY/origin.git
 branch=lane/live
 persisted_branch=lane/live
 base=main
-base_oid=250bd6f1515f7048b8d42a04b82d7a694d70e9e9
-lane_oid=250bd6f1515f7048b8d42a04b82d7a694d70e9e9
+base_oid=afcdd71e2e427bba348a5697e31351ecf08f1f9d
+lane_oid=afcdd71e2e427bba348a5697e31351ecf08f1f9d
 merge_class=operator
 DEVKIT_REFUSE_UNSANDBOXED_STATE=1
-DEVKIT_ROOT=/private/tmp/codex-launcher-synthetic.KKJ7QT/repo
-DEVKIT_STATE_ROOT=/private/tmp/codex-launcher-synthetic.KKJ7QT/sessions/live/state
+DEVKIT_ROOT=/private/tmp/codex-launcher-synthetic-v2.Y9JBVY/repo
+DEVKIT_STATE_ROOT=/private/tmp/codex-launcher-synthetic-v2.Y9JBVY/sessions/live/state
 repository_overrides_present=[]
-pwd_environment=/private/tmp/codex-launcher-synthetic.KKJ7QT/sessions/live/wt
-process_pid=93788
-process_ppid=93772
-process_session_id=93788
-process_start_fingerprint=ps:Wed Aug 26 20:56:26 2026
+pwd_environment=/private/tmp/codex-launcher-synthetic-v2.Y9JBVY/sessions/live/wt
+process_pid=60441
+process_ppid=60423
+process_session_id=60441
+process_start_fingerprint=ps:Wed Aug 26 21:36:46 2026
 ```
 
 The independently executing Codex session then reported the same physical directory,
 Git top-level/common directory, origin, branch, commit, marker, and descriptor-owned
-environment. It observed `GH_REPO` absent and only `GIT_PAGER=cat` in the broader
-`GIT_*` namespace; no Git repository override survived.
+environment. It reported the named Git repository overrides and `GH_REPO` absent; no
+repository override survived.
 
 The terminal receipt recorded `returncode=0`, no signal or error, and final-message
-digest `ab903f17398c0a737f986ea7f2393e2390229ab6ef167e21bc69057f952ab87d`.
+digest `475e433134cfa18f900960d95cc2cfeb8ffcb3b70ce623fc4febb93b406abe53`.
 
 ## Cleanup and containment
 
 - `git status --short` in the synthetic lane at revision
-  `250bd6f1515f7048b8d42a04b82d7a694d70e9e9` on 2026-08-26 returned no entries.
+  `afcdd71e2e427bba348a5697e31351ecf08f1f9d` on 2026-08-26 returned no entries.
 - The receipt-bound process audit
-  `python3 -c '<load receipt; os.kill(observed pid, 0)>' <receipt>` at the same
-  revision/date printed `stopped:93788` by taking the `ProcessLookupError` branch.
+  `python3 -c '<os.kill(pid, 0) for the exact live-probe PID tuple>'` at the same
+  revision/date printed `stopped:60423`, `stopped:60441`, `stopped:60507`, and
+  `stopped:61152` by taking the `ProcessLookupError` branch for the launcher, Codex,
+  and its observed helper processes.
 - The synthetic lane is removed after this record is written. Its temporary fixture is
   not an adopter artifact and supplies no authority after teardown.
 
@@ -130,4 +132,6 @@ The supported claim is limited to the kit wrapper driving stable local `codex ex
 The wrapper, rather than Codex itself, owns environment replacement, inherited-variable
 removal, independent identity observation, one-shot authority, interruption handling,
 and the descriptor/receipt chain. Model, reasoning effort, and Codex project permission
-calibration remain outside this slice.
+calibration remain outside this slice. The read-only task did not observe a write or an
+approval transition, so it establishes no behavior for write permission, approval
+prompts, refusal, or unattended write completion.

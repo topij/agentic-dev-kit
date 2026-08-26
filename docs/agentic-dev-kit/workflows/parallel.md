@@ -251,7 +251,8 @@ slice establishes worktree, environment, identity, and receipt authority only. N
 agent dispatch cannot become a headless-lane shortcut merely because it exposes model
 or effort controls; without the complete descriptor environment and observer/receipt
 chain it remains unsupported for state-writing lanes. Codex model and effort
-calibration is a separate parity slice.
+calibration is a separate parity slice. Claude currently has no supported unattended
+state-writing path, so keep Claude lanes attended.
 
 **Default-safe.** A lane with no assigned tier inherits the cockpit's current
 effort/model — i.e. unspecified ⇒ today's behavior, no regression. The tier is an

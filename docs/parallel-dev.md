@@ -172,9 +172,9 @@ Two of them share `auth/` (cluster A) — so you run **one** of them now and def
 other. You launch three disjoint lanes:
 
 ```bash
-scripts/dev_session.sh new auth-ratelimit --headless --merge-class operator  # cluster A · top tier
-scripts/dev_session.sh new metrics-rename --headless --merge-class self      # cluster B · cheap tier
-scripts/dev_session.sh new cli-help-typo --headless --merge-class self       # cluster C · cheap tier
+scripts/dev_session.sh new auth-ratelimit --headless --merge-class operator --runtime codex  # cluster A · top tier
+scripts/dev_session.sh new metrics-rename --headless --merge-class self --runtime codex      # cluster B · cheap tier
+scripts/dev_session.sh new cli-help-typo --headless --merge-class self --runtime codex       # cluster C · cheap tier
 ```
 
 Each lane works to a green, ready-for-review PR while you watch `list --watch` from the

@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -154,8 +155,14 @@ def _load_descriptor(path: Path, *, now: dt.datetime | None = None) -> tuple[dic
     if path.name != DESCRIPTOR_NAME:
         raise LaunchError(f"descriptor must be named {DESCRIPTOR_NAME}")
     descriptor_id = descriptor.get("descriptor_id")
-    if not isinstance(descriptor_id, str) or not descriptor_id:
+    if not isinstance(descriptor_id, str):
         raise LaunchError("descriptor id is missing")
+    try:
+        parsed_descriptor_id = uuid.UUID(descriptor_id)
+    except ValueError as exc:
+        raise LaunchError("descriptor id must be a canonical UUID4") from exc
+    if str(parsed_descriptor_id) != descriptor_id or parsed_descriptor_id.version != 4:
+        raise LaunchError("descriptor id must be a canonical UUID4")
     issued = _parse_timestamp(descriptor.get("issued_at"), "issued_at")
     expires = _parse_timestamp(descriptor.get("expires_at"), "expires_at")
     current = now or dt.datetime.now(dt.timezone.utc)
@@ -183,12 +190,13 @@ def _load_descriptor(path: Path, *, now: dt.datetime | None = None) -> tuple[dic
     return descriptor, raw
 
 
-def _config_for_launcher() -> tuple[list[str], int, int, Path]:
+def _config_for_launcher() -> tuple[list[str], int, int, int, Path]:
     root = repo_root(SCRIPT_DIR)
     config = load_config(root / "config" / "dev-model.yaml")
     command = get(config, "parallel.codex_headless_command", None)
     timeout = get(config, "parallel.observation_timeout_seconds", None)
     lifetime = get(config, "parallel.descriptor_ttl_seconds", None)
+    termination_grace = get(config, "parallel.termination_grace_seconds", None)
     if not isinstance(command, list) or not command or not all(
         isinstance(item, str) and item for item in command
     ):
@@ -197,7 +205,13 @@ def _config_for_launcher() -> tuple[list[str], int, int, Path]:
         raise LaunchError("config parallel.observation_timeout_seconds must be positive")
     if not isinstance(lifetime, int) or isinstance(lifetime, bool) or lifetime <= 0:
         raise LaunchError("config parallel.descriptor_ttl_seconds must be positive")
-    return list(command), timeout, lifetime, root.resolve()
+    if (
+        not isinstance(termination_grace, int)
+        or isinstance(termination_grace, bool)
+        or termination_grace <= 0
+    ):
+        raise LaunchError("config parallel.termination_grace_seconds must be positive")
+    return list(command), timeout, lifetime, termination_grace, root.resolve()
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -335,16 +349,94 @@ def _validate_observation(expected: dict[str, Any], observed: dict[str, Any]) ->
         raise LaunchError("repository override variables survived environment scrubbing")
 
 
+def _read_pipe_capability(descriptor: int) -> bytes:
+    chunks: list[bytes] = []
+    try:
+        try:
+            while chunk := os.read(descriptor, 64):
+                chunks.append(chunk)
+        except OSError as exc:
+            raise LaunchError("parent launch capability pipe is unavailable") from exc
+    finally:
+        with contextlib.suppress(OSError):
+            os.close(descriptor)
+    capability = b"".join(chunks)
+    if len(capability) != 32:
+        raise LaunchError("parent launch capability is missing or malformed")
+    return capability
+
+
+def _validate_child_authority(
+    arguments: argparse.Namespace,
+    descriptor: dict[str, Any],
+    descriptor_raw: bytes,
+    command: list[str],
+) -> str:
+    if arguments.descriptor_id != descriptor["descriptor_id"]:
+        raise LaunchError("child descriptor identity disagrees with the descriptor")
+    expected_attempt_path = Path(descriptor["session_dir"]) / (
+        f"launch-attempt-{descriptor['descriptor_id']}.json"
+    )
+    expected_receipt_path = Path(descriptor["session_dir"]) / (
+        f"launch-receipt-{descriptor['descriptor_id']}.json"
+    )
+    expected_final_path = Path(descriptor["session_dir"]) / (
+        f"launch-final-{descriptor['descriptor_id']}.txt"
+    )
+    attempt_path = Path(arguments.attempt)
+    if attempt_path != expected_attempt_path:
+        raise LaunchError("child attempt path is foreign to the descriptor session")
+    if Path(arguments.receipt) != expected_receipt_path:
+        raise LaunchError("child receipt path is foreign to the descriptor session")
+    if Path(arguments.final_message) != expected_final_path:
+        raise LaunchError("child final-message path is foreign to the descriptor session")
+    attempt_raw = _read_stable_regular_file(attempt_path)
+    try:
+        attempt = json.loads(attempt_raw)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise LaunchError("launch attempt is not valid JSON") from exc
+    if not isinstance(attempt, dict) or _canonical_json(attempt) != attempt_raw:
+        raise LaunchError("launch attempt is not canonical")
+    capability = _read_pipe_capability(arguments.authority_fd)
+    process_nonce = capability.hex()
+    expected_request = {
+        "descriptor_sha256": _sha256(descriptor_raw),
+        "task_sha256": arguments.task_sha256,
+        "combined_prompt_sha256": arguments.combined_prompt_sha256,
+        "configured_command": list(command),
+        "process_nonce_sha256": _sha256(process_nonce.encode()),
+    }
+    if (
+        attempt.get("status") != "starting"
+        or attempt.get("descriptor_id") != descriptor["descriptor_id"]
+        or attempt.get("request") != expected_request
+        or attempt.get("parent_process", {}).get("pid") != os.getppid()
+    ):
+        raise LaunchError("child is not bound to the exclusive parent launch attempt")
+    parent_fingerprint = attempt["parent_process"].get("start_fingerprint")
+    if parent_fingerprint is not None and parent_fingerprint != _process_start_fingerprint(
+        os.getppid()
+    ):
+        raise LaunchError("parent process identity changed before child observation")
+    return process_nonce
+
+
 def _child_main(arguments: argparse.Namespace) -> int:
     descriptor_path = Path(arguments.descriptor)
-    receipt_path = Path(arguments.receipt)
+    receipt_path: Path | None = None
     try:
         descriptor, raw = _load_descriptor(descriptor_path)
-        command, _timeout, _lifetime, config_root = _config_for_launcher()
+        receipt_path = Path(descriptor["session_dir"]) / (
+            f"launch-receipt-{descriptor['descriptor_id']}.json"
+        )
+        command, _timeout, _lifetime, _termination_grace, config_root = (
+            _config_for_launcher()
+        )
         if Path(descriptor["repo_root"]).resolve() != config_root:
             raise LaunchError("descriptor repository is foreign to the launcher configuration")
+        process_nonce = _validate_child_authority(arguments, descriptor, raw, command)
         expected = _expected_identity(descriptor)
-        observed = _observed_identity(arguments.process_nonce)
+        observed = _observed_identity(process_nonce)
         _validate_observation(expected, observed)
         receipt = {
             "schema_version": SCHEMA_VERSION,
@@ -355,7 +447,7 @@ def _child_main(arguments: argparse.Namespace) -> int:
                 "task_sha256": arguments.task_sha256,
                 "combined_prompt_sha256": arguments.combined_prompt_sha256,
                 "configured_command": list(command),
-                "process_nonce_sha256": _sha256(arguments.process_nonce.encode()),
+                "process_nonce_sha256": _sha256(process_nonce.encode()),
             },
             "expected": dict(expected),
             "observed": dict(observed),
@@ -377,7 +469,8 @@ def _child_main(arguments: argparse.Namespace) -> int:
             "descriptor_id": arguments.descriptor_id,
             "error": str(exc),
         }
-        _write_atomic(receipt_path, rejected)
+        if receipt_path is not None:
+            _write_atomic(receipt_path, rejected)
         with contextlib.suppress(OSError):
             os.write(arguments.ready_fd, b"REJECTED\n")
         print(f"[codex-lane-launcher] child refused: {exc}", file=sys.stderr)
@@ -396,12 +489,13 @@ def _scrubbed_environment(descriptor: dict[str, Any]) -> dict[str, str]:
 
 
 def _read_receipt(path: Path) -> dict[str, Any]:
+    raw = _read_stable_regular_file(path)
     try:
-        value = json.loads(_read_stable_regular_file(path))
+        value = json.loads(raw)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise LaunchError("receipt is not valid JSON") from exc
-    if not isinstance(value, dict):
-        raise LaunchError("receipt is not an object")
+    if not isinstance(value, dict) or _canonical_json(value) != raw:
+        raise LaunchError("receipt is not a canonical object")
     return value
 
 
@@ -438,10 +532,30 @@ def _terminal_receipt(
     caught_signal: int | None,
     final_message: Path,
     error: str | None,
+    required_observed_sha256: str | None = None,
 ) -> None:
     try:
         receipt = _read_receipt(receipt_path)
     except LaunchError:
+        if required_observed_sha256 is not None:
+            raise
+        receipt = {
+            "schema_version": SCHEMA_VERSION,
+            "descriptor_id": attempt["descriptor_id"],
+            "request": dict(attempt["request"]),
+        }
+    binding_matches = (
+        receipt.get("descriptor_id") == attempt["descriptor_id"]
+        and receipt.get("request") == attempt["request"]
+    )
+    if required_observed_sha256 is not None:
+        if (
+            not binding_matches
+            or receipt.get("status") != "observed"
+            or _sha256(_canonical_json(receipt)) != required_observed_sha256
+        ):
+            raise LaunchError("observed receipt changed before successful terminalization")
+    elif not binding_matches:
         receipt = {
             "schema_version": SCHEMA_VERSION,
             "descriptor_id": attempt["descriptor_id"],
@@ -462,9 +576,44 @@ def _terminal_receipt(
     _write_atomic(receipt_path, receipt)
 
 
+def _terminate_process_group(
+    process: subprocess.Popen[bytes], grace_seconds: int
+) -> int:
+    if process.poll() is not None:
+        return process.returncode
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(process.pid, signal.SIGTERM)
+    try:
+        return process.wait(timeout=grace_seconds)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        try:
+            return process.wait(timeout=grace_seconds)
+        except subprocess.TimeoutExpired as exc:
+            raise LaunchError("child process group survived forced termination") from exc
+
+
+def _wait_for_process_or_signal(
+    process: subprocess.Popen[bytes], caught: list[int]
+) -> int | None:
+    while not caught:
+        try:
+            return process.wait(timeout=0.1)
+        except subprocess.TimeoutExpired:
+            continue
+    return None
+
+
 def launch(descriptor_path: Path, prompt_path: Path) -> int:
     descriptor, descriptor_raw = _load_descriptor(descriptor_path)
-    command, observation_timeout, configured_lifetime, config_root = _config_for_launcher()
+    (
+        command,
+        observation_timeout,
+        configured_lifetime,
+        termination_grace,
+        config_root,
+    ) = _config_for_launcher()
     if Path(descriptor["repo_root"]).resolve() != config_root:
         raise LaunchError("descriptor repository is foreign to the launcher configuration")
     issued = _parse_timestamp(descriptor["issued_at"], "issued_at")
@@ -478,7 +627,8 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         raise LaunchError("task prompt must be UTF-8 text") from exc
     combined = (descriptor["prompt_preamble"] + "\n\n" + task_text).encode()
     descriptor_id = descriptor["descriptor_id"]
-    process_nonce = secrets.token_hex(32)
+    launch_capability = secrets.token_bytes(32)
+    process_nonce = launch_capability.hex()
     session_dir = Path(descriptor["session_dir"])
     attempt_path = session_dir / f"launch-attempt-{descriptor_id}.json"
     receipt_path = session_dir / f"launch-receipt-{descriptor_id}.json"
@@ -495,6 +645,10 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         "status": "starting",
         "descriptor_id": descriptor_id,
         "request": dict(request),
+        "parent_process": {
+            "pid": os.getpid(),
+            "start_fingerprint": _process_start_fingerprint(os.getpid()),
+        },
         "started_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     try:
@@ -504,12 +658,15 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
 
     ready_read, ready_write = os.pipe()
     ack_read, ack_write = os.pipe()
+    authority_read, authority_write = os.pipe()
     child_arguments = [
         sys.executable,
         str(Path(__file__).resolve()),
         "_child",
         "--descriptor",
         str(descriptor_path),
+        "--attempt",
+        str(attempt_path),
         "--receipt",
         str(receipt_path),
         "--final-message",
@@ -520,8 +677,8 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         request["task_sha256"],
         "--combined-prompt-sha256",
         request["combined_prompt_sha256"],
-        "--process-nonce",
-        process_nonce,
+        "--authority-fd",
+        str(authority_read),
         "--ready-fd",
         str(ready_write),
         "--ack-fd",
@@ -540,18 +697,23 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         signum: signal.signal(signum, relay) for signum in (signal.SIGINT, signal.SIGTERM)
     }
     error: str | None = None
+    bound_receipt_sha256: str | None = None
     try:
         process = subprocess.Popen(
             child_arguments,
             cwd=descriptor["worktree"],
             env=_scrubbed_environment(descriptor),
             stdin=subprocess.PIPE,
-            pass_fds=(ready_write, ack_read),
+            pass_fds=(ready_write, ack_read, authority_read),
             start_new_session=True,
         )
         os.close(ready_write)
         os.close(ack_read)
-        ready_write = ack_read = -1
+        os.close(authority_read)
+        ready_write = ack_read = authority_read = -1
+        os.write(authority_write, launch_capability)
+        os.close(authority_write)
+        authority_write = -1
         deadline = time.monotonic() + observation_timeout
         ready = b""
         while b"\n" not in ready and process.poll() is None and not caught:
@@ -583,16 +745,17 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
                 except LaunchError:
                     error = "durable child observation or process identity is invalid"
                 if error is None:
+                    bound_receipt_sha256 = _sha256(_canonical_json(receipt))
                     os.write(ack_write, b"1")
                     os.close(ack_write)
                     ack_write = -1
                     assert process.stdin is not None
                     process.stdin.write(combined)
                     process.stdin.close()
-        if (caught or error) and process.poll() is None:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGTERM)
-        returncode = process.wait()
+        returncode = None if error else _wait_for_process_or_signal(process, caught)
+        if caught or error:
+            returncode = _terminate_process_group(process, termination_grace)
+        assert returncode is not None
         final_bytes = b""
         if final_message.is_file() and not final_message.is_symlink():
             final_bytes = _read_stable_regular_file(final_message)
@@ -612,7 +775,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
                 error = (
                     f"child exited with status {returncode}"
                     if returncode != 0
-                    else "child returned success without a durable final message"
+                    else "child returned success without final-message evidence"
                 )
             _terminal_receipt(
                 receipt_path,
@@ -624,6 +787,8 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
                 error=error,
             )
             return 70
+        if bound_receipt_sha256 is None:
+            raise LaunchError("successful child has no bound observed receipt")
         _terminal_receipt(
             receipt_path,
             attempt,
@@ -632,11 +797,36 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
             caught_signal=None,
             final_message=final_message,
             error=None,
+            required_observed_sha256=bound_receipt_sha256,
         )
         print(f"[codex-lane-launcher] receipt: {receipt_path}", file=sys.stderr)
         return 0
+    except (LaunchError, OSError) as exc:
+        returncode: int | None = process.poll() if process is not None else None
+        if process is not None and returncode is None:
+            try:
+                returncode = _terminate_process_group(process, termination_grace)
+            except LaunchError as termination_error:
+                exc = LaunchError(f"{exc}; {termination_error}")
+        _terminal_receipt(
+            receipt_path,
+            attempt,
+            status="failed",
+            returncode=returncode,
+            caught_signal=caught[0] if caught else None,
+            final_message=final_message,
+            error=str(exc),
+        )
+        return 70
     finally:
-        for descriptor in (ready_read, ready_write, ack_read, ack_write):
+        for descriptor in (
+            ready_read,
+            ready_write,
+            ack_read,
+            ack_write,
+            authority_read,
+            authority_write,
+        ):
             if descriptor >= 0:
                 with contextlib.suppress(OSError):
                     os.close(descriptor)
@@ -649,12 +839,13 @@ def _parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="internal")
     child = subparsers.add_parser("_child", help=argparse.SUPPRESS)
     child.add_argument("--descriptor", required=True)
+    child.add_argument("--attempt", required=True)
     child.add_argument("--receipt", required=True)
     child.add_argument("--final-message", required=True)
     child.add_argument("--descriptor-id", required=True)
     child.add_argument("--task-sha256", required=True)
     child.add_argument("--combined-prompt-sha256", required=True)
-    child.add_argument("--process-nonce", required=True)
+    child.add_argument("--authority-fd", required=True, type=int)
     child.add_argument("--ready-fd", required=True, type=int)
     child.add_argument("--ack-fd", required=True, type=int)
     parser.add_argument("--descriptor")

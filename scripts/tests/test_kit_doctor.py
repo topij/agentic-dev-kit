@@ -991,6 +991,7 @@ def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
         "scripts/hooks/pr_followup_hook.py",
         "scripts/hooks/pre-push",
         "scripts/kit_doctor.py",
+        "scripts/launch_codex_lane.py",
         "scripts/panel_prompt.py",
         "scripts/pr_watch.py",
     }

@@ -34,8 +34,21 @@ def _git(cwd: Path, *args: str) -> str:
     ).stdout.strip()
 
 
-def _fake_codex(path: Path, *, sleep: bool = False, write_final: bool = True) -> None:
+def _fake_codex(
+    path: Path,
+    *,
+    sleep: bool = False,
+    write_final: bool = True,
+    corrupt_receipt: bool = False,
+    ignore_sigterm: bool = False,
+) -> None:
     sleep_line = "time.sleep(60)" if sleep else ""
+    ignore_line = "signal.signal(signal.SIGTERM, signal.SIG_IGN)" if ignore_sigterm else ""
+    corrupt_line = (
+        "[p.write_text('{}\\n', encoding='utf-8') for p in Path.cwd().parent.glob('launch-receipt-*.json')]"
+        if corrupt_receipt
+        else ""
+    )
     final_line = (
         "Path(output).write_text(json.dumps(result, sort_keys=True), encoding='utf-8')"
         if write_final
@@ -43,7 +56,7 @@ def _fake_codex(path: Path, *, sleep: bool = False, write_final: bool = True) ->
     )
     path.write_text(
         "#!/usr/bin/env python3\n"
-        "import json, os, subprocess, sys, time\n"
+        "import json, os, signal, subprocess, sys, time\n"
         "from pathlib import Path\n"
         "args = sys.argv[1:]\n"
         "output = args[args.index('--output-last-message') + 1]\n"
@@ -57,6 +70,8 @@ def _fake_codex(path: Path, *, sleep: bool = False, write_final: bool = True) ->
         "  'contract_first': prompt.startswith('LANE CONTRACT (binding):'),\n"
         "  'pid': os.getpid(),\n"
         "}\n"
+        f"{ignore_line}\n"
+        f"{corrupt_line}\n"
         f"{final_line}\n"
         f"{sleep_line}\n",
         encoding="utf-8",
@@ -64,7 +79,14 @@ def _fake_codex(path: Path, *, sleep: bool = False, write_final: bool = True) ->
     path.chmod(0o755)
 
 
-def _install_repo(tmp_path: Path, *, sleep: bool = False, write_final: bool = True):
+def _install_repo(
+    tmp_path: Path,
+    *,
+    sleep: bool = False,
+    write_final: bool = True,
+    corrupt_receipt: bool = False,
+    ignore_sigterm: bool = False,
+):
     remote = tmp_path / "origin.git"
     subprocess.run(
         ["git", "init", "--bare", str(remote)],
@@ -88,7 +110,13 @@ def _install_repo(tmp_path: Path, *, sleep: bool = False, write_final: bool = Tr
     engine_dir = repo / "scripts" / "devkit"
     shutil.copytree(ENGINE_DIR, engine_dir)
     fake_codex = tmp_path / "fake-codex"
-    _fake_codex(fake_codex, sleep=sleep, write_final=write_final)
+    _fake_codex(
+        fake_codex,
+        sleep=sleep,
+        write_final=write_final,
+        corrupt_receipt=corrupt_receipt,
+        ignore_sigterm=ignore_sigterm,
+    )
     (repo / "config").mkdir()
     (repo / "config" / "dev-model.yaml").write_text(
         "paths:\n"
@@ -102,6 +130,7 @@ def _install_repo(tmp_path: Path, *, sleep: bool = False, write_final: bool = Tr
         f"  codex_headless_command: [{json.dumps(str(fake_codex))}]\n"
         "  descriptor_ttl_seconds: 900\n"
         "  observation_timeout_seconds: 5\n"
+        "  termination_grace_seconds: 1\n"
         "vcs:\n"
         "  protected_branch: trunk\n"
         "  dev_branch_prefix: lane\n",
@@ -318,7 +347,7 @@ def test_process_reuse_cannot_satisfy_parent_binding() -> None:
         )
 
 
-def test_success_without_durable_final_message_is_failure(tmp_path: Path) -> None:
+def test_success_without_final_message_evidence_is_failure(tmp_path: Path) -> None:
     _repo, engine, _sessions, descriptor, prompt, env = _install_repo(
         tmp_path, write_final=False
     )
@@ -331,7 +360,7 @@ def test_success_without_durable_final_message_is_failure(tmp_path: Path) -> Non
         ).read_text(encoding="utf-8")
     )
     assert receipt["status"] == "failed"
-    assert "durable final message" in receipt["terminal"]["error"]
+    assert "final-message evidence" in receipt["terminal"]["error"]
 
 
 def test_receipt_evidence_objects_do_not_alias(tmp_path: Path) -> None:
@@ -379,6 +408,123 @@ def test_forced_interruption_stops_child_and_records_terminal_outcome(tmp_path: 
     child_pid = receipt["observed"]["process"]["pid"]
     process.send_signal(signal.SIGTERM)
     stdout, stderr = process.communicate(timeout=10)
+    assert process.returncode != 0, (stdout, stderr)
+    terminal = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert terminal["status"] == "interrupted"
+    with pytest.raises(ProcessLookupError):
+        os.kill(child_pid, 0)
+
+
+def test_internal_child_requires_the_exclusive_parent_attempt(tmp_path: Path) -> None:
+    _repo, engine, _sessions, descriptor, _prompt, env = _install_repo(tmp_path)
+    session_dir = Path(descriptor["session_dir"])
+    descriptor_id = str(descriptor["descriptor_id"])
+    command = [
+        sys.executable,
+        str(engine / "launch_codex_lane.py"),
+        "_child",
+        "--descriptor",
+        str(descriptor["descriptor_path"]),
+        "--attempt",
+        str(session_dir / f"launch-attempt-{descriptor_id}.json"),
+        "--receipt",
+        str(session_dir / f"launch-receipt-{descriptor_id}.json"),
+        "--final-message",
+        str(session_dir / f"launch-final-{descriptor_id}.txt"),
+        "--descriptor-id",
+        descriptor_id,
+        "--task-sha256",
+        "a" * 64,
+        "--combined-prompt-sha256",
+        "b" * 64,
+        "--authority-fd",
+        "0",
+        "--ready-fd",
+        "1",
+        "--ack-fd",
+        "0",
+    ]
+
+    first = subprocess.run(command, input=b"x" * 32, env=env, capture_output=True)
+    second = subprocess.run(command, input=b"y" * 32, env=env, capture_output=True)
+
+    assert first.returncode != 0
+    assert second.returncode != 0
+    assert not (session_dir / f"launch-attempt-{descriptor_id}.json").exists()
+    assert not (session_dir / f"launch-final-{descriptor_id}.txt").exists()
+
+
+def test_descriptor_id_cannot_escape_the_session_evidence_namespace(
+    tmp_path: Path,
+) -> None:
+    launcher = _load_launcher()
+    _repo, _engine, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
+    path = Path(descriptor["descriptor_path"])
+    loaded, _raw = launcher._load_descriptor(path)
+    assert loaded["descriptor_id"] == descriptor["descriptor_id"]
+
+    escaped = copy.deepcopy(descriptor)
+    escaped["descriptor_id"] = "x/../../foreign"
+    path.write_bytes(launcher._canonical_json(escaped))
+
+    with pytest.raises(launcher.LaunchError, match="canonical UUID4"):
+        launcher._load_descriptor(path)
+
+
+def test_corrupted_observation_cannot_be_terminalized_as_success(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, corrupt_receipt=True
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode != 0
+    receipt = json.loads(
+        (sessions / "probe" / f"launch-receipt-{descriptor['descriptor_id']}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert receipt["status"] == "failed"
+    assert "observed receipt changed" in receipt["terminal"]["error"]
+
+
+def test_sigterm_ignoring_child_is_forcibly_stopped_within_the_configured_bound(
+    tmp_path: Path,
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, sleep=True, ignore_sigterm=True
+    )
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            str(engine / "launch_codex_lane.py"),
+            "--descriptor",
+            str(descriptor["descriptor_path"]),
+            "--prompt-file",
+            str(prompt),
+        ],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    receipt_path = sessions / "probe" / f"launch-receipt-{descriptor['descriptor_id']}.json"
+    final_path = sessions / "probe" / f"launch-final-{descriptor['descriptor_id']}.txt"
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if receipt_path.is_file():
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            if receipt.get("status") == "observed" and final_path.is_file():
+                break
+        time.sleep(0.05)
+    else:
+        process.kill()
+        pytest.fail("launcher never durably bound the child observation")
+    child_pid = receipt["observed"]["process"]["pid"]
+
+    process.send_signal(signal.SIGTERM)
+    stdout, stderr = process.communicate(timeout=5)
+
     assert process.returncode != 0, (stdout, stderr)
     terminal = json.loads(receipt_path.read_text(encoding="utf-8"))
     assert terminal["status"] == "interrupted"

@@ -17,7 +17,7 @@ rule above says *don't start the session yourself*). That's the wrong shape for 
 *sandboxed* lane without a human in the loop. `--headless` is for exactly that:
 
 ```bash
-<engine-dir>/dev_session.sh new --headless <scope> --merge-class <self|operator>
+<engine-dir>/dev_session.sh new --headless <scope> --merge-class <self|operator> --runtime codex
 ```
 
 It creates the worktree + sandbox exactly as `new` does, but instead of the human
@@ -49,11 +49,12 @@ block it:
 
    The supported wrapper removes every inherited `DEVKIT_*` key, plus `GH_REPO`, Git
    repository override variables, `PWD`, and `OLDPWD`; then it assigns every key from
-   `env` unconditionally and sets `PWD` from the independently resolved worktree. Do
-   not use `setdefault`, skip a key because it is already present, or rely on the
-   marker to beat an inherited root. Unrelated permitted variables remain available;
-   the descriptor map is complete for lane-root identity, not a complete process
-   environment.
+   `env` unconditionally and seeds `PWD` from the descriptor worktree. The child then
+   resolves its physical cwd independently and rejects disagreement with that seeded
+   value. Do not use `setdefault`, skip a key because it is already present, or rely
+   on the marker to beat an inherited root. Unrelated permitted variables remain
+   available; the descriptor map is complete for lane-root identity, not a complete
+   process environment.
 
 ### The lane-contract preamble (inject this verbatim)
 
@@ -71,9 +72,11 @@ descriptor — **do not hand-copy or paraphrase it into this workflow or a launc
 Always read it fresh from one of those two engine surfaces so a future edit propagates
 without maintaining a second copy.
 
-**Supported Codex launch contract.** Run `new --headless` once, write the task-specific
-prompt to a regular file, and invoke the config-owned kit engine with the persisted
-descriptor path:
+**Supported Codex launch contract.** Run `new --headless --runtime codex` once (or set
+`DEVKIT_RUNTIME=codex` for descriptor issuance), write the task-specific prompt to a
+regular file, and invoke the config-owned kit engine with the persisted descriptor
+path. A descriptor issued for the default Claude runtime is intentionally refused by
+this Codex-only wrapper.
 
 ```bash
 python3 <engine-dir>/launch_codex_lane.py \
@@ -83,8 +86,10 @@ python3 <engine-dir>/launch_codex_lane.py \
 
 `parallel.codex_headless_command` supplies the argv prefix (the shipped value selects
 stable `codex exec`), `parallel.descriptor_ttl_seconds` supplies descriptor lifetime,
-and `parallel.observation_timeout_seconds` bounds the child observation handshake.
-Resolve all through the merged config; never restate them in an adapter or fixture.
+`parallel.observation_timeout_seconds` bounds the child observation handshake, and
+`parallel.termination_grace_seconds` bounds graceful cleanup before forced process-
+group termination. Resolve all through the merged config; never restate them in an
+adapter or fixture.
 
 The wrapper is the supported mechanism because it owns the guarantees a native agent
 dispatch or direct `codex exec` call does not: worktree `cwd`, inherited-identity
@@ -92,7 +97,8 @@ removal, descriptor environment replacement, one-shot attempt authority, and a
 child-side observer that reads Git, the marker, persisted lane metadata, filesystem
 relationships, and its own process before `exec`. It writes a receipt in the session
 directory, binds the exact descriptor/task/combined-prompt bytes, and returns success
-only after the Codex command exits successfully with a durable final message.
+only after the Codex command exits successfully and a durable terminal receipt binds
+the final-message bytes by digest.
 
 The descriptor and receipt fail closed on expiry or reuse; a moved descriptor; a
 foreign repository, worktree, origin, scope, state root, branch, base, commit, or merge

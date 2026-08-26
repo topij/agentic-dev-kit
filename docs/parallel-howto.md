@@ -169,7 +169,7 @@ A headless lane has **no human terminal** to hand a launch line to, so `new` beh
 differently:
 
 ```bash
-scripts/dev_session.sh new <scope> --headless --merge-class <self|operator>
+scripts/dev_session.sh new <scope> --headless --merge-class <self|operator> --runtime codex
 ```
 
 Instead of printing a copy-paste line, `--headless` writes a sticky
@@ -197,7 +197,8 @@ scripts/dev_session.sh print-contract
 Do not pass the descriptor directly to native agent dispatch or direct `codex exec`:
 neither supplies the wrapper's complete environment, observer, one-shot authority, and
 receipt contract. Interactive `new` and your CI/cron runner never set the marker, so
-their behavior is unchanged.
+their behavior is unchanged. Claude has no supported unattended state-writing path in
+this slice; keep Claude lanes attended.
 
 For the full JSON descriptor/receipt contract and verbatim-injection rule, see
 [`agentic-dev-kit/workflows/parallel-headless.md`](agentic-dev-kit/workflows/parallel-headless.md)
