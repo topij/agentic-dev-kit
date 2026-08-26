@@ -3,10 +3,12 @@ from __future__ import annotations
 import contextlib
 import copy
 import datetime as dt
+import fcntl
 import hashlib
 import importlib.util
 import json
 import os
+import resource
 import select
 import shutil
 import signal
@@ -45,6 +47,7 @@ def _fake_codex(
     corrupt_receipt: bool = False,
     ignore_sigterm: bool = False,
     spawn_descendant: bool = False,
+    spawn_detached_descendant: bool = False,
 ) -> None:
     sleep_line = "time.sleep(60)" if sleep else ""
     ignore_line = "signal.signal(signal.SIGTERM, signal.SIG_IGN)" if ignore_sigterm else ""
@@ -65,6 +68,14 @@ def _fake_codex(
         if spawn_descendant
         else ""
     )
+    detached_descendant_line = (
+        "child = subprocess.Popen([sys.executable, '-c', "
+        "'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)'], "
+        "start_new_session=True); "
+        "Path.cwd().parent.joinpath('detached-descendant.pid').write_text(str(child.pid), encoding='utf-8')"
+        if spawn_detached_descendant
+        else ""
+    )
     path.write_text(
         "#!/usr/bin/env python3\n"
         "import json, os, signal, subprocess, sys, time\n"
@@ -72,6 +83,12 @@ def _fake_codex(
         "args = sys.argv[1:]\n"
         "output = args[args.index('--output-last-message') + 1]\n"
         "prompt = sys.stdin.read()\n"
+        "inherited_fd = os.environ.get('TEST_INHERITED_FD')\n"
+        "try:\n"
+        "  os.fstat(int(inherited_fd))\n"
+        "  inherited_fd_open = True\n"
+        "except (OSError, TypeError, ValueError):\n"
+        "  inherited_fd_open = False\n"
         "result = {\n"
         "  'cwd': str(Path.cwd().resolve()),\n"
         "  'branch': subprocess.run(['git','branch','--show-current'], check=True, capture_output=True, text=True).stdout.strip(),\n"
@@ -80,11 +97,14 @@ def _fake_codex(
         "  'gh_repo_present': 'GH_REPO' in os.environ,\n"
         "  'git_work_tree_present': 'GIT_WORK_TREE' in os.environ,\n"
         "  'git_config_present': any(k == 'GIT_CONFIG' or k.startswith('GIT_CONFIG_') for k in os.environ),\n"
+        "  'git_environment_present': sorted(k for k in os.environ if k.startswith('GIT_')),\n"
+        "  'inherited_fd_open': inherited_fd_open,\n"
         "  'contract_first': prompt.startswith('LANE CONTRACT (binding):'),\n"
         "  'pid': os.getpid(),\n"
         "}\n"
         f"{ignore_line}\n"
         f"{descendant_line}\n"
+        f"{detached_descendant_line}\n"
         f"{corrupt_line}\n"
         f"{final_line}\n"
         f"{sleep_line}\n",
@@ -101,6 +121,7 @@ def _install_repo(
     corrupt_receipt: bool = False,
     ignore_sigterm: bool = False,
     spawn_descendant: bool = False,
+    spawn_detached_descendant: bool = False,
 ):
     remote = tmp_path / "origin.git"
     subprocess.run(
@@ -132,6 +153,7 @@ def _install_repo(
         corrupt_receipt=corrupt_receipt,
         ignore_sigterm=ignore_sigterm,
         spawn_descendant=spawn_descendant,
+        spawn_detached_descendant=spawn_detached_descendant,
     )
     (repo / "config").mkdir()
     (repo / "config" / "dev-model.yaml").write_text(
@@ -226,6 +248,9 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
         "GIT_CONFIG_COUNT": "1",
         "GIT_CONFIG_KEY_0": "remote.origin.pushurl",
         "GIT_CONFIG_VALUE_0": str(tmp_path / "foreign-origin"),
+        "GIT_OBJECT_DIRECTORY": str(tmp_path / "foreign-objects"),
+        "GIT_SSH_COMMAND": str(tmp_path / "hostile-ssh"),
+        "GIT_PROXY_COMMAND": str(tmp_path / "hostile-proxy"),
         "PATH": f"{fake_bin}{os.pathsep}{env['PATH']}",
     }
 
@@ -248,11 +273,60 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
     assert final["gh_repo_present"] is False
     assert final["git_work_tree_present"] is False
     assert final["git_config_present"] is False
+    assert final["git_environment_present"] == []
     assert final["push_url"] == descriptor["origin_push_url"]
     assert final["contract_first"] is True
     assert not fake_git_marker.exists()
     assert not fake_bash_marker.exists()
     assert receipt["terminal"]["final_message_sha256"]
+
+
+def test_caller_inheritable_file_descriptor_is_closed_before_runtime_exec(
+    tmp_path: Path,
+) -> None:
+    _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    leak_read, leak_write = os.pipe()
+    high_leak_fd = fcntl.fcntl(leak_read, fcntl.F_DUPFD, 512)
+    os.close(leak_read)
+    os.set_inheritable(high_leak_fd, True)
+    os.write(leak_write, b"CAPABILITY-LEAK")
+    os.close(leak_write)
+    inherited = {**env, "TEST_INHERITED_FD": str(high_leak_fd)}
+    _soft_limit, hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
+
+    def lower_descriptor_limit() -> None:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (256, hard_limit))
+
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(engine_dir / "launch_codex_lane.py"),
+                "--descriptor",
+                str(descriptor["descriptor_path"]),
+                "--prompt-file",
+                str(prompt),
+            ],
+            env=inherited,
+            pass_fds=(high_leak_fd,),
+            preexec_fn=lower_descriptor_limit,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        os.close(high_leak_fd)
+
+    assert result.returncode == 0, result.stderr
+    receipt = json.loads(
+        (
+            sessions
+            / "probe"
+            / f"launch-receipt-{descriptor['descriptor_id']}.json"
+        ).read_text(encoding="utf-8")
+    )
+    final = json.loads(Path(receipt["terminal"]["final_message_path"]).read_text())
+    assert final["inherited_fd_open"] is False
 
 
 def test_relative_runtime_command_uses_only_the_trusted_executable_path(
@@ -493,6 +567,39 @@ def test_process_reuse_cannot_satisfy_parent_binding() -> None:
             process_nonce="reused-process-nonce",
             live_start_fingerprint=None,
         )
+
+
+def test_reused_pid_without_launch_nonce_is_never_signalled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    launcher = _load_launcher()
+    scans = iter(({4242: "ps:same-second"}, {}, {}, {}, {}))
+    signalled: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        launcher,
+        "_processes_with_launch_nonce",
+        lambda _nonce: next(scans, {}),
+    )
+    monkeypatch.setattr(
+        launcher, "_process_start_fingerprint", lambda _pid: "ps:same-second"
+    )
+    monkeypatch.setattr(
+        launcher.os, "kill", lambda pid, signum: signalled.append((pid, signum))
+    )
+
+    launcher._terminate_launch_lineage("current-launch-nonce", 1)
+
+    assert signalled == []
+
+
+def test_descriptor_scrub_refuses_when_live_descriptors_cannot_be_enumerated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    launcher = _load_launcher()
+    monkeypatch.setattr(launcher.Path, "is_dir", lambda _path: False)
+
+    with pytest.raises(launcher.LaunchError, match="cannot enumerate inherited"):
+        launcher._close_nonstandard_descriptors()
 
 
 def test_success_without_final_message_evidence_is_failure(tmp_path: Path) -> None:
@@ -844,6 +951,77 @@ def test_descendant_cannot_outlive_a_successful_child_leader(tmp_path: Path) -> 
         if descendant_pid is not None:
             with contextlib.suppress(ProcessLookupError):
                 os.kill(descendant_pid, signal.SIGKILL)
+
+
+def test_detached_descendant_blocks_success_and_is_terminated(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, spawn_detached_descendant=True
+    )
+    pid_path = sessions / "probe" / "detached-descendant.pid"
+    detached_pid: int | None = None
+    try:
+        result = _run_launcher(engine, descriptor, prompt, env)
+        assert result.returncode != 0
+        detached_pid = int(pid_path.read_text(encoding="utf-8"))
+        receipt = json.loads(
+            (
+                sessions
+                / "probe"
+                / f"launch-receipt-{descriptor['descriptor_id']}.json"
+            ).read_text(encoding="utf-8")
+        )
+        assert receipt["status"] == "failed"
+        assert "detached launch-lineage" in receipt["terminal"]["error"]
+        with pytest.raises(ProcessLookupError):
+            os.kill(detached_pid, 0)
+    finally:
+        if detached_pid is not None:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(detached_pid, signal.SIGKILL)
+
+
+def test_interruption_terminates_detached_launch_lineage(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, sleep=True, spawn_detached_descendant=True
+    )
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            str(engine / "launch_codex_lane.py"),
+            "--descriptor",
+            str(descriptor["descriptor_path"]),
+            "--prompt-file",
+            str(prompt),
+        ],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    pid_path = sessions / "probe" / "detached-descendant.pid"
+    receipt_path = sessions / "probe" / f"launch-receipt-{descriptor['descriptor_id']}.json"
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if pid_path.is_file() and receipt_path.is_file():
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            if receipt.get("status") == "observed":
+                break
+        time.sleep(0.05)
+    else:
+        process.kill()
+        pytest.fail("launcher never durably observed the detached-lineage fixture")
+    detached_pid = int(pid_path.read_text(encoding="utf-8"))
+    try:
+        process.send_signal(signal.SIGTERM)
+        stdout, stderr = process.communicate(timeout=10)
+        assert process.returncode != 0, (stdout, stderr)
+        terminal = json.loads(receipt_path.read_text(encoding="utf-8"))
+        assert terminal["status"] == "interrupted"
+        with pytest.raises(ProcessLookupError):
+            os.kill(detached_pid, 0)
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(detached_pid, signal.SIGKILL)
 
 
 def test_exception_after_reaped_leader_still_cleans_up_descendant(

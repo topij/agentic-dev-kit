@@ -13357,6 +13357,7 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
 
 @pytest.mark.kit_repo_only(
     "AGENTS.md",
+    "CHANGELOG.md",
     "docs/templates/AGENTS.md.tmpl",
     "docs/AGENTS-sections.md",
     ".claude/rules/safety-critical-changes.md",
@@ -13398,6 +13399,11 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         assert "pr_watch.py" in text
         assert "dev_session.sh" in text
         assert "launch_codex_lane.py" in text
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    launcher_entry = changelog.split("## #609", 1)[1].split("\n---", 1)[0]
+    assert "adopter-owned `AGENTS.md`" in launcher_entry
+    assert ".claude/rules/safety-critical-changes.md" in launcher_entry
+    assert "scripts/devkit/launch_codex_lane.py" in launcher_entry
 
 
 @pytest.mark.kit_repo_only("saved_plans/codex-hooks-live-probe/.codex/hooks.json")

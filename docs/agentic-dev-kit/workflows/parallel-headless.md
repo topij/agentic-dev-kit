@@ -49,16 +49,18 @@ block it:
    hard-errors on a `state/` write instead of silently landing in prod. Interactive
    `new` and cron/CI never set either field.
 
-   The supported wrapper removes every inherited `DEVKIT_*` key, plus `GH_REPO`, Git
-   repository override variables (including injected `GIT_CONFIG` / `GIT_CONFIG_*`
-   entries), caller `PATH`, `PWD`, and `OLDPWD`; then it installs the engine-owned
+   The supported wrapper removes every inherited `DEVKIT_*` and `GIT_*` key, plus
+   `GH_REPO`, caller `PATH`, `PWD`, and `OLDPWD`; then it installs the engine-owned
    trusted executable path and assigns every key from
    `env` unconditionally and seeds `PWD` from the descriptor worktree. The child then
    resolves its physical cwd independently and rejects disagreement with that seeded
    value. Do not use `setdefault`, skip a key because it is already present, or rely
    on the marker to beat an inherited root. Unrelated permitted variables remain
    available; the descriptor map is complete for lane-root identity, not a complete
-   process environment.
+   process environment. Before runtime exec, the observer closes every non-standard
+   inherited file descriptor. An internal launch-lineage nonce is added only after the
+   child has observed the exact descriptor environment; it lets the parent detect and
+   terminate descendants that detach from the original process group.
 
 ### The lane-contract preamble (inject this verbatim)
 
@@ -113,7 +115,8 @@ foreign repository, worktree, origin fetch/push identity, scope, state root, bra
 base, commit, prompt contract, or merge class; an occupied attempt or final-message
 path; a child
 process that does not hold the current launch capability; a child leader that exits
-while its process group remains; interruption; missing observation; nonzero child exit;
+while its process group or detached launch lineage remains; interruption; an inherited
+non-standard file descriptor reaching runtime exec; missing observation; nonzero child exit;
 or missing final text. A parent killed before
 it can finalize leaves the exclusive attempt record, so retry cannot silently reuse
 the descriptor. Issue a fresh lane descriptor only after accounting for the partial

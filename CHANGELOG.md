@@ -54,8 +54,14 @@ starts.
   `new --headless --runtime codex` (or `DEVKIT_RUNTIME=codex`); and invoke the wrapper
   rather than direct `codex exec` or runtime-native dispatch. Preserve the descriptor's
   repository fetch/push identity, prompt contract, cross-bound environment, trusted
-  executable lookup, process authority, and one-shot evidence fields when integrating the output. Do not invoke an
-  internal child mode; the supported observer is fork-only inside the public wrapper.**
+  executable lookup, process authority, and one-shot evidence fields when integrating
+  the output. Add `scripts/launch_codex_lane.py` (and the rendered
+  `scripts/devkit/launch_codex_lane.py` path where applicable) beside
+  `scripts/dev_session.sh` and `scripts/pr_watch.py` in the adopter-owned `AGENTS.md`
+  safety-critical ground rule and `.claude/rules/safety-critical-changes.md` path list;
+  `./init.sh --no-clobber` preserves those existing bindings and does not add the route
+  for you. Do not invoke an internal child mode; the supported observer is fork-only
+  inside the public wrapper.**
 - **ADDED (config keys) — `parallel` now owns `codex_headless_command`,
   `descriptor_ttl_seconds`, `observation_timeout_seconds`, and
   `termination_grace_seconds`.** **Refresh `init.sh` and run

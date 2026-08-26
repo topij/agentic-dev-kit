@@ -46,27 +46,21 @@ REQUIRED_ENV_KEYS = frozenset(
 REPOSITORY_OVERRIDE_KEYS = frozenset(
     {
         "GH_REPO",
-        "GIT_DIR",
-        "GIT_WORK_TREE",
-        "GIT_COMMON_DIR",
-        "GIT_INDEX_FILE",
         "PWD",
         "OLDPWD",
     }
 )
+PROCESS_LINEAGE_ENV = "ADK_LAUNCH_PROCESS_NONCE"
 SAFE_EXECUTABLE_PATH = os.pathsep.join(
     (*os.defpath.split(os.pathsep), "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin")
 )
 TRUSTED_GIT = shutil.which("git", path=os.defpath)
 TRUSTED_BASH = shutil.which("bash", path=os.defpath)
+TRUSTED_PS = shutil.which("ps", path=os.defpath)
 
 
 def _is_repository_override_key(key: str) -> bool:
-    return (
-        key in REPOSITORY_OVERRIDE_KEYS
-        or key == "GIT_CONFIG"
-        or key.startswith("GIT_CONFIG_")
-    )
+    return key in REPOSITORY_OVERRIDE_KEYS or key.startswith("GIT_")
 
 
 class LaunchError(RuntimeError):
@@ -372,6 +366,71 @@ def _process_start_fingerprint(pid: int) -> str | None:
     return f"ps:{value}"
 
 
+def _processes_with_launch_nonce(process_nonce: str) -> dict[int, str]:
+    marker = f"{PROCESS_LINEAGE_ENV}={process_nonce}"
+    matches: dict[int, str] = {}
+    proc_root = Path("/proc")
+    if proc_root.is_dir():
+        for candidate in proc_root.iterdir():
+            if not candidate.name.isdecimal():
+                continue
+            try:
+                environment = (candidate / "environ").read_bytes().split(b"\0")
+            except (OSError, PermissionError):
+                continue
+            if marker.encode() not in environment:
+                continue
+            pid = int(candidate.name)
+            fingerprint = _process_start_fingerprint(pid)
+            if fingerprint is None:
+                raise LaunchError("cannot bind a launch-lineage process identity")
+            matches[pid] = fingerprint
+        return matches
+    if TRUSTED_PS is None:
+        raise LaunchError("trusted process observer is unavailable")
+    try:
+        result = subprocess.run(
+            [TRUSTED_PS, "eww", "-axo", "pid=,command="],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise LaunchError("cannot observe the launch process lineage") from exc
+    for line in result.stdout.splitlines():
+        pid_text, separator, payload = line.lstrip().partition(" ")
+        if not separator or marker not in payload:
+            continue
+        try:
+            pid = int(pid_text)
+        except ValueError:
+            continue
+        fingerprint = _process_start_fingerprint(pid)
+        if fingerprint is None:
+            raise LaunchError("cannot bind a launch-lineage process identity")
+        matches[pid] = fingerprint
+    return matches
+
+
+def _close_nonstandard_descriptors() -> None:
+    for descriptor_root in (Path("/proc/self/fd"), Path("/dev/fd")):
+        if not descriptor_root.is_dir():
+            continue
+        try:
+            descriptors = [
+                int(candidate.name)
+                for candidate in descriptor_root.iterdir()
+                if candidate.name.isdecimal() and int(candidate.name) > 2
+            ]
+        except OSError:
+            continue
+        for descriptor in descriptors:
+            with contextlib.suppress(OSError):
+                os.close(descriptor)
+        return
+    raise LaunchError("cannot enumerate inherited file descriptors before runtime exec")
+
+
 def _observed_identity(process_nonce: str) -> dict[str, Any]:
     cwd = Path.cwd().resolve()
     git_top = Path(_git(cwd, "rev-parse", "--show-toplevel")).resolve()
@@ -585,8 +644,10 @@ def _child_main(arguments: argparse.Namespace) -> int:
         if os.read(arguments.ack_fd, 1) != b"1":
             raise LaunchError("parent did not acknowledge the durable observation")
         os.close(arguments.ack_fd)
+        os.environ[PROCESS_LINEAGE_ENV] = process_nonce
         final_message = str(Path(arguments.final_message))
         argv = [*command, "--cd", expected["worktree"], "--output-last-message", final_message, "-"]
+        _close_nonstandard_descriptors()
         os.execvpe(argv[0], argv, os.environ)
     except LaunchError as exc:
         rejected = {
@@ -775,21 +836,67 @@ def _wait_for_process_group_exit(
 def _terminate_process_group(
     process: _ForkedChild, grace_seconds: int
 ) -> int:
-    with contextlib.suppress(ProcessLookupError):
+    try:
         os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    except PermissionError as exc:
+        raise LaunchError("cannot signal the child process group") from exc
     returncode = _wait_for_process_group_exit(
         process, time.monotonic() + grace_seconds
     )
     if returncode is not None:
         return returncode
-    with contextlib.suppress(ProcessLookupError):
+    try:
         os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError as exc:
+        raise LaunchError("cannot force-stop the child process group") from exc
     returncode = _wait_for_process_group_exit(
         process, time.monotonic() + grace_seconds
     )
     if returncode is None:
         raise LaunchError("child process group survived forced termination")
     return returncode
+
+
+def _terminate_launch_lineage(process_nonce: str, grace_seconds: int) -> None:
+    def signal_current_lineage(signum: int, error: str) -> dict[int, str]:
+        tracked = _processes_with_launch_nonce(process_nonce)
+        for pid, fingerprint in tracked.items():
+            current = _processes_with_launch_nonce(process_nonce)
+            if (
+                current.get(pid) != fingerprint
+                or _process_start_fingerprint(pid) != fingerprint
+            ):
+                continue
+            try:
+                os.kill(pid, signum)
+            except ProcessLookupError:
+                pass
+            except PermissionError as exc:
+                raise LaunchError(error) from exc
+        return tracked
+
+    tracked = signal_current_lineage(
+        signal.SIGTERM, "cannot signal a launch-lineage process"
+    )
+    deadline = time.monotonic() + grace_seconds
+    while tracked and time.monotonic() < deadline:
+        tracked = _processes_with_launch_nonce(process_nonce)
+        if tracked:
+            time.sleep(0.05)
+    tracked = signal_current_lineage(
+        signal.SIGKILL, "cannot force-stop a launch-lineage process"
+    )
+    deadline = time.monotonic() + grace_seconds
+    while tracked and time.monotonic() < deadline:
+        tracked = _processes_with_launch_nonce(process_nonce)
+        if tracked:
+            time.sleep(0.05)
+    if _processes_with_launch_nonce(process_nonce):
+        raise LaunchError("launch-lineage process survived forced termination")
 
 
 def _wait_for_process_or_signal(
@@ -953,8 +1060,15 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         returncode = None if error else _wait_for_process_or_signal(process, caught)
         if returncode is not None and _process_group_exists(process.pid):
             error = "child exited while its process group remained active"
+        if (
+            returncode is not None
+            and error is None
+            and _processes_with_launch_nonce(process_nonce)
+        ):
+            error = "child exited while detached launch-lineage processes remained active"
         if caught or error:
             returncode = _terminate_process_group(process, termination_grace)
+            _terminate_launch_lineage(process_nonce, termination_grace)
         assert returncode is not None
         final_bytes = b""
         if final_message.is_file() and not final_message.is_symlink():
@@ -1008,6 +1122,10 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
                 returncode = _terminate_process_group(process, termination_grace)
             except LaunchError as termination_error:
                 exc = LaunchError(f"{exc}; {termination_error}")
+        try:
+            _terminate_launch_lineage(process_nonce, termination_grace)
+        except LaunchError as termination_error:
+            exc = LaunchError(f"{exc}; {termination_error}")
         _terminal_receipt(
             receipt_path,
             attempt,

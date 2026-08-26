@@ -41,7 +41,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "f4eced89e2ff66e8f7efc7e1b509f56d46514486acb0b13ec145ea7b9b69802f"
+      "sha256": "3e49956a86f144d2b9f26982c7eeb41850704b97eef38e276ef66b3b27e92abe"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -133,7 +133,7 @@
     },
     "scripts/launch_codex_lane.py": {
       "role": "engine",
-      "sha256": "ff4ad587ea1c578b9db1f18e015a4d989e4ea25ca2dd1989a3c4c3358b246349"
+      "sha256": "7c987567ff56d5f58312122fd1dcb5a167465eddd59ef1ca8b961a26b64f9895"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
@@ -228,7 +228,7 @@
     },
     "scripts/tests/test_codex_lane_launcher.py": {
       "role": "test",
-      "sha256": "ea14e96bb94390937e518650d8875ccb781b9916b098cea42ea7253d87e4e549"
+      "sha256": "0bc62a7bb3e398bf1d3c860bc83a6d3c46805ad106a28231ceb10a64a976e415"
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
@@ -256,7 +256,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "27def69e3d9e4a464b282896b01271955d861b03f380cb55f718d68cee77a4a6"
+      "sha256": "2eb06091463bfad4a08f442a54a4471885888c7bfa926c792298bb4706b8ea1b"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
