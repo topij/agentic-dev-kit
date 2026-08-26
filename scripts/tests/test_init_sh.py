@@ -2492,8 +2492,16 @@ def test_installer_refuses_duplicate_tracker_authority_before_writing(
     assert not (repo / ".gitignore").exists()
 
 
+@pytest.mark.parametrize(
+    ("opening", "closing"),
+    [
+        ("  metadata: {\n", "  }\n"),
+        ('  metadata: [" ]",\n', "    ]\n"),
+        ("  metadata: {inside: {},\n", "    }\n"),
+    ],
+)
 def test_installer_refuses_nested_flow_path_decoy_before_outside_write(
-    tmp_path: Path,
+    tmp_path: Path, opening: str, closing: str
 ) -> None:
     outside_handoff = tmp_path / "outside" / "handoff.md"
     original_handoff = next(
@@ -2501,15 +2509,18 @@ def test_installer_refuses_nested_flow_path_decoy_before_outside_write(
     )
     config = shipped_config().replace(
         f"{original_handoff}\n",
-        "  metadata: {\n"
-        f'  handoff: "{outside_handoff}"\n'
-        "  }\n",
+        opening + f'  handoff: "{outside_handoff}"\n' + closing,
         1,
     )
     parsed = yaml.safe_load(config)
     assert "handoff" not in parsed["paths"]
-    assert parsed["paths"]["metadata"]["handoff"] == str(outside_handoff)
+    assert str(outside_handoff) in repr(parsed["paths"]["metadata"])
     repo = _fixture(tmp_path, config=config, git=True)
+    existing = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
 
     result = _run_init(repo, "--no-clobber", check=False)
 
@@ -2517,16 +2528,22 @@ def test_installer_refuses_nested_flow_path_decoy_before_outside_write(
     assert "ambiguous child key" in result.stderr, result.stderr
     assert _config(repo) == config
     assert not outside_handoff.exists()
+    assert all((repo / path).read_bytes() == data for path, data in existing.items())
     assert not (repo / ".gitignore").exists()
     assert not (repo / ".git" / "hooks" / "pre-push").exists()
+    assert not (repo / "docs").exists()
 
 
 @pytest.mark.parametrize(
     "config",
     [
         "models:\n  - default: sonnet\n",
+        "models:\n    - default: sonnet\n",
         'tracker:\n  - project_name: "topij/agentic-dev-kit"\n',
+        'tracker:\n    - project_name: "topij/agentic-dev-kit"\n',
         "tracker:\n  linear:\n    - team_id: team-id\n",
+        "tracker:\n  linear:\n      - team_id: team-id\n",
+        "review:\n    bots: [coderabbit]\n",
     ],
 )
 def test_installer_refuses_sequence_shaped_owned_mapping_before_writing(
@@ -2542,6 +2559,7 @@ def test_installer_refuses_sequence_shaped_owned_mapping_before_writing(
     assert _config(repo) == config
     assert not (repo / ".gitignore").exists()
     assert not (repo / ".git" / "hooks" / "pre-push").exists()
+    assert not (repo / "docs").exists()
 
 
 def test_non_interactive_run_is_unaffected_without_an_origin_remote(tmp_path: Path) -> None:

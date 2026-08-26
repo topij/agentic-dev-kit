@@ -603,13 +603,53 @@ preflight_migration_config() {
   # Their continuation indentation is not structural YAML indentation, so a
   # nested flow key can otherwise look exactly like a sibling field here.
   if awk '
-    function opens_unclosed_flow(text,   value) {
+    function flow_text(text,   value) {
       value = text
-      sub(/^[[:space:]]+/, "", value)
-      if (value ~ /^-+[[:space:]]*/) sub(/^-+[[:space:]]*/, "", value)
-      if (value ~ /^([!&][^[:space:]]+[[:space:]]+)*\[/ && value !~ /\]/) return 1
-      if (value ~ /^([!&][^[:space:]]+[[:space:]]+)*\{/ && value !~ /\}/) return 1
-      return 0
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      if (value ~ /^-[[:space:]]+/) sub(/^-[[:space:]]+/, "", value)
+      while (value ~ /^[!&][^[:space:]]+[[:space:]]+/) {
+        sub(/^[!&][^[:space:]]+[[:space:]]+/, "", value)
+      }
+      return value
+    }
+    function starts_flow(text,   value, first) {
+      value = flow_text(text)
+      first = substr(value, 1, 1)
+      return first == "[" || first == "{"
+    }
+    function complete_flow(text,   value, n, i, c, nextc, prev, quote, sqc, square, curly, closed) {
+      value = flow_text(text)
+      if (!starts_flow(value)) return 1
+      n = length(value)
+      sqc = sprintf("%c", 39)
+      prev = " "
+      for (i = 1; i <= n; i++) {
+        c = substr(value, i, 1)
+        nextc = substr(value, i + 1, 1)
+        if (quote != "") {
+          if (quote == "\"" && c == "\\") { i++; continue }
+          if (c == quote) {
+            if (quote == sqc && nextc == sqc) { i++; continue }
+            quote = ""
+          }
+          continue
+        }
+        if (c == "\"" || c == sqc) { quote = c; continue }
+        if (c == "#" && prev ~ /[[:space:]]/) break
+        if (closed) {
+          if (c !~ /[[:space:]]/) return 0
+          prev = c
+          continue
+        }
+        if (c == "[") square++
+        else if (c == "]") square--
+        else if (c == "{") curly++
+        else if (c == "}") curly--
+        if (square < 0 || curly < 0) return 0
+        if (square == 0 && curly == 0) closed = 1
+        prev = c
+      }
+      return closed && quote == ""
     }
     BEGIN {
       owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
@@ -621,59 +661,97 @@ preflight_migration_config() {
       cursec = $0
       sub(/:.*/, "", cursec)
       cursub = ""
+      body_seen = 0
       allow_indentless_sequence = 0
+      linear_seen = 0
       next
     }
-    !owned[cursec] { next }
-    /^  [^ ]/ {
-      if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_.-]*:/) {
-        # YAML permits a block sequence at the same indentation as its key,
-        # but only after a sibling key with an empty value introduced it. A
-        # direct sequence means the owned section is not the mapping the
-        # installer reads and writes.
-        if ($0 ~ /^  -/ && allow_indentless_sequence) {
-          if (opens_unclosed_flow(substr($0, 3))) unsafe = 1
+    # triage has its own preceding flat-map validator and indent-preserving
+    # writer. It is not read or rewritten by the exact-indent prompt helpers.
+    !owned[cursec] || cursec == "triage" { next }
+    {
+      match($0, /^ */)
+      indent = RLENGTH
+      content = substr($0, indent + 1)
+
+      # The prompt reader/writer owns exact two-space sibling keys. Requiring
+      # that same grammar here keeps YAML structure and migration scope aligned;
+      # a deeper first item can otherwise turn the section into a sequence while
+      # remaining invisible to get_field/set_field.
+      if (!body_seen) {
+        if (indent != 2 || content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:/) {
+          unsafe = 1
           next
         }
-        unsafe = 1
+        body_seen = 1
+      }
+
+      if (indent == 2) {
+        if (content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:/) {
+          # YAML permits an indentless block sequence only after an empty-valued
+          # sibling key introduced it. Every other exact-sibling continuation is
+          # outside the line migrator grammar.
+          if (content ~ /^-/ && allow_indentless_sequence) {
+            if (starts_flow(content) && !complete_flow(content)) unsafe = 1
+            next
+          }
+          unsafe = 1
+          next
+        }
+        key = content
+        sub(/:.*/, "", key)
+        if (seen_child[cursec, key]++) unsafe = 1
+        value = content
+        sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
+        if (starts_flow(value) && !complete_flow(value)) unsafe = 1
+        cursub = ""
+        linear_seen = 0
+        allow_indentless_sequence = 0
+        if (content ~ /^[A-Za-z_][A-Za-z0-9_.-]*:[[:space:]]*$/) {
+          cursub = key
+          allow_indentless_sequence = 1
+        }
+        if (cursec == "tracker" && key == "linear" && cursub != "linear") unsafe = 1
+        if (cursec == "tracker" && key == "linear") allow_indentless_sequence = 0
         next
       }
-      key = $0
-      sub(/^  /, "", key)
-      sub(/:.*/, "", key)
-      if (seen_child[cursec, key]++) unsafe = 1
-      cursub = ""
-      allow_indentless_sequence = 0
-      value = $0
-      sub(/^  [A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
-      if (opens_unclosed_flow(value)) unsafe = 1
-      if ($0 ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:[[:space:]]*$/) {
-        cursub = key
-        allow_indentless_sequence = 1
+
+      # A flow value placed on a continuation line is structurally valid YAML
+      # but invisible to the prompt helpers, and a multi-line flow begun under
+      # any nested key can later present a nested key at sibling indentation.
+      if (starts_flow(content)) unsafe = 1
+      nested_value = content
+      if (nested_value ~ /^-?[[:space:]]*[A-Za-z_][A-Za-z0-9_.-]*:/) {
+        sub(/^-?[[:space:]]*[A-Za-z_][A-Za-z0-9_.-]*:/, "", nested_value)
+        if (starts_flow(nested_value) && !complete_flow(nested_value)) unsafe = 1
       }
-      if (cursec == "tracker" && key == "linear" && cursub != "linear") unsafe = 1
-      if (cursec == "tracker" && key == "linear") allow_indentless_sequence = 0
-      next
-    }
-    cursec == "tracker" && cursub == "linear" && /^    [^ ]/ {
-      if ($0 !~ /^    [A-Za-z_][A-Za-z0-9_.-]*:/) {
-        unsafe = 1
-        next
+
+      if (cursec == "tracker" && cursub == "linear") {
+        if (!linear_seen &&
+            (indent != 4 || content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:/)) {
+          unsafe = 1
+          next
+        }
+        if (indent == 4) {
+          if (content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:/) {
+            unsafe = 1
+            next
+          }
+          key = content
+          sub(/:.*/, "", key)
+          if (seen_linear[key]++) unsafe = 1
+          value = content
+          sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
+          if (starts_flow(value) && !complete_flow(value)) unsafe = 1
+          linear_seen = 1
+        }
       }
-      key = $0
-      sub(/^    /, "", key)
-      sub(/:.*/, "", key)
-      if (seen_linear[key]++) unsafe = 1
-      value = $0
-      sub(/^    [A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
-      if (opens_unclosed_flow(value)) unsafe = 1
-      next
     }
-    opens_unclosed_flow($0) { unsafe = 1 }
     END { exit(unsafe ? 0 : 1) }
   ' "$CONFIG_FILE"; then
     echo "error: an init-owned config section contains an ambiguous child key." >&2
-    echo "  Use unique bare mapping keys and single-line flow collections;" >&2
+    echo "  Use unique bare mapping keys at the shipped indentation and keep" >&2
+    echo "  flow collections on the same line as their key;" >&2
     echo "  tracker.linear must be a plain nested map." >&2
     echo "  No migration was applied." >&2
     exit 1

@@ -2472,6 +2472,20 @@ def _assert_triage_semantics(workflow: str) -> None:
         "document are normative. They take precedence over later explanatory prose "
         "and runtime adapters."
     ) in flattened
+    input_order = (
+        "Validate only the syntactic entry keyword before capability probing: an "
+        "unknown or combined keyword hard-stops immediately. For a recognized live "
+        "or test entry, resolve the repository/config and shared-state prerequisites, "
+        "then acquire and hold the mode-specific single-writer gate before observing "
+        "state or recovery-artifact presence, reading either artifact, or resolving "
+        "any state-bearing predicate in this matrix. The scheduled or unattended "
+        "`recover` row is the explicit exception: execution context and the recognized "
+        "keyword select it without acquiring the gate or observing state. Resolve the "
+        "remaining capability-dependent predicates only after the entry/state row is "
+        "selected. This matrix declares required outcomes; it never authorizes "
+        "pre-gate state observation."
+    )
+    assert input_order in flattened
     capabilities = _integration_table(workflow, "Capability contract", 3)
     assert {key: value[0] for key, value in capabilities.items()} == {
         "repository-config-read": "required",
@@ -3326,6 +3340,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "Parse under the held gate before creating the `reserved` state",
             "Create the `reserved` state before parsing under the held gate",
+            1,
+        ),
+        workflow.replace(
+            "then acquire and hold the\nmode-specific single-writer gate before observing state or recovery-artifact presence",
+            "then observe state and recovery artifacts before acquiring the single-writer gate",
             1,
         ),
         workflow.replace(
@@ -4384,11 +4403,6 @@ _MIGRATION_SHAPES = {
   unavailable_markers:
     - "my in-house reviewer is offline"
 """,
-    "four_space": """review:
-    bots: [bugbot]
-    unavailable_markers:
-        - "my in-house reviewer is offline"
-""",
     "flush_indent": """review:
   bots: [bugbot]
   unavailable_markers:
@@ -4397,6 +4411,10 @@ _MIGRATION_SHAPES = {
     "inline_flow": """review:
   bots: [bugbot]
   unavailable_markers: ["my in-house reviewer is offline"]
+""",
+    "inline_flow_quoted_delimiters": """review:
+  bots: [bugbot] # retained adopter choice
+  unavailable_markers: ["my in-house ] reviewer", "literal }"]
 """,
     "decoy_section_first": """other:
   bots: [nope]
@@ -4546,16 +4564,6 @@ def test_migration_adds_every_review_key_exactly_once(tmp_path: Path) -> None:
             "brackets",
             '- "review rate limited"',
         ),
-        # Flow list whose brackets do not close on the key line. Valid YAML, but
-        # `kitconfig` parses it to {} / "[" — so the adopter's WHOLE list is
-        # already inert, and "add it inside the brackets" would be confident,
-        # useless advice. Say what's actually wrong instead.
-        (
-            "flow_next_line",
-            'review:\n  unavailable_markers:\n    ["mine", "other"]\n',
-            "cannot parse that",
-            '- "review rate limited"',
-        ),
         # A marker containing a `#` must not be cut short by comment-stripping —
         # doing so asks for a marker the adopter already has.
         (
@@ -4583,9 +4591,17 @@ def test_the_instruction_matches_the_list_style(
     assert unwanted not in proc.stderr
 
 
+@pytest.mark.parametrize(
+    "config",
+    [
+        'review:\n  unavailable_markers:\n    ["mine", "other"]\n',
+        'review:\n  unavailable_markers: [\n    "mine",\n    "other"\n  ]\n',
+    ],
+)
 @pytest.mark.kit_repo_only("init.sh")
-def test_installer_refuses_multiline_flow_before_migration(tmp_path: Path) -> None:
-    config = 'review:\n  unavailable_markers: [\n    "mine",\n    "other"\n  ]\n'
+def test_installer_refuses_multiline_flow_before_migration(
+    tmp_path: Path, config: str
+) -> None:
     path, proc = _run_init(
         tmp_path,
         "refuses_multiline_flow",

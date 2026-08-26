@@ -77,7 +77,15 @@ missing, or unverifiable transition hard-stops before tracker or repository writ
 
 ## Semantic input matrix
 
-Evaluate the input before capability-dependent work.
+Validate only the syntactic entry keyword before capability probing: an unknown or
+combined keyword hard-stops immediately. For a recognized live or test entry, resolve
+the repository/config and shared-state prerequisites, then acquire and hold the
+mode-specific single-writer gate before observing state or recovery-artifact presence,
+reading either artifact, or resolving any state-bearing predicate in this matrix. The
+scheduled or unattended `recover` row is the explicit exception: execution context and
+the recognized keyword select it without acquiring the gate or observing state. Resolve
+the remaining capability-dependent predicates only after the entry/state row is selected.
+This matrix declares required outcomes; it never authorizes pre-gate state observation.
 Here, `valid active state` means an ordinary live-run state, never a gate-only recovery
 intent or held receipt.
 

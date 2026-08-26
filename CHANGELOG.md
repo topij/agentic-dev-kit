@@ -49,9 +49,11 @@ starts.
   names, commit subject, and PR draft policy.** **Refresh `init.sh`, then run
   `./init.sh --no-clobber`. The additive migration installs the block or missing flat
   keys without replacing adopter values. Before retrying a preflight refusal, normalize
-  init-owned sections to bare mappings and rewrite multi-line flow collections in those
-  sections as single-line flow or block values; the shell-only migrator will not infer
-  structure from flow-continuation indentation. Remove any separate
+  prompted init-owned sections to bare mappings with the shipped two-space child
+  indentation; keep a partial `triage` flat map at one consistent indentation. Rewrite
+  flow values onto the same line as their keys or into block values; the
+  shell-only migrator will not infer structure from alternate or flow-continuation
+  indentation. Remove any separate
   `config/friction-triage.yaml`; keep source/archive, engine directory, tracker,
   notification, state root, branch pattern, and model mappings in their existing shared
   config sections.**
