@@ -2477,8 +2477,10 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     for phase in (
         "reserved",
         "propose",
+        "notification-delivery",
         "awaiting-approval",
         "tracker-write",
+        "forge-finalize",
         "archive-sweep",
         "completed",
     ):
@@ -2500,6 +2502,36 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     ) in flattened
     assert "This phase contains tracker-create operations only" in flattened
     assert "each operation's decision is exactly `file`" in flattened
+    for durable_contract in (
+        "Reference absence alone never permits retry",
+        "The old persisted token is never required to equal the new gate before that transition",
+        "A retained reminder operation prohibits a second reminder",
+        "appends a verified `merge-read-back` operation",
+        "Recompute `source_block_digest` from the exact frozen source-block bytes",
+        "persist the `forge-finalize` operation and first attempt at `attempting`",
+        "An identifier returned by the pending operation is forbidden from its own intent",
+        "an authoritative matching `merged: false` read-back is retained as an unsettled attempt",
+        "an independently parsed empty candidate index in the frozen snapshot",
+        "complete canonical prepared recovery envelope",
+        "exact base64-encoded canonical raw bytes",
+        "independently read back the staged tree and exact staged paths",
+        "creation time. Canonicalize those immutable nonrecursive fields as the gate-claim core",
+        "A merely non-empty or foreign approver identity is invalid",
+        "ordered proposal `(candidate_id, source_block)` sequence equals the independently parsed frozen candidate/block index one-for-one",
+        "Commit intent also binds the exact merged-config `triage.commit_subject`",
+        "Pull-request intent binds `triage.pr_draft` directly",
+        "require its current base branch to remain the configured protected branch",
+        "`live-receipt-restart` or `test-receipt-restart`",
+        "reason fixes the mode and `receipt-to-reserved` cutpoint",
+        "operations are its exact ordered attempted prefix",
+        "canonical nonrecursive route receipt core",
+        "each attempted filed decision",
+        "gate-only recovery remains operator-held",
+        "this schema never replaces `reviewed_head`",
+        "dropping only the derived `archive_sweep` summary",
+        "approval of only the capture or bundle digest is not mutation authority",
+    ):
+        assert durable_contract in flattened
     assert (
         "The capability, authority, artifact, input, gate-only input precedence, test "
         "input precedence, recovery-transition, and completion rows in this "
@@ -3206,8 +3238,12 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "finds invalid test state, acquire the test gate and atomically capture its "
         "exact raw bytes, digest, path observations, test identity, and resolved test "
         "artifacts in a test recovery bundle before parsing. Do not follow an "
-        "unvalidated captured path. Require exact in-session operator approval of the "
-        "bundle digest, then immediately re-read and re-stat the test state and require "
+        "unvalidated captured path. Derive the same complete invalid-state action "
+        "core and receipt core as state-present recovery, then digest-check and atomically replace "
+        "the capture bundle with the complete canonical `state-present-prepared` envelope whose "
+        "exact in-session operator approval binds `action_core_digest`; approval of only the "
+        "capture or bundle digest is not mutation authority. Then immediately re-read and re-stat "
+        "the test state and require "
         "the captured digest, device, inode, mode, and link count. Atomically quarantine "
         "only that unchanged test-state file and write "
         "`test-recovered-safe-to-restart` under the same test gate. A later `test` "
@@ -3230,10 +3266,11 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "`test-gate-recovery-intent` while the old test gate still exists, then follow "
         "the Gate-only recovery transition ordering with test-confined paths. "
         "Quarantine the old test gate only after the intent is durable; finish by "
-        "replacing the intent with `test-recovered-safe-to-restart` under the "
-        "replacement test gate. A later interactive `test` resumes only the recorded "
-        "absent-state intent; a state-present held bundle remains terminally "
-        "operator-held. Scheduled or unattended `test` with invalid state, a blocking "
+        "replacing the intent with `gate-only-operator-held` under the replacement "
+        "test gate. That receipt never authorizes a new test draft or a "
+        "receipt-to-reserved transition. A later interactive `test` resumes only the "
+        "recorded absent-state intent; gate-only and state-present held bundles remain "
+        "terminally operator-held. Scheduled or unattended `test` with invalid state, a blocking "
         "gate, recovery intent, or held bundle preserves everything operator-held and "
         "performs no recovery mutation."
     )
@@ -5231,8 +5268,10 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     ordinary_state_phases = {
         "reserved",
         "propose",
+        "notification-delivery",
         "awaiting-approval",
         "tracker-write",
+        "forge-finalize",
         "archive-sweep",
         "completed",
     }
@@ -5242,8 +5281,10 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             (
                 "reserved",
                 "propose",
+                "notification-delivery",
                 "awaiting-approval",
                 "tracker-write",
+                "forge-finalize",
                 "archive-sweep",
                 "completed",
             )
@@ -5252,11 +5293,17 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     phase_owned_keys = {
         "reserved": set(),
         "propose": {"proposal_payloads", "proposal_payload_digests"},
+        "notification-delivery": {
+            "proposal_payloads",
+            "proposal_payload_digests",
+            "notification_operations",
+        },
         "awaiting-approval": {
             "proposal_payloads",
             "proposal_payload_digests",
             "approval",
             "notification_thread_reference",
+            "notification_operations",
             "decisions",
         },
         "tracker-write": {
@@ -5264,16 +5311,29 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             "proposal_payload_digests",
             "approval",
             "notification_thread_reference",
+            "notification_operations",
             "decisions",
             "operations",
+        },
+        "forge-finalize": {
+            "proposal_payloads",
+            "proposal_payload_digests",
+            "approval",
+            "notification_thread_reference",
+            "notification_operations",
+            "decisions",
+            "operations",
+            "finalization_operations",
         },
         "archive-sweep": {
             "proposal_payloads",
             "proposal_payload_digests",
             "approval",
             "notification_thread_reference",
+            "notification_operations",
             "decisions",
             "operations",
+            "finalization_operations",
             "archive_sweep",
         },
         "completed": {
@@ -5281,8 +5341,10 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             "proposal_payload_digests",
             "approval",
             "notification_thread_reference",
+            "notification_operations",
             "decisions",
             "operations",
+            "finalization_operations",
             "archive_sweep",
             "completion",
         },
@@ -5291,24 +5353,128 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     lowercase_head = re.compile(r"[0-9a-f]{40}")
     owner_token_grammar = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 
-    def ordinary_state_base(phase: str) -> dict[str, object]:
+    def authoritative_frozen_content(
+        run_identity: dict[str, object],
+        candidate_ids: tuple[str, ...] = ("candidate-a", "candidate-b"),
+    ) -> dict[str, object]:
+        return {
+            "run_identity": copy.deepcopy(run_identity),
+            "blocks": [
+                {
+                    "candidate_id": candidate_id,
+                    "source_block": (
+                        f"### {candidate_id}\n\nFrozen source for {candidate_id}"
+                    ),
+                }
+                for candidate_id in candidate_ids
+            ],
+        }
+
+    def frozen_snapshot_record(
+        run_identity: dict[str, object],
+        path: str,
+        candidate_ids: tuple[str, ...] = ("candidate-a", "candidate-b"),
+    ) -> dict[str, object]:
+        content = authoritative_frozen_content(run_identity, candidate_ids)
+        raw_bytes = canonical_json_bytes(content)
+        return {
+            "path": path,
+            "content": content,
+            "raw_bytes_encoding": "base64",
+            "raw_bytes_base64": base64.b64encode(raw_bytes).decode("ascii"),
+            "digest": hashlib.sha256(raw_bytes).hexdigest(),
+        }
+
+    def validated_frozen_content(snapshot: object) -> dict[str, object] | None:
+        if (
+            not isinstance(snapshot, dict)
+            or set(snapshot)
+            != {
+                "path",
+                "content",
+                "raw_bytes_encoding",
+                "raw_bytes_base64",
+                "digest",
+            }
+            or snapshot.get("raw_bytes_encoding") != "base64"
+            or not isinstance(snapshot.get("raw_bytes_base64"), str)
+        ):
+            return None
+        try:
+            raw_bytes = base64.b64decode(snapshot["raw_bytes_base64"], validate=True)
+            parsed = json.loads(raw_bytes)
+        except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        return (
+            parsed
+            if isinstance(parsed, dict)
+            and canonical_json_bytes(parsed) == raw_bytes
+            and base64.b64encode(raw_bytes).decode("ascii")
+            == snapshot["raw_bytes_base64"]
+            and parsed == snapshot.get("content")
+            and snapshot.get("digest") == hashlib.sha256(raw_bytes).hexdigest()
+            else None
+        )
+
+    def ordinary_state_base(
+        phase: str,
+        candidate_ids: tuple[str, ...] = ("candidate-a", "candidate-b"),
+    ) -> dict[str, object]:
         config_fingerprint = "a" * 64
+        run_identity = {
+            "repository_identity": "repo-id",
+            "friction_log": "docs/kit-friction-log.md",
+            "protected_branch_head": "c" * 40,
+            "mode": "live",
+            "session": "session-id",
+            "config_fingerprint": config_fingerprint,
+        }
+        gate_claim_core = {
+            "gate_path": "state/triage/triage-pipeline-gate_live.lock",
+            "repository_identity": "repo-id",
+            "config_fingerprint": config_fingerprint,
+            "owner": {
+                "token": state_old_gate_capture["owner"]["token"],
+                "run_identity": copy.deepcopy(run_identity),
+                "host": "host-a",
+                "process_id": 12345,
+                "process_start_observation": "start-a",
+                "creation_time": "2026-08-26T00:00:00Z",
+            },
+        }
+        gate_binding = {
+            "gate_path": "state/triage/triage-pipeline-gate_live.lock",
+            "owner_token": state_old_gate_capture["owner"]["token"],
+            "owner_run_identity": copy.deepcopy(run_identity),
+            "gate_claim_core_digest": hashlib.sha256(
+                canonical_json_bytes(gate_claim_core)
+            ).hexdigest(),
+        }
+        frozen_snapshot = frozen_snapshot_record(
+            run_identity,
+            "state/triage/frozen-inbox_live_2026-08-26_session-id.json",
+            candidate_ids,
+        )
+        frozen_inbox_digest = frozen_snapshot["digest"]
         return {
             "kind": "triage-run-state",
             "schema_version": 1,
             "phase": phase,
             "mode": "live",
-            "run_identity": {
-                "repository_identity": "repo-id",
-                "friction_log": "docs/kit-friction-log.md",
-                "protected_branch_head": "c" * 40,
-                "mode": "live",
-                "session": "session-id",
-                "config_fingerprint": config_fingerprint,
-            },
+            "run_identity": run_identity,
             "gate_owner_token": state_old_gate_capture["owner"]["token"],
+            "gate_binding": gate_binding,
+            "state_claim": {
+                "reason": "initial-reservation",
+                "previous_gate_binding": None,
+                "current_gate_binding": copy.deepcopy(gate_binding),
+                "captured_state_digest": None,
+                "recovery_bundle_digest": None,
+                "approval_digest": None,
+            },
             "config_fingerprint": config_fingerprint,
-            "frozen_inbox_digest": "b" * 64,
+            "frozen_inbox_digest": frozen_inbox_digest,
+            "frozen_snapshot": frozen_snapshot,
             "engine_mode": "llm-only",
             "attempts": [],
             "verified_tracker_identifiers": [],
@@ -5317,6 +5483,82 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         }
 
     ordinary_state_keys = set(ordinary_state_base("reserved"))
+
+    def gate_binding_valid(binding: object, run_identity: object) -> bool:
+        return (
+            isinstance(binding, dict)
+            and set(binding)
+            == {
+                "gate_path",
+                "owner_token",
+                "owner_run_identity",
+                "gate_claim_core_digest",
+            }
+            and binding.get("gate_path")
+            == (
+                "state/triage/triage-pipeline-gate_"
+                f"{run_identity.get('mode')}.lock"
+            )
+            and isinstance(binding.get("owner_token"), str)
+            and owner_token_grammar.fullmatch(binding["owner_token"]) is not None
+            and (
+                binding.get("owner_run_identity") is None
+                or binding.get("owner_run_identity") == run_identity
+            )
+            and isinstance(binding.get("gate_claim_core_digest"), str)
+            and lowercase_digest.fullmatch(binding["gate_claim_core_digest"])
+            is not None
+        )
+
+    def gate_claim_core_valid(
+        core: object, binding: object, run_identity: object
+    ) -> bool:
+        if not isinstance(binding, dict):
+            return False
+        return (
+            isinstance(core, dict)
+            and set(core)
+            == {"gate_path", "repository_identity", "config_fingerprint", "owner"}
+            and core.get("gate_path") == binding.get("gate_path")
+            and core.get("repository_identity") == "repo-id"
+            and core.get("config_fingerprint") == run_identity.get("config_fingerprint")
+            and isinstance(core.get("owner"), dict)
+            and set(core["owner"])
+            == {
+                "token",
+                "run_identity",
+                "host",
+                "process_id",
+                "process_start_observation",
+                "creation_time",
+            }
+            and core["owner"].get("token") == binding.get("owner_token")
+            and core["owner"].get("run_identity")
+            == binding.get("owner_run_identity")
+            and isinstance(core["owner"].get("host"), str)
+            and bool(core["owner"].get("host"))
+            and type(core["owner"].get("process_id")) is int
+            and core["owner"]["process_id"] > 0
+            and isinstance(core["owner"].get("process_start_observation"), str)
+            and bool(core["owner"].get("process_start_observation"))
+            and isinstance(core["owner"].get("creation_time"), str)
+            and bool(core["owner"].get("creation_time"))
+            and binding.get("gate_claim_core_digest")
+            == hashlib.sha256(canonical_json_bytes(core)).hexdigest()
+        )
+
+    def ordinary_state_bound_to_gate(
+        state: object, current_gate_claim_core: object
+    ) -> bool:
+        return (
+            ordinary_state_valid(state)
+            and isinstance(state, dict)
+            and gate_claim_core_valid(
+                current_gate_claim_core,
+                state.get("gate_binding"),
+                state.get("run_identity"),
+            )
+        )
 
     def ordinary_state_payload(phase: str) -> dict[str, object]:
         payload = ordinary_state_base(phase)
@@ -5349,18 +5591,48 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                     "project": "devkit",
                     "labels": ["friction"],
                 }
+                final_payload_digest = hashlib.sha256(
+                    canonical_json_bytes(final_payload)
+                ).hexdigest()
+                source_block = next(
+                    block["source_block"]
+                    for block in payload["frozen_snapshot"]["content"]["blocks"]
+                    if block["candidate_id"] == candidate_id
+                )
+                source_block_digest = hashlib.sha256(source_block.encode()).hexdigest()
                 proposals.append(
                     {
                         "candidate_id": candidate_id,
+                        "source_block": source_block,
+                        "source_block_digest": source_block_digest,
                         "payload_core": payload_core,
                         "payload_core_digest": payload_core_digest,
                         "marker": marker,
                         "payload": final_payload,
-                        "payload_digest": hashlib.sha256(
-                            canonical_json_bytes(final_payload)
-                        ).hexdigest(),
+                        "payload_digest": final_payload_digest,
                     }
                 )
+            report_core = {
+                "run_identity": copy.deepcopy(payload["run_identity"]),
+                "frozen_inbox_digest": payload["frozen_inbox_digest"],
+                "candidates": [
+                    {
+                        "candidate_id": proposal["candidate_id"],
+                        "source_block_digest": proposal["source_block_digest"],
+                        "payload_digest": proposal["payload_digest"],
+                    }
+                    for proposal in proposals
+                ],
+            }
+            report_binding = {
+                "path": "reports/triage_live_2026-08-26_session-id.md",
+                "core": report_core,
+                "digest": hashlib.sha256(
+                    canonical_json_bytes(report_core)
+                ).hexdigest(),
+            }
+            for proposal in proposals:
+                proposal["report_binding"] = copy.deepcopy(report_binding)
             payload.update(
                 {
                     "proposal_payloads": proposals,
@@ -5369,12 +5641,41 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                     ],
                 }
             )
+        if phase == "notification-delivery":
+            proposal_set_digest = hashlib.sha256(
+                canonical_json_bytes(payload["proposal_payloads"])
+            ).hexdigest()
+            intent = {
+                "target": "operator-target",
+                "proposal_set_digest": proposal_set_digest,
+                "rendered_payload_digest": hashlib.sha256(
+                    canonical_json_bytes(payload["proposal_payload_digests"])
+                ).hexdigest(),
+                "thread_reference": None,
+            }
+            payload["notification_operations"] = [
+                {
+                    "operation": "notification-send",
+                    "status": "attempting",
+                    "idempotency_key": f"session-id:notification-send:{proposal_set_digest}",
+                    "intent": intent,
+                    "intent_digest": hashlib.sha256(
+                        canonical_json_bytes(intent)
+                    ).hexdigest(),
+                    "response": None,
+                    "read_back": None,
+                    "attempts": [
+                        {"status": "attempting", "response": None, "read_back": None}
+                    ],
+                }
+            ]
         if phase_rank[phase] >= phase_rank["awaiting-approval"]:
             if phase == "awaiting-approval":
                 payload.update(
                     {
                         "approval": None,
                         "notification_thread_reference": None,
+                        "notification_operations": [],
                         "decisions": [],
                     }
                 )
@@ -5395,10 +5696,16 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                         "approval": {
                             "source": "current-session",
                             "approver_identity": "operator",
+                            "authority_read_back": {
+                                "outcome": "present-operator",
+                                "source": "current-session",
+                                "approver_identity": "operator",
+                            },
                             "commands": copy.deepcopy(decisions),
                             "proposal_set_digest": proposal_set_digest,
                         },
                         "notification_thread_reference": None,
+                        "notification_operations": [],
                         "decisions": decisions,
                     }
                 )
@@ -5410,7 +5717,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                 returned_identifier = f"tracker-{index}23"
                 marker = proposal["marker"]
                 verified = (
-                    phase_rank[phase] >= phase_rank["archive-sweep"] or index == 1
+                    phase_rank[phase] >= phase_rank["forge-finalize"] or index == 1
                 )
                 operations.append(
                     {
@@ -5428,6 +5735,12 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                             if verified
                             else None
                         ),
+                        "search_read_back": {
+                            "outcome": "authoritative-complete",
+                            "marker": marker,
+                            "destination": copy.deepcopy(destination),
+                            "matches": [],
+                        },
                         "read_back": (
                             {
                                 "identifier": returned_identifier,
@@ -5448,7 +5761,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             payload.update(
                 {
                     "operations": operations,
-                    "attempts": operations,
+                    "attempts": copy.deepcopy(operations),
                     "verified_tracker_identifiers": [
                         operation["returned_identifier"]
                         for operation in operations
@@ -5456,9 +5769,232 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                     ],
                 }
             )
+        if phase_rank[phase] >= phase_rank["forge-finalize"]:
+            branch = "chore/triage-friction-log-archive"
+            commit = "d" * 40
+            pull_request = "pr-123"
+            pull_request_url = "https://example.test/repo-id/pull/123"
+            tree_digest = "7" * 64
+            paths = ["docs/kit-friction-log.md", "docs/kit-friction-log-archive.md"]
+            finalization_operations = []
+            for operation_kind in (
+                "branch-create",
+                "commit",
+                "push",
+                "pull-request",
+                "pr-watch",
+            ):
+                intent = {
+                    "repository": "repo-id",
+                    "base": "main",
+                    "base_head": "c" * 40,
+                    "finalize_base_head": "c" * 40,
+                    "branch": branch,
+                    "commit": (
+                        commit if operation_kind in {"push", "pull-request", "pr-watch"} else None
+                    ),
+                    "commit_subject": (
+                        "docs(triage): graduate friction-log entries"
+                        if operation_kind == "commit"
+                        else None
+                    ),
+                    "pull_request": (
+                        pull_request
+                        if operation_kind == "pr-watch"
+                        else None
+                    ),
+                    "draft": False if operation_kind in {"pull-request", "pr-watch"} else None,
+                    "review_receipt": None,
+                    "tree_digest": (
+                        tree_digest if operation_kind != "branch-create" else None
+                    ),
+                    "paths": paths,
+                }
+                intent_digest = hashlib.sha256(
+                    canonical_json_bytes(intent)
+                ).hexdigest()
+                unsettled = (
+                    phase == "forge-finalize" and operation_kind == "pr-watch"
+                )
+                if unsettled:
+                    response = {"outcome": "unsettled"}
+                    read_back = {
+                        "outcome": "unsettled",
+                        "repository": "repo-id",
+                        "base": "main",
+                        "pull_request": pull_request,
+                        "observed_head": commit,
+                    }
+                    status = "unsettled"
+                elif operation_kind == "pr-watch":
+                    response = {"outcome": "terminal", "receipt": "e" * 64}
+                    read_back = {
+                        "outcome": "verified",
+                        "repository": "repo-id",
+                        "base": "main",
+                        "pull_request": pull_request,
+                        "observed_head": commit,
+                        "reviewed_head": commit,
+                        "receipt": "e" * 64,
+                    }
+                    status = "verified"
+                elif operation_kind == "branch-create":
+                    response = {"outcome": "accepted", "operation": operation_kind}
+                    read_back = {
+                        "outcome": "verified",
+                        "repository": "repo-id",
+                        "base": "main",
+                        "base_head": "c" * 40,
+                        "finalize_base_head": "c" * 40,
+                        "branch": branch,
+                        "branch_head": "c" * 40,
+                        "paths": copy.deepcopy(paths),
+                    }
+                    status = "verified"
+                elif operation_kind == "commit":
+                    response = {"outcome": "created", "commit": commit}
+                    read_back = {
+                        "outcome": "verified",
+                        "repository": "repo-id",
+                        "branch": branch,
+                        "commit": commit,
+                        "tree_digest": tree_digest,
+                        "staged_paths": copy.deepcopy(paths),
+                        "subject": "docs(triage): graduate friction-log entries",
+                    }
+                    status = "verified"
+                elif operation_kind == "push":
+                    response = {"outcome": "accepted", "operation": operation_kind}
+                    read_back = {
+                        "outcome": "verified",
+                        "repository": "repo-id",
+                        "branch": branch,
+                        "remote_head": commit,
+                        "remote_tree_digest": tree_digest,
+                    }
+                    status = "verified"
+                else:
+                    response = {
+                        "outcome": "created",
+                        "pull_request": pull_request,
+                        "url": pull_request_url,
+                    }
+                    read_back = {
+                        "outcome": "verified",
+                        "repository": "repo-id",
+                        "base": "main",
+                        "base_head": "c" * 40,
+                        "finalize_base_head": "c" * 40,
+                        "branch": branch,
+                        "observed_head": commit,
+                        "observed_tree_digest": tree_digest,
+                        "pull_request": pull_request,
+                        "url": pull_request_url,
+                        "draft": False,
+                        "changed_paths": copy.deepcopy(paths),
+                    }
+                    status = "verified"
+                finalization_operations.append(
+                    {
+                        "operation": operation_kind,
+                        "status": status,
+                        "intent": intent,
+                        "intent_digest": intent_digest,
+                        "authority_read_back": (
+                            {
+                                "outcome": "verified-staged-tree",
+                                "repository": "repo-id",
+                                "branch": branch,
+                                "tree_digest": tree_digest,
+                                "staged_paths": copy.deepcopy(paths),
+                            }
+                            if operation_kind == "commit"
+                            else None
+                        ),
+                        "response": response,
+                        "read_back": read_back,
+                        "attempts": [
+                            {
+                                "status": status,
+                                "response": copy.deepcopy(response),
+                                "read_back": copy.deepcopy(read_back),
+                            }
+                        ],
+                    }
+                )
+            if phase == "completed":
+                merge_intent = {
+                    "repository": "repo-id",
+                    "base": "main",
+                    "base_head": "c" * 40,
+                    "finalize_base_head": "c" * 40,
+                    "branch": branch,
+                    "commit": commit,
+                    "commit_subject": None,
+                    "pull_request": pull_request,
+                    "draft": False,
+                    "review_receipt": "e" * 64,
+                    "tree_digest": tree_digest,
+                    "paths": paths,
+                }
+                merge_intent_digest = hashlib.sha256(
+                    canonical_json_bytes(merge_intent)
+                ).hexdigest()
+                finalization_operations.append(
+                    {
+                        "operation": "merge-read-back",
+                        "status": "verified",
+                        "intent": merge_intent,
+                        "intent_digest": merge_intent_digest,
+                        "authority_read_back": None,
+                        "response": None,
+                        "read_back": {
+                            "outcome": "merged",
+                            "merged": True,
+                            "repository": "repo-id",
+                            "pull_request": pull_request,
+                            "base": "main",
+                            "final_head": commit,
+                            "reviewed_head": commit,
+                            "receipt": "e" * 64,
+                        },
+                        "attempts": [
+                            {
+                                "status": "verified",
+                                "response": None,
+                                "read_back": {
+                                    "outcome": "merged",
+                                    "merged": True,
+                                    "repository": "repo-id",
+                                    "base": "main",
+                                    "pull_request": pull_request,
+                                    "final_head": commit,
+                                    "reviewed_head": commit,
+                                    "receipt": "e" * 64,
+                                },
+                            }
+                        ],
+                    }
+                )
+            payload["finalization_operations"] = finalization_operations
+            payload["repository_evidence"] = copy.deepcopy(
+                [
+                    operation
+                    for operation in finalization_operations[:3]
+                    if operation["status"] == "verified"
+                ]
+            )
+            payload["pull_request_evidence"] = copy.deepcopy(
+                [
+                    operation
+                    for operation in finalization_operations[3:]
+                    if operation["status"] == "verified"
+                ]
+            )
         if phase_rank[phase] >= phase_rank["archive-sweep"]:
             archive_sweep = {
                 "repository": "repo-id",
+                "base": "main",
                 "branch": "chore/triage-friction-log-archive",
                 "commit": "d" * 40,
                 "pull_request": "pr-123",
@@ -5469,16 +6005,26 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             payload.update(
                 {
                     "archive_sweep": archive_sweep,
-                    "repository_evidence": [archive_sweep],
-                    "pull_request_evidence": [archive_sweep],
                 }
             )
         if phase_rank[phase] >= phase_rank["completed"]:
+            merge_read_back = copy.deepcopy(
+                payload["finalization_operations"][-1]["read_back"]
+            )
             payload["completion"] = {
                 "route": "archive-sweep",
                 "outcome": "successful-completion",
-                "completed_receipt_digest": "f" * 64,
+                "merge_read_back": merge_read_back,
+                "completed_receipt_digest": "pending",
             }
+            payload["completion"]["completed_receipt_digest"] = (
+                completed_receipt_digest(
+                    payload,
+                    "archive-sweep",
+                    "successful-completion",
+                    merge_read_back,
+                )
+            )
         return payload
 
     def complete_base_valid(value: object) -> bool:
@@ -5487,6 +6033,9 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         run_identity = value.get("run_identity")
         if not isinstance(run_identity, dict):
             return False
+        parsed_frozen_content = validated_frozen_content(
+            value.get("frozen_snapshot")
+        )
         expected_run_identity_keys = {
             "repository_identity",
             "friction_log",
@@ -5509,15 +6058,125 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             and isinstance(run_identity.get("session"), str)
             and owner_token_grammar.fullmatch(run_identity["session"]) is not None
             and isinstance(value.get("gate_owner_token"), str)
-            and value.get("gate_owner_token")
-            == state_old_gate_capture["owner"]["token"]
             and owner_token_grammar.fullmatch(value["gate_owner_token"]) is not None
+            and gate_binding_valid(value.get("gate_binding"), run_identity)
+            and value["gate_binding"].get("owner_token")
+            == value.get("gate_owner_token")
+            and isinstance(value.get("state_claim"), dict)
+            and set(value["state_claim"])
+            == {
+                "reason",
+                "previous_gate_binding",
+                "current_gate_binding",
+                "captured_state_digest",
+                "recovery_bundle_digest",
+                "approval_digest",
+            }
+            and value["state_claim"].get("current_gate_binding")
+            == value.get("gate_binding")
+            and (
+                (
+                    value["state_claim"].get("reason") == "initial-reservation"
+                    and value["state_claim"].get("previous_gate_binding") is None
+                    and value["state_claim"].get("captured_state_digest") is None
+                    and value["state_claim"].get("recovery_bundle_digest") is None
+                    and value["state_claim"].get("approval_digest") is None
+                )
+                or (
+                    value["state_claim"].get("reason")
+                    in {"normal-resume", "approved-recovery"}
+                    and gate_binding_valid(
+                        value["state_claim"].get("previous_gate_binding"),
+                        run_identity,
+                    )
+                    and value["state_claim"]["previous_gate_binding"].get(
+                        "owner_token"
+                    )
+                    != value.get("gate_owner_token")
+                    and isinstance(
+                        value["state_claim"].get("captured_state_digest"), str
+                    )
+                    and lowercase_digest.fullmatch(
+                        value["state_claim"]["captured_state_digest"]
+                    )
+                    is not None
+                    and (
+                        (
+                            value["state_claim"].get("reason") == "normal-resume"
+                            and value["state_claim"].get("recovery_bundle_digest")
+                            is None
+                            and value["state_claim"].get("approval_digest") is None
+                        )
+                        or (
+                            value["state_claim"].get("reason")
+                            == "approved-recovery"
+                            and isinstance(
+                                value["state_claim"].get("recovery_bundle_digest"),
+                                str,
+                            )
+                            and lowercase_digest.fullmatch(
+                                value["state_claim"]["recovery_bundle_digest"]
+                            )
+                            is not None
+                            and isinstance(
+                                value["state_claim"].get("approval_digest"), str
+                            )
+                            and lowercase_digest.fullmatch(
+                                value["state_claim"]["approval_digest"]
+                            )
+                            is not None
+                        )
+                    )
+                )
+                or (
+                    value["state_claim"].get("reason")
+                    in {"live-receipt-restart", "test-receipt-restart"}
+                    and value["state_claim"].get("reason")
+                    == f"{value.get('mode')}-receipt-restart"
+                    and value["state_claim"].get("previous_gate_binding") is None
+                    and isinstance(
+                        value["state_claim"].get("captured_state_digest"), str
+                    )
+                    and lowercase_digest.fullmatch(
+                        value["state_claim"]["captured_state_digest"]
+                    )
+                    is not None
+                    and isinstance(
+                        value["state_claim"].get("recovery_bundle_digest"), str
+                    )
+                    and lowercase_digest.fullmatch(
+                        value["state_claim"]["recovery_bundle_digest"]
+                    )
+                    is not None
+                    and isinstance(
+                        value["state_claim"].get("approval_digest"), str
+                    )
+                    and lowercase_digest.fullmatch(
+                        value["state_claim"]["approval_digest"]
+                    )
+                    is not None
+                )
+            )
             and isinstance(value.get("config_fingerprint"), str)
             and lowercase_digest.fullmatch(value["config_fingerprint"]) is not None
             and run_identity.get("config_fingerprint")
             == value.get("config_fingerprint")
             and isinstance(value.get("frozen_inbox_digest"), str)
             and lowercase_digest.fullmatch(value["frozen_inbox_digest"]) is not None
+            and isinstance(value.get("frozen_snapshot"), dict)
+            and parsed_frozen_content is not None
+            and value["frozen_snapshot"].get("path")
+            == (
+                "state/triage/frozen-inbox_"
+                f"{value.get('mode')}_2026-08-26_session-id.json"
+            )
+            and parsed_frozen_content
+            in (
+                authoritative_frozen_content(run_identity),
+                authoritative_frozen_content(run_identity, ()),
+            )
+            and value.get("frozen_inbox_digest")
+            == value["frozen_snapshot"].get("digest")
             and value.get("engine_mode") in {"engine-backed", "llm-only"}
             and isinstance(value.get("attempts"), list)
             and isinstance(value.get("verified_tracker_identifiers"), list)
@@ -5525,25 +6184,83 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             and isinstance(value.get("pull_request_evidence"), list)
         )
 
+    def completed_receipt_digest(
+        state: dict[str, object],
+        route: str,
+        outcome: str,
+        merge_read_back: object = None,
+    ) -> str:
+        receipt_core: dict[str, object] = {
+            "route": route,
+            "outcome": outcome,
+            "run_identity": state["run_identity"],
+            "frozen_inbox_digest": state["frozen_inbox_digest"],
+        }
+        if route == "no-op":
+            parsed_frozen = validated_frozen_content(state["frozen_snapshot"])
+            receipt_core["candidate_index"] = [
+                block["candidate_id"]
+                for block in (
+                    parsed_frozen["blocks"]
+                    if isinstance(parsed_frozen, dict)
+                    else []
+                )
+            ]
+        else:
+            for field in (
+                "proposal_payloads",
+                "proposal_payload_digests",
+                "approval",
+                "notification_thread_reference",
+                "notification_operations",
+                "decisions",
+                "operations",
+                "attempts",
+                "verified_tracker_identifiers",
+            ):
+                receipt_core[field] = state.get(field)
+        if route == "archive-sweep":
+            for field in (
+                "repository_evidence",
+                "pull_request_evidence",
+                "finalization_operations",
+                "archive_sweep",
+            ):
+                receipt_core[field] = state.get(field)
+            receipt_core["merge_read_back"] = merge_read_back
+        return hashlib.sha256(canonical_json_bytes(receipt_core)).hexdigest()
+
     def ordinary_state_valid(value: object) -> bool:
         if not complete_base_valid(value) or not isinstance(value, dict):
             return False
         phase = value.get("phase")
         if not isinstance(phase, str) or phase not in ordinary_state_phases:
             return False
+        receipt_restart_claim = value["state_claim"].get("reason") in {
+            "live-receipt-restart",
+            "test-receipt-restart",
+        }
+        if receipt_restart_claim and phase != "reserved":
+            return False
         if phase == "completed" and set(value) == ordinary_state_keys | {"completion"}:
             completion = value.get("completion")
+            parsed_frozen = validated_frozen_content(value["frozen_snapshot"])
+            frozen_blocks = (
+                parsed_frozen.get("blocks")
+                if isinstance(parsed_frozen, dict)
+                else None
+            )
             return (
                 isinstance(completion, dict)
                 and set(completion)
                 == {"route", "outcome", "completed_receipt_digest"}
                 and completion.get("route") == "no-op"
                 and completion.get("outcome") == "successful-completion"
-                and isinstance(completion.get("completed_receipt_digest"), str)
-                and lowercase_digest.fullmatch(
-                    completion["completed_receipt_digest"]
+                and frozen_blocks == []
+                and completion.get("completed_receipt_digest")
+                == completed_receipt_digest(
+                    value, "no-op", "successful-completion"
                 )
-                is not None
                 and not any(
                     value[field]
                     for field in (
@@ -5575,6 +6292,14 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         proposals = value.get("proposal_payloads")
         proposal_digests = value.get("proposal_payload_digests")
         expected_proposal_digests: list[str] = []
+        expected_report_candidates: list[dict[str, str]] = []
+        independently_parsed_frozen = validated_frozen_content(
+            value["frozen_snapshot"]
+        )
+        frozen_blocks_by_candidate = {
+            block["candidate_id"]: block["source_block"]
+            for block in independently_parsed_frozen["blocks"]
+        }
         proposals_valid = isinstance(proposals, list) and bool(proposals)
         if proposals_valid:
             for proposal in proposals:
@@ -5583,6 +6308,9 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                     or set(proposal)
                     != {
                         "candidate_id",
+                        "source_block",
+                        "source_block_digest",
+                        "report_binding",
                         "payload_core",
                         "payload_core_digest",
                         "marker",
@@ -5593,6 +6321,9 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                     proposals_valid = False
                     break
                 candidate_id = proposal.get("candidate_id")
+                source_block = proposal.get("source_block")
+                source_block_digest = proposal.get("source_block_digest")
+                report_binding = proposal.get("report_binding")
                 payload_core = proposal.get("payload_core")
                 payload_core_digest = proposal.get("payload_core_digest")
                 marker = proposal.get("marker")
@@ -5601,6 +6332,25 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                 if (
                     not isinstance(candidate_id, str)
                     or owner_token_grammar.fullmatch(candidate_id) is None
+                    or not isinstance(source_block, str)
+                    or not source_block
+                    or source_block != frozen_blocks_by_candidate.get(candidate_id)
+                    or not isinstance(source_block_digest, str)
+                    or lowercase_digest.fullmatch(source_block_digest) is None
+                    or source_block_digest
+                    != hashlib.sha256(source_block.encode()).hexdigest()
+                    or not isinstance(report_binding, dict)
+                    or set(report_binding) != {"path", "core", "digest"}
+                    or not isinstance(report_binding.get("path"), str)
+                    or report_binding.get("path")
+                    != (
+                        "reports/triage_"
+                        f"{value.get('mode')}_2026-08-26_session-id.md"
+                    )
+                    or Path(report_binding["path"]).is_absolute()
+                    or ".." in Path(report_binding["path"]).parts
+                    or not isinstance(report_binding.get("digest"), str)
+                    or lowercase_digest.fullmatch(report_binding["digest"]) is None
                     or not isinstance(payload_core, dict)
                     or set(payload_core)
                     != {"title", "body_without_marker", "project", "labels"}
@@ -5641,15 +6391,216 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                     proposals_valid = False
                     break
                 expected_proposal_digests.append(expected_payload_digest)
+                expected_report_candidates.append(
+                    {
+                        "candidate_id": candidate_id,
+                        "source_block_digest": source_block_digest,
+                        "payload_digest": expected_payload_digest,
+                    }
+                )
+        expected_report_core = {
+            "run_identity": value.get("run_identity"),
+            "frozen_inbox_digest": value.get("frozen_inbox_digest"),
+            "candidates": expected_report_candidates,
+        }
+        expected_report_binding = {
+            "path": (
+                "reports/triage_"
+                f"{value.get('mode')}_2026-08-26_session-id.md"
+            ),
+            "core": expected_report_core,
+            "digest": hashlib.sha256(
+                canonical_json_bytes(expected_report_core)
+            ).hexdigest(),
+        }
         if (
             not proposals_valid
             or not isinstance(proposal_digests, list)
             or proposal_digests != expected_proposal_digests
             or len({proposal["candidate_id"] for proposal in proposals})
             != len(proposals)
+            or len({proposal["source_block_digest"] for proposal in proposals})
+            != len(proposals)
+            or [
+                (proposal["candidate_id"], proposal["source_block"])
+                for proposal in proposals
+            ]
+            != [
+                (block["candidate_id"], block["source_block"])
+                for block in independently_parsed_frozen["blocks"]
+            ]
+            or any(
+                proposal["report_binding"] != expected_report_binding
+                for proposal in proposals
+            )
             or len(set(expected_proposal_digests)) != len(expected_proposal_digests)
         ):
             return False
+
+        proposal_set_digest = hashlib.sha256(
+            canonical_json_bytes(proposals)
+        ).hexdigest()
+        rendered_payload_digest = hashlib.sha256(
+            canonical_json_bytes(proposal_digests)
+        ).hexdigest()
+
+        def notification_operations_valid(
+            notification_operations: object,
+        ) -> bool:
+            if not isinstance(notification_operations, list):
+                return False
+            seen_keys: set[str] = set()
+            verified_thread: str | None = None
+            for index, operation in enumerate(notification_operations):
+                if (
+                    not isinstance(operation, dict)
+                    or set(operation)
+                    != {
+                        "operation",
+                        "status",
+                        "idempotency_key",
+                        "intent",
+                        "intent_digest",
+                        "response",
+                        "read_back",
+                        "attempts",
+                    }
+                ):
+                    return False
+                operation_kind = operation.get("operation")
+                status = operation.get("status")
+                intent = operation.get("intent")
+                idempotency_key = operation.get("idempotency_key")
+                if (
+                    operation_kind not in {"notification-send", "notification-reminder"}
+                    or status not in {"attempting", "verified", "failed", "ambiguous"}
+                    or not isinstance(idempotency_key, str)
+                    or idempotency_key
+                    != f"session-id:{operation_kind}:{proposal_set_digest}"
+                    or idempotency_key in seen_keys
+                    or not isinstance(intent, dict)
+                    or set(intent)
+                    != {
+                        "target",
+                        "proposal_set_digest",
+                        "rendered_payload_digest",
+                        "thread_reference",
+                    }
+                    or intent.get("target") != "operator-target"
+                    or intent.get("proposal_set_digest") != proposal_set_digest
+                    or intent.get("rendered_payload_digest")
+                    != rendered_payload_digest
+                    or operation.get("intent_digest")
+                    != hashlib.sha256(canonical_json_bytes(intent)).hexdigest()
+                    or (
+                        operation_kind == "notification-send"
+                        and (index != 0 or intent.get("thread_reference") is not None)
+                    )
+                    or (
+                        operation_kind == "notification-reminder"
+                        and (
+                            index != 1
+                            or not isinstance(intent.get("thread_reference"), str)
+                            or intent.get("thread_reference") != verified_thread
+                        )
+                    )
+                ):
+                    return False
+                seen_keys.add(idempotency_key)
+                response = operation.get("response")
+                read_back = operation.get("read_back")
+                expected_marker = idempotency_key
+                attempts = operation.get("attempts")
+
+                def notification_attempt_valid(
+                    attempt: object,
+                    attempt_intent: dict[str, object],
+                    marker: str,
+                ) -> bool:
+                    if (
+                        not isinstance(attempt, dict)
+                        or set(attempt) != {"status", "response", "read_back"}
+                        or attempt.get("status")
+                        not in {"attempting", "verified", "failed", "ambiguous"}
+                    ):
+                        return False
+                    attempt_status = attempt["status"]
+                    attempt_response = attempt["response"]
+                    attempt_read_back = attempt["read_back"]
+                    if attempt_status == "attempting":
+                        return attempt_response is None and attempt_read_back is None
+                    if attempt_status == "verified":
+                        return (
+                            isinstance(attempt_response, dict)
+                            and set(attempt_response)
+                            == {"outcome", "thread_reference", "message_id"}
+                            and attempt_response.get("outcome") == "sent"
+                            and isinstance(attempt_response.get("thread_reference"), str)
+                            and bool(attempt_response.get("thread_reference"))
+                            and isinstance(attempt_response.get("message_id"), str)
+                            and bool(attempt_response.get("message_id"))
+                            and attempt_read_back
+                            == {
+                                "outcome": "visible",
+                                "thread_reference": attempt_response[
+                                    "thread_reference"
+                                ],
+                                "message_id": attempt_response["message_id"],
+                                "target": attempt_intent["target"],
+                                "marker": marker,
+                                "proposal_set_digest": proposal_set_digest,
+                                "rendered_payload_digest": rendered_payload_digest,
+                            }
+                        )
+                    if attempt_status == "failed":
+                        return (
+                            isinstance(attempt_response, dict)
+                            and set(attempt_response) == {"outcome", "reason"}
+                            and attempt_response.get("outcome") == "failed"
+                            and isinstance(attempt_response.get("reason"), str)
+                            and bool(attempt_response.get("reason"))
+                            and attempt_read_back
+                            == {
+                                "outcome": "authoritative-no-match",
+                                "target": attempt_intent["target"],
+                                "marker": marker,
+                            }
+                        )
+                    return (
+                        isinstance(attempt_response, dict)
+                        and attempt_response.get("outcome") == "ambiguous"
+                        and isinstance(attempt_read_back, dict)
+                        and set(attempt_read_back)
+                        == {"outcome", "target", "marker", "matches"}
+                        and attempt_read_back.get("outcome") == "ambiguous"
+                        and attempt_read_back.get("target")
+                        == attempt_intent["target"]
+                        and attempt_read_back.get("marker") == marker
+                        and isinstance(attempt_read_back.get("matches"), list)
+                    )
+
+                if (
+                    not isinstance(attempts, list)
+                    or not attempts
+                    or any(
+                        not notification_attempt_valid(
+                            attempt, intent, expected_marker
+                        )
+                        for attempt in attempts
+                    )
+                    or any(
+                        attempt["status"] != "failed" for attempt in attempts[:-1]
+                    )
+                    or attempts[-1]
+                    != {"status": status, "response": response, "read_back": read_back}
+                ):
+                    return False
+                if status == "verified":
+                    verified_thread = response["thread_reference"]
+                if status != "verified" and index != len(notification_operations) - 1:
+                    return False
+            return True
+
         if phase == "propose":
             return not any(
                 value[field]
@@ -5660,8 +6611,29 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                     "pull_request_evidence",
                 )
             )
+        if phase == "notification-delivery":
+            notification_operations = value.get("notification_operations")
+            return (
+                notification_operations_valid(notification_operations)
+                and isinstance(notification_operations, list)
+                and bool(notification_operations)
+                and notification_operations[-1]["status"]
+                in {"attempting", "failed", "ambiguous"}
+                and not any(
+                    value[field]
+                    for field in (
+                        "attempts",
+                        "verified_tracker_identifiers",
+                        "repository_evidence",
+                        "pull_request_evidence",
+                    )
+                )
+            )
         approval = value.get("approval")
         decisions = value.get("decisions")
+        notification_operations = value.get("notification_operations")
+        if not notification_operations_valid(notification_operations):
+            return False
         if phase == "awaiting-approval":
             notification_reference = value.get("notification_thread_reference")
             return (
@@ -5672,6 +6644,21 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                     or (
                         isinstance(notification_reference, str)
                         and bool(notification_reference)
+                    )
+                )
+                and (
+                    (
+                        notification_reference is None
+                        and notification_operations == []
+                    )
+                    or (
+                        isinstance(notification_reference, str)
+                        and bool(notification_operations)
+                        and notification_operations[0]["operation"]
+                        == "notification-send"
+                        and notification_operations[0]["status"] == "verified"
+                        and notification_operations[0]["response"]["thread_reference"]
+                        == notification_reference
                     )
                 )
                 and not any(
@@ -5687,21 +6674,50 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         if (
             not isinstance(approval, dict)
             or set(approval)
-            != {"source", "approver_identity", "commands", "proposal_set_digest"}
+            != {
+                "source",
+                "approver_identity",
+                "authority_read_back",
+                "commands",
+                "proposal_set_digest",
+            }
             or approval.get("source") not in {"current-session", "notification-thread"}
             or not isinstance(approval.get("approver_identity"), str)
-            or not approval.get("approver_identity")
+            or approval.get("approver_identity") != "operator"
             or approval.get("proposal_set_digest")
             != hashlib.sha256(canonical_json_bytes(proposals)).hexdigest()
             or not (
                 (
                     approval.get("source") == "current-session"
+                    and approval.get("authority_read_back")
+                    == {
+                        "outcome": "present-operator",
+                        "source": "current-session",
+                        "approver_identity": "operator",
+                    }
                     and value.get("notification_thread_reference") is None
+                    and notification_operations == []
                 )
                 or (
                     approval.get("source") == "notification-thread"
+                    and approval.get("authority_read_back")
+                    == {
+                        "outcome": "verified-thread-operator",
+                        "source": "notification-thread",
+                        "approver_identity": "operator",
+                        "thread_reference": value.get(
+                            "notification_thread_reference"
+                        ),
+                    }
                     and isinstance(value.get("notification_thread_reference"), str)
                     and bool(value.get("notification_thread_reference"))
+                    and bool(notification_operations)
+                    and all(
+                        operation["status"] == "verified"
+                        for operation in notification_operations
+                    )
+                    and notification_operations[0]["response"]["thread_reference"]
+                    == value.get("notification_thread_reference")
                 )
             )
             or not isinstance(decisions, list)
@@ -5724,6 +6740,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         ):
             return False
         operations = value.get("operations")
+        tracker_attempts = value.get("attempts")
         proposal_markers = {
             payload_digest: proposal["marker"]
             for proposal, payload_digest in zip(
@@ -5768,9 +6785,9 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                 phase in {"archive-sweep", "completed"}
                 and not filed_decision_digests
             )
-        )
+        ) and isinstance(tracker_attempts, list)
         if operations_valid:
-            for operation in operations:
+            for operation in [*operations, *tracker_attempts]:
                 if (
                     not isinstance(operation, dict)
                     or set(operation)
@@ -5783,6 +6800,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                         "verified_route",
                         "returned_identifier",
                         "response",
+                        "search_read_back",
                         "read_back",
                     }
                 ):
@@ -5793,6 +6811,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                 verified_route = operation.get("verified_route")
                 returned_identifier = operation.get("returned_identifier")
                 response = operation.get("response")
+                search_read_back = operation.get("search_read_back")
                 read_back = operation.get("read_back")
                 proposal_record = proposal_records.get(payload_digest)
                 expected_read_back = {
@@ -5806,6 +6825,94 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                     "marker": operation.get("marker"),
                     "destination": operation.get("destination"),
                 }
+                expected_search_match = {
+                    **expected_read_back,
+                    "exact_payload": True,
+                }
+                search_matches = (
+                    search_read_back.get("matches")
+                    if isinstance(search_read_back, dict)
+                    else None
+                )
+                search_read_back_valid = (
+                    value.get("mode") == "test"
+                    and search_read_back is None
+                ) or (
+                    value.get("mode") == "live"
+                    and isinstance(search_read_back, dict)
+                    and set(search_read_back)
+                    == {"outcome", "marker", "destination", "matches"}
+                    and search_read_back.get("outcome")
+                    == "authoritative-complete"
+                    and search_read_back.get("marker") == operation.get("marker")
+                    and search_read_back.get("destination")
+                    == operation.get("destination")
+                    and isinstance(search_matches, list)
+                    and len(
+                        [match.get("identifier") for match in search_matches]
+                    )
+                    == len(
+                        {match.get("identifier") for match in search_matches}
+                    )
+                    and all(
+                        isinstance(match, dict)
+                        and set(match)
+                        == {
+                            "identifier",
+                            "observed_payload",
+                            "observed_payload_digest",
+                            "marker",
+                            "destination",
+                            "exact_payload",
+                        }
+                        and isinstance(match.get("identifier"), str)
+                        and bool(match.get("identifier"))
+                        and observed_payload_valid(
+                            match.get("observed_payload"), match.get("marker")
+                        )
+                        and match.get("observed_payload_digest")
+                        == hashlib.sha256(
+                            canonical_json_bytes(match["observed_payload"])
+                        ).hexdigest()
+                        and match.get("marker") == operation.get("marker")
+                        and match.get("destination")
+                        == operation.get("destination")
+                        and type(match.get("exact_payload")) is bool
+                        and match.get("exact_payload")
+                        is (
+                            isinstance(proposal_record, dict)
+                            and match.get("observed_payload")
+                            == proposal_record.get("payload")
+                            and match.get("observed_payload_digest")
+                            == payload_digest
+                        )
+                        for match in search_matches
+                    )
+                    and (
+                        (
+                            search_matches == []
+                            and verified_route != "pre-existing-exact-match"
+                        )
+                        or (
+                            search_matches == [expected_search_match]
+                            and status == "verified"
+                            and verified_route == "pre-existing-exact-match"
+                        )
+                        or (
+                            bool(search_matches)
+                            and (
+                                len(search_matches) > 1
+                                or any(
+                                    not match["exact_payload"]
+                                    for match in search_matches
+                                )
+                            )
+                            and status == "ambiguous"
+                            and isinstance(read_back, dict)
+                            and read_back.get("matches") == search_matches
+                        )
+                    )
+                )
                 if (
                     status
                     not in (
@@ -5820,12 +6927,14 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                     != proposal_markers.get(payload_digest)
                     or operation.get("destination")
                     != {"tracker": "github", "repository": "repo-id"}
+                    or not search_read_back_valid
                     or (
                         value.get("mode") == "test"
                         and (
                             verified_route is not None
                             or returned_identifier is not None
                             or response is not None
+                            or search_read_back is not None
                             or read_back is not None
                         )
                     )
@@ -6005,11 +7114,47 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                 ):
                     operations_valid = False
                     break
+        tracker_attempt_history_valid = operations_valid
+        if tracker_attempt_history_valid:
+            attempt_cursor = 0
+            for operation in operations:
+                payload_digest = operation["payload_digest"]
+                attempt_group: list[dict[str, object]] = []
+                while (
+                    attempt_cursor < len(tracker_attempts)
+                    and tracker_attempts[attempt_cursor].get("payload_digest")
+                    == payload_digest
+                ):
+                    attempt_group.append(tracker_attempts[attempt_cursor])
+                    attempt_cursor += 1
+                if (
+                    not attempt_group
+                    or attempt_group[-1] != operation
+                    or any(
+                        attempt.get("status") != "failed"
+                        or attempt.get("read_back", {}).get("outcome")
+                        != "authoritative-no-match"
+                        for attempt in attempt_group[:-1]
+                    )
+                ):
+                    tracker_attempt_history_valid = False
+                    break
+            tracker_attempt_history_valid = (
+                tracker_attempt_history_valid
+                and attempt_cursor == len(tracker_attempts)
+            )
         if (
             not operations_valid
-            or operations != value.get("attempts")
+            or not tracker_attempt_history_valid
+            or (
+                value.get("mode") == "live"
+                and any(
+                    operation.get("status") != "verified"
+                    for operation in operations[:-1]
+                )
+            )
             or [operation["payload_digest"] for operation in operations]
-            != filed_decision_digests
+            != filed_decision_digests[: len(operations)]
             or value.get("verified_tracker_identifiers")
             != [
                 operation["returned_identifier"]
@@ -6046,6 +7191,607 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                     )
                 )
             )
+        if [operation["payload_digest"] for operation in operations] != (
+            filed_decision_digests
+        ):
+            return False
+        if phase == "completed" and "archive_sweep" not in value:
+            completion = value.get("completion")
+            if (
+                not isinstance(completion, dict)
+                or set(completion)
+                != {"route", "outcome", "completed_receipt_digest"}
+                or completion.get("outcome")
+                not in {"degraded-success", "successful-completion"}
+                or not isinstance(completion.get("completed_receipt_digest"), str)
+                or lowercase_digest.fullmatch(
+                    completion["completed_receipt_digest"]
+                )
+                is None
+                or completion.get("completed_receipt_digest")
+                != completed_receipt_digest(
+                    value,
+                    completion.get("route"),
+                    completion.get("outcome"),
+                )
+                or value.get("repository_evidence")
+                or value.get("pull_request_evidence")
+            ):
+                return False
+            if completion.get("route") == "decision-only":
+                return (
+                    value.get("mode") == "live"
+                    and not filed_decision_digests
+                    and not operations
+                    and all(decision["decision"] == "park" for decision in decisions)
+                )
+            if completion.get("route") == "test-render":
+                return (
+                    value.get("mode") == "test"
+                    and (bool(operations) or not filed_decision_digests)
+                    and all(
+                        operation["status"] == "would-create"
+                        for operation in operations
+                    )
+                )
+            return False
+
+        finalization_operations = value.get("finalization_operations")
+        finalization_order = (
+            "branch-create",
+            "commit",
+            "push",
+            "pull-request",
+            "pr-watch",
+            "merge-read-back",
+        )
+        finalization_valid = (
+            isinstance(finalization_operations, list)
+            and bool(finalization_operations)
+            and len(finalization_operations) <= len(finalization_order)
+        )
+        if finalization_valid:
+            for index, finalization_operation in enumerate(finalization_operations):
+                if (
+                    not isinstance(finalization_operation, dict)
+                    or set(finalization_operation)
+                    != {
+                        "operation",
+                        "status",
+                        "intent",
+                        "intent_digest",
+                        "authority_read_back",
+                        "response",
+                        "read_back",
+                        "attempts",
+                    }
+                    or finalization_operation.get("operation")
+                    != finalization_order[index]
+                ):
+                    finalization_valid = False
+                    break
+                operation_kind = finalization_operation["operation"]
+                status = finalization_operation.get("status")
+                intent = finalization_operation.get("intent")
+                authority_read_back = finalization_operation.get(
+                    "authority_read_back"
+                )
+                if (
+                    status
+                    not in {"attempting", "verified", "failed", "ambiguous", "unsettled"}
+                    or not isinstance(intent, dict)
+                    or set(intent)
+                    != {
+                        "repository",
+                        "base",
+                        "base_head",
+                        "finalize_base_head",
+                        "branch",
+                        "commit",
+                        "commit_subject",
+                        "pull_request",
+                        "draft",
+                        "review_receipt",
+                        "tree_digest",
+                        "paths",
+                    }
+                    or intent.get("repository") != "repo-id"
+                    or intent.get("base") != "main"
+                    or intent.get("base_head") != "c" * 40
+                    or intent.get("finalize_base_head")
+                    not in {"c" * 40, "b" * 40}
+                    or intent.get("branch") != "chore/triage-friction-log-archive"
+                    or intent.get("paths")
+                    != [
+                        "docs/kit-friction-log.md",
+                        "docs/kit-friction-log-archive.md",
+                    ]
+                    or (
+                        operation_kind == "branch-create"
+                        and any(
+                            intent.get(field) is not None
+                            for field in (
+                                "commit",
+                                "commit_subject",
+                                "pull_request",
+                                "draft",
+                                "review_receipt",
+                                "tree_digest",
+                            )
+                        )
+                    )
+                    or (
+                        operation_kind == "commit"
+                        and (
+                            intent.get("commit") is not None
+                            or intent.get("commit_subject")
+                            != "docs(triage): graduate friction-log entries"
+                            or intent.get("pull_request") is not None
+                            or intent.get("draft") is not None
+                            or intent.get("review_receipt") is not None
+                            or not isinstance(intent.get("tree_digest"), str)
+                            or lowercase_digest.fullmatch(intent["tree_digest"]) is None
+                        )
+                    )
+                    or (
+                        operation_kind == "push"
+                        and (
+                            not isinstance(intent.get("commit"), str)
+                            or lowercase_head.fullmatch(intent["commit"]) is None
+                            or intent.get("commit_subject") is not None
+                            or intent.get("pull_request") is not None
+                            or intent.get("draft") is not None
+                            or intent.get("review_receipt") is not None
+                            or not isinstance(intent.get("tree_digest"), str)
+                            or lowercase_digest.fullmatch(intent["tree_digest"]) is None
+                        )
+                    )
+                    or (
+                        operation_kind == "pull-request"
+                        and (
+                            not isinstance(intent.get("commit"), str)
+                            or lowercase_head.fullmatch(intent["commit"]) is None
+                            or intent.get("commit_subject") is not None
+                            or intent.get("pull_request") is not None
+                            or intent.get("draft") is not False
+                            or intent.get("review_receipt") is not None
+                            or not isinstance(intent.get("tree_digest"), str)
+                            or lowercase_digest.fullmatch(intent["tree_digest"]) is None
+                        )
+                    )
+                    or (
+                        operation_kind in {"pr-watch", "merge-read-back"}
+                        and (
+                            not isinstance(intent.get("commit"), str)
+                            or lowercase_head.fullmatch(intent["commit"]) is None
+                            or intent.get("commit_subject") is not None
+                            or not isinstance(intent.get("pull_request"), str)
+                            or not intent.get("pull_request")
+                            or intent.get("draft") is not False
+                            or (
+                                operation_kind == "pr-watch"
+                                and intent.get("review_receipt") is not None
+                            )
+                            or (
+                                operation_kind == "merge-read-back"
+                                and (
+                                    not isinstance(
+                                        intent.get("review_receipt"), str
+                                    )
+                                    or lowercase_digest.fullmatch(
+                                        intent["review_receipt"]
+                                    )
+                                    is None
+                                )
+                            )
+                            or not isinstance(intent.get("tree_digest"), str)
+                            or lowercase_digest.fullmatch(intent["tree_digest"]) is None
+                        )
+                    )
+                    or finalization_operation.get("intent_digest")
+                    != hashlib.sha256(canonical_json_bytes(intent)).hexdigest()
+                    or (
+                        operation_kind == "commit"
+                        and authority_read_back
+                        != {
+                            "outcome": "verified-staged-tree",
+                            "repository": "repo-id",
+                            "branch": "chore/triage-friction-log-archive",
+                            "tree_digest": "7" * 64,
+                            "staged_paths": [
+                                "docs/kit-friction-log.md",
+                                "docs/kit-friction-log-archive.md",
+                            ],
+                        }
+                    )
+                    or (
+                        operation_kind != "commit"
+                        and authority_read_back is not None
+                    )
+                    or (
+                        index < len(finalization_operations) - 1
+                        and status != "verified"
+                    )
+                ):
+                    finalization_valid = False
+                    break
+                if operation_kind != "branch-create":
+                    branch_read_back = finalization_operations[0]["read_back"]
+                    if operation_kind == "commit":
+                        expected_intent = {
+                            "repository": branch_read_back["repository"],
+                            "base": branch_read_back["base"],
+                            "base_head": branch_read_back["base_head"],
+                            "finalize_base_head": branch_read_back[
+                                "finalize_base_head"
+                            ],
+                            "branch": branch_read_back["branch"],
+                            "commit": None,
+                            "commit_subject": (
+                                "docs(triage): graduate friction-log entries"
+                            ),
+                            "pull_request": None,
+                            "draft": None,
+                            "review_receipt": None,
+                            "tree_digest": authority_read_back["tree_digest"],
+                            "paths": authority_read_back["staged_paths"],
+                        }
+                    else:
+                        commit_read_back = finalization_operations[1]["read_back"]
+                        if operation_kind == "push":
+                            expected_intent = {
+                                "repository": commit_read_back["repository"],
+                                "base": branch_read_back["base"],
+                                "base_head": branch_read_back["base_head"],
+                                "finalize_base_head": branch_read_back[
+                                    "finalize_base_head"
+                                ],
+                                "branch": commit_read_back["branch"],
+                                "commit": commit_read_back["commit"],
+                                "commit_subject": None,
+                                "pull_request": None,
+                                "draft": None,
+                                "review_receipt": None,
+                                "tree_digest": commit_read_back["tree_digest"],
+                                "paths": commit_read_back["staged_paths"],
+                            }
+                        else:
+                            push_read_back = finalization_operations[2]["read_back"]
+                            if operation_kind == "pull-request":
+                                expected_intent = {
+                                    "repository": push_read_back["repository"],
+                                    "base": branch_read_back["base"],
+                                    "base_head": branch_read_back["base_head"],
+                                    "finalize_base_head": branch_read_back[
+                                        "finalize_base_head"
+                                    ],
+                                    "branch": push_read_back["branch"],
+                                    "commit": push_read_back["remote_head"],
+                                    "commit_subject": None,
+                                    "pull_request": None,
+                                    "draft": False,
+                                    "review_receipt": None,
+                                    "tree_digest": push_read_back[
+                                        "remote_tree_digest"
+                                    ],
+                                    "paths": commit_read_back["staged_paths"],
+                                }
+                            else:
+                                pull_request_read_back = finalization_operations[3][
+                                    "read_back"
+                                ]
+                                expected_intent = {
+                                    "repository": pull_request_read_back["repository"],
+                                    "base": pull_request_read_back["base"],
+                                    "base_head": pull_request_read_back["base_head"],
+                                    "finalize_base_head": pull_request_read_back[
+                                        "finalize_base_head"
+                                    ],
+                                    "branch": pull_request_read_back["branch"],
+                                    "commit": (
+                                        pull_request_read_back["observed_head"]
+                                        if operation_kind == "pr-watch"
+                                        else finalization_operations[index - 1][
+                                            "read_back"
+                                        ]["reviewed_head"]
+                                    ),
+                                    "commit_subject": None,
+                                    "pull_request": (
+                                        pull_request_read_back["pull_request"]
+                                        if operation_kind == "pr-watch"
+                                        else finalization_operations[index - 1][
+                                            "read_back"
+                                        ]["pull_request"]
+                                    ),
+                                    "draft": pull_request_read_back["draft"],
+                                    "review_receipt": (
+                                        None
+                                        if operation_kind == "pr-watch"
+                                        else finalization_operations[index - 1][
+                                            "read_back"
+                                        ]["receipt"]
+                                    ),
+                                    "tree_digest": pull_request_read_back[
+                                        "observed_tree_digest"
+                                    ],
+                                    "paths": pull_request_read_back["changed_paths"],
+                                }
+                    if intent != expected_intent:
+                        finalization_valid = False
+                        break
+                response = finalization_operation.get("response")
+                read_back = finalization_operation.get("read_back")
+                intent_digest = finalization_operation["intent_digest"]
+                if status == "attempting":
+                    status_valid = response is None and read_back is None
+                elif status == "unsettled":
+                    status_valid = (
+                        (
+                            operation_kind == "pr-watch"
+                            and response == {"outcome": "unsettled"}
+                            and read_back
+                            == {
+                                "outcome": "unsettled",
+                                "repository": intent["repository"],
+                                "base": intent["base"],
+                                "pull_request": intent["pull_request"],
+                                "observed_head": intent["commit"],
+                            }
+                        )
+                        or (
+                            operation_kind == "merge-read-back"
+                            and response is None
+                            and read_back
+                            == {
+                                "outcome": "not-merged",
+                                "merged": False,
+                                "repository": intent["repository"],
+                                "base": intent["base"],
+                                "pull_request": intent["pull_request"],
+                                "observed_head": intent["commit"],
+                                "reviewed_head": intent["commit"],
+                                "receipt": intent["review_receipt"],
+                            }
+                        )
+                    )
+                elif status == "failed":
+                    status_valid = (
+                        isinstance(response, dict)
+                        and set(response) == {"outcome", "reason"}
+                        and response.get("outcome") == "failed"
+                        and isinstance(response.get("reason"), str)
+                        and bool(response.get("reason"))
+                        and read_back
+                        == {
+                            "outcome": "authoritative-no-effect",
+                            "intent_digest": intent_digest,
+                        }
+                    )
+                elif status == "ambiguous":
+                    status_valid = (
+                        isinstance(response, dict)
+                        and response.get("outcome") == "ambiguous"
+                        and isinstance(read_back, dict)
+                        and set(read_back)
+                        == {"outcome", "intent_digest", "observations"}
+                        and read_back.get("outcome") == "ambiguous"
+                        and read_back.get("intent_digest") == intent_digest
+                        and isinstance(read_back.get("observations"), list)
+                    )
+                elif operation_kind == "pr-watch":
+                    status_valid = (
+                        isinstance(response, dict)
+                        and set(response) == {"outcome", "receipt"}
+                        and response.get("outcome") == "terminal"
+                        and isinstance(response.get("receipt"), str)
+                        and lowercase_digest.fullmatch(response["receipt"])
+                        is not None
+                        and read_back
+                        == {
+                            "outcome": "verified",
+                            "repository": intent["repository"],
+                            "base": intent["base"],
+                            "pull_request": intent["pull_request"],
+                            "observed_head": intent["commit"],
+                            "reviewed_head": intent["commit"],
+                            "receipt": response["receipt"],
+                        }
+                    )
+                elif operation_kind == "merge-read-back":
+                    prior_review = finalization_operations[index - 1]
+                    status_valid = (
+                        response is None
+                        and prior_review.get("operation") == "pr-watch"
+                        and prior_review.get("status") == "verified"
+                        and read_back
+                        == {
+                            "outcome": "merged",
+                            "merged": True,
+                            "repository": intent["repository"],
+                            "base": intent["base"],
+                            "pull_request": intent["pull_request"],
+                            "final_head": intent["commit"],
+                            "reviewed_head": intent["commit"],
+                            "receipt": intent["review_receipt"],
+                        }
+                    )
+                elif operation_kind == "branch-create":
+                    status_valid = (
+                        response
+                        == {"outcome": "accepted", "operation": operation_kind}
+                        and read_back
+                        == {
+                            "outcome": "verified",
+                            "repository": intent["repository"],
+                            "base": intent["base"],
+                            "base_head": intent["base_head"],
+                            "finalize_base_head": intent["finalize_base_head"],
+                            "branch": intent["branch"],
+                            "branch_head": intent["finalize_base_head"],
+                            "paths": intent["paths"],
+                        }
+                    )
+                elif operation_kind == "commit":
+                    status_valid = (
+                        isinstance(response, dict)
+                        and set(response) == {"outcome", "commit"}
+                        and response.get("outcome") == "created"
+                        and isinstance(response.get("commit"), str)
+                        and lowercase_head.fullmatch(response["commit"]) is not None
+                        and read_back
+                        == {
+                            "outcome": "verified",
+                            "repository": intent["repository"],
+                            "branch": intent["branch"],
+                            "commit": response["commit"],
+                            "tree_digest": intent["tree_digest"],
+                            "staged_paths": intent["paths"],
+                            "subject": intent["commit_subject"],
+                        }
+                    )
+                elif operation_kind == "push":
+                    status_valid = (
+                        response
+                        == {"outcome": "accepted", "operation": operation_kind}
+                        and read_back
+                        == {
+                            "outcome": "verified",
+                            "repository": intent["repository"],
+                            "branch": intent["branch"],
+                            "remote_head": intent["commit"],
+                            "remote_tree_digest": intent["tree_digest"],
+                        }
+                    )
+                else:
+                    status_valid = (
+                        isinstance(response, dict)
+                        and set(response) == {"outcome", "pull_request", "url"}
+                        and response.get("outcome") == "created"
+                        and isinstance(response.get("pull_request"), str)
+                        and bool(response.get("pull_request"))
+                        and isinstance(response.get("url"), str)
+                        and bool(response.get("url"))
+                        and read_back
+                        == {
+                            "outcome": "verified",
+                            "repository": intent["repository"],
+                            "base": intent["base"],
+                            "base_head": intent["base_head"],
+                            "finalize_base_head": intent["finalize_base_head"],
+                            "branch": intent["branch"],
+                            "observed_head": intent["commit"],
+                            "observed_tree_digest": intent["tree_digest"],
+                            "pull_request": response["pull_request"],
+                            "url": response["url"],
+                            "draft": intent["draft"],
+                            "changed_paths": intent["paths"],
+                        }
+                    )
+                finalization_attempts = finalization_operation.get("attempts")
+                prior_attempts_valid = isinstance(finalization_attempts, list) and bool(
+                    finalization_attempts
+                )
+                if prior_attempts_valid:
+                    for prior_attempt in finalization_attempts[:-1]:
+                        if not isinstance(prior_attempt, dict) or set(prior_attempt) != {
+                            "status",
+                            "response",
+                            "read_back",
+                        }:
+                            prior_attempts_valid = False
+                            break
+                        prior_status = prior_attempt.get("status")
+                        prior_response = prior_attempt.get("response")
+                        prior_read_back = prior_attempt.get("read_back")
+                        failed_retryable = (
+                            prior_status == "failed"
+                            and isinstance(prior_response, dict)
+                            and set(prior_response) == {"outcome", "reason"}
+                            and prior_response.get("outcome") == "failed"
+                            and isinstance(prior_response.get("reason"), str)
+                            and bool(prior_response.get("reason"))
+                            and prior_read_back
+                            == {
+                                "outcome": "authoritative-no-effect",
+                                "intent_digest": intent_digest,
+                            }
+                        )
+                        unsettled_review_retryable = (
+                            prior_status == "unsettled"
+                            and operation_kind == "pr-watch"
+                            and prior_response == {"outcome": "unsettled"}
+                            and prior_read_back
+                            == {
+                                "outcome": "unsettled",
+                                "repository": intent["repository"],
+                                "base": intent["base"],
+                                "pull_request": intent["pull_request"],
+                                "observed_head": intent["commit"],
+                            }
+                        )
+                        unsettled_merge_retryable = (
+                            prior_status == "unsettled"
+                            and operation_kind == "merge-read-back"
+                            and prior_response is None
+                            and prior_read_back
+                            == {
+                                "outcome": "not-merged",
+                                "merged": False,
+                                "repository": intent["repository"],
+                                "base": intent["base"],
+                                "pull_request": intent["pull_request"],
+                                "observed_head": intent["commit"],
+                                "reviewed_head": intent["commit"],
+                                "receipt": intent["review_receipt"],
+                            }
+                        )
+                        if not (
+                            failed_retryable
+                            or unsettled_review_retryable
+                            or unsettled_merge_retryable
+                        ):
+                            prior_attempts_valid = False
+                            break
+                if (
+                    prior_attempts_valid
+                    and finalization_attempts[-1]
+                    != {"status": status, "response": response, "read_back": read_back}
+                ):
+                    prior_attempts_valid = False
+                if not status_valid or not prior_attempts_valid:
+                    finalization_valid = False
+                    break
+        expected_repository_evidence = (
+            [
+                copy.deepcopy(operation)
+                for operation in finalization_operations
+                if operation.get("operation") in {"branch-create", "commit", "push"}
+                and operation.get("status") == "verified"
+            ]
+            if isinstance(finalization_operations, list)
+            else []
+        )
+        expected_pr_evidence = (
+            [
+                copy.deepcopy(operation)
+                for operation in finalization_operations
+                if operation.get("operation")
+                in {"pull-request", "pr-watch", "merge-read-back"}
+                and operation.get("status") == "verified"
+            ]
+            if isinstance(finalization_operations, list)
+            else []
+        )
+        if (
+            not finalization_valid
+            or value.get("repository_evidence") != expected_repository_evidence
+            or value.get("pull_request_evidence") != expected_pr_evidence
+        ):
+            return False
+        if phase == "forge-finalize":
+            return value.get("mode") == "live" and all(
+                operation["status"] == "verified" for operation in operations
+            )
         if phase == "completed" and "archive_sweep" not in value:
             completion = value.get("completion")
             if (
@@ -6081,13 +7827,36 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                 )
             return False
         archive_sweep = value.get("archive_sweep")
+        review_operation = (
+            finalization_operations[4]
+            if isinstance(finalization_operations, list)
+            and len(finalization_operations) >= 5
+            else None
+        )
+        expected_archive_sweep = (
+            {
+                "repository": review_operation["read_back"]["repository"],
+                "base": review_operation["read_back"]["base"],
+                "branch": finalization_operations[3]["read_back"]["branch"],
+                "commit": finalization_operations[2]["read_back"]["remote_head"],
+                "pull_request": review_operation["read_back"]["pull_request"],
+                "observed_pr_head": review_operation["read_back"]["observed_head"],
+                "reviewed_head": review_operation["read_back"]["reviewed_head"],
+                "pr_watch_receipt": review_operation["read_back"]["receipt"],
+            }
+            if isinstance(review_operation, dict)
+            and review_operation.get("status") == "verified"
+            else None
+        )
         if (
             value.get("mode") != "live"
             or any(operation["status"] != "verified" for operation in operations)
             or not isinstance(archive_sweep, dict)
+            or archive_sweep != expected_archive_sweep
             or set(archive_sweep)
             != {
                 "repository",
+                "base",
                 "branch",
                 "commit",
                 "pull_request",
@@ -6096,6 +7865,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                 "pr_watch_receipt",
             }
             or archive_sweep.get("repository") != "repo-id"
+            or archive_sweep.get("base") != "main"
             or not isinstance(archive_sweep.get("branch"), str)
             or not archive_sweep.get("branch")
             or not isinstance(archive_sweep.get("commit"), str)
@@ -6106,8 +7876,13 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             or archive_sweep.get("reviewed_head") != archive_sweep.get("commit")
             or not isinstance(archive_sweep.get("pr_watch_receipt"), str)
             or lowercase_digest.fullmatch(archive_sweep["pr_watch_receipt"]) is None
-            or value.get("repository_evidence") != [archive_sweep]
-            or value.get("pull_request_evidence") != [archive_sweep]
+            or [operation["operation"] for operation in finalization_operations]
+            != ["branch-create", "commit", "push", "pull-request", "pr-watch"]
+            + (["merge-read-back"] if phase == "completed" else [])
+            or any(
+                operation["status"] != "verified"
+                for operation in finalization_operations
+            )
         ):
             return False
         if phase == "archive-sweep":
@@ -6116,18 +7891,955 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         return (
             isinstance(completion, dict)
             and set(completion)
-            == {"route", "outcome", "completed_receipt_digest"}
+            == {"route", "outcome", "merge_read_back", "completed_receipt_digest"}
             and completion.get("route") == "archive-sweep"
             and completion.get("outcome")
             in {"degraded-success", "successful-completion"}
-            and isinstance(completion.get("completed_receipt_digest"), str)
-            and lowercase_digest.fullmatch(completion["completed_receipt_digest"])
-            is not None
+            and completion.get("merge_read_back")
+            == finalization_operations[-1]["read_back"]
+            and completion.get("completed_receipt_digest")
+            == completed_receipt_digest(
+                value,
+                "archive-sweep",
+                completion.get("outcome"),
+                completion.get("merge_read_back"),
+            )
         )
 
     valid_state_payload = ordinary_state_payload("propose")
     for phase in ordinary_state_phases:
         assert ordinary_state_valid(ordinary_state_payload(phase))
+    foreign_operator_approval = ordinary_state_payload("tracker-write")
+    foreign_operator_approval["approval"]["approver_identity"] = "foreign-actor"
+    foreign_operator_approval["approval"]["authority_read_back"][
+        "approver_identity"
+    ] = "foreign-actor"
+    assert not ordinary_state_valid(foreign_operator_approval)
+    independent_attempts_state = ordinary_state_payload("tracker-write")
+    assert independent_attempts_state["operations"] is not independent_attempts_state[
+        "attempts"
+    ]
+
+    def rebind_state_valid(
+        prior: dict[str, object],
+        replacement: dict[str, object],
+        current_gate_claim_core: dict[str, object],
+    ) -> bool:
+        expected = copy.deepcopy(prior)
+        expected["gate_owner_token"] = replacement.get("gate_owner_token")
+        expected["gate_binding"] = copy.deepcopy(replacement.get("gate_binding"))
+        expected["state_claim"] = copy.deepcopy(replacement.get("state_claim"))
+        claim = replacement.get("state_claim")
+        return (
+            ordinary_state_valid(prior)
+            and ordinary_state_valid(replacement)
+            and gate_claim_core_valid(
+                current_gate_claim_core,
+                replacement.get("gate_binding"),
+                replacement.get("run_identity"),
+            )
+            and isinstance(claim, dict)
+            and claim.get("reason") == "normal-resume"
+            and claim.get("previous_gate_binding") == prior.get("gate_binding")
+            and claim.get("current_gate_binding") == replacement.get("gate_binding")
+            and claim.get("captured_state_digest")
+            == hashlib.sha256(canonical_json_bytes(prior)).hexdigest()
+            and claim.get("recovery_bundle_digest") is None
+            and claim.get("approval_digest") is None
+            and replacement == expected
+        )
+
+    def approved_recovery_rebind_valid(
+        prior: dict[str, object],
+        replacement: dict[str, object],
+        current_gate_claim_core: dict[str, object],
+        recovery_bundle_bytes: bytes,
+        approval_bytes: bytes,
+    ) -> bool:
+        try:
+            recovery_bundle = json.loads(recovery_bundle_bytes)
+            approval_record = json.loads(approval_bytes)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return False
+        recovery_bundle_digest = hashlib.sha256(recovery_bundle_bytes).hexdigest()
+        expected_capture_core = {
+            "run_identity": prior.get("run_identity"),
+            "captured_state": prior,
+            "captured_state_digest": hashlib.sha256(
+                canonical_json_bytes(prior)
+            ).hexdigest(),
+            "previous_gate_binding": prior.get("gate_binding"),
+        }
+        expected_capture_core_digest = hashlib.sha256(
+            canonical_json_bytes(expected_capture_core)
+        ).hexdigest()
+        expected_action_core = {
+            "action": "rebind-valid-state",
+            "run_identity": prior.get("run_identity"),
+            "capture_core_digest": expected_capture_core_digest,
+            "captured_state_digest": expected_capture_core["captured_state_digest"],
+            "previous_gate_binding": prior.get("gate_binding"),
+        }
+        expected_action_core_digest = hashlib.sha256(
+            canonical_json_bytes(expected_action_core)
+        ).hexdigest()
+        expected_recovery_bundle = {
+            "kind": "state-present-prepared",
+            "capture_core": expected_capture_core,
+            "capture_core_digest": expected_capture_core_digest,
+            "action_core": expected_action_core,
+            "action_core_digest": expected_action_core_digest,
+            "approval": {
+                "decision": f"recover action-core {expected_action_core_digest}",
+                "source": "current-session",
+                "approver_identity": "operator",
+                "action_core_digest": expected_action_core_digest,
+            },
+        }
+        if (
+            recovery_bundle != expected_recovery_bundle
+            or canonical_json_bytes(recovery_bundle) != recovery_bundle_bytes
+            or not isinstance(approval_record, dict)
+            or set(approval_record)
+            != {
+                "decision",
+                "source",
+                "approver_identity",
+                "recovery_bundle_digest",
+            }
+            or approval_record.get("decision") != "approve-recovery"
+            or approval_record.get("source") != "current-session"
+            or approval_record.get("approver_identity") != "operator"
+            or approval_record.get("recovery_bundle_digest")
+            != recovery_bundle_digest
+            or canonical_json_bytes(approval_record) != approval_bytes
+        ):
+            return False
+        expected = copy.deepcopy(prior)
+        expected["gate_owner_token"] = replacement.get("gate_owner_token")
+        expected["gate_binding"] = copy.deepcopy(replacement.get("gate_binding"))
+        expected["state_claim"] = copy.deepcopy(replacement.get("state_claim"))
+        claim = replacement.get("state_claim")
+        return (
+            ordinary_state_valid(prior)
+            and ordinary_state_valid(replacement)
+            and gate_claim_core_valid(
+                current_gate_claim_core,
+                replacement.get("gate_binding"),
+                replacement.get("run_identity"),
+            )
+            and isinstance(claim, dict)
+            and claim.get("reason") == "approved-recovery"
+            and claim.get("previous_gate_binding") == prior.get("gate_binding")
+            and claim.get("current_gate_binding") == replacement.get("gate_binding")
+            and claim.get("captured_state_digest")
+            == hashlib.sha256(canonical_json_bytes(prior)).hexdigest()
+            and claim.get("recovery_bundle_digest")
+            == recovery_bundle_digest
+            and claim.get("approval_digest")
+            == hashlib.sha256(approval_bytes).hexdigest()
+            and replacement == expected
+        )
+
+    prior_claim_state = ordinary_state_payload("propose")
+    rebound_claim_state = copy.deepcopy(prior_claim_state)
+    current_gate_claim_core = {
+        "gate_path": "state/triage/triage-pipeline-gate_live.lock",
+        "repository_identity": "repo-id",
+        "config_fingerprint": rebound_claim_state["config_fingerprint"],
+        "owner": {
+            "token": "new-owner-token",
+            "run_identity": None,
+            "host": "host-b",
+            "process_id": 54321,
+            "process_start_observation": "start-b",
+            "creation_time": "2026-08-26T00:01:00Z",
+        },
+    }
+    rebound_claim_state["gate_owner_token"] = "new-owner-token"
+    rebound_claim_state["gate_binding"] = {
+        **copy.deepcopy(prior_claim_state["gate_binding"]),
+        "owner_token": "new-owner-token",
+        "owner_run_identity": None,
+        "gate_claim_core_digest": hashlib.sha256(
+            canonical_json_bytes(current_gate_claim_core)
+        ).hexdigest(),
+    }
+    rebound_claim_state["state_claim"] = {
+        "reason": "normal-resume",
+        "previous_gate_binding": copy.deepcopy(prior_claim_state["gate_binding"]),
+        "current_gate_binding": copy.deepcopy(rebound_claim_state["gate_binding"]),
+        "captured_state_digest": hashlib.sha256(
+            canonical_json_bytes(prior_claim_state)
+        ).hexdigest(),
+        "recovery_bundle_digest": None,
+        "approval_digest": None,
+    }
+    assert rebind_state_valid(
+        prior_claim_state, rebound_claim_state, current_gate_claim_core
+    )
+    assert ordinary_state_bound_to_gate(
+        rebound_claim_state, current_gate_claim_core
+    )
+    recovery_capture_core = {
+        "run_identity": prior_claim_state["run_identity"],
+        "captured_state": prior_claim_state,
+        "captured_state_digest": hashlib.sha256(
+            canonical_json_bytes(prior_claim_state)
+        ).hexdigest(),
+        "previous_gate_binding": prior_claim_state["gate_binding"],
+    }
+    recovery_capture_core_digest = hashlib.sha256(
+        canonical_json_bytes(recovery_capture_core)
+    ).hexdigest()
+    recovery_action_core = {
+        "action": "rebind-valid-state",
+        "run_identity": prior_claim_state["run_identity"],
+        "capture_core_digest": recovery_capture_core_digest,
+        "captured_state_digest": recovery_capture_core["captured_state_digest"],
+        "previous_gate_binding": prior_claim_state["gate_binding"],
+    }
+    recovery_action_core_digest = hashlib.sha256(
+        canonical_json_bytes(recovery_action_core)
+    ).hexdigest()
+    recovery_bundle_bytes = canonical_json_bytes(
+        {
+            "kind": "state-present-prepared",
+            "capture_core": recovery_capture_core,
+            "capture_core_digest": recovery_capture_core_digest,
+            "action_core": recovery_action_core,
+            "action_core_digest": recovery_action_core_digest,
+            "approval": {
+                "decision": f"recover action-core {recovery_action_core_digest}",
+                "source": "current-session",
+                "approver_identity": "operator",
+                "action_core_digest": recovery_action_core_digest,
+            },
+        }
+    )
+    recovery_approval_bytes = canonical_json_bytes(
+        {
+            "decision": "approve-recovery",
+            "source": "current-session",
+            "approver_identity": "operator",
+            "recovery_bundle_digest": hashlib.sha256(
+                recovery_bundle_bytes
+            ).hexdigest(),
+        }
+    )
+    approved_recovery_state = copy.deepcopy(rebound_claim_state)
+    approved_recovery_state["state_claim"] = {
+        **copy.deepcopy(rebound_claim_state["state_claim"]),
+        "reason": "approved-recovery",
+        "recovery_bundle_digest": hashlib.sha256(recovery_bundle_bytes).hexdigest(),
+        "approval_digest": hashlib.sha256(recovery_approval_bytes).hexdigest(),
+    }
+    assert approved_recovery_rebind_valid(
+        prior_claim_state,
+        approved_recovery_state,
+        current_gate_claim_core,
+        recovery_bundle_bytes,
+        recovery_approval_bytes,
+    )
+    for recovery_mutation_field in (
+        "captured_state_digest",
+        "recovery_bundle_digest",
+        "approval_digest",
+    ):
+        approved_recovery_mutation = copy.deepcopy(approved_recovery_state)
+        approved_recovery_mutation["state_claim"][recovery_mutation_field] = "0" * 64
+        assert not approved_recovery_rebind_valid(
+            prior_claim_state,
+            approved_recovery_mutation,
+            current_gate_claim_core,
+            recovery_bundle_bytes,
+            recovery_approval_bytes,
+        )
+    approved_recovery_previous_gate_mutation = copy.deepcopy(approved_recovery_state)
+    approved_recovery_previous_gate_mutation["state_claim"][
+        "previous_gate_binding"
+    ]["gate_claim_core_digest"] = "0" * 64
+    assert not approved_recovery_rebind_valid(
+        prior_claim_state,
+        approved_recovery_previous_gate_mutation,
+        current_gate_claim_core,
+        recovery_bundle_bytes,
+        recovery_approval_bytes,
+    )
+    foreign_bundle_approval_bytes = canonical_json_bytes(
+        {
+            "decision": "approve-recovery",
+            "source": "current-session",
+            "approver_identity": "operator",
+            "recovery_bundle_digest": "f" * 64,
+        }
+    )
+    cross_bundle_approval_state = copy.deepcopy(approved_recovery_state)
+    cross_bundle_approval_state["state_claim"]["approval_digest"] = hashlib.sha256(
+        foreign_bundle_approval_bytes
+    ).hexdigest()
+    assert not approved_recovery_rebind_valid(
+        prior_claim_state,
+        cross_bundle_approval_state,
+        current_gate_claim_core,
+        recovery_bundle_bytes,
+        foreign_bundle_approval_bytes,
+    )
+    foreign_approver_bytes = canonical_json_bytes(
+        {
+            "decision": "approve-recovery",
+            "source": "current-session",
+            "approver_identity": "foreign-actor",
+            "recovery_bundle_digest": hashlib.sha256(
+                recovery_bundle_bytes
+            ).hexdigest(),
+        }
+    )
+    foreign_approver_state = copy.deepcopy(approved_recovery_state)
+    foreign_approver_state["state_claim"]["approval_digest"] = hashlib.sha256(
+        foreign_approver_bytes
+    ).hexdigest()
+    assert not approved_recovery_rebind_valid(
+        prior_claim_state,
+        foreign_approver_state,
+        current_gate_claim_core,
+        recovery_bundle_bytes,
+        foreign_approver_bytes,
+    )
+    foreign_recovery_bundle_bytes = canonical_json_bytes(
+        {"kind": "foreign-recovery-bundle", "captured_state": {}}
+    )
+    foreign_recovery_approval_bytes = canonical_json_bytes(
+        {
+            "decision": "approve-recovery",
+            "source": "current-session",
+            "approver_identity": "operator",
+            "recovery_bundle_digest": hashlib.sha256(
+                foreign_recovery_bundle_bytes
+            ).hexdigest(),
+        }
+    )
+    foreign_recovery_state = copy.deepcopy(approved_recovery_state)
+    foreign_recovery_state["state_claim"]["recovery_bundle_digest"] = (
+        hashlib.sha256(foreign_recovery_bundle_bytes).hexdigest()
+    )
+    foreign_recovery_state["state_claim"]["approval_digest"] = hashlib.sha256(
+        foreign_recovery_approval_bytes
+    ).hexdigest()
+    assert not approved_recovery_rebind_valid(
+        prior_claim_state,
+        foreign_recovery_state,
+        current_gate_claim_core,
+        foreign_recovery_bundle_bytes,
+        foreign_recovery_approval_bytes,
+    )
+    incomplete_recovery_bundle = json.loads(recovery_bundle_bytes)
+    incomplete_recovery_bundle.pop("approval")
+    incomplete_recovery_bundle_bytes = canonical_json_bytes(
+        incomplete_recovery_bundle
+    )
+    incomplete_recovery_approval_bytes = canonical_json_bytes(
+        {
+            "decision": "approve-recovery",
+            "source": "current-session",
+            "approver_identity": "operator",
+            "recovery_bundle_digest": hashlib.sha256(
+                incomplete_recovery_bundle_bytes
+            ).hexdigest(),
+        }
+    )
+    incomplete_recovery_state = copy.deepcopy(approved_recovery_state)
+    incomplete_recovery_state["state_claim"]["recovery_bundle_digest"] = (
+        hashlib.sha256(incomplete_recovery_bundle_bytes).hexdigest()
+    )
+    incomplete_recovery_state["state_claim"]["approval_digest"] = hashlib.sha256(
+        incomplete_recovery_approval_bytes
+    ).hexdigest()
+    assert not approved_recovery_rebind_valid(
+        prior_claim_state,
+        incomplete_recovery_state,
+        current_gate_claim_core,
+        incomplete_recovery_bundle_bytes,
+        incomplete_recovery_approval_bytes,
+    )
+    rebind_digest_mutation = copy.deepcopy(rebound_claim_state)
+    rebind_digest_mutation["state_claim"]["captured_state_digest"] = "0" * 64
+    assert not rebind_state_valid(
+        prior_claim_state, rebind_digest_mutation, current_gate_claim_core
+    )
+    rebind_token_mutation = copy.deepcopy(rebound_claim_state)
+    rebind_token_mutation["state_claim"]["previous_gate_binding"]["owner_token"] = (
+        "new-owner-token"
+    )
+    assert not rebind_state_valid(
+        prior_claim_state, rebind_token_mutation, current_gate_claim_core
+    )
+    rebind_phase_mutation = copy.deepcopy(rebound_claim_state)
+    rebind_phase_mutation["phase"] = "reserved"
+    assert not rebind_state_valid(
+        prior_claim_state, rebind_phase_mutation, current_gate_claim_core
+    )
+    foreign_gate_path = copy.deepcopy(current_gate_claim_core)
+    foreign_gate_path["gate_path"] = "state/triage/foreign.lock"
+    assert not rebind_state_valid(
+        prior_claim_state, rebound_claim_state, foreign_gate_path
+    )
+    foreign_gate_owner = copy.deepcopy(current_gate_claim_core)
+    foreign_gate_owner["owner"]["token"] = "foreign-owner"
+    assert not rebind_state_valid(
+        prior_claim_state, rebound_claim_state, foreign_gate_owner
+    )
+    foreign_gate_start = copy.deepcopy(current_gate_claim_core)
+    foreign_gate_start["owner"]["process_start_observation"] = "foreign-start"
+    assert not rebind_state_valid(
+        prior_claim_state, rebound_claim_state, foreign_gate_start
+    )
+    foreign_gate_creation = copy.deepcopy(current_gate_claim_core)
+    foreign_gate_creation["owner"]["creation_time"] = "foreign-creation-time"
+    assert not rebind_state_valid(
+        prior_claim_state, rebound_claim_state, foreign_gate_creation
+    )
+    foreign_gate_process = copy.deepcopy(current_gate_claim_core)
+    foreign_gate_process["owner"]["process_id"] = 98765
+    assert not rebind_state_valid(
+        prior_claim_state, rebound_claim_state, foreign_gate_process
+    )
+    forged_bound_state = copy.deepcopy(rebound_claim_state)
+    forged_bound_core = copy.deepcopy(current_gate_claim_core)
+    forged_bound_core["owner"]["token"] = "foreign-owner"
+    forged_bound_state["gate_owner_token"] = "foreign-owner"
+    forged_bound_state["gate_binding"]["owner_token"] = "foreign-owner"
+    forged_bound_state["gate_binding"]["gate_claim_core_digest"] = hashlib.sha256(
+        canonical_json_bytes(forged_bound_core)
+    ).hexdigest()
+    forged_bound_state["state_claim"]["current_gate_binding"] = copy.deepcopy(
+        forged_bound_state["gate_binding"]
+    )
+    assert ordinary_state_valid(forged_bound_state)
+    assert not ordinary_state_bound_to_gate(
+        forged_bound_state, current_gate_claim_core
+    )
+    for frozen_mutation_kind in ("foreign", "reordered", "duplicate"):
+        frozen_mutation = ordinary_state_base("reserved")
+        blocks = frozen_mutation["frozen_snapshot"]["content"]["blocks"]
+        if frozen_mutation_kind == "foreign":
+            blocks[0]["source_block"] += "\nforeign"
+        elif frozen_mutation_kind == "reordered":
+            blocks.reverse()
+        else:
+            blocks[1] = copy.deepcopy(blocks[0])
+        mutated_frozen_digest = hashlib.sha256(
+            canonical_json_bytes(frozen_mutation["frozen_snapshot"]["content"])
+        ).hexdigest()
+        frozen_mutation["frozen_snapshot"]["digest"] = mutated_frozen_digest
+        frozen_mutation["frozen_inbox_digest"] = mutated_frozen_digest
+        assert not complete_base_valid(frozen_mutation), frozen_mutation_kind
+
+    verified_notification_state = ordinary_state_payload("notification-delivery")
+    verified_notification = verified_notification_state["notification_operations"][0]
+    notification_thread = "thread-123"
+    notification_message = "message-123"
+    verified_notification.update(
+        {
+            "status": "verified",
+            "response": {
+                "outcome": "sent",
+                "thread_reference": notification_thread,
+                "message_id": notification_message,
+            },
+            "read_back": {
+                "outcome": "visible",
+                "thread_reference": notification_thread,
+                "message_id": notification_message,
+                "target": verified_notification["intent"]["target"],
+                "marker": verified_notification["idempotency_key"],
+                "proposal_set_digest": verified_notification["intent"][
+                    "proposal_set_digest"
+                ],
+                "rendered_payload_digest": verified_notification["intent"][
+                    "rendered_payload_digest"
+                ],
+            },
+        }
+    )
+    verified_notification["attempts"][-1] = {
+        "status": verified_notification["status"],
+        "response": copy.deepcopy(verified_notification["response"]),
+        "read_back": copy.deepcopy(verified_notification["read_back"]),
+    }
+    verified_notification_state.update(
+        {
+            "phase": "awaiting-approval",
+            "approval": None,
+            "notification_thread_reference": notification_thread,
+            "decisions": [],
+        }
+    )
+    assert ordinary_state_valid(verified_notification_state)
+
+    failed_notification_state = ordinary_state_payload("notification-delivery")
+    failed_notification = failed_notification_state["notification_operations"][0]
+    failed_notification.update(
+        {
+            "status": "failed",
+            "response": {"outcome": "failed", "reason": "send rejected"},
+            "read_back": {
+                "outcome": "authoritative-no-match",
+                "target": failed_notification["intent"]["target"],
+                "marker": failed_notification["idempotency_key"],
+            },
+        }
+    )
+    failed_notification["attempts"][-1] = {
+        "status": failed_notification["status"],
+        "response": copy.deepcopy(failed_notification["response"]),
+        "read_back": copy.deepcopy(failed_notification["read_back"]),
+    }
+    assert ordinary_state_valid(failed_notification_state)
+    retry_notification_state = copy.deepcopy(failed_notification_state)
+    retry_notification = retry_notification_state["notification_operations"][0]
+    retry_notification["attempts"].append(
+        {"status": "attempting", "response": None, "read_back": None}
+    )
+    retry_notification.update(
+        {"status": "attempting", "response": None, "read_back": None}
+    )
+    assert ordinary_state_valid(retry_notification_state)
+
+    ambiguous_notification_state = ordinary_state_payload("notification-delivery")
+    ambiguous_notification = ambiguous_notification_state["notification_operations"][0]
+    ambiguous_notification.update(
+        {
+            "status": "ambiguous",
+            "response": {"outcome": "ambiguous"},
+            "read_back": {
+                "outcome": "ambiguous",
+                "target": ambiguous_notification["intent"]["target"],
+                "marker": ambiguous_notification["idempotency_key"],
+                "matches": [{"thread_reference": "thread-uncertain"}],
+            },
+        }
+    )
+    ambiguous_notification["attempts"][-1] = {
+        "status": ambiguous_notification["status"],
+        "response": copy.deepcopy(ambiguous_notification["response"]),
+        "read_back": copy.deepcopy(ambiguous_notification["read_back"]),
+    }
+    assert ordinary_state_valid(ambiguous_notification_state)
+
+    reminder_state = copy.deepcopy(verified_notification_state)
+    reminder_intent = {
+        **copy.deepcopy(verified_notification["intent"]),
+        "thread_reference": notification_thread,
+    }
+    reminder_state["notification_operations"].append(
+        {
+            "operation": "notification-reminder",
+            "status": "attempting",
+            "idempotency_key": (
+                "session-id:notification-reminder:"
+                f"{verified_notification['intent']['proposal_set_digest']}"
+            ),
+            "intent": reminder_intent,
+            "intent_digest": hashlib.sha256(
+                canonical_json_bytes(reminder_intent)
+            ).hexdigest(),
+            "response": None,
+            "read_back": None,
+            "attempts": [
+                {"status": "attempting", "response": None, "read_back": None}
+            ],
+        }
+    )
+    assert ordinary_state_valid(reminder_state)
+
+    def sync_finalization_evidence(state: dict[str, object]) -> None:
+        finalization_operations = state["finalization_operations"]
+        for operation in finalization_operations:
+            operation["attempts"][-1] = {
+                "status": operation["status"],
+                "response": copy.deepcopy(operation["response"]),
+                "read_back": copy.deepcopy(operation["read_back"]),
+            }
+        state["repository_evidence"] = copy.deepcopy(
+            [
+                operation
+                for operation in finalization_operations
+                if operation["operation"] in {"branch-create", "commit", "push"}
+                and operation["status"] == "verified"
+            ]
+        )
+        state["pull_request_evidence"] = copy.deepcopy(
+            [
+                operation
+                for operation in finalization_operations
+                if operation["operation"]
+                in {"pull-request", "pr-watch", "merge-read-back"}
+                and operation["status"] == "verified"
+            ]
+        )
+        completion = state.get("completion")
+        if (
+            isinstance(completion, dict)
+            and completion.get("route") == "archive-sweep"
+            and "merge_read_back" in completion
+        ):
+            completion["completed_receipt_digest"] = completed_receipt_digest(
+                state,
+                "archive-sweep",
+                completion.get("outcome"),
+                completion.get("merge_read_back"),
+            )
+
+    fast_forward_state = ordinary_state_payload("completed")
+    descendant_finalize_base = "b" * 40
+    for finalization_operation in fast_forward_state["finalization_operations"]:
+        finalization_operation["intent"]["finalize_base_head"] = (
+            descendant_finalize_base
+        )
+        finalization_operation["intent_digest"] = hashlib.sha256(
+            canonical_json_bytes(finalization_operation["intent"])
+        ).hexdigest()
+        if finalization_operation["operation"] == "branch-create":
+            finalization_operation["read_back"]["finalize_base_head"] = (
+                descendant_finalize_base
+            )
+            finalization_operation["read_back"]["branch_head"] = (
+                descendant_finalize_base
+            )
+        elif finalization_operation["operation"] == "pull-request":
+            finalization_operation["read_back"]["finalize_base_head"] = (
+                descendant_finalize_base
+            )
+    sync_finalization_evidence(fast_forward_state)
+    assert ordinary_state_valid(fast_forward_state)
+    unobserved_finalize_base = copy.deepcopy(fast_forward_state)
+    for finalization_operation in unobserved_finalize_base[
+        "finalization_operations"
+    ]:
+        finalization_operation["intent"]["finalize_base_head"] = "1" * 40
+        finalization_operation["intent_digest"] = hashlib.sha256(
+            canonical_json_bytes(finalization_operation["intent"])
+        ).hexdigest()
+        if finalization_operation["operation"] == "branch-create":
+            finalization_operation["read_back"]["finalize_base_head"] = "1" * 40
+            finalization_operation["read_back"]["branch_head"] = "1" * 40
+        elif finalization_operation["operation"] == "pull-request":
+            finalization_operation["read_back"]["finalize_base_head"] = "1" * 40
+    sync_finalization_evidence(unobserved_finalize_base)
+    assert not ordinary_state_valid(unobserved_finalize_base)
+
+    finalization_template = ordinary_state_payload("archive-sweep")
+    for operation_index, operation_kind in enumerate(
+        ("branch-create", "commit", "push", "pull-request", "pr-watch")
+    ):
+        for status in ("attempting", "failed", "ambiguous"):
+            cutpoint_state = copy.deepcopy(finalization_template)
+            cutpoint_state["phase"] = "forge-finalize"
+            cutpoint_state.pop("archive_sweep")
+            cutpoint_state["finalization_operations"] = cutpoint_state[
+                "finalization_operations"
+            ][: operation_index + 1]
+            cutpoint_operation = cutpoint_state["finalization_operations"][-1]
+            assert cutpoint_operation["operation"] == operation_kind
+            cutpoint_operation["status"] = status
+            if status == "attempting":
+                cutpoint_operation["response"] = None
+                cutpoint_operation["read_back"] = None
+            elif status == "failed":
+                cutpoint_operation["response"] = {
+                    "outcome": "failed",
+                    "reason": "operation failed",
+                }
+                cutpoint_operation["read_back"] = {
+                    "outcome": "authoritative-no-effect",
+                    "intent_digest": cutpoint_operation["intent_digest"],
+                }
+            else:
+                cutpoint_operation["response"] = {"outcome": "ambiguous"}
+                cutpoint_operation["read_back"] = {
+                    "outcome": "ambiguous",
+                    "intent_digest": cutpoint_operation["intent_digest"],
+                    "observations": [{"outcome": "uncertain"}],
+                }
+            sync_finalization_evidence(cutpoint_state)
+            assert ordinary_state_valid(cutpoint_state), (operation_kind, status)
+    for merge_status in ("attempting", "failed", "ambiguous"):
+        merge_cutpoint_state = ordinary_state_payload("completed")
+        merge_cutpoint_state["phase"] = "forge-finalize"
+        merge_cutpoint_state.pop("archive_sweep")
+        merge_cutpoint_state.pop("completion")
+        merge_operation = merge_cutpoint_state["finalization_operations"][-1]
+        assert merge_operation["operation"] == "merge-read-back"
+        merge_operation["status"] = merge_status
+        if merge_status == "attempting":
+            merge_operation["response"] = None
+            merge_operation["read_back"] = None
+        elif merge_status == "failed":
+            merge_operation["response"] = {
+                "outcome": "failed",
+                "reason": "merge read-back failed",
+            }
+            merge_operation["read_back"] = {
+                "outcome": "authoritative-no-effect",
+                "intent_digest": merge_operation["intent_digest"],
+            }
+        else:
+            merge_operation["response"] = {"outcome": "ambiguous"}
+            merge_operation["read_back"] = {
+                "outcome": "ambiguous",
+                "intent_digest": merge_operation["intent_digest"],
+                "observations": [{"merge_state": "unknown"}],
+            }
+        sync_finalization_evidence(merge_cutpoint_state)
+        assert ordinary_state_valid(merge_cutpoint_state), merge_status
+
+    failed_branch_retry_state = copy.deepcopy(finalization_template)
+    failed_branch_retry_state["phase"] = "forge-finalize"
+    failed_branch_retry_state.pop("archive_sweep")
+    failed_branch_retry_state["finalization_operations"] = (
+        failed_branch_retry_state["finalization_operations"][:1]
+    )
+    failed_branch_retry = failed_branch_retry_state["finalization_operations"][0]
+    failed_branch_retry.update(
+        {
+            "status": "failed",
+            "response": {"outcome": "failed", "reason": "branch create failed"},
+            "read_back": {
+                "outcome": "authoritative-no-effect",
+                "intent_digest": failed_branch_retry["intent_digest"],
+            },
+        }
+    )
+    sync_finalization_evidence(failed_branch_retry_state)
+    failed_branch_retry["attempts"].append(
+        {"status": "attempting", "response": None, "read_back": None}
+    )
+    failed_branch_retry.update(
+        {"status": "attempting", "response": None, "read_back": None}
+    )
+    sync_finalization_evidence(failed_branch_retry_state)
+    assert ordinary_state_valid(failed_branch_retry_state)
+
+    unsettled_watch_retry_state = ordinary_state_payload("forge-finalize")
+    unsettled_watch_retry = unsettled_watch_retry_state["finalization_operations"][-1]
+    unsettled_watch_retry["attempts"].append(
+        {"status": "attempting", "response": None, "read_back": None}
+    )
+    unsettled_watch_retry.update(
+        {"status": "attempting", "response": None, "read_back": None}
+    )
+    sync_finalization_evidence(unsettled_watch_retry_state)
+    assert ordinary_state_valid(unsettled_watch_retry_state)
+
+    unsettled_merge_retry_state = ordinary_state_payload("completed")
+    unsettled_merge_retry_state["phase"] = "forge-finalize"
+    unsettled_merge_retry_state.pop("archive_sweep")
+    unsettled_merge_retry_state.pop("completion")
+    unsettled_merge_retry = unsettled_merge_retry_state["finalization_operations"][-1]
+    unsettled_merge_retry.update(
+        {
+            "status": "unsettled",
+            "response": None,
+            "read_back": {
+                "outcome": "not-merged",
+                "merged": False,
+                "repository": unsettled_merge_retry["intent"]["repository"],
+                "base": unsettled_merge_retry["intent"]["base"],
+                "pull_request": unsettled_merge_retry["intent"]["pull_request"],
+                "observed_head": unsettled_merge_retry["intent"]["commit"],
+                "reviewed_head": unsettled_merge_retry["intent"]["commit"],
+                "receipt": unsettled_merge_retry["intent"]["review_receipt"],
+            },
+        }
+    )
+    sync_finalization_evidence(unsettled_merge_retry_state)
+    assert ordinary_state_valid(unsettled_merge_retry_state)
+    unsettled_merge_retry["attempts"].append(
+        {"status": "attempting", "response": None, "read_back": None}
+    )
+    unsettled_merge_retry.update(
+        {"status": "attempting", "response": None, "read_back": None}
+    )
+    sync_finalization_evidence(unsettled_merge_retry_state)
+    assert ordinary_state_valid(unsettled_merge_retry_state)
+
+    def verified_finalization_prefix(last_operation_index: int) -> dict[str, object]:
+        state = copy.deepcopy(finalization_template)
+        state["phase"] = "forge-finalize"
+        state.pop("archive_sweep")
+        state["finalization_operations"] = state["finalization_operations"][
+            : last_operation_index + 1
+        ]
+        sync_finalization_evidence(state)
+        assert ordinary_state_valid(state)
+        return state
+
+    push_cutpoint_provenance_mutation = verified_finalization_prefix(2)
+    push_cutpoint_operation = push_cutpoint_provenance_mutation[
+        "finalization_operations"
+    ][2]
+    push_cutpoint_operation["intent"].update(
+        {"commit": "a" * 40, "tree_digest": "8" * 64}
+    )
+    push_cutpoint_operation["intent_digest"] = hashlib.sha256(
+        canonical_json_bytes(push_cutpoint_operation["intent"])
+    ).hexdigest()
+    push_cutpoint_operation["read_back"].update(
+        {"remote_head": "a" * 40, "remote_tree_digest": "8" * 64}
+    )
+    sync_finalization_evidence(push_cutpoint_provenance_mutation)
+    assert not ordinary_state_valid(push_cutpoint_provenance_mutation)
+
+    pull_request_cutpoint_provenance_mutation = verified_finalization_prefix(3)
+    pull_request_cutpoint_operation = pull_request_cutpoint_provenance_mutation[
+        "finalization_operations"
+    ][3]
+    pull_request_cutpoint_operation["intent"].update(
+        {"commit": "a" * 40, "tree_digest": "8" * 64}
+    )
+    pull_request_cutpoint_operation["intent_digest"] = hashlib.sha256(
+        canonical_json_bytes(pull_request_cutpoint_operation["intent"])
+    ).hexdigest()
+    pull_request_cutpoint_operation["read_back"].update(
+        {"observed_head": "a" * 40, "observed_tree_digest": "8" * 64}
+    )
+    sync_finalization_evidence(pull_request_cutpoint_provenance_mutation)
+    assert not ordinary_state_valid(pull_request_cutpoint_provenance_mutation)
+
+    pr_watch_cutpoint_provenance_mutation = verified_finalization_prefix(4)
+    pr_watch_cutpoint_operation = pr_watch_cutpoint_provenance_mutation[
+        "finalization_operations"
+    ][4]
+    pr_watch_cutpoint_operation["intent"].update(
+        {
+            "commit": "a" * 40,
+            "pull_request": "pr-watch-foreign",
+            "tree_digest": "8" * 64,
+        }
+    )
+    pr_watch_cutpoint_operation["intent_digest"] = hashlib.sha256(
+        canonical_json_bytes(pr_watch_cutpoint_operation["intent"])
+    ).hexdigest()
+    pr_watch_cutpoint_operation["read_back"].update(
+        {
+            "pull_request": "pr-watch-foreign",
+            "observed_head": "a" * 40,
+            "reviewed_head": "a" * 40,
+        }
+    )
+    sync_finalization_evidence(pr_watch_cutpoint_provenance_mutation)
+    assert not ordinary_state_valid(pr_watch_cutpoint_provenance_mutation)
+
+    merge_receipt_intent_mutation = ordinary_state_payload("completed")
+    merge_receipt_intent_mutation["phase"] = "forge-finalize"
+    merge_receipt_intent_mutation.pop("archive_sweep")
+    merge_receipt_intent_mutation.pop("completion")
+    changed_review_receipt = "f" * 64
+    changed_review_operation = merge_receipt_intent_mutation[
+        "finalization_operations"
+    ][4]
+    changed_review_operation["response"]["receipt"] = changed_review_receipt
+    changed_review_operation["read_back"]["receipt"] = changed_review_receipt
+    changed_merge_operation = merge_receipt_intent_mutation[
+        "finalization_operations"
+    ][5]
+    changed_merge_operation["read_back"]["receipt"] = changed_review_receipt
+    sync_finalization_evidence(merge_receipt_intent_mutation)
+    assert not ordinary_state_valid(merge_receipt_intent_mutation)
+
+    commit_tree_chain_mutation = ordinary_state_payload("completed")
+    foreign_tree_digest = "8" * 64
+    for operation in commit_tree_chain_mutation["finalization_operations"][1:]:
+        operation["intent"]["tree_digest"] = foreign_tree_digest
+        operation["intent_digest"] = hashlib.sha256(
+            canonical_json_bytes(operation["intent"])
+        ).hexdigest()
+    commit_operation = commit_tree_chain_mutation["finalization_operations"][1]
+    commit_operation["authority_read_back"]["tree_digest"] = foreign_tree_digest
+    commit_operation["read_back"]["tree_digest"] = foreign_tree_digest
+    push_operation = commit_tree_chain_mutation["finalization_operations"][2]
+    push_operation["read_back"]["remote_tree_digest"] = foreign_tree_digest
+    pull_request_operation = commit_tree_chain_mutation[
+        "finalization_operations"
+    ][3]
+    pull_request_operation["read_back"][
+        "observed_tree_digest"
+    ] = foreign_tree_digest
+    sync_finalization_evidence(commit_tree_chain_mutation)
+    assert not ordinary_state_valid(commit_tree_chain_mutation)
+
+    configured_draft_chain_mutation = ordinary_state_payload("completed")
+    for operation in configured_draft_chain_mutation["finalization_operations"][3:]:
+        operation["intent"]["draft"] = True
+        operation["intent_digest"] = hashlib.sha256(
+            canonical_json_bytes(operation["intent"])
+        ).hexdigest()
+    configured_draft_chain_mutation["finalization_operations"][3]["read_back"][
+        "draft"
+    ] = True
+    sync_finalization_evidence(configured_draft_chain_mutation)
+    assert not ordinary_state_valid(configured_draft_chain_mutation)
+    configured_subject_mutation = ordinary_state_payload("completed")
+    configured_subject_operation = configured_subject_mutation[
+        "finalization_operations"
+    ][1]
+    configured_subject_operation["intent"]["commit_subject"] = "foreign subject"
+    configured_subject_operation["intent_digest"] = hashlib.sha256(
+        canonical_json_bytes(configured_subject_operation["intent"])
+    ).hexdigest()
+    configured_subject_operation["read_back"]["subject"] = "foreign subject"
+    sync_finalization_evidence(configured_subject_mutation)
+    assert not ordinary_state_valid(configured_subject_mutation)
+
+    pr_base_retarget_mutation = ordinary_state_payload("completed")
+    pr_base_retarget_mutation["finalization_operations"][4]["read_back"]["base"] = (
+        "foreign-base"
+    )
+    pr_base_retarget_mutation["archive_sweep"]["base"] = "foreign-base"
+    pr_base_retarget_mutation["finalization_operations"][5]["read_back"]["base"] = (
+        "foreign-base"
+    )
+    pr_base_retarget_mutation["completion"]["merge_read_back"]["base"] = (
+        "foreign-base"
+    )
+    pr_base_retarget_mutation["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            pr_base_retarget_mutation,
+            "archive-sweep",
+            pr_base_retarget_mutation["completion"]["outcome"],
+            pr_base_retarget_mutation["completion"]["merge_read_back"],
+        )
+    )
+    sync_finalization_evidence(pr_base_retarget_mutation)
+    pr_base_retarget_mutation["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            pr_base_retarget_mutation,
+            "archive-sweep",
+            pr_base_retarget_mutation["completion"]["outcome"],
+            pr_base_retarget_mutation["completion"]["merge_read_back"],
+        )
+    )
+    assert not ordinary_state_valid(pr_base_retarget_mutation)
+
+    def sync_tracker_attempts(state: dict[str, object]) -> None:
+        state["attempts"] = copy.deepcopy(state["operations"])
+
+    first_tracker_attempt_cutpoint = ordinary_state_payload("tracker-write")
+    first_tracker_operation = first_tracker_attempt_cutpoint["operations"][0]
+    first_tracker_operation.update(
+        {
+            "status": "attempting",
+            "verified_route": None,
+            "returned_identifier": None,
+            "response": None,
+            "read_back": None,
+        }
+    )
+    first_tracker_attempt_cutpoint["operations"] = [first_tracker_operation]
+    sync_tracker_attempts(first_tracker_attempt_cutpoint)
+    first_tracker_attempt_cutpoint["verified_tracker_identifiers"] = []
+    assert ordinary_state_valid(first_tracker_attempt_cutpoint)
 
     failed_tracker_state = copy.deepcopy(ordinary_state_payload("tracker-write"))
     failed_operation = failed_tracker_state["operations"][1]
@@ -6143,7 +8855,52 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             },
         }
     )
+    sync_tracker_attempts(failed_tracker_state)
     assert ordinary_state_valid(failed_tracker_state)
+    retry_tracker_state = copy.deepcopy(failed_tracker_state)
+    retry_tracker_operation = copy.deepcopy(retry_tracker_state["operations"][1])
+    retry_tracker_operation.update(
+        {
+            "status": "attempting",
+            "verified_route": None,
+            "returned_identifier": None,
+            "response": None,
+            "read_back": None,
+        }
+    )
+    retry_tracker_state["operations"][1] = retry_tracker_operation
+    retry_tracker_state["attempts"].append(copy.deepcopy(retry_tracker_operation))
+    assert ordinary_state_valid(retry_tracker_state)
+    tracker_attempt_history_mutation = copy.deepcopy(retry_tracker_state)
+    tracker_attempt_history_mutation["attempts"][1]["read_back"]["marker"] = (
+        "foreign-marker"
+    )
+    assert not ordinary_state_valid(tracker_attempt_history_mutation)
+    tracker_operation_summary_mutation = copy.deepcopy(retry_tracker_state)
+    tracker_operation_summary_mutation["operations"][1]["status"] = "failed"
+    assert not ordinary_state_valid(tracker_operation_summary_mutation)
+    non_prefix_tracker_state = ordinary_state_payload("archive-sweep")
+    non_prefix_tracker_state["phase"] = "tracker-write"
+    non_prefix_tracker_state.pop("finalization_operations")
+    non_prefix_tracker_state.pop("archive_sweep")
+    non_prefix_tracker_state["repository_evidence"] = []
+    non_prefix_tracker_state["pull_request_evidence"] = []
+    non_prefix_first = non_prefix_tracker_state["operations"][0]
+    non_prefix_first.update(
+        {
+            "status": "failed",
+            "verified_route": None,
+            "returned_identifier": None,
+            "response": {"outcome": "failed", "reason": "first create rejected"},
+            "read_back": {
+                "outcome": "authoritative-no-match",
+                "marker": non_prefix_first["marker"],
+                "destination": non_prefix_first["destination"],
+            },
+        }
+    )
+    sync_tracker_attempts(non_prefix_tracker_state)
+    assert not ordinary_state_valid(non_prefix_tracker_state)
 
     ambiguous_tracker_state = copy.deepcopy(ordinary_state_payload("tracker-write"))
     ambiguous_operation = ambiguous_tracker_state["operations"][1]
@@ -6178,6 +8935,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             },
         }
     )
+    sync_tracker_attempts(ambiguous_tracker_state)
     assert ordinary_state_valid(ambiguous_tracker_state)
 
     pre_existing_verified_state = copy.deepcopy(
@@ -6189,7 +8947,26 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "outcome": "pre-existing-exact-match",
         "identifier": pre_existing_operation["returned_identifier"],
     }
+    pre_existing_operation["search_read_back"]["matches"] = [
+        {
+            **copy.deepcopy(pre_existing_operation["read_back"]),
+            "exact_payload": True,
+        }
+    ]
+    sync_tracker_attempts(pre_existing_verified_state)
     assert ordinary_state_valid(pre_existing_verified_state)
+    pre_existing_second_match_mutation = copy.deepcopy(pre_existing_verified_state)
+    second_match = copy.deepcopy(
+        pre_existing_second_match_mutation["operations"][0]["search_read_back"][
+            "matches"
+        ][0]
+    )
+    second_match["identifier"] = "tracker-foreign"
+    pre_existing_second_match_mutation["operations"][0]["search_read_back"][
+        "matches"
+    ].append(second_match)
+    sync_tracker_attempts(pre_existing_second_match_mutation)
+    assert not ordinary_state_valid(pre_existing_second_match_mutation)
 
     failed_reconciled_state = copy.deepcopy(ordinary_state_payload("archive-sweep"))
     failed_reconciled_operation = failed_reconciled_state["operations"][0]
@@ -6200,6 +8977,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "outcome": "failed",
         "reason": "response unavailable",
     }
+    sync_tracker_attempts(failed_reconciled_state)
     assert ordinary_state_valid(failed_reconciled_state)
 
     ambiguous_reconciled_state = copy.deepcopy(
@@ -6213,6 +8991,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "outcome": "ambiguous",
         "returned_identifier": None,
     }
+    sync_tracker_attempts(ambiguous_reconciled_state)
     assert ordinary_state_valid(ambiguous_reconciled_state)
 
     archive_only_state = copy.deepcopy(ordinary_state_payload("archive-sweep"))
@@ -6227,6 +9006,45 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     test_state = copy.deepcopy(ordinary_state_payload("tracker-write"))
     test_state["mode"] = "test"
     test_state["run_identity"]["mode"] = "test"
+    test_state["gate_binding"]["gate_path"] = (
+        "state/triage/triage-pipeline-gate_test.lock"
+    )
+    test_state["gate_binding"]["owner_run_identity"] = copy.deepcopy(
+        test_state["run_identity"]
+    )
+    test_state["state_claim"]["current_gate_binding"] = copy.deepcopy(
+        test_state["gate_binding"]
+    )
+    test_frozen_snapshot = frozen_snapshot_record(
+        test_state["run_identity"],
+        "state/triage/frozen-inbox_test_2026-08-26_session-id.json",
+    )
+    test_frozen_digest = test_frozen_snapshot["digest"]
+    test_state["frozen_inbox_digest"] = test_frozen_digest
+    test_state["frozen_snapshot"] = test_frozen_snapshot
+    test_report_core = {
+        "run_identity": copy.deepcopy(test_state["run_identity"]),
+        "frozen_inbox_digest": test_state["frozen_inbox_digest"],
+        "candidates": [
+            {
+                "candidate_id": proposal["candidate_id"],
+                "source_block_digest": proposal["source_block_digest"],
+                "payload_digest": proposal["payload_digest"],
+            }
+            for proposal in test_state["proposal_payloads"]
+        ],
+    }
+    for proposal in test_state["proposal_payloads"]:
+        proposal["report_binding"]["path"] = (
+            "reports/triage_test_2026-08-26_session-id.md"
+        )
+        proposal["report_binding"]["core"] = copy.deepcopy(test_report_core)
+        proposal["report_binding"]["digest"] = hashlib.sha256(
+            canonical_json_bytes(test_report_core)
+        ).hexdigest()
+    test_state["approval"]["proposal_set_digest"] = hashlib.sha256(
+        canonical_json_bytes(test_state["proposal_payloads"])
+    ).hexdigest()
     for operation in test_state["operations"]:
         operation.update(
             {
@@ -6234,21 +9052,59 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                 "verified_route": None,
                 "returned_identifier": None,
                 "response": None,
+                "search_read_back": None,
                 "read_back": None,
             }
         )
+    sync_tracker_attempts(test_state)
     test_state["verified_tracker_identifiers"] = []
     assert ordinary_state_valid(test_state)
 
-    no_op_completed_state = {
-        **ordinary_state_base("completed"),
-        "completion": {
-            "route": "no-op",
-            "outcome": "successful-completion",
-            "completed_receipt_digest": "f" * 64,
-        },
+    no_op_completed_state = ordinary_state_base("completed", ())
+    no_op_completed_state["completion"] = {
+        "route": "no-op",
+        "outcome": "successful-completion",
+        "completed_receipt_digest": completed_receipt_digest(
+            no_op_completed_state, "no-op", "successful-completion"
+        ),
     }
     assert ordinary_state_valid(no_op_completed_state)
+    non_empty_no_op_state = copy.deepcopy(no_op_completed_state)
+    non_empty_frozen_content = authoritative_frozen_content(
+        non_empty_no_op_state["run_identity"]
+    )
+    non_empty_frozen_digest = hashlib.sha256(
+        canonical_json_bytes(non_empty_frozen_content)
+    ).hexdigest()
+    non_empty_no_op_state["frozen_snapshot"]["content"] = non_empty_frozen_content
+    non_empty_no_op_state["frozen_snapshot"]["digest"] = non_empty_frozen_digest
+    non_empty_no_op_state["frozen_inbox_digest"] = non_empty_frozen_digest
+    non_empty_no_op_state["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            non_empty_no_op_state, "no-op", "successful-completion"
+        )
+    )
+    assert not ordinary_state_valid(non_empty_no_op_state)
+    no_op_receipt_mutation = copy.deepcopy(no_op_completed_state)
+    no_op_receipt_mutation["completion"]["completed_receipt_digest"] = "f" * 64
+    assert not ordinary_state_valid(no_op_receipt_mutation)
+    hidden_raw_candidate_no_op = copy.deepcopy(no_op_completed_state)
+    hidden_raw_content = authoritative_frozen_content(
+        hidden_raw_candidate_no_op["run_identity"], ("candidate-hidden",)
+    )
+    hidden_raw_bytes = canonical_json_bytes(hidden_raw_content)
+    hidden_raw_digest = hashlib.sha256(hidden_raw_bytes).hexdigest()
+    hidden_raw_candidate_no_op["frozen_snapshot"]["raw_bytes_base64"] = (
+        base64.b64encode(hidden_raw_bytes).decode("ascii")
+    )
+    hidden_raw_candidate_no_op["frozen_snapshot"]["digest"] = hidden_raw_digest
+    hidden_raw_candidate_no_op["frozen_inbox_digest"] = hidden_raw_digest
+    hidden_raw_candidate_no_op["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            hidden_raw_candidate_no_op, "no-op", "successful-completion"
+        )
+    )
+    assert not ordinary_state_valid(hidden_raw_candidate_no_op)
 
     decision_only_completed_state = copy.deepcopy(
         ordinary_state_payload("tracker-write")
@@ -6265,7 +9121,11 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     decision_only_completed_state["completion"] = {
         "route": "decision-only",
         "outcome": "successful-completion",
-        "completed_receipt_digest": "f" * 64,
+        "completed_receipt_digest": completed_receipt_digest(
+            decision_only_completed_state,
+            "decision-only",
+            "successful-completion",
+        ),
     }
     assert ordinary_state_valid(decision_only_completed_state)
 
@@ -6274,7 +9134,9 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     test_render_completed_state["completion"] = {
         "route": "test-render",
         "outcome": "successful-completion",
-        "completed_receipt_digest": "f" * 64,
+        "completed_receipt_digest": completed_receipt_digest(
+            test_render_completed_state, "test-render", "successful-completion"
+        ),
     }
     assert ordinary_state_valid(test_render_completed_state)
 
@@ -6286,13 +9148,30 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     )
     test_archive_render_completed_state["operations"] = []
     test_archive_render_completed_state["attempts"] = []
+    test_archive_render_completed_state["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            test_archive_render_completed_state,
+            "test-render",
+            "successful-completion",
+        )
+    )
     assert ordinary_state_valid(test_archive_render_completed_state)
 
     degraded_decision_only_state = copy.deepcopy(decision_only_completed_state)
     degraded_decision_only_state["completion"]["outcome"] = "degraded-success"
+    degraded_decision_only_state["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            degraded_decision_only_state, "decision-only", "degraded-success"
+        )
+    )
     assert ordinary_state_valid(degraded_decision_only_state)
     degraded_test_render_state = copy.deepcopy(test_render_completed_state)
     degraded_test_render_state["completion"]["outcome"] = "degraded-success"
+    degraded_test_render_state["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            degraded_test_render_state, "test-render", "degraded-success"
+        )
+    )
     assert ordinary_state_valid(degraded_test_render_state)
 
     nested_phase_mutations: list[dict[str, object]] = []
@@ -6317,11 +9196,59 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "project"
     ] = "foreign-project"
     nested_phase_mutations.append(proposal_final_payload_mutation)
+    proposal_source_bytes_mutation = copy.deepcopy(ordinary_state_payload("propose"))
+    proposal_source = proposal_source_bytes_mutation["proposal_payloads"][0]
+    proposal_source["source_block"] += "\nforged"
+    proposal_source["source_block_digest"] = hashlib.sha256(
+        proposal_source["source_block"].encode()
+    ).hexdigest()
+    forged_report_core = copy.deepcopy(proposal_source["report_binding"]["core"])
+    forged_report_core["candidates"][0]["source_block_digest"] = proposal_source[
+        "source_block_digest"
+    ]
+    forged_report_digest = hashlib.sha256(
+        canonical_json_bytes(forged_report_core)
+    ).hexdigest()
+    for proposal in proposal_source_bytes_mutation["proposal_payloads"]:
+        proposal["report_binding"]["core"] = copy.deepcopy(forged_report_core)
+        proposal["report_binding"]["digest"] = forged_report_digest
+    nested_phase_mutations.append(proposal_source_bytes_mutation)
+    proposal_report_core_mutation = copy.deepcopy(ordinary_state_payload("propose"))
+    proposal_report_core_mutation["proposal_payloads"][0]["report_binding"]["core"][
+        "payload_digest"
+    ] = "0" * 64
+    nested_phase_mutations.append(proposal_report_core_mutation)
+    proposal_report_digest_mutation = copy.deepcopy(ordinary_state_payload("propose"))
+    proposal_report_digest_mutation["proposal_payloads"][0]["report_binding"][
+        "digest"
+    ] = "0" * 64
+    nested_phase_mutations.append(proposal_report_digest_mutation)
     duplicate_candidate_mutation = copy.deepcopy(ordinary_state_payload("propose"))
     duplicate_candidate_mutation["proposal_payloads"][1]["candidate_id"] = (
         duplicate_candidate_mutation["proposal_payloads"][0]["candidate_id"]
     )
     nested_phase_mutations.append(duplicate_candidate_mutation)
+    omitted_candidate_mutation = copy.deepcopy(ordinary_state_payload("propose"))
+    omitted_candidate_mutation["proposal_payloads"].pop()
+    omitted_candidate_mutation["proposal_payload_digests"].pop()
+    omitted_report_core = {
+        "run_identity": omitted_candidate_mutation["run_identity"],
+        "frozen_inbox_digest": omitted_candidate_mutation["frozen_inbox_digest"],
+        "candidates": [
+            {
+                "candidate_id": proposal["candidate_id"],
+                "source_block_digest": proposal["source_block_digest"],
+                "payload_digest": proposal["payload_digest"],
+            }
+            for proposal in omitted_candidate_mutation["proposal_payloads"]
+        ],
+    }
+    for proposal in omitted_candidate_mutation["proposal_payloads"]:
+        proposal["report_binding"]["core"] = copy.deepcopy(omitted_report_core)
+        proposal["report_binding"]["digest"] = hashlib.sha256(
+            canonical_json_bytes(omitted_report_core)
+        ).hexdigest()
+    nested_phase_mutations.append(omitted_candidate_mutation)
 
     approval_digest_mutation = copy.deepcopy(
         ordinary_state_payload("tracker-write")
@@ -6342,9 +9269,47 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     approval_notification_mutation["notification_thread_reference"] = "thread-foreign"
     nested_phase_mutations.append(approval_notification_mutation)
 
+    notification_readback_mutation = copy.deepcopy(verified_notification_state)
+    notification_readback_mutation["notification_operations"][0]["read_back"][
+        "message_id"
+    ] = "message-foreign"
+    nested_phase_mutations.append(notification_readback_mutation)
+    notification_response_only_mutation = copy.deepcopy(verified_notification_state)
+    notification_response_only_mutation["notification_operations"][0][
+        "read_back"
+    ] = None
+    nested_phase_mutations.append(notification_response_only_mutation)
+    notification_missing_delivery_mutation = copy.deepcopy(verified_notification_state)
+    notification_missing_delivery_mutation["notification_operations"] = []
+    nested_phase_mutations.append(notification_missing_delivery_mutation)
+    notification_reminder_thread_mutation = copy.deepcopy(reminder_state)
+    notification_reminder_thread_mutation["notification_operations"][1]["intent"][
+        "thread_reference"
+    ] = "thread-foreign"
+    notification_reminder_thread_mutation["notification_operations"][1][
+        "intent_digest"
+    ] = hashlib.sha256(
+        canonical_json_bytes(
+            notification_reminder_thread_mutation["notification_operations"][1][
+                "intent"
+            ]
+        )
+    ).hexdigest()
+    nested_phase_mutations.append(notification_reminder_thread_mutation)
+    notification_duplicate_reminder_mutation = copy.deepcopy(reminder_state)
+    notification_duplicate_reminder_mutation["notification_operations"].append(
+        copy.deepcopy(notification_duplicate_reminder_mutation["notification_operations"][1])
+    )
+    nested_phase_mutations.append(notification_duplicate_reminder_mutation)
+
     tracker_marker_mutation = copy.deepcopy(ordinary_state_payload("tracker-write"))
     tracker_marker_mutation["operations"][0]["marker"] = "foreign-marker"
     nested_phase_mutations.append(tracker_marker_mutation)
+    tracker_attempt_log_mutation = copy.deepcopy(
+        ordinary_state_payload("tracker-write")
+    )
+    tracker_attempt_log_mutation["attempts"][0]["marker"] = "foreign-marker"
+    nested_phase_mutations.append(tracker_attempt_log_mutation)
     tracker_destination_mutation = copy.deepcopy(
         ordinary_state_payload("tracker-write")
     )
@@ -6504,6 +9469,345 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     )
     nested_phase_mutations.append(tracker_duplicate_identifier)
 
+    finalization_skip_mutation = copy.deepcopy(
+        ordinary_state_payload("forge-finalize")
+    )
+    finalization_skip_mutation["finalization_operations"].pop(1)
+    sync_finalization_evidence(finalization_skip_mutation)
+    nested_phase_mutations.append(finalization_skip_mutation)
+    finalization_readback_mutation = copy.deepcopy(
+        ordinary_state_payload("forge-finalize")
+    )
+    finalization_readback_mutation["finalization_operations"][3]["read_back"][
+        "branch"
+    ] = "foreign-branch"
+    sync_finalization_evidence(finalization_readback_mutation)
+    nested_phase_mutations.append(finalization_readback_mutation)
+    finalization_response_only_mutation = copy.deepcopy(
+        ordinary_state_payload("archive-sweep")
+    )
+    finalization_response_only_mutation["finalization_operations"][2][
+        "read_back"
+    ] = None
+    sync_finalization_evidence(finalization_response_only_mutation)
+    nested_phase_mutations.append(finalization_response_only_mutation)
+    finalization_unsettled_receipt_mutation = copy.deepcopy(
+        ordinary_state_payload("forge-finalize")
+    )
+    finalization_unsettled_receipt_mutation["finalization_operations"][-1][
+        "read_back"
+    ]["reviewed_head"] = "d" * 40
+    sync_finalization_evidence(finalization_unsettled_receipt_mutation)
+    nested_phase_mutations.append(finalization_unsettled_receipt_mutation)
+
+    cross_chain_identity_mutation = copy.deepcopy(
+        ordinary_state_payload("completed")
+    )
+    foreign_lifecycle_head = "a" * 40
+    foreign_lifecycle_tree = "8" * 64
+    for finalization_operation in cross_chain_identity_mutation[
+        "finalization_operations"
+    ][2:]:
+        finalization_operation["intent"]["commit"] = foreign_lifecycle_head
+        finalization_operation["intent"]["tree_digest"] = foreign_lifecycle_tree
+        finalization_operation["intent_digest"] = hashlib.sha256(
+            canonical_json_bytes(finalization_operation["intent"])
+        ).hexdigest()
+        operation_kind = finalization_operation["operation"]
+        if operation_kind == "push":
+            finalization_operation["read_back"].update(
+                {
+                    "remote_head": foreign_lifecycle_head,
+                    "remote_tree_digest": foreign_lifecycle_tree,
+                }
+            )
+        elif operation_kind == "pull-request":
+            finalization_operation["read_back"].update(
+                {
+                    "observed_head": foreign_lifecycle_head,
+                    "observed_tree_digest": foreign_lifecycle_tree,
+                }
+            )
+        elif operation_kind == "pr-watch":
+            finalization_operation["read_back"].update(
+                {
+                    "observed_head": foreign_lifecycle_head,
+                    "reviewed_head": foreign_lifecycle_head,
+                }
+            )
+        else:
+            finalization_operation["read_back"].update(
+                {
+                    "final_head": foreign_lifecycle_head,
+                    "reviewed_head": foreign_lifecycle_head,
+                }
+            )
+    cross_chain_identity_mutation["archive_sweep"].update(
+        {
+            "commit": foreign_lifecycle_head,
+            "observed_pr_head": foreign_lifecycle_head,
+            "reviewed_head": foreign_lifecycle_head,
+        }
+    )
+    mutated_merge_read_back = copy.deepcopy(
+        cross_chain_identity_mutation["finalization_operations"][-1]["read_back"]
+    )
+    cross_chain_identity_mutation["completion"].update(
+        {
+            "merge_read_back": mutated_merge_read_back,
+            "completed_receipt_digest": completed_receipt_digest(
+                cross_chain_identity_mutation,
+                "archive-sweep",
+                cross_chain_identity_mutation["completion"]["outcome"],
+                mutated_merge_read_back,
+            ),
+        }
+    )
+    sync_finalization_evidence(cross_chain_identity_mutation)
+    cross_chain_identity_mutation["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            cross_chain_identity_mutation,
+            "archive-sweep",
+            cross_chain_identity_mutation["completion"]["outcome"],
+            cross_chain_identity_mutation["completion"]["merge_read_back"],
+        )
+    )
+    assert all(
+        operation["intent_digest"]
+        == hashlib.sha256(canonical_json_bytes(operation["intent"])).hexdigest()
+        for operation in cross_chain_identity_mutation["finalization_operations"]
+    )
+    assert (
+        cross_chain_identity_mutation["finalization_operations"][2]["read_back"][
+            "remote_head"
+        ]
+        == cross_chain_identity_mutation["finalization_operations"][2]["intent"][
+            "commit"
+        ]
+    )
+    assert (
+        cross_chain_identity_mutation["finalization_operations"][3]["read_back"][
+            "observed_head"
+        ]
+        == cross_chain_identity_mutation["finalization_operations"][3]["intent"][
+            "commit"
+        ]
+    )
+    assert (
+        cross_chain_identity_mutation["finalization_operations"][4]["read_back"][
+            "reviewed_head"
+        ]
+        == cross_chain_identity_mutation["finalization_operations"][4]["intent"][
+            "commit"
+        ]
+    )
+    assert (
+        cross_chain_identity_mutation["finalization_operations"][5]["read_back"][
+            "final_head"
+        ]
+        == cross_chain_identity_mutation["finalization_operations"][5]["intent"][
+            "commit"
+        ]
+    )
+    nested_phase_mutations.append(cross_chain_identity_mutation)
+
+    pull_request_head_chain_mutation = copy.deepcopy(
+        ordinary_state_payload("completed")
+    )
+    future_pr_head = "b" * 40
+    future_pr_tree = "9" * 64
+    for operation_index in (3, 4, 5):
+        finalization_operation = pull_request_head_chain_mutation[
+            "finalization_operations"
+        ][operation_index]
+        finalization_operation["intent"]["commit"] = future_pr_head
+        finalization_operation["intent"]["tree_digest"] = future_pr_tree
+        finalization_operation["intent_digest"] = hashlib.sha256(
+            canonical_json_bytes(finalization_operation["intent"])
+        ).hexdigest()
+    pull_request_head_chain_mutation["finalization_operations"][3][
+        "read_back"
+    ].update(
+        {
+            "observed_head": future_pr_head,
+            "observed_tree_digest": future_pr_tree,
+        }
+    )
+    pull_request_head_chain_mutation["finalization_operations"][4][
+        "read_back"
+    ].update(
+        {"observed_head": future_pr_head, "reviewed_head": future_pr_head}
+    )
+    pull_request_head_chain_mutation["finalization_operations"][5][
+        "read_back"
+    ].update({"final_head": future_pr_head, "reviewed_head": future_pr_head})
+    pull_request_head_chain_mutation["archive_sweep"].update(
+        {
+            "commit": future_pr_head,
+            "observed_pr_head": future_pr_head,
+            "reviewed_head": future_pr_head,
+        }
+    )
+    future_pr_merge_read_back = copy.deepcopy(
+        pull_request_head_chain_mutation["finalization_operations"][-1]["read_back"]
+    )
+    pull_request_head_chain_mutation["completion"].update(
+        {
+            "merge_read_back": future_pr_merge_read_back,
+            "completed_receipt_digest": completed_receipt_digest(
+                pull_request_head_chain_mutation,
+                "archive-sweep",
+                pull_request_head_chain_mutation["completion"]["outcome"],
+                future_pr_merge_read_back,
+            ),
+        }
+    )
+    sync_finalization_evidence(pull_request_head_chain_mutation)
+    pull_request_head_chain_mutation["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            pull_request_head_chain_mutation,
+            "archive-sweep",
+            pull_request_head_chain_mutation["completion"]["outcome"],
+            pull_request_head_chain_mutation["completion"]["merge_read_back"],
+        )
+    )
+    nested_phase_mutations.append(pull_request_head_chain_mutation)
+
+    pull_request_identity_chain_mutation = copy.deepcopy(
+        ordinary_state_payload("archive-sweep")
+    )
+    pull_request_operation = pull_request_identity_chain_mutation[
+        "finalization_operations"
+    ][3]
+    pull_request_operation["response"]["pull_request"] = "pr-created-foreign"
+    pull_request_operation["read_back"]["pull_request"] = "pr-created-foreign"
+    sync_finalization_evidence(pull_request_identity_chain_mutation)
+    nested_phase_mutations.append(pull_request_identity_chain_mutation)
+
+    pr_watch_identity_chain_mutation = copy.deepcopy(
+        ordinary_state_payload("completed")
+    )
+    foreign_review_pr = "pr-watch-foreign"
+    foreign_review_head = "f" * 40
+    foreign_review_tree = "6" * 64
+    foreign_review_receipt = "5" * 64
+    pr_watch_operation = pr_watch_identity_chain_mutation[
+        "finalization_operations"
+    ][4]
+    pr_watch_operation["intent"].update(
+        {
+            "commit": foreign_review_head,
+            "pull_request": foreign_review_pr,
+            "tree_digest": foreign_review_tree,
+        }
+    )
+    pr_watch_operation["intent_digest"] = hashlib.sha256(
+        canonical_json_bytes(pr_watch_operation["intent"])
+    ).hexdigest()
+    pr_watch_operation["response"]["receipt"] = foreign_review_receipt
+    pr_watch_operation["read_back"].update(
+        {
+            "pull_request": foreign_review_pr,
+            "observed_head": foreign_review_head,
+            "reviewed_head": foreign_review_head,
+            "receipt": foreign_review_receipt,
+        }
+    )
+    merge_operation = pr_watch_identity_chain_mutation["finalization_operations"][5]
+    merge_operation["intent"].update(
+        {
+            "commit": foreign_review_head,
+            "pull_request": foreign_review_pr,
+            "review_receipt": foreign_review_receipt,
+            "tree_digest": foreign_review_tree,
+        }
+    )
+    merge_operation["intent_digest"] = hashlib.sha256(
+        canonical_json_bytes(merge_operation["intent"])
+    ).hexdigest()
+    merge_operation["read_back"].update(
+        {
+            "pull_request": foreign_review_pr,
+            "final_head": foreign_review_head,
+            "reviewed_head": foreign_review_head,
+            "receipt": foreign_review_receipt,
+        }
+    )
+    pr_watch_identity_chain_mutation["archive_sweep"].update(
+        {
+            "commit": foreign_review_head,
+            "pull_request": foreign_review_pr,
+            "observed_pr_head": foreign_review_head,
+            "reviewed_head": foreign_review_head,
+            "pr_watch_receipt": foreign_review_receipt,
+        }
+    )
+    foreign_review_merge_read_back = copy.deepcopy(merge_operation["read_back"])
+    pr_watch_identity_chain_mutation["completion"].update(
+        {
+            "merge_read_back": foreign_review_merge_read_back,
+            "completed_receipt_digest": completed_receipt_digest(
+                pr_watch_identity_chain_mutation,
+                "archive-sweep",
+                pr_watch_identity_chain_mutation["completion"]["outcome"],
+                foreign_review_merge_read_back,
+            ),
+        }
+    )
+    sync_finalization_evidence(pr_watch_identity_chain_mutation)
+    pr_watch_identity_chain_mutation["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            pr_watch_identity_chain_mutation,
+            "archive-sweep",
+            pr_watch_identity_chain_mutation["completion"]["outcome"],
+            pr_watch_identity_chain_mutation["completion"]["merge_read_back"],
+        )
+    )
+    nested_phase_mutations.append(pr_watch_identity_chain_mutation)
+
+    archive_chain_mutation = copy.deepcopy(ordinary_state_payload("archive-sweep"))
+    archive_chain_mutation["archive_sweep"].update(
+        {
+            "commit": "4" * 40,
+            "pull_request": "pr-archive-foreign",
+            "observed_pr_head": "4" * 40,
+            "reviewed_head": "4" * 40,
+            "pr_watch_receipt": "3" * 64,
+        }
+    )
+    nested_phase_mutations.append(archive_chain_mutation)
+
+    merge_identity_chain_mutation = copy.deepcopy(
+        ordinary_state_payload("completed")
+    )
+    merge_operation = merge_identity_chain_mutation["finalization_operations"][-1]
+    merge_operation["intent"]["pull_request"] = "pr-merge-foreign"
+    merge_operation["intent_digest"] = hashlib.sha256(
+        canonical_json_bytes(merge_operation["intent"])
+    ).hexdigest()
+    merge_operation["read_back"]["pull_request"] = "pr-merge-foreign"
+    merge_identity_chain_mutation["completion"]["merge_read_back"] = copy.deepcopy(
+        merge_operation["read_back"]
+    )
+    merge_identity_chain_mutation["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            merge_identity_chain_mutation,
+            "archive-sweep",
+            merge_identity_chain_mutation["completion"]["outcome"],
+            merge_identity_chain_mutation["completion"]["merge_read_back"],
+        )
+    )
+    sync_finalization_evidence(merge_identity_chain_mutation)
+    merge_identity_chain_mutation["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            merge_identity_chain_mutation,
+            "archive-sweep",
+            merge_identity_chain_mutation["completion"]["outcome"],
+            merge_identity_chain_mutation["completion"]["merge_read_back"],
+        )
+    )
+    nested_phase_mutations.append(merge_identity_chain_mutation)
+
     archive_head_mutation = copy.deepcopy(ordinary_state_payload("archive-sweep"))
     archive_head_mutation["archive_sweep"]["reviewed_head"] = "0" * 40
     nested_phase_mutations.append(archive_head_mutation)
@@ -6513,6 +9817,34 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     completion_digest_mutation = copy.deepcopy(ordinary_state_payload("completed"))
     completion_digest_mutation["completion"]["completed_receipt_digest"] = "F" * 64
     nested_phase_mutations.append(completion_digest_mutation)
+    completion_final_head_mutation = copy.deepcopy(ordinary_state_payload("completed"))
+    completion_final_head_mutation["finalization_operations"][-1]["read_back"][
+        "final_head"
+    ] = "0" * 40
+    completion_final_head_mutation["completion"]["merge_read_back"] = copy.deepcopy(
+        completion_final_head_mutation["finalization_operations"][-1]["read_back"]
+    )
+    completion_final_head_mutation["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            completion_final_head_mutation,
+            "archive-sweep",
+            completion_final_head_mutation["completion"]["outcome"],
+            completion_final_head_mutation["completion"]["merge_read_back"],
+        )
+    )
+    sync_finalization_evidence(completion_final_head_mutation)
+    completion_final_head_mutation["completion"]["completed_receipt_digest"] = (
+        completed_receipt_digest(
+            completion_final_head_mutation,
+            "archive-sweep",
+            completion_final_head_mutation["completion"]["outcome"],
+            completion_final_head_mutation["completion"]["merge_read_back"],
+        )
+    )
+    nested_phase_mutations.append(completion_final_head_mutation)
+    gate_binding_mutation = copy.deepcopy(ordinary_state_payload("propose"))
+    gate_binding_mutation["gate_binding"]["owner_token"] = "foreign-owner"
+    nested_phase_mutations.append(gate_binding_mutation)
     test_external_evidence_mutation = copy.deepcopy(ordinary_state_payload("tracker-write"))
     test_external_evidence_mutation["mode"] = "test"
     test_external_evidence_mutation["run_identity"]["mode"] = "test"
@@ -6821,6 +10153,550 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         }
 
     restart_receipt_artifact = receipt_artifact_for(restart_receipt)
+
+    def receipt_restart_replacement_valid(
+        receipt_bytes: bytes,
+        prepared_envelope_bytes: bytes,
+        approval_bytes: bytes,
+        replacement: dict[str, object],
+        current_gate_claim_core: dict[str, object],
+    ) -> bool:
+        try:
+            receipt = json.loads(receipt_bytes)
+            prepared_envelope = json.loads(prepared_envelope_bytes)
+            approval = json.loads(approval_bytes)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return False
+        if (
+            canonical_json_bytes(receipt) != receipt_bytes
+            or canonical_json_bytes(prepared_envelope) != prepared_envelope_bytes
+            or canonical_json_bytes(approval) != approval_bytes
+            or not isinstance(receipt, dict)
+            or not isinstance(prepared_envelope, dict)
+            or set(prepared_envelope)
+            != {
+                "kind",
+                "capture_core",
+                "capture_core_digest",
+                "action_core",
+                "action_core_digest",
+                "approval",
+            }
+        ):
+            return False
+        capture_core = prepared_envelope.get("capture_core")
+        action_core = prepared_envelope.get("action_core")
+        if not isinstance(capture_core, dict) or not isinstance(action_core, dict):
+            return False
+        capture_core_digest = hashlib.sha256(
+            canonical_json_bytes(capture_core)
+        ).hexdigest()
+        action_core_digest = hashlib.sha256(
+            canonical_json_bytes(action_core)
+        ).hexdigest()
+        mode = capture_core.get("mode")
+        expected_state_path = (
+            resolve_logical_path(triage_config["state_path"].format(mode=mode))
+            if mode in {"live", "test"}
+            else None
+        )
+        expected_gate_path = (
+            resolve_logical_path(triage_config["gate_path"].format(mode=mode))
+            if mode in {"live", "test"}
+            else None
+        )
+        old_gate = capture_core.get("old_gate")
+        old_gate_digest = (
+            old_gate.get("digest") if isinstance(old_gate, dict) else None
+        )
+        expected_bundle_path = (
+            recovery_bundle_pattern.format(
+                mode=mode, gate_digest=old_gate_digest
+            )
+            if mode in {"live", "test"} and isinstance(old_gate_digest, str)
+            else None
+        )
+        expected_quarantine_path = (
+            resolve_logical_path(
+                f"state/quarantine/{Path(expected_state_path).name}"
+            )
+            if isinstance(expected_state_path, str)
+            else None
+        )
+        captured_state_bytes = validated_state_bytes(capture_core)
+        try:
+            captured_state = (
+                json.loads(captured_state_bytes)
+                if captured_state_bytes is not None
+                else None
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            captured_state = None
+        captured_state_abandonable = (
+            isinstance(captured_state, dict)
+            and complete_base_valid(captured_state)
+            and set(captured_state) == ordinary_state_keys
+            and isinstance(captured_state.get("phase"), str)
+            and captured_state.get("phase") not in ordinary_state_phases
+            and not any(
+                captured_state.get(field)
+                for field in (
+                    "attempts",
+                    "verified_tracker_identifiers",
+                    "repository_evidence",
+                    "pull_request_evidence",
+                )
+            )
+        )
+        state_observations = capture_core.get("state_observations")
+        expected_quarantine_artifact = (
+            {
+                "path": expected_quarantine_path,
+                "state_bytes_encoding": capture_core.get(
+                    "state_bytes_encoding"
+                ),
+                "state_bytes_base64": capture_core.get("state_bytes_base64"),
+                "state_digest": capture_core.get("state_digest"),
+                "state_observations": {
+                    **state_observations,
+                    "path": expected_quarantine_path,
+                },
+            }
+            if isinstance(state_observations, dict)
+            else None
+        )
+        expected_receipt_kind = {
+            "live": "recovered-safe-to-restart",
+            "test": "test-recovered-safe-to-restart",
+        }.get(mode)
+        expected_approval = {
+            "source": "current-session",
+            "approver_identity": "operator",
+            "decision": f"abandon action-core {action_core_digest}",
+            "action_core_digest": action_core_digest,
+        }
+        restart_core = action_core.get("restart_receipt_core")
+        gate_authority = action_core.get("gate_authority")
+        expected_restart_core = {
+            "mode": mode,
+            "old_gate_digest": old_gate_digest,
+            "bundle_path": expected_bundle_path,
+            "capture_core_digest": capture_core_digest,
+            "quarantine_path": expected_quarantine_path,
+        }
+        expected_receipt = (
+            {
+                "kind": expected_receipt_kind,
+                **restart_core,
+                "prepared_envelope_digest": hashlib.sha256(
+                    prepared_envelope_bytes
+                ).hexdigest(),
+            }
+            if isinstance(restart_core, dict)
+            else None
+        )
+        claim = replacement.get("state_claim")
+        return (
+            expected_receipt_kind is not None
+            and prepared_envelope.get("kind") == "state-present-prepared"
+            and complete_gate_capture_valid(old_gate, expected_gate_path)
+            and capture_core.get("bundle_path") == expected_bundle_path
+            and captured_state_abandonable
+            and captured_state.get("mode") == mode
+            and isinstance(state_observations, dict)
+            and state_observations.get("path") == expected_state_path
+            and prepared_envelope.get("capture_core_digest")
+            == capture_core_digest
+            and action_core.get("capture_core_digest") == capture_core_digest
+            and action_core.get("action") == "abandon-invalid-state"
+            and action_core.get("old_gate_digest") == old_gate_digest
+            and isinstance(gate_authority, dict)
+            and gate_authority
+            == {
+                "origin": gate_authority.get("origin"),
+                "owner_token": old_gate["owner"]["token"],
+                "run_identity": old_gate["owner"]["run_identity"],
+            }
+            and gate_authority.get("origin") in {"current-owned", "proven-stale"}
+            and action_core.get("quarantine_artifact")
+            == expected_quarantine_artifact
+            and restart_core == expected_restart_core
+            and prepared_envelope.get("action_core_digest") == action_core_digest
+            and prepared_envelope.get("approval") == expected_approval
+            and approval == expected_approval
+            and receipt == expected_receipt
+            and restart_core.get("mode") == mode
+            and ordinary_state_valid(replacement)
+            and replacement.get("phase") == "reserved"
+            and replacement.get("mode") == mode
+            and gate_claim_core_valid(
+                current_gate_claim_core,
+                replacement.get("gate_binding"),
+                replacement.get("run_identity"),
+            )
+            and isinstance(claim, dict)
+            and claim.get("reason") == f"{mode}-receipt-restart"
+            and claim.get("previous_gate_binding") is None
+            and claim.get("current_gate_binding")
+            == replacement.get("gate_binding")
+            and claim.get("captured_state_digest")
+            == hashlib.sha256(receipt_bytes).hexdigest()
+            and claim.get("recovery_bundle_digest")
+            == hashlib.sha256(prepared_envelope_bytes).hexdigest()
+            and claim.get("approval_digest")
+            == hashlib.sha256(approval_bytes).hexdigest()
+        )
+
+    def reserved_restart_state(
+        mode: str,
+        receipt_bytes: bytes,
+        prepared_envelope_bytes: bytes,
+        approval_bytes: bytes,
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        replacement = ordinary_state_base("reserved")
+        replacement["mode"] = mode
+        replacement["run_identity"]["mode"] = mode
+        replacement["frozen_snapshot"] = frozen_snapshot_record(
+            replacement["run_identity"],
+            f"state/triage/frozen-inbox_{mode}_2026-08-26_session-id.json",
+            ("candidate-a", "candidate-b"),
+        )
+        replacement["frozen_inbox_digest"] = replacement["frozen_snapshot"][
+            "digest"
+        ]
+        current_gate_core = {
+            "gate_path": f"state/triage/triage-pipeline-gate_{mode}.lock",
+            "repository_identity": "repo-id",
+            "config_fingerprint": replacement["config_fingerprint"],
+            "owner": {
+                "token": f"{mode}-receipt-owner",
+                "run_identity": copy.deepcopy(replacement["run_identity"]),
+                "host": "host-restart",
+                "process_id": 65432,
+                "process_start_observation": "start-restart",
+                "creation_time": "2026-08-26T00:02:00Z",
+            },
+        }
+        replacement["gate_owner_token"] = current_gate_core["owner"]["token"]
+        replacement["gate_binding"] = {
+            "gate_path": current_gate_core["gate_path"],
+            "owner_token": current_gate_core["owner"]["token"],
+            "owner_run_identity": copy.deepcopy(replacement["run_identity"]),
+            "gate_claim_core_digest": hashlib.sha256(
+                canonical_json_bytes(current_gate_core)
+            ).hexdigest(),
+        }
+        replacement["state_claim"] = {
+            "reason": f"{mode}-receipt-restart",
+            "previous_gate_binding": None,
+            "current_gate_binding": copy.deepcopy(replacement["gate_binding"]),
+            "captured_state_digest": hashlib.sha256(receipt_bytes).hexdigest(),
+            "recovery_bundle_digest": hashlib.sha256(
+                prepared_envelope_bytes
+            ).hexdigest(),
+            "approval_digest": hashlib.sha256(approval_bytes).hexdigest(),
+        }
+        return replacement, current_gate_core
+
+    live_restart_receipt_bytes = canonical_json_bytes(restart_receipt)
+    live_prepared_envelope_bytes = canonical_json_bytes(invalid_prepared)
+    live_restart_approval_bytes = canonical_json_bytes(invalid_prepared["approval"])
+    live_restart_state, live_restart_gate_core = reserved_restart_state(
+        "live",
+        live_restart_receipt_bytes,
+        live_prepared_envelope_bytes,
+        live_restart_approval_bytes,
+    )
+    assert receipt_restart_replacement_valid(
+        live_restart_receipt_bytes,
+        live_prepared_envelope_bytes,
+        live_restart_approval_bytes,
+        live_restart_state,
+        live_restart_gate_core,
+    )
+
+    test_invalid_state, _ = reserved_restart_state(
+        "test",
+        live_restart_receipt_bytes,
+        live_prepared_envelope_bytes,
+        live_restart_approval_bytes,
+    )
+    test_invalid_state["phase"] = "unrecognized"
+    test_captured_state_bytes = canonical_json_bytes(test_invalid_state)
+    test_state_path = resolve_logical_path(
+        triage_config["state_path"].format(mode="test")
+    )
+    test_state_observations = {
+        **captured_observations,
+        "path": test_state_path,
+        "size": len(test_captured_state_bytes),
+        "modification_time_ns": 123461,
+    }
+    test_bundle_path = recovery_bundle_pattern.format(
+        mode="test", gate_digest=old_gate_digest
+    )
+    test_capture_core = {
+        "mode": "test",
+        "bundle_path": test_bundle_path,
+        "old_gate": old_gate_capture,
+        **encoded_state_fields(test_captured_state_bytes),
+        "state_observations": test_state_observations,
+        "repository_identity": "repo-id",
+    }
+    test_capture_digest = hashlib.sha256(
+        canonical_json_bytes(test_capture_core)
+    ).hexdigest()
+    test_quarantine_path = resolve_logical_path(
+        f"state/quarantine/{Path(test_state_path).name}"
+    )
+    test_quarantine_artifact = {
+        "path": test_quarantine_path,
+        **encoded_state_fields(test_captured_state_bytes),
+        "state_observations": {
+            **test_state_observations,
+            "path": test_quarantine_path,
+        },
+    }
+    test_restart_core = {
+        "mode": "test",
+        "old_gate_digest": old_gate_digest,
+        "bundle_path": test_bundle_path,
+        "capture_core_digest": test_capture_digest,
+        "quarantine_path": test_quarantine_path,
+    }
+    test_action_core = {
+        "capture_core_digest": test_capture_digest,
+        "action": "abandon-invalid-state",
+        "old_gate_digest": old_gate_digest,
+        "gate_authority": {
+            "origin": "current-owned",
+            "owner_token": old_gate_capture["owner"]["token"],
+            "run_identity": old_gate_capture["owner"]["run_identity"],
+        },
+        "quarantine_artifact": test_quarantine_artifact,
+        "restart_receipt_core": test_restart_core,
+    }
+    test_action_digest = hashlib.sha256(
+        canonical_json_bytes(test_action_core)
+    ).hexdigest()
+    test_approval = {
+        "source": "current-session",
+        "approver_identity": "operator",
+        "decision": f"abandon action-core {test_action_digest}",
+        "action_core_digest": test_action_digest,
+    }
+    test_prepared_envelope = {
+        "kind": "state-present-prepared",
+        "capture_core": test_capture_core,
+        "capture_core_digest": test_capture_digest,
+        "action_core": test_action_core,
+        "action_core_digest": test_action_digest,
+        "approval": test_approval,
+    }
+    test_prepared_envelope_bytes = canonical_json_bytes(test_prepared_envelope)
+    test_restart_receipt = {
+        "kind": "test-recovered-safe-to-restart",
+        **test_restart_core,
+        "prepared_envelope_digest": hashlib.sha256(
+            test_prepared_envelope_bytes
+        ).hexdigest(),
+    }
+    test_restart_receipt_bytes = canonical_json_bytes(test_restart_receipt)
+    test_restart_approval_bytes = canonical_json_bytes(
+        test_approval
+    )
+    test_restart_state, test_restart_gate_core = reserved_restart_state(
+        "test",
+        test_restart_receipt_bytes,
+        test_prepared_envelope_bytes,
+        test_restart_approval_bytes,
+    )
+    assert receipt_restart_replacement_valid(
+        test_restart_receipt_bytes,
+        test_prepared_envelope_bytes,
+        test_restart_approval_bytes,
+        test_restart_state,
+        test_restart_gate_core,
+    )
+    assert test_capture_core["state_observations"]["path"] == test_state_path
+    assert test_capture_core["state_observations"]["path"] != live_state_path
+    assert test_capture_core["old_gate"]["observations"]["path"] == test_gate_path
+    assert test_restart_core["bundle_path"] == test_bundle_path
+    assert test_restart_core["quarantine_path"] == test_quarantine_path
+
+    cross_mode_test_envelope = copy.deepcopy(test_prepared_envelope)
+    cross_mode_test_envelope["capture_core"]["state_observations"]["path"] = (
+        live_state_path
+    )
+    cross_mode_capture_digest = hashlib.sha256(
+        canonical_json_bytes(cross_mode_test_envelope["capture_core"])
+    ).hexdigest()
+    cross_mode_test_envelope["capture_core_digest"] = cross_mode_capture_digest
+    cross_mode_test_envelope["action_core"]["capture_core_digest"] = (
+        cross_mode_capture_digest
+    )
+    cross_mode_test_envelope["action_core"]["restart_receipt_core"][
+        "capture_core_digest"
+    ] = cross_mode_capture_digest
+    cross_mode_action_digest = hashlib.sha256(
+        canonical_json_bytes(cross_mode_test_envelope["action_core"])
+    ).hexdigest()
+    cross_mode_test_envelope["action_core_digest"] = cross_mode_action_digest
+    cross_mode_test_envelope["approval"] = {
+        "source": "current-session",
+        "approver_identity": "operator",
+        "decision": f"abandon action-core {cross_mode_action_digest}",
+        "action_core_digest": cross_mode_action_digest,
+    }
+    cross_mode_envelope_bytes = canonical_json_bytes(cross_mode_test_envelope)
+    cross_mode_receipt = {
+        "kind": "test-recovered-safe-to-restart",
+        **cross_mode_test_envelope["action_core"]["restart_receipt_core"],
+        "prepared_envelope_digest": hashlib.sha256(
+            cross_mode_envelope_bytes
+        ).hexdigest(),
+    }
+    cross_mode_receipt_bytes = canonical_json_bytes(cross_mode_receipt)
+    cross_mode_approval_bytes = canonical_json_bytes(
+        cross_mode_test_envelope["approval"]
+    )
+    cross_mode_restart_state, _ = reserved_restart_state(
+        "test",
+        cross_mode_receipt_bytes,
+        cross_mode_envelope_bytes,
+        cross_mode_approval_bytes,
+    )
+    assert not receipt_restart_replacement_valid(
+        cross_mode_receipt_bytes,
+        cross_mode_envelope_bytes,
+        cross_mode_approval_bytes,
+        cross_mode_restart_state,
+        test_restart_gate_core,
+    )
+
+    legacy_capture_approval_envelope = copy.deepcopy(test_prepared_envelope)
+    legacy_capture_approval_envelope["approval"] = {
+        "source": "current-session",
+        "approver_identity": "operator",
+        "decision": f"approve capture-core {test_capture_digest}",
+        "capture_core_digest": test_capture_digest,
+    }
+    legacy_capture_approval_envelope_bytes = canonical_json_bytes(
+        legacy_capture_approval_envelope
+    )
+    legacy_capture_approval_receipt = {
+        "kind": "test-recovered-safe-to-restart",
+        **test_restart_core,
+        "prepared_envelope_digest": hashlib.sha256(
+            legacy_capture_approval_envelope_bytes
+        ).hexdigest(),
+    }
+    legacy_capture_approval_receipt_bytes = canonical_json_bytes(
+        legacy_capture_approval_receipt
+    )
+    legacy_capture_approval_bytes = canonical_json_bytes(
+        legacy_capture_approval_envelope["approval"]
+    )
+    legacy_capture_approval_state, _ = reserved_restart_state(
+        "test",
+        legacy_capture_approval_receipt_bytes,
+        legacy_capture_approval_envelope_bytes,
+        legacy_capture_approval_bytes,
+    )
+    assert not receipt_restart_replacement_valid(
+        legacy_capture_approval_receipt_bytes,
+        legacy_capture_approval_envelope_bytes,
+        legacy_capture_approval_bytes,
+        legacy_capture_approval_state,
+        test_restart_gate_core,
+    )
+
+    valid_state_abandonment, _ = abandonment_prepared_for(valid_state)
+    valid_state_abandonment_bytes = canonical_json_bytes(valid_state_abandonment)
+    valid_state_abandonment_receipt = {
+        "kind": "recovered-safe-to-restart",
+        **valid_state_abandonment["action_core"]["restart_receipt_core"],
+        "prepared_envelope_digest": hashlib.sha256(
+            valid_state_abandonment_bytes
+        ).hexdigest(),
+    }
+    valid_state_abandonment_receipt_bytes = canonical_json_bytes(
+        valid_state_abandonment_receipt
+    )
+    valid_state_abandonment_approval_bytes = canonical_json_bytes(
+        valid_state_abandonment["approval"]
+    )
+    valid_state_restart_state, valid_state_restart_gate_core = (
+        reserved_restart_state(
+            "live",
+            valid_state_abandonment_receipt_bytes,
+            valid_state_abandonment_bytes,
+            valid_state_abandonment_approval_bytes,
+        )
+    )
+    assert not receipt_restart_replacement_valid(
+        valid_state_abandonment_receipt_bytes,
+        valid_state_abandonment_bytes,
+        valid_state_abandonment_approval_bytes,
+        valid_state_restart_state,
+        valid_state_restart_gate_core,
+    )
+
+    for receipt_restart_mutation in (
+        (
+            b'{"kind":"recovered-safe-to-restart"}',
+            live_prepared_envelope_bytes,
+            live_restart_approval_bytes,
+            live_restart_state,
+            live_restart_gate_core,
+        ),
+        (
+            live_restart_receipt_bytes,
+            test_prepared_envelope_bytes,
+            live_restart_approval_bytes,
+            live_restart_state,
+            live_restart_gate_core,
+        ),
+        (
+            live_restart_receipt_bytes,
+            live_prepared_envelope_bytes,
+            test_restart_approval_bytes,
+            live_restart_state,
+            live_restart_gate_core,
+        ),
+    ):
+        assert not receipt_restart_replacement_valid(*receipt_restart_mutation)
+    receipt_restart_phase_mutation = copy.deepcopy(live_restart_state)
+    receipt_restart_phase_mutation["phase"] = "propose"
+    assert not receipt_restart_replacement_valid(
+        live_restart_receipt_bytes,
+        live_prepared_envelope_bytes,
+        live_restart_approval_bytes,
+        receipt_restart_phase_mutation,
+        live_restart_gate_core,
+    )
+    receipt_restart_mode_mutation = copy.deepcopy(live_restart_state)
+    receipt_restart_mode_mutation["state_claim"]["reason"] = (
+        "test-receipt-restart"
+    )
+    assert not receipt_restart_replacement_valid(
+        live_restart_receipt_bytes,
+        live_prepared_envelope_bytes,
+        live_restart_approval_bytes,
+        receipt_restart_mode_mutation,
+        live_restart_gate_core,
+    )
+    receipt_restart_gate_mutation = copy.deepcopy(live_restart_gate_core)
+    receipt_restart_gate_mutation["owner"]["process_start_observation"] = (
+        "foreign-start"
+    )
+    assert not receipt_restart_replacement_valid(
+        live_restart_receipt_bytes,
+        live_prepared_envelope_bytes,
+        live_restart_approval_bytes,
+        live_restart_state,
+        receipt_restart_gate_mutation,
+    )
     owned_release_evidence = {
         "kind": "owned-gate-release",
         "released_path": state_gate_observations["path"],
@@ -8136,7 +12012,8 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "Only terminal exact-head review evidence plus a matching authoritative read-back",
         "atomically persist that head as `reviewed_head` with the PR-watch receipt",
         "Any later head movement invalidates the receipt",
-        "authoritative PR read-back must prove both that the pull request merged",
+            "authoritative PR read-back must prove that the pull request still names "
+            "that same base, that it merged",
         "final `headRefOid` equals `reviewed_head` recorded in state",
         "retained terminal PR-watch receipt must still bind that same head",
         "never mark an unreviewed replacement head complete",
@@ -8447,12 +12324,12 @@ def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> N
             "create, publish, write, edit, comment, push, or merge for this route.",
             "create, publish, write, edit, comment, push, or merge for this route. After selection, quarantine the gate and restart.",
             1,
-        ),
-        workflow.replace(
-            "a state-present held bundle remains\nterminally operator-held",
-            "a state-present held bundle authorizes gate quarantine and restart",
-            1,
-        ),
+            ),
+            workflow.replace(
+                "gate-only and state-present held bundles remain\nterminally operator-held",
+                "gate-only and state-present held bundles authorize gate quarantine and restart",
+                1,
+            ),
         workflow.replace(
             "Only an interactive `test` that proves\nthe owner dead and obtains exact approval of the capture may preserve",
             "Any interactive `test`, without proving owner death or obtaining capture approval, may preserve",
@@ -8625,6 +12502,91 @@ def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> N
         workflow.replace(
             "A missing or mismatched final head or receipt is\noperator-held",
             "A missing or mismatched final head or receipt is successful-completion",
+            1,
+        ),
+        workflow.replace(
+            "Reference absence alone never permits retry",
+            "Reference absence permits an automatic retry",
+            1,
+        ),
+        workflow.replace(
+            "The old persisted\ntoken is never required to equal the new gate before that transition",
+            "The old persisted token must equal the new gate before transition",
+            1,
+        ),
+        workflow.replace(
+            "A retained reminder operation prohibits a second reminder",
+            "A retained reminder operation permits another reminder",
+            1,
+        ),
+        workflow.replace(
+            "appends a verified\n  `merge-read-back` operation",
+            "may complete without a merge read-back operation",
+            1,
+        ),
+        workflow.replace(
+            "Recompute `source_block_digest` from the exact\n  frozen source-block bytes",
+            "Trust the recorded source-block digest without source bytes",
+            1,
+        ),
+        workflow.replace(
+            "persist the `forge-finalize` operation and first attempt at\n`attempting`",
+            "perform the forge-finalize operation before persisting attempting",
+            1,
+        ),
+        workflow.replace(
+            "An identifier returned by the pending operation\n  is forbidden from its own intent",
+            "An identifier returned by the pending operation is permitted in its own intent",
+            1,
+        ),
+        workflow.replace(
+            "an independently\n  parsed empty candidate index in the frozen snapshot",
+            "a proposal-state claimed empty candidate index",
+            1,
+        ),
+        workflow.replace(
+            "parse the bundle as the complete canonical prepared\nrecovery envelope",
+            "accept any bytes whose digest matches recovery_bundle_digest",
+            1,
+        ),
+        workflow.replace(
+            "canonical frozen content plus the exact base64-encoded canonical raw bytes",
+            "caller-supplied structured frozen content without raw bytes",
+            1,
+        ),
+        workflow.replace(
+            "independently read back the staged tree and exact staged\n  paths",
+            "trust the commit intent tree and paths",
+            1,
+        ),
+        workflow.replace(
+            "observation, and creation time. Canonicalize those immutable nonrecursive fields",
+            "observation. Canonicalize fields without creation time",
+            1,
+        ),
+        workflow.replace(
+            "A merely\n  non-empty or foreign approver identity is invalid",
+            "Any non-empty approver identity is accepted",
+            1,
+        ),
+        workflow.replace(
+            "ordered proposal `(candidate_id, source_block)` sequence equals\n  the independently parsed frozen candidate/block index one-for-one",
+            "remaining proposals may omit parsed frozen candidates",
+            1,
+        ),
+        workflow.replace(
+            "Commit intent also binds the exact merged-config `triage.commit_subject`",
+            "Commit intent supplies its own subject",
+            1,
+        ),
+        workflow.replace(
+            "Pull-request intent binds `triage.pr_draft` directly",
+            "Pull-request intent supplies its own draft bit",
+            1,
+        ),
+        workflow.replace(
+            "require its current base branch to remain the configured protected branch",
+            "allow the current base branch to differ from the configured protected branch",
             1,
         ),
         workflow.replace("operator-held` |", "successful-completion` |", 1),
