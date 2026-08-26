@@ -39,7 +39,9 @@ block it:
    `prompt_preamble` is the canonical lane-contract text
    below — the launcher **MUST** prepend it verbatim to the lane's task prompt. `env`
    carries lane-specific `DEVKIT_STATE_ROOT`, `DEVKIT_ROOT`, and
-   `DEVKIT_REFUSE_UNSANDBOXED_STATE=1`. The launcher **MUST replace inherited values
+   `DEVKIT_REFUSE_UNSANDBOXED_STATE=1`. An issuer-created authority object binds the
+   exact descriptor digest and id, and the launcher cross-binds this environment map to
+   the descriptor repository, state root, and refusal identity. The launcher **MUST replace inherited values
    with this map**: the resolver gives an explicit env root precedence over the marker,
    so inheriting the cockpit's root would collapse every child lane into one sandbox.
    The refusal flag flips the unsandboxed-write guard from *warn* to *refuse* — so a lane
@@ -94,15 +96,18 @@ adapter or fixture.
 
 The wrapper is the supported mechanism because it owns the guarantees a native agent
 dispatch or direct `codex exec` call does not: worktree `cwd`, inherited-identity
-removal, descriptor environment replacement, one-shot attempt and final-path authority,
-and a child-side observer that reads Git fetch/push origin identity, the marker,
+removal, descriptor environment replacement, issuer-created descriptor authority,
+session-scoped one-shot attempt and final-path authority, and a fork-only child observer
+with no public direct entry that reads Git fetch/push origin identity, the marker,
 persisted lane metadata, filesystem relationships, a freshly derived canonical prompt
 contract, and its own process before `exec`. It writes a receipt in the session
 directory, binds the exact descriptor/task/combined-prompt bytes, and returns success
 only after the Codex command exits successfully and a durable terminal receipt binds
 the final-message bytes by digest.
 
-The descriptor and receipt fail closed on expiry or reuse; a moved descriptor; a
+The descriptor, issuer authority, and receipt fail closed on expiry, byte rewrite, or
+reuse; a moved descriptor; a descriptor environment that disagrees with its repository,
+state root, or refusal identity; a substituted id or issue window; a
 foreign repository, worktree, origin fetch/push identity, scope, state root, branch,
 base, commit, prompt contract, or merge class; an occupied evidence path; a child
 process that does not hold the current launch capability; a child leader that exits

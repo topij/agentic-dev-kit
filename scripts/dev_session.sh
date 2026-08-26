@@ -401,6 +401,7 @@ ACTIVATE
             "$session_dir_abs" "$descriptor_ttl" "$base_oid" "$lane_oid" "$origin_url" \
             "$origin_push_url" >&3 <<'PY'
 import datetime as dt
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -416,6 +417,7 @@ import uuid
 issued = dt.datetime.now(dt.timezone.utc)
 expires = issued + dt.timedelta(seconds=int(descriptor_ttl))
 descriptor_path = Path(session_dir, "launch-descriptor.json")
+authority_path = Path(session_dir, "launch-authority.json")
 descriptor = {
     "schema_version": 1,
     "descriptor_id": str(uuid.uuid4()),
@@ -460,6 +462,28 @@ try:
 finally:
     if os.path.exists(tmp_name):
         os.unlink(tmp_name)
+authority = {
+    "schema_version": 1,
+    "descriptor_id": descriptor["descriptor_id"],
+    "descriptor_sha256": hashlib.sha256(payload).hexdigest(),
+}
+authority_payload = (
+    json.dumps(authority, sort_keys=True, separators=(",", ":")) + "\n"
+).encode()
+authority_fd = os.open(
+    authority_path,
+    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+    0o400,
+)
+with os.fdopen(authority_fd, "wb") as handle:
+    handle.write(authority_payload)
+    handle.flush()
+    os.fsync(handle.fileno())
+directory_fd = os.open(session_dir, os.O_RDONLY)
+try:
+    os.fsync(directory_fd)
+finally:
+    os.close(directory_fd)
 sys.stdout.buffer.write(payload)
 PY
         return 0

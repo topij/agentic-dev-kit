@@ -19,13 +19,13 @@ An attempted probe whose synthetic history included the repository's scripts tre
 rejected by the execution approval layer before the launcher process started. The
 accepted probe instead exposed a synthetic tracked worktree under `/private/tmp`
 containing only a harmless README, gitignore, and config. The minimum copied launcher
-engines remained untracked outside the lane worktree. No workspace source, credentials,
-local config overlay, MCP file, or operator note entered the visible fixture.
+engines remained untracked outside the lane worktree. No additional workspace source,
+credentials, local config overlay, MCP file, or operator note entered the fixture.
 
 ## Stamped surfaces
 
 - `codex --version` at synthetic revision
-  `f5882fbf1bae4ba23a0bd2e0e5ed40efc524545c` on 2026-08-26 printed
+  `842b7b17c77f440df48d75e1fdc87106a6230068` on 2026-08-26 printed
   `codex-cli 0.149.1`; the live run banner printed `OpenAI Codex v0.149.1`.
 - The official OpenAI developer-command reference on 2026-08-26 described
   `codex exec` as stable and documented `--cd, -C` as setting the workspace root for
@@ -35,9 +35,9 @@ local config overlay, MCP file, or operator note entered the visible fixture.
   /Users/topi/Coding/agentic-dev-kit/scripts/dev_session.sh
   /Users/topi/Coding/agentic-dev-kit/scripts/launch_codex_lane.py` at the same synthetic
   revision/date printed matching pairs:
-  `06058415661467a09c76fe34281a0be619406c68b76fb08714ad2b396e275b26` for the
+  `2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba` for the
   descriptor issuer and
-  `e4c80c0eceb3a614bb7953edbd6926a3c1c0b32b8b396854f86b015256bfd15b` for the
+  `cdc2a06dcecdc4aa0ff50569c8228a8d5781acfff002553195c1047a0c2cc685` for the
   launcher.
 
 ## Launch request
@@ -45,7 +45,7 @@ local config overlay, MCP file, or operator note entered the visible fixture.
 The synthetic lane was issued with:
 
 ```text
-DEVKIT_SESSIONS_DIR=/private/tmp/codex-launcher-synthetic-v4.RT21nH/sessions \
+DEVKIT_SESSIONS_DIR=/private/tmp/codex-launcher-synthetic-v5.eueSnF/sessions \
   scripts/dev_session.sh new live --headless --runtime codex
 ```
 
@@ -61,8 +61,8 @@ GIT_CONFIG_COUNT=1 \
 GIT_CONFIG_KEY_0=remote.origin.pushurl \
 GIT_CONFIG_VALUE_0=/private/tmp/synthetic-foreign-origin \
 python3 scripts/launch_codex_lane.py \
-  --descriptor /private/tmp/codex-launcher-synthetic-v4.RT21nH/sessions/live/launch-descriptor.json \
-  --prompt-file /private/tmp/codex-launcher-synthetic-v4.RT21nH/prompt.txt
+  --descriptor /private/tmp/codex-launcher-synthetic-v5.eueSnF/sessions/live/launch-descriptor.json \
+  --prompt-file /private/tmp/codex-launcher-synthetic-v5.eueSnF/prompt.txt
 ```
 
 The task limited Codex to local read-only identity observation and prohibited edits,
@@ -71,13 +71,14 @@ commits, pushes, pull requests, browsing, and child agents.
 ## Durable binding
 
 The completed receipt carried descriptor id
-`06192709-c5ab-4ce2-bab2-a6ac50d3d7e6` and these request digests:
+`56ad8e07-2ab8-4cbc-97d7-07acd9c0172a` and these request digests. The issuer-created
+authority object bound the same descriptor id and descriptor digest before launch:
 
 ```text
-descriptor_sha256=1448f17d6862ad1c2351ad424eb11ab4795c0a9a4b2db761c212bc58be8cc595
+descriptor_sha256=4d56e292770f92ea164971e4a8b6ea6bd0877482a636c1d440ab30a85d325040
 task_sha256=db9131543711f8876549da438274ca8662374b3347de1c329b6bfae00e389d64
 combined_prompt_sha256=962e9da7b8e12aa27f38ced5cc93c8ca0dfd98e9eaab7e5fabd699cb9535657c
-process_nonce_sha256=40221fe191efe22cb884c37392e2766fd64b6ea5b4246ff01495585684d54e87
+process_nonce_sha256=83591fc30685e20ec66ccf0589efc1820e19fa5d180ff4da95bc1887349cb289
 configured_command=["codex","exec"]
 ```
 
@@ -85,29 +86,29 @@ The child constructed and durably recorded the following observations before `ex
 
 ```text
 scope=live
-worktree=/private/tmp/codex-launcher-synthetic-v4.RT21nH/sessions/live/wt
-git_top=/private/tmp/codex-launcher-synthetic-v4.RT21nH/sessions/live/wt
-session_dir=/private/tmp/codex-launcher-synthetic-v4.RT21nH/sessions/live
-state_root=/private/tmp/codex-launcher-synthetic-v4.RT21nH/sessions/live/state
-marker_state_root=/private/tmp/codex-launcher-synthetic-v4.RT21nH/sessions/live/state
-repo_root=/private/tmp/codex-launcher-synthetic-v4.RT21nH/repo
-origin_url=/private/tmp/codex-launcher-synthetic-v4.RT21nH/origin.git
-origin_push_url=/private/tmp/codex-launcher-synthetic-v4.RT21nH/origin.git
+worktree=/private/tmp/codex-launcher-synthetic-v5.eueSnF/sessions/live/wt
+git_top=/private/tmp/codex-launcher-synthetic-v5.eueSnF/sessions/live/wt
+session_dir=/private/tmp/codex-launcher-synthetic-v5.eueSnF/sessions/live
+state_root=/private/tmp/codex-launcher-synthetic-v5.eueSnF/sessions/live/state
+marker_state_root=/private/tmp/codex-launcher-synthetic-v5.eueSnF/sessions/live/state
+repo_root=/private/tmp/codex-launcher-synthetic-v5.eueSnF/repo
+origin_url=/private/tmp/codex-launcher-synthetic-v5.eueSnF/origin.git
+origin_push_url=/private/tmp/codex-launcher-synthetic-v5.eueSnF/origin.git
 branch=lane/live
 persisted_branch=lane/live
 base=main
-base_oid=f5882fbf1bae4ba23a0bd2e0e5ed40efc524545c
-lane_oid=f5882fbf1bae4ba23a0bd2e0e5ed40efc524545c
+base_oid=842b7b17c77f440df48d75e1fdc87106a6230068
+lane_oid=842b7b17c77f440df48d75e1fdc87106a6230068
 merge_class=operator
 DEVKIT_REFUSE_UNSANDBOXED_STATE=1
-DEVKIT_ROOT=/private/tmp/codex-launcher-synthetic-v4.RT21nH/repo
-DEVKIT_STATE_ROOT=/private/tmp/codex-launcher-synthetic-v4.RT21nH/sessions/live/state
+DEVKIT_ROOT=/private/tmp/codex-launcher-synthetic-v5.eueSnF/repo
+DEVKIT_STATE_ROOT=/private/tmp/codex-launcher-synthetic-v5.eueSnF/sessions/live/state
 repository_overrides_present=[]
-pwd_environment=/private/tmp/codex-launcher-synthetic-v4.RT21nH/sessions/live/wt
-process_pid=54839
-process_ppid=54796
-process_session_id=54839
-process_start_fingerprint=ps:Wed Aug 26 22:07:50 2026
+pwd_environment=/private/tmp/codex-launcher-synthetic-v5.eueSnF/sessions/live/wt
+process_pid=98181
+process_ppid=98119
+process_session_id=98181
+process_start_fingerprint=ps:Wed Aug 26 22:26:40 2026
 ```
 
 The independently executing Codex session then reported the same physical directory,
@@ -116,15 +117,15 @@ descriptor-owned environment. It reported the named Git repository overrides,
 injected Git config keys, and `GH_REPO` absent; no repository override survived.
 
 The terminal receipt recorded `returncode=0`, no signal or error, and final-message
-digest `ebb8e709446fff50b79d0a98a8cd0f53e251dc5eedc8129ccf6e9cec4837d818`.
+digest `a2cf83379951621ac8afa2e3726aae45c95ab5640af17e15ec9dcfe0dc82f2e5`.
 
 ## Cleanup and containment
 
 - `git status --short` in the synthetic lane at revision
-  `f5882fbf1bae4ba23a0bd2e0e5ed40efc524545c` on 2026-08-26 returned no entries.
+  `842b7b17c77f440df48d75e1fdc87106a6230068` on 2026-08-26 returned no entries.
 - The receipt-bound process audit
   `python3 -c '<os.kill(pid, 0) for the exact live-probe PID tuple>'` at the same
-  revision/date printed `stopped:54796` and `stopped:54839` by taking the
+  revision/date printed `stopped:98119` and `stopped:98181` by taking the
   `ProcessLookupError` branch for the launcher and receipt-bound Codex process.
 - The synthetic lane is removed after this record is written. Its temporary fixture is
   not an adopter artifact and supplies no authority after teardown.

@@ -26,7 +26,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
@@ -65,6 +65,32 @@ def _is_repository_override_key(key: str) -> bool:
 
 class LaunchError(RuntimeError):
     """A fail-closed launcher refusal."""
+
+
+class _ForkedChild:
+    """Minimal wait/poll surface for the fork-only observer process."""
+
+    def __init__(self, pid: int, stdin: BinaryIO) -> None:
+        self.pid = pid
+        self.stdin = stdin
+        self.returncode: int | None = None
+
+    def poll(self) -> int | None:
+        if self.returncode is not None:
+            return self.returncode
+        waited, status = os.waitpid(self.pid, os.WNOHANG)
+        if waited == self.pid:
+            self.returncode = os.waitstatus_to_exitcode(status)
+        return self.returncode
+
+    def wait(self, timeout: float | None = None) -> int:
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while self.poll() is None:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise subprocess.TimeoutExpired(["forked lane observer"], timeout)
+            time.sleep(0.02)
+        assert self.returncode is not None
+        return self.returncode
 
 
 def _canonical_json(value: object) -> bytes:
@@ -210,6 +236,27 @@ def _load_descriptor(path: Path, *, now: dt.datetime | None = None) -> tuple[dic
         raise LaunchError("descriptor env keys and values must be strings")
     if descriptor.get("runtime") != "codex":
         raise LaunchError("descriptor runtime is not codex")
+    expected_env = {
+        "DEVKIT_STATE_ROOT": descriptor.get("state_root"),
+        "DEVKIT_ROOT": descriptor.get("repo_root"),
+        "DEVKIT_REFUSE_UNSANDBOXED_STATE": "1",
+    }
+    if env != expected_env:
+        raise LaunchError("descriptor environment disagrees with lane identity")
+    authority_path = session_dir / "launch-authority.json"
+    authority_raw = _read_stable_regular_file(authority_path)
+    try:
+        authority = json.loads(authority_raw)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise LaunchError("launch authority is not valid JSON") from exc
+    if not isinstance(authority, dict) or _canonical_json(authority) != authority_raw:
+        raise LaunchError("launch authority is not canonical")
+    if authority != {
+        "schema_version": SCHEMA_VERSION,
+        "descriptor_id": descriptor_id,
+        "descriptor_sha256": _sha256(raw),
+    }:
+        raise LaunchError("descriptor disagrees with issuer-created launch authority")
     return descriptor, raw
 
 
@@ -420,9 +467,7 @@ def _validate_child_authority(
 ) -> str:
     if arguments.descriptor_id != descriptor["descriptor_id"]:
         raise LaunchError("child descriptor identity disagrees with the descriptor")
-    expected_attempt_path = Path(descriptor["session_dir"]) / (
-        f"launch-attempt-{descriptor['descriptor_id']}.json"
-    )
+    expected_attempt_path = Path(descriptor["session_dir"]) / "launch-attempt.json"
     expected_receipt_path = Path(descriptor["session_dir"]) / (
         f"launch-receipt-{descriptor['descriptor_id']}.json"
     )
@@ -535,6 +580,48 @@ def _scrubbed_environment(descriptor: dict[str, Any]) -> dict[str, str]:
     return environment
 
 
+def _fork_observer_child(
+    arguments: argparse.Namespace,
+    *,
+    worktree: str,
+    environment: dict[str, str],
+    ready_read: int,
+    ack_write: int,
+    authority_write: int,
+) -> _ForkedChild:
+    prompt_read, prompt_write = os.pipe()
+    try:
+        pid = os.fork()
+    except OSError:
+        os.close(prompt_read)
+        os.close(prompt_write)
+        raise
+    if pid == 0:
+        returncode = 70
+        try:
+            os.setsid()
+            for signum in (signal.SIGINT, signal.SIGTERM):
+                signal.signal(signum, signal.SIG_DFL)
+            os.chdir(worktree)
+            os.environ.clear()
+            os.environ.update(environment)
+            for descriptor in (ready_read, ack_write, authority_write, prompt_write):
+                with contextlib.suppress(OSError):
+                    os.close(descriptor)
+            os.dup2(prompt_read, 0)
+            os.close(prompt_read)
+            returncode = _child_main(arguments)
+        except BaseException as exc:  # child must terminalize without re-entering parent
+            print(f"[codex-lane-launcher] forked child failed: {exc}", file=sys.stderr)
+        finally:
+            with contextlib.suppress(Exception):
+                sys.stdout.flush()
+                sys.stderr.flush()
+        os._exit(returncode)
+    os.close(prompt_read)
+    return _ForkedChild(pid, os.fdopen(prompt_write, "wb", buffering=0))
+
+
 def _read_receipt(path: Path) -> dict[str, Any]:
     raw = _read_stable_regular_file(path)
     try:
@@ -634,7 +721,7 @@ def _process_group_exists(process_group: int) -> bool:
 
 
 def _wait_for_process_group_exit(
-    process: subprocess.Popen[bytes], deadline: float
+    process: _ForkedChild, deadline: float
 ) -> int | None:
     while time.monotonic() < deadline:
         process.poll()
@@ -651,7 +738,7 @@ def _wait_for_process_group_exit(
 
 
 def _terminate_process_group(
-    process: subprocess.Popen[bytes], grace_seconds: int
+    process: _ForkedChild, grace_seconds: int
 ) -> int:
     with contextlib.suppress(ProcessLookupError):
         os.killpg(process.pid, signal.SIGTERM)
@@ -671,7 +758,7 @@ def _terminate_process_group(
 
 
 def _wait_for_process_or_signal(
-    process: subprocess.Popen[bytes], caught: list[int]
+    process: _ForkedChild, caught: list[int]
 ) -> int | None:
     while not caught:
         try:
@@ -707,7 +794,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
     launch_capability = secrets.token_bytes(32)
     process_nonce = launch_capability.hex()
     session_dir = Path(descriptor["session_dir"])
-    attempt_path = session_dir / f"launch-attempt-{descriptor_id}.json"
+    attempt_path = session_dir / "launch-attempt.json"
     receipt_path = session_dir / f"launch-receipt-{descriptor_id}.json"
     final_message = session_dir / f"launch-final-{descriptor_id}.txt"
     request = {
@@ -749,32 +836,19 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
     ready_read, ready_write = os.pipe()
     ack_read, ack_write = os.pipe()
     authority_read, authority_write = os.pipe()
-    child_arguments = [
-        sys.executable,
-        str(Path(__file__).resolve()),
-        "_child",
-        "--descriptor",
-        str(descriptor_path),
-        "--attempt",
-        str(attempt_path),
-        "--receipt",
-        str(receipt_path),
-        "--final-message",
-        str(final_message),
-        "--descriptor-id",
-        descriptor_id,
-        "--task-sha256",
-        request["task_sha256"],
-        "--combined-prompt-sha256",
-        request["combined_prompt_sha256"],
-        "--authority-fd",
-        str(authority_read),
-        "--ready-fd",
-        str(ready_write),
-        "--ack-fd",
-        str(ack_read),
-    ]
-    process: subprocess.Popen[bytes] | None = None
+    child_arguments = argparse.Namespace(
+        descriptor=str(descriptor_path),
+        attempt=str(attempt_path),
+        receipt=str(receipt_path),
+        final_message=str(final_message),
+        descriptor_id=descriptor_id,
+        task_sha256=request["task_sha256"],
+        combined_prompt_sha256=request["combined_prompt_sha256"],
+        authority_fd=authority_read,
+        ready_fd=ready_write,
+        ack_fd=ack_read,
+    )
+    process: _ForkedChild | None = None
     caught: list[int] = []
 
     def relay(signum: int, _frame: object) -> None:
@@ -789,13 +863,13 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
     error: str | None = None
     bound_receipt_sha256: str | None = None
     try:
-        process = subprocess.Popen(
+        process = _fork_observer_child(
             child_arguments,
-            cwd=descriptor["worktree"],
-            env=_scrubbed_environment(descriptor),
-            stdin=subprocess.PIPE,
-            pass_fds=(ready_write, ack_read, authority_read),
-            start_new_session=True,
+            worktree=descriptor["worktree"],
+            environment=_scrubbed_environment(descriptor),
+            ready_read=ready_read,
+            ack_write=ack_write,
+            authority_write=authority_write,
         )
         os.close(ready_write)
         os.close(ack_read)
@@ -839,7 +913,6 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
                     os.write(ack_write, b"1")
                     os.close(ack_write)
                     ack_write = -1
-                    assert process.stdin is not None
                     process.stdin.write(combined)
                     process.stdin.close()
         returncode = None if error else _wait_for_process_or_signal(process, caught)
@@ -911,6 +984,9 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         )
         return 70
     finally:
+        if process is not None:
+            with contextlib.suppress(OSError):
+                process.stdin.close()
         for descriptor in (
             ready_read,
             ready_write,
@@ -928,18 +1004,6 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    subparsers = parser.add_subparsers(dest="internal")
-    child = subparsers.add_parser("_child", help=argparse.SUPPRESS)
-    child.add_argument("--descriptor", required=True)
-    child.add_argument("--attempt", required=True)
-    child.add_argument("--receipt", required=True)
-    child.add_argument("--final-message", required=True)
-    child.add_argument("--descriptor-id", required=True)
-    child.add_argument("--task-sha256", required=True)
-    child.add_argument("--combined-prompt-sha256", required=True)
-    child.add_argument("--authority-fd", required=True, type=int)
-    child.add_argument("--ready-fd", required=True, type=int)
-    child.add_argument("--ack-fd", required=True, type=int)
     parser.add_argument("--descriptor")
     parser.add_argument("--prompt-file")
     return parser
@@ -948,8 +1012,6 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     try:
-        if arguments.internal == "_child":
-            return _child_main(arguments)
         if not arguments.descriptor or not arguments.prompt_file:
             raise LaunchError("--descriptor and --prompt-file are required")
         return launch(Path(arguments.descriptor), Path(arguments.prompt_file))

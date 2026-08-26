@@ -41,7 +41,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "f0895091fcd3cac1cf86eebc4006297b67843edf4bdb4065f8f399e99ada3dd7"
+      "sha256": "5615c755baae77aeb08089b5b6e4b337ccfa42f6cfdf4f6be21d0d9b42b0a5d6"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -117,7 +117,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "06058415661467a09c76fe34281a0be619406c68b76fb08714ad2b396e275b26"
+      "sha256": "2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba"
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
@@ -133,7 +133,7 @@
     },
     "scripts/launch_codex_lane.py": {
       "role": "engine",
-      "sha256": "e4c80c0eceb3a614bb7953edbd6926a3c1c0b32b8b396854f86b015256bfd15b"
+      "sha256": "cdc2a06dcecdc4aa0ff50569c8228a8d5781acfff002553195c1047a0c2cc685"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
@@ -228,7 +228,7 @@
     },
     "scripts/tests/test_codex_lane_launcher.py": {
       "role": "test",
-      "sha256": "96fdd482fe5f2402887390eceb85268f99b9693fa30cb051c35dc18feb17fbbd"
+      "sha256": "76c7ed11d8d1cdf0702f8042178a57b1060692db4828e49c14d7ef32e7af873b"
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",

@@ -3,9 +3,11 @@ from __future__ import annotations
 import contextlib
 import copy
 import datetime as dt
+import hashlib
 import importlib.util
 import json
 import os
+import select
 import shutil
 import signal
 import subprocess
@@ -236,6 +238,59 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
     assert receipt["terminal"]["final_message_sha256"]
 
 
+@pytest.mark.parametrize(
+    ("key", "foreign"),
+    (
+        ("DEVKIT_STATE_ROOT", "/foreign-state"),
+        ("DEVKIT_ROOT", "/foreign-repository"),
+        ("DEVKIT_REFUSE_UNSANDBOXED_STATE", "0"),
+    ),
+)
+def test_descriptor_environment_is_cross_bound_to_lane_identity(
+    tmp_path: Path, key: str, foreign: str
+) -> None:
+    launcher = _load_launcher()
+    _repo, engine, _sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    descriptor_path = Path(descriptor["descriptor_path"])
+    mutated = copy.deepcopy(descriptor)
+    mutated["env"][key] = foreign
+    mutated_raw = launcher._canonical_json(mutated)
+    descriptor_path.write_bytes(mutated_raw)
+    authority_path = Path(descriptor["session_dir"]) / "launch-authority.json"
+    authority = json.loads(authority_path.read_text(encoding="utf-8"))
+    authority["descriptor_sha256"] = hashlib.sha256(mutated_raw).hexdigest()
+    authority_path.chmod(0o600)
+    authority_path.write_bytes(launcher._canonical_json(authority))
+
+    result = _run_launcher(engine, mutated, prompt, env)
+
+    assert result.returncode != 0
+    assert "environment disagrees with lane identity" in result.stderr
+    assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
+
+
+def test_issuer_authority_rejects_id_and_window_rewrite_before_launch(
+    tmp_path: Path,
+) -> None:
+    launcher = _load_launcher()
+    _repo, engine, _sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    descriptor_path = Path(descriptor["descriptor_path"])
+    mutated = copy.deepcopy(descriptor)
+    mutated["descriptor_id"] = "11111111-1111-4111-8111-111111111111"
+    for field in ("issued_at", "expires_at"):
+        value = dt.datetime.fromisoformat(mutated[field].replace("Z", "+00:00"))
+        mutated[field] = (value - dt.timedelta(seconds=1)).isoformat().replace(
+            "+00:00", "Z"
+        )
+    descriptor_path.write_bytes(launcher._canonical_json(mutated))
+
+    result = _run_launcher(engine, mutated, prompt, env)
+
+    assert result.returncode != 0
+    assert "issuer-created launch authority" in result.stderr
+    assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
+
+
 def test_correct_descriptor_cannot_launch_in_a_wrong_worktree() -> None:
     launcher = _load_launcher()
     expected = {
@@ -438,10 +493,41 @@ def test_forced_interruption_stops_child_and_records_terminal_outcome(tmp_path: 
         os.kill(child_pid, 0)
 
 
-def test_internal_child_requires_a_parent_attempt(tmp_path: Path) -> None:
+def test_internal_child_mode_cannot_be_forged_by_a_caller(tmp_path: Path) -> None:
+    launcher = _load_launcher()
     _repo, engine, _sessions, descriptor, _prompt, env = _install_repo(tmp_path)
     session_dir = Path(descriptor["session_dir"])
     descriptor_id = str(descriptor["descriptor_id"])
+    descriptor_raw = Path(descriptor["descriptor_path"]).read_bytes()
+    capability = b"x" * 32
+    task = b"MALICIOUS PROMPT WITHOUT CONTRACT"
+    request = {
+        "descriptor_sha256": hashlib.sha256(descriptor_raw).hexdigest(),
+        "task_sha256": hashlib.sha256(task).hexdigest(),
+        "combined_prompt_sha256": hashlib.sha256(task).hexdigest(),
+        "configured_command": [str(tmp_path / "fake-codex")],
+        "process_nonce_sha256": hashlib.sha256(capability.hex().encode()).hexdigest(),
+    }
+    attempt_path = session_dir / "launch-attempt.json"
+    attempt_path.write_bytes(
+        launcher._canonical_json(
+            {
+                "schema_version": 1,
+                "status": "starting",
+                "descriptor_id": descriptor_id,
+                "request": request,
+                "parent_process": {
+                    "pid": os.getpid(),
+                    "start_fingerprint": launcher._process_start_fingerprint(os.getpid()),
+                },
+            }
+        )
+    )
+    receipt_path = session_dir / f"launch-receipt-{descriptor_id}.json"
+    final_path = session_dir / f"launch-final-{descriptor_id}.txt"
+    authority_read, authority_write = os.pipe()
+    ready_read, ready_write = os.pipe()
+    ack_read, ack_write = os.pipe()
     command = [
         sys.executable,
         str(engine / "launch_codex_lane.py"),
@@ -449,32 +535,51 @@ def test_internal_child_requires_a_parent_attempt(tmp_path: Path) -> None:
         "--descriptor",
         str(descriptor["descriptor_path"]),
         "--attempt",
-        str(session_dir / f"launch-attempt-{descriptor_id}.json"),
+        str(attempt_path),
         "--receipt",
-        str(session_dir / f"launch-receipt-{descriptor_id}.json"),
+        str(receipt_path),
         "--final-message",
-        str(session_dir / f"launch-final-{descriptor_id}.txt"),
+        str(final_path),
         "--descriptor-id",
         descriptor_id,
         "--task-sha256",
-        "a" * 64,
+        request["task_sha256"],
         "--combined-prompt-sha256",
-        "b" * 64,
+        request["combined_prompt_sha256"],
         "--authority-fd",
-        "0",
+        str(authority_read),
         "--ready-fd",
-        "1",
+        str(ready_write),
         "--ack-fd",
-        "0",
+        str(ack_read),
     ]
+    process = subprocess.Popen(
+        command,
+        cwd=descriptor["worktree"],
+        env=launcher._scrubbed_environment(descriptor),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        pass_fds=(authority_read, ready_write, ack_read),
+        start_new_session=True,
+    )
+    os.close(authority_read)
+    os.close(ready_write)
+    os.close(ack_read)
+    os.write(authority_write, capability)
+    os.close(authority_write)
+    readable, _, _ = select.select([ready_read], [], [], 2)
+    ready = os.read(ready_read, 64) if readable else b""
+    os.close(ready_read)
+    if ready == b"READY\n":
+        os.write(ack_write, b"1")
+    os.close(ack_write)
+    stdout, stderr = process.communicate(input=task, timeout=5)
 
-    first = subprocess.run(command, input=b"x" * 32, env=env, capture_output=True)
-    second = subprocess.run(command, input=b"y" * 32, env=env, capture_output=True)
-
-    assert first.returncode != 0
-    assert second.returncode != 0
-    assert not (session_dir / f"launch-attempt-{descriptor_id}.json").exists()
-    assert not (session_dir / f"launch-final-{descriptor_id}.txt").exists()
+    assert process.returncode != 0, (stdout, stderr)
+    assert ready != b"READY\n"
+    assert not receipt_path.exists()
+    assert not final_path.exists()
 
 
 def test_descriptor_id_cannot_escape_the_session_evidence_namespace(
@@ -596,13 +701,19 @@ def test_rewritten_prompt_contract_is_rejected_before_launch(tmp_path: Path) -> 
     descriptor_path = Path(descriptor["descriptor_path"])
     rewritten = copy.deepcopy(descriptor)
     rewritten["prompt_preamble"] = "caller supplied identity"
-    descriptor_path.write_bytes(launcher._canonical_json(rewritten))
+    rewritten_raw = launcher._canonical_json(rewritten)
+    descriptor_path.write_bytes(rewritten_raw)
+    authority_path = Path(descriptor["session_dir"]) / "launch-authority.json"
+    authority = json.loads(authority_path.read_text(encoding="utf-8"))
+    authority["descriptor_sha256"] = hashlib.sha256(rewritten_raw).hexdigest()
+    authority_path.chmod(0o600)
+    authority_path.write_bytes(launcher._canonical_json(authority))
 
     result = _run_launcher(engine, descriptor, prompt, env)
 
     assert result.returncode != 0
     assert "canonical issuer" in result.stderr
-    assert not list(sessions.joinpath("probe").glob("launch-attempt-*.json"))
+    assert not sessions.joinpath("probe", "launch-attempt.json").exists()
 
 
 def test_descendant_cannot_outlive_a_successful_child_leader(tmp_path: Path) -> None:
