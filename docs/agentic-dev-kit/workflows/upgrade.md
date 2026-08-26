@@ -396,6 +396,34 @@ else
 fi
 ```
 
+The refreshed migrator owns the additive `triage:` block. It inserts the complete flat
+block when absent and adds only missing keys to a partial block, preserving existing
+values, indentation, and trailing comments. Ambiguous top-level or child-key YAML stops
+before any migration write. The shell-only parser also stops on multi-line flow
+collections inside init-owned sections and on a sequence where an owned mapping is
+required; normalize prompted-section child keys to the shipped two-space indentation,
+keep a partial `triage` flat map at one consistent indentation, and keep flow or quoted
+values complete on the same line as their keys. Prompted values also reject YAML tags,
+anchors, aliases, block scalars, and block children. Partial-`triage` string fields also
+reject double-quoted backslash escapes. Normalize `review.bots` and
+`systemize.operator_logins` to complete same-line flow sequences; normalize every other
+prompted value to a same-line scalar, never a flow mapping. Quote a string whose plain
+spelling YAML could resolve as a non-string; string fields must be non-empty, and
+`triage.pr_draft` must be the plain boolean `true` or `false`. Block YAML on other fields can still be refused
+when its continuation resembles migrator-owned structure; normalize any refused value
+to an ordinary same-line form. Do not retain or create a separate
+`config/friction-triage.yaml`: `paths`, `tracker`, `notify`, `state`, `vcs`, and
+`models` remain the authoritative shared sections. After this step, verify that
+`triage.state_path` and `triage.gate_path` separate live/test mode, the recovery-bundle
+pattern carries mode and gate-digest placeholders, and the frozen-inbox and report
+patterns carry mode, date, and session placeholders.
+
+The older Claude and Codex triage adapters carried approval and notification policy
+outside the shared workflow. When the selected changelog entry names this migration,
+replace both adapters with the refreshed thin bindings even though Step 3 normally
+retains adopter-owned adapters. Keeping either old adapter leaves runtime-dependent gate
+semantics around the new shared state and exact-payload contract.
+
 Every path above is absolute or `$REPO`-anchored, per **Working across two trees** in
 [`AGENTS.md`](../../../AGENTS.md) — the rule this workflow binds by setting `$REPO` and
 `$KIT` in Step 0 above — including the manifest the gate reads, which is the adopter's and

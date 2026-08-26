@@ -300,18 +300,23 @@ integration. Read `PRINCIPLES.md` for both principles' full statement.
 **Runtime coverage and engine wiring are independent.** The aligned entries in
 `runtime-parity.md` point to a runtime-neutral definition plus thin Claude and Codex
 adapters.
-`parallel` and `pr-watch` ship deterministic engines. `session-start` and `wrap-up` use
-shared workflow doctrine, configured runtime-native integrations, and the particular
-shipped helpers each definition names. `triage-friction-log` and
-`post-merge-systemize` share policy across runtimes while their project-specific
-integrations remain unwired. The absent integration surfaces are enumerated here so
-runtime parity cannot be mistaken for engine availability:
+`parallel` and `pr-watch` ship deterministic engines. `session-start`, `wrap-up`, and
+`triage-friction-log` use shared workflow doctrine, configured runtime-native
+integrations, and the particular shipped helpers each definition names.
+`post-merge-systemize` follows the same shared-contract pattern. Runtime parity still
+does not imply that an optional deterministic engine or external client is installed;
+the absent integration surfaces are enumerated here:
 
 - a tracker client and notification channel;
 - `scripts/fetch_merged_prs.py`, `scripts/digest_merged_prs.py`, and
   `scripts/heartbeat_cli.py` for `post-merge-systemize`;
-- `triage_friction_log.py` and `finalize_triage.py` beneath `paths.engines` for
-  `triage-friction-log`.
+- `triage.draft_engine` and `triage.finalize_engine` beneath `paths.engines` for
+  engine-backed `triage-friction-log`.
+
+Both triage modes use `triage.state_path` and `triage.gate_path` as separate logical
+state locations. Expand `{mode}`, remove the configured `state.dirname` prefix, and
+resolve the remaining fragment through the shared state-path resolver; never hardcode a
+worktree-local gate path.
 
 The shared `session-start` and `wrap-up` definitions also declare their integration
 preflights and outcomes directly. Session start fails closed on missing repository,
@@ -339,6 +344,22 @@ mask an incomplete repository path or ambiguous authorized merge.
 These bookend declarations use existing config and upgrade through the shared workflow
 refresh; they add no installer migration or runtime-specific connector requirement.
 
+The shared triage workflow owns its pipeline configuration in `triage`. A new draft
+selects engine-backed mode only when both configured engines exist, selects an honest
+agent-executed LLM-only path when both are absent, and stops on a partial pair. Merged
+config, sandbox-aware atomic state, and an exact frozen inbox are required in either
+mode. Scheduled or unattended approval requires notification send and thread-read
+capabilities; an interactive run can present the same exact payloads in-session when
+notification is unavailable and records that degradation. Tracker availability never
+authorizes a write: the operator approves the canonical payload digest, the workflow
+persists the attempt before acting, and a failed or ambiguous response is read back by
+its idempotency marker before any retry. Finalization waits until every approved write
+is verified and sweeps only explicitly accounted, byte-identical frozen blocks. Test
+mode writes only its declared local evidence and optional `[TEST]` notification; it
+cannot edit the friction documents or create tracker/forge state. Approval or any
+unsettled tracker, repository, or review path remains operator-held with exact resume
+evidence.
+
 The shared systemize workflow treats the configured engine set atomically: all absent
 selects its honest LLM-only path, all present selects engine-backed mode, and a partial
 set stops with an actionable preflight failure. Notification and tracker access have
@@ -361,7 +382,18 @@ section at the shipped two-space indentation. Rewrite tagged, quoted, anchored,
 explicit, duplicated, alternate-indented, or inline-commented section-key forms before
 retrying. Operator-login items must be simple plain login tokens or simple quoted
 strings; tags, anchors, aliases, typed scalars, escapes, and ambiguous flow syntax are
-refused before migration writes.
+refused before migration writes. Prompted init-owned sections must remain mappings at
+the shipped two-space child indentation; a partial `triage` flat map may use another
+consistent indentation. Keep every prompted value, and every value in a partial
+`triage` flat map, complete on the same line as its key. YAML tags, anchors, aliases,
+block scalars, and block children are unsupported on prompted values. Partial-`triage`
+string fields also reject double-quoted backslash escapes. Keep `review.bots`
+and `systemize.operator_logins` as complete same-line flow sequences; every other
+prompted value must be a same-line scalar, and flow mappings are unsupported. Quote a
+string whose plain spelling YAML could resolve as a non-string; string fields must be
+non-empty, and `triage.pr_draft` must be the plain boolean `true` or `false`. Block YAML
+on other fields can still be refused when its continuation resembles migrator-owned
+structure; normalize any refused value to an ordinary same-line form before retrying.
 
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
 behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)

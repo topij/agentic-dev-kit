@@ -25,11 +25,12 @@ their delivery order and exit conditions.
   the root route and read and applied the shared doctrine for affected merge-authority
   work. It does not generalize one client observation. Interactive-TUI
   `systemMessage` presentation remains an explicit live-client gap.
-- [ ] **Phase 3 — Complete workflow and integration coverage.** PR `#595` merged the
+- [x] **Phase 3 — Complete workflow and integration coverage.** PR `#595` merged the
   bounded `post-merge-systemize` extraction with a shared definition, thin runtime
   bindings, config-owned policy, equivalent durable artifacts, and explicit capability
   preflights. PR `#596` merged the same structured contract for `session-start` and
-  `wrap-up`; `triage-friction-log` remains the Phase 3 exit.
+  `wrap-up`; the triage integration slice adds the config-owned draft/approve/finalize
+  matrix and closes the remaining structural exit.
 - [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivers
   the kit-owned engine boundary for absolute descriptor roots, the environment
   replacement contract, exact lane/forge
@@ -117,19 +118,22 @@ that revision; the delivery slices below are expected to change them.
 - **Runtime translation:** Claude accepts `$ARGUMENTS`; Codex accepts the skill argument.
   Each runtime needs native tracker and notification clients, but neither adapter should
   choose their policy.
-- **Capabilities:** repository/config and inbox reads are required. Live Session B needs
-  tracker write access after payload-specific approval. Scheduled approval collection
-  needs notification thread read/write. Parser/finalizer availability must be treated as
-  an atomic engine mode rather than assumed.
+- **Capabilities:** repository/config, sandbox-aware state resolution, and an exact
+  frozen inbox are required. Tracker write/read-back is conditional after exact-payload
+  approval. Scheduled approval collection requires notification send/thread read, while
+  interactive notification failure degrades to the current session. The configured
+  draft/finalize pair is atomic; both absent selects an honest agent-executed LLM-only
+  mode and a partial pair stops.
 - **Authority and artifacts:** the frozen inbox, proposal report, approval-bound state,
   returned tracker identifiers, source/archive diff, and PR are resume evidence. Tracker
   writes require exact-payload approval; a standing workflow request is not approval.
-- **Stops and mismatch:** the current shared workflow names a dedicated pipeline config
-  that is absent from `config/dev-model.yaml`, assumes unvendored engines, and makes the
-  notification channel an unconditional stop even when the operator is present in the
-  interactive session. Its Codex adapter also states only a generic external-mutation
-  gate. Resolving those together requires a config/installer migration and the semantic
-  input matrix, so it is deliberately outside the bookend slice.
+- **Stops and mismatch:** active approval state cannot be overwritten; missing frozen
+  evidence never falls back to a whole-inbox sweep; changed approved payloads require a
+  new decision; failed or ambiguous tracker/forge writes require destination read-back;
+  partial tracker success holds before finalization; and test mode cannot write tracker,
+  source documents, or forge state. Shared precedence distinguishes hard-stop,
+  operator-held, degraded success, and successful completion. Both adapters now carry
+  invocation/mechanism translation only.
 
 ### Slice boundary and next starter
 
@@ -151,18 +155,15 @@ merge policy or `CS_TOOLKIT_*` namespace. The downstream checkout remains unchan
 its repo-owned engines require a later explicit reconciliation PR rather than a normal
 kit upgrade.
 
-Resume the Phase 3 exit with this preserved starter:
+The Phase 3 starter is delivered by this slice. Preserve the next sprint starter:
 
 ```text
-Create feat/triage-integration-preflights from current origin/main. Build the semantic
-input matrix for a config/dev-model.yaml-owned triage block and its init/upgrade
-migration first. Then make triage-friction-log declare required repository and frozen-
-state capabilities, atomic engine-backed versus honest LLM-only behavior, interactive
-approval when notification is unavailable, scheduled notification requirements,
-payload-specific tracker authority, durable resume evidence, test-mode write limits,
-and hard-stop/degraded-success/completion outcomes. Keep the Claude and Codex adapters
-thin; update runtime parity, README/getting-started, upgrade guidance, manifest, and
-declaration-derived mutation tests in the same PR.
+Create feat/codex-environment-capable-launcher from current origin/main. Inventory the
+supported Codex launch surfaces against the existing absolute descriptor and environment
+replacement contract, choose one mechanism that can apply worktree plus environment
+without weakening lane identity, and add live isolation evidence before changing the
+shared parallel launcher guidance. Keep model/effort calibration and downstream
+cs-toolkit adaptation in separate later slices.
 ```
 
 ## Pre-implementation assessment
@@ -259,12 +260,13 @@ loads the safety doctrine for affected work.
   connector dependency that the client cannot mechanically require.
 - [x] Apply the capability-contract pattern to `session-start` and `wrap-up` without
   moving their policy into adapters.
-- [ ] Apply the capability-contract pattern to `triage-friction-log` without moving its
+- [x] Apply the capability-contract pattern to `triage-friction-log` without moving its
   policy into adapters.
 
 The bounded workflow slice is done when either runtime can execute the retro workflow
-and produce the same durable artifacts. The phase closes when `session-start`,
-`wrap-up`, and `triage-friction-log` carry equally explicit required and degraded paths.
+and produce the same durable artifacts. The phase is structurally complete:
+`session-start`, `wrap-up`, and `triage-friction-log` carry explicit required,
+degraded, held, resume, authority, and completion paths under shared definitions.
 
 ### Phase 4 — Make delegation and parallel lanes equivalent
 
@@ -325,15 +327,15 @@ either fact. Until such an artifact exists, uncertain classification continues t
 the full-panel route and issue `#32` remains the provenance boundary.
 
 PR `#596` then merged the shared integration contract for the lifecycle bookends. The
-remaining Phase 3 starter is the `feat/triage-integration-preflights` block under
-“Slice boundary and next starter” above and is mirrored in the latest handoff; update
-both together if its scope changes.
+triage integration slice completes that phase with config migration, frozen approval
+state, exact external-write authority and read-back, total outcomes, thin adapters, and
+declaration-derived hostile mutations.
 
 PR `#598` then moved the reusable lane-identity and forge-safety behavior exposed by
 cs-toolkit `#2086` into kit-owned engines and shared workflows. It deliberately leaves
 runtime launcher mechanics and downstream repo-owned engine adaptation outside the
-slice. The Phase 3 starter remains `feat/triage-integration-preflights`; this Phase 4
-slice neither replaces nor completes it.
+slice. The next sprint begins with the environment-capable launcher starter above; the
+triage slice does not implement it.
 
 Keep the trusted-client record as an observation at its stamped client and revision; do
 not turn it into a general instruction-loading guarantee.

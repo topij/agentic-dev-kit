@@ -14,10 +14,52 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-25 — PR `#598` delivers the kit-owned parallel identity boundary;
-the triage pipeline remains the following Phase 3 slice.
+Last updated: 2026-08-25 — the triage integration slice closes the structural Phase 3
+exit; the environment-capable Codex launcher is the next sprint boundary.
 
-## Latest session — 2026-08-25 (parallel lane ownership returns to the kit)
+## Latest session — 2026-08-25 (triage integration preflights complete the shared phase)
+
+**Theme —** The friction-triage pipeline now has config-owned, runtime-neutral input,
+authority, artifact, resume, and outcome contracts, while the optional deterministic
+engines remain honestly absent and runtime adapters remain thin.
+
+- **Configuration and migration lead the contract.** `triage` owns its analysis tier,
+  mode-separated active state, session-unique frozen/report patterns, optional engine
+  names, commit subject, and PR draft policy. Refreshed `init.sh` adds the whole block or
+  missing flat keys without replacing adopter values and refuses ambiguous YAML before
+  writing. Shared `paths`, tracker, notification, state, branch, and model sections stay
+  authoritative.
+
+- **Approval and resume evidence are act-time gates.** Merged config, sandbox-aware
+  atomic state, and the exact frozen inbox are required. The configured engine pair is
+  atomic; both absent selects agent-executed LLM-only behavior and a partial pair stops.
+  Scheduled approval requires notification send/thread read; an interactive run can
+  degrade to the current session. Exact canonical payload digests bind approval,
+  attempts persist before writes, and failed or ambiguous tracker/forge responses take
+  destination read-back before any retry.
+
+- **Partial success cannot lose the inbox.** Finalization waits until every approved
+  tracker payload is verified, then sweeps only explicitly accounted blocks that remain
+  byte-identical to the frozen snapshot. Parked, unmentioned, failed, ambiguous, edited,
+  and window-added entries remain active. Test mode cannot write tracker, friction/archive,
+  branch, commit, push, or PR state.
+
+- **Parity is structural without pretending engine availability.** The Claude and Codex
+  bindings translate invocation and mechanisms only. Runtime parity, README/getting-
+  started, adoption/upgrade guidance, the changelog, installer fixtures, declaration-
+  derived semantic tests, and hostile mutations carry the same contract. No Phase 4
+  launcher, model/effort calibration, lane reconciliation, or downstream cs-toolkit
+  adaptation is included.
+
+▶ Next: create `feat/codex-environment-capable-launcher` from current `origin/main`.
+Inventory supported Codex launch surfaces against the absolute descriptor/environment-
+replacement contract, select an environment-capable mechanism, and obtain live lane-
+isolation evidence before changing shared launcher guidance. Keep model/effort
+calibration and downstream adapter reconciliation in later slices.
+
+______________________________________________________________________
+
+## Session — 2026-08-25 (parallel lane ownership returns to the kit)
 
 **Theme —** Reusable lane identity, forge safety, and resume behavior now live in the
 kit-owned engines and shared workflows, while runtime adapters remain thin and

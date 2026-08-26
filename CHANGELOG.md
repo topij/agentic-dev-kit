@@ -42,6 +42,72 @@ starts.
 
 ---
 
+## #599 — 2026-08-25
+
+- **ADDED (config keys) — `triage` now owns the friction-triage analysis tier,
+  `triage.state_path`, `triage.gate_path`, the gate-digest-addressed
+  `triage.recovery_bundle_pattern`, frozen-inbox and report patterns, optional
+  draft/finalize engine names, commit subject, and PR
+  draft policy.** **Refresh `init.sh`, then run
+  `./init.sh --no-clobber`. The additive migration installs the block or missing flat
+  keys without replacing adopter values. Before retrying a preflight refusal, normalize
+  prompted init-owned sections to bare mappings with the shipped two-space child
+  indentation; keep a partial `triage` flat map at one consistent indentation. Rewrite
+  `review.bots` and `systemize.operator_logins` as complete same-line flow sequences,
+  and every other prompted or partial-`triage` value as a same-line scalar;
+  the shell-only migrator rejects YAML tags, anchors, aliases, block scalars, and block
+  children beneath prompted values, plus flow or quote continuations. Partial-`triage`
+  string fields also reject double-quoted backslash escapes. Quote strings
+  whose plain spelling YAML could resolve as a non-string; string fields must be
+  non-empty, and `triage.pr_draft` must be the plain boolean `true` or `false`. Block YAML on
+  other fields can still be refused; normalize any refused value to an ordinary
+  same-line form. Remove any separate
+  `config/friction-triage.yaml`; keep source/archive, engine directory, tracker,
+  notification, state root, branch pattern, and model mappings in their existing shared
+  config sections.**
+- **CHANGED (gate semantics) — `triage-friction-log` now requires merged config,
+  sandbox-aware atomic state, and an exact frozen inbox; treats its configured engine
+  pair atomically; requires notification send/thread read when unattended; permits an
+  explicit degraded interactive approval path; binds tracker authority to the exact
+  payload; reads back failed or ambiguous external writes; holds partial tracker
+  batches before finalization; sweeps only accounted byte-identical frozen blocks; and
+  prohibits tracker, source-document, and forge writes in test mode.** **Refresh
+  `docs/agentic-dev-kit/workflows/triage-friction-log.md`,
+  `.claude/commands/triage-friction-log.md`, and
+  `.agents/skills/triage-friction-log/SKILL.md` together. Replace both old adapters even
+  when locally retained: their runtime-specific approval/notification instructions do
+  not load the new shared gate. Preserve an operator-held state/report until approval,
+  tracker, sweep PR, and exact-head review evidence reach the terminal state named by
+  the workflow; never retry an ambiguous write or whole-sweep an older snapshot. Use
+  the interactive `recover` entry point for invalid live state; it preserves a recovery
+  bundle and prohibits abandonment when prior external-write absence is uncertain.
+  Keep malformed test-state recovery on the `test` entry and test sandbox; it may
+  quarantine only revalidated test state after exact approval and never selects live
+  or external-write paths. During interactive test-gate recovery, only a proven-dead
+  owner plus exact capture approval permits preserving existing test state or a
+  safe-restart receipt in an operator-held byte-preserving evidence bundle; do not
+  quarantine either artifact. With an active or uncertain owner, or during scheduled
+  or unattended execution, preserve the gate and artifact without writing a bundle or
+  intent. When the same approved interactive recovery proves state absent, publish a
+  durable `test-gate-recovery-intent`. A later `test` resumes only that intent and
+  consumes the verified `test-recovered-safe-to-restart` receipt under the replacement
+  test gate.
+  Before completing a merged sweep, read back its final `headRefOid` and require it to
+  equal the exact terminal PR-watch head and receipt persisted as `reviewed_head`;
+  keep an unsettled read-back separate as `observed_pr_head`. A replacement head or
+  missing terminal receipt remains operator-held even when the PR is merged.
+  During interactive stale-gate recovery, after proving owner termination and obtaining
+  exact approval, publish `gate-only-recovery-intent` before quarantining an old gate
+  with no active state, then retain its
+  `gate-only-operator-held` receipt and evidence bundle; do not treat gate quarantine
+  or a crash between transition steps as proof that a new draft is safe.
+  Treat an existing single-writer gate or an act-time state-digest mismatch as
+  operator-held; never replace, steal, or retry through it. Keep configured draft and
+  finalize engine fragments canonically beneath `paths.engines`; an absolute,
+  traversing, escaping-symlink, or non-regular target now hard-stops.**
+
+---
+
 ## #598 — 2026-08-25
 
 - **BREAKING (gate semantics, engine CLI exit contract) — parallel reconciliation no

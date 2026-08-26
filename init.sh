@@ -192,33 +192,45 @@ get_field() {
   wantsub="$2"
   keyre="$3"
   awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" "$AWK_COMMENT_IDX"'
+    function emit_value(line,   idx, rest, cidx) {
+      idx = index(line, ":")
+      rest = substr(line, idx + 1)
+      cidx = comment_idx(rest)
+      if (cidx > 0) { rest = substr(rest, 1, cidx - 1) }
+      gsub(/^[ \t]+|[ \t]+$/, "", rest)
+      if (length(rest) >= 2 && substr(rest, 1, 1) == "\"" && substr(rest, length(rest), 1) == "\"") {
+        rest = substr(rest, 2, length(rest) - 2)
+      }
+      print rest
+    }
     BEGIN { cursec = ""; cursub = "" }
     {
       line = $0
-      if (line ~ /^[A-Za-z_][A-Za-z0-9_]*:[ \t]*$/) {
+      if (line ~ /^[A-Za-z_][A-Za-z0-9_.-]*:[ \t]*$/) {
         cursec = line
         gsub(/^[ \t]+|[ \t]+$/, "", cursec)
         cursub = ""
         next
       }
-      if (line ~ /^  [A-Za-z_][A-Za-z0-9_]*:[ \t]*$/) {
+      if (line ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:[ \t]*$/) {
+        if (cursec == wantsec && wantsub == "" && line ~ keyre) {
+          emit_value(line)
+          exit
+        }
         cursub = line
         gsub(/^[ \t]+|[ \t]+$/, "", cursub)
         next
       }
+      # An exact two-space scalar is a sibling of any preceding subsection,
+      # not its child. Reset scope before matching flat section fields.
+      if (line ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:/) {
+        cursub = ""
+      }
       if (cursec == wantsec && cursub == wantsub && line ~ keyre) {
-        idx = index(line, ":")
-        rest = substr(line, idx + 1)
-        cidx = comment_idx(rest)
-        if (cidx > 0) { rest = substr(rest, 1, cidx - 1) }
-        gsub(/^[ \t]+|[ \t]+$/, "", rest)
         # Strip one MATCHING pair of double quotes, the way kitconfig does. The
         # old independent-ends gsub ate the closing quote of a value that only
         # ENDS with one (`he said "hi"` -> `he said "hi`) — panel round on #87.
-        if (length(rest) >= 2 && substr(rest, 1, 1) == "\"" && substr(rest, length(rest), 1) == "\"") {
-          rest = substr(rest, 2, length(rest) - 2)
-        }
-        print rest
+        emit_value(line)
         exit
       }
     }
@@ -241,36 +253,49 @@ set_field() {
   newval="$4"
   tmpfile="${CONFIG_FILE}.tmp.$$"
   newval="$newval" awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" "$AWK_COMMENT_IDX"'
-    BEGIN { cursec = ""; cursub = ""; newval = ENVIRON["newval"] }
+    function emit_replacement(line,   idx, prefix, rest, cidx, comment) {
+      idx = index(line, ":")
+      prefix = substr(line, 1, idx)
+      rest = substr(line, idx + 1)
+      cidx = comment_idx(rest)
+      if (cidx > 0) {
+        comment = substr(rest, cidx)
+        printf "%s %s  %s\n", prefix, newval, comment
+      } else {
+        printf "%s %s\n", prefix, newval
+      }
+      changed = 1
+    }
+    BEGIN { cursec = ""; cursub = ""; newval = ENVIRON["newval"]; changed = 0 }
     {
       line = $0
-      if (line ~ /^[A-Za-z_][A-Za-z0-9_]*:[ \t]*$/) {
+      if (line ~ /^[A-Za-z_][A-Za-z0-9_.-]*:[ \t]*$/) {
         cursec = line
         gsub(/^[ \t]+|[ \t]+$/, "", cursec)
         cursub = ""
         print line
         next
       }
-      if (line ~ /^  [A-Za-z_][A-Za-z0-9_]*:[ \t]*$/) {
+      if (line ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:[ \t]*$/) {
+        if (!changed && cursec == wantsec && wantsub == "" && line ~ keyre) {
+          emit_replacement(line)
+          next
+        }
         cursub = line
         gsub(/^[ \t]+|[ \t]+$/, "", cursub)
         print line
         next
       }
-      if (cursec == wantsec && cursub == wantsub && line ~ keyre) {
-        idx = index(line, ":")
-        prefix = substr(line, 1, idx)
-        rest = substr(line, idx + 1)
+      # Keep the write-side scope transition byte-for-byte equivalent to the
+      # reader above: a two-space scalar leaves the preceding subsection.
+      if (line ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:/) {
+        cursub = ""
+      }
+      if (!changed && cursec == wantsec && cursub == wantsub && line ~ keyre) {
         # comment_idx (shared above) finds the comment to re-attach — a blind
         # index() re-attached the tail of the old value as a growing
         # pseudo-comment on every re-run (issue #62).
-        cidx = comment_idx(rest)
-        if (cidx > 0) {
-          comment = substr(rest, cidx)
-          printf "%s %s  %s\n", prefix, newval, comment
-        } else {
-          printf "%s %s\n", prefix, newval
-        }
+        emit_replacement(line)
         next
       }
       print line
@@ -332,7 +357,7 @@ append_to_section() {
       close(blockfile)
     }
     index($0, section) == 1 && $0 ~ /^[A-Za-z_]/ { inside = 1; header = NR }
-    inside && NR != header && $0 ~ /^[A-Za-z_][A-Za-z0-9_]*:/ && !inserted {
+    inside && NR != header && $0 ~ /^[A-Za-z_][A-Za-z0-9_.-]*:/ && !inserted {
       emit()
       inserted = 1
       inside = 0
@@ -367,6 +392,24 @@ ensure_review_key() {
   fi
 }
 
+# Add one flat `triage:` key if the section does not already define it. Existing
+# values are adopter policy and remain untouched; preflight proves the section is
+# a shape this line-oriented writer can extend without changing its meaning.
+ensure_triage_key() {
+  key="$1"
+  block="$2"
+  if [ -n "$(section_lines triage: "$CONFIG_FILE" | grep -E "^[[:space:]]+$key:")" ]; then
+    return 0
+  fi
+  append_to_section "triage:" "$block"
+  if [ -n "$(section_lines triage: "$CONFIG_FILE" | grep -E "^[[:space:]]+$key:")" ]; then
+    echo "added triage.$key to config/dev-model.yaml"
+  else
+    echo "error: could not add triage.$key to $CONFIG_FILE." >&2
+    return 1
+  fi
+}
+
 # The 1-based line range [start end] of a top-level section's body, or "0 0" if
 # the section is absent. A section runs from its header to the next line that
 # starts in column 1 with a key.
@@ -381,7 +424,7 @@ section_range() {
     # reader that reported the last one would have the two helpers disagreeing
     # about which block they are talking about on a duplicated section.
     !start && index($0, section) == 1 && $0 ~ /^[A-Za-z_]/ { inside = 1; start = NR; next }
-    inside && /^[A-Za-z_][A-Za-z0-9_]*:/ { print start + 1, NR - 1; found = 1; exit }
+    inside && /^[A-Za-z_][A-Za-z0-9_.-]*:/ { print start + 1, NR - 1; found = 1; exit }
     END { if (!found) print (inside ? start + 1 : 0), (inside ? NR : 0) }
   ' "$2"
 }
@@ -471,7 +514,7 @@ preflight_migration_config() {
   if awk '
     BEGIN {
       owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
-      owned["vcs"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
+      owned["vcs"] = owned["triage"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
       owned["notify"] = owned["models"] = 1
     }
     /^[[:space:]]*($|#)/ { next }
@@ -520,7 +563,7 @@ preflight_migration_config() {
     /^systemize:[[:space:]]*$/ { in_systemize = 1; next }
     in_systemize && /^[^[:space:]]/ { in_systemize = 0 }
     in_systemize && /^[[:space:]]+[^[:space:]#]/ {
-      if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_]*:/) unsafe = 1
+      if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_]*:([[:space:]]|$)/) unsafe = 1
       key = $0
       sub(/^  /, "", key)
       sub(/:.*/, "", key)
@@ -536,6 +579,341 @@ preflight_migration_config() {
     echo "error: the systemize section contains a key or operator_logins value init.sh cannot rewrite safely." >&2
     echo "  Indent bare scalar keys with two spaces and use simple login strings:" >&2
     echo '    operator_logins: [first-login, second-login]' >&2
+    echo "  No migration was applied." >&2
+    exit 1
+  fi
+
+  if awk '
+    /^triage:[[:space:]]*$/ { in_triage = 1; next }
+    in_triage && /^[^[:space:]]/ { in_triage = 0 }
+    in_triage && /^[[:space:]]*($|#)/ { next }
+    in_triage {
+      if ($0 ~ /\t/ || $0 !~ /^ +[A-Za-z_][A-Za-z0-9_]*:([[:space:]]|$)/) {
+        unsafe = 1
+        next
+      }
+      match($0, /^ */)
+      if (!child_indent) child_indent = RLENGTH
+      if (RLENGTH < 2) unsafe = 1
+      if (RLENGTH != child_indent) unsafe = 1
+      key = $0
+      sub(/^ +/, "", key)
+      sub(/:.*/, "", key)
+      if (seen_child[key]++) unsafe = 1
+    }
+    END { exit(unsafe ? 0 : 1) }
+  ' "$CONFIG_FILE"; then
+    echo "error: the triage section contains a key init.sh cannot migrate safely." >&2
+    echo "  Use unique bare scalar keys at one consistent indentation; do not use" >&2
+    echo "  quoted, tagged, anchored, explicit, duplicated, or nested key forms." >&2
+    echo "  No migration was applied." >&2
+    exit 1
+  fi
+
+  # Every field get_field/set_field can reach lives beneath an init-owned
+  # mapping. Refuse ambiguous child keys before migration writes: the helpers
+  # read the first match, while YAML consumers may resolve a later duplicate.
+  # Multi-line flow collections are also outside this line parser's grammar.
+  # Their continuation indentation is not structural YAML indentation, so a
+  # nested flow key can otherwise look exactly like a sibling field here.
+  if awk '
+    function flow_text(text,   value) {
+      value = text
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      if (value ~ /^-[[:space:]]+/) sub(/^-[[:space:]]+/, "", value)
+      while (value ~ /^[!&][^[:space:]]+[[:space:]]+/) {
+        sub(/^[!&][^[:space:]]+[[:space:]]+/, "", value)
+      }
+      return value
+    }
+    function starts_flow(text,   value, first) {
+      value = flow_text(text)
+      first = substr(value, 1, 1)
+      return first == "[" || first == "{"
+    }
+    function starts_quoted(text,   value, first, sqc) {
+      value = flow_text(text)
+      first = substr(value, 1, 1)
+      sqc = sprintf("%c", 39)
+      return first == "\"" || first == sqc
+    }
+    function has_unsupported_line_owned_syntax(text,   value, first) {
+      value = text
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      first = substr(value, 1, 1)
+      return first == "!" || first == "&" || first == "*" ||
+             first == "|" || first == ">"
+    }
+    function is_semantically_empty(text,   value) {
+      value = text
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      return value == "" || substr(value, 1, 1) == "#"
+    }
+    function valid_triage_string(text,   value, lower, sqc) {
+      value = text
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      if (starts_quoted(value)) {
+        sqc = sprintf("%c", 39)
+        if ((substr(flow_text(value), 1, 1) == "\"" && value ~ /\\/) ||
+            !complete_quoted(value) ||
+            value ~ /^""([[:space:]]+#.*)?$/ ||
+            value ~ "^" sqc sqc "([[:space:]]+#.*)?$") return 0
+        return 1
+      }
+      sub(/[[:space:]]+#.*/, "", value)
+      gsub(/[[:space:]]+$/, "", value)
+      if (value !~ /^[A-Za-z_.\/][-A-Za-z0-9_.\/{}+]*$/) return 0
+      lower = tolower(value)
+      if (lower ~ /^(true|false|null|yes|no|on|off|~|[-+]?[0-9]+([.][0-9]+)?|[-+]?[.](inf|nan))$/) return 0
+      return 1
+    }
+    function complete_quoted(text,   value, n, i, c, nextc, quote, sqc, closed, spaced) {
+      value = flow_text(text)
+      if (!starts_quoted(value)) return 1
+      n = length(value)
+      sqc = sprintf("%c", 39)
+      quote = substr(value, 1, 1)
+      for (i = 2; i <= n; i++) {
+        c = substr(value, i, 1)
+        nextc = substr(value, i + 1, 1)
+        if (quote == "\"" && c == "\\") { i++; continue }
+        if (c == quote) {
+          if (quote == sqc && nextc == sqc) { i++; continue }
+          closed = 1
+          i++
+          break
+        }
+      }
+      if (!closed) return 0
+      for (; i <= n; i++) {
+        c = substr(value, i, 1)
+        if (c ~ /[[:space:]]/) { spaced = 1; continue }
+        if (c == "#" && spaced) return 1
+        return 0
+      }
+      return 1
+    }
+    function complete_flow(text,   value, n, i, c, nextc, prev, quote, sqc, square, curly, closed) {
+      value = flow_text(text)
+      if (!starts_flow(value)) return 1
+      n = length(value)
+      sqc = sprintf("%c", 39)
+      prev = " "
+      for (i = 1; i <= n; i++) {
+        c = substr(value, i, 1)
+        nextc = substr(value, i + 1, 1)
+        if (quote != "") {
+          if (quote == "\"" && c == "\\") { i++; continue }
+          if (c == quote) {
+            if (quote == sqc && nextc == sqc) { i++; continue }
+            quote = ""
+          }
+          continue
+        }
+        if (c == "\"" || c == sqc) { quote = c; continue }
+        if (c == "#" && prev ~ /[[:space:]]/) break
+        if (closed) {
+          if (c !~ /[[:space:]]/) return 0
+          prev = c
+          continue
+        }
+        if (c == "[") square++
+        else if (c == "]") square--
+        else if (c == "{") curly++
+        else if (c == "}") curly--
+        if (square < 0 || curly < 0) return 0
+        if (square == 0 && curly == 0) closed = 1
+        prev = c
+      }
+      return closed && quote == ""
+    }
+    BEGIN {
+      owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
+      owned["vcs"] = owned["triage"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
+      owned["notify"] = owned["models"] = 1
+      line_owned["project", "name"] = 1
+      line_owned["runtime", "default"] = 1
+      line_owned["systemize", "operator_logins"] = 1
+      line_owned["tracker", "backend"] = 1
+      line_owned["tracker", "project_name"] = 1
+      line_owned["tracker", "url"] = 1
+      line_owned["vcs", "protected_branch"] = 1
+      line_owned["notify", "user_key"] = 1
+      line_owned["review", "bots"] = 1
+      line_owned["review", "fallback_command"] = 1
+      line_owned["paths", "engines"] = 1
+      line_owned["paths", "handoff"] = 1
+      line_owned["paths", "handoff_history"] = 1
+      line_owned["paths", "friction_log"] = 1
+      line_owned["paths", "friction_log_archive"] = 1
+      line_owned["models", "cheap"] = 1
+      line_owned["models", "default"] = 1
+      line_owned["models", "expensive"] = 1
+      sequence_owned["systemize", "operator_logins"] = 1
+      sequence_owned["review", "bots"] = 1
+      linear_owned["team_id"] = linear_owned["project_id"] = 1
+      triage_string["analysis_tier"] = triage_string["state_path"] = 1
+      triage_string["gate_path"] = triage_string["recovery_bundle_pattern"] = 1
+      triage_string["frozen_inbox_pattern"] = triage_string["report_root"] = 1
+      triage_string["report_pattern"] = triage_string["draft_engine"] = 1
+      triage_string["finalize_engine"] = triage_string["commit_subject"] = 1
+      triage_bool["pr_draft"] = 1
+    }
+    /^[[:space:]]*($|#)/ { next }
+    /^[^[:space:]]/ {
+      cursec = $0
+      sub(/:.*/, "", cursec)
+      cursub = ""
+      body_seen = 0
+      allow_indentless_sequence = 0
+      empty_line_owned = 0
+      empty_linear_owned = 0
+      linear_seen = 0
+      next
+    }
+    !owned[cursec] { next }
+    # triage has its own preceding flat-map validator and indent-preserving
+    # writer. It is not read or rewritten by the exact-indent prompt helpers,
+    # but it shares the same no-multiline-flow/quoted-scalar grammar.
+    cursec == "triage" {
+      match($0, /^ */)
+      content = substr($0, RLENGTH + 1)
+      value = content
+      if (value ~ /^[A-Za-z_][A-Za-z0-9_.-]*:([[:space:]]|$)/) {
+        key = value
+        sub(/:.*/, "", key)
+        sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
+      }
+      if ((!triage_string[key] && !triage_bool[key]) ||
+          has_unsupported_line_owned_syntax(value) || starts_flow(value) ||
+          (triage_string[key] && !valid_triage_string(value)) ||
+          (triage_bool[key] && flow_text(value) !~ /^(true|false)([[:space:]]+#.*)?$/)) unsafe = 1
+      next
+    }
+    {
+      match($0, /^ */)
+      indent = RLENGTH
+      content = substr($0, indent + 1)
+
+      # The prompt reader/writer owns exact two-space sibling keys. Requiring
+      # that same grammar here keeps YAML structure and migration scope aligned;
+      # a deeper first item can otherwise turn the section into a sequence while
+      # remaining invisible to get_field/set_field.
+      if (!body_seen) {
+        if (indent != 2 ||
+            content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:([[:space:]]|$)/) {
+          unsafe = 1
+          next
+        }
+        body_seen = 1
+      }
+
+      if (indent == 2) {
+        if (content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:([[:space:]]|$)/) {
+          # YAML permits an indentless block sequence only after an empty-valued
+          # sibling key introduced it. Every other exact-sibling continuation is
+          # outside the line migrator grammar.
+          if (content ~ /^-/ && allow_indentless_sequence) {
+            if ((starts_flow(content) && !complete_flow(content)) ||
+                (starts_quoted(content) && !complete_quoted(content))) unsafe = 1
+            next
+          }
+          unsafe = 1
+          next
+        }
+        empty_line_owned = 0
+        key = content
+        sub(/:.*/, "", key)
+        if (seen_child[cursec, key]++) unsafe = 1
+        value = content
+        sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
+        if (line_owned[cursec, key] &&
+            has_unsupported_line_owned_syntax(value)) unsafe = 1
+        if (line_owned[cursec, key]) {
+          if (sequence_owned[cursec, key]) {
+            if (!is_semantically_empty(value) &&
+                (!starts_flow(value) || substr(flow_text(value), 1, 1) != "[")) unsafe = 1
+          } else if (starts_flow(value)) {
+            unsafe = 1
+          }
+        }
+        if (starts_flow(value) && !complete_flow(value)) unsafe = 1
+        if (starts_quoted(value) && !complete_quoted(value)) unsafe = 1
+        cursub = ""
+        linear_seen = 0
+        allow_indentless_sequence = 0
+        if (is_semantically_empty(value)) {
+          if (line_owned[cursec, key]) {
+            empty_line_owned = 1
+          } else {
+            cursub = key
+            allow_indentless_sequence = 1
+          }
+        }
+        if (cursec == "tracker" && key == "linear" && cursub != "linear") unsafe = 1
+        if (cursec == "tracker" && key == "linear") allow_indentless_sequence = 0
+        next
+      }
+
+      # A line-owned value is a scalar or same-line collection. Any child node
+      # would be invisible to get_field and left behind by set_field.
+      if (empty_line_owned) unsafe = 1
+      if (cursec == "tracker" && cursub == "linear" &&
+          empty_linear_owned && indent != 4) unsafe = 1
+
+      # A flow value placed on a continuation line is structurally valid YAML
+      # but invisible to the prompt helpers, and a multi-line flow begun under
+      # any nested key can later present a nested key at sibling indentation.
+      if (content ~ /^-[[:space:]]+/) {
+        if ((starts_flow(content) && !complete_flow(content)) ||
+            (starts_quoted(content) && !complete_quoted(content))) unsafe = 1
+      } else if (starts_flow(content) || starts_quoted(content)) unsafe = 1
+      nested_value = content
+      if (nested_value ~ /^-?[[:space:]]*[A-Za-z_][A-Za-z0-9_.-]*:/) {
+        sub(/^-?[[:space:]]*[A-Za-z_][A-Za-z0-9_.-]*:/, "", nested_value)
+        if (starts_flow(nested_value) && !complete_flow(nested_value)) unsafe = 1
+        if (starts_quoted(nested_value) && !complete_quoted(nested_value)) unsafe = 1
+      }
+
+      if (cursec == "tracker" && cursub == "linear") {
+        if (!linear_seen &&
+            (indent != 4 ||
+             content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:([[:space:]]|$)/)) {
+          unsafe = 1
+          next
+        }
+        if (indent == 4) {
+          if (content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:([[:space:]]|$)/) {
+            unsafe = 1
+            next
+          }
+          key = content
+          sub(/:.*/, "", key)
+          empty_linear_owned = 0
+          if (seen_linear[key]++) unsafe = 1
+          value = content
+          sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
+          if (linear_owned[key] &&
+              has_unsupported_line_owned_syntax(value)) unsafe = 1
+          if (linear_owned[key] && starts_flow(value)) unsafe = 1
+          if (starts_flow(value) && !complete_flow(value)) unsafe = 1
+          if (starts_quoted(value) && !complete_quoted(value)) unsafe = 1
+          if (linear_owned[key] && is_semantically_empty(value)) {
+            empty_linear_owned = 1
+          }
+          linear_seen = 1
+        }
+      }
+    }
+    END { exit(unsafe ? 0 : 1) }
+  ' "$CONFIG_FILE"; then
+    echo "error: an init-owned config section contains an ambiguous child key." >&2
+    echo "  Use unique bare mapping keys at the shipped indentation and keep" >&2
+    echo "  prompted values on their key line without tags, anchors, aliases, or block scalars;" >&2
+    echo "  review.bots and systemize.operator_logins require complete same-line flow sequences;" >&2
+    echo "  every other prompted field requires a same-line scalar, and flow mappings are unsupported;" >&2
+    echo "  quoted scalars must also finish on their key line;" >&2
+    echo "  tracker.linear must be a plain nested map." >&2
     echo "  No migration was applied." >&2
     exit 1
   fi
@@ -613,6 +991,38 @@ migrate_kit_schema() {
 '
     echo "stamped kit.version=2 in config/dev-model.yaml"
   fi
+
+  if ! grep -q '^triage:' "$CONFIG_FILE"; then
+    insert_before_section "systemize:" 'triage:
+  # Shared triage-friction-log workflow settings. Runtime adapters translate
+  # invocation and available mechanisms only; policy stays in the shared workflow.
+  analysis_tier: default
+  state_path: "state/triage/triage-pipeline-state_{mode}.json"
+  gate_path: "state/triage/triage-pipeline-gate_{mode}.lock"
+  recovery_bundle_pattern: "state/triage/recovery-bundle_{mode}_{gate_digest}.json"
+  frozen_inbox_pattern: "state/triage/frozen-inbox_{mode}_{date}_{session}.json"
+  report_root: reports
+  report_pattern: "reports/triage_{mode}_{date}_{session}.md"
+  # Optional deterministic integration, resolved beneath paths.engines.
+  draft_engine: triage_friction_log.py
+  finalize_engine: finalize_triage.py
+  commit_subject: "docs(triage): graduate friction-log entries"
+  pr_draft: false
+'
+    echo "added triage workflow config to config/dev-model.yaml"
+  fi
+
+  ensure_triage_key analysis_tier '  analysis_tier: default'
+  ensure_triage_key state_path '  state_path: "state/triage/triage-pipeline-state_{mode}.json"'
+  ensure_triage_key gate_path '  gate_path: "state/triage/triage-pipeline-gate_{mode}.lock"'
+  ensure_triage_key recovery_bundle_pattern '  recovery_bundle_pattern: "state/triage/recovery-bundle_{mode}_{gate_digest}.json"'
+  ensure_triage_key frozen_inbox_pattern '  frozen_inbox_pattern: "state/triage/frozen-inbox_{mode}_{date}_{session}.json"'
+  ensure_triage_key report_root '  report_root: reports'
+  ensure_triage_key report_pattern '  report_pattern: "reports/triage_{mode}_{date}_{session}.md"'
+  ensure_triage_key draft_engine '  draft_engine: triage_friction_log.py'
+  ensure_triage_key finalize_engine '  finalize_engine: finalize_triage.py'
+  ensure_triage_key commit_subject '  commit_subject: "docs(triage): graduate friction-log entries"'
+  ensure_triage_key pr_draft '  pr_draft: false'
 
   if ! grep -q '^systemize:' "$CONFIG_FILE"; then
     insert_before_section "tracker:" 'systemize:
