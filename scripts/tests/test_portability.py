@@ -4430,12 +4430,6 @@ review:
   unavailable_markers:
     - "my in-house reviewer is offline"
 """,
-    "multiline_item": '''review:
-  bots: [bugbot]
-  unavailable_markers:
-    - "the reviewer could not run because the
-       account is out of credits"
-''',
     "no_trailing_newline": """review:
   bots: [bugbot]
   unavailable_markers:
@@ -4485,17 +4479,7 @@ def test_migration_never_corrupts_or_silently_drops_adopter_config(
     sys.path.insert(0, str(ENGINE_DIR / "lib"))
     import kitconfig  # noqa: PLC0415
 
-    if shape == "multiline_item":
-        # kitconfig has no multi-line-scalar support, so it reads a wrapped list
-        # item as a truncated one. PRE-EXISTING and unrelated to migration: it
-        # reads the input the same way. Asserted as a known divergence rather
-        # than skipped, so closing it later fails here instead of passing quietly.
-        assert kitconfig.loads(text) != parsed
-        assert kitconfig.loads(_MIGRATION_SHAPES[shape]) != yaml.safe_load(
-            _MIGRATION_SHAPES[shape]
-        ), "the divergence is in the reader, not in what the migration wrote"
-    else:
-        assert kitconfig.loads(text) == parsed
+    assert kitconfig.loads(text) == parsed
 
     # A decoy section with the same key names must be left exactly as it was.
     if shape == "decoy_section_first":
@@ -4596,20 +4580,21 @@ def test_the_instruction_matches_the_list_style(
     [
         'review:\n  unavailable_markers:\n    ["mine", "other"]\n',
         'review:\n  unavailable_markers: [\n    "mine",\n    "other"\n  ]\n',
+        'review:\n  unavailable_markers:\n    - "the reviewer could not run because the\n       account is out of credits"\n',
     ],
 )
 @pytest.mark.kit_repo_only("init.sh")
-def test_installer_refuses_multiline_flow_before_migration(
+def test_installer_refuses_unsupported_multiline_scalar_before_migration(
     tmp_path: Path, config: str
 ) -> None:
     path, proc = _run_init(
         tmp_path,
-        "refuses_multiline_flow",
+        "refuses_multiline_scalar",
         config,
         check=False,
     )
 
-    assert yaml.safe_load(config)["review"]["unavailable_markers"] == ["mine", "other"]
+    assert yaml.safe_load(config)["review"]["unavailable_markers"]
     assert proc.returncode == 1
     assert "ambiguous child key" in proc.stderr
     assert path.read_text(encoding="utf-8") == config

@@ -51,7 +51,7 @@ starts.
   keys without replacing adopter values. Before retrying a preflight refusal, normalize
   prompted init-owned sections to bare mappings with the shipped two-space child
   indentation; keep a partial `triage` flat map at one consistent indentation. Rewrite
-  flow values onto the same line as their keys or into block values; the
+  flow and quoted values onto the same line as their keys or into block values; the
   shell-only migrator will not infer structure from alternate or flow-continuation
   indentation. Remove any separate
   `config/friction-triage.yaml`; keep source/archive, engine directory, tracker,

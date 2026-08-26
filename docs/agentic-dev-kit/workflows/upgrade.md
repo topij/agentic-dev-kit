@@ -402,9 +402,9 @@ values, indentation, and trailing comments. Ambiguous top-level or child-key YAM
 before any migration write. The shell-only parser also stops on multi-line flow
 collections inside init-owned sections and on a sequence where an owned mapping is
 required; normalize prompted-section child keys to the shipped two-space indentation,
-keep a partial `triage` flat map at one consistent indentation, and rewrite flow values
-onto the same line as their keys or into block YAML before retrying. Do not retain or
-create a separate
+keep a partial `triage` flat map at one consistent indentation, and keep flow or quoted
+values on the same line as their keys or rewrite them as block YAML before retrying. Do
+not retain or create a separate
 `config/friction-triage.yaml`: `paths`, `tracker`, `notify`, `state`, `vcs`, and
 `models` remain the authoritative shared sections. After this step, verify that
 `triage.state_path` separates live/test mode and that the frozen-inbox and report

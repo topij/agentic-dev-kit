@@ -617,6 +617,38 @@ preflight_migration_config() {
       first = substr(value, 1, 1)
       return first == "[" || first == "{"
     }
+    function starts_quoted(text,   value, first, sqc) {
+      value = flow_text(text)
+      first = substr(value, 1, 1)
+      sqc = sprintf("%c", 39)
+      return first == "\"" || first == sqc
+    }
+    function complete_quoted(text,   value, n, i, c, nextc, quote, sqc, closed, spaced) {
+      value = flow_text(text)
+      if (!starts_quoted(value)) return 1
+      n = length(value)
+      sqc = sprintf("%c", 39)
+      quote = substr(value, 1, 1)
+      for (i = 2; i <= n; i++) {
+        c = substr(value, i, 1)
+        nextc = substr(value, i + 1, 1)
+        if (quote == "\"" && c == "\\") { i++; continue }
+        if (c == quote) {
+          if (quote == sqc && nextc == sqc) { i++; continue }
+          closed = 1
+          i++
+          break
+        }
+      }
+      if (!closed) return 0
+      for (; i <= n; i++) {
+        c = substr(value, i, 1)
+        if (c ~ /[[:space:]]/) { spaced = 1; continue }
+        if (c == "#" && spaced) return 1
+        return 0
+      }
+      return 1
+    }
     function complete_flow(text,   value, n, i, c, nextc, prev, quote, sqc, square, curly, closed) {
       value = flow_text(text)
       if (!starts_flow(value)) return 1
@@ -666,9 +698,21 @@ preflight_migration_config() {
       linear_seen = 0
       next
     }
+    !owned[cursec] { next }
     # triage has its own preceding flat-map validator and indent-preserving
-    # writer. It is not read or rewritten by the exact-indent prompt helpers.
-    !owned[cursec] || cursec == "triage" { next }
+    # writer. It is not read or rewritten by the exact-indent prompt helpers,
+    # but it shares the same no-multiline-flow/quoted-scalar grammar.
+    cursec == "triage" {
+      match($0, /^ */)
+      content = substr($0, RLENGTH + 1)
+      value = content
+      if (value ~ /^[A-Za-z_][A-Za-z0-9_.-]*:/) {
+        sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
+      }
+      if ((starts_flow(value) && !complete_flow(value)) ||
+          (starts_quoted(value) && !complete_quoted(value))) unsafe = 1
+      next
+    }
     {
       match($0, /^ */)
       indent = RLENGTH
@@ -692,7 +736,8 @@ preflight_migration_config() {
           # sibling key introduced it. Every other exact-sibling continuation is
           # outside the line migrator grammar.
           if (content ~ /^-/ && allow_indentless_sequence) {
-            if (starts_flow(content) && !complete_flow(content)) unsafe = 1
+            if ((starts_flow(content) && !complete_flow(content)) ||
+                (starts_quoted(content) && !complete_quoted(content))) unsafe = 1
             next
           }
           unsafe = 1
@@ -704,6 +749,7 @@ preflight_migration_config() {
         value = content
         sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
         if (starts_flow(value) && !complete_flow(value)) unsafe = 1
+        if (starts_quoted(value) && !complete_quoted(value)) unsafe = 1
         cursub = ""
         linear_seen = 0
         allow_indentless_sequence = 0
@@ -719,11 +765,15 @@ preflight_migration_config() {
       # A flow value placed on a continuation line is structurally valid YAML
       # but invisible to the prompt helpers, and a multi-line flow begun under
       # any nested key can later present a nested key at sibling indentation.
-      if (starts_flow(content)) unsafe = 1
+      if (content ~ /^-[[:space:]]+/) {
+        if ((starts_flow(content) && !complete_flow(content)) ||
+            (starts_quoted(content) && !complete_quoted(content))) unsafe = 1
+      } else if (starts_flow(content) || starts_quoted(content)) unsafe = 1
       nested_value = content
       if (nested_value ~ /^-?[[:space:]]*[A-Za-z_][A-Za-z0-9_.-]*:/) {
         sub(/^-?[[:space:]]*[A-Za-z_][A-Za-z0-9_.-]*:/, "", nested_value)
         if (starts_flow(nested_value) && !complete_flow(nested_value)) unsafe = 1
+        if (starts_quoted(nested_value) && !complete_quoted(nested_value)) unsafe = 1
       }
 
       if (cursec == "tracker" && cursub == "linear") {
@@ -743,6 +793,7 @@ preflight_migration_config() {
           value = content
           sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
           if (starts_flow(value) && !complete_flow(value)) unsafe = 1
+          if (starts_quoted(value) && !complete_quoted(value)) unsafe = 1
           linear_seen = 1
         }
       }
@@ -751,7 +802,7 @@ preflight_migration_config() {
   ' "$CONFIG_FILE"; then
     echo "error: an init-owned config section contains an ambiguous child key." >&2
     echo "  Use unique bare mapping keys at the shipped indentation and keep" >&2
-    echo "  flow collections on the same line as their key;" >&2
+    echo "  flow collections and quoted scalars on the same line as their key;" >&2
     echo "  tracker.linear must be a plain nested map." >&2
     echo "  No migration was applied." >&2
     exit 1

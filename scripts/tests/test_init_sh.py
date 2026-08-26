@@ -2515,7 +2515,7 @@ def test_installer_refuses_nested_flow_path_decoy_before_outside_write(
     parsed = yaml.safe_load(config)
     assert "handoff" not in parsed["paths"]
     assert str(outside_handoff) in repr(parsed["paths"]["metadata"])
-    repo = _fixture(tmp_path, config=config, git=True)
+    repo = _fixture(tmp_path, config=config, git=True, templates=True)
     existing = {
         path.relative_to(repo): path.read_bytes()
         for path in repo.rglob("*")
@@ -2528,7 +2528,83 @@ def test_installer_refuses_nested_flow_path_decoy_before_outside_write(
     assert "ambiguous child key" in result.stderr, result.stderr
     assert _config(repo) == config
     assert not outside_handoff.exists()
-    assert all((repo / path).read_bytes() == data for path, data in existing.items())
+    after = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+    assert after == existing
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".git" / "hooks" / "pre-push").exists()
+
+
+@pytest.mark.parametrize(
+    ("quote", "prefix"),
+    [
+        ('"', ""),
+        ("'", ""),
+        ('"', "!!str "),
+        ("'", "&saved "),
+    ],
+)
+def test_installer_refuses_multiline_quoted_path_decoy_before_outside_write(
+    tmp_path: Path, quote: str, prefix: str
+) -> None:
+    outside_handoff = tmp_path / "outside" / "handoff.md"
+    physical_target = Path(f"{outside_handoff}{quote}")
+    original_handoff = next(
+        line for line in shipped_config().splitlines() if line.startswith("  handoff:")
+    )
+    config = shipped_config().replace(
+        f"{original_handoff}\n",
+        f"  metadata: {prefix}{quote}retained text\n"
+        f"  handoff: {outside_handoff}{quote}\n",
+        1,
+    )
+    parsed = yaml.safe_load(config)
+    assert "handoff" not in parsed["paths"]
+    assert str(outside_handoff) in parsed["paths"]["metadata"]
+    repo = _fixture(tmp_path, config=config, git=True, templates=True)
+    existing = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert "ambiguous child key" in result.stderr, result.stderr
+    after = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+    assert after == existing
+    assert not outside_handoff.exists()
+    assert not physical_target.exists()
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".git" / "hooks" / "pre-push").exists()
+
+
+@pytest.mark.parametrize("quote", ['"', "'"])
+def test_installer_refuses_multiline_quote_decoy_in_triage(
+    tmp_path: Path, quote: str
+) -> None:
+    config = (
+        "triage:\n"
+        f"  metadata: {quote}retained text\n"
+        f"  state_path: state/hidden.json{quote}\n"
+    )
+    parsed = yaml.safe_load(config)
+    assert "state_path" not in parsed["triage"]
+    repo = _fixture(tmp_path, config=config, git=True)
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert "ambiguous child key" in result.stderr, result.stderr
+    assert _config(repo) == config
     assert not (repo / ".gitignore").exists()
     assert not (repo / ".git" / "hooks" / "pre-push").exists()
     assert not (repo / "docs").exists()
