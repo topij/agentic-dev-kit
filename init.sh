@@ -206,6 +206,11 @@ get_field() {
         gsub(/^[ \t]+|[ \t]+$/, "", cursub)
         next
       }
+      # An exact two-space scalar is a sibling of any preceding subsection,
+      # not its child. Reset scope before matching flat section fields.
+      if (line ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:/) {
+        cursub = ""
+      }
       if (cursec == wantsec && cursub == wantsub && line ~ keyre) {
         idx = index(line, ":")
         rest = substr(line, idx + 1)
@@ -256,6 +261,11 @@ set_field() {
         gsub(/^[ \t]+|[ \t]+$/, "", cursub)
         print line
         next
+      }
+      # Keep the write-side scope transition byte-for-byte equivalent to the
+      # reader above: a two-space scalar leaves the preceding subsection.
+      if (line ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:/) {
+        cursub = ""
       }
       if (!changed && cursec == wantsec && cursub == wantsub && line ~ keyre) {
         idx = index(line, ":")

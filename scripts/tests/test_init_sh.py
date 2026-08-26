@@ -1050,6 +1050,31 @@ def test_set_field_writes_backslashes_literally(tmp_path: Path) -> None:
     assert r"a\nb\\c" in _config(repo)
 
 
+def test_set_field_leaves_a_custom_child_mapping_for_its_sibling(
+    tmp_path: Path,
+) -> None:
+    config = (
+        "tracker:\n"
+        "  custom.section:\n"
+        "    retained: adopter-value\n"
+        '  url: "old-value"\n'
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    subprocess.run(
+        ["sh", "-c", _SET_FIELD_DRIVER, "_", '"new-value"'],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=_env(repo.parent),
+    )
+
+    tracker = yaml.safe_load(_config(repo))["tracker"]
+    assert tracker["custom.section"] == {"retained": "adopter-value"}
+    assert tracker["url"] == "new-value"
+
+
 _GET_FIELD_DRIVER = '''CONFIG_FILE="config/dev-model.yaml"
 eval "$(sed -n "/^AWK_COMMENT_IDX=/,/^'/p" init.sh)"
 eval "$(sed -n '/^get_field() {/,/^}/p' init.sh)"
@@ -2401,6 +2426,38 @@ def test_non_interactive_run_refuses_to_inherit_a_foreign_tracker(tmp_path: Path
 
     assert result.returncode == 1, result.stdout
     assert "does not match this repo's origin" in result.stderr, result.stderr
+
+
+def test_foreign_tracker_refusal_survives_a_custom_child_mapping(
+    tmp_path: Path,
+) -> None:
+    """A two-space custom mapping must not hide later sibling tracker scalars.
+
+    The broadened dotted/hyphenated key grammar originally left ``cursub`` set
+    after ``custom.section:``. The following ``project_name`` was then invisible,
+    bypassing the non-interactive foreign-tracker write boundary.
+    """
+    config = shipped_config().replace(
+        "tracker:\n",
+        "tracker:\n  custom.section:\n    retained: adopter-value\n",
+        1,
+    )
+    repo = _fixture(tmp_path, config=config, git=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/acme/widgets.git"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        env=_env(tmp_path),
+    )
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert "does not match this repo's origin" in result.stderr, result.stderr
+    tracker = yaml.safe_load(_config(repo))["tracker"]
+    assert tracker["custom.section"] == {"retained": "adopter-value"}
+    assert tracker["project_name"] == "topij/agentic-dev-kit"
 
 
 def test_non_interactive_run_is_unaffected_without_an_origin_remote(tmp_path: Path) -> None:

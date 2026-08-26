@@ -2898,31 +2898,42 @@ def _assert_triage_semantics(workflow: str) -> None:
     )
     isolated_test_recovery = workflow.split(
         "### Isolated test-state recovery\n", 1
-    )[1].split("\n## Preflight and engine mode", 1)[0]
-    for sentence in re.split(
-        r"(?<=[.!?])\s+", " ".join(isolated_test_recovery.split())
-    ):
-        if "held bundle" not in sentence:
-            continue
-        after_held_bundle = sentence.lower().split("held bundle", 1)[1]
-        following_words = re.findall(r"[a-z]+", after_held_bundle)[:6]
-        assert not any(
-            word.startswith(forbidden)
-            for word in following_words
-            for forbidden in (
-                "authoriz",
-                "permit",
-                "quarantine",
-                "replace",
-                "resume",
-                "restart",
-                "delete",
-                "rename",
-                "publish",
-                "write",
-                "create",
-            )
-        )
+    )[1].split("\n### Execution context", 1)[0]
+    assert " ".join(isolated_test_recovery.split()) == (
+        "The `test` entry resolves only the test state, test gate, and test "
+        "artifacts; it never reads or changes a live path. When interactive `test` "
+        "finds invalid test state, acquire the test gate and atomically capture its "
+        "exact raw bytes, digest, path observations, test identity, and resolved test "
+        "artifacts in a test recovery bundle before parsing. Do not follow an "
+        "unvalidated captured path. Require exact in-session operator approval of the "
+        "bundle digest, then immediately re-read and re-stat the test state and require "
+        "the captured digest, device, inode, mode, and link count. Atomically quarantine "
+        "only that unchanged test-state file and write "
+        "`test-recovered-safe-to-restart` under the same test gate. A later `test` "
+        "invocation may digest-check and replace only that receipt after successfully "
+        "parsing the current inbox under the test gate; a parse or act-time digest "
+        "failure preserves the receipt. The transition never reads or writes live "
+        "state, notification approval, tracker, source documents, archive, branch, "
+        "commit, push, PR, or merge. Unknown test-gate ownership remains operator-held "
+        "under the same capture, owner-death, and exact-approval rule, confined to test "
+        "paths. Only an interactive `test` that proves the owner dead and obtains exact "
+        "approval of the capture may preserve the unchanged gate and state or "
+        "safe-restart receipt in a unique state-present test-gate held bundle, then "
+        "stop operator-held. Without a crash-released exclusive recovery primitive, "
+        "neither engine-backed nor LLM-only execution may claim that separate gate, "
+        "state, and bundle files form one atomic transition. When that same approved "
+        "interactive recovery proves test state absent, capture that absence in the "
+        "test recovery bundle, then exclusively create and flush "
+        "`test-gate-recovery-intent` while the old test gate still exists, then follow "
+        "the Gate-only recovery transition ordering with test-confined paths. "
+        "Quarantine the old test gate only after the intent is durable; finish by "
+        "replacing the intent with `test-recovered-safe-to-restart` under the "
+        "replacement test gate. A later interactive `test` resumes only the recorded "
+        "absent-state intent; a state-present held bundle remains terminally "
+        "operator-held. Scheduled or unattended `test` with invalid state, a blocking "
+        "gate, recovery intent, or held bundle preserves everything operator-held and "
+        "performs no recovery mutation."
+    )
     assert "without changing test or live artifacts" in inputs[
         "Scheduled or unattended test, invalid test state"
     ][0]
@@ -3240,6 +3251,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "a state-present held bundle remains\nterminally operator-held",
             "a state-present held bundle authorizes gate quarantine and restart",
+            1,
+        ),
+        workflow.replace(
+            "Only an interactive `test` that proves\nthe owner dead and obtains exact approval of the capture may preserve",
+            "Any interactive `test`, without proving owner death or obtaining capture approval, may preserve",
             1,
         ),
         workflow.replace(

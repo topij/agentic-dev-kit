@@ -412,6 +412,8 @@ terminally operator-held. Scheduled or unattended `test` with invalid state, a b
 gate, recovery intent, or held bundle preserves everything operator-held and performs
 no recovery mutation.
 
+### Execution context
+
 Classify execution as interactive or scheduled/unattended from the actual invocation,
 not a branch name or worktree path. Non-interactive runs never wait for input. A
 scheduled draft with an active session resumes the held cycle or sends the documented
