@@ -383,7 +383,7 @@ ACTIVATE
         # Explicit lane roots are load-bearing: an inherited cockpit
         # DEVKIT_STATE_ROOT otherwise outranks this lane's marker and collapses
         # multiple headless lanes into one shared state directory.
-        local session_dir_abs descriptor_ttl base_oid lane_oid origin_url
+        local session_dir_abs descriptor_ttl base_oid lane_oid origin_url origin_push_url
         session_dir_abs="$(cd "$session_dir" && pwd -P)" || _die "could not resolve session path"
         descriptor_ttl="$(_config_scalar parallel "" descriptor_ttl_seconds)"
         [[ "$descriptor_ttl" =~ ^[1-9][0-9]*$ ]] \
@@ -394,9 +394,12 @@ ACTIVATE
             || _die "could not resolve lane head for the launch descriptor"
         origin_url="$(git -C "$worktree_abs" remote get-url origin)" \
             || _die "could not resolve origin URL for the launch descriptor"
+        origin_push_url="$(git -C "$worktree_abs" remote get-url --push origin)" \
+            || _die "could not resolve origin push URL for the launch descriptor"
         python3 - "$scope" "$branch" "$worktree_abs" "$sandbox_abs" "$repo_root_abs" "$base" \
             "$merge_class" "$(_lane_contract)" "$REFUSE_UNSANDBOXED_ENV_VALUE" "$runtime" "$launcher" \
-            "$session_dir_abs" "$descriptor_ttl" "$base_oid" "$lane_oid" "$origin_url" >&3 <<'PY'
+            "$session_dir_abs" "$descriptor_ttl" "$base_oid" "$lane_oid" "$origin_url" \
+            "$origin_push_url" >&3 <<'PY'
 import datetime as dt
 import json
 import os
@@ -408,8 +411,8 @@ import uuid
 (
     scope, branch, worktree, state_root, repo_root, base, merge_class,
     prompt_preamble, refuse_unsandboxed, runtime, launcher, session_dir,
-    descriptor_ttl, base_oid, lane_oid, origin_url,
-) = sys.argv[1:17]
+    descriptor_ttl, base_oid, lane_oid, origin_url, origin_push_url,
+) = sys.argv[1:18]
 issued = dt.datetime.now(dt.timezone.utc)
 expires = issued + dt.timedelta(seconds=int(descriptor_ttl))
 descriptor_path = Path(session_dir, "launch-descriptor.json")
@@ -429,6 +432,7 @@ descriptor = {
     "base_oid": base_oid,
     "lane_oid": lane_oid,
     "origin_url": origin_url,
+    "origin_push_url": origin_push_url,
     "merge_class": merge_class,
     "prompt_preamble": prompt_preamble,
     "env": {

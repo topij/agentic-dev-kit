@@ -55,6 +55,14 @@ REPOSITORY_OVERRIDE_KEYS = frozenset(
 )
 
 
+def _is_repository_override_key(key: str) -> bool:
+    return (
+        key in REPOSITORY_OVERRIDE_KEYS
+        or key == "GIT_CONFIG"
+        or key.startswith("GIT_CONFIG_")
+    )
+
+
 class LaunchError(RuntimeError):
     """A fail-closed launcher refusal."""
 
@@ -120,6 +128,21 @@ def _write_atomic(path: Path, value: object, *, exclusive: bool = False) -> None
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)
+    directory = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def _reserve_empty_regular_file(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
     directory = os.open(path.parent, os.O_RDONLY)
     try:
         os.fsync(directory)
@@ -224,6 +247,24 @@ def _git(cwd: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def _validate_descriptor_contract(descriptor: dict[str, Any], config_root: Path) -> None:
+    issuer = SCRIPT_DIR / "dev_session.sh"
+    _read_stable_regular_file(issuer)
+    try:
+        result = subprocess.run(
+            ["bash", str(issuer), "print-contract"],
+            cwd=config_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise LaunchError("cannot derive the canonical lane contract from the issuer") from exc
+    canonical = result.stdout.rstrip("\n")
+    if not canonical or descriptor.get("prompt_preamble") != canonical:
+        raise LaunchError("descriptor prompt preamble disagrees with the canonical issuer")
+
+
 def _process_start_fingerprint(pid: int) -> str | None:
     proc_stat = Path(f"/proc/{pid}/stat")
     if proc_stat.is_file():
@@ -285,6 +326,7 @@ def _observed_identity(process_nonce: str) -> dict[str, Any]:
         "marker_state_root": str(marker_root),
         "repo_root": str(repository),
         "origin_url": _git(cwd, "remote", "get-url", "origin"),
+        "origin_push_url": _git(cwd, "remote", "get-url", "--push", "origin"),
         "branch": branch,
         "persisted_branch": persisted_branch,
         "base": persisted_base,
@@ -294,7 +336,9 @@ def _observed_identity(process_nonce: str) -> dict[str, Any]:
         "environment": devkit_env,
         "pwd_environment": os.environ.get("PWD"),
         "repository_overrides_present": sorted(
-            key for key in REPOSITORY_OVERRIDE_KEYS - {"PWD"} if key in os.environ
+            key
+            for key in os.environ
+            if key != "PWD" and _is_repository_override_key(key)
         ),
         "process": process,
     }
@@ -310,6 +354,7 @@ def _expected_identity(descriptor: dict[str, Any]) -> dict[str, Any]:
             "state_root",
             "repo_root",
             "origin_url",
+            "origin_push_url",
             "branch",
             "base",
             "base_oid",
@@ -327,6 +372,7 @@ def _validate_observation(expected: dict[str, Any], observed: dict[str, Any]) ->
         "state_root",
         "repo_root",
         "origin_url",
+        "origin_push_url",
         "branch",
         "base",
         "base_oid",
@@ -434,6 +480,7 @@ def _child_main(arguments: argparse.Namespace) -> int:
         )
         if Path(descriptor["repo_root"]).resolve() != config_root:
             raise LaunchError("descriptor repository is foreign to the launcher configuration")
+        _validate_descriptor_contract(descriptor, config_root)
         process_nonce = _validate_child_authority(arguments, descriptor, raw, command)
         expected = _expected_identity(descriptor)
         observed = _observed_identity(process_nonce)
@@ -481,7 +528,7 @@ def _scrubbed_environment(descriptor: dict[str, Any]) -> dict[str, str]:
     environment = {
         key: value
         for key, value in os.environ.items()
-        if not key.startswith("DEVKIT_") and key not in REPOSITORY_OVERRIDE_KEYS
+        if not key.startswith("DEVKIT_") and not _is_repository_override_key(key)
     }
     environment.update(descriptor["env"])
     environment["PWD"] = descriptor["worktree"]
@@ -576,22 +623,51 @@ def _terminal_receipt(
     _write_atomic(receipt_path, receipt)
 
 
+def _process_group_exists(process_group: int) -> bool:
+    try:
+        os.killpg(process_group, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _wait_for_process_group_exit(
+    process: subprocess.Popen[bytes], deadline: float
+) -> int | None:
+    while time.monotonic() < deadline:
+        process.poll()
+        if not _process_group_exists(process.pid):
+            if process.returncode is None:
+                remaining = max(0.0, deadline - time.monotonic())
+                try:
+                    return process.wait(timeout=remaining)
+                except subprocess.TimeoutExpired:
+                    return None
+            return process.returncode
+        time.sleep(0.05)
+    return None
+
+
 def _terminate_process_group(
     process: subprocess.Popen[bytes], grace_seconds: int
 ) -> int:
-    if process.poll() is not None:
-        return process.returncode
     with contextlib.suppress(ProcessLookupError):
         os.killpg(process.pid, signal.SIGTERM)
-    try:
-        return process.wait(timeout=grace_seconds)
-    except subprocess.TimeoutExpired:
-        with contextlib.suppress(ProcessLookupError):
-            os.killpg(process.pid, signal.SIGKILL)
-        try:
-            return process.wait(timeout=grace_seconds)
-        except subprocess.TimeoutExpired as exc:
-            raise LaunchError("child process group survived forced termination") from exc
+    returncode = _wait_for_process_group_exit(
+        process, time.monotonic() + grace_seconds
+    )
+    if returncode is not None:
+        return returncode
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(process.pid, signal.SIGKILL)
+    returncode = _wait_for_process_group_exit(
+        process, time.monotonic() + grace_seconds
+    )
+    if returncode is None:
+        raise LaunchError("child process group survived forced termination")
+    return returncode
 
 
 def _wait_for_process_or_signal(
@@ -616,6 +692,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
     ) = _config_for_launcher()
     if Path(descriptor["repo_root"]).resolve() != config_root:
         raise LaunchError("descriptor repository is foreign to the launcher configuration")
+    _validate_descriptor_contract(descriptor, config_root)
     issued = _parse_timestamp(descriptor["issued_at"], "issued_at")
     expires = _parse_timestamp(descriptor["expires_at"], "expires_at")
     if int((expires - issued).total_seconds()) != configured_lifetime:
@@ -655,6 +732,19 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         _write_atomic(attempt_path, attempt, exclusive=True)
     except FileExistsError as exc:
         raise LaunchError("descriptor already has a launch attempt and cannot be reused") from exc
+    try:
+        _reserve_empty_regular_file(final_message)
+    except OSError as exc:
+        _terminal_receipt(
+            receipt_path,
+            attempt,
+            status="failed",
+            returncode=None,
+            caught_signal=None,
+            final_message=final_message,
+            error=f"cannot reserve empty final-message evidence: {exc}",
+        )
+        return 70
 
     ready_read, ready_write = os.pipe()
     ack_read, ack_write = os.pipe()
@@ -753,6 +843,8 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
                     process.stdin.write(combined)
                     process.stdin.close()
         returncode = None if error else _wait_for_process_or_signal(process, caught)
+        if returncode is not None and _process_group_exists(process.pid):
+            error = "child exited while its process group remained active"
         if caught or error:
             returncode = _terminate_process_group(process, termination_grace)
         assert returncode is not None

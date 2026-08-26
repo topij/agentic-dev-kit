@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import copy
 import datetime as dt
 import importlib.util
@@ -41,6 +42,7 @@ def _fake_codex(
     write_final: bool = True,
     corrupt_receipt: bool = False,
     ignore_sigterm: bool = False,
+    spawn_descendant: bool = False,
 ) -> None:
     sleep_line = "time.sleep(60)" if sleep else ""
     ignore_line = "signal.signal(signal.SIGTERM, signal.SIG_IGN)" if ignore_sigterm else ""
@@ -54,6 +56,13 @@ def _fake_codex(
         if write_final
         else "pass"
     )
+    descendant_line = (
+        "child = subprocess.Popen([sys.executable, '-c', "
+        "'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)']); "
+        "Path.cwd().parent.joinpath('descendant.pid').write_text(str(child.pid), encoding='utf-8')"
+        if spawn_descendant
+        else ""
+    )
     path.write_text(
         "#!/usr/bin/env python3\n"
         "import json, os, signal, subprocess, sys, time\n"
@@ -64,13 +73,16 @@ def _fake_codex(
         "result = {\n"
         "  'cwd': str(Path.cwd().resolve()),\n"
         "  'branch': subprocess.run(['git','branch','--show-current'], check=True, capture_output=True, text=True).stdout.strip(),\n"
+        "  'push_url': subprocess.run(['git','remote','get-url','--push','origin'], check=True, capture_output=True, text=True).stdout.strip(),\n"
         "  'env': {k: v for k, v in os.environ.items() if k.startswith('DEVKIT_')},\n"
         "  'gh_repo_present': 'GH_REPO' in os.environ,\n"
         "  'git_work_tree_present': 'GIT_WORK_TREE' in os.environ,\n"
+        "  'git_config_present': any(k == 'GIT_CONFIG' or k.startswith('GIT_CONFIG_') for k in os.environ),\n"
         "  'contract_first': prompt.startswith('LANE CONTRACT (binding):'),\n"
         "  'pid': os.getpid(),\n"
         "}\n"
         f"{ignore_line}\n"
+        f"{descendant_line}\n"
         f"{corrupt_line}\n"
         f"{final_line}\n"
         f"{sleep_line}\n",
@@ -86,6 +98,7 @@ def _install_repo(
     write_final: bool = True,
     corrupt_receipt: bool = False,
     ignore_sigterm: bool = False,
+    spawn_descendant: bool = False,
 ):
     remote = tmp_path / "origin.git"
     subprocess.run(
@@ -116,6 +129,7 @@ def _install_repo(
         write_final=write_final,
         corrupt_receipt=corrupt_receipt,
         ignore_sigterm=ignore_sigterm,
+        spawn_descendant=spawn_descendant,
     )
     (repo / "config").mkdir()
     (repo / "config" / "dev-model.yaml").write_text(
@@ -193,6 +207,9 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
         "DEVKIT_FOREIGN_LANE": "must-be-removed",
         "GH_REPO": "foreign/project",
         "GIT_WORK_TREE": str(tmp_path / "foreign-worktree"),
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "remote.origin.pushurl",
+        "GIT_CONFIG_VALUE_0": str(tmp_path / "foreign-origin"),
     }
 
     result = _run_launcher(engine_dir, descriptor, prompt, inherited)
@@ -213,6 +230,8 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
     assert final["env"] == descriptor["env"]
     assert final["gh_repo_present"] is False
     assert final["git_work_tree_present"] is False
+    assert final["git_config_present"] is False
+    assert final["push_url"] == descriptor["origin_push_url"]
     assert final["contract_first"] is True
     assert receipt["terminal"]["final_message_sha256"]
 
@@ -226,6 +245,7 @@ def test_correct_descriptor_cannot_launch_in_a_wrong_worktree() -> None:
         "state_root": "/sessions/lane/state",
         "repo_root": "/repo",
         "origin_url": "origin",
+        "origin_push_url": "origin",
         "branch": "dev/lane",
         "base": "main",
         "base_oid": "a" * 40,
@@ -266,6 +286,8 @@ def test_caller_supplied_identity_without_independent_observation_is_rejected() 
         ("branch", "dev/foreign"),
         ("base", "foreign-base"),
         ("state_root", "/foreign-state"),
+        ("origin_url", "/foreign-fetch"),
+        ("origin_push_url", "/foreign-push"),
         ("base_oid", "c" * 40),
         ("lane_oid", "d" * 40),
     ),
@@ -279,6 +301,7 @@ def test_foreign_identity_mutations_are_rejected(field: str, foreign: str) -> No
         "state_root": "/sessions/lane/state",
         "repo_root": "/repo",
         "origin_url": "origin",
+        "origin_push_url": "origin",
         "branch": "dev/lane",
         "base": "main",
         "base_oid": "a" * 40,
@@ -415,7 +438,7 @@ def test_forced_interruption_stops_child_and_records_terminal_outcome(tmp_path: 
         os.kill(child_pid, 0)
 
 
-def test_internal_child_requires_the_exclusive_parent_attempt(tmp_path: Path) -> None:
+def test_internal_child_requires_a_parent_attempt(tmp_path: Path) -> None:
     _repo, engine, _sessions, descriptor, _prompt, env = _install_repo(tmp_path)
     session_dir = Path(descriptor["session_dir"])
     descriptor_id = str(descriptor["descriptor_id"])
@@ -485,6 +508,9 @@ def test_corrupted_observation_cannot_be_terminalized_as_success(tmp_path: Path)
         )
     )
     assert receipt["status"] == "failed"
+    assert receipt["descriptor_id"] == descriptor["descriptor_id"]
+    assert receipt["request"]["descriptor_sha256"]
+    assert receipt["request"]["task_sha256"]
     assert "observed receipt changed" in receipt["terminal"]["error"]
 
 
@@ -522,11 +548,85 @@ def test_sigterm_ignoring_child_is_forcibly_stopped_within_the_configured_bound(
         pytest.fail("launcher never durably bound the child observation")
     child_pid = receipt["observed"]["process"]["pid"]
 
+    started = time.monotonic()
     process.send_signal(signal.SIGTERM)
     stdout, stderr = process.communicate(timeout=5)
+    elapsed = time.monotonic() - started
 
     assert process.returncode != 0, (stdout, stderr)
     terminal = json.loads(receipt_path.read_text(encoding="utf-8"))
     assert terminal["status"] == "interrupted"
+    assert elapsed < 2.5
     with pytest.raises(ProcessLookupError):
         os.kill(child_pid, 0)
+
+
+def test_descriptor_is_one_shot_after_a_successful_launch(tmp_path: Path) -> None:
+    _repo, engine, _sessions, descriptor, prompt, env = _install_repo(tmp_path)
+
+    first = _run_launcher(engine, descriptor, prompt, env)
+    second = _run_launcher(engine, descriptor, prompt, env)
+
+    assert first.returncode == 0, first.stderr
+    assert second.returncode != 0
+    assert "already has a launch attempt" in second.stderr
+
+
+def test_preexisting_final_message_path_blocks_launch(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    final_path = sessions / "probe" / f"launch-final-{descriptor['descriptor_id']}.txt"
+    final_path.write_text("stale evidence", encoding="utf-8")
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode != 0
+    receipt = json.loads(
+        (sessions / "probe" / f"launch-receipt-{descriptor['descriptor_id']}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert receipt["status"] == "failed"
+    assert "reserve empty final-message evidence" in receipt["terminal"]["error"]
+    assert final_path.read_text(encoding="utf-8") == "stale evidence"
+
+
+def test_rewritten_prompt_contract_is_rejected_before_launch(tmp_path: Path) -> None:
+    launcher = _load_launcher()
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    descriptor_path = Path(descriptor["descriptor_path"])
+    rewritten = copy.deepcopy(descriptor)
+    rewritten["prompt_preamble"] = "caller supplied identity"
+    descriptor_path.write_bytes(launcher._canonical_json(rewritten))
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode != 0
+    assert "canonical issuer" in result.stderr
+    assert not list(sessions.joinpath("probe").glob("launch-attempt-*.json"))
+
+
+def test_descendant_cannot_outlive_a_successful_child_leader(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, spawn_descendant=True
+    )
+    pid_path = sessions / "probe" / "descendant.pid"
+    descendant_pid: int | None = None
+    try:
+        result = _run_launcher(engine, descriptor, prompt, env)
+        assert result.returncode != 0
+        descendant_pid = int(pid_path.read_text(encoding="utf-8"))
+        receipt = json.loads(
+            (
+                sessions
+                / "probe"
+                / f"launch-receipt-{descriptor['descriptor_id']}.json"
+            ).read_text(encoding="utf-8")
+        )
+        assert receipt["status"] == "failed"
+        assert "process group remained active" in receipt["terminal"]["error"]
+        with pytest.raises(ProcessLookupError):
+            os.kill(descendant_pid, 0)
+    finally:
+        if descendant_pid is not None:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(descendant_pid, signal.SIGKILL)

@@ -392,16 +392,44 @@ ensure_review_key() {
   fi
 }
 
+# Print a top-level child key from one section, ignoring a same-named key nested
+# beneath another child. The section's own indentation is derived rather than fixed.
+flat_section_key_line() {
+  section="$1"
+  key="$2"
+  section_lines "$section" "$CONFIG_FILE" | awk -v key="$key" '
+    /^[[:space:]]*($|#)/ { next }
+    {
+      match($0, /^[[:space:]]*/)
+      indent = RLENGTH
+      if (minimum == 0 || indent < minimum) minimum = indent
+      lines[++count] = $0
+      indents[count] = indent
+    }
+    END {
+      for (i = 1; i <= count; i++) {
+        line = lines[i]
+        sub(/^[[:space:]]+/, "", line)
+        if (indents[i] == minimum && line ~ ("^" key ":[[:space:]]*")) {
+          print lines[i]
+          exit
+        }
+      }
+    }
+  '
+}
+
 # Add one flat `parallel:` key if the section does not already define it.
-# Existing values are adopter policy and remain untouched.
+# Existing flat values are adopter policy and remain untouched; nested names do
+# not suppress the required launcher key.
 ensure_parallel_key() {
   key="$1"
   block="$2"
-  if [ -n "$(section_lines parallel: "$CONFIG_FILE" | grep -E "^[[:space:]]+$key:")" ]; then
+  if [ -n "$(flat_section_key_line parallel: "$key")" ]; then
     return 0
   fi
   append_to_section "parallel:" "$block"
-  if [ -n "$(section_lines parallel: "$CONFIG_FILE" | grep -E "^[[:space:]]+$key:")" ]; then
+  if [ -n "$(flat_section_key_line parallel: "$key")" ]; then
     echo "added parallel.$key to config/dev-model.yaml"
   else
     echo "error: could not add parallel.$key to $CONFIG_FILE." >&2

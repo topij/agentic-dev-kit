@@ -42,6 +42,28 @@ starts.
 
 ---
 
+## #609 — 2026-08-26
+
+- **ADDED (engine CLI surface) — unattended Codex lanes now use a one-shot,
+  environment-capable launcher and durable descriptor/attempt/observation/terminal
+  receipt chain.** **Refresh `scripts/dev_session.sh`,
+  `scripts/launch_codex_lane.py`, `config/dev-model.yaml`, and the shared parallel
+  workflows `docs/agentic-dev-kit/workflows/parallel.md` and
+  `docs/agentic-dev-kit/workflows/parallel-headless.md` together; run
+  `./init.sh --no-clobber`; issue descriptors with
+  `new --headless --runtime codex` (or `DEVKIT_RUNTIME=codex`); and invoke the wrapper
+  rather than direct `codex exec` or runtime-native dispatch. Preserve the descriptor's
+  repository fetch/push identity, prompt contract, environment, process authority, and
+  one-shot evidence fields when integrating the output.**
+- **ADDED (config keys) — `parallel` now owns `codex_headless_command`,
+  `descriptor_ttl_seconds`, `observation_timeout_seconds`, and
+  `termination_grace_seconds`.** **Refresh `init.sh` and run
+  `./init.sh --no-clobber`; keep each launcher value as a flat `parallel` child. The
+  migrator preserves adopter-owned flat values and adds a shipped default when only a
+  same-named nested key exists.**
+
+---
+
 ## #599 — 2026-08-25
 
 - **ADDED (config keys) — `triage` now owns the friction-triage analysis tier,

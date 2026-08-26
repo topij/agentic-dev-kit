@@ -48,7 +48,8 @@ block it:
    `new` and cron/CI never set either field.
 
    The supported wrapper removes every inherited `DEVKIT_*` key, plus `GH_REPO`, Git
-   repository override variables, `PWD`, and `OLDPWD`; then it assigns every key from
+   repository override variables (including injected `GIT_CONFIG` / `GIT_CONFIG_*`
+   entries), `PWD`, and `OLDPWD`; then it assigns every key from
    `env` unconditionally and seeds `PWD` from the descriptor worktree. The child then
    resolves its physical cwd independently and rejects disagreement with that seeded
    value. Do not use `setdefault`, skip a key because it is already present, or rely
@@ -93,17 +94,20 @@ adapter or fixture.
 
 The wrapper is the supported mechanism because it owns the guarantees a native agent
 dispatch or direct `codex exec` call does not: worktree `cwd`, inherited-identity
-removal, descriptor environment replacement, one-shot attempt authority, and a
-child-side observer that reads Git, the marker, persisted lane metadata, filesystem
-relationships, and its own process before `exec`. It writes a receipt in the session
+removal, descriptor environment replacement, one-shot attempt and final-path authority,
+and a child-side observer that reads Git fetch/push origin identity, the marker,
+persisted lane metadata, filesystem relationships, a freshly derived canonical prompt
+contract, and its own process before `exec`. It writes a receipt in the session
 directory, binds the exact descriptor/task/combined-prompt bytes, and returns success
 only after the Codex command exits successfully and a durable terminal receipt binds
 the final-message bytes by digest.
 
 The descriptor and receipt fail closed on expiry or reuse; a moved descriptor; a
-foreign repository, worktree, origin, scope, state root, branch, base, commit, or merge
-class; a child process that does not hold the current launch capability; interruption;
-missing observation; nonzero child exit; or missing final text. A parent killed before
+foreign repository, worktree, origin fetch/push identity, scope, state root, branch,
+base, commit, prompt contract, or merge class; an occupied evidence path; a child
+process that does not hold the current launch capability; a child leader that exits
+while its process group remains; interruption; missing observation; nonzero child exit;
+or missing final text. A parent killed before
 it can finalize leaves the exclusive attempt record, so retry cannot silently reuse
 the descriptor. Issue a fresh lane descriptor only after accounting for the partial
 lane and attempt.

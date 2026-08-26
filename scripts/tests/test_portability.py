@@ -1617,6 +1617,29 @@ state:
         for key, value in shipped["parallel"].items()
         if key != "descriptor_ttl_seconds"
     }
+
+    nested_same_name = re.sub(
+        r"(?m)^parallel:\n(?:  [^\n]*\n)+",
+        "parallel:\n  custom:\n    termination_grace_seconds: 999\n",
+        config_path.read_text(encoding="utf-8"),
+        count=1,
+    )
+    config_path.write_text(nested_same_name, encoding="utf-8")
+    subprocess.run(
+        ["sh", "init.sh"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    migrated_nested = yaml.safe_load(
+        config_path.read_text(encoding="utf-8")
+    )["parallel"]
+
+    assert migrated_nested["termination_grace_seconds"] == shipped["parallel"][
+        "termination_grace_seconds"
+    ]
+    assert migrated_nested["custom"]["termination_grace_seconds"] == 999
     # The panel is what the fallback actually IS now; deleting its whole
     # migration block from init.sh previously passed the entire suite.
     panel = config["review"]["fallback_panel"]
@@ -2222,7 +2245,8 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
         REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "parallel-headless.md"
     ).read_text(encoding="utf-8")
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    release_entry = changelog.split("## #598", 1)[1].split("\n---", 1)[0]
+    release_entry_598 = changelog.split("## #598", 1)[1].split("\n---", 1)[0]
+    release_entry_609 = changelog.split("## #609", 1)[1].split("\n---", 1)[0]
     existing_identity_roles = {
         "scripts/dev_session.sh": "engine",
         "scripts/reconcile_sessions.sh": "engine",
@@ -2232,8 +2256,11 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
         "docs/agentic-dev-kit/workflows/parallel-headless.md": "workflow",
     }
     launcher_roles = {
+        "init.sh": "installer",
         "scripts/launch_codex_lane.py": "engine",
         "scripts/tests/test_codex_lane_launcher.py": "test",
+        "docs/agentic-dev-kit/workflows/upgrade.md": "workflow",
+        "docs/templates/AGENTS.md.tmpl": "template",
     }
     expected_roles = existing_identity_roles | launcher_roles
 
@@ -2245,7 +2272,16 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
     assert "Engines are **kit-owned**; config is **adopter-owned**" in upgrade
     assert re.search(r"assigns\s+every key from\s+`env` unconditionally", headless)
     assert re.search(r"Do\s+not use `setdefault`", headless)
-    assert all(path in release_entry for path in existing_identity_roles)
+    assert all(path in release_entry_598 for path in existing_identity_roles)
+    adopter_launcher_paths = {
+        "init.sh",
+        "config/dev-model.yaml",
+        "scripts/dev_session.sh",
+        "scripts/launch_codex_lane.py",
+        "docs/agentic-dev-kit/workflows/parallel.md",
+        "docs/agentic-dev-kit/workflows/parallel-headless.md",
+    }
+    assert all(path in release_entry_609 for path in adopter_launcher_paths)
 
 
 @pytest.mark.kit_repo_only(
@@ -13361,8 +13397,7 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     for text in (root_agents, template, merge_section, claude_rule):
         assert "pr_watch.py" in text
         assert "dev_session.sh" in text
-    assert "launch_codex_lane.py" in root_agents
-    assert "launch_codex_lane.py" in claude_rule
+        assert "launch_codex_lane.py" in text
 
 
 @pytest.mark.kit_repo_only("saved_plans/codex-hooks-live-probe/.codex/hooks.json")

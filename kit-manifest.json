@@ -41,7 +41,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "883583f2598a1a7cd66cdfadca7b8da96d10e2cbbd12704460146f2f81dd5044"
+      "sha256": "f0895091fcd3cac1cf86eebc4006297b67843edf4bdb4065f8f399e99ada3dd7"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -65,7 +65,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "043a94141ff1d734c79c1e177a54158b92807b349bc8e9d7d8e3582ddab59e28"
+      "sha256": "8f1aaec0cfcd843600d0593ea6b9b3ba196b7bcc58a4df105bddc3a82a2f59ac"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -73,7 +73,7 @@
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "3feebf82c317eb093459ba328f6e6cc80757bd8bbe16ac4f183743b93345106e"
+      "sha256": "ecf9d8ad3af1c99c50c14577904da943222719da2a58f88b42b2d40b7c6e91be"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -97,7 +97,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "234daecb8560ce29cd713402ab5cf940c6aaeb5ff45c403cdeb6e2144debf95a"
+      "sha256": "cb725fa0847d021cdff3a5404dd75be61c8105e7f184299361a9307183317eca"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -117,7 +117,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "9ce3a64047f4b5f5377624686ef43abf1b1d7f6b5e8e70a537caab79a1d6f815"
+      "sha256": "06058415661467a09c76fe34281a0be619406c68b76fb08714ad2b396e275b26"
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
@@ -133,7 +133,7 @@
     },
     "scripts/launch_codex_lane.py": {
       "role": "engine",
-      "sha256": "6087fb00f4eec9a443fca41bf8a4f5e0fd32084148e786b6d9bd9cc6836f3a03"
+      "sha256": "e4c80c0eceb3a614bb7953edbd6926a3c1c0b32b8b396854f86b015256bfd15b"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
@@ -228,7 +228,7 @@
     },
     "scripts/tests/test_codex_lane_launcher.py": {
       "role": "test",
-      "sha256": "5f9885b9835eb87a64baa3ba383f8ad3d2a22da1146532e8f8e6040eb14e0ffd"
+      "sha256": "96fdd482fe5f2402887390eceb85268f99b9693fa30cb051c35dc18feb17fbbd"
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
@@ -256,7 +256,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "c191310550e6aa9e285ab20b14200d0bcec769bb2d5e5031613e09c870de5011"
+      "sha256": "e583d9e863d689aebf950c99285697c5ab80c0a7a2c01bcb842a9eec61d8d8e7"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
