@@ -83,14 +83,16 @@ the repository/config and shared-state prerequisites, then attempt to acquire an
 the mode-specific single-writer gate before observing state or recovery-artifact
 presence, reading either artifact, or resolving any state-bearing predicate in this
 matrix. A successful acquisition keeps every such observation under that gate. Only an
-interactive `recover` whose acquisition fails on a complete blocking gate may use the
-bounded stale-gate classifier: capture the complete gate and its filesystem
+interactive `recover` or `test` whose acquisition fails on a complete blocking gate may
+use the bounded stale-gate classifier: capture the complete gate and its filesystem
 observations, prove its owner terminated, then non-creatingly resolve and capture the
 exact mode-specific state path and its filesystem observations. Parse only the captured
-copy to classify an ordinary state, absence, or a gate-only intent or held receipt. A
-valid gate-only intent may additionally resolve and digest-check only its bound immutable
-bundle. An active or uncertain owner stops operator-held before the state-path capture;
-the classifier never changes an artifact or resolves unrelated capabilities. The
+copy to classify an ordinary state, absence, or a mode-specific recovery intent or held
+receipt. A valid mode-specific intent may additionally resolve and digest-check only its
+bound immutable bundle. Test classification stays inside the test state root and never
+reads a live state, receipt, intent, or bundle. An active or uncertain owner stops
+operator-held before the state-path capture; the classifier never changes an artifact or
+resolves unrelated capabilities. The
 scheduled or unattended `recover` row is the other explicit exception: execution
 context and the recognized keyword select it without acquiring the gate or observing
 state. Resolve the remaining capability-dependent predicates only after the entry/state

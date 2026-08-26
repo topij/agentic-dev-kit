@@ -53,8 +53,9 @@ starts.
   indentation; keep a partial `triage` flat map at one consistent indentation. Rewrite
   prompted and partial-`triage` values as ordinary same-line scalars or collections;
   the shell-only migrator rejects YAML tags, anchors, aliases, block scalars, and block
-  children beneath prompted values, plus flow or quote continuations. Block YAML remains supported on
-  fields the installer does not read or rewrite. Remove any separate
+  children beneath prompted values, plus flow or quote continuations. Block YAML on
+  other fields can still be refused; normalize any refused value to an ordinary
+  same-line form. Remove any separate
   `config/friction-triage.yaml`; keep source/archive, engine directory, tracker,
   notification, state root, branch pattern, and model mappings in their existing shared
   config sections.**

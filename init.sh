@@ -644,6 +644,11 @@ preflight_migration_config() {
       return first == "!" || first == "&" || first == "*" ||
              first == "|" || first == ">"
     }
+    function is_semantically_empty(text,   value) {
+      value = text
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      return value == "" || substr(value, 1, 1) == "#"
+    }
     function complete_quoted(text,   value, n, i, c, nextc, quote, sqc, closed, spaced) {
       value = flow_text(text)
       if (!starts_quoted(value)) return 1
@@ -798,7 +803,7 @@ preflight_migration_config() {
         cursub = ""
         linear_seen = 0
         allow_indentless_sequence = 0
-        if (content ~ /^[A-Za-z_][A-Za-z0-9_.-]*:[[:space:]]*$/) {
+        if (is_semantically_empty(value)) {
           if (line_owned[cursec, key]) {
             empty_line_owned = 1
           } else {
@@ -852,8 +857,7 @@ preflight_migration_config() {
               has_unsupported_line_owned_syntax(value)) unsafe = 1
           if (starts_flow(value) && !complete_flow(value)) unsafe = 1
           if (starts_quoted(value) && !complete_quoted(value)) unsafe = 1
-          if (linear_owned[key] &&
-              content ~ /^[A-Za-z_][A-Za-z0-9_.-]*:[[:space:]]*$/) {
+          if (linear_owned[key] && is_semantically_empty(value)) {
             empty_linear_owned = 1
           }
           linear_seen = 1

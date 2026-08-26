@@ -2660,6 +2660,54 @@ def test_installer_refuses_block_children_under_a_prompt_owned_value(
 
 
 @pytest.mark.parametrize(
+    ("old_line", "replacement", "section", "key"),
+    [
+        (
+            "  bots: [coderabbit]",
+            "  bots: # retained comment\n    - coderabbit",
+            "review",
+            "bots",
+        ),
+        (
+            '    team_id: ""',
+            "    team_id: # retained comment\n      nested: value",
+            "tracker",
+            "linear",
+        ),
+    ],
+)
+def test_installer_refuses_commented_block_children_under_a_line_owned_value(
+    tmp_path: Path, old_line: str, replacement: str, section: str, key: str
+) -> None:
+    config = shipped_config().replace(old_line, replacement, 1)
+    parsed = yaml.safe_load(config)
+    if section == "review":
+        assert parsed[section][key] == ["coderabbit"]
+    else:
+        assert parsed[section][key]["team_id"] == {"nested": "value"}
+    repo = _fixture(tmp_path, config=config, git=True, templates=True)
+    existing = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert "ambiguous child key" in result.stderr, result.stderr
+    assert _config(repo) == config
+    after = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+    assert after == existing
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".git" / "hooks" / "pre-push").exists()
+
+
+@pytest.mark.parametrize(
     ("prefix", "value"),
     [
         ("", "&saved docs/kit-handoff.md"),
