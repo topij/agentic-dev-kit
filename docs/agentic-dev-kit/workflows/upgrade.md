@@ -403,8 +403,10 @@ before any migration write. The shell-only parser also stops on multi-line flow
 collections inside init-owned sections and on a sequence where an owned mapping is
 required; normalize prompted-section child keys to the shipped two-space indentation,
 keep a partial `triage` flat map at one consistent indentation, and keep flow or quoted
-values on the same line as their keys or rewrite them as block YAML before retrying. Do
-not retain or create a separate
+values complete on the same line as their keys. Prompted values also reject YAML tags,
+anchors, aliases, block scalars, and block children; rewrite them as ordinary same-line
+scalars or collections before retrying. Block YAML is supported only on fields the installer does
+not read or rewrite. Do not retain or create a separate
 `config/friction-triage.yaml`: `paths`, `tracker`, `notify`, `state`, `vcs`, and
 `models` remain the authoritative shared sections. After this step, verify that
 `triage.state_path` separates live/test mode and that the frozen-inbox and report

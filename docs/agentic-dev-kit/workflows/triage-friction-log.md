@@ -79,13 +79,23 @@ missing, or unverifiable transition hard-stops before tracker or repository writ
 
 Validate only the syntactic entry keyword before capability probing: an unknown or
 combined keyword hard-stops immediately. For a recognized live or test entry, resolve
-the repository/config and shared-state prerequisites, then acquire and hold the
-mode-specific single-writer gate before observing state or recovery-artifact presence,
-reading either artifact, or resolving any state-bearing predicate in this matrix. The
-scheduled or unattended `recover` row is the explicit exception: execution context and
-the recognized keyword select it without acquiring the gate or observing state. Resolve
-the remaining capability-dependent predicates only after the entry/state row is selected.
-This matrix declares required outcomes; it never authorizes pre-gate state observation.
+the repository/config and shared-state prerequisites, then attempt to acquire and hold
+the mode-specific single-writer gate before observing state or recovery-artifact
+presence, reading either artifact, or resolving any state-bearing predicate in this
+matrix. A successful acquisition keeps every such observation under that gate. Only an
+interactive `recover` whose acquisition fails on a complete blocking gate may use the
+bounded stale-gate classifier: capture the complete gate and its filesystem
+observations, prove its owner terminated, then non-creatingly resolve and capture the
+exact mode-specific state path and its filesystem observations. Parse only the captured
+copy to classify an ordinary state, absence, or a gate-only intent or held receipt. A
+valid gate-only intent may additionally resolve and digest-check only its bound immutable
+bundle. An active or uncertain owner stops operator-held before the state-path capture;
+the classifier never changes an artifact or resolves unrelated capabilities. The
+scheduled or unattended `recover` row is the other explicit exception: execution
+context and the recognized keyword select it without acquiring the gate or observing
+state. Resolve the remaining capability-dependent predicates only after the entry/state
+row is selected. This matrix declares required outcomes; it never authorizes any other
+pre-gate state observation.
 Here, `valid active state` means an ordinary live-run state, never a gate-only recovery
 intent or held receipt.
 
@@ -316,13 +326,14 @@ changing an artifact.
 ## Invalid-state recovery
 
 Recovery is a state-preservation transition, not approval to discard a session or repeat
-an external write. Acquire the mode's single-writer gate before state capture. If an
-existing gate blocks acquisition, capture its complete owner record, every same-inode
-temporary name, and filesystem observations before following the stale-gate recovery
-rule above; this route remains available when active state is absent. Never remove the
-gate first. When active state is absent, the immutable capture also records repeated
-non-creating resolution and filesystem observations proving that absence. After proving
-owner termination and obtaining exact operator approval of the bundle digest,
+an external write. Acquire the mode's single-writer gate before ordinary state capture.
+If a complete existing gate blocks acquisition, capture its owner record, every
+same-inode temporary name, and filesystem observations, then prove owner termination
+before using the bounded stale-gate classifier defined above. This route remains
+available when active state is absent. Never remove the gate first. When active state is
+absent, the immutable capture also records repeated non-creating resolution and
+filesystem observations proving that absence. After obtaining exact operator approval
+of the bundle digest,
 atomically claim the absent state path by exclusive creation of a
 `gate-only-recovery-intent` that binds the bundle digest, old gate owner record,
 approved capture, absence observations, and repository identity. Flush that intent and

@@ -1075,6 +1075,21 @@ def test_set_field_leaves_a_custom_child_mapping_for_its_sibling(
     assert tracker["url"] == "new-value"
 
 
+def test_set_field_replaces_an_empty_line_owned_scalar(tmp_path: Path) -> None:
+    repo = _fixture(tmp_path, config="tracker:\n  url:\n")
+
+    subprocess.run(
+        ["sh", "-c", _SET_FIELD_DRIVER, "_", '"new-value"'],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=_env(repo.parent),
+    )
+
+    assert yaml.safe_load(_config(repo))["tracker"]["url"] == "new-value"
+
+
 _GET_FIELD_DRIVER = '''CONFIG_FILE="config/dev-model.yaml"
 eval "$(sed -n "/^AWK_COMMENT_IDX=/,/^'/p" init.sh)"
 eval "$(sed -n '/^get_field() {/,/^}/p' init.sh)"
@@ -2608,6 +2623,150 @@ def test_installer_refuses_multiline_quote_decoy_in_triage(
     assert not (repo / ".gitignore").exists()
     assert not (repo / ".git" / "hooks" / "pre-push").exists()
     assert not (repo / "docs").exists()
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        "  bots:\n    - coderabbit",
+        "  bots:\n  - coderabbit",
+    ],
+)
+def test_installer_refuses_block_children_under_a_prompt_owned_value(
+    tmp_path: Path, replacement: str
+) -> None:
+    config = shipped_config().replace("  bots: [coderabbit]", replacement, 1)
+    assert yaml.safe_load(config)["review"]["bots"] == ["coderabbit"]
+    repo = _fixture(tmp_path, config=config, git=True, templates=True)
+    existing = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert "ambiguous child key" in result.stderr, result.stderr
+    assert _config(repo) == config
+    after = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+    assert after == existing
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".git" / "hooks" / "pre-push").exists()
+
+
+@pytest.mark.parametrize(
+    ("prefix", "value"),
+    [
+        ("", "&saved docs/kit-handoff.md"),
+        ("", "!!str docs/kit-handoff.md"),
+        ("", '&saved "docs/kit-handoff.md"'),
+        ("", '!!str "docs/kit-handoff.md"'),
+        ("saved_handoff: &saved docs/kit-handoff.md\n", "*saved"),
+        ("", ">-\n    docs/kit-handoff.md"),
+        ("", "|-\n    docs/kit-handoff.md"),
+    ],
+)
+def test_installer_refuses_unsupported_yaml_syntax_on_a_line_owned_path(
+    tmp_path: Path, prefix: str, value: str
+) -> None:
+    original = next(
+        line for line in shipped_config().splitlines() if line.startswith("  handoff:")
+    )
+    config = prefix + shipped_config().replace(original, f"  handoff: {value}", 1)
+    assert yaml.safe_load(config)["paths"]["handoff"] == "docs/kit-handoff.md"
+    repo = _fixture(tmp_path, config=config, git=True, templates=True)
+    existing = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert "ambiguous child key" in result.stderr, result.stderr
+    assert _config(repo) == config
+    after = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+    assert after == existing
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".git" / "hooks" / "pre-push").exists()
+
+
+def test_line_owned_preflight_declarations_cover_every_static_field_helper() -> None:
+    installer = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
+    calls = {
+        (section, subsection, key)
+        for section, subsection, _, key in re.findall(
+            r'(?:get_field|set_field) "([^"]+)" "([^"]*)" "\^( +)([A-Za-z_][A-Za-z0-9_.-]*):"',
+            installer,
+        )
+    }
+    flat_calls = {
+        (section.removesuffix(":"), key)
+        for section, subsection, key in calls
+        if subsection == ""
+    }
+    nested_calls = {
+        key
+        for section, subsection, key in calls
+        if (section, subsection) == ("tracker:", "linear:")
+    }
+    declared_flat = set(
+        re.findall(r'line_owned\["([^"]+)", "([^"]+)"\] = 1', installer)
+    )
+    declared_nested = set(
+        re.findall(r'linear_owned\["([^"]+)"\]', installer)
+    )
+
+    assert declared_flat == flat_calls
+    assert declared_nested == nested_calls
+
+
+def test_installer_refuses_an_alias_on_tracker_authority_before_writing(
+    tmp_path: Path,
+) -> None:
+    config = (
+        "tracker_project: &tracker_project topij/agentic-dev-kit\n"
+        + shipped_config().replace(
+            '  project_name: "topij/agentic-dev-kit"',
+            "  project_name: *tracker_project",
+            1,
+        )
+    )
+    assert yaml.safe_load(config)["tracker"]["project_name"] == (
+        "topij/agentic-dev-kit"
+    )
+    repo = _fixture(tmp_path, config=config, git=True)
+    subprocess.run(
+        [
+            "git",
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/topij/agentic-dev-kit.git",
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        env=_env(tmp_path),
+    )
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert "ambiguous child key" in result.stderr, result.stderr
+    assert _config(repo) == config
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".git" / "hooks" / "pre-push").exists()
 
 
 @pytest.mark.parametrize(

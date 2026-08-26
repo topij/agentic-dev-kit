@@ -192,6 +192,17 @@ get_field() {
   wantsub="$2"
   keyre="$3"
   awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" "$AWK_COMMENT_IDX"'
+    function emit_value(line,   idx, rest, cidx) {
+      idx = index(line, ":")
+      rest = substr(line, idx + 1)
+      cidx = comment_idx(rest)
+      if (cidx > 0) { rest = substr(rest, 1, cidx - 1) }
+      gsub(/^[ \t]+|[ \t]+$/, "", rest)
+      if (length(rest) >= 2 && substr(rest, 1, 1) == "\"" && substr(rest, length(rest), 1) == "\"") {
+        rest = substr(rest, 2, length(rest) - 2)
+      }
+      print rest
+    }
     BEGIN { cursec = ""; cursub = "" }
     {
       line = $0
@@ -202,6 +213,10 @@ get_field() {
         next
       }
       if (line ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:[ \t]*$/) {
+        if (cursec == wantsec && wantsub == "" && line ~ keyre) {
+          emit_value(line)
+          exit
+        }
         cursub = line
         gsub(/^[ \t]+|[ \t]+$/, "", cursub)
         next
@@ -212,18 +227,10 @@ get_field() {
         cursub = ""
       }
       if (cursec == wantsec && cursub == wantsub && line ~ keyre) {
-        idx = index(line, ":")
-        rest = substr(line, idx + 1)
-        cidx = comment_idx(rest)
-        if (cidx > 0) { rest = substr(rest, 1, cidx - 1) }
-        gsub(/^[ \t]+|[ \t]+$/, "", rest)
         # Strip one MATCHING pair of double quotes, the way kitconfig does. The
         # old independent-ends gsub ate the closing quote of a value that only
         # ENDS with one (`he said "hi"` -> `he said "hi`) — panel round on #87.
-        if (length(rest) >= 2 && substr(rest, 1, 1) == "\"" && substr(rest, length(rest), 1) == "\"") {
-          rest = substr(rest, 2, length(rest) - 2)
-        }
-        print rest
+        emit_value(line)
         exit
       }
     }
@@ -246,6 +253,19 @@ set_field() {
   newval="$4"
   tmpfile="${CONFIG_FILE}.tmp.$$"
   newval="$newval" awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" "$AWK_COMMENT_IDX"'
+    function emit_replacement(line,   idx, prefix, rest, cidx, comment) {
+      idx = index(line, ":")
+      prefix = substr(line, 1, idx)
+      rest = substr(line, idx + 1)
+      cidx = comment_idx(rest)
+      if (cidx > 0) {
+        comment = substr(rest, cidx)
+        printf "%s %s  %s\n", prefix, newval, comment
+      } else {
+        printf "%s %s\n", prefix, newval
+      }
+      changed = 1
+    }
     BEGIN { cursec = ""; cursub = ""; newval = ENVIRON["newval"]; changed = 0 }
     {
       line = $0
@@ -257,6 +277,10 @@ set_field() {
         next
       }
       if (line ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:[ \t]*$/) {
+        if (!changed && cursec == wantsec && wantsub == "" && line ~ keyre) {
+          emit_replacement(line)
+          next
+        }
         cursub = line
         gsub(/^[ \t]+|[ \t]+$/, "", cursub)
         print line
@@ -268,20 +292,10 @@ set_field() {
         cursub = ""
       }
       if (!changed && cursec == wantsec && cursub == wantsub && line ~ keyre) {
-        idx = index(line, ":")
-        prefix = substr(line, 1, idx)
-        rest = substr(line, idx + 1)
         # comment_idx (shared above) finds the comment to re-attach — a blind
         # index() re-attached the tail of the old value as a growing
         # pseudo-comment on every re-run (issue #62).
-        cidx = comment_idx(rest)
-        if (cidx > 0) {
-          comment = substr(rest, cidx)
-          printf "%s %s  %s\n", prefix, newval, comment
-        } else {
-          printf "%s %s\n", prefix, newval
-        }
-        changed = 1
+        emit_replacement(line)
         next
       }
       print line
@@ -623,6 +637,13 @@ preflight_migration_config() {
       sqc = sprintf("%c", 39)
       return first == "\"" || first == sqc
     }
+    function has_unsupported_line_owned_syntax(text,   value, first) {
+      value = text
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      first = substr(value, 1, 1)
+      return first == "!" || first == "&" || first == "*" ||
+             first == "|" || first == ">"
+    }
     function complete_quoted(text,   value, n, i, c, nextc, quote, sqc, closed, spaced) {
       value = flow_text(text)
       if (!starts_quoted(value)) return 1
@@ -687,6 +708,25 @@ preflight_migration_config() {
       owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
       owned["vcs"] = owned["triage"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
       owned["notify"] = owned["models"] = 1
+      line_owned["project", "name"] = 1
+      line_owned["runtime", "default"] = 1
+      line_owned["systemize", "operator_logins"] = 1
+      line_owned["tracker", "backend"] = 1
+      line_owned["tracker", "project_name"] = 1
+      line_owned["tracker", "url"] = 1
+      line_owned["vcs", "protected_branch"] = 1
+      line_owned["notify", "user_key"] = 1
+      line_owned["review", "bots"] = 1
+      line_owned["review", "fallback_command"] = 1
+      line_owned["paths", "engines"] = 1
+      line_owned["paths", "handoff"] = 1
+      line_owned["paths", "handoff_history"] = 1
+      line_owned["paths", "friction_log"] = 1
+      line_owned["paths", "friction_log_archive"] = 1
+      line_owned["models", "cheap"] = 1
+      line_owned["models", "default"] = 1
+      line_owned["models", "expensive"] = 1
+      linear_owned["team_id"] = linear_owned["project_id"] = 1
     }
     /^[[:space:]]*($|#)/ { next }
     /^[^[:space:]]/ {
@@ -695,6 +735,8 @@ preflight_migration_config() {
       cursub = ""
       body_seen = 0
       allow_indentless_sequence = 0
+      empty_line_owned = 0
+      empty_linear_owned = 0
       linear_seen = 0
       next
     }
@@ -743,24 +785,37 @@ preflight_migration_config() {
           unsafe = 1
           next
         }
+        empty_line_owned = 0
         key = content
         sub(/:.*/, "", key)
         if (seen_child[cursec, key]++) unsafe = 1
         value = content
         sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
+        if (line_owned[cursec, key] &&
+            has_unsupported_line_owned_syntax(value)) unsafe = 1
         if (starts_flow(value) && !complete_flow(value)) unsafe = 1
         if (starts_quoted(value) && !complete_quoted(value)) unsafe = 1
         cursub = ""
         linear_seen = 0
         allow_indentless_sequence = 0
         if (content ~ /^[A-Za-z_][A-Za-z0-9_.-]*:[[:space:]]*$/) {
-          cursub = key
-          allow_indentless_sequence = 1
+          if (line_owned[cursec, key]) {
+            empty_line_owned = 1
+          } else {
+            cursub = key
+            allow_indentless_sequence = 1
+          }
         }
         if (cursec == "tracker" && key == "linear" && cursub != "linear") unsafe = 1
         if (cursec == "tracker" && key == "linear") allow_indentless_sequence = 0
         next
       }
+
+      # A line-owned value is a scalar or same-line collection. Any child node
+      # would be invisible to get_field and left behind by set_field.
+      if (empty_line_owned) unsafe = 1
+      if (cursec == "tracker" && cursub == "linear" &&
+          empty_linear_owned && indent != 4) unsafe = 1
 
       # A flow value placed on a continuation line is structurally valid YAML
       # but invisible to the prompt helpers, and a multi-line flow begun under
@@ -789,11 +844,18 @@ preflight_migration_config() {
           }
           key = content
           sub(/:.*/, "", key)
+          empty_linear_owned = 0
           if (seen_linear[key]++) unsafe = 1
           value = content
           sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
+          if (linear_owned[key] &&
+              has_unsupported_line_owned_syntax(value)) unsafe = 1
           if (starts_flow(value) && !complete_flow(value)) unsafe = 1
           if (starts_quoted(value) && !complete_quoted(value)) unsafe = 1
+          if (linear_owned[key] &&
+              content ~ /^[A-Za-z_][A-Za-z0-9_.-]*:[[:space:]]*$/) {
+            empty_linear_owned = 1
+          }
           linear_seen = 1
         }
       }
@@ -802,7 +864,8 @@ preflight_migration_config() {
   ' "$CONFIG_FILE"; then
     echo "error: an init-owned config section contains an ambiguous child key." >&2
     echo "  Use unique bare mapping keys at the shipped indentation and keep" >&2
-    echo "  flow collections and quoted scalars on the same line as their key;" >&2
+    echo "  prompted values on their key line without tags, anchors, aliases, or block scalars;" >&2
+    echo "  flow collections and quoted scalars must also finish on that line;" >&2
     echo "  tracker.linear must be a plain nested map." >&2
     echo "  No migration was applied." >&2
     exit 1

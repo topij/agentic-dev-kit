@@ -51,9 +51,10 @@ starts.
   keys without replacing adopter values. Before retrying a preflight refusal, normalize
   prompted init-owned sections to bare mappings with the shipped two-space child
   indentation; keep a partial `triage` flat map at one consistent indentation. Rewrite
-  flow and quoted values onto the same line as their keys or into block values; the
-  shell-only migrator will not infer structure from alternate or flow-continuation
-  indentation. Remove any separate
+  prompted and partial-`triage` values as ordinary same-line scalars or collections;
+  the shell-only migrator rejects YAML tags, anchors, aliases, block scalars, and block
+  children beneath prompted values, plus flow or quote continuations. Block YAML remains supported on
+  fields the installer does not read or rewrite. Remove any separate
   `config/friction-triage.yaml`; keep source/archive, engine directory, tracker,
   notification, state root, branch pattern, and model mappings in their existing shared
   config sections.**

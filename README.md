@@ -379,8 +379,11 @@ retrying. Operator-login items must be simple plain login tokens or simple quote
 strings; tags, anchors, aliases, typed scalars, escapes, and ambiguous flow syntax are
 refused before migration writes. Prompted init-owned sections must remain mappings at
 the shipped two-space child indentation; a partial `triage` flat map may use another
-consistent indentation. Flow and quoted values must stay on the same line as their keys
-or be rewritten as block YAML before running the shell-only migrator.
+consistent indentation. Keep every prompted value, and every value in a partial
+`triage` flat map, complete on the same line as its key. YAML tags, anchors, aliases,
+block scalars, and block children are unsupported on prompted values; rewrite them as
+ordinary same-line scalars or collections before running the shell-only migrator. Block YAML
+remains available only on schema fields the installer does not read or rewrite.
 
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
 behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)
