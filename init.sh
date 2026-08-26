@@ -563,7 +563,7 @@ preflight_migration_config() {
     /^systemize:[[:space:]]*$/ { in_systemize = 1; next }
     in_systemize && /^[^[:space:]]/ { in_systemize = 0 }
     in_systemize && /^[[:space:]]+[^[:space:]#]/ {
-      if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_]*:/) unsafe = 1
+      if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_]*:([[:space:]]|$)/) unsafe = 1
       key = $0
       sub(/^  /, "", key)
       sub(/:.*/, "", key)
@@ -753,7 +753,7 @@ preflight_migration_config() {
       match($0, /^ */)
       content = substr($0, RLENGTH + 1)
       value = content
-      if (value ~ /^[A-Za-z_][A-Za-z0-9_.-]*:/) {
+      if (value ~ /^[A-Za-z_][A-Za-z0-9_.-]*:([[:space:]]|$)/) {
         sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
       }
       if ((starts_flow(value) && !complete_flow(value)) ||
@@ -770,7 +770,8 @@ preflight_migration_config() {
       # a deeper first item can otherwise turn the section into a sequence while
       # remaining invisible to get_field/set_field.
       if (!body_seen) {
-        if (indent != 2 || content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:/) {
+        if (indent != 2 ||
+            content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:([[:space:]]|$)/) {
           unsafe = 1
           next
         }
@@ -778,7 +779,7 @@ preflight_migration_config() {
       }
 
       if (indent == 2) {
-        if (content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:/) {
+        if (content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:([[:space:]]|$)/) {
           # YAML permits an indentless block sequence only after an empty-valued
           # sibling key introduced it. Every other exact-sibling continuation is
           # outside the line migrator grammar.
@@ -838,12 +839,13 @@ preflight_migration_config() {
 
       if (cursec == "tracker" && cursub == "linear") {
         if (!linear_seen &&
-            (indent != 4 || content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:/)) {
+            (indent != 4 ||
+             content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:([[:space:]]|$)/)) {
           unsafe = 1
           next
         }
         if (indent == 4) {
-          if (content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:/) {
+          if (content !~ /^[A-Za-z_][A-Za-z0-9_.-]*:([[:space:]]|$)/) {
             unsafe = 1
             next
           }

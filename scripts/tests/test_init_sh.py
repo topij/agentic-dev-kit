@@ -2845,6 +2845,30 @@ def test_installer_refuses_sequence_shaped_owned_mapping_before_writing(
     assert not (repo / "docs").exists()
 
 
+@pytest.mark.parametrize(
+    "config",
+    [
+        "review:\n  bots:[coderabbit]\n",
+        "tracker:\n  linear:\n    team_id:value\n",
+        "systemize:\n  operator_logins:[first-login]\n",
+        "triage:\n  state_path:state/triage.json\n",
+    ],
+)
+def test_installer_refuses_owned_keys_without_a_yaml_value_separator(
+    tmp_path: Path, config: str
+) -> None:
+    assert isinstance(yaml.safe_load(config), dict)
+    repo = _fixture(tmp_path, config=config, git=True)
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert _config(repo) == config
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".git" / "hooks" / "pre-push").exists()
+    assert not (repo / "docs").exists()
+
+
 def test_non_interactive_run_is_unaffected_without_an_origin_remote(tmp_path: Path) -> None:
     """The guard must not fire for the kit's own repo or a fresh copy-in — both
     reach init.sh before any remote exists. Pins the guard's narrowness, which is
