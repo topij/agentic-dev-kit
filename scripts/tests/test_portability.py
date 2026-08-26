@@ -2896,6 +2896,33 @@ def _assert_triage_semantics(workflow: str) -> None:
         "acquire, replace, resume, restart, reconstruct, delete, rename, link, unlink, "
         "create, publish, write, edit, comment, push, or merge for this route."
     )
+    isolated_test_recovery = workflow.split(
+        "### Isolated test-state recovery\n", 1
+    )[1].split("\n## Preflight and engine mode", 1)[0]
+    for sentence in re.split(
+        r"(?<=[.!?])\s+", " ".join(isolated_test_recovery.split())
+    ):
+        if "held bundle" not in sentence:
+            continue
+        after_held_bundle = sentence.lower().split("held bundle", 1)[1]
+        following_words = re.findall(r"[a-z]+", after_held_bundle)[:6]
+        assert not any(
+            word.startswith(forbidden)
+            for word in following_words
+            for forbidden in (
+                "authoriz",
+                "permit",
+                "quarantine",
+                "replace",
+                "resume",
+                "restart",
+                "delete",
+                "rename",
+                "publish",
+                "write",
+                "create",
+            )
+        )
     assert "without changing test or live artifacts" in inputs[
         "Scheduled or unattended test, invalid test state"
     ][0]
@@ -3211,6 +3238,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
+            "a state-present held bundle remains\nterminally operator-held",
+            "a state-present held bundle authorizes gate quarantine and restart",
+            1,
+        ),
+        workflow.replace(
             "| No argument, valid active state | Resume the recorded phase and mode. |",
             "| No argument, valid active state | Start a new live draft and replace the active session. |",
             1,
@@ -3364,7 +3396,9 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
 )
 def test_triage_config_and_adapter_migration_reaches_adopters() -> None:
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    first_entry = changelog.split("\n## ", 1)[1].split("\n---", 1)[0]
+    first_entry = " ".join(
+        changelog.split("\n## ", 1)[1].split("\n---", 1)[0].split()
+    )
     upgrade = (
         REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md"
     ).read_text(encoding="utf-8")
@@ -3378,6 +3412,10 @@ def test_triage_config_and_adapter_migration_reaches_adopters() -> None:
         ".claude/commands/triage-friction-log.md",
         ".agents/skills/triage-friction-log/SKILL.md",
         "Replace both old adapters",
+        "proven-dead owner plus exact capture approval",
+        "With an active or uncertain owner, or during scheduled or unattended "
+        "execution",
+        "after proving owner termination and obtaining exact approval",
     ):
         assert required in first_entry
     assert "adds only missing keys to a partial block" in upgrade

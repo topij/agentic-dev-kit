@@ -391,16 +391,18 @@ the captured digest, device, inode, mode, and link count. Atomically quarantine 
 that unchanged test-state file and write `test-recovered-safe-to-restart` under the
 same test gate. A later `test` invocation may digest-check and replace only that receipt
 after successfully parsing the current inbox under the test gate; a parse or act-time
-digest failure preserves the receipt. The transition never reads or writes live state, notification
-approval, tracker, source documents, archive, branch, commit, push, PR, or merge.
+digest failure preserves the receipt. The transition never reads or writes live state,
+notification approval, tracker, source documents, archive, branch, commit, push, PR,
+or merge.
 Unknown test-gate ownership remains operator-held under the same capture, owner-death,
-and exact-approval rule, confined to test paths. When a proven-dead owner left test
-state or a safe-restart receipt, capture the unchanged gate and artifact in a unique
-state-present test-gate held bundle, then stop operator-held. Without a crash-released
-exclusive recovery primitive, neither engine-backed nor LLM-only execution may claim
-that separate gate, state, and bundle files form one atomic transition. The held bundle
-is evidence only: it never authorizes quarantine, replacement, restart, or a live path.
-When test state is absent, capture that absence in the test recovery bundle, exclusively create and flush
+and exact-approval rule, confined to test paths. Only an interactive `test` that proves
+the owner dead and obtains exact approval of the capture may preserve the unchanged gate
+and state or safe-restart receipt in a unique state-present test-gate held bundle, then
+stop operator-held. Without a crash-released exclusive recovery primitive, neither
+engine-backed nor LLM-only execution may claim
+that separate gate, state, and bundle files form one atomic transition. When that same
+approved interactive recovery proves test state absent, capture that absence in the
+test recovery bundle, then exclusively create and flush
 `test-gate-recovery-intent` while the old test gate still exists, then follow the
 Gate-only recovery transition ordering with test-confined paths. Quarantine the old
 test gate only after the intent is durable; finish by replacing the intent with

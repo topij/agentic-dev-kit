@@ -70,17 +70,22 @@ starts.
   bundle and prohibits abandonment when prior external-write absence is uncertain.
   Keep malformed test-state recovery on the `test` entry and test sandbox; it may
   quarantine only revalidated test state after exact approval and never selects live
-  or external-write paths. A blocking test gate with existing test state or a
-  safe-restart receipt becomes operator-held with a byte-preserving evidence bundle;
-  do not quarantine either artifact. When state is absent, publish a durable
-  `test-gate-recovery-intent`. A later `test` resumes only that intent and consumes the verified
-  `test-recovered-safe-to-restart` receipt under the replacement test gate.
+  or external-write paths. During interactive test-gate recovery, only a proven-dead
+  owner plus exact capture approval permits preserving existing test state or a
+  safe-restart receipt in an operator-held byte-preserving evidence bundle; do not
+  quarantine either artifact. With an active or uncertain owner, or during scheduled
+  or unattended execution, preserve the gate and artifact without writing a bundle or
+  intent. When the same approved interactive recovery proves state absent, publish a
+  durable `test-gate-recovery-intent`. A later `test` resumes only that intent and
+  consumes the verified `test-recovered-safe-to-restart` receipt under the replacement
+  test gate.
   Before completing a merged sweep, read back its final `headRefOid` and require it to
   equal the exact terminal PR-watch head and receipt persisted as `reviewed_head`;
   keep an unsettled read-back separate as `observed_pr_head`. A replacement head or
   missing terminal receipt remains operator-held even when the PR is merged.
-  When stale-gate recovery finds no active state, publish
-  `gate-only-recovery-intent` before quarantining the old gate, then retain its
+  During interactive stale-gate recovery, after proving owner termination and obtaining
+  exact approval, publish `gate-only-recovery-intent` before quarantining an old gate
+  with no active state, then retain its
   `gate-only-operator-held` receipt and evidence bundle; do not treat gate quarantine
   or a crash between transition steps as proof that a new draft is safe.
   Treat an existing single-writer gate or an act-time state-digest mismatch as
