@@ -2616,11 +2616,12 @@ def _assert_triage_semantics(workflow: str) -> None:
         "test, no test state, test gate, or test recovery receipt",
         "test, valid test state and no blocking test gate",
         "test, test-recovered-safe-to-restart receipt and no blocking test gate",
-        "Interactive test, blocking test gate with no test state, safe-restart receipt, intent, or held bundle",
+        "Interactive test, blocking test gate, no held bundle, and owner active or uncertain",
+        "Interactive test, blocking test gate with no test state, safe-restart receipt, intent, or held bundle, plus proven-dead owner and exact capture approval",
         "Interactive test, test-gate-recovery-intent present and no held bundle",
-        "Interactive test, blocking test gate with valid test state and no held bundle",
-        "Interactive test, blocking test gate with invalid test state and no held bundle",
-        "Interactive test, blocking test gate with test-recovered-safe-to-restart receipt and no held bundle",
+        "Interactive test, blocking test gate with valid test state, no held bundle, proven-dead owner, and exact capture approval",
+        "Interactive test, blocking test gate with invalid test state, no held bundle, proven-dead owner, and exact capture approval",
+        "Interactive test, blocking test gate with test-recovered-safe-to-restart receipt, no held bundle, proven-dead owner, and exact capture approval",
         "Any test with a state-present test-gate held bundle",
         "Interactive test, invalid test state and no blocking test gate",
         "Scheduled or unattended test, invalid test state",
@@ -2687,8 +2688,13 @@ def _assert_triage_semantics(workflow: str) -> None:
         "test, test-recovered-safe-to-restart receipt and no blocking test gate"
     ][0]
     assert "test-gate-recovery-intent" in inputs[
-        "Interactive test, blocking test gate with no test state, safe-restart receipt, intent, or held bundle"
+        "Interactive test, blocking test gate with no test state, safe-restart receipt, intent, or held bundle, plus proven-dead owner and exact capture approval"
     ][0]
+    owner_unready = inputs[
+        "Interactive test, blocking test gate, no held bundle, and owner active or uncertain"
+    ][0]
+    assert "Preserve the gate" in owner_unready
+    assert "without writing a bundle or intent" in owner_unready
     assert "Resume only the recorded test-gate transition" in inputs[
         "Interactive test, test-gate-recovery-intent present and no held bundle"
     ][0]
@@ -2698,7 +2704,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "test-recovered-safe-to-restart receipt",
     ):
         result = inputs[
-            f"Interactive test, blocking test gate with {artifact} and no held bundle"
+            f"Interactive test, blocking test gate with {artifact}, no held bundle, proven-dead owner, and exact capture approval"
         ][0]
         assert "held bundle" in result.replace("-", " ")
         assert "operator-held" in result
@@ -2706,13 +2712,14 @@ def _assert_triage_semantics(workflow: str) -> None:
     held_result = inputs["Any test with a state-present test-gate held bundle"][0]
     assert "byte-identically" in held_result
     assert "terminal evidence, not resumable mutation authority" in held_result
-    test_precedence = _integration_table(workflow, "Test input precedence", 6)
+    test_precedence = _integration_table(workflow, "Test input precedence", 7)
     assert test_precedence == {
         "held-evidence": (
             "any",
             "any",
             "any",
             "present",
+            "any",
             "Preserve bundle, gate, and artifact; report operator-held with no mutation.",
         ),
         "intent-interactive": (
@@ -2720,6 +2727,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "any",
             "test-gate-recovery-intent",
             "absent",
+            "already recorded",
             "Resume only the recorded absent-state gate transition.",
         ),
         "intent-unattended": (
@@ -2727,20 +2735,31 @@ def _assert_triage_semantics(workflow: str) -> None:
             "any",
             "test-gate-recovery-intent",
             "absent",
+            "any",
             "Preserve everything and report operator-held.",
         ),
-        "gated-artifact-interactive": (
+        "gated-owner-unready-interactive": (
+            "interactive",
+            "blocking",
+            "absent, valid-state, invalid-state, or safe-restart-receipt",
+            "absent",
+            "active or uncertain",
+            "Preserve gate and artifact; report operator-held without writing a bundle or intent.",
+        ),
+        "gated-artifact-approved": (
             "interactive",
             "blocking",
             "valid-state, invalid-state, or safe-restart-receipt",
             "absent",
+            "proven dead and exactly approved",
             "Capture one state-present held bundle; report operator-held without gate or artifact mutation.",
         ),
-        "gated-absent-interactive": (
+        "gated-absent-approved": (
             "interactive",
             "blocking",
             "absent",
             "absent",
+            "proven dead and exactly approved",
             "Publish the absent-state intent before any gate quarantine.",
         ),
         "gated-unattended": (
@@ -2748,6 +2767,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "blocking",
             "absent, valid-state, invalid-state, or safe-restart-receipt",
             "absent",
+            "any",
             "Preserve everything and report operator-held.",
         ),
         "ungated-valid": (
@@ -2755,6 +2775,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "absent",
             "valid-state",
             "absent",
+            "not applicable",
             "Resume only the valid test state.",
         ),
         "ungated-safe-restart": (
@@ -2762,6 +2783,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "absent",
             "safe-restart-receipt",
             "absent",
+            "not applicable",
             "Execute only the receipt-to-reserved-state route.",
         ),
         "ungated-invalid-interactive": (
@@ -2769,6 +2791,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "absent",
             "invalid-state",
             "absent",
+            "not applicable",
             "Execute only isolated invalid test-state recovery.",
         ),
         "ungated-invalid-unattended": (
@@ -2776,6 +2799,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "absent",
             "invalid-state",
             "absent",
+            "not applicable",
             "Preserve everything and report operator-held.",
         ),
         "ungated-absent": (
@@ -2783,12 +2807,17 @@ def _assert_triage_semantics(workflow: str) -> None:
             "absent",
             "absent",
             "absent",
+            "not applicable",
             "Start a new isolated test draft.",
         ),
     }
 
     def matching_test_routes(
-        context: str, gate: str, artifact: str, held_bundle: bool
+        context: str,
+        gate: str,
+        artifact: str,
+        held_bundle: bool,
+        owner_authority: str,
     ) -> list[str]:
         if held_bundle:
             return ["held-evidence"]
@@ -2801,9 +2830,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         if gate == "blocking":
             if context == "scheduled or unattended":
                 return ["gated-unattended"]
+            if owner_authority == "active or uncertain":
+                return ["gated-owner-unready-interactive"]
             if artifact == "absent":
-                return ["gated-absent-interactive"]
-            return ["gated-artifact-interactive"]
+                return ["gated-absent-approved"]
+            return ["gated-artifact-approved"]
         if artifact == "valid-state":
             return ["ungated-valid"]
         if artifact == "safe-restart-receipt":
@@ -2826,24 +2857,44 @@ def _assert_triage_semantics(workflow: str) -> None:
                 "test-gate-recovery-intent",
             ):
                 for held_bundle in (False, True):
-                    routes = matching_test_routes(
-                        context, gate, artifact, held_bundle
-                    )
-                    assert len(routes) == 1
-                    assert routes[0] in test_precedence
-                    if held_bundle:
-                        assert test_precedence[routes[0]][-1].endswith(
-                            "operator-held with no mutation."
+                    for owner_authority in (
+                        "active or uncertain",
+                        "proven dead and exactly approved",
+                    ):
+                        routes = matching_test_routes(
+                            context,
+                            gate,
+                            artifact,
+                            held_bundle,
+                            owner_authority,
                         )
-    assert (
-        "after `held-evidence` is selected, every later step is report-only"
-        in flattened
-    )
-    assert (
-        "the workflow forbids quarantine, acquire, replace, resume, restart, "
-        "reconstruct, delete, rename, link, unlink, create, publish, write, edit, "
-        "comment, push, or merge"
-        in flattened
+                        assert len(routes) == 1
+                        assert routes[0] in test_precedence
+                        result = test_precedence[routes[0]][-1]
+                        if held_bundle:
+                            assert result.endswith("operator-held with no mutation.")
+                        if (
+                            context == "interactive"
+                            and gate == "blocking"
+                            and not held_bundle
+                            and artifact != "test-gate-recovery-intent"
+                            and owner_authority == "active or uncertain"
+                        ):
+                            assert routes == ["gated-owner-unready-interactive"]
+                            assert result.endswith(
+                                "without writing a bundle or intent."
+                            )
+    held_section = workflow.split(
+        "### State-present held-evidence procedure\n", 1
+    )[1].split("\n## ", 1)[0]
+    assert " ".join(held_section.split()) == (
+        "Only `gated-artifact-approved` may atomically create and flush one unique "
+        "held bundle; once it is durable, routing immediately becomes "
+        "`held-evidence`. A `held-evidence` invocation performs no pre-selection or "
+        "post-selection write. Every step is report-only: preserve the bundle, gate, "
+        "and artifact byte-identically. No later prose may authorize quarantine, "
+        "acquire, replace, resume, restart, reconstruct, delete, rename, link, unlink, "
+        "create, publish, write, edit, comment, push, or merge for this route."
     )
     assert "without changing test or live artifacts" in inputs[
         "Scheduled or unattended test, invalid test state"
@@ -3140,13 +3191,23 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
-            "blocking test gate with no test state, safe-restart receipt, intent, or held bundle",
-            "blocking test gate without test state or intent",
+            "blocking test gate, no held bundle, and owner active or uncertain",
+            "blocking test gate, no held bundle, and owner active or uncertain; write a held bundle",
             1,
         ),
         workflow.replace(
-            "after `held-evidence` is selected, every later step\nis report-only",
-            "after `held-evidence` is selected, quarantine the gate and restart",
+            "active or uncertain | Preserve gate and artifact; report operator-held without writing a bundle or intent.",
+            "active or uncertain | Capture a held bundle and publish restart intent.",
+            1,
+        ),
+        workflow.replace(
+            "proven dead and exactly approved | Capture one state-present held bundle",
+            "active or uncertain | Capture one state-present held bundle",
+            1,
+        ),
+        workflow.replace(
+            "create, publish, write, edit, comment, push, or merge for this route.",
+            "create, publish, write, edit, comment, push, or merge for this route. After selection, quarantine the gate and restart.",
             1,
         ),
         workflow.replace(

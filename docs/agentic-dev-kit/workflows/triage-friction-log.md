@@ -100,11 +100,12 @@ intent or held receipt.
 | `test`, no test state, test gate, or test recovery receipt | Start a test draft with test identity and test state; never read, replace, or resume live state. |
 | `test`, valid test state and no blocking test gate | Resume only that test state; never read, replace, or resume live state. |
 | `test`, `test-recovered-safe-to-restart` receipt and no blocking test gate | Under the test gate, verify the receipt and bundle, parse the current inbox, then digest-check and replace only that receipt with the reserved new test state. Preserve the receipt if parsing or replacement fails. |
-| Interactive `test`, blocking test gate with no test state, safe-restart receipt, intent, or held bundle | Capture the complete test gate, prove owner termination, require exact approval, and publish `test-gate-recovery-intent` before quarantining the unchanged gate. |
+| Interactive `test`, blocking test gate, no held bundle, and owner active or uncertain | Preserve the gate and any test artifact byte-identically; report operator-held without writing a bundle or intent. |
+| Interactive `test`, blocking test gate with no test state, safe-restart receipt, intent, or held bundle, plus proven-dead owner and exact capture approval | Publish `test-gate-recovery-intent` before quarantining the unchanged gate. |
 | Interactive `test`, `test-gate-recovery-intent` present and no held bundle | Resume only the recorded test-gate transition and finish `test-recovered-safe-to-restart`; never select a live path. |
-| Interactive `test`, blocking test gate with valid test state and no held bundle | Capture the complete gate plus exact state bytes and observations in a durable state-present test-gate held bundle, then report operator-held. Never quarantine the gate, acquire a replacement, or resume or replace state. |
-| Interactive `test`, blocking test gate with invalid test state and no held bundle | Capture the complete gate plus exact invalid-state bytes and observations in the same held-bundle shape, then report operator-held. Never quarantine the gate or state and never publish a restart receipt. |
-| Interactive `test`, blocking test gate with `test-recovered-safe-to-restart` receipt and no held bundle | Capture the complete gate plus exact receipt bytes and observations in the same held-bundle shape, then report operator-held. Never quarantine the gate or replace the receipt. |
+| Interactive `test`, blocking test gate with valid test state, no held bundle, proven-dead owner, and exact capture approval | Write one durable state-present test-gate held bundle from the complete gate plus exact state bytes and observations, then report operator-held. Never quarantine the gate, acquire a replacement, or resume or replace state. |
+| Interactive `test`, blocking test gate with invalid test state, no held bundle, proven-dead owner, and exact capture approval | Write the same held-bundle shape from the complete gate plus exact invalid-state bytes and observations, then report operator-held. Never quarantine the gate or state and never publish a restart receipt. |
+| Interactive `test`, blocking test gate with `test-recovered-safe-to-restart` receipt, no held bundle, proven-dead owner, and exact capture approval | Write the same held-bundle shape from the complete gate plus exact receipt bytes and observations, then report operator-held. Never quarantine the gate or replace the receipt. |
 | Any `test` with a state-present test-gate held bundle | Preserve the bundle, gate, and test artifact byte-identically and report operator-held. The bundle is terminal evidence, not resumable mutation authority, and never selects a live path. |
 | Interactive `test`, invalid test state and no blocking test gate | Under the test gate, capture and preserve the exact test-state evidence, require exact operator approval of its digest, revalidate before quarantine, and write `test-recovered-safe-to-restart`; prohibit live-state and external writes. |
 | Scheduled or unattended `test`, invalid test state | Report operator-held without changing test or live artifacts. |
@@ -139,24 +140,29 @@ the remaining cases require it to be absent. Artifact kinds are exclusive parser
 results: `absent`, `valid-state`, `invalid-state`, `safe-restart-receipt`, or
 `test-gate-recovery-intent`.
 
-| Test case id | Context | Gate | Artifact | Held bundle | Required result |
-|---|---|---|---|---|---|
-| `held-evidence` | any | any | any | present | Preserve bundle, gate, and artifact; report operator-held with no mutation. |
-| `intent-interactive` | interactive | any | `test-gate-recovery-intent` | absent | Resume only the recorded absent-state gate transition. |
-| `intent-unattended` | scheduled or unattended | any | `test-gate-recovery-intent` | absent | Preserve everything and report operator-held. |
-| `gated-artifact-interactive` | interactive | blocking | `valid-state`, `invalid-state`, or `safe-restart-receipt` | absent | Capture one state-present held bundle; report operator-held without gate or artifact mutation. |
-| `gated-absent-interactive` | interactive | blocking | `absent` | absent | Publish the absent-state intent before any gate quarantine. |
-| `gated-unattended` | scheduled or unattended | blocking | `absent`, `valid-state`, `invalid-state`, or `safe-restart-receipt` | absent | Preserve everything and report operator-held. |
-| `ungated-valid` | any | absent | `valid-state` | absent | Resume only the valid test state. |
-| `ungated-safe-restart` | any | absent | `safe-restart-receipt` | absent | Execute only the receipt-to-reserved-state route. |
-| `ungated-invalid-interactive` | interactive | absent | `invalid-state` | absent | Execute only isolated invalid test-state recovery. |
-| `ungated-invalid-unattended` | scheduled or unattended | absent | `invalid-state` | absent | Preserve everything and report operator-held. |
-| `ungated-absent` | any | absent | `absent` | absent | Start a new isolated test draft. |
+| Test case id | Context | Gate | Artifact | Held bundle | Owner/capture authority | Required result |
+|---|---|---|---|---|---|---|
+| `held-evidence` | any | any | any | present | any | Preserve bundle, gate, and artifact; report operator-held with no mutation. |
+| `intent-interactive` | interactive | any | `test-gate-recovery-intent` | absent | already recorded | Resume only the recorded absent-state gate transition. |
+| `intent-unattended` | scheduled or unattended | any | `test-gate-recovery-intent` | absent | any | Preserve everything and report operator-held. |
+| `gated-owner-unready-interactive` | interactive | blocking | `absent`, `valid-state`, `invalid-state`, or `safe-restart-receipt` | absent | active or uncertain | Preserve gate and artifact; report operator-held without writing a bundle or intent. |
+| `gated-artifact-approved` | interactive | blocking | `valid-state`, `invalid-state`, or `safe-restart-receipt` | absent | proven dead and exactly approved | Capture one state-present held bundle; report operator-held without gate or artifact mutation. |
+| `gated-absent-approved` | interactive | blocking | `absent` | absent | proven dead and exactly approved | Publish the absent-state intent before any gate quarantine. |
+| `gated-unattended` | scheduled or unattended | blocking | `absent`, `valid-state`, `invalid-state`, or `safe-restart-receipt` | absent | any | Preserve everything and report operator-held. |
+| `ungated-valid` | any | absent | `valid-state` | absent | not applicable | Resume only the valid test state. |
+| `ungated-safe-restart` | any | absent | `safe-restart-receipt` | absent | not applicable | Execute only the receipt-to-reserved-state route. |
+| `ungated-invalid-interactive` | interactive | absent | `invalid-state` | absent | not applicable | Execute only isolated invalid test-state recovery. |
+| `ungated-invalid-unattended` | scheduled or unattended | absent | `invalid-state` | absent | not applicable | Preserve everything and report operator-held. |
+| `ungated-absent` | any | absent | `absent` | absent | not applicable | Start a new isolated test draft. |
 
-State-present terminal prohibition: after `held-evidence` is selected, every later step
-is report-only. Apart from writing that unique evidence bundle before selection, the
-workflow forbids quarantine, acquire, replace, resume, restart, reconstruct, delete,
-rename, link, unlink, create, publish, write, edit, comment, push, or merge.
+### State-present held-evidence procedure
+
+Only `gated-artifact-approved` may atomically create and flush one unique held bundle;
+once it is durable, routing immediately becomes `held-evidence`. A `held-evidence`
+invocation performs no pre-selection or post-selection write. Every step is report-only:
+preserve the bundle, gate, and artifact byte-identically. No later prose may authorize
+quarantine, acquire, replace, resume, restart, reconstruct, delete, rename, link, unlink,
+create, publish, write, edit, comment, push, or merge for this route.
 
 ## Authoritative integration declaration
 
