@@ -14,10 +14,58 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-26 — PR `#599` merged and closed the structural Phase 3 exit; the
-session preserved the environment-capable Codex launcher as the next sprint boundary.
+Last updated: 2026-08-27 — PR `#609` merged the environment-capable Codex launcher,
+preserved attended Claude lanes, and declared the unattended Claude launcher gap.
 
-## Latest session — 2026-08-26 (triage forge provenance closes Phase 3)
+## Latest session — 2026-08-27 (Codex environment-capable launcher merged)
+
+**Theme —** PR `#609` delivered the bounded Codex launcher slice: a kit-owned wrapper
+now applies an absolute worktree and replacement lane environment, independently
+observes the child, and binds the request, attempt, process lineage, observation, final
+text, and terminal receipt before success.
+
+- **The supported surface is explicit.** `new --headless` accepts the descriptor when
+  the runtime resolves to Codex through `--runtime codex` or
+  `DEVKIT_RUNTIME=codex`. Claude remains supported for attended lanes; its headless
+  parity cell is a declared gap because no unattended state-writing path has live
+  runtime evidence yet.
+
+- **Repository authority stays with shared policy and kit-owned engines.** The launcher
+  replaces inherited lane/state values, removes repository overrides, resolves the
+  runtime through trusted paths, observes worktree/repository/lane/state/branch/base/
+  forge/process identity in the child, and fails closed on stale or foreign evidence,
+  interrupted or partial launches, reused process identity, detached descendants, and
+  an unbound success. Runtime adapters remain translation-only.
+
+- **The live record is intentionally bounded.** The Codex-produced record proves the
+  read-only isolation and receipt chain at its stamped client and revision. It does not
+  claim writing-lane approval behavior, Claude headless behavior, model/effort
+  calibration, downstream adaptation, or a general launcher framework.
+
+- **The adopter and review surfaces moved with the engine.** The launcher is tracked as
+  safety-critical kit-owned content, the changelog names the adopter refresh path, and
+  the configured fallback panel disposition records the accepted positive/hostile pairs
+  after CodeRabbit reported automatic review unavailable.
+
+▶ Next: create `feat/claude-environment-capable-launcher` from current `origin/main`
+and run the slice from a Claude Code session, because the live record must be produced
+by the runtime under test. Generalise `scripts/launch_codex_lane.py` into a per-runtime
+wrapper: keep the descriptor, scrub, child observer, one-shot attempt, and receipt chain
+unchanged; move the runtime check and child argv into a config-owned per-runtime template
+(`parallel.<runtime>_headless_command` plus each runtime's final-text transport —
+`claude -p` reads the prompt from stdin, takes cwd from the process, and returns final
+text on stdout with `--output-format json`). Write the design matrix and semantic/
+mutation rows before code, obtain a Claude-produced live isolation record matching
+`saved_plans/codex-environment-capable-launcher-live-validation_2026-08-26.md`, then
+move the headless parity row's Claude cell from gap to the observed mechanism. Keep
+approval policy and the writing-lane record (`#601`), calibration (`#605`), and `#602`
+in the slices that follow, in that order. Stamp final `make test` as a PR comment at the
+merged head, post the panel disposition, and record the review-round count so PR `#609`
+remains the comparison baseline.
+
+______________________________________________________________________
+
+## Session — 2026-08-26 (triage forge provenance closes Phase 3)
 
 **Theme —** PR `#599` changed the friction-triage forge path so its lifecycle operations
 consume identifiers from preceding independently verified read-backs. The change
