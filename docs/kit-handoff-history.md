@@ -5,6 +5,95 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-08-22 · evening (the review process assessed, and a session that kept reproducing the defect class it was assessing)
+
+**Theme —** A planning session on why PR review costs what it does. The assessment found a
+gap nothing on the tracker held and filed it. Then, writing up the finding, this session
+produced the same defect three times — a claim generalised from one observation — and each
+was refuted by something cheap that no panel had to run.
+
+- **The proportionality machinery all governs re-runs; the opening pass has none.**
+  Blast-radius classes, the executed/record discriminator, the delta pass, logged
+  dispositions — every one is scoped to what a *fix round* owes.
+  `fallback-review-panel.md` then closes the other door explicitly: a PR's initial review
+  takes the full panel, never a delta pass. So a wrap-up PR of pure record prose opens with
+  the pass a merge-gate change opens with. Filed as `#585`, with the three holes it has to
+  survive named rather than waved at. Distinct from `#209` (within a PR's re-run chain) and
+  `#420` (across sibling PRs), both of which are about a pass after the first.
+
+- **The reviewer selection is not a choice anyone is making badly.** The bot reviews when it
+  can, the panel runs when it cannot, and `fallback_commands` is degraded mode for a runtime
+  that cannot isolate a lens — which Claude Code can, so it never runs here. Combined with
+  `#372`'s quota shape, the session's *second* PR reliably gets the panel, and a session's
+  second PR is reliably its wrap-up. The most expensive review a normal session buys is the
+  one on the content with the least to break.
+
+- **Doctrine carries to adopters; the economics do not.** `fallback-review-panel.md`,
+  `safety-critical-changes.md`, `pr-watch.md` and `wrap-up.md` are byte-identical between
+  this repo and cs-toolkit's install, so a fix to `#585` arrives there on its next
+  `/upgrade` with no separate assessment. Whether the gap *costs* anything there is a
+  per-repo fact and is unmeasured.
+
+- **A paid reviewer tier is still metered, and past the allowance the behaviour is a
+  console setting.** `#372` now carries the readings: a stated allowance per hour, and an
+  over-limit path that bills, pauses, or stops depending on the usage-based add-on's mode,
+  with any mode refusing once the spending cap is reached. That narrows what option 3 *is*
+  without choosing it — paying makes the refusal a setting rather than removing it.
+
+- **`#491` showed up live three times in one session**, in three different contexts: a
+  configured incremental skip reported identically to an outage on a PR that had just
+  configured the skip; the same on a later head; and once alongside *valid* coverage, where
+  it was harmless. Followed literally the first time, it prescribes a two-lens panel over a
+  YAML config file. Recorded there — the failure is not fail-open, it is fail-expensive.
+
+- **Executed prose has no deterministic checker at all.** `make lint` is `ruff` and nothing
+  else; there is no prose tool anywhere in the tree. So the surface where findings actually
+  concentrate is checked only by a stochastic reviewer. Filed as `#586`, scoped to executed
+  prose and explicitly *not* to record accuracy — `#120`'s territory, which no lint can
+  reach, because those are truth defects rather than clarity ones.
+
+- **In cs-toolkit:** `#2076` merged (`c5a6897f`) adding that repo's first
+  `.coderabbit.yaml`; `#2078` carries its handoff update. Following `wrap-up.md` there hit
+  `#505`'s mechanism with a second file pair — the workflow names `check_doc_budget.py`
+  unconditionally, that adopter declines it deliberately and says so, and a *downstream*
+  instruction depending on its output was silently skipped while the wrap-up reported
+  success. Recorded there, with a third direction that issue lacked: the workflow could
+  consult the `remedy:` field it already reads.
+
+- **Filed this session:** `#585`, `#586`. Occurrence comments on `#491` and `#505`, and on
+  `#372` — where an earlier comment of this session's was corrected in place rather than
+  answered with a second one.
+
+- **Verified:** no kit code changed this session, so nothing here rests on the suite —
+  though `make test` in `/Users/topi/Coding/agentic-dev-kit` on this branch at `0a06365`
+  printed `1362 passed`, which says the tree was green at handoff and nothing more. The
+  claims above were established by reading rather than by running. The byte-identity of the
+  four doctrine files was checked with `shasum -a 256` over both trees from
+  `/Users/topi/Coding/agentic-dev-kit`; the absence of a prose linter by reading the `lint:`
+  target and grepping the Makefile, `.github/workflows/` and `scripts/` at `fabf554`; the
+  engine defaults behind three "absent" adopter config keys by reading `pr_watch.py`'s
+  module constants, which is what retracted them as findings.
+
+**Learned**
+
+- **Three claims this session were generalisations from one observation, and each was
+  refuted by something cheaper than a review round.** No refusals in a PR sweep read as
+  "there is no quota" — refuted by an allowance line already in the reviewer's own output.
+  One `Charged:` receipt read as "it bills rather than refusing" — refuted by a vendor docs
+  page. And an adopter's absent config keys read as gaps — retracted by the engine's own
+  defaults. Each reading was accurate; the error each time was treating one reading of a
+  *configurable* system as a property of it.
+
+- **What caught them is the argument for `#585` and `#586` both.** An allowance line, a
+  docs page, and a module constant — none of them a panel. The expensive reviewer is not
+  the only thing capable of finding this class, and the cheap things that found it were
+  already present and unread.
+
+▶ Next: `#372` — take the posture decision. It gates how much `#585` and `#586` are worth:
+if the reviewer covers every head, the opening-pass gap is latent rather than live. It now
+carries the metered-tier readings, the over-limit mode table, and the adopter comparison it
+was missing, and a further occurrence has nothing left to teach it.
+
 ## Session — 2026-08-22 · afternoon (a field report acted on, and a remedy moved out of the document it was about)
 
 **Theme —** `#577`, a cs-toolkit field report that is explicitly not a defect report, read

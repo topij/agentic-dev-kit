@@ -7,7 +7,7 @@ safety guarantees, review evidence, lane isolation, and upgrade behavior as Clau
 Code. Runtime-specific files may differ in shape; their observable contract should
 not.
 
-## Sprint status — 2026-08-25
+## Sprint status — 2026-08-26
 
 The machine-readable inventory and current capability judgments live in
 [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
@@ -29,8 +29,9 @@ their delivery order and exit conditions.
   bounded `post-merge-systemize` extraction with a shared definition, thin runtime
   bindings, config-owned policy, equivalent durable artifacts, and explicit capability
   preflights. PR `#596` merged the same structured contract for `session-start` and
-  `wrap-up`; the triage integration slice adds the config-owned draft/approve/finalize
-  matrix and closes the remaining structural exit.
+  `wrap-up`. PR `#599` merged the config-owned draft/approve/finalize matrix and the
+  independently observed forge-provenance chain for `triage-friction-log`, closing the
+  remaining structural exit.
 - [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivers
   the kit-owned engine boundary for absolute descriptor roots, the environment
   replacement contract, exact lane/forge
@@ -127,6 +128,9 @@ that revision; the delivery slices below are expected to change them.
 - **Authority and artifacts:** the frozen inbox, proposal report, approval-bound state,
   returned tracker identifiers, source/archive diff, and PR are resume evidence. Tracker
   writes require exact-payload approval; a standing workflow request is not approval.
+  Commit, push, pull-request creation, `pr-watch`, archive sweep, and merge read-back
+  consume the exact identity established by the preceding independently verified
+  read-back rather than a locally self-consistent lifecycle record.
 - **Stops and mismatch:** active approval state cannot be overwritten; missing frozen
   evidence never falls back to a whole-inbox sweep; changed approved payloads require a
   new decision; failed or ambiguous tracker/forge writes require destination read-back;
@@ -155,7 +159,8 @@ merge policy or `CS_TOOLKIT_*` namespace. The downstream checkout remains unchan
 its repo-owned engines require a later explicit reconciliation PR rather than a normal
 kit upgrade.
 
-The Phase 3 starter is delivered by this slice. Preserve the next sprint starter:
+PR `#599` delivered the Phase 3 starter and closed the declared structural exit.
+Preserve the next sprint starter:
 
 ```text
 Create feat/codex-environment-capable-launcher from current origin/main. Inventory the
@@ -326,10 +331,10 @@ bind posted delta-draw verdicts; Git paths and author-supplied labels cannot est
 either fact. Until such an artifact exists, uncertain classification continues to take
 the full-panel route and issue `#32` remains the provenance boundary.
 
-PR `#596` then merged the shared integration contract for the lifecycle bookends. The
-triage integration slice completes that phase with config migration, frozen approval
-state, exact external-write authority and read-back, total outcomes, thin adapters, and
-declaration-derived hostile mutations.
+PR `#596` then merged the shared integration contract for the lifecycle bookends. PR
+`#599` completed that phase with config migration, frozen approval state, exact
+external-write authority and read-back, cross-operation forge provenance, total
+outcomes, thin adapters, and declaration-derived hostile mutations.
 
 PR `#598` then moved the reusable lane-identity and forge-safety behavior exposed by
 cs-toolkit `#2086` into kit-owned engines and shared workflows. It deliberately leaves
