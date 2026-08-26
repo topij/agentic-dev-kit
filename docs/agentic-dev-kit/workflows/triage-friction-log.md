@@ -398,7 +398,11 @@ of the canonical `prepared_core` digest, atomically and exclusively create and f
 the semantic classifier: derive the one intent payload by adding the core digest, hash
 that payload, and include both plus the core-bound approval in the envelope. Hashing the
 full envelope is permitted for artifact read-back, but that digest is never an input to
-its core or intended intent. Then claim the absent state path by exclusive creation of
+its core or intended intent. On every read, require the envelope kind to match the mode,
+recompute the old-gate digest from the captured gate bytes, match the complete captured
+gate and filesystem observations to the externally observed blocking gate, and derive
+the exact configured bundle path from that digest. A self-consistent foreign envelope
+is evidence, not resume authority. Then claim the absent state path by exclusive creation of
 that exact `gate-only-recovery-intent`, which binds the prepared-core digest, old gate
 owner record, old gate digest, exact configured bundle path, approved capture, absence
 observations, and repository identity. Flush that intent and
@@ -429,8 +433,10 @@ its content. Reject a symlink, non-regular file, or link count other than one. B
 validity classification, rename, or repair, atomically and exclusively create a
 `state-present-capture` bundle at `triage.recovery_bundle_pattern` expanded with the mode
 and digest of the exact complete held gate. Its immutable capture core contains the
-exact raw state bytes, their SHA-256 digest, the active path, repository identity, and
-the path's device, inode, mode, link count, size, and modification time observed around
+exact raw state bytes, their SHA-256 digest, the active path, repository identity, the
+exact configured bundle path, and the complete held-gate bytes, owner record, digest,
+and filesystem observations. It also contains the path's device, inode, mode, link
+count, size, and modification time observed around
 the read; changed observations abort the capture and leave the active file untouched.
 A process stop after publication is resumable only by interactive `recover`: rederive
 the exact bundle from the unchanged blocking gate, validate its capture digest, and
@@ -444,6 +450,11 @@ digest, and the exact decision plus approver identity bound to `action_core_dige
 Only the two declared actions are valid: `preserve-valid-state-and-quarantine-old-gate`
 and `abandon-invalid-state`. An absent, empty, or unknown action or approving decision is
 not recovery authority and stops operator-held.
+Before selecting either transition, require the exact `state-present-capture` or
+`state-present-prepared` kind, recompute the embedded old-gate digest, rederive the
+configured bundle path, and match the embedded complete gate capture to the externally
+observed blocking gate. Missing or foreign kinds and self-consistent cross-gate bundles
+stop operator-held.
 For each report or frozen-snapshot path obtained from validated captured
 fields, apply the same path, alias, and atomic-read checks before recording exact paths,
 bytes/digests, and filesystem observations. Never follow an unvalidated path from
