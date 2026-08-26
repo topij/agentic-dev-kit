@@ -108,7 +108,12 @@ absent or byte-identical to that intended same-mode intent. Absence resumes at e
 intent publication after revalidation; a matching intent resumes its recorded
 transition. A valid matching `state-present-capture` or `state-present-prepared` bundle
 selects only the bounded state-present transition declared below; it never falls through
-to an ordinary state parse. Any other state stops operator-held. A valid ordinary non-held recovery
+to an ordinary state parse. Every prepared or held state-present envelope carries the
+complete immutable `capture_core` byte-for-byte plus `capture_core_digest`; a prepared
+envelope also carries `action_core`, `action_core_digest`, and an exact approval record
+whose decision and approver identity bind that action-core digest. A missing, altered,
+or digest-mismatched core or approval stops operator-held. Any other state stops
+operator-held. A valid ordinary non-held recovery
 bundle stops operator-held without an ordinary state parse because it is evidence, not
 resume authority. A malformed, foreign, or digest-mismatched candidate also stops
 operator-held without parsing state. Every held result preserves bundle, gate, and state
@@ -174,17 +179,17 @@ intent or held receipt.
 ### Gate-only input precedence
 
 Resolve this table before ordinary live-state rows. The cases are disjoint by execution
-context, entry, and recovery-artifact kind.
+context, entry, live-state artifact, and live recovery-bundle artifact. `unobserved`
+means the row is selected without resolving or reading that live artifact.
 
-| Case id | Context | Entry | Required result |
-|---|---|---|---|
-| `intent-interactive-recover` | interactive | `recover` | Resume only the exact recorded gate-only transition, whether the old or replacement gate is present. |
-| `prepared-interactive-recover` | interactive | `recover` | Resume only the exact approved prepared transition from intent publication while the old gate and state absence still match. |
-| `prepared-unattended-recover` | scheduled or unattended | `recover` | Preserve the prepared bundle and report operator-held without changing an artifact. |
-| `intent-unattended-recover` | scheduled or unattended | `recover` | Report operator-held without changing an artifact. |
-| `intent-other-live-entry` | any live context | no argument, `new`, or `resume` | Report operator-held; preserve intent and bundle. |
-| `held-any-live-entry` | any live context | no argument, `new`, `resume`, or `recover` | Report operator-held; preserve receipt, quarantined gate, and bundle. |
-| `test-isolated-from-live-recovery` | any context | `test` | Select only the test-state rows without reading or changing a live recovery artifact. |
+| Case id | Context | Entry | Live-state artifact | Live bundle artifact | Required result |
+|---|---|---|---|---|---|
+| `intent-interactive-recover` | interactive | `recover` | `gate-only-recovery-intent` | matching `gate-only-prepared` | Resume only the exact recorded gate-only transition, whether the old or replacement gate is present. |
+| `prepared-interactive-recover` | interactive | `recover` | absent | matching `gate-only-prepared` | Resume only the exact approved prepared transition from intent publication while the old gate and state absence still match. |
+| `unattended-recover` | scheduled or unattended | `recover` | unobserved | unobserved | Report operator-held without acquiring the gate or reading or changing an artifact. |
+| `intent-other-live-entry` | any live context | no argument, `new`, or `resume` | `gate-only-recovery-intent` | matching `gate-only-prepared` | Report operator-held; preserve intent and bundle. |
+| `held-any-live-entry` | any live context | no argument, `new`, `resume`, or `recover` | `gate-only-operator-held` | matching `gate-only-prepared` | Report operator-held; preserve receipt, quarantined gate, and bundle. |
+| `test-isolated-from-live-recovery` | any context | `test` | unobserved | unobserved | Select only the test-state rows without reading or changing a live recovery artifact. |
 
 ### Test input precedence
 
@@ -196,19 +201,17 @@ matches the current gate but carries neither a prepared nor state-present held-e
 
 | Test case id | Context | Gate | Artifact | Current-gate bundle | Owner/capture authority | Required result |
 |---|---|---|---|---|---|---|
-| `held-evidence` | any | blocking | any | `held-evidence` | any | Preserve bundle, gate, and artifact; report operator-held with no mutation. |
-| `prepared-unattended` | scheduled or unattended | blocking | any | `test-gate-only-prepared` | any | Preserve bundle, gate, and artifact; report operator-held with no mutation. |
-| `bundle-evidence-unattended` | scheduled or unattended | blocking | any | `valid-non-held`, malformed, foreign, or digest-mismatched | any | Preserve bundle, gate, and artifact; report operator-held with no mutation. |
+| `gated-unattended` | scheduled or unattended | blocking | unobserved | unobserved | not evaluated | Preserve everything and report operator-held without reading an artifact. |
+| `held-evidence` | interactive | blocking | any | `held-evidence` | proven dead | Preserve bundle, gate, and artifact; report operator-held with no mutation. |
 | `prepared-absent-interactive` | interactive | blocking | `absent` | `test-gate-only-prepared` | proven dead with exact approval recorded | Revalidate gate and absence, then publish only the prepared intent payload. |
 | `prepared-mismatch-interactive` | interactive | blocking | `valid-state`, `invalid-state`, or `safe-restart-receipt` | `test-gate-only-prepared` | proven dead with exact approval recorded | Preserve bundle, gate, and artifact; report operator-held without artifact mutation. |
 | `bundle-evidence-held` | interactive | blocking | any | `valid-non-held`, malformed, foreign, or digest-mismatched | proven dead | Preserve bundle, gate, and artifact; report operator-held without an ordinary state parse or artifact mutation. |
 | `intent-interactive` | interactive | any | `test-gate-recovery-intent` | absent or matching `test-gate-only-prepared` | already recorded | Resume only the recorded absent-state gate transition. |
 | `intent-unattended` | scheduled or unattended | any | `test-gate-recovery-intent` | absent | already recorded | Preserve everything and report operator-held. |
-| `gated-owner-unready-interactive` | interactive | blocking | `absent`, `valid-state`, `invalid-state`, or `safe-restart-receipt` | absent | active or uncertain | Preserve gate and artifact; report operator-held without writing a bundle or intent. |
+| `gated-owner-unready-interactive` | interactive | blocking | unobserved | unobserved | active or uncertain | Preserve gate and artifact; report operator-held without writing a bundle or intent. |
 | `gated-owner-unapproved-interactive` | interactive | blocking | `absent`, `valid-state`, `invalid-state`, or `safe-restart-receipt` | absent | proven dead but approval pending, refused, or unavailable | Preserve gate and artifact; report operator-held without writing a bundle or intent. |
 | `gated-artifact-approved` | interactive | blocking | `valid-state`, `invalid-state`, or `safe-restart-receipt` | absent | proven dead and exactly approved | Capture one state-present held bundle; report operator-held without gate or artifact mutation. |
 | `gated-absent-approved` | interactive | blocking | `absent` | absent | proven dead and exactly approved | Publish the absent-state intent before any gate quarantine. |
-| `gated-unattended` | scheduled or unattended | blocking | `absent`, `valid-state`, `invalid-state`, or `safe-restart-receipt` | absent | any | Preserve everything and report operator-held. |
 | `ungated-valid` | any | absent | `valid-state` | absent | not applicable | Resume only the valid test state. |
 | `ungated-safe-restart` | any | absent | `safe-restart-receipt` | absent | not applicable | Execute only the receipt-to-reserved-state route. |
 | `ungated-invalid-interactive` | interactive | absent | `invalid-state` | absent | not applicable | Execute only isolated invalid test-state recovery. |
@@ -426,8 +429,10 @@ continue from the captured bytes. Other entries and unattended execution preserv
 operator-held.
 
 Parse and validate only the captured bytes, never the still-live path. Record the parse
-result and current and recorded identities in a candidate `state-present-prepared`
-envelope. For each report or frozen-snapshot path obtained from validated captured
+result and current and recorded identities in a candidate `action_core`. The prepared
+envelope embeds the complete immutable capture core and digest, the action core and
+digest, and the exact decision plus approver identity bound to `action_core_digest`.
+For each report or frozen-snapshot path obtained from validated captured
 fields, apply the same path, alias, and atomic-read checks before recording exact paths,
 bytes/digests, and filesystem observations. Never follow an unvalidated path from
 malformed state; unresolved artifacts are named as unresolved. A valid captured state
@@ -445,7 +450,7 @@ second time or start work under an unowned gate.
 Classify invalid captured state conservatively. Only a readable state that proves it
 never reached `attempting` and contains no verified tracker identifier or repository/PR
 evidence may offer `abandon <action-core-digest>` to the present interactive operator.
-The action core binds the capture digest, exact quarantine target, exact
+The action core binds the capture-core digest, exact quarantine target, exact
 `recovered-safe-to-restart` receipt payload, old-gate capture, and repository identity.
 Persist exact approval by digest-checking and atomically replacing
 `state-present-capture` with `state-present-prepared` before the first disputed rename.
@@ -475,7 +480,8 @@ The bundle, quarantined bytes, and receipt remain durable.
 If any external attempt or verified identifier is present, or absence of either cannot
 be proved from readable evidence, abandonment is prohibited. Digest-check and atomically
 replace the capture bundle with a terminal `state-present-held` envelope without moving,
-replacing, or deleting the active bytes or old gate. Reconcile
+replacing, or deleting the active bytes or old gate. That envelope retains the complete
+immutable capture core and digest plus the terminal classification. Reconcile
 only with authoritative tracker/forge read-backs keyed by the preserved exact marker,
 payload digest, returned identifier, repository, branch, and head evidence. A
 reconstructed state must preserve all verified and ambiguous operations and requires
