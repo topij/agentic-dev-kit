@@ -313,6 +313,11 @@ the absent integration surfaces are enumerated here:
 - `triage.draft_engine` and `triage.finalize_engine` beneath `paths.engines` for
   engine-backed `triage-friction-log`.
 
+Both triage modes use `triage.state_path` and `triage.gate_path` as separate logical
+state locations. Expand `{mode}`, remove the configured `state.dirname` prefix, and
+resolve the remaining fragment through the shared state-path resolver; never hardcode a
+worktree-local gate path.
+
 The shared `session-start` and `wrap-up` definitions also declare their integration
 preflights and outcomes directly. Session start fails closed on missing repository,
 config, handoff, friction-log, or repository-state reads; unavailable forge, CI,

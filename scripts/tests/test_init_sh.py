@@ -295,6 +295,7 @@ def test_installer_completes_a_partial_triage_section_without_replacing_policy(
     assert triage == expected
     assert "    analysis_tier: expensive  # adopter choice" in first
     assert '    state_path: "state/custom_{mode}.json"  # retained' in first
+    assert "\n    gate_path:" in first
     assert "\n    recovery_bundle_pattern:" in first
     assert "\n    frozen_inbox_pattern:" in first
 

@@ -98,6 +98,10 @@ triage:
   # also carry a generated session id so a later same-day run cannot replace the
   # evidence an earlier approval bound.
   state_path: "state/triage/triage-pipeline-state_{mode}.json"
+  # The single-writer gate is a separate, mode-specific logical state path.
+  # Resolve it through state_paths exactly like state_path; never derive or
+  # hardcode a worktree-local lock location.
+  gate_path: "state/triage/triage-pipeline-gate_{mode}.lock"
   # Deterministic recovery evidence locator. gate_digest is SHA-256 over the
   # exact complete gate bytes, so a crash-resuming invocation never scans for
   # a matching bundle or confuses it with another gate's evidence.

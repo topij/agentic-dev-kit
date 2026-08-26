@@ -4,15 +4,19 @@ import ast
 import base64
 import binascii
 import contextlib
+import copy
 import hashlib
 import importlib.util
 import json
 import os
 import re
 import shutil
+import socket
 import stat
 import subprocess
 import sys
+import tempfile
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import ModuleType
 
@@ -2468,7 +2472,7 @@ def _assert_triage_adapter(adapter: str, runtime: str) -> None:
     assert " ".join(parts[2].split()) == _triage_adapter_body(runtime)
 
 
-def _assert_triage_semantics(workflow: str) -> None:
+def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     flattened = " ".join(workflow.split())
     assert (
         "The capability, authority, artifact, input, gate-only input precedence, test "
@@ -3318,6 +3322,40 @@ def _assert_triage_semantics(workflow: str) -> None:
             value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
         ).encode("utf-8")
 
+    resolved_state_root = resolved_state_root.resolve()
+    triage_config = yaml.safe_load(
+        (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
+    )["triage"]
+
+    def resolve_logical_path(logical_path: str) -> str:
+        logical = Path(logical_path)
+        assert not logical.is_absolute() and ".." not in logical.parts
+        candidate = resolved_state_root / logical
+        assert candidate.resolve(strict=False).is_relative_to(resolved_state_root)
+        return str(candidate)
+
+    # The state_paths suite owns sandbox selection. This probe owns the workflow's
+    # next boundary: a resolver-returned lexical child is still rejected when an
+    # existing parent symlink canonically escapes that sandbox.
+    state_probe_parent = resolved_state_root / "resolver-containment-probe"
+    state_probe_parent.mkdir()
+    with tempfile.TemporaryDirectory(
+        dir=resolved_state_root.parent
+    ) as outside_probe_dir:
+        escape_link = state_probe_parent / "escape"
+        escape_link.symlink_to(outside_probe_dir, target_is_directory=True)
+        with pytest.raises(AssertionError):
+            resolve_logical_path("resolver-containment-probe/escape/artifact.json")
+        escape_link.unlink()
+    state_probe_parent.rmdir()
+
+    test_gate_path = resolve_logical_path(
+        triage_config["gate_path"].format(mode="test")
+    )
+    live_gate_path = resolve_logical_path(
+        triage_config["gate_path"].format(mode="live")
+    )
+
     gate_owner_fields = {
         "token",
         "run_identity",
@@ -3336,7 +3374,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         "modification_time_ns",
     }
 
-    def complete_gate_capture_valid(capture: object) -> bool:
+    def complete_gate_capture_valid(
+        capture: object, expected_gate_path: str
+    ) -> bool:
         if not isinstance(capture, dict):
             return False
         gate_bytes = capture.get("bytes")
@@ -3360,8 +3400,46 @@ def _assert_triage_semantics(workflow: str) -> None:
             gate_bytes.encode("utf-8")
         ).hexdigest():
             return False
+        if (
+            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", owner.get("token", ""))
+            is None
+            or
+            not all(
+                isinstance(owner.get(field), str) and bool(owner.get(field))
+                for field in gate_owner_fields - {"process_id", "run_identity"}
+            )
+            or not (
+                owner.get("run_identity") is None
+                or (
+                    isinstance(owner.get("run_identity"), str)
+                    and bool(owner.get("run_identity"))
+                )
+            )
+            or type(owner.get("process_id")) is not int
+            or owner.get("process_id", 0) <= 0
+            or observations.get("size") != len(gate_bytes.encode("utf-8"))
+        ):
+            return False
         if observations.get("link_count") != len(same_inode_names):
             return False
+        primary_path = observations.get("path")
+        if not isinstance(primary_path, str):
+            return False
+        if primary_path != expected_gate_path:
+            return False
+        expected_path = Path(expected_gate_path)
+        if (
+            not expected_path.is_absolute()
+            or not expected_path.is_relative_to(resolved_state_root)
+            or not expected_path.resolve(strict=False).is_relative_to(
+                resolved_state_root
+            )
+            or ".." in expected_path.parts
+            or str(expected_path) != expected_gate_path
+        ):
+            return False
+        expected_parent = expected_path.parent
+        expected_temp_name = f".{expected_path.name}.{owner['token']}.tmp"
         paths: list[str] = []
         invariant_fields = gate_stat_fields - {"path"}
         for name in same_inode_names:
@@ -3369,6 +3447,19 @@ def _assert_triage_semantics(workflow: str) -> None:
                 return False
             path = name.get("path")
             if not isinstance(path, str) or not path:
+                return False
+            candidate_path = Path(path)
+            if (
+                not candidate_path.is_absolute()
+                or not candidate_path.is_relative_to(resolved_state_root)
+                or not candidate_path.resolve(strict=False).is_relative_to(
+                    resolved_state_root
+                )
+                or ".." in candidate_path.parts
+                or str(candidate_path) != path
+                or candidate_path.parent != expected_parent
+                or candidate_path.name not in {expected_path.name, expected_temp_name}
+            ):
                 return False
             paths.append(path)
             if any(name.get(field) != observations.get(field) for field in invariant_fields):
@@ -3378,11 +3469,26 @@ def _assert_triage_semantics(workflow: str) -> None:
     def quarantine_gate_capture(capture: dict[str, object]) -> dict[str, object]:
         names = capture["same_inode_names"]
         assert isinstance(names, list)
+        observations = capture["observations"]
+        assert isinstance(observations, dict)
+        quarantine_root = Path(observations["path"]).parent.parent / "quarantine" / "gates"
         quarantined_names = [
             {
-                **name,
                 "source_path": name["path"],
-                "path": f"state/quarantine/gates/{index}-{Path(name['path']).name}",
+                "source_absent": True,
+                "target": {
+                    "path": str(
+                        quarantine_root / f"{index}-{Path(name['path']).name}"
+                    ),
+                    "bytes": capture["bytes"],
+                    "digest": capture["digest"],
+                    "observations": {
+                        **name,
+                        "path": str(
+                            quarantine_root / f"{index}-{Path(name['path']).name}"
+                        ),
+                    },
+                },
             }
             for index, name in enumerate(names)
         ]
@@ -3395,29 +3501,121 @@ def _assert_triage_semantics(workflow: str) -> None:
         }
 
     def gate_quarantine_valid(
-        evidence: object, capture: dict[str, object]
+        evidence: object,
+        capture: dict[str, object],
+        expected_gate_path: str,
     ) -> bool:
-        if not isinstance(evidence, dict):
+        if (
+            not isinstance(evidence, dict)
+            or set(evidence)
+            != {"old_gate_digest", "old_gate_capture_digest", "quarantined_names"}
+        ):
             return False
-        expected = quarantine_gate_capture(capture)
-        return evidence == expected
+        if not complete_gate_capture_valid(capture, expected_gate_path):
+            return False
+        names = capture.get("same_inode_names")
+        observed_names = evidence.get("quarantined_names")
+        if (
+            not isinstance(names, list)
+            or not isinstance(observed_names, list)
+            or len(observed_names) != len(names)
+            or evidence.get("old_gate_digest") != capture.get("digest")
+            or evidence.get("old_gate_capture_digest")
+            != hashlib.sha256(canonical_json_bytes(capture)).hexdigest()
+        ):
+            return False
+        target_paths: list[str] = []
+        quarantine_root = (
+            Path(expected_gate_path).parent.parent / "quarantine" / "gates"
+        )
+        for index, (source, observed) in enumerate(
+            zip(names, observed_names, strict=True)
+        ):
+            if (
+                not isinstance(source, dict)
+                or not isinstance(observed, dict)
+                or set(observed) != {"source_path", "source_absent", "target"}
+                or observed.get("source_path") != source.get("path")
+                or observed.get("source_absent") is not True
+            ):
+                return False
+            target = observed.get("target")
+            expected_target_path = str(
+                quarantine_root / f"{index}-{Path(source['path']).name}"
+            )
+            if (
+                not isinstance(target, dict)
+                or set(target) != {"path", "bytes", "digest", "observations"}
+                or target.get("path") != expected_target_path
+                or target.get("bytes") != capture.get("bytes")
+                or target.get("digest") != capture.get("digest")
+                or target.get("observations")
+                != {**source, "path": expected_target_path}
+            ):
+                return False
+            target_paths.append(expected_target_path)
+        return len(target_paths) == len(set(target_paths))
 
-    triage_config = yaml.safe_load(
-        (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
-    )["triage"]
     recovery_bundle_pattern = triage_config["recovery_bundle_pattern"]
-    old_gate_owner = {
-        "token": "old-owner",
-        "run_identity": "triage-run-identity",
-        "host": "review-host",
-        "process_id": 31415,
-        "process_start_observation": "process-start-token",
-        "creation_time": "2026-08-26T00:00:00Z",
+    def process_start_observation(process_id: int) -> str | None:
+        try:
+            observation = subprocess.run(
+                ("ps", "-o", "lstart=", "-p", str(process_id)),
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise AssertionError("process identity observation timed out") from exc
+        observed_start = observation.stdout.strip()
+        return observed_start or None
+
+    owner_process = subprocess.Popen(
+        (sys.executable, "-c", "import time; time.sleep(30)"),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        owner_process_start = process_start_observation(owner_process.pid)
+        assert owner_process_start is not None
+        old_gate_owner = {
+            "token": "old-owner",
+            "run_identity": "triage-run-identity",
+            "host": socket.gethostname(),
+            "process_id": owner_process.pid,
+            "process_start_observation": owner_process_start,
+            "creation_time": "2026-08-26T00:00:00Z",
+        }
+        assert process_start_observation(owner_process.pid) == owner_process_start
+    finally:
+        if owner_process.poll() is None:
+            owner_process.terminate()
+        try:
+            owner_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            owner_process.kill()
+            owner_process.wait(timeout=5)
+    assert process_start_observation(owner_process.pid) is None
+    observed_owned_termination_proof = {
+        "kind": "gate-owner-termination-proof",
+        "owner_token": old_gate_owner["token"],
+        "run_identity": old_gate_owner["run_identity"],
+        "host": old_gate_owner["host"],
+        "process_id": old_gate_owner["process_id"],
+        "process_start_observation": old_gate_owner[
+            "process_start_observation"
+        ],
+        "termination_observation": {
+            "process_id": owner_process.pid,
+            "present": False,
+            "process_start_observation": None,
+        },
     }
     old_gate_bytes = canonical_json_bytes(old_gate_owner) + b"\n"
     old_gate_digest = hashlib.sha256(old_gate_bytes).hexdigest()
     old_gate_observations = {
-        "path": "state/gates/triage-test.gate",
+        "path": test_gate_path,
         "device": 7,
         "inode": 19,
         "mode": 0o100600,
@@ -3429,7 +3627,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         old_gate_observations,
         {
             **old_gate_observations,
-            "path": "state/gates/.triage-test.gate.old-owner.tmp",
+            "path": str(
+                Path(test_gate_path).with_name(
+                    f".{Path(test_gate_path).name}.old-owner.tmp"
+                )
+            ),
         },
     ]
     old_gate_capture = {
@@ -3439,6 +3641,748 @@ def _assert_triage_semantics(workflow: str) -> None:
         "observations": old_gate_observations,
         "same_inode_names": old_gate_inode_names,
     }
+    def stat_observations(
+        path: Path, observed: os.stat_result | None = None
+    ) -> dict[str, object]:
+        observed = path.lstat() if observed is None else observed
+        return {
+            "path": str(path),
+            "device": observed.st_dev,
+            "inode": observed.st_ino,
+            "mode": observed.st_mode,
+            "link_count": observed.st_nlink,
+            "size": observed.st_size,
+            "modification_time_ns": observed.st_mtime_ns,
+        }
+
+    @contextlib.contextmanager
+    def anchored_parent(
+        path: Path,
+    ) -> Iterator[tuple[list[int], tuple[str, ...], str]]:
+        try:
+            relative_path = path.relative_to(resolved_state_root)
+        except ValueError:
+            raise OSError("path escapes the state root") from None
+        directory_descriptors: list[int] = []
+        try:
+            directory_descriptors.append(
+                os.open(
+                    resolved_state_root,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                )
+            )
+            for component in relative_path.parts[:-1]:
+                directory_descriptors.append(
+                    os.open(
+                        component,
+                        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                        dir_fd=directory_descriptors[-1],
+                    )
+                )
+            yield (
+                directory_descriptors,
+                tuple(relative_path.parts[:-1]),
+                relative_path.name,
+            )
+        finally:
+            for directory_descriptor in reversed(directory_descriptors):
+                os.close(directory_descriptor)
+
+    def anchored_chain_is_current(
+        held_descriptors: list[int], parent_parts: tuple[str, ...]
+    ) -> bool:
+        fresh_descriptors: list[int] = []
+        try:
+            fresh_descriptors.append(
+                os.open(
+                    resolved_state_root,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                )
+            )
+            for component in parent_parts:
+                fresh_descriptors.append(
+                    os.open(
+                        component,
+                        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                        dir_fd=fresh_descriptors[-1],
+                    )
+                )
+            return all(
+                os.path.samestat(os.fstat(held), os.fstat(fresh))
+                for held, fresh in zip(
+                    held_descriptors, fresh_descriptors, strict=True
+                )
+            )
+        except OSError:
+            return False
+        finally:
+            for descriptor in reversed(fresh_descriptors):
+                os.close(descriptor)
+
+    def atomically_observe_regular_file(
+        path: Path,
+        before_parent_walk: Callable[[], None] | None = None,
+        after_parent_walk: Callable[[], None] | None = None,
+        before_open: Callable[[], None] | None = None,
+        after_read: Callable[[], None] | None = None,
+    ) -> tuple[bytes, dict[str, object]] | None:
+        try:
+            if before_parent_walk is not None:
+                before_parent_walk()
+            with anchored_parent(path) as (
+                directory_descriptors,
+                parent_parts,
+                leaf_name,
+            ):
+                if after_parent_walk is not None:
+                    after_parent_walk()
+                if before_open is not None:
+                    before_open()
+                descriptor = os.open(
+                    leaf_name,
+                    os.O_RDONLY | os.O_NOFOLLOW,
+                    dir_fd=directory_descriptors[-1],
+                )
+                try:
+                    before = os.fstat(descriptor)
+                    if not stat.S_ISREG(before.st_mode):
+                        return None
+                    chunks: list[bytes] = []
+                    while chunk := os.read(descriptor, 65536):
+                        chunks.append(chunk)
+                    after = os.fstat(descriptor)
+                    if after_read is not None:
+                        after_read()
+                    path_after = os.stat(
+                        leaf_name,
+                        dir_fd=directory_descriptors[-1],
+                        follow_symlinks=False,
+                    )
+                    identity_fields = (
+                        "st_dev",
+                        "st_ino",
+                        "st_mode",
+                        "st_nlink",
+                        "st_size",
+                        "st_mtime_ns",
+                    )
+                    if any(
+                        getattr(before, field) != getattr(after, field)
+                        or getattr(after, field) != getattr(path_after, field)
+                        for field in identity_fields
+                    ) or not anchored_chain_is_current(
+                        directory_descriptors, parent_parts
+                    ):
+                        return None
+                    return b"".join(chunks), stat_observations(path, path_after)
+                finally:
+                    os.close(descriptor)
+        except OSError:
+            return None
+
+    def anchored_lstat_proves_absent(path: Path) -> bool:
+        try:
+            with anchored_parent(path) as (
+                directory_descriptors,
+                parent_parts,
+                leaf_name,
+            ):
+                if not anchored_chain_is_current(
+                    directory_descriptors, parent_parts
+                ):
+                    return False
+                try:
+                    os.stat(
+                        leaf_name,
+                        dir_fd=directory_descriptors[-1],
+                        follow_symlinks=False,
+                    )
+                except FileNotFoundError:
+                    return anchored_chain_is_current(
+                        directory_descriptors, parent_parts
+                    )
+                return False
+        except OSError:
+            return False
+
+    def anchored_rename_and_observe(
+        source: Path,
+        target: Path,
+        expected_bytes: bytes,
+        expected_observations: dict[str, object],
+        before_rename: Callable[[], None] | None = None,
+        after_validation: Callable[[], None] | None = None,
+        after_publish: Callable[[], None] | None = None,
+    ) -> tuple[bytes, dict[str, object]] | None:
+        source_descriptor: int | None = None
+        try:
+            with anchored_parent(source) as (
+                source_descriptors,
+                source_parent_parts,
+                source_name,
+            ), anchored_parent(target) as (
+                target_descriptors,
+                target_parent_parts,
+                target_name,
+            ):
+                if before_rename is not None:
+                    before_rename()
+                if not anchored_chain_is_current(
+                    source_descriptors, source_parent_parts
+                ) or not anchored_chain_is_current(
+                    target_descriptors, target_parent_parts
+                ):
+                    return None
+                source_descriptor = os.open(
+                    source_name,
+                    os.O_RDONLY | os.O_NOFOLLOW,
+                    dir_fd=source_descriptors[-1],
+                )
+                source_before = os.fstat(source_descriptor)
+                if not stat.S_ISREG(source_before.st_mode):
+                    return None
+                source_chunks: list[bytes] = []
+                while source_chunk := os.read(source_descriptor, 65536):
+                    source_chunks.append(source_chunk)
+                source_after = os.fstat(source_descriptor)
+                named_source = os.stat(
+                    source_name,
+                    dir_fd=source_descriptors[-1],
+                    follow_symlinks=False,
+                )
+                identity_fields = {
+                    "device": "st_dev",
+                    "inode": "st_ino",
+                    "mode": "st_mode",
+                    "link_count": "st_nlink",
+                    "size": "st_size",
+                    "modification_time_ns": "st_mtime_ns",
+                }
+                if (
+                    b"".join(source_chunks) != expected_bytes
+                    or hashlib.sha256(b"".join(source_chunks)).hexdigest()
+                    != hashlib.sha256(expected_bytes).hexdigest()
+                    or expected_observations.get("path") != str(source)
+                    or any(
+                        getattr(source_before, stat_field)
+                        != getattr(source_after, stat_field)
+                        or getattr(source_after, stat_field)
+                        != getattr(named_source, stat_field)
+                        or getattr(named_source, stat_field)
+                        != expected_observations.get(evidence_field)
+                        for evidence_field, stat_field in identity_fields.items()
+                    )
+                ):
+                    return None
+                try:
+                    os.stat(
+                        target_name,
+                        dir_fd=target_descriptors[-1],
+                        follow_symlinks=False,
+                    )
+                except FileNotFoundError:
+                    pass
+                else:
+                    return None
+                if after_validation is not None:
+                    after_validation()
+                link_published_by_this_call = False
+                try:
+                    os.link(
+                        source_name,
+                        target_name,
+                        src_dir_fd=source_descriptors[-1],
+                        dst_dir_fd=target_descriptors[-1],
+                        follow_symlinks=False,
+                    )
+                    link_published_by_this_call = True
+                    target_after_link = os.stat(
+                        target_name,
+                        dir_fd=target_descriptors[-1],
+                        follow_symlinks=False,
+                    )
+                    source_after_link = os.stat(
+                        source_name,
+                        dir_fd=source_descriptors[-1],
+                        follow_symlinks=False,
+                    )
+                    approved_descriptor_after_link = os.fstat(source_descriptor)
+                    if (
+                        not os.path.samestat(
+                            approved_descriptor_after_link, source_after
+                        )
+                        or not os.path.samestat(
+                            target_after_link, approved_descriptor_after_link
+                        )
+                        or not os.path.samestat(
+                            source_after_link, approved_descriptor_after_link
+                        )
+                        or any(
+                            getattr(approved_descriptor_after_link, stat_field)
+                            != (
+                                expected_observations.get(evidence_field) + 1
+                                if evidence_field == "link_count"
+                                else expected_observations.get(evidence_field)
+                            )
+                            for evidence_field, stat_field in identity_fields.items()
+                        )
+                    ):
+                        os.unlink(target_name, dir_fd=target_descriptors[-1])
+                        return None
+                    os.fsync(target_descriptors[-1])
+                    os.unlink(source_name, dir_fd=source_descriptors[-1])
+                    os.fsync(source_descriptors[-1])
+                except OSError:
+                    try:
+                        source_still_present = os.stat(
+                            source_name,
+                            dir_fd=source_descriptors[-1],
+                            follow_symlinks=False,
+                        )
+                        target_to_rollback = os.stat(
+                            target_name,
+                            dir_fd=target_descriptors[-1],
+                            follow_symlinks=False,
+                        )
+                    except OSError:
+                        pass
+                    else:
+                        if link_published_by_this_call and os.path.samestat(
+                            source_still_present, target_to_rollback
+                        ):
+                            os.unlink(
+                                target_name, dir_fd=target_descriptors[-1]
+                            )
+                    return None
+                if after_publish is not None:
+                    after_publish()
+                try:
+                    os.stat(
+                        source_name,
+                        dir_fd=source_descriptors[-1],
+                        follow_symlinks=False,
+                    )
+                except FileNotFoundError:
+                    pass
+                else:
+                    return None
+                if not anchored_chain_is_current(
+                    source_descriptors, source_parent_parts
+                ) or not anchored_chain_is_current(
+                    target_descriptors, target_parent_parts
+                ):
+                    return None
+                target_readback = atomically_observe_regular_file(target)
+                if target_readback is None:
+                    return None
+                if not anchored_chain_is_current(
+                    source_descriptors, source_parent_parts
+                ) or not anchored_chain_is_current(
+                    target_descriptors, target_parent_parts
+                ):
+                    return None
+                return target_readback
+        except OSError:
+            return None
+        finally:
+            if source_descriptor is not None:
+                os.close(source_descriptor)
+
+    def run_gate_quarantine_filesystem_probe() -> None:
+        with tempfile.TemporaryDirectory(dir=resolved_state_root) as probe_dir:
+            probe_root = Path(probe_dir)
+            probe_gate_dir = probe_root / "state" / "gates"
+            probe_gate_dir.mkdir(parents=True)
+            probe_primary = probe_gate_dir / "triage-test.gate"
+            probe_temporary = probe_gate_dir / ".triage-test.gate.old-owner.tmp"
+            probe_temporary.write_bytes(old_gate_bytes)
+            os.link(probe_temporary, probe_primary)
+
+            probe_readback = atomically_observe_regular_file(probe_primary)
+            assert probe_readback is not None
+            probe_bytes, probe_observations = probe_readback
+            probe_capture = {
+                "bytes": probe_bytes.decode("utf-8"),
+                "digest": hashlib.sha256(probe_bytes).hexdigest(),
+                "owner": json.loads(probe_bytes),
+                "observations": probe_observations,
+                "same_inode_names": [
+                    stat_observations(probe_primary),
+                    stat_observations(probe_temporary),
+                ],
+            }
+            probe_quarantine_dir = probe_root / "state" / "quarantine" / "gates"
+            probe_quarantine_dir.mkdir(parents=True)
+            observed_probe_names: list[dict[str, object]] = []
+            for index, source in enumerate((probe_primary, probe_temporary)):
+                target = probe_quarantine_dir / f"{index}-{source.name}"
+                target_readback = anchored_rename_and_observe(
+                    source,
+                    target,
+                    old_gate_bytes,
+                    probe_capture["same_inode_names"][index],
+                )
+                assert target_readback is not None
+                target_bytes, target_observations = target_readback
+                observed_probe_names.append(
+                    {
+                        "source_path": str(source),
+                        "source_absent": anchored_lstat_proves_absent(source),
+                        "target": {
+                            "path": str(target),
+                            "bytes": target_bytes.decode("utf-8"),
+                            "digest": hashlib.sha256(target_bytes).hexdigest(),
+                            "observations": target_observations,
+                        },
+                    }
+                )
+            observed_probe_quarantine = {
+                "old_gate_digest": probe_capture["digest"],
+                "old_gate_capture_digest": hashlib.sha256(
+                    canonical_json_bytes(probe_capture)
+                ).hexdigest(),
+                "quarantined_names": observed_probe_names,
+            }
+            assert gate_quarantine_valid(
+                observed_probe_quarantine,
+                probe_capture,
+                str(probe_primary),
+            )
+            replacement_control = probe_quarantine_dir / "replacement-control"
+            replacement_control.write_bytes(old_gate_bytes)
+            replacement_candidate = probe_quarantine_dir / "replacement-candidate"
+            saved_original = probe_quarantine_dir / "saved-original"
+            opened_substitute = probe_quarantine_dir / "opened-substitute"
+
+            def swap_before_open() -> None:
+                replacement_control.rename(saved_original)
+                replacement_candidate.write_bytes(old_gate_bytes)
+                replacement_candidate.replace(replacement_control)
+
+            def restore_after_read() -> None:
+                replacement_control.rename(opened_substitute)
+                saved_original.rename(replacement_control)
+
+            assert (
+                atomically_observe_regular_file(
+                    replacement_control,
+                    before_open=swap_before_open,
+                    after_read=restore_after_read,
+                )
+                is None
+            )
+            with tempfile.TemporaryDirectory(
+                dir=resolved_state_root.parent
+            ) as outside_parent_dir:
+                outside_parent = Path(outside_parent_dir)
+                (outside_parent / "artifact").write_bytes(old_gate_bytes)
+                parent_control = probe_root / "parent-control"
+                parent_control.mkdir()
+                parent_control_artifact = parent_control / "artifact"
+                parent_control_artifact.write_bytes(old_gate_bytes)
+                saved_parent = probe_root / "saved-parent"
+
+                def swap_parent_before_walk() -> None:
+                    parent_control.rename(saved_parent)
+                    parent_control.symlink_to(outside_parent, target_is_directory=True)
+
+                try:
+                    assert (
+                        atomically_observe_regular_file(
+                            parent_control_artifact,
+                            after_parent_walk=swap_parent_before_walk,
+                        )
+                        is None
+                    )
+                finally:
+                    if parent_control.is_symlink():
+                        parent_control.unlink()
+                    if saved_parent.exists():
+                        saved_parent.rename(parent_control)
+
+                rename_parent = probe_root / "rename-parent-control"
+                rename_parent.mkdir()
+                rename_source = rename_parent / "artifact"
+                rename_source.write_bytes(old_gate_bytes)
+                rename_source_observations = stat_observations(rename_source)
+                rename_target = probe_quarantine_dir / "rename-parent-target"
+                saved_rename_parent = probe_root / "saved-rename-parent"
+
+                def swap_parent_before_rename() -> None:
+                    rename_parent.rename(saved_rename_parent)
+                    rename_parent.symlink_to(outside_parent, target_is_directory=True)
+
+                try:
+                    assert (
+                        anchored_rename_and_observe(
+                            rename_source,
+                            rename_target,
+                            old_gate_bytes,
+                            rename_source_observations,
+                            before_rename=swap_parent_before_rename,
+                        )
+                        is None
+                    )
+                    assert (saved_rename_parent / "artifact").read_bytes() == (
+                        old_gate_bytes
+                    )
+                    assert anchored_lstat_proves_absent(rename_target)
+                finally:
+                    if rename_parent.is_symlink():
+                        rename_parent.unlink()
+                    if saved_rename_parent.exists():
+                        saved_rename_parent.rename(rename_parent)
+
+                post_publish_parent = probe_root / "post-publish-parent-control"
+                post_publish_parent.mkdir()
+                post_publish_source = post_publish_parent / "artifact"
+                post_publish_source.write_bytes(old_gate_bytes)
+                post_publish_observations = stat_observations(post_publish_source)
+                post_publish_target = (
+                    probe_quarantine_dir / "post-publish-parent-target"
+                )
+                saved_post_publish_parent = probe_root / "saved-post-publish-parent"
+
+                def swap_parent_after_publish() -> None:
+                    post_publish_parent.rename(saved_post_publish_parent)
+                    post_publish_parent.symlink_to(
+                        outside_parent, target_is_directory=True
+                    )
+
+                try:
+                    assert (
+                        anchored_rename_and_observe(
+                            post_publish_source,
+                            post_publish_target,
+                            old_gate_bytes,
+                            post_publish_observations,
+                            after_publish=swap_parent_after_publish,
+                        )
+                        is None
+                    )
+                    assert not (
+                        saved_post_publish_parent / "artifact"
+                    ).exists()
+                    assert post_publish_target.read_bytes() == old_gate_bytes
+                finally:
+                    if post_publish_parent.is_symlink():
+                        post_publish_parent.unlink()
+                    if saved_post_publish_parent.exists():
+                        saved_post_publish_parent.rename(post_publish_parent)
+
+                leaf_source = probe_root / "leaf-source"
+                leaf_source.write_bytes(old_gate_bytes)
+                leaf_source_observations = stat_observations(leaf_source)
+                saved_leaf_source = probe_root / "saved-leaf-source"
+                leaf_target = probe_quarantine_dir / "leaf-target"
+
+                def replace_leaf_before_rename() -> None:
+                    leaf_source.rename(saved_leaf_source)
+                    leaf_source.write_bytes(old_gate_bytes)
+
+                assert (
+                    anchored_rename_and_observe(
+                        leaf_source,
+                        leaf_target,
+                        old_gate_bytes,
+                        leaf_source_observations,
+                        before_rename=replace_leaf_before_rename,
+                    )
+                    is None
+                )
+                assert leaf_source.read_bytes() == old_gate_bytes
+                assert saved_leaf_source.read_bytes() == old_gate_bytes
+                assert anchored_lstat_proves_absent(leaf_target)
+
+                late_leaf_source = probe_root / "late-leaf-source"
+                late_leaf_source.write_bytes(old_gate_bytes)
+                late_leaf_observations = stat_observations(late_leaf_source)
+                saved_late_leaf_source = probe_root / "saved-late-leaf-source"
+                late_leaf_target = probe_quarantine_dir / "late-leaf-target"
+
+                def replace_leaf_after_validation() -> None:
+                    late_leaf_source.rename(saved_late_leaf_source)
+                    late_leaf_source.write_bytes(old_gate_bytes)
+
+                assert (
+                    anchored_rename_and_observe(
+                        late_leaf_source,
+                        late_leaf_target,
+                        old_gate_bytes,
+                        late_leaf_observations,
+                        after_validation=replace_leaf_after_validation,
+                    )
+                    is None
+                )
+                assert late_leaf_source.read_bytes() == old_gate_bytes
+                assert saved_late_leaf_source.read_bytes() == old_gate_bytes
+                assert anchored_lstat_proves_absent(late_leaf_target)
+
+                collision_source = probe_root / "collision-source"
+                collision_source.write_bytes(old_gate_bytes)
+                collision_source_observations = stat_observations(collision_source)
+                collision_target = probe_quarantine_dir / "collision-target"
+                collision_target.write_bytes(b"durable-existing-evidence")
+                assert (
+                    anchored_rename_and_observe(
+                        collision_source,
+                        collision_target,
+                        old_gate_bytes,
+                        collision_source_observations,
+                    )
+                    is None
+                )
+                assert collision_source.read_bytes() == old_gate_bytes
+                assert collision_target.read_bytes() == b"durable-existing-evidence"
+
+                race_source = probe_root / "same-inode-race-source"
+                race_source.write_bytes(old_gate_bytes)
+                race_source_observations = stat_observations(race_source)
+                race_target = probe_quarantine_dir / "same-inode-race-target"
+
+                def publish_same_inode_race_target() -> None:
+                    os.link(race_source, race_target)
+
+                assert (
+                    anchored_rename_and_observe(
+                        race_source,
+                        race_target,
+                        old_gate_bytes,
+                        race_source_observations,
+                        after_validation=publish_same_inode_race_target,
+                    )
+                    is None
+                )
+                assert race_source.read_bytes() == old_gate_bytes
+                assert race_target.read_bytes() == old_gate_bytes
+                assert os.path.samestat(race_source.stat(), race_target.stat())
+
+    run_gate_quarantine_filesystem_probe()
+    forced_failure_path: Path | None = None
+    try:
+        with tempfile.TemporaryDirectory(dir=resolved_state_root) as failure_dir:
+            forced_failure_path = Path(failure_dir)
+            (forced_failure_path / "hard-link-evidence").write_bytes(old_gate_bytes)
+            raise RuntimeError("forced quarantine-probe failure")
+    except RuntimeError as exc:
+        assert str(exc) == "forced quarantine-probe failure"
+    assert forced_failure_path is not None and not forced_failure_path.exists()
+    for foreign_path in (
+        "/tmp/triage-test.gate",
+        f"{Path(test_gate_path).parent}/../foreign/{Path(test_gate_path).name}",
+    ):
+        foreign_primary_observations = {
+            **old_gate_observations,
+            "path": foreign_path,
+        }
+        foreign_primary_capture = {
+            **old_gate_capture,
+            "observations": foreign_primary_observations,
+            "same_inode_names": [
+                foreign_primary_observations,
+                old_gate_inode_names[1],
+            ],
+        }
+        assert not complete_gate_capture_valid(
+            foreign_primary_capture, test_gate_path
+        )
+    foreign_alias_capture = {
+        **old_gate_capture,
+        "same_inode_names": [
+            old_gate_observations,
+            {
+                **old_gate_inode_names[1],
+                "path": resolve_logical_path(
+                    f"state/foreign/.{Path(test_gate_path).name}.old-owner.tmp"
+                ),
+            },
+        ],
+    }
+    assert not complete_gate_capture_valid(
+        foreign_alias_capture, test_gate_path
+    )
+    noncanonical_alias_capture = {
+        **old_gate_capture,
+        "same_inode_names": [
+            old_gate_observations,
+            {
+                **old_gate_inode_names[1],
+                "path": (
+                    f"{Path(test_gate_path).parent}/./"
+                    f".{Path(test_gate_path).name}.old-owner.tmp"
+                ),
+            },
+        ],
+    }
+    assert not complete_gate_capture_valid(
+        noncanonical_alias_capture, test_gate_path
+    )
+    wrong_gate_size_capture = {
+        **old_gate_capture,
+        "observations": {**old_gate_observations, "size": len(old_gate_bytes) + 1},
+        "same_inode_names": [
+            {**name, "size": len(old_gate_bytes) + 1}
+            for name in old_gate_inode_names
+        ],
+    }
+    assert not complete_gate_capture_valid(
+        wrong_gate_size_capture, test_gate_path
+    )
+    wrong_owner_type = {**old_gate_owner, "process_id": "31415"}
+    wrong_owner_type_bytes = canonical_json_bytes(wrong_owner_type) + b"\n"
+    wrong_owner_type_capture = {
+        **old_gate_capture,
+        "bytes": wrong_owner_type_bytes.decode("utf-8"),
+        "digest": hashlib.sha256(wrong_owner_type_bytes).hexdigest(),
+        "owner": wrong_owner_type,
+        "observations": {
+            **old_gate_observations,
+            "size": len(wrong_owner_type_bytes),
+        },
+        "same_inode_names": [
+            {**name, "size": len(wrong_owner_type_bytes)}
+            for name in old_gate_inode_names
+        ],
+    }
+    assert not complete_gate_capture_valid(
+        wrong_owner_type_capture, test_gate_path
+    )
+    unsafe_token_owner = {**old_gate_owner, "token": "../foreign"}
+    unsafe_token_bytes = canonical_json_bytes(unsafe_token_owner) + b"\n"
+    unsafe_token_observations = {
+        **old_gate_observations,
+        "link_count": 1,
+        "size": len(unsafe_token_bytes),
+    }
+    unsafe_token_capture = {
+        **old_gate_capture,
+        "bytes": unsafe_token_bytes.decode("utf-8"),
+        "digest": hashlib.sha256(unsafe_token_bytes).hexdigest(),
+        "owner": unsafe_token_owner,
+        "observations": unsafe_token_observations,
+        "same_inode_names": [unsafe_token_observations],
+    }
+    assert not complete_gate_capture_valid(unsafe_token_capture, test_gate_path)
+    preallocation_owner = {**old_gate_owner, "run_identity": None}
+    preallocation_gate_bytes = canonical_json_bytes(preallocation_owner) + b"\n"
+    preallocation_observations = {
+        **old_gate_observations,
+        "size": len(preallocation_gate_bytes),
+    }
+    preallocation_capture = {
+        **old_gate_capture,
+        "bytes": preallocation_gate_bytes.decode("utf-8"),
+        "digest": hashlib.sha256(preallocation_gate_bytes).hexdigest(),
+        "owner": preallocation_owner,
+        "observations": preallocation_observations,
+        "same_inode_names": [
+            preallocation_observations,
+            {**old_gate_inode_names[1], "size": len(preallocation_gate_bytes)},
+        ],
+    }
+    assert complete_gate_capture_valid(
+        preallocation_capture, test_gate_path
+    )
     intent_fields = {
         "kind": "test-gate-recovery-intent",
         "mode": "test",
@@ -3467,11 +4411,15 @@ def _assert_triage_semantics(workflow: str) -> None:
     ).hexdigest()
     intended_intent_bytes = canonical_json_bytes(intended_intent)
     durable_intent_artifact = {
-        "path": "state/triage-test.json",
+        "path": resolve_logical_path(
+            triage_config["state_path"].format(mode="test")
+        ),
         "bytes": intended_intent_bytes.decode("utf-8"),
         "digest": hashlib.sha256(intended_intent_bytes).hexdigest(),
         "observations": {
-            "path": "state/triage-test.json",
+            "path": resolve_logical_path(
+                triage_config["state_path"].format(mode="test")
+            ),
             "device": 7,
             "inode": 29,
             "mode": 0o100600,
@@ -3481,6 +4429,42 @@ def _assert_triage_semantics(workflow: str) -> None:
         },
     }
     old_gate_quarantine = quarantine_gate_capture(old_gate_capture)
+    source_present_quarantine = copy.deepcopy(old_gate_quarantine)
+    source_present_quarantine["quarantined_names"][0]["source_absent"] = False
+    assert not gate_quarantine_valid(
+        source_present_quarantine,
+        old_gate_capture,
+        test_gate_path,
+    )
+    for changed_target_field, changed_target_value in (
+        ("bytes", "foreign-gate-bytes"),
+        ("digest", "foreign-gate-digest"),
+    ):
+        changed_target_quarantine = copy.deepcopy(old_gate_quarantine)
+        changed_target_quarantine["quarantined_names"][0]["target"][
+            changed_target_field
+        ] = changed_target_value
+        assert not gate_quarantine_valid(
+            changed_target_quarantine,
+            old_gate_capture,
+            test_gate_path,
+        )
+    for changed_target_stat, changed_target_value in (
+        ("inode", 99),
+        ("mode", 0o100644),
+        ("link_count", 1),
+        ("size", len(old_gate_bytes) + 1),
+        ("modification_time_ns", 654323),
+    ):
+        changed_target_quarantine = copy.deepcopy(old_gate_quarantine)
+        changed_target_quarantine["quarantined_names"][0]["target"][
+            "observations"
+        ][changed_target_stat] = changed_target_value
+        assert not gate_quarantine_valid(
+            changed_target_quarantine,
+            old_gate_capture,
+            test_gate_path,
+        )
     prepared_bundle = {
         "kind": "test-gate-only-prepared",
         "prepared_core": prepared_core,
@@ -3516,6 +4500,17 @@ def _assert_triage_semantics(workflow: str) -> None:
         core_intent_fields = core.get("intent_fields")
         if not isinstance(core_intent_fields, dict):
             return False
+        mode = core_intent_fields.get("mode")
+        expected_gate_path = (
+            {
+                "live": live_gate_path,
+                "test": test_gate_path,
+            }.get(mode)
+            if isinstance(mode, str)
+            else None
+        )
+        if expected_gate_path is None:
+            return False
         embedded_gate = core.get("old_gate_capture")
         if not isinstance(embedded_gate, dict):
             return False
@@ -3526,28 +4521,35 @@ def _assert_triage_semantics(workflow: str) -> None:
                 return False
             durable_bytes = durable_intent.get("bytes")
             durable_observations = durable_intent.get("observations")
+            expected_state_path = resolve_logical_path(
+                triage_config["state_path"].format(mode=mode)
+            )
             if (
                 not isinstance(durable_bytes, str)
                 or durable_bytes.encode("utf-8") != canonical_json_bytes(intent)
                 or durable_intent.get("digest")
                 != hashlib.sha256(durable_bytes.encode("utf-8")).hexdigest()
                 or not isinstance(durable_observations, dict)
-                or durable_intent.get("path") != durable_observations.get("path")
+                or set(durable_observations) != gate_stat_fields
+                or durable_intent.get("path") != expected_state_path
+                or durable_observations.get("path") != expected_state_path
                 or durable_observations.get("size") != len(durable_bytes.encode("utf-8"))
-                or not gate_quarantine_valid(gate_quarantine, embedded_gate)
+                or durable_observations.get("link_count") != 1
+                or not gate_quarantine_valid(
+                    gate_quarantine, embedded_gate, expected_gate_path
+                )
             ):
                 return False
             if replacement_gate is not None and not complete_gate_capture_valid(
-                replacement_gate
+                replacement_gate, expected_gate_path
             ):
                 return False
-        if not complete_gate_capture_valid(embedded_gate):
+        if not complete_gate_capture_valid(embedded_gate, expected_gate_path):
             return False
         embedded_gate_bytes = embedded_gate.get("bytes")
         if not isinstance(embedded_gate_bytes, str):
             return False
         gate_digest = hashlib.sha256(embedded_gate_bytes.encode("utf-8")).hexdigest()
-        mode = core_intent_fields.get("mode")
         expected_kind = {
             "live": "gate-only-prepared",
             "test": "test-gate-only-prepared",
@@ -3564,6 +4566,12 @@ def _assert_triage_semantics(workflow: str) -> None:
             **core_intent_fields,
             "prepared_core_digest": core_digest,
         }
+        expected_approval = {
+            "decision": f"approve prepared-core {core_digest}",
+            "source": "current-session",
+            "approver_identity": "operator",
+            "prepared_core_digest": core_digest,
+        }
         return (
             expected_kind is not None
             and expected_intent_kind is not None
@@ -3575,10 +4583,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             and core_intent_fields.get("bundle_path") == expected_bundle_path
             and observed_bundle_path == expected_bundle_path
             and bundle.get("prepared_core_digest") == core_digest
-            and approval.get("prepared_core_digest") == core_digest
-            and approval.get("decision") == f"approve prepared-core {core_digest}"
-            and approval.get("source") == "current-session"
-            and approval.get("approver_identity") == "operator"
+            and approval == expected_approval
             and intent == expected_intent
             and bundle.get("intended_intent_digest")
             == hashlib.sha256(canonical_json_bytes(intent)).hexdigest()
@@ -3754,7 +4759,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         **old_gate_capture,
         "same_inode_names": [old_gate_observations, old_gate_observations],
     }
-    assert not complete_gate_capture_valid(duplicate_inode_name_capture)
+    assert not complete_gate_capture_valid(
+        duplicate_inode_name_capture, test_gate_path
+    )
     assert not gate_only_bundle_valid(
         rebuild_gate_only_bundle(
             duplicate_inode_name_capture, intent_fields["bundle_path"]
@@ -3766,7 +4773,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         **old_gate_capture,
         "same_inode_names": [old_gate_inode_names[0], incomplete_inode_name],
     }
-    assert not complete_gate_capture_valid(incomplete_inode_name_capture)
+    assert not complete_gate_capture_valid(
+        incomplete_inode_name_capture, test_gate_path
+    )
     assert not gate_only_bundle_valid(
         rebuild_gate_only_bundle(
             incomplete_inode_name_capture, intent_fields["bundle_path"]
@@ -3784,7 +4793,9 @@ def _assert_triage_semantics(workflow: str) -> None:
                 {**old_gate_inode_names[1], changed_stat: changed_value},
             ],
         }
-        assert not complete_gate_capture_valid(changed_name_capture)
+        assert not complete_gate_capture_valid(
+            changed_name_capture, test_gate_path
+        )
         assert not gate_only_bundle_valid(
             rebuild_gate_only_bundle(
                 changed_name_capture, intent_fields["bundle_path"]
@@ -3796,7 +4807,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             *old_gate_inode_names,
             {
                 **old_gate_observations,
-                "path": "state/gates/foreign-name",
+                "path": str(Path(test_gate_path).with_name("foreign-name")),
             },
         ],
     }
@@ -3865,7 +4876,8 @@ def _assert_triage_semantics(workflow: str) -> None:
         "old_gate_digest": old_gate_digest,
         "bundle_path": intent_fields["bundle_path"],
         "quarantine_paths": [
-            name["path"] for name in old_gate_quarantine["quarantined_names"]
+            name["target"]["path"]
+            for name in old_gate_quarantine["quarantined_names"]
         ],
         "new_gate_digest": replacement_gate_digest,
         "new_gate_owner_token": replacement_gate_owner["token"],
@@ -3890,10 +4902,35 @@ def _assert_triage_semantics(workflow: str) -> None:
         held_artifact: dict[str, object] = gate_only_held_artifact,
         gate_quarantine: dict[str, object] = old_gate_quarantine,
         replacement_gate: dict[str, object] = replacement_gate_capture,
+        require_mutation_authority: bool = False,
+        current_owner_token: str | None = None,
+        current_run_identity: str | None = None,
     ) -> bool:
-        held_bytes = held_artifact["bytes"]
+        held_bytes = held_artifact.get("bytes")
+        held_observations = held_artifact.get("observations")
+        expected_held_payload = {
+            "kind": "gate-only-operator-held",
+            "prepared_core_digest": prepared_bundle["prepared_core_digest"],
+            "old_gate_digest": old_gate_capture["digest"],
+            "bundle_path": intent_fields["bundle_path"],
+            "quarantine_paths": [
+                name["target"]["path"]
+                for name in gate_quarantine["quarantined_names"]
+            ],
+            "new_gate_digest": replacement_gate["digest"],
+            "new_gate_owner_token": replacement_gate["owner"]["token"],
+        }
+        mutation_authority_valid = (
+            not require_mutation_authority
+            or (
+                current_owner_token == replacement_gate["owner"]["token"]
+                and current_run_identity
+                == replacement_gate["owner"]["run_identity"]
+            )
+        )
         return (
             isinstance(held_bytes, str)
+            and isinstance(held_observations, dict)
             and gate_only_bundle_valid(
                 prepared_bundle,
                 observed_gate=None,
@@ -3901,15 +4938,17 @@ def _assert_triage_semantics(workflow: str) -> None:
                 gate_quarantine=gate_quarantine,
                 replacement_gate=replacement_gate,
             )
+            and held_payload == expected_held_payload
             and held_bytes.encode("utf-8")
-            == canonical_json_bytes(held_payload)
-            and held_artifact["digest"]
+            == canonical_json_bytes(expected_held_payload)
+            and held_artifact.get("digest")
             == hashlib.sha256(held_bytes.encode("utf-8")).hexdigest()
-            and held_payload["quarantine_paths"]
-            == [name["path"] for name in gate_quarantine["quarantined_names"]]
-            and held_payload["new_gate_owner_token"]
-            == replacement_gate["owner"]["token"]
-            and held_payload["new_gate_digest"] == replacement_gate["digest"]
+            and held_artifact.get("path") == durable_intent_artifact["path"]
+            and set(held_observations) == gate_stat_fields
+            and held_observations.get("path") == held_artifact.get("path")
+            and held_observations.get("size") == len(held_bytes.encode("utf-8"))
+            and held_observations.get("link_count") == 1
+            and mutation_authority_valid
         )
     changed_held_owner = {
         **gate_only_held_payload,
@@ -3920,11 +4959,63 @@ def _assert_triage_semantics(workflow: str) -> None:
     )
     changed_held_paths = {
         **gate_only_held_payload,
-        "quarantine_paths": ["state/quarantine/gates/foreign"],
+        "quarantine_paths": [
+            resolve_logical_path("state/quarantine/gates/foreign")
+        ],
     }
     assert not gate_only_held_valid(
         changed_held_paths, held_artifact_for(changed_held_paths)
     )
+    for changed_field, changed_value in (
+        ("kind", "foreign-held"),
+        ("prepared_core_digest", "foreign-core"),
+        ("old_gate_digest", "foreign-old-gate"),
+        ("bundle_path", "state/triage/foreign-bundle.json"),
+    ):
+        changed_held_payload = {
+            **gate_only_held_payload,
+            changed_field: changed_value,
+        }
+        assert not gate_only_held_valid(
+            changed_held_payload, held_artifact_for(changed_held_payload)
+        )
+    extra_held_payload = {**gate_only_held_payload, "foreign": "field"}
+    assert not gate_only_held_valid(
+        extra_held_payload, held_artifact_for(extra_held_payload)
+    )
+    foreign_replacement_observations = {
+        **replacement_gate_observations,
+        "path": str(Path(test_gate_path).with_name("foreign-replacement.gate")),
+    }
+    foreign_replacement_capture = {
+        **replacement_gate_capture,
+        "observations": foreign_replacement_observations,
+        "same_inode_names": [foreign_replacement_observations],
+    }
+    assert not gate_only_held_valid(replacement_gate=foreign_replacement_capture)
+    assert not gate_only_held_valid(require_mutation_authority=True)
+    assert not gate_only_held_valid(
+        require_mutation_authority=True,
+        current_owner_token="foreign-owner",
+        current_run_identity=replacement_gate_owner["run_identity"],
+    )
+    assert not gate_only_held_valid(
+        require_mutation_authority=True,
+        current_owner_token=replacement_gate_owner["token"],
+        current_run_identity="foreign-run",
+    )
+    for held_observation_mutation in (
+        {**gate_only_held_artifact["observations"], "path": "state/foreign.json"},
+        {
+            **gate_only_held_artifact["observations"],
+            "size": gate_only_held_artifact["observations"]["size"] + 1,
+        },
+    ):
+        changed_held_artifact = {
+            **gate_only_held_artifact,
+            "observations": held_observation_mutation,
+        }
+        assert not gate_only_held_valid(held_artifact=changed_held_artifact)
     current_gate_digest: str | None = old_gate_digest
     bundle_gate_digest: str | None = None
     intent_bundle_gate_digest: str | None = None
@@ -3995,13 +5086,21 @@ def _assert_triage_semantics(workflow: str) -> None:
             assert current_gate_digest == replacement_gate_digest
             assert state_kind == "intent"
             assert intent_bundle_gate_digest == old_gate_digest
-            assert gate_only_held_valid()
+            assert gate_only_held_valid(
+                require_mutation_authority=True,
+                current_owner_token=replacement_gate_owner["token"],
+                current_run_identity=replacement_gate_owner["run_identity"],
+            )
             state_kind = "held"
             crash_routes.append("held-any-live-entry-with-replacement-gate")
         elif step == "release-recovery-gate":
             assert current_gate_digest == replacement_gate_digest
             assert state_kind == "held"
-            assert gate_only_held_valid()
+            assert gate_only_held_valid(
+                require_mutation_authority=True,
+                current_owner_token=replacement_gate_owner["token"],
+                current_run_identity=replacement_gate_owner["run_identity"],
+            )
             current_gate_digest = None
             crash_routes.append("held-any-live-entry-without-gate")
         if state_kind == "intent":
@@ -4078,13 +5177,17 @@ def _assert_triage_semantics(workflow: str) -> None:
 
     state_gate_observations = {
         **old_gate_observations,
-        "path": "state/gates/triage-live.gate",
+        "path": live_gate_path,
     }
     state_gate_inode_names = [
         state_gate_observations,
         {
             **state_gate_observations,
-            "path": "state/gates/.triage-live.gate.old-owner.tmp",
+            "path": str(
+                Path(live_gate_path).with_name(
+                    f".{Path(live_gate_path).name}.old-owner.tmp"
+                )
+            ),
         },
     ]
     state_old_gate_capture = {
@@ -4096,9 +5199,12 @@ def _assert_triage_semantics(workflow: str) -> None:
     bundle_path = recovery_bundle_pattern.format(
         mode="live", gate_digest=old_gate_digest
     )
+    live_state_path = resolve_logical_path(
+        triage_config["state_path"].format(mode="live")
+    )
     valid_state = b'{"phase":"propose"}\n'
     valid_observations = {
-        "path": "state/triage-live.json",
+        "path": live_state_path,
         "device": 7,
         "inode": 11,
         "mode": 0o100600,
@@ -4122,6 +5228,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         "action": "preserve-valid-state-and-quarantine-old-gate",
         "old_gate_digest": old_gate_digest,
         "state_digest": hashlib.sha256(valid_state).hexdigest(),
+        "gate_authority": {
+            "origin": "proven-stale",
+            "owner_token": state_old_gate_capture["owner"]["token"],
+            "run_identity": state_old_gate_capture["owner"]["run_identity"],
+        },
     }
     valid_action_core_digest = hashlib.sha256(
         canonical_json_bytes(valid_action_core)
@@ -4176,12 +5287,24 @@ def _assert_triage_semantics(workflow: str) -> None:
         "capture_core": capture_core,
         "capture_core_digest": capture_core_digest,
     }
+    def capture_bundle_for(candidate_core: dict[str, object]) -> dict[str, object]:
+        return {
+            "kind": "state-present-capture",
+            "capture_core": candidate_core,
+            "capture_core_digest": hashlib.sha256(
+                canonical_json_bytes(candidate_core)
+            ).hexdigest(),
+        }
+
+    live_quarantine_path = resolve_logical_path(
+        f"state/quarantine/{Path(live_state_path).name}"
+    )
     quarantine_artifact = {
-        "path": "state/quarantine/triage-live.json",
+        "path": live_quarantine_path,
         **encoded_state_fields(captured_state),
         "state_observations": {
             **captured_observations,
-            "path": "state/quarantine/triage-live.json",
+            "path": live_quarantine_path,
         },
     }
     restart_receipt_core = {
@@ -4195,6 +5318,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         "capture_core_digest": capture_core_digest,
         "action": "abandon-invalid-state",
         "old_gate_digest": old_gate_digest,
+        "gate_authority": {
+            "origin": "current-owned",
+            "owner_token": state_old_gate_capture["owner"]["token"],
+            "run_identity": state_old_gate_capture["owner"]["run_identity"],
+        },
         "quarantine_artifact": quarantine_artifact,
         "restart_receipt_core": restart_receipt_core,
     }
@@ -4222,6 +5350,35 @@ def _assert_triage_semantics(workflow: str) -> None:
         **restart_receipt_core,
         "prepared_envelope_digest": invalid_prepared_digest,
     }
+    def receipt_artifact_for(payload: dict[str, object]) -> dict[str, object]:
+        receipt_bytes = canonical_json_bytes(payload)
+        return {
+            "path": live_state_path,
+            "bytes": receipt_bytes.decode("utf-8"),
+            "digest": hashlib.sha256(receipt_bytes).hexdigest(),
+            "observations": {
+                "path": live_state_path,
+                "device": 7,
+                "inode": 13,
+                "mode": 0o100600,
+                "link_count": 1,
+                "size": len(receipt_bytes),
+                "modification_time_ns": 123458,
+            },
+        }
+
+    restart_receipt_artifact = receipt_artifact_for(restart_receipt)
+    owned_release_evidence = {
+        "kind": "owned-gate-release",
+        "released_path": state_gate_observations["path"],
+        "old_gate_capture_digest": hashlib.sha256(
+            canonical_json_bytes(state_old_gate_capture)
+        ).hexdigest(),
+        "owner_token": state_old_gate_capture["owner"]["token"],
+        "receipt_digest": restart_receipt_artifact["digest"],
+        "source_absent": True,
+    }
+    owned_termination_proof = observed_owned_termination_proof
     held_envelope = {
         "kind": "state-present-held",
         "capture_core": capture_core,
@@ -4244,6 +5401,10 @@ def _assert_triage_semantics(workflow: str) -> None:
         observed_gate: dict[str, object] | None = state_old_gate_capture,
         observed_bundle_path: str = bundle_path,
         quarantined_gate: dict[str, object] | None = None,
+        owned_release: dict[str, object] | None = None,
+        current_owner_token: str | None = None,
+        current_run_identity: str | None = None,
+        termination_proof: dict[str, object] | None = None,
     ) -> str:
         kind = bundle.get("kind")
         if kind not in {"state-present-capture", "state-present-prepared"}:
@@ -4274,15 +5435,50 @@ def _assert_triage_semantics(workflow: str) -> None:
         embedded_gate = embedded_capture.get("old_gate")
         if not isinstance(embedded_gate, dict):
             return "operator-held"
+        mode = embedded_capture.get("mode")
+        if mode != "live":
+            return "operator-held"
+        expected_gate_path = live_gate_path
         if gate_status == "absent" and observed_gate is not None:
             return "operator-held"
         if gate_status != "absent" and embedded_gate != observed_gate:
             return "operator-held"
-        if gate_status == "absent" and not gate_quarantine_valid(
-            quarantined_gate, embedded_gate
+        if gate_status not in {
+            "owned",
+            "owned-now-proven-stale",
+            "foreign-proven-stale",
+            "absent",
+        }:
+            return "operator-held"
+        if not complete_gate_capture_valid(embedded_gate, expected_gate_path):
+            return "operator-held"
+        if (
+            gate_status == "owned"
+            and (
+                current_owner_token != embedded_gate["owner"]["token"]
+                or current_run_identity != embedded_gate["owner"]["run_identity"]
+            )
         ):
             return "operator-held"
-        if not complete_gate_capture_valid(embedded_gate):
+        expected_termination_proof = {
+            "kind": "gate-owner-termination-proof",
+            "owner_token": embedded_gate["owner"]["token"],
+            "run_identity": embedded_gate["owner"]["run_identity"],
+            "host": embedded_gate["owner"]["host"],
+            "process_id": embedded_gate["owner"]["process_id"],
+            "process_start_observation": embedded_gate["owner"][
+                "process_start_observation"
+            ],
+            "termination_observation": {
+                "process_id": embedded_gate["owner"]["process_id"],
+                "present": False,
+                "process_start_observation": None,
+            },
+        }
+        if gate_status == "owned-now-proven-stale":
+            if termination_proof != expected_termination_proof:
+                return "operator-held"
+        elif termination_proof is not None:
             return "operator-held"
         embedded_gate_bytes = embedded_gate.get("bytes")
         if not isinstance(embedded_gate_bytes, str):
@@ -4290,7 +5486,6 @@ def _assert_triage_semantics(workflow: str) -> None:
         embedded_gate_digest = hashlib.sha256(
             embedded_gate_bytes.encode("utf-8")
         ).hexdigest()
-        mode = embedded_capture.get("mode")
         expected_bundle_path = recovery_bundle_pattern.format(
             mode=mode, gate_digest=embedded_gate_digest
         )
@@ -4302,7 +5497,20 @@ def _assert_triage_semantics(workflow: str) -> None:
         ):
             return "operator-held"
         embedded_state_observations = embedded_capture.get("state_observations")
-        if not isinstance(embedded_state_observations, dict):
+        expected_state_path = resolve_logical_path(
+            triage_config["state_path"].format(mode=mode)
+        )
+        expected_quarantine_path = resolve_logical_path(
+            f"state/quarantine/{Path(expected_state_path).name}"
+        )
+        if (
+            not isinstance(embedded_state_observations, dict)
+            or set(embedded_state_observations) != gate_stat_fields
+            or embedded_state_observations.get("path") != expected_state_path
+            or str(Path(expected_state_path)) != expected_state_path
+            or embedded_state_observations.get("size") != len(embedded_state_bytes)
+            or embedded_state_observations.get("link_count") != 1
+        ):
             return "operator-held"
         expected_current_artifact = {
             "path": embedded_state_observations.get("path"),
@@ -4315,7 +5523,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             return (
                 "await-action-approval"
                 if artifact == expected_current_artifact
-                and gate_status == "proven-stale"
+                and gate_status == "foreign-proven-stale"
                 else "operator-held"
             )
         action_core = bundle.get("action_core")
@@ -4326,12 +5534,36 @@ def _assert_triage_semantics(workflow: str) -> None:
         ).hexdigest()
         approval = bundle.get("approval")
         action = action_core.get("action")
+        gate_authority = action_core.get("gate_authority")
+        expected_authority_identity = {
+            "owner_token": embedded_gate["owner"]["token"],
+            "run_identity": embedded_gate["owner"]["run_identity"],
+        }
+        valid_gate_authorities = (
+            {"origin": origin, **expected_authority_identity}
+            for origin in ("current-owned", "proven-stale")
+        )
+        if gate_authority not in valid_gate_authorities:
+            return "operator-held"
+        expected_origin = {
+            "owned": "current-owned",
+            "owned-now-proven-stale": "current-owned",
+            "foreign-proven-stale": "proven-stale",
+        }.get(gate_status)
+        if expected_origin is not None and gate_authority["origin"] != expected_origin:
+            return "operator-held"
         expected_decision = {
             "preserve-valid-state-and-quarantine-old-gate": (
                 f"approve action-core {action_core_digest}"
             ),
             "abandon-invalid-state": f"abandon action-core {action_core_digest}",
         }.get(action)
+        expected_approval = {
+            "source": "current-session",
+            "approver_identity": "operator",
+            "decision": expected_decision,
+            "action_core_digest": action_core_digest,
+        }
         if (
             expected_decision is None
             or bundle.get("action_core_digest") != action_core_digest
@@ -4340,24 +5572,71 @@ def _assert_triage_semantics(workflow: str) -> None:
             or action_core.get("capture_core_digest")
             != bundle.get("capture_core_digest")
             or action_core.get("old_gate_digest") != embedded_gate.get("digest")
-            or approval.get("action_core_digest") != action_core_digest
-            or approval.get("decision") != expected_decision
-            or approval.get("source") != "current-session"
-            or approval.get("approver_identity") != "operator"
+            or approval != expected_approval
         ):
             return "operator-held"
         if action == "preserve-valid-state-and-quarantine-old-gate":
-            if artifact != expected_current_artifact:
+            expected_valid_action = {
+                "capture_core_digest": bundle.get("capture_core_digest"),
+                "action": "preserve-valid-state-and-quarantine-old-gate",
+                "old_gate_digest": embedded_gate_digest,
+                "state_digest": embedded_capture.get("state_digest"),
+                "gate_authority": {
+                    "origin": "proven-stale",
+                    **expected_authority_identity,
+                },
+            }
+            if (
+                action_core != expected_valid_action
+                or artifact != expected_current_artifact
+            ):
                 return "operator-held"
+            if gate_status == "absent":
+                return (
+                    "ordinary-resume"
+                    if gate_quarantine_valid(
+                        quarantined_gate, embedded_gate, expected_gate_path
+                    )
+                    else "operator-held"
+                )
             return {
-                "proven-stale": "resume-valid-stale-gate-quarantine",
-                "absent": "ordinary-resume",
+                "foreign-proven-stale": "resume-valid-stale-gate-quarantine",
             }.get(gate_status, "operator-held")
         expected_quarantine_artifact = action_core.get("quarantine_artifact")
         expected_receipt_core = action_core.get("restart_receipt_core")
+        quarantine_observations = (
+            expected_quarantine_artifact.get("state_observations")
+            if isinstance(expected_quarantine_artifact, dict)
+            else None
+        )
+        quarantine_path = (
+            expected_quarantine_artifact.get("path")
+            if isinstance(expected_quarantine_artifact, dict)
+            else None
+        )
         if (
-            not isinstance(expected_quarantine_artifact, dict)
+            set(action_core)
+            != {
+                "capture_core_digest",
+                "action",
+                "old_gate_digest",
+                "gate_authority",
+                "quarantine_artifact",
+                "restart_receipt_core",
+            }
+            or action != "abandon-invalid-state"
+            or not isinstance(expected_quarantine_artifact, dict)
             or not isinstance(expected_receipt_core, dict)
+            or not isinstance(quarantine_path, str)
+            or quarantine_path != expected_quarantine_path
+            or str(Path(quarantine_path)) != quarantine_path
+            or not Path(quarantine_path).is_absolute()
+            or not Path(quarantine_path).is_relative_to(resolved_state_root)
+            or ".." in Path(quarantine_path).parts
+            or not isinstance(quarantine_observations, dict)
+            or set(quarantine_observations) != gate_stat_fields
+            or quarantine_observations
+            != {**embedded_state_observations, "path": quarantine_path}
             or expected_receipt_core
             != {
                 "mode": mode,
@@ -4373,7 +5652,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         if artifact == expected_current_artifact:
             return (
                 "resume-state-quarantine"
-                if gate_status in {"owned", "proven-stale"}
+                if gate_status in {
+                    "owned",
+                    "owned-now-proven-stale",
+                    "foreign-proven-stale",
+                }
                 else "operator-held"
             )
         if artifact == expected_quarantine_artifact:
@@ -4381,7 +5664,11 @@ def _assert_triage_semantics(workflow: str) -> None:
                 return "operator-held"
             return (
                 "resume-receipt-publication"
-                if gate_status in {"owned", "proven-stale"}
+                if gate_status in {
+                    "owned",
+                    "owned-now-proven-stale",
+                    "foreign-proven-stale",
+                }
                 else "operator-held"
             )
         expected_receipt = {
@@ -4391,19 +5678,102 @@ def _assert_triage_semantics(workflow: str) -> None:
                 canonical_json_bytes(bundle)
             ).hexdigest(),
         }
-        if artifact == expected_receipt:
+        receipt_bytes = artifact.get("bytes")
+        receipt_observations = artifact.get("observations")
+        receipt_payload: object = None
+        if isinstance(receipt_bytes, str):
+            try:
+                receipt_payload = json.loads(receipt_bytes)
+            except json.JSONDecodeError:
+                receipt_payload = None
+        receipt_valid = (
+            isinstance(receipt_bytes, str)
+            and receipt_payload == expected_receipt
+            and receipt_bytes.encode("utf-8") == canonical_json_bytes(expected_receipt)
+            and artifact.get("digest")
+            == hashlib.sha256(receipt_bytes.encode("utf-8")).hexdigest()
+            and artifact.get("path") == expected_state_path
+            and isinstance(receipt_observations, dict)
+            and set(receipt_observations) == gate_stat_fields
+            and receipt_observations.get("path") == expected_state_path
+            and receipt_observations.get("size") == len(receipt_bytes.encode("utf-8"))
+            and receipt_observations.get("link_count") == 1
+        )
+        if receipt_valid:
+            if gate_status == "absent":
+                stale_quarantine_valid = gate_quarantine_valid(
+                    quarantined_gate, embedded_gate, expected_gate_path
+                )
+                expected_owned_release = {
+                    "kind": "owned-gate-release",
+                    "released_path": expected_gate_path,
+                    "old_gate_capture_digest": hashlib.sha256(
+                        canonical_json_bytes(embedded_gate)
+                    ).hexdigest(),
+                    "owner_token": embedded_gate["owner"]["token"],
+                    "receipt_digest": artifact.get("digest"),
+                    "source_absent": True,
+                }
+                owned_release_valid = (
+                    gate_authority["origin"] == "current-owned"
+                    and owned_release == expected_owned_release
+                )
+                return (
+                    "restart-receipt-ready"
+                    if stale_quarantine_valid != owned_release_valid
+                    else "operator-held"
+                )
             return {
                 "owned": "release-owned-gate",
-                "proven-stale": "quarantine-proven-stale-gate",
-                "absent": "restart-receipt-ready",
+                "owned-now-proven-stale": "quarantine-proven-stale-gate",
+                "foreign-proven-stale": "quarantine-proven-stale-gate",
             }.get(gate_status, "operator-held")
         return "operator-held"
 
+    def stale_owned_route(
+        bundle: dict[str, object],
+        artifact: dict[str, object],
+        **kwargs: object,
+    ) -> str:
+        return state_present_route(
+            bundle,
+            "owned-now-proven-stale",
+            artifact,
+            termination_proof=owned_termination_proof,
+            **kwargs,
+        )
+
     assert state_present_route(
-        capture_bundle, "proven-stale", current_artifact
+        capture_bundle, "foreign-proven-stale", current_artifact
     ) == "await-action-approval"
+    malformed_capture_observations: list[dict[str, object]] = []
+    missing_capture_field = {**captured_observations}
+    missing_capture_field.pop("modification_time_ns")
+    malformed_capture_observations.append(missing_capture_field)
+    malformed_capture_observations.extend(
+        [
+            {**captured_observations, "size": len(captured_state) + 1},
+            {**captured_observations, "path": "state/triage/foreign-live.json"},
+            {**captured_observations, "path": "state/triage/../foreign-live.json"},
+        ]
+    )
+    for malformed_observations in malformed_capture_observations:
+        malformed_capture_core = {
+            **capture_core,
+            "state_observations": malformed_observations,
+        }
+        malformed_current_artifact = {
+            **current_artifact,
+            "path": malformed_observations.get("path"),
+            "state_observations": malformed_observations,
+        }
+        assert state_present_route(
+            capture_bundle_for(malformed_capture_core),
+            "foreign-proven-stale",
+            malformed_current_artifact,
+        ) == "operator-held"
     assert state_present_route(
-        valid_prepared, "proven-stale", valid_artifact
+        valid_prepared, "foreign-proven-stale", valid_artifact
     ) == "resume-valid-stale-gate-quarantine"
     assert state_present_route(
         valid_prepared,
@@ -4413,21 +5783,158 @@ def _assert_triage_semantics(workflow: str) -> None:
         quarantined_gate=state_old_gate_quarantine,
     ) == "ordinary-resume"
     assert state_present_route(
-        invalid_prepared, "owned", current_artifact
+        invalid_prepared,
+        "owned",
+        current_artifact,
+        current_owner_token=state_old_gate_capture["owner"]["token"],
+        current_run_identity=state_old_gate_capture["owner"]["run_identity"],
     ) == "resume-state-quarantine"
     assert state_present_route(
-        invalid_prepared, "proven-stale", quarantine_artifact
+        invalid_prepared,
+        "owned",
+        current_artifact,
+        current_owner_token="foreign-owner",
+        current_run_identity=state_old_gate_capture["owner"]["run_identity"],
+    ) == "operator-held"
+    assert state_present_route(
+        invalid_prepared,
+        "owned",
+        current_artifact,
+        current_owner_token=state_old_gate_capture["owner"]["token"],
+        current_run_identity="foreign-run",
+    ) == "operator-held"
+    assert stale_owned_route(
+        invalid_prepared, quarantine_artifact
     ) == "resume-receipt-publication"
     assert state_present_route(
-        invalid_prepared, "owned", restart_receipt
+        invalid_prepared,
+        "owned",
+        restart_receipt_artifact,
+        current_owner_token=state_old_gate_capture["owner"]["token"],
+        current_run_identity=state_old_gate_capture["owner"]["run_identity"],
     ) == "release-owned-gate"
     assert state_present_route(
-        invalid_prepared, "proven-stale", restart_receipt
+        invalid_prepared,
+        "owned",
+        restart_receipt_artifact,
+        current_owner_token="foreign-owner",
+        current_run_identity=state_old_gate_capture["owner"]["run_identity"],
+    ) == "operator-held"
+    assert stale_owned_route(
+        invalid_prepared, restart_receipt_artifact
     ) == "quarantine-proven-stale-gate"
     assert state_present_route(
         invalid_prepared,
+        "owned-now-proven-stale",
+        restart_receipt_artifact,
+    ) == "operator-held"
+    for proof_mutation in (
+        {**owned_termination_proof, "owner_token": "foreign-owner"},
+        {**owned_termination_proof, "run_identity": "foreign-run"},
+        {**owned_termination_proof, "host": "foreign-host"},
+        {**owned_termination_proof, "process_id": 27182},
+        {
+            **owned_termination_proof,
+            "process_start_observation": "foreign-process-start",
+        },
+        {
+            **owned_termination_proof,
+            "termination_observation": {
+                "process_id": owned_termination_proof["process_id"],
+                "present": True,
+                "process_start_observation": owned_termination_proof[
+                    "process_start_observation"
+                ],
+            },
+        },
+        {
+            **owned_termination_proof,
+            "termination_observation": {
+                "process_id": owned_termination_proof["process_id"],
+                "present": True,
+                "process_start_observation": "reused-process-start",
+            },
+        },
+    ):
+        assert state_present_route(
+            invalid_prepared,
+            "owned-now-proven-stale",
+            restart_receipt_artifact,
+            termination_proof=proof_mutation,
+        ) == "operator-held"
+    assert state_present_route(
+        invalid_prepared,
+        "foreign-proven-stale",
+        current_artifact,
+        termination_proof=owned_termination_proof,
+    ) == "operator-held"
+    assert state_present_route(
+        invalid_prepared,
         "absent",
-        restart_receipt,
+        restart_receipt_artifact,
+        observed_gate=None,
+        quarantined_gate=state_old_gate_quarantine,
+    ) == "restart-receipt-ready"
+    assert state_present_route(
+        invalid_prepared,
+        "absent",
+        restart_receipt_artifact,
+        observed_gate=None,
+        owned_release=owned_release_evidence,
+    ) == "restart-receipt-ready"
+    stale_action_core = {
+        **invalid_action_core,
+        "gate_authority": {
+            "origin": "proven-stale",
+            "owner_token": state_old_gate_capture["owner"]["token"],
+            "run_identity": state_old_gate_capture["owner"]["run_identity"],
+        },
+    }
+    stale_action_core_digest = hashlib.sha256(
+        canonical_json_bytes(stale_action_core)
+    ).hexdigest()
+    stale_prepared = {
+        **invalid_prepared,
+        "action_core": stale_action_core,
+        "action_core_digest": stale_action_core_digest,
+        "approval": {
+            "source": "current-session",
+            "approver_identity": "operator",
+            "decision": f"abandon action-core {stale_action_core_digest}",
+            "action_core_digest": stale_action_core_digest,
+        },
+    }
+    stale_receipt = {
+        **restart_receipt,
+        "prepared_envelope_digest": hashlib.sha256(
+            canonical_json_bytes(stale_prepared)
+        ).hexdigest(),
+    }
+    stale_receipt_artifact = receipt_artifact_for(stale_receipt)
+    assert state_present_route(
+        stale_prepared,
+        "foreign-proven-stale",
+        quarantine_artifact,
+    ) == "resume-receipt-publication"
+    assert stale_owned_route(
+        stale_prepared,
+        quarantine_artifact,
+    ) == "operator-held"
+    stale_as_owned_release = {
+        **owned_release_evidence,
+        "receipt_digest": stale_receipt_artifact["digest"],
+    }
+    assert state_present_route(
+        stale_prepared,
+        "absent",
+        stale_receipt_artifact,
+        observed_gate=None,
+        owned_release=stale_as_owned_release,
+    ) == "operator-held"
+    assert state_present_route(
+        stale_prepared,
+        "absent",
+        stale_receipt_artifact,
         observed_gate=None,
         quarantined_gate=state_old_gate_quarantine,
     ) == "restart-receipt-ready"
@@ -4448,19 +5955,67 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert state_present_route(
         invalid_prepared,
         "absent",
-        restart_receipt,
+        restart_receipt_artifact,
         observed_gate=None,
         quarantined_gate=None,
     ) == "operator-held"
+    for release_mutation in (
+        {**owned_release_evidence, "owner_token": "foreign-owner"},
+        {**owned_release_evidence, "receipt_digest": "foreign-receipt"},
+        {**owned_release_evidence, "source_absent": False},
+    ):
+        assert state_present_route(
+            invalid_prepared,
+            "absent",
+            restart_receipt_artifact,
+            observed_gate=None,
+            owned_release=release_mutation,
+        ) == "operator-held"
+    noncanonical_receipt_bytes = json.dumps(
+        restart_receipt, ensure_ascii=False, sort_keys=True
+    ).encode("utf-8")
+    noncanonical_receipt_artifact = {
+        **restart_receipt_artifact,
+        "bytes": noncanonical_receipt_bytes.decode("utf-8"),
+        "digest": hashlib.sha256(noncanonical_receipt_bytes).hexdigest(),
+        "observations": {
+            **restart_receipt_artifact["observations"],
+            "size": len(noncanonical_receipt_bytes),
+        },
+    }
+    assert canonical_json_bytes(restart_receipt) != noncanonical_receipt_bytes
+    assert state_present_route(
+        invalid_prepared,
+        "owned",
+        noncanonical_receipt_artifact,
+        current_owner_token=state_old_gate_capture["owner"]["token"],
+        current_run_identity=state_old_gate_capture["owner"]["run_identity"],
+    ) == "operator-held"
+    for receipt_observation_mutation in (
+        {**restart_receipt_artifact["observations"], "path": "state/foreign.json"},
+        {
+            **restart_receipt_artifact["observations"],
+            "size": restart_receipt_artifact["observations"]["size"] + 1,
+        },
+    ):
+        changed_receipt_artifact = {
+            **restart_receipt_artifact,
+            "observations": receipt_observation_mutation,
+        }
+        assert state_present_route(
+            invalid_prepared,
+            "owned",
+            changed_receipt_artifact,
+            current_owner_token=state_old_gate_capture["owner"]["token"],
+            current_run_identity=state_old_gate_capture["owner"]["run_identity"],
+        ) == "operator-held"
     for kind_mutation in ("foreign", None):
         changed_kind = {**invalid_prepared}
         if kind_mutation is None:
             changed_kind.pop("kind")
         else:
             changed_kind["kind"] = kind_mutation
-        assert state_present_route(
-            changed_kind, "proven-stale", current_artifact
-        ) == "operator-held"
+        assert stale_owned_route(changed_kind, current_artifact) == "operator-held"
     assert restart_receipt["old_gate_digest"] != replacement_gate_digest
     stored_bundle_bytes = {bundle_path: canonical_json_bytes(invalid_prepared)}
     located_bundle_bytes = stored_bundle_bytes[restart_receipt["bundle_path"]]
@@ -4473,9 +6028,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         **current_artifact,
         "state_observations": {**captured_observations, "inode": 12},
     }
-    assert state_present_route(
-        invalid_prepared, "proven-stale", changed_observations
-    ) == "operator-held"
+    assert stale_owned_route(invalid_prepared, changed_observations) == "operator-held"
     for changed_field, changed_value in (("inode", 12), ("link_count", 2)):
         changed_quarantine = {
             **quarantine_artifact,
@@ -4484,8 +6037,46 @@ def _assert_triage_semantics(workflow: str) -> None:
                 changed_field: changed_value,
             },
         }
-        assert state_present_route(
-            invalid_prepared, "proven-stale", changed_quarantine
+        assert stale_owned_route(
+            invalid_prepared, changed_quarantine
+        ) == "operator-held"
+    for changed_field, changed_value in (
+        ("inode", 12),
+        ("mode", 0o100644),
+        ("link_count", 2),
+        ("size", len(captured_state) + 1),
+        ("modification_time_ns", 123459),
+    ):
+        changed_approved_quarantine = {
+            **quarantine_artifact,
+            "state_observations": {
+                **quarantine_artifact["state_observations"],
+                changed_field: changed_value,
+            },
+        }
+        changed_approved_action = {
+            **invalid_action_core,
+            "quarantine_artifact": changed_approved_quarantine,
+        }
+        changed_approved_action_digest = hashlib.sha256(
+            canonical_json_bytes(changed_approved_action)
+        ).hexdigest()
+        changed_approved_bundle = {
+            **invalid_prepared,
+            "action_core": changed_approved_action,
+            "action_core_digest": changed_approved_action_digest,
+            "approval": {
+                "source": "current-session",
+                "approver_identity": "operator",
+                "decision": (
+                    f"abandon action-core {changed_approved_action_digest}"
+                ),
+                "action_core_digest": changed_approved_action_digest,
+            },
+        }
+        assert stale_owned_route(
+            changed_approved_bundle,
+            changed_approved_quarantine,
         ) == "operator-held"
     for approval_mutation in (
         {**invalid_prepared["approval"], "decision": "refuse"},
@@ -4493,9 +6084,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         {**invalid_prepared["approval"], "approver_identity": ""},
     ):
         changed_approval = {**invalid_prepared, "approval": approval_mutation}
-        assert state_present_route(
-            changed_approval, "proven-stale", current_artifact
-        ) == "operator-held"
+        assert stale_owned_route(changed_approval, current_artifact) == "operator-held"
     cross_core_action = {
         **invalid_action_core,
         "capture_core_digest": "different-capture-core",
@@ -4514,9 +6103,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "action_core_digest": cross_core_digest,
         },
     }
-    assert state_present_route(
-        cross_core_bundle, "proven-stale", current_artifact
-    ) == "operator-held"
+    assert stale_owned_route(cross_core_bundle, current_artifact) == "operator-held"
     cross_gate_action = {
         **invalid_action_core,
         "old_gate_digest": "different-old-gate",
@@ -4535,9 +6122,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "action_core_digest": cross_gate_digest,
         },
     }
-    assert state_present_route(
-        cross_gate_bundle, "proven-stale", current_artifact
-    ) == "operator-held"
+    assert stale_owned_route(cross_gate_bundle, current_artifact) == "operator-held"
 
     def rebuild_invalid_for_gate(
         gate_capture: dict[str, object], candidate_path: str
@@ -4592,9 +6177,8 @@ def _assert_triage_semantics(workflow: str) -> None:
     changed_state_gate_path = recovery_bundle_pattern.format(
         mode="live", gate_digest=changed_state_gate_digest
     )
-    assert state_present_route(
+    assert stale_owned_route(
         rebuild_invalid_for_gate(changed_state_gate_bytes, changed_state_gate_path),
-        "proven-stale",
         current_artifact,
     ) == "operator-held"
     for changed_field, changed_value in (("inode", 20), ("link_count", 3)):
@@ -4605,24 +6189,26 @@ def _assert_triage_semantics(workflow: str) -> None:
                 changed_field: changed_value,
             },
         }
-        assert state_present_route(
+        assert stale_owned_route(
             rebuild_invalid_for_gate(changed_state_gate_identity, bundle_path),
-            "proven-stale",
             current_artifact,
         ) == "operator-held"
-    assert state_present_route(
+    assert stale_owned_route(
         rebuild_invalid_for_gate(
             state_old_gate_capture, "state/foreign-state-bundle.json"
         ),
-        "proven-stale",
         current_artifact,
     ) == "operator-held"
     foreign_quarantine_artifact = {
         **quarantine_artifact,
-        "path": "state/quarantine/foreign-triage-live.json",
+        "path": resolve_logical_path(
+            "state/quarantine/foreign-triage-live.json"
+        ),
         "state_observations": {
             **quarantine_artifact["state_observations"],
-            "path": "state/quarantine/foreign-triage-live.json",
+            "path": resolve_logical_path(
+                "state/quarantine/foreign-triage-live.json"
+            ),
         },
     }
     foreign_receipt_core = {
@@ -4648,8 +6234,8 @@ def _assert_triage_semantics(workflow: str) -> None:
             "action_core_digest": foreign_quarantine_action_digest,
         },
     }
-    assert state_present_route(
-        foreign_quarantine_bundle, "proven-stale", quarantine_artifact
+    assert stale_owned_route(
+        foreign_quarantine_bundle, quarantine_artifact
     ) == "operator-held"
     changed_quarantine_bytes = b"changed-quarantine-bytes"
     changed_quarantine_artifact = {
@@ -4683,8 +6269,9 @@ def _assert_triage_semantics(workflow: str) -> None:
             "action_core_digest": changed_bytes_action_digest,
         },
     }
-    assert state_present_route(
-        changed_bytes_bundle, "proven-stale", changed_quarantine_artifact
+    assert stale_owned_route(
+        changed_bytes_bundle,
+        changed_quarantine_artifact,
     ) == "operator-held"
     unknown_action = {**invalid_action_core, "action": "unknown-action"}
     unknown_action_digest = hashlib.sha256(
@@ -4701,9 +6288,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "action_core_digest": unknown_action_digest,
         },
     }
-    assert state_present_route(
-        unknown_action_bundle, "proven-stale", current_artifact
-    ) == "operator-held"
+    assert stale_owned_route(unknown_action_bundle, current_artifact) == "operator-held"
     for required_phrase in (
         "kitconfig.load_config()",
         "RFC 8785 JSON",
@@ -4716,9 +6301,16 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Never use `resolve_read_path` for either artifact",
         "An absolute, traversing, escaping, or non-regular engine target hard-stops",
         "published gate therefore never exists without its complete owner record",
+        "only the contained absolute path is filesystem authority",
+        "[A-Za-z0-9][A-Za-z0-9_-]{0,127}",
+        "or JSON null before one is allocated",
         "gate-only-recovery-intent`, which binds the prepared-core digest",
         "Flush that intent and its directory before",
         "The durable intent is the blocking state",
+        "require every source absent, and independently read and stat every target",
+        "same resolved mode gate path with its complete owner record",
+        "finalization and release separately require the current invocation's owner "
+        "token and run identity",
         "digest-check and atomically replace the intent",
         "The gate-only intent has no live-run identity or new gate owner token",
         "Release the new gate only after that receipt is durable",
@@ -4740,12 +6332,17 @@ def _assert_triage_semantics(workflow: str) -> None:
         "a fresh invocation derives the same path from the still-blocking gate",
         "no directory scan or state pointer is required",
         "Parse and validate only the captured bytes, never the still-live path",
+        "no quarantine evidence exists or is required for this route",
         "A valid capture reached through a proven-stale gate may select only "
         "`preserve-valid-state-and-quarantine-old-gate`",
+        "exact engine-derived quarantine target",
+        "A proven-stale disposition binds the captured foreign or prior owner and can "
+        "never select normal owned release",
         "receipt core contains mode, old-gate digest, exact configured bundle path, "
         "capture-core digest, and quarantine path",
         "adding `prepared_envelope_digest` to the approved receipt core",
         "Immediately before quarantine, re-read and re-stat the active path",
+        "without inventing quarantine evidence",
         "every mismatch is operator-held without another mutation",
         "Only a readable state that proves it never reached `attempting`",
         "abandonment is prohibited",
@@ -4791,7 +6388,7 @@ def _assert_triage_semantics(workflow: str) -> None:
     ".claude/commands/triage-friction-log.md",
     ".agents/skills/triage-friction-log",
 )
-def test_triage_integration_is_config_owned_shared_and_thin() -> None:
+def test_triage_integration_is_config_owned_shared_and_thin(tmp_path: Path) -> None:
     workflow = (
         REPO_ROOT / "docs/agentic-dev-kit/workflows/triage-friction-log.md"
     ).read_text(encoding="utf-8")
@@ -4818,6 +6415,7 @@ def test_triage_integration_is_config_owned_shared_and_thin() -> None:
     assert set(triage) == {
         "analysis_tier",
         "state_path",
+        "gate_path",
         "recovery_bundle_pattern",
         "frozen_inbox_pattern",
         "report_root",
@@ -4831,6 +6429,7 @@ def test_triage_integration_is_config_owned_shared_and_thin() -> None:
     assert type(triage["pr_draft"]) is bool
     for key in (
         "state_path",
+        "gate_path",
         "recovery_bundle_pattern",
         "frozen_inbox_pattern",
         "report_pattern",
@@ -4838,22 +6437,91 @@ def test_triage_integration_is_config_owned_shared_and_thin() -> None:
         path = Path(triage[key])
         assert not path.is_absolute()
         assert ".." not in path.parts
-    for key in ("state_path", "recovery_bundle_pattern", "frozen_inbox_pattern"):
+    for key in (
+        "state_path",
+        "gate_path",
+        "recovery_bundle_pattern",
+        "frozen_inbox_pattern",
+    ):
         assert Path(triage[key]).parts[0] == config["state"]["dirname"]
     for key in ("draft_engine", "finalize_engine"):
         engine_path = Path(triage[key])
         assert not engine_path.is_absolute()
         assert ".." not in engine_path.parts
     assert "{mode}" in triage["state_path"]
+    assert "{mode}" in triage["gate_path"]
     for placeholder in ("{mode}", "{gate_digest}"):
         assert placeholder in triage["recovery_bundle_pattern"]
     assert "{date}" not in triage["recovery_bundle_pattern"]
+
+    declaration_root = tmp_path / "triage-declaration-root"
+    declaration_root.mkdir()
+
+    def expanded_triage_paths_are_distinct(candidate: dict[str, object]) -> bool:
+        expanded_paths: list[Path] = []
+        for mode in ("live", "test"):
+            expanded_paths.extend(
+                (
+                    Path(str(candidate["state_path"]).format(mode=mode)),
+                    Path(str(candidate["gate_path"]).format(mode=mode)),
+                    Path(
+                        str(candidate["recovery_bundle_pattern"]).format(
+                            mode=mode,
+                            gate_digest="0" * 64,
+                        )
+                    ),
+                )
+            )
+        canonical_paths: list[Path] = []
+        existing_identities: list[tuple[int, int]] = []
+        for logical_path in expanded_paths:
+            if logical_path.is_absolute() or ".." in logical_path.parts:
+                return False
+            candidate_path = declaration_root / logical_path
+            canonical_path = candidate_path.resolve(strict=False)
+            if not canonical_path.is_relative_to(declaration_root.resolve()):
+                return False
+            canonical_paths.append(canonical_path)
+            try:
+                observed = candidate_path.stat(follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            existing_identities.append((observed.st_dev, observed.st_ino))
+        return (
+            len(canonical_paths) == len(set(canonical_paths))
+            and len(existing_identities) == len(set(existing_identities))
+        )
+
+    assert expanded_triage_paths_are_distinct(triage)
+    assert not expanded_triage_paths_are_distinct(
+        {**triage, "gate_path": triage["state_path"]}
+    )
+    declaration_state_dir = declaration_root / "state" / "triage"
+    declaration_state_dir.mkdir(parents=True)
+    declaration_alias = declaration_root / "state" / "triage-alias"
+    declaration_alias.symlink_to(declaration_state_dir, target_is_directory=True)
+    assert not expanded_triage_paths_are_distinct(
+        {
+            **triage,
+            "gate_path": "state/triage-alias/triage-pipeline-state_{mode}.json",
+        }
+    )
+    declaration_alias.unlink()
+    live_state_declaration = declaration_root / triage["state_path"].format(
+        mode="live"
+    )
+    live_gate_declaration = declaration_root / triage["gate_path"].format(
+        mode="live"
+    )
+    live_state_declaration.write_bytes(b"state")
+    os.link(live_state_declaration, live_gate_declaration)
+    assert not expanded_triage_paths_are_distinct(triage)
     for placeholder in ("{mode}", "{date}", "{session}"):
         assert placeholder in triage["frozen_inbox_pattern"]
         assert placeholder in triage["report_pattern"]
     for key in triage:
         assert f"triage.{key}" in workflow
-    _assert_triage_semantics(workflow)
+    _assert_triage_semantics(workflow, tmp_path)
 
 
 @pytest.mark.kit_repo_only(
@@ -4861,7 +6529,7 @@ def test_triage_integration_is_config_owned_shared_and_thin() -> None:
     ".claude/commands/triage-friction-log.md",
     ".agents/skills/triage-friction-log",
 )
-def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
+def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> None:
     workflow = (
         REPO_ROOT / "docs/agentic-dev-kit/workflows/triage-friction-log.md"
     ).read_text(encoding="utf-8")
@@ -4887,7 +6555,7 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         ),
         workflow.replace("never whole-sweep", "whole-sweep", 1),
         workflow.replace(
-            "pass only the remaining fragment to the\nresolver",
+            "pass\nonly the remaining fragment to the resolver",
             "pass the complete logical path to the resolver",
             1,
         ),
@@ -5190,7 +6858,7 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
     for mutation_index, mutated in enumerate(mutations):
         assert mutated != workflow, mutation_index
         with pytest.raises(AssertionError):
-            _assert_triage_semantics(mutated)
+            _assert_triage_semantics(mutated, tmp_path)
 
     paths = (
         ("claude", REPO_ROOT / ".claude/commands/triage-friction-log.md"),
@@ -5231,6 +6899,7 @@ def test_triage_config_and_adapter_migration_reaches_adopters() -> None:
 
     for required in (
         "triage.state_path",
+        "triage.gate_path",
         "triage.recovery_bundle_pattern",
         "./init.sh --no-clobber",
         ".claude/commands/triage-friction-log.md",

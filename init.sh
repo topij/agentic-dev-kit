@@ -970,6 +970,7 @@ migrate_kit_schema() {
   # invocation and available mechanisms only; policy stays in the shared workflow.
   analysis_tier: default
   state_path: "state/triage/triage-pipeline-state_{mode}.json"
+  gate_path: "state/triage/triage-pipeline-gate_{mode}.lock"
   recovery_bundle_pattern: "state/triage/recovery-bundle_{mode}_{gate_digest}.json"
   frozen_inbox_pattern: "state/triage/frozen-inbox_{mode}_{date}_{session}.json"
   report_root: reports
@@ -985,6 +986,7 @@ migrate_kit_schema() {
 
   ensure_triage_key analysis_tier '  analysis_tier: default'
   ensure_triage_key state_path '  state_path: "state/triage/triage-pipeline-state_{mode}.json"'
+  ensure_triage_key gate_path '  gate_path: "state/triage/triage-pipeline-gate_{mode}.lock"'
   ensure_triage_key recovery_bundle_pattern '  recovery_bundle_pattern: "state/triage/recovery-bundle_{mode}_{gate_digest}.json"'
   ensure_triage_key frozen_inbox_pattern '  frozen_inbox_pattern: "state/triage/frozen-inbox_{mode}_{date}_{session}.json"'
   ensure_triage_key report_root '  report_root: reports'

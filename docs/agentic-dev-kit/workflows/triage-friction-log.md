@@ -20,7 +20,7 @@ per leaf. Do not fall back to the tracked file alone. In this workflow:
 - `<tracker>`, `<notify>`, and `<state-dir>` mean the configured `tracker`, `notify`,
   and `state.dirname` sections.
 - `<triage>` means the complete `triage` section: `triage.analysis_tier`,
-  `triage.state_path`, `triage.recovery_bundle_pattern`,
+  `triage.state_path`, `triage.gate_path`, `triage.recovery_bundle_pattern`,
   `triage.frozen_inbox_pattern`, `triage.report_root`, `triage.report_pattern`,
   `triage.draft_engine`, `triage.finalize_engine`, `triage.commit_subject`, and
   `triage.pr_draft`.
@@ -40,11 +40,13 @@ component. Resolve it beneath the canonical `<engine-dir>` and require any exist
 target to remain canonically contained there, including through symlinks, and to be a
 regular file. An absolute, traversing, escaping, or non-regular engine target hard-stops
 before engine-mode selection. Artifact patterns are non-empty repository-relative paths.
-`triage.state_path` contains `{mode}`; `triage.recovery_bundle_pattern` contains
+`triage.state_path` and `triage.gate_path` contain `{mode}`;
+`triage.recovery_bundle_pattern` contains
 `{mode}` and `{gate_digest}`; the frozen-inbox and report patterns contain
 `{mode}`, `{date}`, and `{session}`. `gate_digest` is the lowercase SHA-256 digest of
-the exact complete gate bytes. Live and test state and recovery bundles must resolve to
-different paths. The state, recovery bundle, and frozen snapshot are logical
+the exact complete gate bytes. Live and test state, gates, and recovery bundles must
+resolve to different paths. The state, gate, recovery bundle, and frozen snapshot are
+logical
 `state.dirname` paths; the report is a child of `triage.report_root`, which is neither
 empty nor the repository root.
 
@@ -56,9 +58,9 @@ either artifact; its newer-of sandbox/production cascade can import another sess
 approval authority. Require
 `state.dirname` to match that resolver's declared `STATE_DIRNAME`; a mismatch hard-stops
 because the resolver does not take the directory from config. Require the matching
-lexical prefix on `triage.state_path`, `triage.recovery_bundle_pattern`, and
-`triage.frozen_inbox_pattern`, remove it, then pass only the remaining fragment to the
-resolver. Honor `DEVKIT_STATE_ROOT` and
+lexical prefix on `triage.state_path`, `triage.gate_path`,
+`triage.recovery_bundle_pattern`, and `triage.frozen_inbox_pattern`, remove it, then pass
+only the remaining fragment to the resolver. Honor `DEVKIT_STATE_ROOT` and
 `.devkit_state_root`; never write logical state paths directly beneath the worktree.
 Preflight with non-creating resolution. Reject absolute fragments,
 `..` traversal, path collisions, tracked artifact targets, control-input targets,
@@ -309,10 +311,15 @@ payload digest. After response/read-back, atomically persist `verified`, `failed
 a missing final chat summary never authorizes repeating a write.
 
 Every live or test mode has one single-writer gate file beside its active state path.
-Prepare a complete owner record in a unique same-directory temporary file: opaque owner
-token, run identity when allocated, host, process identifier, process-start observation,
-and creation time. Flush the file, then acquire the absent gate with an atomic hard-link
-publication of that inode; a pre-existing destination loses without replacement. The
+Keep the configured logical fragment separate from the resolver-returned absolute path;
+only the contained absolute path is filesystem authority. Prepare a complete owner
+record in a same-directory temporary file whose basename is
+`.<gate-basename>.<owner-token>.tmp`: an opaque owner token matching the ASCII grammar
+`[A-Za-z0-9][A-Za-z0-9_-]{0,127}`, run identity or JSON null before one is allocated,
+host, process identifier, process-start
+observation, and creation time. Flush the file, then acquire the absent gate with an
+atomic hard-link publication of that inode; a pre-existing destination loses without
+replacement. The
 published gate therefore never exists without its complete owner record. Flush the
 directory, then unlink the temporary name. Process loss before publication leaves no
 gate; process loss after publication leaves a complete gate, even when its temporary
@@ -398,18 +405,38 @@ of the canonical `prepared_core` digest, atomically and exclusively create and f
 the semantic classifier: derive the one intent payload by adding the core digest, hash
 that payload, and include both plus the core-bound approval in the envelope. Hashing the
 full envelope is permitted for artifact read-back, but that digest is never an input to
-its core or intended intent. Before old-gate quarantine, require the envelope kind to
-match the mode, recompute the old-gate digest from the captured gate bytes, match the
-complete captured gate and filesystem observations to the externally observed blocking
-gate, and derive the exact configured bundle path from that digest. After quarantine,
-the old gate is necessarily unavailable at its blocking path: validate the same bundle
-through the byte-identical canonical intent bytes and digest, its prepared-core binding,
-the retained gate capture and locator, every exact gate-quarantine identity, and any
-complete replacement-gate owner/token authority instead of inventing a live old-gate
-observation. Finalization constructs and validates the canonical held receipt that adds
-those quarantine paths and the replacement owner token before releasing that gate. A
-self-consistent foreign envelope is evidence,
-not resume authority. Then claim the absent state path by exclusive creation of
+its core or intended intent. Before old-gate quarantine, require the captured primary
+path to equal the resolved mode gate path, require the envelope kind to match the mode,
+recompute the old-gate digest from the captured gate bytes, match every captured gate
+name and filesystem observation to the independently observed blocking inode, and
+derive the exact configured bundle path from that digest. After quarantine, never
+derive evidence by transforming that capture: resolve every recorded source and
+quarantine target non-creatingly, require every source absent, and independently read
+and stat every target as the exact recorded bytes, digest, device, inode, mode, link
+count, size, and modification time. Open and retain no-follow descriptors for the state
+root and every source and target parent. Immediately before each rename, independently
+re-walk the configured parent chains from the state root and require every named
+directory to retain the held device/inode identity; perform the rename and source
+absence check relative to those held parents, revalidate the chains afterward, then
+independently reacquire the configured target chain for read-back. A renamed, replaced,
+or symlinked parent stops operator-held even when a detached descriptor can still read
+the approved inode. Immediately before mutation, read and stat the held source and
+require its exact approved bytes, digest, device, inode, mode, link count, size, and
+modification time. Keep that approved source descriptor open through publication and
+bind both names back to its device/inode identity before unlinking either. Publish the
+quarantine name without replacement by exclusively hard-linking that inode, flush the
+target directory, unlink the held source name, and
+flush its directory; an existing target leaves both artifacts untouched and stops
+operator-held. Any replacement gate is captured separately at the
+same resolved mode gate path with its complete owner record and matching owner token.
+Finalization validates those observations and the exact canonical held receipt before
+releasing the replacement gate. Receipt validity is passive evidence; finalization and
+release separately require the current invocation's owner token and run identity to
+match the replacement gate. A later process observing the prior replacement owner can
+hold the receipt but never release that gate as its own. A self-consistent foreign
+envelope or reconstructed
+quarantine record is evidence, not resume authority. Then claim the absent state path
+by exclusive creation of
 that exact `gate-only-recovery-intent`, which binds the prepared-core digest, old gate
 owner record, old gate digest, exact configured bundle path, approved capture, absence
 observations, and repository identity. Flush that intent and
@@ -462,14 +489,15 @@ Only the two declared actions are valid: `preserve-valid-state-and-quarantine-ol
 and `abandon-invalid-state`. An absent, empty, or unknown action or approving decision is
 not recovery authority and stops operator-held.
 Before selecting either transition, require the exact `state-present-capture` or
-`state-present-prepared` kind, recompute the embedded old-gate digest, and rederive the
-configured bundle path. While the old gate exists, match the embedded complete gate
-capture to that externally observed blocking gate. At a declared post-quarantine
-cutpoint, require old-gate absence and validate only through the retained immutable
-capture plus every exact old-gate quarantine identity and the action-derived quarantine
-or receipt evidence; never fabricate an observation
-of an absent gate. Missing or foreign kinds and self-consistent cross-gate bundles stop
-operator-held.
+`state-present-prepared` kind, recompute the embedded old-gate digest, require its
+primary path to equal the resolved mode gate path, and rederive the configured bundle
+path. While that gate exists, match the complete embedded capture to the independently
+observed gate. After quarantining a proven-stale gate, require resolved-path absence and
+independent read-back of every recorded quarantine target. After normally releasing a
+gate owned by this recovery invocation, require resolved-path absence plus the exact
+durable receipt and bundle whose capture-core binding records that gate path, digest,
+and owner token; no quarantine evidence exists or is required for this route. Missing,
+foreign, reconstructed, or cross-gate evidence stops operator-held.
 For each report or frozen-snapshot path obtained from validated captured
 fields, apply the same path, alias, and atomic-read checks before recording exact paths,
 bytes/digests, and filesystem observations. Never follow an unvalidated path from
@@ -488,8 +516,18 @@ second time or start work under an unowned gate.
 Classify invalid captured state conservatively. Only a readable state that proves it
 never reached `attempting` and contains no verified tracker identifier or repository/PR
 evidence may offer `abandon <action-core-digest>` to the present interactive operator.
-The action core binds the capture-core digest, exact quarantine target, exact
-`recovered-safe-to-restart` receipt core, old-gate capture, and repository identity. The
+The action core binds the capture-core digest, exact engine-derived quarantine target,
+exact `recovered-safe-to-restart` receipt core, old-gate capture, repository identity,
+and gate disposition. An owned disposition binds the current recovery invocation's
+owner token and run identity. If that process later terminates, only a new exact
+termination proof that records an independently observed process absence after a
+live-owner control and matches the captured host, process identifier, process-start
+observation, owner token, and run identity changes its observed status to
+owned-now-proven-stale; a present process or a reused identifier with a different start
+observation stops operator-held, and the gate does not become a
+foreign-stale disposition. A proven-stale
+disposition binds the captured foreign or prior owner and can never select normal owned
+release. The
 receipt core contains mode, old-gate digest, exact configured bundle path,
 capture-core digest, and quarantine path, but no action-core or prepared-envelope
 digest. Persist exact approval by digest-checking and atomically replacing
@@ -499,13 +537,18 @@ adding `prepared_envelope_digest` to the approved receipt core; neither the rece
 nor action core contains that later digest, so the graph remains non-circular.
 Immediately before quarantine, re-read and re-stat the active path and require its
 digest, device, inode, mode, and link count to equal the captured observations.
-Derive the only acceptable quarantine read-back and restart receipt from the approved
-action core; a closure-local, reconstructed, or semantically similar artifact is not
-authority. Quarantining the current state and publishing its receipt require an owned
-or unchanged proven-stale gate. Old-gate absence is accepted only for ordinary resume
-after a valid-state gate quarantine or for an exact durable restart receipt after gate
-release, and both require the complete gate-quarantine evidence.
-Atomically rename that exact source to the prepared quarantine path. Create the receipt
+Derive the only acceptable quarantine target and restart receipt from the approved
+action core, then independently read and stat the resulting artifact; a closure-local
+reconstruction or semantic match is not authority. Quarantining the current state and
+publishing its receipt require either the exact currently owned gate or the unchanged
+proven-stale gate at the resolved mode gate path. For a proven-stale gate, later absence
+requires the independently observed quarantine read-back above. For an owned gate, make
+the exact receipt durable and read it back while the matching owner token still occupies
+that path, then unlink only that gate; a later invocation may accept resolved-path
+absence from that exact receipt-and-bundle binding without inventing quarantine
+evidence.
+Move that exact source to an absent prepared quarantine path without replacement using
+the same exclusive-link, flush, unlink, and held-parent revalidation sequence. Create the receipt
 only after re-reading and re-statting the quarantine target. Its exact path, digest,
 device, inode, mode, link count, size, and modification time must equal the prepared
 target and immutable capture observations; a same-byte replacement or changed
