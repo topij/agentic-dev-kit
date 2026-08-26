@@ -1711,6 +1711,7 @@ def _integration_table(
             "Precedence id",
             "Input or state",
             "Gate-only step",
+            "Case id",
             "",
         }:
             continue
@@ -2464,7 +2465,8 @@ def _assert_triage_adapter(adapter: str, runtime: str) -> None:
 def _assert_triage_semantics(workflow: str) -> None:
     flattened = " ".join(workflow.split())
     assert (
-        "The capability, authority, artifact, input, recovery-transition, and completion rows in this "
+        "The capability, authority, artifact, input, gate-only input precedence, "
+        "recovery-transition, and completion rows in this "
         "document are normative. They take precedence over later explanatory prose "
         "and runtime adapters."
     ) in flattened
@@ -2530,6 +2532,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         "gate-only-recovery": (
             "preserve-evidence-publish-intent-before-quarantine-remain-operator-held",
         ),
+        "test-state-recovery": (
+            "preserve-test-evidence-never-touch-live-or-external-state",
+        ),
         "partial-engine-set": ("stop-never-mix-engine-and-llm-artifacts",),
         "unattended-without-notification": ("stop-before-new-approval-session",),
         "tracker-without-exact-payload-approval": (
@@ -2548,7 +2553,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "require-merged-final-head-equals-reviewed-head-else-operator-held",
         ),
         "reviewed-head-persistence": (
-            "persist-exact-pr-watch-head-before-operator-hold-or-merge",
+            "persist-terminal-exact-pr-watch-head-and-receipt-before-merge",
         ),
         "runtime-policy-override": ("shared-declaration-wins-and-stop",),
     }
@@ -2585,33 +2590,36 @@ def _assert_triage_semantics(workflow: str) -> None:
     inputs = _integration_table(workflow, "Semantic input matrix", 2)
     assert set(inputs) == {
         "Unknown or combined entry keyword",
-        "No argument, no active state",
+        "No argument, neither active state nor gate-only receipt",
         "No argument, valid active state",
-        "resume, no valid active state",
+        "resume, neither valid active state nor gate-only receipt",
         "resume, valid active state",
-        "new, no active state",
+        "new, neither active state nor gate-only receipt",
         "new, active live state",
         "Interactive recover, active live state and no blocking gate",
         "Interactive recover, blocking gate without a gate-only receipt",
         "Interactive recover, gate-only-recovery-intent present",
-        "Interactive recover, no active live state and no gate",
+        "Interactive recover, no active live state, gate, or gate-only receipt",
         "Non-recover live invocation with a gate-only intent",
         "Any live invocation with a gate-only held receipt",
         "Scheduled or unattended recover",
-        "test",
+        "test, no test state",
+        "test, valid test state",
+        "Interactive test, invalid test state",
+        "Scheduled or unattended test, invalid test state",
         "Scheduled or unattended non-recovery invocation with active state",
         "Both configured engines present",
         "Both configured engines absent",
         "Only one configured engine present",
         "Interactive invocation with notification unavailable",
         "Scheduled or unattended invocation with notification unavailable",
-        "Missing, malformed, or identity-mismatched frozen snapshot/state "
+        "Missing, malformed, or identity-mismatched live frozen snapshot/state "
         "outside recover",
         "Tracker or finalization write fails or is ambiguous",
         "Test mode",
     }
     assert "never whole-sweep" in inputs[
-        "Missing, malformed, or identity-mismatched frozen snapshot/state "
+        "Missing, malformed, or identity-mismatched live frozen snapshot/state "
         "outside recover"
     ][0]
     assert "prohibit tracker, source-document, and forge writes" in inputs[
@@ -2624,12 +2632,17 @@ def _assert_triage_semantics(workflow: str) -> None:
         "No argument, valid active state"
     ][0]
     assert "never replace the active session" in inputs["resume, valid active state"][0]
-    assert "Start a new live draft" in inputs["new, no active state"][0]
+    assert "Start a new live draft" in inputs[
+        "new, neither active state nor gate-only receipt"
+    ][0]
     assert "whether or not active state exists" in inputs[
         "Interactive recover, blocking gate without a gate-only receipt"
     ][0]
     assert "never infer safe restart" in inputs[
         "Interactive recover, blocking gate without a gate-only receipt"
+    ][0]
+    assert "Resume only the recorded bundle" in inputs[
+        "Interactive recover, gate-only-recovery-intent present"
     ][0]
     assert "never start, resume, or reconstruct a draft automatically" in inputs[
         "Non-recover live invocation with a gate-only intent"
@@ -2638,11 +2651,51 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Any live invocation with a gate-only held receipt"
     ][0]
     assert "without creating a recovery bundle" in inputs[
-        "Interactive recover, no active live state and no gate"
+        "Interactive recover, no active live state, gate, or gate-only receipt"
     ][0]
     assert "without acquiring the single-writer gate" in inputs[
         "Scheduled or unattended recover"
     ][0]
+    assert "never read, replace, or resume live state" in inputs[
+        "test, no test state"
+    ][0]
+    assert "never read, replace, or resume live state" in inputs[
+        "test, valid test state"
+    ][0]
+    assert "test-recovered-safe-to-restart" in inputs[
+        "Interactive test, invalid test state"
+    ][0]
+    assert "without changing test or live artifacts" in inputs[
+        "Scheduled or unattended test, invalid test state"
+    ][0]
+    gate_only_inputs = _integration_table(workflow, "Gate-only input precedence", 4)
+    assert gate_only_inputs == {
+        "intent-interactive-recover": (
+            "interactive",
+            "recover",
+            "Resume only the exact recorded gate-only transition, whether the old or replacement gate is present.",
+        ),
+        "intent-unattended-recover": (
+            "scheduled or unattended",
+            "recover",
+            "Report operator-held without changing an artifact.",
+        ),
+        "intent-other-live-entry": (
+            "any live context",
+            "no argument, new, or resume",
+            "Report operator-held; preserve intent and bundle.",
+        ),
+        "held-any-live-entry": (
+            "any live context",
+            "no argument, new, resume, or recover",
+            "Report operator-held; preserve receipt, quarantined gate, and bundle.",
+        ),
+        "test-isolated-from-live-recovery": (
+            "any context",
+            "test",
+            "Select only the test-state rows without reading or changing a live recovery artifact.",
+        ),
+    }
     gate_only_steps = _integration_table(workflow, "Gate-only recovery transition", 2)
     assert gate_only_steps == {
         "capture-old-gate": (
@@ -2721,6 +2774,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Only a readable state that proves it never reached `attempting`",
         "abandonment is prohibited",
         "never make `new` available by manual deletion",
+        "The `test` entry resolves only the test state, test gate, and test artifacts",
+        "write `test-recovered-safe-to-restart` under the same test gate",
+        "The transition never reads or writes live state",
         "body_without_marker",
         "hash it separately as `payload_digest`",
         "without attempting to hash a digest into itself",
@@ -2736,12 +2792,15 @@ def _assert_triage_semantics(workflow: str) -> None:
         "an older helper that whole-sweeps the frozen snapshot is not ready",
         "Never switch the caller checkout",
         "This workflow never merges the sweep pull request",
+        "Each authoritative PR read-back may update `observed_pr_head`",
+        "Only terminal exact-head review evidence plus a matching authoritative read-back",
         "atomically persist that head as `reviewed_head` with the PR-watch receipt",
         "Any later head movement invalidates the receipt",
         "authoritative PR read-back must prove both that the pull request merged",
         "final `headRefOid` equals `reviewed_head` recorded in state",
+        "retained terminal PR-watch receipt must still bind that same head",
         "never mark an unreviewed replacement head complete",
-        "A missing or mismatched final head is operator-held",
+        "A missing or mismatched final head or receipt is operator-held",
         "without notification, approval state, tracker, source-document, or forge writes",
     ):
         assert required_phrase in flattened
@@ -2875,8 +2934,13 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
-            "persist-exact-pr-watch-head-before-operator-hold-or-merge",
+            "persist-terminal-exact-pr-watch-head-and-receipt-before-merge",
             "leave-reviewed-head-implicit-until-after-merge",
+            1,
+        ),
+        workflow.replace(
+            "preserve-test-evidence-never-touch-live-or-external-state",
+            "replace-live-state-while-recovering-test-state",
             1,
         ),
         workflow.replace(
@@ -2892,6 +2956,16 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "| `gate-only-recovery-held` | A valid `gate-only-recovery-intent` or `gate-only-operator-held` receipt exists. | `operator-held` |",
             "| `gate-only-recovery-held` | A valid gate-only receipt exists. | `successful-completion` |",
+            1,
+        ),
+        workflow.replace(
+            "Resume only the recorded bundle and digest-checked gate-only transition; never restart or reconstruct the draft.",
+            "Discard the recorded bundle and start a new live draft immediately.",
+            1,
+        ),
+        workflow.replace(
+            "Start a test draft with test identity and test state; never read, replace, or resume live state.",
+            "Use live identity and live state; replace or resume live state.",
             1,
         ),
         workflow.replace(
@@ -2979,8 +3053,8 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
-            "A missing or mismatched final head is\noperator-held",
-            "A missing or mismatched final head is successful-completion",
+            "A missing or mismatched final head or receipt is\noperator-held",
+            "A missing or mismatched final head or receipt is successful-completion",
             1,
         ),
         workflow.replace("operator-held` |", "successful-completion` |", 1),

@@ -84,34 +84,50 @@ intent or held receipt.
 | Input or state | Required result |
 |---|---|
 | Unknown or combined entry keyword | Hard-stop before capability probing or writes. |
-| No argument, no active state | Start a new live draft. |
+| No argument, neither active state nor gate-only receipt | Start a new live draft. |
 | No argument, valid active state | Resume the recorded phase and mode. |
-| `resume`, no valid active state | Hard-stop without an external write. |
+| `resume`, neither valid active state nor gate-only receipt | Hard-stop without an external write. |
 | `resume`, valid active state | Resume the recorded phase and mode; never replace the active session. |
-| `new`, no active state | Start a new live draft. |
+| `new`, neither active state nor gate-only receipt | Start a new live draft. |
 | `new`, active live state | Refuse; never overwrite an approval-bound session. |
 | Interactive `recover`, active live state and no blocking gate | Under the single-writer gate, capture raw bytes and filesystem observations before parsing the captured copy; valid state then refuses and directs to `resume`, while invalid state enters recovery. Recovery never authorizes a tracker, source, or forge write. |
 | Interactive `recover`, blocking gate without a gate-only receipt | Capture the complete published gate and its filesystem observations; prove owner termination and require exact operator approval before quarantining the unchanged gate, whether or not active state exists. When state is absent, publish a blocking `gate-only-recovery-intent` before gate quarantine; never infer safe restart. |
 | Interactive `recover`, `gate-only-recovery-intent` present | Resume only the recorded bundle and digest-checked gate-only transition; never restart or reconstruct the draft. |
-| Interactive `recover`, no active live state and no gate | Hard-stop without creating a recovery bundle or performing an external write. |
+| Interactive `recover`, no active live state, gate, or gate-only receipt | Hard-stop without creating a recovery bundle or performing an external write. |
 | Non-recover live invocation with a gate-only intent | Preserve the intent and bundle; report operator-held and never start, resume, or reconstruct a draft automatically. |
 | Any live invocation with a gate-only held receipt | Preserve the receipt, quarantined gate, and bundle; report operator-held and never start, resume, or reconstruct a draft automatically. |
 | Scheduled or unattended `recover` | Report operator-held without acquiring the single-writer gate, capturing state, or changing an artifact. |
-| `test` | Use test identity and test state; never replace or resume live state. |
+| `test`, no test state | Start a test draft with test identity and test state; never read, replace, or resume live state. |
+| `test`, valid test state | Resume only that test state; never read, replace, or resume live state. |
+| Interactive `test`, invalid test state | Under the test gate, capture and preserve the exact test-state evidence, require exact operator approval of its digest, revalidate before quarantine, and write `test-recovered-safe-to-restart`; prohibit live-state and external writes. |
+| Scheduled or unattended `test`, invalid test state | Report operator-held without changing test or live artifacts. |
 | Scheduled or unattended non-recovery invocation with active state | Resume or report operator-held; never start another draft. |
 | Both configured engines present | Select engine-backed mode and persist it. |
 | Both configured engines absent | Select LLM-only mode and label its work agent-executed. |
 | Only one configured engine present | Hard-stop before artifact or external write. |
 | Interactive invocation with notification unavailable | Present exact payloads in-session and persist exact decisions; record degradation. |
 | Scheduled or unattended invocation with notification unavailable | Hard-stop before creating a new approval session; preserve an existing session as operator-held. |
-| Missing, malformed, or identity-mismatched frozen snapshot/state outside `recover` | Hard-stop before tracker writes; name `recover` as the safe interactive transition; after an attempted or verified write, preserve operator-held evidence and never whole-sweep. |
+| Missing, malformed, or identity-mismatched live frozen snapshot/state outside `recover` | Hard-stop before tracker writes; name `recover` as the safe interactive transition; after an attempted or verified write, preserve operator-held evidence and never whole-sweep. Test-state remediation stays on the isolated `test` entry. |
 | Tracker or finalization write fails or is ambiguous | Read back before retry; unresolved state is operator-held. |
 | Test mode | Permit declared local artifacts and optional `[TEST]` notification only; prohibit tracker, source-document, and forge writes. |
 
+### Gate-only input precedence
+
+Resolve this table before ordinary live-state rows. The cases are disjoint by execution
+context, entry, and recovery-artifact kind.
+
+| Case id | Context | Entry | Required result |
+|---|---|---|---|
+| `intent-interactive-recover` | interactive | `recover` | Resume only the exact recorded gate-only transition, whether the old or replacement gate is present. |
+| `intent-unattended-recover` | scheduled or unattended | `recover` | Report operator-held without changing an artifact. |
+| `intent-other-live-entry` | any live context | no argument, `new`, or `resume` | Report operator-held; preserve intent and bundle. |
+| `held-any-live-entry` | any live context | no argument, `new`, `resume`, or `recover` | Report operator-held; preserve receipt, quarantined gate, and bundle. |
+| `test-isolated-from-live-recovery` | any context | `test` | Select only the test-state rows without reading or changing a live recovery artifact. |
+
 ## Authoritative integration declaration
 
-The capability, authority, artifact, input, recovery-transition, and completion rows in
-this document are
+The capability, authority, artifact, input, gate-only input precedence,
+recovery-transition, and completion rows in this document are
 normative. They take precedence over later explanatory prose and runtime adapters. If a
 runtime-specific instruction conflicts, stop before the disputed action, record
 `workflow safety contradiction` when a safe report already exists, and perform no
@@ -148,6 +164,7 @@ conditional capability ready before its trigger.
 | `state-or-frozen-identity-mismatch` | `stop-before-tracker-write-never-whole-sweep` |
 | `protected-branch-advance` | `allow-fast-forward-preserve-draft-identity-hold-divergence` |
 | `gate-only-recovery` | `preserve-evidence-publish-intent-before-quarantine-remain-operator-held` |
+| `test-state-recovery` | `preserve-test-evidence-never-touch-live-or-external-state` |
 | `partial-engine-set` | `stop-never-mix-engine-and-llm-artifacts` |
 | `unattended-without-notification` | `stop-before-new-approval-session` |
 | `tracker-without-exact-payload-approval` | `prohibit-create-update-comment` |
@@ -157,7 +174,7 @@ conditional capability ready before its trigger.
 | `test-mode-external-write` | `prohibit-tracker-friction-archive-branch-commit-push-pr` |
 | `archive-sweep-boundary` | `sweep-only-approved-accounted-byte-identical-frozen-blocks` |
 | `merged-pr-completion` | `require-merged-final-head-equals-reviewed-head-else-operator-held` |
-| `reviewed-head-persistence` | `persist-exact-pr-watch-head-before-operator-hold-or-merge` |
+| `reviewed-head-persistence` | `persist-terminal-exact-pr-watch-head-and-receipt-before-merge` |
 | `runtime-policy-override` | `shared-declaration-wins-and-stop` |
 
 ### Durable artifacts, resumability, and completion
@@ -166,8 +183,9 @@ The report is load-bearing and is written before any external attempt. The state
 act-time gate. It records the run/config/frozen identities, selected engine mode, exact
 canonical proposal payloads and digests, approval source and approver identity,
 notification thread reference when used, normalized per-item decisions, attempt state,
-verified tracker identifiers, branch/commit/PR identity, and the exact `reviewed_head`
-plus its PR-watch receipt after review becomes terminal. Never record an external
+verified tracker identifiers and branch/commit/PR identity. Each authoritative PR
+read-back may update `observed_pr_head`. Only terminal exact-head review evidence plus a
+matching authoritative read-back sets `reviewed_head` and its PR-watch receipt. Never record an external
 identifier not returned authoritatively or verified by read-back.
 
 Before an external write, atomically persist `attempting` with the exact operation and
@@ -318,6 +336,23 @@ edit, and no branch, commit, push, PR, or merge. When evidence cannot be reconci
 keep the recovery bundle and active state operator-held and name the missing evidence;
 never make `new` available by manual deletion.
 
+### Isolated test-state recovery
+
+The `test` entry resolves only the test state, test gate, and test artifacts; it never
+reads or changes a live path. When interactive `test` finds invalid test state, acquire
+the test gate and atomically capture its exact raw bytes, digest, path observations,
+test identity, and resolved test artifacts in a test recovery bundle before parsing.
+Do not follow an unvalidated captured path. Require exact in-session operator approval
+of the bundle digest, then immediately re-read and re-stat the test state and require
+the captured digest, device, inode, mode, and link count. Atomically quarantine only
+that unchanged test-state file and write `test-recovered-safe-to-restart` under the
+same test gate. A later `test` invocation may digest-check and replace only that receipt
+to start a new test draft. The transition never reads or writes live state, notification
+approval, tracker, source documents, archive, branch, commit, push, PR, or merge.
+Unknown test-gate ownership remains operator-held under the same capture, owner-death,
+and exact-approval rule, confined to test paths. Scheduled or unattended `test` with
+invalid state preserves everything operator-held and performs no recovery mutation.
+
 Classify execution as interactive or scheduled/unattended from the actual invocation,
 not a branch name or worktree path. Non-interactive runs never wait for input. A
 scheduled draft with an active session resumes the held cycle or sends the documented
@@ -446,13 +481,17 @@ otherwise remains operator-held.
 Run `pr-watch` for the exact head. This workflow never merges the sweep pull request.
 When `pr-watch` reports terminal exact-head review evidence, authoritatively read back
 the PR and require its current `headRefOid` to equal the head in that evidence. Before
-reporting operator-held or allowing merge, atomically persist that head as
+allowing merge, atomically persist that head as
 `reviewed_head` with the PR-watch receipt. Any later head movement invalidates the
 receipt and requires a new exact-head PR-watch cycle before replacing `reviewed_head`.
 When review is unsettled or the operator still owns the merge decision, report
-`operator-held` with the PR URL and persisted reviewed head. On a later resume,
+`operator-held` with the PR URL and `observed_pr_head`; name `reviewed_head` only when a
+retained terminal receipt establishes it. If terminal evidence exists but PR read-back
+is unavailable or mismatched, remain operator-held without changing `reviewed_head`.
+On a later resume,
 authoritative PR read-back must prove both that the pull request merged and that its final `headRefOid`
-equals `reviewed_head` recorded in state. A missing or mismatched final head is
+equals `reviewed_head` recorded in state, and the retained terminal PR-watch receipt
+must still bind that same head. A missing or mismatched final head or receipt is
 operator-held; never mark an unreviewed replacement head complete. Only then write
 completion to the report and state before optionally deleting active state; the
 completed report remains durable.

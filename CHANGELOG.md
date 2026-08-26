@@ -68,9 +68,13 @@ starts.
   the workflow; never retry an ambiguous write or whole-sweep an older snapshot. Use
   the interactive `recover` entry point for invalid live state; it preserves a recovery
   bundle and prohibits abandonment when prior external-write absence is uncertain.
+  Keep malformed test-state recovery on the `test` entry and test sandbox; it may
+  quarantine only revalidated test state after exact approval and never selects live
+  or external-write paths.
   Before completing a merged sweep, read back its final `headRefOid` and require it to
-  equal the exact PR-watch head persisted as `reviewed_head`; a replacement head
-  invalidates the receipt and remains operator-held even when the PR is merged.
+  equal the exact terminal PR-watch head and receipt persisted as `reviewed_head`;
+  keep an unsettled read-back separate as `observed_pr_head`. A replacement head or
+  missing terminal receipt remains operator-held even when the PR is merged.
   When stale-gate recovery finds no active state, publish
   `gate-only-recovery-intent` before quarantining the old gate, then retain its
   `gate-only-operator-held` receipt and evidence bundle; do not treat gate quarantine
