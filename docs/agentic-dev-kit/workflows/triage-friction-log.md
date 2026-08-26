@@ -305,6 +305,110 @@ read-back may update `observed_pr_head`. Only terminal exact-head review evidenc
 matching authoritative read-back sets `reviewed_head` and its PR-watch receipt. Never record an external
 identifier not returned authoritatively or verified by read-back.
 
+An ordinary active state is canonical JSON with `kind: triage-run-state`,
+`schema_version: 1`, and a `phase` selected from:
+
+- `reserved`
+- `propose`
+- `awaiting-approval`
+- `tracker-write`
+- `archive-sweep`
+- `completed`
+
+Every phase has an exact base shape. It retains `mode`, the complete structured
+`run_identity`, `gate_owner_token`, `config_fingerprint`, `frozen_inbox_digest`,
+`engine_mode`, and array-valued `attempts`, `verified_tracker_identifiers`,
+`repository_evidence`, and `pull_request_evidence`. `mode` is `live` or `test` and
+equals `run_identity.mode`; `engine_mode` is `engine-backed` or `llm-only`.
+`run_identity` has exactly `repository_identity`, `friction_log`,
+`protected_branch_head`, `mode`, `session`, and `config_fingerprint`; its repository,
+friction-log path, mode, protected head, and config fingerprint equal the frozen run
+identity. `gate_owner_token` matches the captured gate owner and the declared owner-token
+grammar. `config_fingerprint` equals `run_identity.config_fingerprint`.
+`config_fingerprint` and `frozen_inbox_digest` are lowercase SHA-256 strings, and
+`protected_branch_head` is a lowercase full commit identifier. Reject a missing, extra,
+mistyped, non-canonical, foreign, or cross-binding-mismatched base field.
+
+Each phase has the exact additional keys and validation below; keys owned by a later
+phase are forbidden earlier.
+
+- `reserved`: no additional keys; every evidence array is empty.
+- `propose`: `proposal_payloads` and `proposal_payload_digests`; payloads are non-empty
+  canonical records with exactly `candidate_id`, `payload_core`,
+  `payload_core_digest`, `marker`, `payload`, and `payload_digest`. The core is exactly
+  `{title, body_without_marker, project, labels}`; the final payload is exactly
+  `{title, body, project, labels}`. Recompute the core digest, derive the
+  session/candidate marker from it, append that exact marker to form the final body, and
+  recompute the final digest. The digest array is ordered one-for-one with those final
+  payload digests.
+- `awaiting-approval`: all proposal keys plus `approval`,
+  `notification_thread_reference`, and `decisions`; before a decision, approval is JSON
+  null and decisions are empty, while the optional non-empty thread reference records
+  where proposals were presented. Once decisions exist, transition atomically to the
+  selected write or archive phase. That next phase's approval has exact source,
+  approver identity, normalized command records, and proposal-set digest; its ordered
+  commands equal the ordered decisions one-for-one, and each binds the same candidate id
+  and proposal digest.
+- `tracker-write`: all approval keys plus `operations`; live operations are non-empty, equal
+  the durable attempt records, bind a proposal digest, frozen payload marker, exact
+  tracker destination, returned identifier, and authoritative read-back, and use only
+  `attempting`, `verified`, `failed`, or `ambiguous`. A `verified` read-back repeats the
+  operation's identifier, payload digest, marker, and destination exactly. Its exact
+  `verified_route` is `created-and-read-back`, `pre-existing-exact-match`,
+  `failed-response-then-exact-read-back`, or
+  `ambiguous-response-then-exact-read-back`; the retained response must match that route
+  and no route may fabricate a successful create. The read-back carries the observed
+  canonical `{title, body, project, labels}` plus its independently recomputed digest;
+  exact verification requires that payload, digest, marker, destination, and identifier
+  to match the approved operation. Operations
+  account for every approved tracker payload without cross-payload or duplicate
+  identifier reuse. The
+  `verified_tracker_identifiers` array equals the ordered returned identifiers of
+  `verified` operations after authoritative read-back. An `attempting`, `failed`, or
+  `ambiguous` operation may honestly retain JSON null for both returned identifier and
+  read-back only when that is the exact observation; never fabricate either. A failed
+  operation instead preserves an authoritative negative read-back. An ambiguous
+  operation preserves the exact response, any returned identifier, and the non-exact or
+  multiple-match read-back. Every ambiguous match has exact identifier, observed
+  canonical payload, independently recomputed observed digest, marker, destination, and
+  derived exact-payload verdict; the observed payload has exactly `title`, `body`,
+  `project`, and `labels`, and its body carries the claimed marker exactly once.
+  Identifiers are unique and every field binds the operation. Ambiguity requires
+  multiple matches or a non-exact match; one
+  exact match selects the matching verified route. This phase contains tracker-create operations only, and each
+  operation's decision is exactly `file`; candidate ids, payload digests, decisions,
+  operations, and non-null returned identifiers are unique and ordered bijectively.
+  Forge evidence begins in `archive-sweep`. In `test` mode the same phase uses
+  `would-create` operations with JSON-null response, returned identifier, and read-back;
+  verified identifiers and repository/PR evidence stay empty. Operations are empty when
+  no test decision is `file`.
+- `archive-sweep`: all tracker-write keys plus `archive_sweep`; the record has exact
+  repository, branch, commit, PR, observed head, reviewed head, and PR-watch receipt.
+  Repository and PR evidence contain that same record, and every head/digest binding
+  matches. Every filed operation is verified. Operations may be empty only when no
+  decision is `file`, so an archive-only batch remains constructible without inventing a
+  tracker write.
+- `completed`: a route-discriminated terminal shape with `completion`, which contains
+  `route`, selected terminal outcome, and exact durable completed-receipt digest. The
+  `archive-sweep` route retains the complete archive-sweep shape. The `no-op` route is
+  the exact base plus completion, requires `successful-completion` and empty evidence
+  arrays, and never invents tracker or PR evidence. The `decision-only` route retains
+  proposal, approval, and ordered parked decisions with empty operations and repository/PR
+  evidence. The `test-render` route retains proposal, approval, decisions, and
+  `would-create` operations while forbidding returned identifiers, read-back, and
+  repository/PR evidence; those operations are empty when every test decision is
+  `archive` or `park`. Evidence-retaining `decision-only` and `test-render` routes may
+  record `degraded-success` when an optional interactive notification degraded after the
+  decisions became durable.
+
+Validate the exact base and the complete phase-owned shape before treating a captured
+state as valid. A recognized phase with incomplete or invalid phase-owned fields is
+uncertain, not abandonable. An unrecognized phase is invalid, but it is abandonable
+only when the readable object contains exactly the valid complete base shape and that
+shape independently proves empty `attempts`, `verified_tracker_identifiers`,
+`repository_evidence`, and `pull_request_evidence`. A malformed base, extra key, or
+unreadable field cannot prove absence.
+
 Before an external write, atomically persist `attempting` with the exact operation and
 payload digest. After response/read-back, atomically persist `verified`, `failed`, or
 `ambiguous`. A retry must inspect that state and the destination. Process termination or

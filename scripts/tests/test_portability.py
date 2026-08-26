@@ -2474,6 +2474,32 @@ def _assert_triage_adapter(adapter: str, runtime: str) -> None:
 
 def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     flattened = " ".join(workflow.split())
+    for phase in (
+        "reserved",
+        "propose",
+        "awaiting-approval",
+        "tracker-write",
+        "archive-sweep",
+        "completed",
+    ):
+        assert f"- `{phase}`" in workflow
+    assert (
+        "A recognized phase with incomplete or invalid phase-owned fields is uncertain, "
+        "not abandonable"
+        in flattened
+    )
+    assert (
+        "An unrecognized phase is invalid, but it is abandonable only when the readable "
+        "object contains exactly the valid complete base shape"
+    ) in flattened
+    assert "A malformed base, extra key, or unreadable field cannot prove absence" in flattened
+    assert workflow.count("`{title, body_without_marker, project, labels}`") == 2
+    assert (
+        "An `attempting`, `failed`, or `ambiguous` operation may honestly retain JSON "
+        "null for both returned identifier and read-back"
+    ) in flattened
+    assert "This phase contains tracker-create operations only" in flattened
+    assert "each operation's decision is exactly `file`" in flattened
     assert (
         "The capability, authority, artifact, input, gate-only input precedence, test "
         "input precedence, recovery-transition, and completion rows in this "
@@ -5202,7 +5228,1318 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     live_state_path = resolve_logical_path(
         triage_config["state_path"].format(mode="live")
     )
-    valid_state = b'{"phase":"propose"}\n'
+    ordinary_state_phases = {
+        "reserved",
+        "propose",
+        "awaiting-approval",
+        "tracker-write",
+        "archive-sweep",
+        "completed",
+    }
+    phase_rank = {
+        phase: rank
+        for rank, phase in enumerate(
+            (
+                "reserved",
+                "propose",
+                "awaiting-approval",
+                "tracker-write",
+                "archive-sweep",
+                "completed",
+            )
+        )
+    }
+    phase_owned_keys = {
+        "reserved": set(),
+        "propose": {"proposal_payloads", "proposal_payload_digests"},
+        "awaiting-approval": {
+            "proposal_payloads",
+            "proposal_payload_digests",
+            "approval",
+            "notification_thread_reference",
+            "decisions",
+        },
+        "tracker-write": {
+            "proposal_payloads",
+            "proposal_payload_digests",
+            "approval",
+            "notification_thread_reference",
+            "decisions",
+            "operations",
+        },
+        "archive-sweep": {
+            "proposal_payloads",
+            "proposal_payload_digests",
+            "approval",
+            "notification_thread_reference",
+            "decisions",
+            "operations",
+            "archive_sweep",
+        },
+        "completed": {
+            "proposal_payloads",
+            "proposal_payload_digests",
+            "approval",
+            "notification_thread_reference",
+            "decisions",
+            "operations",
+            "archive_sweep",
+            "completion",
+        },
+    }
+    lowercase_digest = re.compile(r"[0-9a-f]{64}")
+    lowercase_head = re.compile(r"[0-9a-f]{40}")
+    owner_token_grammar = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
+
+    def ordinary_state_base(phase: str) -> dict[str, object]:
+        config_fingerprint = "a" * 64
+        return {
+            "kind": "triage-run-state",
+            "schema_version": 1,
+            "phase": phase,
+            "mode": "live",
+            "run_identity": {
+                "repository_identity": "repo-id",
+                "friction_log": "docs/kit-friction-log.md",
+                "protected_branch_head": "c" * 40,
+                "mode": "live",
+                "session": "session-id",
+                "config_fingerprint": config_fingerprint,
+            },
+            "gate_owner_token": state_old_gate_capture["owner"]["token"],
+            "config_fingerprint": config_fingerprint,
+            "frozen_inbox_digest": "b" * 64,
+            "engine_mode": "llm-only",
+            "attempts": [],
+            "verified_tracker_identifiers": [],
+            "repository_evidence": [],
+            "pull_request_evidence": [],
+        }
+
+    ordinary_state_keys = set(ordinary_state_base("reserved"))
+
+    def ordinary_state_payload(phase: str) -> dict[str, object]:
+        payload = ordinary_state_base(phase)
+        if phase_rank[phase] >= phase_rank["propose"]:
+            proposals = []
+            for candidate_id, title, body_without_marker in (
+                ("candidate-a", "Proposal", "Exact tracker payload"),
+                (
+                    "candidate-b",
+                    "Proposal follow-up",
+                    "Second exact tracker payload",
+                ),
+            ):
+                payload_core = {
+                    "title": title,
+                    "body_without_marker": body_without_marker,
+                    "project": "devkit",
+                    "labels": ["friction"],
+                }
+                payload_core_digest = hashlib.sha256(
+                    canonical_json_bytes(payload_core)
+                ).hexdigest()
+                marker = (
+                    "<!-- triage-payload:session-id:"
+                    f"{candidate_id}:{payload_core_digest} -->"
+                )
+                final_payload = {
+                    "title": title,
+                    "body": f"{body_without_marker}\n\n{marker}",
+                    "project": "devkit",
+                    "labels": ["friction"],
+                }
+                proposals.append(
+                    {
+                        "candidate_id": candidate_id,
+                        "payload_core": payload_core,
+                        "payload_core_digest": payload_core_digest,
+                        "marker": marker,
+                        "payload": final_payload,
+                        "payload_digest": hashlib.sha256(
+                            canonical_json_bytes(final_payload)
+                        ).hexdigest(),
+                    }
+                )
+            payload.update(
+                {
+                    "proposal_payloads": proposals,
+                    "proposal_payload_digests": [
+                        proposal["payload_digest"] for proposal in proposals
+                    ],
+                }
+            )
+        if phase_rank[phase] >= phase_rank["awaiting-approval"]:
+            if phase == "awaiting-approval":
+                payload.update(
+                    {
+                        "approval": None,
+                        "notification_thread_reference": None,
+                        "decisions": [],
+                    }
+                )
+            else:
+                proposal_set_digest = hashlib.sha256(
+                    canonical_json_bytes(payload["proposal_payloads"])
+                ).hexdigest()
+                decisions = [
+                    {
+                        "candidate_id": proposal["candidate_id"],
+                        "payload_digest": proposal["payload_digest"],
+                        "decision": "file",
+                    }
+                    for proposal in payload["proposal_payloads"]
+                ]
+                payload.update(
+                    {
+                        "approval": {
+                            "source": "current-session",
+                            "approver_identity": "operator",
+                            "commands": copy.deepcopy(decisions),
+                            "proposal_set_digest": proposal_set_digest,
+                        },
+                        "notification_thread_reference": None,
+                        "decisions": decisions,
+                    }
+                )
+        if phase_rank[phase] >= phase_rank["tracker-write"]:
+            destination = {"tracker": "github", "repository": "repo-id"}
+            operations = []
+            for index, proposal in enumerate(payload["proposal_payloads"], start=1):
+                payload_digest = proposal["payload_digest"]
+                returned_identifier = f"tracker-{index}23"
+                marker = proposal["marker"]
+                verified = (
+                    phase_rank[phase] >= phase_rank["archive-sweep"] or index == 1
+                )
+                operations.append(
+                    {
+                        "status": "verified" if verified else "attempting",
+                        "operation": "tracker-create",
+                        "payload_digest": payload_digest,
+                        "marker": marker,
+                        "destination": copy.deepcopy(destination),
+                        "verified_route": (
+                            "created-and-read-back" if verified else None
+                        ),
+                        "returned_identifier": returned_identifier if verified else None,
+                        "response": (
+                            {"outcome": "created", "identifier": returned_identifier}
+                            if verified
+                            else None
+                        ),
+                        "read_back": (
+                            {
+                                "identifier": returned_identifier,
+                                "observed_payload": copy.deepcopy(
+                                    proposal["payload"]
+                                ),
+                                "observed_payload_digest": proposal[
+                                    "payload_digest"
+                                ],
+                                "marker": marker,
+                                "destination": copy.deepcopy(destination),
+                            }
+                            if verified
+                            else None
+                        ),
+                    }
+                )
+            payload.update(
+                {
+                    "operations": operations,
+                    "attempts": operations,
+                    "verified_tracker_identifiers": [
+                        operation["returned_identifier"]
+                        for operation in operations
+                        if operation["status"] == "verified"
+                    ],
+                }
+            )
+        if phase_rank[phase] >= phase_rank["archive-sweep"]:
+            archive_sweep = {
+                "repository": "repo-id",
+                "branch": "chore/triage-friction-log-archive",
+                "commit": "d" * 40,
+                "pull_request": "pr-123",
+                "observed_pr_head": "d" * 40,
+                "reviewed_head": "d" * 40,
+                "pr_watch_receipt": "e" * 64,
+            }
+            payload.update(
+                {
+                    "archive_sweep": archive_sweep,
+                    "repository_evidence": [archive_sweep],
+                    "pull_request_evidence": [archive_sweep],
+                }
+            )
+        if phase_rank[phase] >= phase_rank["completed"]:
+            payload["completion"] = {
+                "route": "archive-sweep",
+                "outcome": "successful-completion",
+                "completed_receipt_digest": "f" * 64,
+            }
+        return payload
+
+    def complete_base_valid(value: object) -> bool:
+        if not isinstance(value, dict) or not ordinary_state_keys.issubset(value):
+            return False
+        run_identity = value.get("run_identity")
+        if not isinstance(run_identity, dict):
+            return False
+        expected_run_identity_keys = {
+            "repository_identity",
+            "friction_log",
+            "protected_branch_head",
+            "mode",
+            "session",
+            "config_fingerprint",
+        }
+        return (
+            value.get("kind") == "triage-run-state"
+            and value.get("schema_version") == 1
+            and value.get("mode") in {"live", "test"}
+            and set(run_identity) == expected_run_identity_keys
+            and run_identity.get("repository_identity") == "repo-id"
+            and run_identity.get("friction_log") == "docs/kit-friction-log.md"
+            and isinstance(run_identity.get("protected_branch_head"), str)
+            and lowercase_head.fullmatch(run_identity["protected_branch_head"])
+            is not None
+            and run_identity.get("mode") == value.get("mode")
+            and isinstance(run_identity.get("session"), str)
+            and owner_token_grammar.fullmatch(run_identity["session"]) is not None
+            and isinstance(value.get("gate_owner_token"), str)
+            and value.get("gate_owner_token")
+            == state_old_gate_capture["owner"]["token"]
+            and owner_token_grammar.fullmatch(value["gate_owner_token"]) is not None
+            and isinstance(value.get("config_fingerprint"), str)
+            and lowercase_digest.fullmatch(value["config_fingerprint"]) is not None
+            and run_identity.get("config_fingerprint")
+            == value.get("config_fingerprint")
+            and isinstance(value.get("frozen_inbox_digest"), str)
+            and lowercase_digest.fullmatch(value["frozen_inbox_digest"]) is not None
+            and value.get("engine_mode") in {"engine-backed", "llm-only"}
+            and isinstance(value.get("attempts"), list)
+            and isinstance(value.get("verified_tracker_identifiers"), list)
+            and isinstance(value.get("repository_evidence"), list)
+            and isinstance(value.get("pull_request_evidence"), list)
+        )
+
+    def ordinary_state_valid(value: object) -> bool:
+        if not complete_base_valid(value) or not isinstance(value, dict):
+            return False
+        phase = value.get("phase")
+        if not isinstance(phase, str) or phase not in ordinary_state_phases:
+            return False
+        if phase == "completed" and set(value) == ordinary_state_keys | {"completion"}:
+            completion = value.get("completion")
+            return (
+                isinstance(completion, dict)
+                and set(completion)
+                == {"route", "outcome", "completed_receipt_digest"}
+                and completion.get("route") == "no-op"
+                and completion.get("outcome") == "successful-completion"
+                and isinstance(completion.get("completed_receipt_digest"), str)
+                and lowercase_digest.fullmatch(
+                    completion["completed_receipt_digest"]
+                )
+                is not None
+                and not any(
+                    value[field]
+                    for field in (
+                        "attempts",
+                        "verified_tracker_identifiers",
+                        "repository_evidence",
+                        "pull_request_evidence",
+                    )
+                )
+            )
+        terminal_completion_keys = phase_owned_keys["tracker-write"] | {"completion"}
+        if (
+            phase == "completed"
+            and set(value) == ordinary_state_keys | terminal_completion_keys
+        ):
+            pass
+        elif set(value) != ordinary_state_keys | phase_owned_keys[phase]:
+            return False
+        if phase == "reserved":
+            return not any(
+                value[field]
+                for field in (
+                    "attempts",
+                    "verified_tracker_identifiers",
+                    "repository_evidence",
+                    "pull_request_evidence",
+                )
+            )
+        proposals = value.get("proposal_payloads")
+        proposal_digests = value.get("proposal_payload_digests")
+        expected_proposal_digests: list[str] = []
+        proposals_valid = isinstance(proposals, list) and bool(proposals)
+        if proposals_valid:
+            for proposal in proposals:
+                if (
+                    not isinstance(proposal, dict)
+                    or set(proposal)
+                    != {
+                        "candidate_id",
+                        "payload_core",
+                        "payload_core_digest",
+                        "marker",
+                        "payload",
+                        "payload_digest",
+                    }
+                ):
+                    proposals_valid = False
+                    break
+                candidate_id = proposal.get("candidate_id")
+                payload_core = proposal.get("payload_core")
+                payload_core_digest = proposal.get("payload_core_digest")
+                marker = proposal.get("marker")
+                final_payload = proposal.get("payload")
+                payload_digest = proposal.get("payload_digest")
+                if (
+                    not isinstance(candidate_id, str)
+                    or owner_token_grammar.fullmatch(candidate_id) is None
+                    or not isinstance(payload_core, dict)
+                    or set(payload_core)
+                    != {"title", "body_without_marker", "project", "labels"}
+                    or any(
+                        not isinstance(payload_core[field], str)
+                        or not payload_core[field]
+                        for field in ("title", "body_without_marker", "project")
+                    )
+                    or not isinstance(payload_core.get("labels"), list)
+                    or any(
+                        not isinstance(label, str) or not label
+                        for label in payload_core["labels"]
+                    )
+                    or payload_core_digest
+                    != hashlib.sha256(canonical_json_bytes(payload_core)).hexdigest()
+                ):
+                    proposals_valid = False
+                    break
+                expected_marker = (
+                    "<!-- triage-payload:"
+                    f"{value['run_identity']['session']}:{candidate_id}:"
+                    f"{payload_core_digest} -->"
+                )
+                expected_final_payload = {
+                    "title": payload_core["title"],
+                    "body": f"{payload_core['body_without_marker']}\n\n{expected_marker}",
+                    "project": payload_core["project"],
+                    "labels": payload_core["labels"],
+                }
+                expected_payload_digest = hashlib.sha256(
+                    canonical_json_bytes(expected_final_payload)
+                ).hexdigest()
+                if (
+                    marker != expected_marker
+                    or final_payload != expected_final_payload
+                    or payload_digest != expected_payload_digest
+                ):
+                    proposals_valid = False
+                    break
+                expected_proposal_digests.append(expected_payload_digest)
+        if (
+            not proposals_valid
+            or not isinstance(proposal_digests, list)
+            or proposal_digests != expected_proposal_digests
+            or len({proposal["candidate_id"] for proposal in proposals})
+            != len(proposals)
+            or len(set(expected_proposal_digests)) != len(expected_proposal_digests)
+        ):
+            return False
+        if phase == "propose":
+            return not any(
+                value[field]
+                for field in (
+                    "attempts",
+                    "verified_tracker_identifiers",
+                    "repository_evidence",
+                    "pull_request_evidence",
+                )
+            )
+        approval = value.get("approval")
+        decisions = value.get("decisions")
+        if phase == "awaiting-approval":
+            notification_reference = value.get("notification_thread_reference")
+            return (
+                approval is None
+                and decisions == []
+                and (
+                    notification_reference is None
+                    or (
+                        isinstance(notification_reference, str)
+                        and bool(notification_reference)
+                    )
+                )
+                and not any(
+                    value[field]
+                    for field in (
+                        "attempts",
+                        "verified_tracker_identifiers",
+                        "repository_evidence",
+                        "pull_request_evidence",
+                    )
+                )
+            )
+        if (
+            not isinstance(approval, dict)
+            or set(approval)
+            != {"source", "approver_identity", "commands", "proposal_set_digest"}
+            or approval.get("source") not in {"current-session", "notification-thread"}
+            or not isinstance(approval.get("approver_identity"), str)
+            or not approval.get("approver_identity")
+            or approval.get("proposal_set_digest")
+            != hashlib.sha256(canonical_json_bytes(proposals)).hexdigest()
+            or not (
+                (
+                    approval.get("source") == "current-session"
+                    and value.get("notification_thread_reference") is None
+                )
+                or (
+                    approval.get("source") == "notification-thread"
+                    and isinstance(value.get("notification_thread_reference"), str)
+                    and bool(value.get("notification_thread_reference"))
+                )
+            )
+            or not isinstance(decisions, list)
+            or not decisions
+            or len(decisions) != len(proposal_digests)
+            or any(
+                not isinstance(decision, dict)
+                or set(decision) != {"candidate_id", "payload_digest", "decision"}
+                or decision.get("candidate_id")
+                != proposals[index]["candidate_id"]
+                or decision.get("payload_digest") not in proposal_digests
+                or decision.get("decision") not in {"file", "park", "archive"}
+                for index, decision in enumerate(decisions)
+            )
+            or {decision["payload_digest"] for decision in decisions}
+            != set(proposal_digests)
+            or [decision["payload_digest"] for decision in decisions]
+            != proposal_digests
+            or approval.get("commands") != decisions
+        ):
+            return False
+        operations = value.get("operations")
+        proposal_markers = {
+            payload_digest: proposal["marker"]
+            for proposal, payload_digest in zip(
+                proposals, proposal_digests, strict=True
+            )
+        }
+        proposal_records = {
+            proposal["payload_digest"]: proposal for proposal in proposals
+        }
+
+        def observed_payload_valid(
+            observed_payload: object, marker: object
+        ) -> bool:
+            return (
+                isinstance(observed_payload, dict)
+                and set(observed_payload) == {"title", "body", "project", "labels"}
+                and all(
+                    isinstance(observed_payload.get(field), str)
+                    and bool(observed_payload[field])
+                    for field in ("title", "body", "project")
+                )
+                and isinstance(observed_payload.get("labels"), list)
+                and all(
+                    isinstance(label, str) and bool(label)
+                    for label in observed_payload["labels"]
+                )
+                and isinstance(marker, str)
+                and observed_payload["body"].count(marker) == 1
+            )
+
+        decision_by_digest = {
+            decision["payload_digest"]: decision["decision"] for decision in decisions
+        }
+        filed_decision_digests = [
+            decision["payload_digest"]
+            for decision in decisions
+            if decision["decision"] == "file"
+        ]
+        operations_valid = isinstance(operations, list) and (
+            bool(operations)
+            or (
+                phase in {"archive-sweep", "completed"}
+                and not filed_decision_digests
+            )
+        )
+        if operations_valid:
+            for operation in operations:
+                if (
+                    not isinstance(operation, dict)
+                    or set(operation)
+                    != {
+                        "status",
+                        "operation",
+                        "payload_digest",
+                        "marker",
+                        "destination",
+                        "verified_route",
+                        "returned_identifier",
+                        "response",
+                        "read_back",
+                    }
+                ):
+                    operations_valid = False
+                    break
+                status = operation.get("status")
+                payload_digest = operation.get("payload_digest")
+                verified_route = operation.get("verified_route")
+                returned_identifier = operation.get("returned_identifier")
+                response = operation.get("response")
+                read_back = operation.get("read_back")
+                proposal_record = proposal_records.get(payload_digest)
+                expected_read_back = {
+                    "identifier": returned_identifier,
+                    "observed_payload": (
+                        proposal_record.get("payload")
+                        if isinstance(proposal_record, dict)
+                        else None
+                    ),
+                    "observed_payload_digest": payload_digest,
+                    "marker": operation.get("marker"),
+                    "destination": operation.get("destination"),
+                }
+                if (
+                    status
+                    not in (
+                        {"would-create"}
+                        if value.get("mode") == "test"
+                        else {"attempting", "verified", "failed", "ambiguous"}
+                    )
+                    or operation.get("operation") != "tracker-create"
+                    or payload_digest not in proposal_digests
+                    or decision_by_digest.get(payload_digest) != "file"
+                    or operation.get("marker")
+                    != proposal_markers.get(payload_digest)
+                    or operation.get("destination")
+                    != {"tracker": "github", "repository": "repo-id"}
+                    or (
+                        value.get("mode") == "test"
+                        and (
+                            verified_route is not None
+                            or returned_identifier is not None
+                            or response is not None
+                            or read_back is not None
+                        )
+                    )
+                    or (
+                        value.get("mode") == "live"
+                        and status == "verified"
+                        and (
+                            verified_route
+                            not in {
+                                "created-and-read-back",
+                                "pre-existing-exact-match",
+                                "failed-response-then-exact-read-back",
+                                "ambiguous-response-then-exact-read-back",
+                            }
+                            or not isinstance(returned_identifier, str)
+                            or not returned_identifier
+                            or (
+                                verified_route == "created-and-read-back"
+                                and response
+                                != {
+                                    "outcome": "created",
+                                    "identifier": returned_identifier,
+                                }
+                            )
+                            or (
+                                verified_route == "pre-existing-exact-match"
+                                and response
+                                != {
+                                    "outcome": "pre-existing-exact-match",
+                                    "identifier": returned_identifier,
+                                }
+                            )
+                            or (
+                                verified_route
+                                == "failed-response-then-exact-read-back"
+                                and (
+                                    not isinstance(response, dict)
+                                    or set(response) != {"outcome", "reason"}
+                                    or response.get("outcome") != "failed"
+                                    or not isinstance(response.get("reason"), str)
+                                    or not response.get("reason")
+                                )
+                            )
+                            or (
+                                verified_route
+                                == "ambiguous-response-then-exact-read-back"
+                                and (
+                                    not isinstance(response, dict)
+                                    or set(response)
+                                    != {"outcome", "returned_identifier"}
+                                    or response.get("outcome") != "ambiguous"
+                                    or response.get("returned_identifier")
+                                    not in {None, returned_identifier}
+                                )
+                            )
+                            or not isinstance(read_back, dict)
+                            or not observed_payload_valid(
+                                read_back.get("observed_payload"),
+                                read_back.get("marker"),
+                            )
+                            or read_back.get("observed_payload_digest")
+                            != hashlib.sha256(
+                                canonical_json_bytes(read_back["observed_payload"])
+                            ).hexdigest()
+                            or read_back != expected_read_back
+                        )
+                    )
+                    or (
+                        value.get("mode") == "live"
+                        and status == "attempting"
+                        and (
+                            verified_route is not None
+                            or returned_identifier is not None
+                            or response is not None
+                            or read_back is not None
+                        )
+                    )
+                    or (
+                        value.get("mode") == "live"
+                        and status == "failed"
+                        and (
+                            verified_route is not None
+                            or returned_identifier is not None
+                            or not isinstance(response, dict)
+                            or set(response) != {"outcome", "reason"}
+                            or response.get("outcome") != "failed"
+                            or not isinstance(response.get("reason"), str)
+                            or not response.get("reason")
+                            or read_back
+                            != {
+                                "outcome": "authoritative-no-match",
+                                "marker": operation.get("marker"),
+                                "destination": operation.get("destination"),
+                            }
+                        )
+                    )
+                    or (
+                        value.get("mode") == "live"
+                        and status == "ambiguous"
+                        and (
+                            verified_route is not None
+                            or not isinstance(response, dict)
+                            or set(response)
+                            != {"outcome", "returned_identifier"}
+                            or response.get("outcome") != "ambiguous"
+                            or response.get("returned_identifier")
+                            != returned_identifier
+                            or (
+                                returned_identifier is not None
+                                and (
+                                    not isinstance(returned_identifier, str)
+                                    or not returned_identifier
+                                )
+                            )
+                            or not isinstance(read_back, dict)
+                            or set(read_back)
+                            != {"outcome", "marker", "destination", "matches"}
+                            or read_back.get("outcome") != "ambiguous"
+                            or read_back.get("marker") != operation.get("marker")
+                            or read_back.get("destination")
+                            != operation.get("destination")
+                            or not isinstance(read_back.get("matches"), list)
+                            or not read_back.get("matches")
+                            or any(
+                                not isinstance(match, dict)
+                                or set(match)
+                                != {
+                                    "identifier",
+                                    "observed_payload",
+                                    "observed_payload_digest",
+                                    "marker",
+                                    "destination",
+                                    "exact_payload",
+                                }
+                                or not isinstance(match.get("identifier"), str)
+                                or not match.get("identifier")
+                                or not observed_payload_valid(
+                                    match.get("observed_payload"),
+                                    match.get("marker"),
+                                )
+                                or match.get("observed_payload_digest")
+                                != hashlib.sha256(
+                                    canonical_json_bytes(match["observed_payload"])
+                                ).hexdigest()
+                                or match.get("marker") != operation.get("marker")
+                                or match.get("destination")
+                                != operation.get("destination")
+                                or type(match.get("exact_payload")) is not bool
+                                or match.get("exact_payload")
+                                is not (
+                                    isinstance(proposal_record, dict)
+                                    and match.get("observed_payload")
+                                    == proposal_record.get("payload")
+                                    and match.get("observed_payload_digest")
+                                    == payload_digest
+                                )
+                                for match in read_back["matches"]
+                            )
+                            or len(
+                                [match["identifier"] for match in read_back["matches"]]
+                            )
+                            != len(
+                                {
+                                    match["identifier"]
+                                    for match in read_back["matches"]
+                                }
+                            )
+                            or not (
+                                len(read_back["matches"]) > 1
+                                or any(
+                                    not match["exact_payload"]
+                                    for match in read_back["matches"]
+                                )
+                            )
+                        )
+                    )
+                ):
+                    operations_valid = False
+                    break
+        if (
+            not operations_valid
+            or operations != value.get("attempts")
+            or [operation["payload_digest"] for operation in operations]
+            != filed_decision_digests
+            or value.get("verified_tracker_identifiers")
+            != [
+                operation["returned_identifier"]
+                for operation in operations
+                if operation.get("status") == "verified"
+            ]
+            or len(value.get("verified_tracker_identifiers", []))
+            != len(set(value.get("verified_tracker_identifiers", [])))
+            or len(
+                [
+                    operation["returned_identifier"]
+                    for operation in operations
+                    if operation["returned_identifier"] is not None
+                ]
+            )
+            != len(
+                {
+                    operation["returned_identifier"]
+                    for operation in operations
+                    if operation["returned_identifier"] is not None
+                }
+            )
+        ):
+            return False
+        if phase == "tracker-write":
+            return (
+                not value.get("repository_evidence")
+                and not value.get("pull_request_evidence")
+                and (
+                    value.get("mode") == "live"
+                    or (
+                        value.get("mode") == "test"
+                        and not value.get("verified_tracker_identifiers")
+                    )
+                )
+            )
+        if phase == "completed" and "archive_sweep" not in value:
+            completion = value.get("completion")
+            if (
+                not isinstance(completion, dict)
+                or set(completion)
+                != {"route", "outcome", "completed_receipt_digest"}
+                or completion.get("outcome")
+                not in {"degraded-success", "successful-completion"}
+                or not isinstance(completion.get("completed_receipt_digest"), str)
+                or lowercase_digest.fullmatch(
+                    completion["completed_receipt_digest"]
+                )
+                is None
+                or value.get("repository_evidence")
+                or value.get("pull_request_evidence")
+            ):
+                return False
+            if completion.get("route") == "decision-only":
+                return (
+                    value.get("mode") == "live"
+                    and not filed_decision_digests
+                    and not operations
+                    and all(decision["decision"] == "park" for decision in decisions)
+                )
+            if completion.get("route") == "test-render":
+                return (
+                    value.get("mode") == "test"
+                    and (bool(operations) or not filed_decision_digests)
+                    and all(
+                        operation["status"] == "would-create"
+                        for operation in operations
+                    )
+                )
+            return False
+        archive_sweep = value.get("archive_sweep")
+        if (
+            value.get("mode") != "live"
+            or any(operation["status"] != "verified" for operation in operations)
+            or not isinstance(archive_sweep, dict)
+            or set(archive_sweep)
+            != {
+                "repository",
+                "branch",
+                "commit",
+                "pull_request",
+                "observed_pr_head",
+                "reviewed_head",
+                "pr_watch_receipt",
+            }
+            or archive_sweep.get("repository") != "repo-id"
+            or not isinstance(archive_sweep.get("branch"), str)
+            or not archive_sweep.get("branch")
+            or not isinstance(archive_sweep.get("commit"), str)
+            or lowercase_head.fullmatch(archive_sweep["commit"]) is None
+            or not isinstance(archive_sweep.get("pull_request"), str)
+            or not archive_sweep.get("pull_request")
+            or archive_sweep.get("observed_pr_head") != archive_sweep.get("commit")
+            or archive_sweep.get("reviewed_head") != archive_sweep.get("commit")
+            or not isinstance(archive_sweep.get("pr_watch_receipt"), str)
+            or lowercase_digest.fullmatch(archive_sweep["pr_watch_receipt"]) is None
+            or value.get("repository_evidence") != [archive_sweep]
+            or value.get("pull_request_evidence") != [archive_sweep]
+        ):
+            return False
+        if phase == "archive-sweep":
+            return True
+        completion = value.get("completion")
+        return (
+            isinstance(completion, dict)
+            and set(completion)
+            == {"route", "outcome", "completed_receipt_digest"}
+            and completion.get("route") == "archive-sweep"
+            and completion.get("outcome")
+            in {"degraded-success", "successful-completion"}
+            and isinstance(completion.get("completed_receipt_digest"), str)
+            and lowercase_digest.fullmatch(completion["completed_receipt_digest"])
+            is not None
+        )
+
+    valid_state_payload = ordinary_state_payload("propose")
+    for phase in ordinary_state_phases:
+        assert ordinary_state_valid(ordinary_state_payload(phase))
+
+    failed_tracker_state = copy.deepcopy(ordinary_state_payload("tracker-write"))
+    failed_operation = failed_tracker_state["operations"][1]
+    failed_operation.update(
+        {
+            "status": "failed",
+            "returned_identifier": None,
+            "response": {"outcome": "failed", "reason": "create rejected"},
+            "read_back": {
+                "outcome": "authoritative-no-match",
+                "marker": failed_operation["marker"],
+                "destination": failed_operation["destination"],
+            },
+        }
+    )
+    assert ordinary_state_valid(failed_tracker_state)
+
+    ambiguous_tracker_state = copy.deepcopy(ordinary_state_payload("tracker-write"))
+    ambiguous_operation = ambiguous_tracker_state["operations"][1]
+    ambiguous_observed_payload = {
+        **ambiguous_tracker_state["proposal_payloads"][1]["payload"],
+        "title": "Non-exact tracker title",
+    }
+    ambiguous_operation.update(
+        {
+            "status": "ambiguous",
+            "returned_identifier": "tracker-ambiguous",
+            "response": {
+                "outcome": "ambiguous",
+                "returned_identifier": "tracker-ambiguous",
+            },
+            "read_back": {
+                "outcome": "ambiguous",
+                "marker": ambiguous_operation["marker"],
+                "destination": ambiguous_operation["destination"],
+                "matches": [
+                    {
+                        "identifier": "tracker-ambiguous",
+                        "observed_payload": ambiguous_observed_payload,
+                        "observed_payload_digest": hashlib.sha256(
+                            canonical_json_bytes(ambiguous_observed_payload)
+                        ).hexdigest(),
+                        "marker": ambiguous_operation["marker"],
+                        "destination": ambiguous_operation["destination"],
+                        "exact_payload": False,
+                    }
+                ],
+            },
+        }
+    )
+    assert ordinary_state_valid(ambiguous_tracker_state)
+
+    pre_existing_verified_state = copy.deepcopy(
+        ordinary_state_payload("archive-sweep")
+    )
+    pre_existing_operation = pre_existing_verified_state["operations"][0]
+    pre_existing_operation["verified_route"] = "pre-existing-exact-match"
+    pre_existing_operation["response"] = {
+        "outcome": "pre-existing-exact-match",
+        "identifier": pre_existing_operation["returned_identifier"],
+    }
+    assert ordinary_state_valid(pre_existing_verified_state)
+
+    failed_reconciled_state = copy.deepcopy(ordinary_state_payload("archive-sweep"))
+    failed_reconciled_operation = failed_reconciled_state["operations"][0]
+    failed_reconciled_operation[
+        "verified_route"
+    ] = "failed-response-then-exact-read-back"
+    failed_reconciled_operation["response"] = {
+        "outcome": "failed",
+        "reason": "response unavailable",
+    }
+    assert ordinary_state_valid(failed_reconciled_state)
+
+    ambiguous_reconciled_state = copy.deepcopy(
+        ordinary_state_payload("archive-sweep")
+    )
+    ambiguous_reconciled_operation = ambiguous_reconciled_state["operations"][0]
+    ambiguous_reconciled_operation[
+        "verified_route"
+    ] = "ambiguous-response-then-exact-read-back"
+    ambiguous_reconciled_operation["response"] = {
+        "outcome": "ambiguous",
+        "returned_identifier": None,
+    }
+    assert ordinary_state_valid(ambiguous_reconciled_state)
+
+    archive_only_state = copy.deepcopy(ordinary_state_payload("archive-sweep"))
+    for decision in archive_only_state["decisions"]:
+        decision["decision"] = "archive"
+    archive_only_state["approval"]["commands"] = archive_only_state["decisions"]
+    archive_only_state["operations"] = []
+    archive_only_state["attempts"] = []
+    archive_only_state["verified_tracker_identifiers"] = []
+    assert ordinary_state_valid(archive_only_state)
+
+    test_state = copy.deepcopy(ordinary_state_payload("tracker-write"))
+    test_state["mode"] = "test"
+    test_state["run_identity"]["mode"] = "test"
+    for operation in test_state["operations"]:
+        operation.update(
+            {
+                "status": "would-create",
+                "verified_route": None,
+                "returned_identifier": None,
+                "response": None,
+                "read_back": None,
+            }
+        )
+    test_state["verified_tracker_identifiers"] = []
+    assert ordinary_state_valid(test_state)
+
+    no_op_completed_state = {
+        **ordinary_state_base("completed"),
+        "completion": {
+            "route": "no-op",
+            "outcome": "successful-completion",
+            "completed_receipt_digest": "f" * 64,
+        },
+    }
+    assert ordinary_state_valid(no_op_completed_state)
+
+    decision_only_completed_state = copy.deepcopy(
+        ordinary_state_payload("tracker-write")
+    )
+    decision_only_completed_state["phase"] = "completed"
+    for decision in decision_only_completed_state["decisions"]:
+        decision["decision"] = "park"
+    decision_only_completed_state["approval"]["commands"] = (
+        decision_only_completed_state["decisions"]
+    )
+    decision_only_completed_state["operations"] = []
+    decision_only_completed_state["attempts"] = []
+    decision_only_completed_state["verified_tracker_identifiers"] = []
+    decision_only_completed_state["completion"] = {
+        "route": "decision-only",
+        "outcome": "successful-completion",
+        "completed_receipt_digest": "f" * 64,
+    }
+    assert ordinary_state_valid(decision_only_completed_state)
+
+    test_render_completed_state = copy.deepcopy(test_state)
+    test_render_completed_state["phase"] = "completed"
+    test_render_completed_state["completion"] = {
+        "route": "test-render",
+        "outcome": "successful-completion",
+        "completed_receipt_digest": "f" * 64,
+    }
+    assert ordinary_state_valid(test_render_completed_state)
+
+    test_archive_render_completed_state = copy.deepcopy(test_render_completed_state)
+    for decision in test_archive_render_completed_state["decisions"]:
+        decision["decision"] = "archive"
+    test_archive_render_completed_state["approval"]["commands"] = (
+        test_archive_render_completed_state["decisions"]
+    )
+    test_archive_render_completed_state["operations"] = []
+    test_archive_render_completed_state["attempts"] = []
+    assert ordinary_state_valid(test_archive_render_completed_state)
+
+    degraded_decision_only_state = copy.deepcopy(decision_only_completed_state)
+    degraded_decision_only_state["completion"]["outcome"] = "degraded-success"
+    assert ordinary_state_valid(degraded_decision_only_state)
+    degraded_test_render_state = copy.deepcopy(test_render_completed_state)
+    degraded_test_render_state["completion"]["outcome"] = "degraded-success"
+    assert ordinary_state_valid(degraded_test_render_state)
+
+    nested_phase_mutations: list[dict[str, object]] = []
+    propose_digest_mutation = copy.deepcopy(ordinary_state_payload("propose"))
+    propose_digest_mutation["proposal_payload_digests"][0] = "0" * 64
+    nested_phase_mutations.append(propose_digest_mutation)
+    proposal_core_shape_mutation = copy.deepcopy(ordinary_state_payload("propose"))
+    proposal_core_shape_mutation["proposal_payloads"][0]["payload_core"].pop(
+        "project"
+    )
+    nested_phase_mutations.append(proposal_core_shape_mutation)
+    proposal_core_digest_mutation = copy.deepcopy(ordinary_state_payload("propose"))
+    proposal_core_digest_mutation["proposal_payloads"][0][
+        "payload_core_digest"
+    ] = "0" * 64
+    nested_phase_mutations.append(proposal_core_digest_mutation)
+    proposal_marker_mutation = copy.deepcopy(ordinary_state_payload("propose"))
+    proposal_marker_mutation["proposal_payloads"][0]["marker"] = "foreign-marker"
+    nested_phase_mutations.append(proposal_marker_mutation)
+    proposal_final_payload_mutation = copy.deepcopy(ordinary_state_payload("propose"))
+    proposal_final_payload_mutation["proposal_payloads"][0]["payload"][
+        "project"
+    ] = "foreign-project"
+    nested_phase_mutations.append(proposal_final_payload_mutation)
+    duplicate_candidate_mutation = copy.deepcopy(ordinary_state_payload("propose"))
+    duplicate_candidate_mutation["proposal_payloads"][1]["candidate_id"] = (
+        duplicate_candidate_mutation["proposal_payloads"][0]["candidate_id"]
+    )
+    nested_phase_mutations.append(duplicate_candidate_mutation)
+
+    approval_digest_mutation = copy.deepcopy(
+        ordinary_state_payload("tracker-write")
+    )
+    approval_digest_mutation["approval"]["proposal_set_digest"] = "0" * 64
+    nested_phase_mutations.append(approval_digest_mutation)
+    approval_decision_mutation = copy.deepcopy(
+        ordinary_state_payload("tracker-write")
+    )
+    approval_decision_mutation["decisions"][0]["payload_digest"] = "0" * 64
+    nested_phase_mutations.append(approval_decision_mutation)
+    approval_command_mutation = copy.deepcopy(ordinary_state_payload("tracker-write"))
+    approval_command_mutation["approval"]["commands"][0]["decision"] = "park"
+    nested_phase_mutations.append(approval_command_mutation)
+    approval_notification_mutation = copy.deepcopy(
+        ordinary_state_payload("tracker-write")
+    )
+    approval_notification_mutation["notification_thread_reference"] = "thread-foreign"
+    nested_phase_mutations.append(approval_notification_mutation)
+
+    tracker_marker_mutation = copy.deepcopy(ordinary_state_payload("tracker-write"))
+    tracker_marker_mutation["operations"][0]["marker"] = "foreign-marker"
+    nested_phase_mutations.append(tracker_marker_mutation)
+    tracker_destination_mutation = copy.deepcopy(
+        ordinary_state_payload("tracker-write")
+    )
+    tracker_destination_mutation["operations"][0]["destination"][
+        "repository"
+    ] = "foreign-repo"
+    nested_phase_mutations.append(tracker_destination_mutation)
+    tracker_identifier_mutation = copy.deepcopy(
+        ordinary_state_payload("tracker-write")
+    )
+    tracker_identifier_mutation["operations"][0][
+        "returned_identifier"
+    ] = "foreign-id"
+    nested_phase_mutations.append(tracker_identifier_mutation)
+    tracker_readback_mutation = copy.deepcopy(ordinary_state_payload("tracker-write"))
+    tracker_readback_mutation["operations"][0]["read_back"][
+        "observed_payload_digest"
+    ] = tracker_readback_mutation["operations"][1]["payload_digest"]
+    nested_phase_mutations.append(tracker_readback_mutation)
+    tracker_observed_payload_mutation = copy.deepcopy(
+        ordinary_state_payload("tracker-write")
+    )
+    tracker_observed_payload_mutation["operations"][0]["read_back"][
+        "observed_payload"
+    ] = {
+        **tracker_observed_payload_mutation["operations"][0]["read_back"][
+            "observed_payload"
+        ],
+        "title": "Forged observed title",
+    }
+    nested_phase_mutations.append(tracker_observed_payload_mutation)
+    tracker_observed_shape_mutation = copy.deepcopy(ambiguous_tracker_state)
+    tracker_observed_shape_mutation["operations"][1]["read_back"]["matches"][0][
+        "observed_payload"
+    ]["extra"] = "forged"
+    nested_phase_mutations.append(tracker_observed_shape_mutation)
+    tracker_detached_marker_mutation = copy.deepcopy(ambiguous_tracker_state)
+    detached_match = tracker_detached_marker_mutation["operations"][1]["read_back"][
+        "matches"
+    ][0]
+    detached_match["observed_payload"]["body"] = "Observed body without marker"
+    detached_match["observed_payload_digest"] = hashlib.sha256(
+        canonical_json_bytes(detached_match["observed_payload"])
+    ).hexdigest()
+    nested_phase_mutations.append(tracker_detached_marker_mutation)
+    tracker_cross_payload_mutation = copy.deepcopy(
+        ordinary_state_payload("tracker-write")
+    )
+    tracker_cross_payload_mutation["operations"][0]["payload_digest"] = (
+        tracker_cross_payload_mutation["operations"][1]["payload_digest"]
+    )
+    nested_phase_mutations.append(tracker_cross_payload_mutation)
+    tracker_decision_mutation = copy.deepcopy(ordinary_state_payload("tracker-write"))
+    tracker_decision_mutation["decisions"][0]["decision"] = "park"
+    nested_phase_mutations.append(tracker_decision_mutation)
+    tracker_forge_operation_mutation = copy.deepcopy(
+        ordinary_state_payload("tracker-write")
+    )
+    tracker_forge_operation_mutation["operations"][0]["operation"] = "forge-pr"
+    nested_phase_mutations.append(tracker_forge_operation_mutation)
+    tracker_attempting_identifier_mutation = copy.deepcopy(
+        ordinary_state_payload("tracker-write")
+    )
+    tracker_attempting_identifier_mutation["operations"][1][
+        "returned_identifier"
+    ] = "fabricated-id"
+    nested_phase_mutations.append(tracker_attempting_identifier_mutation)
+    tracker_failed_evidence_mutation = copy.deepcopy(failed_tracker_state)
+    tracker_failed_evidence_mutation["operations"][1]["read_back"] = None
+    nested_phase_mutations.append(tracker_failed_evidence_mutation)
+    tracker_ambiguous_evidence_mutation = copy.deepcopy(ambiguous_tracker_state)
+    tracker_ambiguous_evidence_mutation["operations"][1]["read_back"]["matches"] = []
+    nested_phase_mutations.append(tracker_ambiguous_evidence_mutation)
+    tracker_false_ambiguity_mutation = copy.deepcopy(ambiguous_tracker_state)
+    tracker_false_ambiguity_mutation["operations"][1]["read_back"]["matches"][0][
+        "exact_payload"
+    ] = True
+    nested_phase_mutations.append(tracker_false_ambiguity_mutation)
+    tracker_forged_match_digest = copy.deepcopy(ambiguous_tracker_state)
+    tracker_forged_match_digest["operations"][1]["read_back"]["matches"][0][
+        "observed_payload_digest"
+    ] = tracker_forged_match_digest["operations"][1]["payload_digest"]
+    nested_phase_mutations.append(tracker_forged_match_digest)
+    tracker_singleton_exact_ambiguity = copy.deepcopy(ambiguous_tracker_state)
+    exact_proposal = tracker_singleton_exact_ambiguity["proposal_payloads"][1]
+    exact_match = tracker_singleton_exact_ambiguity["operations"][1]["read_back"][
+        "matches"
+    ][0]
+    exact_match["observed_payload"] = exact_proposal["payload"]
+    exact_match["observed_payload_digest"] = exact_proposal["payload_digest"]
+    exact_match["exact_payload"] = True
+    nested_phase_mutations.append(tracker_singleton_exact_ambiguity)
+    tracker_ambiguous_duplicate_identifier = copy.deepcopy(ambiguous_tracker_state)
+    existing_identifier = tracker_ambiguous_duplicate_identifier["operations"][0][
+        "returned_identifier"
+    ]
+    tracker_ambiguous_duplicate_identifier["operations"][1][
+        "returned_identifier"
+    ] = existing_identifier
+    tracker_ambiguous_duplicate_identifier["operations"][1]["response"][
+        "returned_identifier"
+    ] = existing_identifier
+    nested_phase_mutations.append(tracker_ambiguous_duplicate_identifier)
+    pre_existing_response_mutation = copy.deepcopy(pre_existing_verified_state)
+    pre_existing_response_mutation["operations"][0]["response"] = {
+        "outcome": "created",
+        "identifier": pre_existing_response_mutation["operations"][0][
+            "returned_identifier"
+        ],
+    }
+    nested_phase_mutations.append(pre_existing_response_mutation)
+    failed_reconciled_response_mutation = copy.deepcopy(failed_reconciled_state)
+    failed_reconciled_response_mutation["operations"][0]["response"] = {
+        "outcome": "ambiguous",
+        "returned_identifier": None,
+    }
+    nested_phase_mutations.append(failed_reconciled_response_mutation)
+    ambiguous_reconciled_response_mutation = copy.deepcopy(
+        ambiguous_reconciled_state
+    )
+    ambiguous_reconciled_response_mutation["operations"][0]["response"] = {
+        "outcome": "created",
+        "identifier": ambiguous_reconciled_response_mutation["operations"][0][
+            "returned_identifier"
+        ],
+    }
+    nested_phase_mutations.append(ambiguous_reconciled_response_mutation)
+    duplicate_decision_mutation = copy.deepcopy(ordinary_state_payload("tracker-write"))
+    duplicate_decision_mutation["decisions"][1] = copy.deepcopy(
+        duplicate_decision_mutation["decisions"][0]
+    )
+    duplicate_decision_mutation["approval"]["commands"] = (
+        duplicate_decision_mutation["decisions"]
+    )
+    nested_phase_mutations.append(duplicate_decision_mutation)
+    duplicate_operation_mutation = copy.deepcopy(
+        ordinary_state_payload("archive-sweep")
+    )
+    duplicate_operation_mutation["operations"][1] = copy.deepcopy(
+        duplicate_operation_mutation["operations"][0]
+    )
+    nested_phase_mutations.append(duplicate_operation_mutation)
+    tracker_duplicate_identifier = copy.deepcopy(
+        ordinary_state_payload("archive-sweep")
+    )
+    duplicate_identifier = tracker_duplicate_identifier["operations"][0][
+        "returned_identifier"
+    ]
+    tracker_duplicate_identifier["operations"][1][
+        "returned_identifier"
+    ] = duplicate_identifier
+    tracker_duplicate_identifier["operations"][1]["read_back"][
+        "identifier"
+    ] = duplicate_identifier
+    tracker_duplicate_identifier["verified_tracker_identifiers"][1] = (
+        duplicate_identifier
+    )
+    nested_phase_mutations.append(tracker_duplicate_identifier)
+
+    archive_head_mutation = copy.deepcopy(ordinary_state_payload("archive-sweep"))
+    archive_head_mutation["archive_sweep"]["reviewed_head"] = "0" * 40
+    nested_phase_mutations.append(archive_head_mutation)
+    archive_evidence_mutation = copy.deepcopy(ordinary_state_payload("archive-sweep"))
+    archive_evidence_mutation["repository_evidence"] = []
+    nested_phase_mutations.append(archive_evidence_mutation)
+    completion_digest_mutation = copy.deepcopy(ordinary_state_payload("completed"))
+    completion_digest_mutation["completion"]["completed_receipt_digest"] = "F" * 64
+    nested_phase_mutations.append(completion_digest_mutation)
+    test_external_evidence_mutation = copy.deepcopy(ordinary_state_payload("tracker-write"))
+    test_external_evidence_mutation["mode"] = "test"
+    test_external_evidence_mutation["run_identity"]["mode"] = "test"
+    nested_phase_mutations.append(test_external_evidence_mutation)
+    test_archive_mutation = copy.deepcopy(ordinary_state_payload("archive-sweep"))
+    test_archive_mutation["mode"] = "test"
+    test_archive_mutation["run_identity"]["mode"] = "test"
+    nested_phase_mutations.append(test_archive_mutation)
+    no_op_evidence_mutation = copy.deepcopy(no_op_completed_state)
+    no_op_evidence_mutation["repository_evidence"] = ["foreign-write"]
+    nested_phase_mutations.append(no_op_evidence_mutation)
+    decision_only_write_mutation = copy.deepcopy(decision_only_completed_state)
+    decision_only_write_mutation["operations"] = copy.deepcopy(
+        ordinary_state_payload("tracker-write")["operations"]
+    )
+    decision_only_write_mutation["attempts"] = decision_only_write_mutation[
+        "operations"
+    ]
+    nested_phase_mutations.append(decision_only_write_mutation)
+    test_render_repository_mutation = copy.deepcopy(test_render_completed_state)
+    test_render_repository_mutation["repository_evidence"] = ["foreign-write"]
+    nested_phase_mutations.append(test_render_repository_mutation)
+
+    for nested_phase_mutation in nested_phase_mutations:
+        assert not ordinary_state_valid(nested_phase_mutation)
+
+    valid_state = canonical_json_bytes(valid_state_payload)
     valid_observations = {
         "path": live_state_path,
         "device": 7,
@@ -5223,6 +6560,11 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     valid_capture_core_digest = hashlib.sha256(
         canonical_json_bytes(valid_capture_core)
     ).hexdigest()
+    valid_capture_bundle = {
+        "kind": "state-present-capture",
+        "capture_core": valid_capture_core,
+        "capture_core_digest": valid_capture_core_digest,
+    }
     valid_action_core = {
         "capture_core_digest": valid_capture_core_digest,
         "action": "preserve-valid-state-and-quarantine-old-gate",
@@ -5250,13 +6592,39 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             "action_core_digest": valid_action_core_digest,
         },
     }
+    valid_owned_action_core = {
+        **valid_action_core,
+        "gate_authority": {
+            **valid_action_core["gate_authority"],
+            "origin": "current-owned",
+        },
+    }
+    valid_owned_action_core_digest = hashlib.sha256(
+        canonical_json_bytes(valid_owned_action_core)
+    ).hexdigest()
+    valid_owned_prepared = {
+        **valid_prepared,
+        "action_core": valid_owned_action_core,
+        "action_core_digest": valid_owned_action_core_digest,
+        "approval": {
+            "source": "current-session",
+            "approver_identity": "operator",
+            "decision": f"approve action-core {valid_owned_action_core_digest}",
+            "action_core_digest": valid_owned_action_core_digest,
+        },
+    }
     valid_artifact = {
         "path": valid_observations["path"],
         **encoded_state_fields(valid_state),
         "state_observations": valid_observations,
     }
 
-    captured_state = b'\xff{"phase":"propose"}\n'
+    safe_invalid_state_payload = {
+        **ordinary_state_payload("reserved"),
+        "phase": "unrecognized",
+    }
+    assert not ordinary_state_valid(safe_invalid_state_payload)
+    captured_state = canonical_json_bytes(safe_invalid_state_payload)
     captured_observations = {
         **valid_observations,
         "size": len(captured_state),
@@ -5287,6 +6655,33 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "capture_core": capture_core,
         "capture_core_digest": capture_core_digest,
     }
+
+    unreadable_state = b'\xff{"phase":"propose"}\n'
+    unreadable_observations = {
+        **captured_observations,
+        "size": len(unreadable_state),
+        "modification_time_ns": 123459,
+    }
+    unreadable_capture_core = {
+        **capture_core,
+        **encoded_state_fields(unreadable_state),
+        "state_observations": unreadable_observations,
+    }
+    unreadable_capture_core_digest = hashlib.sha256(
+        canonical_json_bytes(unreadable_capture_core)
+    ).hexdigest()
+    unreadable_capture_bundle = {
+        "kind": "state-present-capture",
+        "capture_core": unreadable_capture_core,
+        "capture_core_digest": unreadable_capture_core_digest,
+    }
+    unreadable_artifact = {
+        "path": unreadable_observations["path"],
+        **encoded_state_fields(unreadable_state),
+        "state_observations": unreadable_observations,
+    }
+    assert decoded_state_bytes(unreadable_capture_core) == unreadable_state
+
     def capture_bundle_for(candidate_core: dict[str, object]) -> dict[str, object]:
         return {
             "kind": "state-present-capture",
@@ -5342,6 +6737,64 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             "action_core_digest": invalid_action_core_digest,
         },
     }
+
+    def abandonment_prepared_for(
+        candidate_state: bytes,
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        candidate_observations = {
+            **captured_observations,
+            "size": len(candidate_state),
+            "modification_time_ns": 123460,
+        }
+        candidate_capture_core = {
+            **capture_core,
+            **encoded_state_fields(candidate_state),
+            "state_observations": candidate_observations,
+        }
+        candidate_capture_digest = hashlib.sha256(
+            canonical_json_bytes(candidate_capture_core)
+        ).hexdigest()
+        candidate_quarantine = {
+            "path": live_quarantine_path,
+            **encoded_state_fields(candidate_state),
+            "state_observations": {
+                **candidate_observations,
+                "path": live_quarantine_path,
+            },
+        }
+        candidate_receipt_core = {
+            **restart_receipt_core,
+            "capture_core_digest": candidate_capture_digest,
+        }
+        candidate_action_core = {
+            **invalid_action_core,
+            "capture_core_digest": candidate_capture_digest,
+            "quarantine_artifact": candidate_quarantine,
+            "restart_receipt_core": candidate_receipt_core,
+        }
+        candidate_action_digest = hashlib.sha256(
+            canonical_json_bytes(candidate_action_core)
+        ).hexdigest()
+        candidate_prepared = {
+            "kind": "state-present-prepared",
+            "capture_core": candidate_capture_core,
+            "capture_core_digest": candidate_capture_digest,
+            "action_core": candidate_action_core,
+            "action_core_digest": candidate_action_digest,
+            "approval": {
+                "source": "current-session",
+                "approver_identity": "operator",
+                "decision": f"abandon action-core {candidate_action_digest}",
+                "action_core_digest": candidate_action_digest,
+            },
+        }
+        candidate_artifact = {
+            "path": candidate_observations["path"],
+            **encoded_state_fields(candidate_state),
+            "state_observations": candidate_observations,
+        }
+        return candidate_prepared, candidate_artifact
+
     invalid_prepared_digest = hashlib.sha256(
         canonical_json_bytes(invalid_prepared)
     ).hexdigest()
@@ -5379,13 +6832,6 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "source_absent": True,
     }
     owned_termination_proof = observed_owned_termination_proof
-    held_envelope = {
-        "kind": "state-present-held",
-        "capture_core": capture_core,
-        "capture_core_digest": capture_core_digest,
-        "classification": "external-attempt-unresolved",
-    }
-
     current_artifact = {
         "path": captured_observations["path"],
         **encoded_state_fields(captured_state),
@@ -5393,6 +6839,44 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     }
     assert decoded_state_bytes(current_artifact) == captured_state
     assert decoded_state_bytes(quarantine_artifact) == captured_state
+
+    def captured_state_classification(raw_state: bytes) -> tuple[str, str | None]:
+        try:
+            parsed_state = json.loads(raw_state.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return "uncertain", "unreadable-state"
+        if ordinary_state_valid(parsed_state):
+            return "valid", None
+        if not complete_base_valid(parsed_state) or not isinstance(parsed_state, dict):
+            return "uncertain", "malformed-or-foreign-base-state"
+        parsed_phase = parsed_state.get("phase")
+        if isinstance(parsed_phase, str) and parsed_phase in ordinary_state_phases:
+            return "uncertain", "incomplete-or-invalid-phase-state"
+        if set(parsed_state) != ordinary_state_keys:
+            return "uncertain", "absence-of-external-evidence-unproven"
+        attempts = parsed_state.get("attempts")
+        tracker_identifiers = parsed_state.get("verified_tracker_identifiers")
+        repository_evidence = parsed_state.get("repository_evidence")
+        pull_request_evidence = parsed_state.get("pull_request_evidence")
+        if not all(
+            isinstance(evidence, list)
+            for evidence in (
+                attempts,
+                tracker_identifiers,
+                repository_evidence,
+                pull_request_evidence,
+            )
+        ):
+            return "uncertain", "absence-of-external-evidence-unproven"
+        if attempts:
+            return "uncertain", "external-attempt-present"
+        if tracker_identifiers:
+            return "uncertain", "verified-tracker-identifier-present"
+        if repository_evidence:
+            return "uncertain", "repository-evidence-present"
+        if pull_request_evidence:
+            return "uncertain", "pull-request-evidence-present"
+        return "abandonable", None
 
     def state_present_route(
         bundle: dict[str, object],
@@ -5405,7 +6889,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         current_owner_token: str | None = None,
         current_run_identity: str | None = None,
         termination_proof: dict[str, object] | None = None,
-    ) -> str:
+    ) -> str | dict[str, object]:
         kind = bundle.get("kind")
         if kind not in {"state-present-capture", "state-present-prepared"}:
             return "operator-held"
@@ -5519,14 +7003,32 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             "state_digest": embedded_capture.get("state_digest"),
             "state_observations": embedded_state_observations,
         }
+        state_classification, held_classification = captured_state_classification(
+            embedded_state_bytes
+        )
         if kind == "state-present-capture":
-            return (
-                "await-action-approval"
-                if artifact == expected_current_artifact
-                and gate_status
-                in {"owned", "owned-now-proven-stale", "foreign-proven-stale"}
-                else "operator-held"
-            )
+            if artifact != expected_current_artifact:
+                return "operator-held"
+            if state_classification == "valid":
+                return {
+                    "owned": "release-owned-gate-and-resume",
+                    "owned-now-proven-stale": "await-preserve-approval",
+                    "foreign-proven-stale": "await-preserve-approval",
+                }.get(gate_status, "operator-held")
+            if state_classification == "abandonable":
+                return (
+                    "await-action-approval"
+                    if gate_status
+                    in {"owned", "owned-now-proven-stale", "foreign-proven-stale"}
+                    else "operator-held"
+                )
+            assert held_classification is not None
+            return {
+                "kind": "state-present-held",
+                "capture_core": embedded_capture,
+                "capture_core_digest": bundle.get("capture_core_digest"),
+                "classification": held_classification,
+            }
         action_core = bundle.get("action_core")
         if not isinstance(action_core, dict):
             return "operator-held"
@@ -5583,12 +7085,13 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                 "old_gate_digest": embedded_gate_digest,
                 "state_digest": embedded_capture.get("state_digest"),
                 "gate_authority": {
-                    "origin": "proven-stale",
+                    "origin": gate_authority["origin"],
                     **expected_authority_identity,
                 },
             }
             if (
-                action_core != expected_valid_action
+                state_classification != "valid"
+                or action_core != expected_valid_action
                 or artifact != expected_current_artifact
             ):
                 return "operator-held"
@@ -5601,6 +7104,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
                     else "operator-held"
                 )
             return {
+                "owned-now-proven-stale": "resume-valid-stale-gate-quarantine",
                 "foreign-proven-stale": "resume-valid-stale-gate-quarantine",
             }.get(gate_status, "operator-held")
         expected_quarantine_artifact = action_core.get("quarantine_artifact")
@@ -5616,7 +7120,8 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             else None
         )
         if (
-            set(action_core)
+            state_classification != "abandonable"
+            or set(action_core)
             != {
                 "capture_core_digest",
                 "action",
@@ -5744,6 +7249,231 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             **kwargs,
         )
 
+    held_envelope = state_present_route(
+        unreadable_capture_bundle,
+        "foreign-proven-stale",
+        unreadable_artifact,
+    )
+    assert held_envelope == {
+        "kind": "state-present-held",
+        "capture_core": unreadable_capture_core,
+        "capture_core_digest": unreadable_capture_core_digest,
+        "classification": "unreadable-state",
+    }
+    assert held_envelope["capture_core"]["old_gate"] == state_old_gate_capture
+    assert decoded_state_bytes(held_envelope["capture_core"]) == unreadable_state
+    assert state_present_route(
+        held_envelope,
+        "foreign-proven-stale",
+        unreadable_artifact,
+    ) == "operator-held"
+
+    uncertain_state_payloads = (
+        (
+            {
+                **safe_invalid_state_payload,
+                "attempts": [{"status": "attempting", "operation": "tracker-create"}],
+            },
+            "external-attempt-present",
+        ),
+        (
+            {
+                **safe_invalid_state_payload,
+                "verified_tracker_identifiers": ["tracker-123"],
+            },
+            "verified-tracker-identifier-present",
+        ),
+        (
+            {
+                **safe_invalid_state_payload,
+                "repository_evidence": ["branch-observed"],
+            },
+            "repository-evidence-present",
+        ),
+        (
+            {
+                **safe_invalid_state_payload,
+                "pull_request_evidence": ["pr-observed"],
+            },
+            "pull-request-evidence-present",
+        ),
+    )
+    for uncertain_payload, expected_classification in uncertain_state_payloads:
+        uncertain_state = canonical_json_bytes(uncertain_payload)
+        uncertain_prepared, uncertain_artifact = abandonment_prepared_for(
+            uncertain_state
+        )
+        uncertain_capture_core = uncertain_prepared["capture_core"]
+        assert isinstance(uncertain_capture_core, dict)
+        uncertain_capture = {
+            "kind": "state-present-capture",
+            "capture_core": uncertain_capture_core,
+            "capture_core_digest": uncertain_prepared["capture_core_digest"],
+        }
+        assert state_present_route(
+            uncertain_capture,
+            "foreign-proven-stale",
+            uncertain_artifact,
+        ) == {
+            "kind": "state-present-held",
+            "capture_core": uncertain_capture_core,
+            "capture_core_digest": uncertain_prepared["capture_core_digest"],
+            "classification": expected_classification,
+        }
+        assert state_present_route(
+            uncertain_prepared,
+            "foreign-proven-stale",
+            uncertain_artifact,
+        ) == "operator-held"
+
+    malformed_run_identity = {
+        **safe_invalid_state_payload["run_identity"],
+        "repository_identity": "foreign-repo",
+    }
+    hostile_empty_evidence_payloads = (
+        ({**safe_invalid_state_payload, "kind": "foreign-state"},
+         "malformed-or-foreign-base-state"),
+        ({**safe_invalid_state_payload, "schema_version": 2},
+         "malformed-or-foreign-base-state"),
+        ({**safe_invalid_state_payload, "mode": "test"},
+         "malformed-or-foreign-base-state"),
+        ({**safe_invalid_state_payload, "run_identity": malformed_run_identity},
+         "malformed-or-foreign-base-state"),
+        ({**safe_invalid_state_payload, "gate_owner_token": "foreign-owner"},
+         "malformed-or-foreign-base-state"),
+        ({**safe_invalid_state_payload, "config_fingerprint": "A" * 64},
+         "malformed-or-foreign-base-state"),
+        ({**safe_invalid_state_payload, "frozen_inbox_digest": "not-a-digest"},
+         "malformed-or-foreign-base-state"),
+        (
+            ordinary_state_base("awaiting-approval"),
+            "incomplete-or-invalid-phase-state",
+        ),
+        ({**safe_invalid_state_payload, "unknown_evidence": []},
+         "absence-of-external-evidence-unproven"),
+    )
+    for hostile_payload, expected_classification in hostile_empty_evidence_payloads:
+        hostile_state = canonical_json_bytes(hostile_payload)
+        hostile_prepared, hostile_artifact = abandonment_prepared_for(hostile_state)
+        hostile_capture_core = hostile_prepared["capture_core"]
+        assert isinstance(hostile_capture_core, dict)
+        hostile_capture = {
+            "kind": "state-present-capture",
+            "capture_core": hostile_capture_core,
+            "capture_core_digest": hostile_prepared["capture_core_digest"],
+        }
+        assert state_present_route(
+            hostile_capture,
+            "foreign-proven-stale",
+            hostile_artifact,
+        ) == {
+            "kind": "state-present-held",
+            "capture_core": hostile_capture_core,
+            "capture_core_digest": hostile_prepared["capture_core_digest"],
+            "classification": expected_classification,
+        }
+        assert state_present_route(
+            hostile_prepared,
+            "foreign-proven-stale",
+            hostile_artifact,
+        ) == "operator-held"
+
+    for phase in ordinary_state_phases - {"reserved"}:
+        complete_phase_payload = ordinary_state_payload(phase)
+        for phase_owned_field in phase_owned_keys[phase]:
+            missing_phase_payload = {**complete_phase_payload}
+            missing_phase_payload.pop(phase_owned_field)
+            wrong_type_phase_payload = {
+                **complete_phase_payload,
+                phase_owned_field: (
+                    7
+                    if phase_owned_field
+                    in {"approval", "notification_thread_reference"}
+                    else None
+                ),
+            }
+            for malformed_phase_payload in (
+                missing_phase_payload,
+                wrong_type_phase_payload,
+            ):
+                malformed_phase_state = canonical_json_bytes(malformed_phase_payload)
+                malformed_phase_prepared, malformed_phase_artifact = (
+                    abandonment_prepared_for(malformed_phase_state)
+                )
+                malformed_phase_capture_core = malformed_phase_prepared["capture_core"]
+                assert isinstance(malformed_phase_capture_core, dict)
+                malformed_phase_capture = {
+                    "kind": "state-present-capture",
+                    "capture_core": malformed_phase_capture_core,
+                    "capture_core_digest": malformed_phase_prepared[
+                        "capture_core_digest"
+                    ],
+                }
+                assert state_present_route(
+                    malformed_phase_capture,
+                    "foreign-proven-stale",
+                    malformed_phase_artifact,
+                ) == {
+                    "kind": "state-present-held",
+                    "capture_core": malformed_phase_capture_core,
+                    "capture_core_digest": malformed_phase_prepared[
+                        "capture_core_digest"
+                    ],
+                    "classification": "incomplete-or-invalid-phase-state",
+                }
+                assert state_present_route(
+                    malformed_phase_prepared,
+                    "foreign-proven-stale",
+                    malformed_phase_artifact,
+                ) == "operator-held"
+
+    unreadable_prepared, unreadable_prepared_artifact = abandonment_prepared_for(
+        unreadable_state
+    )
+    assert state_present_route(
+        unreadable_prepared,
+        "foreign-proven-stale",
+        unreadable_prepared_artifact,
+    ) == "operator-held"
+
+    for phase in ordinary_state_phases:
+        phase_state = canonical_json_bytes(ordinary_state_payload(phase))
+        phase_prepared, phase_artifact = abandonment_prepared_for(phase_state)
+        phase_capture_core = phase_prepared["capture_core"]
+        assert isinstance(phase_capture_core, dict)
+        phase_capture = {
+            "kind": "state-present-capture",
+            "capture_core": phase_capture_core,
+            "capture_core_digest": phase_prepared["capture_core_digest"],
+        }
+        assert state_present_route(
+            phase_capture,
+            "foreign-proven-stale",
+            phase_artifact,
+        ) == "await-preserve-approval"
+
+    assert state_present_route(
+        valid_capture_bundle, "foreign-proven-stale", valid_artifact
+    ) == "await-preserve-approval"
+    assert state_present_route(
+        valid_capture_bundle,
+        "owned",
+        valid_artifact,
+        current_owner_token=state_old_gate_capture["owner"]["token"],
+        current_run_identity=state_old_gate_capture["owner"]["run_identity"],
+    ) == "release-owned-gate-and-resume"
+    assert stale_owned_route(
+        valid_capture_bundle, valid_artifact
+    ) == "await-preserve-approval"
+    assert state_present_route(
+        valid_capture_bundle,
+        "owned-now-proven-stale",
+        valid_artifact,
+        termination_proof={
+            **owned_termination_proof,
+            "process_start_observation": "foreign-process-start",
+        },
+    ) == "operator-held"
     assert state_present_route(
         capture_bundle, "foreign-proven-stale", current_artifact
     ) == "await-action-approval"
@@ -5795,8 +7525,22 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     assert state_present_route(
         valid_prepared, "foreign-proven-stale", valid_artifact
     ) == "resume-valid-stale-gate-quarantine"
+    assert stale_owned_route(
+        valid_owned_prepared, valid_artifact
+    ) == "resume-valid-stale-gate-quarantine"
+    assert stale_owned_route(valid_prepared, valid_artifact) == "operator-held"
+    assert state_present_route(
+        valid_owned_prepared, "foreign-proven-stale", valid_artifact
+    ) == "operator-held"
     assert state_present_route(
         valid_prepared,
+        "absent",
+        valid_artifact,
+        observed_gate=None,
+        quarantined_gate=state_old_gate_quarantine,
+    ) == "ordinary-resume"
+    assert state_present_route(
+        valid_owned_prepared,
         "absent",
         valid_artifact,
         observed_gate=None,
@@ -6043,7 +7787,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         restart_receipt["prepared_envelope_digest"]
     )
     assert json.loads(located_bundle_bytes) == invalid_prepared
-    assert held_envelope["capture_core"] == capture_core
+    assert held_envelope["capture_core"] == unreadable_capture_core
     changed_observations = {
         **current_artifact,
         "state_observations": {**captured_observations, "inode": 12},
@@ -6640,6 +8384,16 @@ def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> N
             1,
         ),
         workflow.replace(
+            "A recognized phase with incomplete or invalid phase-owned fields is\nuncertain, not abandonable",
+            "A recognized phase with incomplete fields is safe to abandon",
+            1,
+        ),
+        workflow.replace(
+            "A malformed base, extra key, or\nunreadable field cannot prove absence",
+            "A malformed base or unreadable field proves absence",
+            1,
+        ),
+        workflow.replace(
             "| `gated-unattended` | scheduled or unattended | blocking | unobserved | unobserved | not evaluated | Preserve everything and report operator-held without reading an artifact. |",
             "| `gated-unattended` | scheduled or unattended | blocking | any | `test-gate-only-prepared` | any | Read the bundle before proving owner death. |",
             1,
@@ -6877,8 +8631,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> N
     )
     for mutation_index, mutated in enumerate(mutations):
         assert mutated != workflow, mutation_index
-        with pytest.raises(AssertionError):
+        try:
             _assert_triage_semantics(mutated, tmp_path)
+        except AssertionError:
+            continue
+        raise AssertionError(f"semantic mutation survived: {mutation_index}")
 
     paths = (
         ("claude", REPO_ROOT / ".claude/commands/triage-friction-log.md"),
