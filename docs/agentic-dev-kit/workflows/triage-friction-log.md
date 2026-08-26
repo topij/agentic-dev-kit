@@ -102,10 +102,10 @@ intent or held receipt.
 | `test`, `test-recovered-safe-to-restart` receipt and no blocking test gate | Under the test gate, verify the receipt and bundle, parse the current inbox, then digest-check and replace only that receipt with the reserved new test state. Preserve the receipt if parsing or replacement fails. |
 | Interactive `test`, blocking test gate without test state or intent | Capture the complete test gate, prove owner termination, require exact approval, and publish `test-gate-recovery-intent` before quarantining the unchanged gate. |
 | Interactive `test`, `test-gate-recovery-intent` present | Resume only the recorded test-gate transition and finish `test-recovered-safe-to-restart`; never select a live path. |
-| Interactive `test`, blocking test gate with valid test state | Before changing the gate, publish a state-present test-gate recovery bundle that preserves the complete gate, exact state bytes and observations, owner-death proof, and exact gate-recovery approval. Resume that bundle through a replacement gate, then resume only the still-matching valid state. |
-| Interactive `test`, blocking test gate with invalid test state | Before changing the gate, publish the same state-present test-gate recovery bundle. Resume it through a replacement gate, then enter invalid test-state recovery with the still-matching evidence and its separately exact action approval. |
-| Interactive `test`, blocking test gate with `test-recovered-safe-to-restart` receipt | Before changing the gate, publish the same state-present test-gate recovery bundle. Resume it through a replacement gate, then execute only the still-matching receipt replacement route. |
-| Interactive `test`, state-present test-gate recovery bundle | Give the bundle precedence over ordinary test-state rows and resume only its digest-checked transition. Reconcile an old, absent, or replacement gate only from the bundle's already-durable operation intent and exact source, destination, digest, inode, and owner-token evidence; never infer an unrecorded next phase from filesystem absence. |
+| Interactive `test`, blocking test gate with valid test state | Capture the complete gate plus exact state bytes and observations in a durable state-present test-gate held bundle, then report operator-held. Never quarantine the gate, acquire a replacement, or resume or replace state. |
+| Interactive `test`, blocking test gate with invalid test state | Capture the complete gate plus exact invalid-state bytes and observations in the same held-bundle shape, then report operator-held. Never quarantine the gate or state and never publish a restart receipt. |
+| Interactive `test`, blocking test gate with `test-recovered-safe-to-restart` receipt | Capture the complete gate plus exact receipt bytes and observations in the same held-bundle shape, then report operator-held. Never quarantine the gate or replace the receipt. |
+| Any `test` with a state-present test-gate held bundle | Preserve the bundle, gate, and test artifact byte-identically and report operator-held. The bundle is terminal evidence, not resumable mutation authority, and never selects a live path. |
 | Interactive `test`, invalid test state and no blocking test gate | Under the test gate, capture and preserve the exact test-state evidence, require exact operator approval of its digest, revalidate before quarantine, and write `test-recovered-safe-to-restart`; prohibit live-state and external writes. |
 | Scheduled or unattended `test`, invalid test state | Report operator-held without changing test or live artifacts. |
 | Scheduled or unattended `test`, blocking test gate or test-gate intent | Report operator-held without changing test or live artifacts. |
@@ -173,7 +173,7 @@ conditional capability ready before its trigger.
 | `protected-branch-advance` | `allow-fast-forward-preserve-draft-identity-hold-divergence` |
 | `gate-only-recovery` | `preserve-evidence-publish-intent-before-quarantine-remain-operator-held` |
 | `test-state-recovery` | `preserve-test-evidence-never-touch-live-or-external-state` |
-| `test-gate-recovery` | `preserve-test-artifact-or-publish-intent-before-gate-quarantine-never-touch-live` |
+| `test-gate-recovery` | `hold-state-present-or-publish-absent-state-intent-before-quarantine-never-touch-live` |
 | `partial-engine-set` | `stop-never-mix-engine-and-llm-artifacts` |
 | `unattended-without-notification` | `stop-before-new-approval-session` |
 | `tracker-without-exact-payload-approval` | `prohibit-create-update-comment` |
@@ -256,7 +256,7 @@ Select the first matching row and report exactly one overall outcome.
 |---|---|---|
 | `required-or-safety-failure` | A required preflight/state/safety check failed before a disputed action, or shared/runtime policy conflicts. | `hard-stop` |
 | `gate-only-recovery-held` | A valid `gate-only-recovery-intent` or `gate-only-operator-held` receipt exists. | `operator-held` |
-| `test-gate-recovery-held` | A valid `test-gate-recovery-intent` or state-present test-gate recovery bundle exists and cannot be resumed interactively. | `operator-held` |
+| `test-gate-recovery-held` | A valid `test-gate-recovery-intent` cannot be resumed interactively, or a state-present test-gate held bundle exists. | `operator-held` |
 | `approval-or-triggered-write-not-terminal` | Approval is pending or a triggered notification, tracker, repository, or review path lacks an authoritative terminal state. | `operator-held` |
 | `optional-degradation-after-terminal-work` | Required and triggered work is terminal, but an optional interactive notification or compute enhancement degraded. | `degraded-success` |
 | `all-triggered-contracts-terminal` | No prior row matches and every triggered capability is terminal. | `successful-completion` |
@@ -304,35 +304,6 @@ route does not enter the raw-state capture path below.
 | `acquire-recovery-gate` | Intent present; atomically acquire a new complete recovery gate. |
 | `finalize-held-receipt` | New gate present; digest-check and atomically replace intent with `gate-only-operator-held`. |
 | `release-recovery-gate` | Held receipt durable; release only the matching new recovery gate. |
-
-### State-present test-gate recovery transition
-
-This transition applies before ordinary test-state classification whenever its bundle
-exists. Each bundle update is an atomic digest-checked phase replacement. Every gate or
-test-artifact filesystem primitive has a durable intent phase before it and a separate
-confirmation phase after it. A process loss resumes by reconciling the exact before/after
-objects authorized by the recorded intent; absence without that intent proves nothing.
-
-| Test-gate step | Required state transition |
-|---|---|
-| `capture-test-artifact-and-gate` | Old test gate and test state or safe-restart receipt present; persist their exact bytes and filesystem observations, the complete gate, owner-death proof, artifact kind, and exact gate-recovery approval in a separate durable bundle. |
-| `prepare-old-test-gate-quarantine` | Old gate and test artifact still match; persist the unique quarantine destination and exact source observations as quarantine intent before rename. |
-| `apply-old-test-gate-quarantine` | Quarantine intent durable; rename only the recorded unchanged old gate and leave the bundle in quarantine-intent phase. |
-| `confirm-old-test-gate-quarantine` | Quarantine intent still durable; accept either the exact source or exact destination, never both or neither, then persist the verified quarantine result. |
-| `prepare-replacement-test-gate` | Quarantine verified and test artifact unchanged; generate the complete owner record and persist its owner token, bytes/digest, unique candidate path, and absent target as candidate intent before creating the candidate. |
-| `materialize-replacement-test-gate-candidate` | Candidate intent durable; exclusively create and flush only the recorded complete private candidate and leave the bundle in candidate-intent phase. |
-| `confirm-replacement-test-gate-candidate` | Candidate intent still durable; require the private file to match the pre-bound path, bytes/digest, and owner token, then persist candidate verified and publication intent. |
-| `publish-replacement-test-gate` | Publication intent durable; hard-link only the verified recorded candidate to the absent gate target and leave the bundle in publication-intent phase. |
-| `confirm-replacement-test-gate` | Publication intent still durable; require the target to match the pre-bound candidate inode, bytes/digest, and owner token, then persist target verified with candidate still present. |
-| `prepare-replacement-candidate-cleanup` | Target verified and candidate unchanged; persist the exact candidate unlink intent. |
-| `unlink-replacement-test-gate-candidate` | Candidate-cleanup intent durable; unlink only the matching private candidate and leave the bundle in cleanup-intent phase. |
-| `confirm-replacement-candidate-cleanup` | Cleanup intent still durable; accept only the exact candidate or its authorized absence, finish any required unlink, then persist replacement gate verified. |
-| `prepare-recorded-test-artifact-operation` | Replacement gate verified; persist the exact artifact-specific next primitive, source and destination observations, prepared destination bytes/digest and candidate path, and separately exact action approval when required. Materialize any needed private candidate as its own recorded primitive in this repeated cycle. Valid-state resume records a no-mutation dispatch. |
-| `apply-recorded-test-artifact-operation` | Artifact-operation intent durable; apply at most one recorded rename, link, or atomic replacement and leave the bundle in that intent phase. |
-| `confirm-recorded-test-artifact-operation` | Artifact-operation intent still durable; reconcile only its exact before or after object, persist the result, and repeat the prepare/apply/confirm cycle for any remaining primitive. Invalid-state recovery separately records quarantine rename then safe-restart receipt publication; safe-restart separately records receipt-to-reserved-state replacement. |
-| `mark-test-gate-bundle-resolved-held` | The artifact route has durable resumable state or a durable held result; persist resolved-gate-held with the exact replacement owner token before unlink. |
-| `release-replacement-test-gate` | Resolved-gate-held durable; unlink only the matching replacement gate and leave the bundle in resolved-gate-held phase. |
-| `confirm-replacement-test-gate-release` | Resolved-gate-held still durable; accept only the matching gate or its authorized absence, finish any required unlink, then persist resolved. |
 
 Otherwise, locate active state in its own sandbox with
 `resolve_write_path(fragment, mkdir=False)` and inspect the path itself without parsing
@@ -392,18 +363,20 @@ digest failure preserves the receipt. The transition never reads or writes live 
 approval, tracker, source documents, archive, branch, commit, push, PR, or merge.
 Unknown test-gate ownership remains operator-held under the same capture, owner-death,
 and exact-approval rule, confined to test paths. When a proven-dead owner left test
-state or a safe-restart receipt, preserve that artifact byte-identically as the durable
-blocker and publish the separate state-present test-gate recovery bundle before changing
-the old gate. Follow the normative state-present transition through a replacement gate;
-its bundle has input precedence after every process-loss cutpoint. When test state is
-absent, capture that absence in the test recovery bundle, exclusively create and flush
+state or a safe-restart receipt, capture the unchanged gate and artifact in a unique
+state-present test-gate held bundle, then stop operator-held. Without a crash-released
+exclusive recovery primitive, neither engine-backed nor LLM-only execution may claim
+that separate gate, state, and bundle files form one atomic transition. The held bundle
+is evidence only: it never authorizes quarantine, replacement, restart, or a live path.
+When test state is absent, capture that absence in the test recovery bundle, exclusively create and flush
 `test-gate-recovery-intent` while the old test gate still exists, then follow the
 Gate-only recovery transition ordering with test-confined paths. Quarantine the old
 test gate only after the intent is durable; finish by replacing the intent with
 `test-recovered-safe-to-restart` under the replacement test gate. A later interactive
-`test` resumes only the recorded intent or state-present bundle. Scheduled or unattended
-`test` with invalid state, a blocking gate, recovery intent, or unresolved recovery
-bundle preserves everything operator-held and performs no recovery mutation.
+`test` resumes only the recorded absent-state intent; a state-present held bundle remains
+terminally operator-held. Scheduled or unattended `test` with invalid state, a blocking
+gate, recovery intent, or held bundle preserves everything operator-held and performs
+no recovery mutation.
 
 Classify execution as interactive or scheduled/unattended from the actual invocation,
 not a branch name or worktree path. Non-interactive runs never wait for input. A

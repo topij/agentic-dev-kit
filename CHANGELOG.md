@@ -70,10 +70,10 @@ starts.
   bundle and prohibits abandonment when prior external-write absence is uncertain.
   Keep malformed test-state recovery on the `test` entry and test sandbox; it may
   quarantine only revalidated test state after exact approval and never selects live
-  or external-write paths. Before quarantining a blocking test gate, preserve an
-  existing test state or safe-restart receipt in a state-present recovery bundle; when
-  state is absent, publish a durable `test-gate-recovery-intent`. A later `test`
-  resumes only that bundle or intent and consumes only the verified
+  or external-write paths. A blocking test gate with existing test state or a
+  safe-restart receipt becomes operator-held with a byte-preserving evidence bundle;
+  do not quarantine either artifact. When state is absent, publish a durable
+  `test-gate-recovery-intent`. A later `test` resumes only that intent and consumes the verified
   `test-recovered-safe-to-restart` receipt under the replacement test gate.
   Before completing a merged sweep, read back its final `headRefOid` and require it to
   equal the exact terminal PR-watch head and receipt persisted as `reviewed_head`;
