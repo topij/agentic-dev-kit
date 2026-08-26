@@ -392,6 +392,23 @@ ensure_review_key() {
   fi
 }
 
+# Add one flat `parallel:` key if the section does not already define it.
+# Existing values are adopter policy and remain untouched.
+ensure_parallel_key() {
+  key="$1"
+  block="$2"
+  if [ -n "$(section_lines parallel: "$CONFIG_FILE" | grep -E "^[[:space:]]+$key:")" ]; then
+    return 0
+  fi
+  append_to_section "parallel:" "$block"
+  if [ -n "$(section_lines parallel: "$CONFIG_FILE" | grep -E "^[[:space:]]+$key:")" ]; then
+    echo "added parallel.$key to config/dev-model.yaml"
+  else
+    echo "error: could not add parallel.$key to $CONFIG_FILE." >&2
+    return 1
+  fi
+}
+
 # Add one flat `triage:` key if the section does not already define it. Existing
 # values are adopter policy and remain untouched; preflight proves the section is
 # a shape this line-oriented writer can extend without changing its meaning.
@@ -514,6 +531,7 @@ preflight_migration_config() {
   if awk '
     BEGIN {
       owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
+      owned["parallel"] = 1
       owned["vcs"] = owned["triage"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
       owned["notify"] = owned["models"] = 1
     }
@@ -729,10 +747,14 @@ preflight_migration_config() {
     }
     BEGIN {
       owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
+      owned["parallel"] = 1
       owned["vcs"] = owned["triage"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
       owned["notify"] = owned["models"] = 1
       line_owned["project", "name"] = 1
       line_owned["runtime", "default"] = 1
+      line_owned["parallel", "codex_headless_command"] = 1
+      line_owned["parallel", "descriptor_ttl_seconds"] = 1
+      line_owned["parallel", "observation_timeout_seconds"] = 1
       line_owned["systemize", "operator_logins"] = 1
       line_owned["tracker", "backend"] = 1
       line_owned["tracker", "project_name"] = 1
@@ -751,6 +773,7 @@ preflight_migration_config() {
       line_owned["models", "expensive"] = 1
       sequence_owned["systemize", "operator_logins"] = 1
       sequence_owned["review", "bots"] = 1
+      sequence_owned["parallel", "codex_headless_command"] = 1
       linear_owned["team_id"] = linear_owned["project_id"] = 1
       triage_string["analysis_tier"] = triage_string["state_path"] = 1
       triage_string["gate_path"] = triage_string["recovery_bundle_pattern"] = 1
@@ -973,6 +996,20 @@ migrate_runtime_schema() {
       expensive: high"
     echo "added runtime model mappings to config/dev-model.yaml"
   fi
+}
+
+migrate_parallel_schema() {
+  if ! grep -q '^parallel:' "$CONFIG_FILE"; then
+    insert_before_section "doc_budgets:" 'parallel:
+  codex_headless_command: [codex, exec]
+  descriptor_ttl_seconds: 900
+  observation_timeout_seconds: 30
+'
+    echo "added parallel launcher config to config/dev-model.yaml"
+  fi
+  ensure_parallel_key codex_headless_command '  codex_headless_command: [codex, exec]'
+  ensure_parallel_key descriptor_ttl_seconds '  descriptor_ttl_seconds: 900'
+  ensure_parallel_key observation_timeout_seconds '  observation_timeout_seconds: 30'
 }
 
 # Schema additions introduced after the v2 template release. Same idempotent
@@ -1878,6 +1915,7 @@ fi
 
 preflight_migration_config
 migrate_runtime_schema
+migrate_parallel_schema
 migrate_kit_schema
 
 # ── prompts ──────────────────────────────────────────────────────────────

@@ -36,8 +36,9 @@ their delivery order and exit conditions.
   the kit-owned engine boundary for absolute descriptor roots, the environment
   replacement contract, exact lane/forge
   identity, fail-closed reconciliation, operator-held evidence, and adopter upgrade
-  ownership. Codex model and effort calibration, an environment-capable launcher, and
-  live runtime isolation checks remain planned.
+  ownership. The environment-capable launcher slice now selects the kit-owned stable
+  `codex exec` wrapper and carries synthetic live runtime-isolation evidence. Codex
+  model and effort calibration remains planned.
 - [ ] **Phase 5 — Align permissions, installation, and upgrades.** Codex project
   policy, adopter-owned merge surfaces, and adapter refresh behavior remain planned.
 - [ ] **Phase 6 — Gate parity and roll it out.** Adoption fixtures, trusted smoke
@@ -278,12 +279,17 @@ degraded, held, resume, authority, and completion paths under shared definitions
 - Calibrate Codex `{model, effort}` mappings for the neutral capability tiers.
 - Pass configured Codex model and reasoning effort mechanically to fallback-review
   lenses.
-- Provide or select a Codex lane launcher that can set worktree, environment, model,
-  reasoning effort, and permission mode.
-- Permit native subagents only when the state-isolation contract can be satisfied;
-  otherwise use the environment-capable launcher or remain attended.
-- Add live checks for reviewer isolation, reviewed revision, lane state root, and
-  final-text handoff.
+- [x] Select a Codex lane launcher that sets worktree and complete lane environment,
+  removes inherited identity, and binds child-observed identity plus final text to a
+  one-shot receipt. The bounded launcher does not calibrate model, reasoning effort,
+  or project permission mode.
+- [x] Keep native subagents unsupported for headless state-writing lanes because their
+  dispatch surface cannot apply the descriptor environment and observer/receipt chain;
+  use the selected wrapper or remain attended.
+- [x] Add a synthetic live check for lane worktree, repository, branch/base, state root,
+  process, inherited-variable removal, and final-text binding at the stamped client.
+- Calibrate model and reasoning effort separately, then extend live checks to reviewer
+  isolation and reviewed-revision handoff without weakening launcher identity.
 
 Done when a Codex parallel batch preserves the same state isolation, review evidence,
 and merge authority as Claude usage.
@@ -339,8 +345,9 @@ outcomes, thin adapters, and declaration-derived hostile mutations.
 PR `#598` then moved the reusable lane-identity and forge-safety behavior exposed by
 cs-toolkit `#2086` into kit-owned engines and shared workflows. It deliberately leaves
 runtime launcher mechanics and downstream repo-owned engine adaptation outside the
-slice. The next sprint begins with the environment-capable launcher starter above; the
-triage slice does not implement it.
+slice. The environment-capable launcher workstream then selected the kit-owned stable
+`codex exec` wrapper, added descriptor/receipt authority and synthetic live isolation
+evidence, and left compute calibration plus downstream adaptation outside its boundary.
 
 Keep the trusted-client record as an observation at its stamped client and revision; do
 not turn it into a general instruction-loading guarantee.

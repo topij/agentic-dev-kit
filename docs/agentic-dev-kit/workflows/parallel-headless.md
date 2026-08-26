@@ -31,9 +31,12 @@ block it:
    isolate into the sandbox **automatically** — no env gymnastics in the prompt.
    (Precedence: env var → marker → repo-root default. Cron/CI writes no marker, so
    it's unaffected.)
-1. **Prints a JSON descriptor to stdout** (diagnostics go to stderr, so stdout is
-   clean JSON): `{"scope","branch","worktree","state_root","repo_root","base",
-   "merge_class","prompt_preamble","env","runtime","launcher"}`. `prompt_preamble` is the canonical lane-contract text
+1. **Persists a canonical JSON descriptor beside the lane metadata and prints those
+   same bytes to stdout** (diagnostics go to stderr, so stdout is clean JSON). The
+   descriptor binds its schema and one-shot id; issue/expiry window; descriptor,
+   session, worktree, state, and repository roots; origin, scope, branch, base,
+   merge class, base and lane commits; prompt preamble; environment; and runtime.
+   `prompt_preamble` is the canonical lane-contract text
    below — the launcher **MUST** prepend it verbatim to the lane's task prompt. `env`
    carries lane-specific `DEVKIT_STATE_ROOT`, `DEVKIT_ROOT`, and
    `DEVKIT_REFUSE_UNSANDBOXED_STATE=1`. The launcher **MUST replace inherited values
@@ -44,12 +47,13 @@ block it:
    hard-errors on a `state/` write instead of silently landing in prod. Interactive
    `new` and cron/CI never set either field.
 
-   Replacement is per descriptor key, not replacement of the entire process
-   environment: begin with the launcher's permitted/scrubbed environment, then assign
-   every key from `env` unconditionally. Do not use `setdefault`, skip a key because it
-   is already present, or rely on the marker to beat an inherited root. Unrelated
-   permitted variables remain available; the descriptor map is complete for lane-root
-   identity, not a complete process environment.
+   The supported wrapper removes every inherited `DEVKIT_*` key, plus `GH_REPO`, Git
+   repository override variables, `PWD`, and `OLDPWD`; then it assigns every key from
+   `env` unconditionally and sets `PWD` from the independently resolved worktree. Do
+   not use `setdefault`, skip a key because it is already present, or rely on the
+   marker to beat an inherited root. Unrelated permitted variables remain available;
+   the descriptor map is complete for lane-root identity, not a complete process
+   environment.
 
 ### The lane-contract preamble (inject this verbatim)
 
@@ -67,63 +71,46 @@ descriptor — **do not hand-copy or paraphrase it into this workflow or a launc
 Always read it fresh from one of those two engine surfaces so a future edit propagates
 without maintaining a second copy.
 
-**Launch contract (cockpit usage).** Every supported launcher drives the same `new
---headless` worktrees. Each launcher **MUST prepend the lane-contract preamble to
-every lane prompt**; runtime capability changes how tiers are applied, not whether
-the safety contract binds.
+**Supported Codex launch contract.** Run `new --headless` once, write the task-specific
+prompt to a regular file, and invoke the config-owned kit engine with the persisted
+descriptor path:
 
-**Preferred when available — a workflow launcher with a real effort dial.** Run
-`new --headless <scope> --merge-class <class>` once per chosen scope, collect each one's JSON descriptor
-into a list (attaching the per-lane `effort`/`model` tier from the plan's risk read),
-then drive the lanes from a *single* fan-out that gives each sub-agent its own
-`{effort, model}` — the one path on which the tier's `effort` half actually takes
-effect. Pseudocode:
-
-```js
-// args.lanes = [{scope, worktree, branch, ticket, effort, model, merge_class, prompt_preamble, env}, …]
-// — one per `new --headless` descriptor (prompt_preamble copied straight off it).
-// effort ∈ low|medium|high|max (omit ⇒ inherit cockpit effort); model ∈ cheap|default|expensive (omit ⇒ inherit).
-runInParallel(args.lanes.map(lane => () =>
-  spawnAgent(
-    `${lane.prompt_preamble}\n\n` +
-    `Work in worktree ${lane.worktree} on branch ${lane.branch} (cd there first — its state sandbox is active via the on-disk marker, so your state/ writes isolate automatically). ` +
-    `Read tracker ticket ${lane.ticket}, pre-flight its premise against the live code, implement, draft PR on first push, drive it to green-and-clean, then hand off per the contract above.`,
-    { label: lane.scope, effort: lane.effort, model: lane.model, env: lane.env }
-  )
-))
+```bash
+python3 <engine-dir>/launch_codex_lane.py \
+  --descriptor <session>/launch-descriptor.json \
+  --prompt-file <task-prompt>
 ```
 
-Five things to keep right: **(1)** `lane.prompt_preamble` is prepended verbatim,
-ahead of everything else, on every lane — never abbreviated to "follow the usual
-contract" (that's exactly the prose-reference that failed to bind a lane before).
-**(2)** do **not** open a second worktree on top of `--headless` — it already owns the
-worktree+sandbox, so a second one would have no marker and lose isolation. **(3)** A
-lane with no assigned tier omits `effort`/`model` and inherits the cockpit's — the
-same default-safe fallback as everywhere else. **(4)** replace the spawned process's
-environment roots with `lane.env`; do not merge them over inherited cockpit roots.
-**(5)** Check what compute budget your
-fan-out mechanism draws from before running a large batch, and monitor it via
-whatever live-progress view your runtime exposes, plus `list --watch` on the lanes'
-branches/PRs.
+`parallel.codex_headless_command` supplies the argv prefix (the shipped value selects
+stable `codex exec`), `parallel.descriptor_ttl_seconds` supplies descriptor lifetime,
+and `parallel.observation_timeout_seconds` bounds the child observation handshake.
+Resolve all through the merged config; never restate them in an adapter or fixture.
 
-The `env` field is mandatory for unattended launches. If a fan-out/background-agent
-tool cannot replace the spawned process's environment, do not use it for a headless
-state-writing lane; use an env-capable subprocess/fresh terminal or keep the work
-attended. Prompt injection cannot override an inherited `DEVKIT_STATE_ROOT`.
+The wrapper is the supported mechanism because it owns the guarantees a native agent
+dispatch or direct `codex exec` call does not: worktree `cwd`, inherited-identity
+removal, descriptor environment replacement, one-shot attempt authority, and a
+child-side observer that reads Git, the marker, persisted lane metadata, filesystem
+relationships, and its own process before `exec`. It writes a receipt in the session
+directory, binds the exact descriptor/task/combined-prompt bytes, and returns success
+only after the Codex command exits successfully with a durable final message.
 
-**Fallback — a single background sub-agent per lane (model-only).** Parse the
-descriptor and spawn a background sub-agent whose prompt is **the `prompt_preamble`
-field, prepended verbatim**, followed by the task-specific instructions naming the
-`worktree` path — e.g. *"`<prompt_preamble>` Work in worktree `<worktree>` on branch
-`<branch>`. The state sandbox is active via its on-disk marker — your `state/` writes
-isolate automatically. Read tracker ticket `<ID>`, pre-flight its premise, draft PR on
-first push, drive it to green-and-clean, then hand off per the contract above."* Same
-no-second-worktree rule and same prepend-verbatim requirement as the workflow path.
-This path sets each lane's `model` per the tier but **not its effort** if your
-runtime's background-task tool has no effort dial — fine for a single lane, lanes that
-all share a tier, or when you want individually-stoppable cockpit-side agent objects.
-The how-the-tier-reaches-the-lane mechanics + the default-safe fallback live in
-[Per-lane effort tier](parallel.md#per-lane-effort-tier-risk--reasoning-effort--model).
+The descriptor and receipt fail closed on expiry or reuse; a moved descriptor; a
+foreign repository, worktree, origin, scope, state root, branch, base, commit, or merge
+class; a child process that does not hold the current launch capability; interruption;
+missing observation; nonzero child exit; or missing final text. A parent killed before
+it can finalize leaves the exclusive attempt record, so retry cannot silently reuse
+the descriptor. Issue a fresh lane descriptor only after accounting for the partial
+lane and attempt.
+
+Do not hand this descriptor to native in-session agent dispatch, a desktop task,
+Codex cloud, or direct `codex exec`: those surfaces do not apply this complete local
+worktree/environment/receipt contract. App-server is experimental and is not selected
+for this bounded mechanism. Keep the lane attended when the wrapper is unavailable.
+Model and reasoning-effort calibration remain separate from launcher identity.
+
+Every supported launcher must still prepend `prompt_preamble` verbatim and must not
+open a second worktree on top of `new --headless`. The wrapper does both by consuming
+the existing descriptor and constructing the combined prompt itself.
 
 **When to use which.** Attended work (operator at a terminal) → plain `new`.
 Unattended pipeline-touching work (any lane that writes `state/cache/`) → `new

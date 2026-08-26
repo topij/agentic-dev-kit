@@ -67,6 +67,10 @@ runtime:
   launchers:
     claude: claude
     codex: codex
+parallel:
+  codex_headless_command: [codex, exec]
+  descriptor_ttl_seconds: 900
+  observation_timeout_seconds: 30
 vcs:
   protected_branch: trunk
 """,
@@ -113,6 +117,10 @@ runtime:
   launchers:
     claude: claude
     codex: codex
+parallel:
+  codex_headless_command: [codex, exec]
+  descriptor_ttl_seconds: 900
+  observation_timeout_seconds: 30
 vcs:
   protected_branch: trunk
   dev_branch_prefix: lane
@@ -1652,6 +1660,30 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
             _assert_claude_workflow_adapter(name, declared_shared, claude_path)
 
 
+def _assert_parallel_adapter_is_translation_only(adapter: str) -> None:
+    assert "docs/agentic-dev-kit/workflows/parallel.md" in adapter
+    assert "docs/agentic-dev-kit/workflows/parallel-headless.md" not in adapter
+    contradictions = (
+        "native agent dispatch may bypass the launcher",
+        "merge descriptor env with inherited values",
+        "ignore the shared contract",
+        "return success before the receipt",
+    )
+    assert not any(contradiction in adapter.lower() for contradiction in contradictions)
+
+
+def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
+    for path in (
+        REPO_ROOT / ".claude" / "commands" / "parallel.md",
+        REPO_ROOT / ".agents" / "skills" / "parallel" / "SKILL.md",
+    ):
+        adapter = path.read_text(encoding="utf-8")
+        _assert_parallel_adapter_is_translation_only(adapter)
+        hostile = adapter + "\nNative agent dispatch may bypass the launcher.\n"
+        with pytest.raises(AssertionError):
+            _assert_parallel_adapter_is_translation_only(hostile)
+
+
 def _post_merge_capabilities(workflow: str) -> dict[str, tuple[str, str]]:
     rows: dict[str, tuple[str, str]] = {}
     for line in workflow.splitlines():
@@ -2123,7 +2155,9 @@ def test_bookend_integrations_are_shared_thin_declared_and_manifested() -> None:
 
 @pytest.mark.kit_repo_only(
     "scripts/dev_session.sh",
+    "scripts/launch_codex_lane.py",
     "scripts/reconcile_sessions.sh",
+    "scripts/tests/test_codex_lane_launcher.py",
     "scripts/tests/test_portability.py",
     "scripts/tests/test_reconcile_sessions.py",
     "docs/agentic-dev-kit/workflows/parallel.md",
@@ -2144,7 +2178,7 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
     ).read_text(encoding="utf-8")
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     release_entry = changelog.split("## #598", 1)[1].split("\n---", 1)[0]
-    expected_roles = {
+    existing_identity_roles = {
         "scripts/dev_session.sh": "engine",
         "scripts/reconcile_sessions.sh": "engine",
         "scripts/tests/test_portability.py": "test",
@@ -2152,6 +2186,11 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
         "docs/agentic-dev-kit/workflows/parallel.md": "workflow",
         "docs/agentic-dev-kit/workflows/parallel-headless.md": "workflow",
     }
+    launcher_roles = {
+        "scripts/launch_codex_lane.py": "engine",
+        "scripts/tests/test_codex_lane_launcher.py": "test",
+    }
+    expected_roles = existing_identity_roles | launcher_roles
 
     assert {
         path: manifest[path]["role"] for path in expected_roles
@@ -2159,9 +2198,9 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
     assert "**`STALE`** → replace it" in upgrade
     assert "Never batch-replace the whole list" in upgrade
     assert "Engines are **kit-owned**; config is **adopter-owned**" in upgrade
-    assert re.search(r"assign\s+every key from `env` unconditionally", headless)
-    assert "Do not use `setdefault`" in headless
-    assert all(path in release_entry for path in expected_roles)
+    assert re.search(r"assigns\s+every key from\s+`env` unconditionally", headless)
+    assert re.search(r"Do\s+not use `setdefault`", headless)
+    assert all(path in release_entry for path in existing_identity_roles)
 
 
 @pytest.mark.kit_repo_only(

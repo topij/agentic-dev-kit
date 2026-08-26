@@ -396,6 +396,12 @@ else
 fi
 ```
 
+The refreshed migrator also owns the additive `parallel:` launcher block. It preserves
+each existing value and adds only missing `codex_headless_command`,
+`descriptor_ttl_seconds`, and `observation_timeout_seconds` keys. The command is an
+argv sequence consumed without a shell; the lifetime and observation bound must remain
+positive integers for descriptor issuance and launch.
+
 The refreshed migrator owns the additive `triage:` block. It inserts the complete flat
 block when absent and adds only missing keys to a partial block, preserving existing
 values, indentation, and trailing comments. Ambiguous top-level or child-key YAML stops

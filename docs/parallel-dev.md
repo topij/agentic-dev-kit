@@ -92,9 +92,12 @@ The exact per-step commands, plus the effort-tier and merge-class tables, are in
 
 Each `new` creates the worktree + branch + sandbox, persists the merge class, and
 hands off to the lane: a copy-paste line for an interactive operator, or (`--headless`)
-a sticky on-disk marker plus a JSON descriptor for an unattended launcher — the
-mechanism a background sub-agent's stateless tool calls need to find their sandbox
-without a surviving shell export. Omitting `--merge-class` fails safe to `operator`.
+a sticky on-disk marker plus a canonical one-shot JSON descriptor for an unattended
+launcher. Codex headless lanes use the kit-owned wrapper, whose child independently
+observes Git, filesystem, state, and process identity before `exec` and whose receipt
+binds that observation to the launch request. Native agent dispatch is not a substitute
+for the descriptor environment/receipt chain. Omitting `--merge-class` fails safe to
+`operator`.
 The exact command, every flag, and the headless JSON descriptor are in
 [`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#starting-a-new-session)
 (interactive) and

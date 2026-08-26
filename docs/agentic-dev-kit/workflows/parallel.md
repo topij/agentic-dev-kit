@@ -31,7 +31,7 @@ command is invoked; they do not replace, relax, or reconstruct this chain.
 | Surface | Authoritative inputs | Durable evidence | Failure / resume result |
 | --- | --- | --- | --- |
 | `new` | configured protected branch and lane prefix; requested branch, base, and merge class | session `branch`, `base`, and `merge_class`; worktree and sandbox | creation failure is not a lane; retry only after accounting for any branch or worktree the failed Git operation left behind |
-| `new --headless` | the same identity plus resolved absolute worktree, sandbox, and repository roots; a relative sessions container is anchored to the invocation directory before any write | marker, descriptor, and activation file agree on the resolved roots; descriptor `env` carries the complete lane-root override | an env-incapable launcher cannot resume this as an unattended state-writing lane; use an env-capable launcher or attended activation |
+| `new --headless` | the same identity plus resolved absolute worktree, sandbox, and repository roots; a relative sessions container is anchored to the invocation directory before any write | marker, canonical one-shot descriptor, persisted identity, and activation file agree; the supported Codex wrapper adds an exclusive attempt and observed/terminal receipt | an env-incapable launcher cannot resume this as an unattended state-writing lane; the selected wrapper rejects expiry, reuse, partial evidence, or any child-observed identity mismatch |
 | scope `pr-watch` | one intact session; exact checkout repository; same-repository open PR whose base, head branch, owner, and fork flag match the persisted lane | acknowledgements and review receipt in that session's state root | missing, ambiguous, foreign, or malformed identity refuses before the review engine runs |
 | `merge` | persisted `self` class plus the scope-watch identity chain; act-time report for the same PR, base, and head | forge merge pinned to the validated head | any identity movement or failed/ambiguous forge result refuses; re-poll and resume from the exact current head |
 | reconciliation | exact checkout repository; authoritative PR list; persisted base/class when a session survives; stable snapshots of every surviving local ref, remote-tracking ref, and live origin branch | `merged`, `held`, `open`, or `parked` row plus the batch exit contract | repository/read/shape failure emits no board and stops; an observed newer or moving branch tip keeps the lane resumable |
@@ -46,7 +46,9 @@ launcher mutation with the environment-capable launcher rather than simulating o
 
 | Mutation | Required observable result |
 | --- | --- |
-| inherit a cockpit `DEVKIT_STATE_ROOT` instead of applying descriptor `env` | descriptor emission replaces the inherited root, and the shared launcher contract rejects `setdefault`; live child-process coverage remains part of the environment-capable launcher slice |
+| inherit cockpit lane/state variables instead of applying descriptor `env` | the supported wrapper removes inherited `DEVKIT_*`, assigns every descriptor key unconditionally, and the live child/receipt must observe only the descriptor environment |
+| launch a correct descriptor in another worktree, or let a child echo descriptor identity without observing Git/filesystem/process state | the child-side observer refuses before `exec`; caller-supplied expected fields cannot substitute for Git, marker, persisted metadata, path relationships, and the launch capability |
+| reuse an expired, foreign, interrupted, or completed descriptor/process, or return before observations/final text are durable | exclusive attempt creation, descriptor expiry, process-capability handshake, observed receipt, and terminal final-message digest refuse the launch or its success outcome |
 | drop or alter persisted branch, base, or merge class | merge refuses; reconciliation cannot widen the lane to `held` |
 | inherit ambient `GH_REPO`, fail a forge read, or return malformed JSON | the engine stops before rendering or authorizing an empty/clean result |
 | return a fork, foreign owner, wrong base, or wrong head branch under the requested head name | row is not eligible to identify or terminalize the lane |
@@ -242,25 +244,14 @@ merge to the reviewed head commit. It refuses any lane whose persisted class is 
 `self`. Operator-class lanes intentionally cannot use the wrapper; the operator lands
 those directly after the required review and sign-off.
 
-**How the tier reaches the lane.** It depends on the launch mechanism:
-
-- **Headless lanes — fan out through a multi-agent workflow when it exposes a real
-  effort dial.** Such a launcher passes each lane its
-  tier directly — one sub-agent per lane, each given its own `effort`/`model` — so
-  **both** halves of the tier (reasoning effort *and* model) actually take effect.
-  Use this path when the runtime supports it and lanes are tiered differently. Recipe + caveats in [Unattended / headless
-  launch](parallel-headless.md#unattended--headless-launch--new---headless).
-- **Headless lanes — a single background sub-agent per lane is the *model-only*
-  fallback.** If your agent runtime's background-task tool exposes `model` but no
-  `effort` parameter, spawning lanes as individual sub-agents sets each lane's *model*
-  per the tier while the *effort* reaches it only as a prose hint in the prompt
-  ("tier: high, think carefully") — nominal, not a real setting. Fine when there's a
-  single lane, when every lane shares a tier, or when you want independently-stoppable
-  cockpit-side agent objects; use the workflow-fan-out path when per-lane effort
-  differentiation is the point. Either way the tier is **sourced from the plan's risk
-  assessment**, one per lane.
-- **Interactive `new` lanes**: the kickoff only *suggests* the tier (above); the
-  operator sets their own session's effort/model.
+**How the tier reaches the lane.** Interactive `new` lanes keep the tier as a kickoff
+suggestion and the operator selects available runtime controls. The supported Codex
+headless wrapper deliberately inherits the configured client compute: this launcher
+slice establishes worktree, environment, identity, and receipt authority only. Native
+agent dispatch cannot become a headless-lane shortcut merely because it exposes model
+or effort controls; without the complete descriptor environment and observer/receipt
+chain it remains unsupported for state-writing lanes. Codex model and effort
+calibration is a separate parity slice.
 
 **Default-safe.** A lane with no assigned tier inherits the cockpit's current
 effort/model — i.e. unspecified ⇒ today's behavior, no regression. The tier is an
