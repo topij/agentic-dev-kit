@@ -67,6 +67,11 @@ runtime:
   launchers:
     claude: claude
     codex: codex
+parallel:
+  codex_headless_command: [codex, exec]
+  descriptor_ttl_seconds: 900
+  observation_timeout_seconds: 30
+  termination_grace_seconds: 5
 vcs:
   protected_branch: trunk
 """,
@@ -113,6 +118,11 @@ runtime:
   launchers:
     claude: claude
     codex: codex
+parallel:
+  codex_headless_command: [codex, exec]
+  descriptor_ttl_seconds: 900
+  observation_timeout_seconds: 30
+  termination_grace_seconds: 5
 vcs:
   protected_branch: trunk
   dev_branch_prefix: lane
@@ -1567,14 +1577,69 @@ state:
     config = yaml.safe_load(
         (repo / "config" / "dev-model.yaml").read_text(encoding="utf-8")
     )
+    shipped = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
 
     assert config["paths"]["engines"] == "scripts"
     assert config["runtime"]["default"] == "claude"
     assert config["runtime"]["launchers"]["codex"] == "codex"
+    assert config["parallel"] == shipped["parallel"]
     assert config["review"]["fallback_commands"]["codex"] == "/review"
-    assert config["triage"] == yaml.safe_load(
-        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
-    )["triage"]
+    assert config["triage"] == shipped["triage"]
+
+    config_path = repo / "config" / "dev-model.yaml"
+    partial = re.sub(
+        r"(?m)^parallel:\n(?:  [^\n]*\n)+",
+        "parallel:\n  descriptor_ttl_seconds: 321\n",
+        config_path.read_text(encoding="utf-8"),
+        count=1,
+    )
+    config_path.write_text(partial, encoding="utf-8")
+    subprocess.run(
+        ["sh", "init.sh"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    migrated_partial = yaml.safe_load(
+        config_path.read_text(encoding="utf-8")
+    )["parallel"]
+
+    assert migrated_partial["descriptor_ttl_seconds"] == 321
+    assert {
+        key: value
+        for key, value in migrated_partial.items()
+        if key != "descriptor_ttl_seconds"
+    } == {
+        key: value
+        for key, value in shipped["parallel"].items()
+        if key != "descriptor_ttl_seconds"
+    }
+
+    nested_same_name = re.sub(
+        r"(?m)^parallel:\n(?:  [^\n]*\n)+",
+        "parallel:\n  custom:\n    termination_grace_seconds: 999\n",
+        config_path.read_text(encoding="utf-8"),
+        count=1,
+    )
+    config_path.write_text(nested_same_name, encoding="utf-8")
+    subprocess.run(
+        ["sh", "init.sh"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    migrated_nested = yaml.safe_load(
+        config_path.read_text(encoding="utf-8")
+    )["parallel"]
+
+    assert migrated_nested["termination_grace_seconds"] == shipped["parallel"][
+        "termination_grace_seconds"
+    ]
+    assert migrated_nested["custom"]["termination_grace_seconds"] == 999
     # The panel is what the fallback actually IS now; deleting its whole
     # migration block from init.sh previously passed the entire suite.
     panel = config["review"]["fallback_panel"]
@@ -1650,6 +1715,41 @@ def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
         )
         if (REPO_ROOT / claude_path).is_file():
             _assert_claude_workflow_adapter(name, declared_shared, claude_path)
+
+
+def _assert_parallel_adapter_is_translation_only(adapter: str) -> None:
+    body = adapter.split("---", 2)[2].strip()
+    allowed_bodies = {
+        """Read `docs/agentic-dev-kit/workflows/parallel.md` completely and follow it.
+
+Treat `$ARGUMENTS` as the requested parallel-development action and arguments.
+Resolve the engine path from the repository root.""",
+        """# Parallel Development
+
+1. Work from the repository root.
+2. Read `config/dev-model.yaml` and `docs/agentic-dev-kit/workflows/parallel.md` completely.
+3. Follow the requested action. With no action, show the read-only lane board.
+4. Resolve engine paths from the repository root; support both `scripts/dev_session.sh` and a namespaced adopted path such as `scripts/devkit/dev_session.sh`.
+5. Use the current runtime's supported parallel-task mechanism. Do not assume peer messaging, model selection, background execution, or automatic terminal launch unless the runtime exposes it.
+6. Preserve the cockpit/lane ownership boundary and require disjoint source-file footprints before launch.
+7. For behavioral changes to lane safety, read and apply `docs/agentic-dev-kit/safety-critical-changes.md`.""",
+    }
+    assert body in allowed_bodies
+
+
+def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
+    for path in (
+        REPO_ROOT / ".claude" / "commands" / "parallel.md",
+        REPO_ROOT / ".agents" / "skills" / "parallel" / "SKILL.md",
+    ):
+        adapter = path.read_text(encoding="utf-8")
+        _assert_parallel_adapter_is_translation_only(adapter)
+        for hostile in (
+            adapter + "\nNative dispatch can launch unattended lanes directly.\n",
+            adapter + "\nThe shared workflow is optional advice.\n",
+        ):
+            with pytest.raises(AssertionError):
+                _assert_parallel_adapter_is_translation_only(hostile)
 
 
 def _post_merge_capabilities(workflow: str) -> dict[str, tuple[str, str]]:
@@ -2123,7 +2223,9 @@ def test_bookend_integrations_are_shared_thin_declared_and_manifested() -> None:
 
 @pytest.mark.kit_repo_only(
     "scripts/dev_session.sh",
+    "scripts/launch_codex_lane.py",
     "scripts/reconcile_sessions.sh",
+    "scripts/tests/test_codex_lane_launcher.py",
     "scripts/tests/test_portability.py",
     "scripts/tests/test_reconcile_sessions.py",
     "docs/agentic-dev-kit/workflows/parallel.md",
@@ -2143,8 +2245,9 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
         REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "parallel-headless.md"
     ).read_text(encoding="utf-8")
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    release_entry = changelog.split("## #598", 1)[1].split("\n---", 1)[0]
-    expected_roles = {
+    release_entry_598 = changelog.split("## #598", 1)[1].split("\n---", 1)[0]
+    release_entry_609 = changelog.split("## #609", 1)[1].split("\n---", 1)[0]
+    existing_identity_roles = {
         "scripts/dev_session.sh": "engine",
         "scripts/reconcile_sessions.sh": "engine",
         "scripts/tests/test_portability.py": "test",
@@ -2152,6 +2255,14 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
         "docs/agentic-dev-kit/workflows/parallel.md": "workflow",
         "docs/agentic-dev-kit/workflows/parallel-headless.md": "workflow",
     }
+    launcher_roles = {
+        "init.sh": "installer",
+        "scripts/launch_codex_lane.py": "engine",
+        "scripts/tests/test_codex_lane_launcher.py": "test",
+        "docs/agentic-dev-kit/workflows/upgrade.md": "workflow",
+        "docs/templates/AGENTS.md.tmpl": "template",
+    }
+    expected_roles = existing_identity_roles | launcher_roles
 
     assert {
         path: manifest[path]["role"] for path in expected_roles
@@ -2159,9 +2270,18 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
     assert "**`STALE`** → replace it" in upgrade
     assert "Never batch-replace the whole list" in upgrade
     assert "Engines are **kit-owned**; config is **adopter-owned**" in upgrade
-    assert re.search(r"assign\s+every key from `env` unconditionally", headless)
-    assert "Do not use `setdefault`" in headless
-    assert all(path in release_entry for path in expected_roles)
+    assert re.search(r"assigns\s+every key from\s+`env` unconditionally", headless)
+    assert re.search(r"Do\s+not use `setdefault`", headless)
+    assert all(path in release_entry_598 for path in existing_identity_roles)
+    adopter_launcher_paths = {
+        "init.sh",
+        "config/dev-model.yaml",
+        "scripts/dev_session.sh",
+        "scripts/launch_codex_lane.py",
+        "docs/agentic-dev-kit/workflows/parallel.md",
+        "docs/agentic-dev-kit/workflows/parallel-headless.md",
+    }
+    assert all(path in release_entry_609 for path in adopter_launcher_paths)
 
 
 @pytest.mark.kit_repo_only(
@@ -12624,8 +12744,8 @@ def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> N
 )
 def test_triage_config_and_adapter_migration_reaches_adopters() -> None:
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    first_entry = " ".join(
-        changelog.split("\n## ", 1)[1].split("\n---", 1)[0].split()
+    triage_entry = " ".join(
+        changelog.split("## #599", 1)[1].split("\n---", 1)[0].split()
     )
     upgrade = (
         REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md"
@@ -12649,11 +12769,11 @@ def test_triage_config_and_adapter_migration_reaches_adopters() -> None:
         "execution",
         "after proving owner termination and obtaining exact approval",
     ):
-        assert required in first_entry
+        assert required in triage_entry
     assert "adds only missing keys to a partial block" in upgrade
     assert "replace both adapters" in upgrade
     assert "do not create a separate friction-triage config" in adopt
-    for surface in (first_entry, upgrade, readme, installer):
+    for surface in (triage_entry, upgrade, readme, installer):
         assert "review.bots" in surface
         assert "systemize.operator_logins" in surface
         assert "flow sequences" in surface
@@ -13237,6 +13357,7 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
 
 @pytest.mark.kit_repo_only(
     "AGENTS.md",
+    "CHANGELOG.md",
     "docs/templates/AGENTS.md.tmpl",
     "docs/AGENTS-sections.md",
     ".claude/rules/safety-critical-changes.md",
@@ -13269,12 +13390,20 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     assert set(claude_frontmatter["paths"]) == {
         "scripts/dev_session.sh",
         "scripts/devkit/dev_session.sh",
+        "scripts/launch_codex_lane.py",
+        "scripts/devkit/launch_codex_lane.py",
         "scripts/pr_watch.py",
         "scripts/devkit/pr_watch.py",
     }
     for text in (root_agents, template, merge_section, claude_rule):
         assert "pr_watch.py" in text
         assert "dev_session.sh" in text
+        assert "launch_codex_lane.py" in text
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    launcher_entry = changelog.split("## #609", 1)[1].split("\n---", 1)[0]
+    assert "adopter-owned `AGENTS.md`" in launcher_entry
+    assert ".claude/rules/safety-critical-changes.md" in launcher_entry
+    assert "scripts/devkit/launch_codex_lane.py" in launcher_entry
 
 
 @pytest.mark.kit_repo_only("saved_plans/codex-hooks-live-probe/.codex/hooks.json")

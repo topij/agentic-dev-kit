@@ -42,6 +42,35 @@ starts.
 
 ---
 
+## #609 — 2026-08-26
+
+- **ADDED (engine CLI surface) — unattended Codex lanes now use a one-shot,
+  environment-capable launcher and durable descriptor-seal/session-attempt/
+  observation/terminal receipt chain.** **Refresh `scripts/dev_session.sh`,
+  `scripts/launch_codex_lane.py`, `config/dev-model.yaml`, and the shared parallel
+  workflows `docs/agentic-dev-kit/workflows/parallel.md` and
+  `docs/agentic-dev-kit/workflows/parallel-headless.md` together; run
+  `./init.sh --no-clobber`; issue descriptors with
+  `new --headless --runtime codex` (or `DEVKIT_RUNTIME=codex`); and invoke the wrapper
+  rather than direct `codex exec` or runtime-native dispatch. Preserve the descriptor's
+  repository fetch/push identity, prompt contract, cross-bound environment, trusted
+  executable lookup, process authority, and one-shot evidence fields when integrating
+  the output. Add `scripts/launch_codex_lane.py` (and the rendered
+  `scripts/devkit/launch_codex_lane.py` path where applicable) beside
+  `scripts/dev_session.sh` and `scripts/pr_watch.py` in the adopter-owned `AGENTS.md`
+  safety-critical ground rule and `.claude/rules/safety-critical-changes.md` path list;
+  `./init.sh --no-clobber` preserves those existing bindings and does not add the route
+  for you. Do not invoke an internal child mode; the supported observer is fork-only
+  inside the public wrapper.**
+- **ADDED (config keys) — `parallel` now owns `codex_headless_command`,
+  `descriptor_ttl_seconds`, `observation_timeout_seconds`, and
+  `termination_grace_seconds`.** **Refresh `init.sh` and run
+  `./init.sh --no-clobber`; keep each launcher value as a flat `parallel` child. The
+  migrator preserves adopter-owned flat values and adds a shipped default when only a
+  same-named nested key exists.**
+
+---
+
 ## #599 — 2026-08-25
 
 - **ADDED (config keys) — `triage` now owns the friction-triage analysis tier,

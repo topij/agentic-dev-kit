@@ -209,6 +209,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/check_doc_budget.py", "engine"),
     ("scripts/archive_plan_sessions.py", "engine"),
     ("scripts/dev_session.sh", "engine"),
+    ("scripts/launch_codex_lane.py", "engine"),
     ("scripts/reconcile_sessions.sh", "engine"),
     ("scripts/kit_doctor.py", "engine"),
     # Assembles panel launch prompts by QUOTING the contract out of
@@ -250,6 +251,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/conftest.py", "test"),
     ("scripts/tests/test_check_memory_budget.py", "test"),
     ("scripts/tests/test_ci_workflow.py", "test"),
+    ("scripts/tests/test_codex_lane_launcher.py", "test"),
     ("scripts/tests/test_init_sh.py", "test"),
     ("scripts/tests/test_kit_doctor.py", "test"),
     ("scripts/tests/test_kit_repo_only.py", "test"),

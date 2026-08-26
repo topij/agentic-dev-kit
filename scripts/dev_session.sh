@@ -375,42 +375,116 @@ ACTIVATE
         printf '%s\n' "$sandbox_abs" > "$worktree_abs/$STATE_ROOT_MARKER"
 
         # Machine-readable descriptor (NOT the human copy-paste block) so a
-        # launcher can `json.load` it. Built via python3 so paths with spaces /
-        # special chars — and the multi-line contract text — stay valid JSON.
-        # Written to fd 3 (the saved real stdout) so it is the sole thing on
-        # the caller's stdout. `prompt_preamble` is the canonical lane-contract
-        # text the launcher MUST prepend verbatim to the lane's prompt; `env`
-        # is the map of env vars the launcher MUST REPLACE in the lane process.
+        # launcher can `json.load` it. The canonical bytes are persisted beside
+        # the lane metadata before those same bytes become the sole stdout
+        # payload. `prompt_preamble` is the canonical lane-contract text the
+        # launcher MUST prepend verbatim to the lane's prompt; `env` is the map
+        # of env vars the launcher MUST REPLACE in the lane process.
         # Explicit lane roots are load-bearing: an inherited cockpit
         # DEVKIT_STATE_ROOT otherwise outranks this lane's marker and collapses
         # multiple headless lanes into one shared state directory.
+        local session_dir_abs descriptor_ttl base_oid lane_oid origin_url origin_push_url
+        session_dir_abs="$(cd "$session_dir" && pwd -P)" || _die "could not resolve session path"
+        descriptor_ttl="$(_config_scalar parallel "" descriptor_ttl_seconds)"
+        [[ "$descriptor_ttl" =~ ^[1-9][0-9]*$ ]] \
+            || _die "config parallel.descriptor_ttl_seconds must be a positive integer"
+        base_oid="$(git -C "$worktree_abs" rev-parse "refs/remotes/origin/$base")" \
+            || _die "could not resolve origin/$base for the launch descriptor"
+        lane_oid="$(git -C "$worktree_abs" rev-parse HEAD)" \
+            || _die "could not resolve lane head for the launch descriptor"
+        origin_url="$(git -C "$worktree_abs" remote get-url origin)" \
+            || _die "could not resolve origin URL for the launch descriptor"
+        origin_push_url="$(git -C "$worktree_abs" remote get-url --push origin)" \
+            || _die "could not resolve origin push URL for the launch descriptor"
         python3 - "$scope" "$branch" "$worktree_abs" "$sandbox_abs" "$repo_root_abs" "$base" \
-            "$merge_class" "$(_lane_contract)" "$REFUSE_UNSANDBOXED_ENV_VALUE" "$runtime" "$launcher" >&3 <<'PY'
+            "$merge_class" "$(_lane_contract)" "$REFUSE_UNSANDBOXED_ENV_VALUE" "$runtime" "$launcher" \
+            "$session_dir_abs" "$descriptor_ttl" "$base_oid" "$lane_oid" "$origin_url" \
+            "$origin_push_url" >&3 <<'PY'
+import datetime as dt
+import hashlib
 import json
+import os
+from pathlib import Path
 import sys
+import tempfile
+import uuid
 
-scope, branch, worktree, state_root, repo_root, base, merge_class, prompt_preamble, refuse_unsandboxed, runtime, launcher = sys.argv[1:12]
-print(
-    json.dumps(
-        {
-            "scope": scope,
-            "branch": branch,
-            "worktree": worktree,
-            "state_root": state_root,
-            "repo_root": repo_root,
-            "base": base,
-            "merge_class": merge_class,
-            "prompt_preamble": prompt_preamble,
-            "env": {
-                "DEVKIT_STATE_ROOT": state_root,
-                "DEVKIT_ROOT": repo_root,
-                "DEVKIT_REFUSE_UNSANDBOXED_STATE": refuse_unsandboxed,
-            },
-            "runtime": runtime,
-            "launcher": launcher or None,
-        }
-    )
+(
+    scope, branch, worktree, state_root, repo_root, base, merge_class,
+    prompt_preamble, refuse_unsandboxed, runtime, launcher, session_dir,
+    descriptor_ttl, base_oid, lane_oid, origin_url, origin_push_url,
+) = sys.argv[1:18]
+issued = dt.datetime.now(dt.timezone.utc)
+expires = issued + dt.timedelta(seconds=int(descriptor_ttl))
+descriptor_path = Path(session_dir, "launch-descriptor.json")
+authority_path = Path(session_dir, "launch-authority.json")
+descriptor = {
+    "schema_version": 1,
+    "descriptor_id": str(uuid.uuid4()),
+    "issued_at": issued.isoformat().replace("+00:00", "Z"),
+    "expires_at": expires.isoformat().replace("+00:00", "Z"),
+    "descriptor_path": str(descriptor_path),
+    "scope": scope,
+    "branch": branch,
+    "worktree": worktree,
+    "state_root": state_root,
+    "repo_root": repo_root,
+    "session_dir": session_dir,
+    "base": base,
+    "base_oid": base_oid,
+    "lane_oid": lane_oid,
+    "origin_url": origin_url,
+    "origin_push_url": origin_push_url,
+    "merge_class": merge_class,
+    "prompt_preamble": prompt_preamble,
+    "env": {
+        "DEVKIT_STATE_ROOT": state_root,
+        "DEVKIT_ROOT": repo_root,
+        "DEVKIT_REFUSE_UNSANDBOXED_STATE": refuse_unsandboxed,
+    },
+    "runtime": runtime,
+    "launcher": launcher or None,
+}
+payload = (json.dumps(descriptor, sort_keys=True, separators=(",", ":")) + "\n").encode()
+fd, tmp_name = tempfile.mkstemp(prefix=".launch-descriptor.", dir=session_dir)
+try:
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.chmod(tmp_name, 0o600)
+    os.replace(tmp_name, descriptor_path)
+    directory_fd = os.open(session_dir, os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+finally:
+    if os.path.exists(tmp_name):
+        os.unlink(tmp_name)
+authority = {
+    "schema_version": 1,
+    "descriptor_id": descriptor["descriptor_id"],
+    "descriptor_sha256": hashlib.sha256(payload).hexdigest(),
+}
+authority_payload = (
+    json.dumps(authority, sort_keys=True, separators=(",", ":")) + "\n"
+).encode()
+authority_fd = os.open(
+    authority_path,
+    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+    0o400,
 )
+with os.fdopen(authority_fd, "wb") as handle:
+    handle.write(authority_payload)
+    handle.flush()
+    os.fsync(handle.fileno())
+directory_fd = os.open(session_dir, os.O_RDONLY)
+try:
+    os.fsync(directory_fd)
+finally:
+    os.close(directory_fd)
+sys.stdout.buffer.write(payload)
 PY
         return 0
     fi

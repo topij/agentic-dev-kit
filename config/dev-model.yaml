@@ -55,6 +55,22 @@ runtime:
     claude: claude
     codex: codex
 
+parallel:
+  # The supported unattended Codex path is a kit-owned wrapper around the stable
+  # non-interactive CLI. Keep this an argv sequence: the wrapper never invokes a
+  # shell, so a launcher value cannot smuggle shell syntax into the child.
+  codex_headless_command: [codex, exec]
+  # A descriptor is a one-shot launch authority, not standing permission. The
+  # issuer stamps this lifetime into the descriptor and the wrapper rejects an
+  # expired value before starting a child.
+  descriptor_ttl_seconds: 900
+  # The parent waits only this long for the child-side Git/filesystem/process
+  # observation to become durable before refusing the launch.
+  observation_timeout_seconds: 30
+  # An interrupted or rejected launch gets this bounded graceful-stop window
+  # before the wrapper escalates to forced process-group termination.
+  termination_grace_seconds: 5
+
 doc_budgets:
   # Line-count tripwires (the archival mechanism of Principle #1). A file over budget
   # is a housekeeping nudge: check_doc_budget.py exits 0 by default even when one is

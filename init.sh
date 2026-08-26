@@ -392,6 +392,51 @@ ensure_review_key() {
   fi
 }
 
+# Print a top-level child key from one section, ignoring a same-named key nested
+# beneath another child. The section's own indentation is derived rather than fixed.
+flat_section_key_line() {
+  section="$1"
+  key="$2"
+  section_lines "$section" "$CONFIG_FILE" | awk -v key="$key" '
+    /^[[:space:]]*($|#)/ { next }
+    {
+      match($0, /^[[:space:]]*/)
+      indent = RLENGTH
+      if (minimum == 0 || indent < minimum) minimum = indent
+      lines[++count] = $0
+      indents[count] = indent
+    }
+    END {
+      for (i = 1; i <= count; i++) {
+        line = lines[i]
+        sub(/^[[:space:]]+/, "", line)
+        if (indents[i] == minimum && line ~ ("^" key ":[[:space:]]*")) {
+          print lines[i]
+          exit
+        }
+      }
+    }
+  '
+}
+
+# Add one flat `parallel:` key if the section does not already define it.
+# Existing flat values are adopter policy and remain untouched; nested names do
+# not suppress the required launcher key.
+ensure_parallel_key() {
+  key="$1"
+  block="$2"
+  if [ -n "$(flat_section_key_line parallel: "$key")" ]; then
+    return 0
+  fi
+  append_to_section "parallel:" "$block"
+  if [ -n "$(flat_section_key_line parallel: "$key")" ]; then
+    echo "added parallel.$key to config/dev-model.yaml"
+  else
+    echo "error: could not add parallel.$key to $CONFIG_FILE." >&2
+    return 1
+  fi
+}
+
 # Add one flat `triage:` key if the section does not already define it. Existing
 # values are adopter policy and remain untouched; preflight proves the section is
 # a shape this line-oriented writer can extend without changing its meaning.
@@ -514,6 +559,7 @@ preflight_migration_config() {
   if awk '
     BEGIN {
       owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
+      owned["parallel"] = 1
       owned["vcs"] = owned["triage"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
       owned["notify"] = owned["models"] = 1
     }
@@ -729,6 +775,7 @@ preflight_migration_config() {
     }
     BEGIN {
       owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
+      owned["parallel"] = 1
       owned["vcs"] = owned["triage"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
       owned["notify"] = owned["models"] = 1
       line_owned["project", "name"] = 1
@@ -973,6 +1020,22 @@ migrate_runtime_schema() {
       expensive: high"
     echo "added runtime model mappings to config/dev-model.yaml"
   fi
+}
+
+migrate_parallel_schema() {
+  if ! grep -q '^parallel:' "$CONFIG_FILE"; then
+    insert_before_section "doc_budgets:" 'parallel:
+  codex_headless_command: [codex, exec]
+  descriptor_ttl_seconds: 900
+  observation_timeout_seconds: 30
+  termination_grace_seconds: 5
+'
+    echo "added parallel launcher config to config/dev-model.yaml"
+  fi
+  ensure_parallel_key codex_headless_command '  codex_headless_command: [codex, exec]'
+  ensure_parallel_key descriptor_ttl_seconds '  descriptor_ttl_seconds: 900'
+  ensure_parallel_key observation_timeout_seconds '  observation_timeout_seconds: 30'
+  ensure_parallel_key termination_grace_seconds '  termination_grace_seconds: 5'
 }
 
 # Schema additions introduced after the v2 template release. Same idempotent
@@ -1878,6 +1941,7 @@ fi
 
 preflight_migration_config
 migrate_runtime_schema
+migrate_parallel_schema
 migrate_kit_schema
 
 # ── prompts ──────────────────────────────────────────────────────────────
