@@ -202,6 +202,14 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
     tmp_path: Path,
 ) -> None:
     repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    fake_bin = tmp_path / "hostile-bin"
+    fake_bin.mkdir()
+    fake_git_marker = tmp_path / "fake-git-ran"
+    fake_git = fake_bin / "git"
+    fake_git.write_text(
+        f"#!/bin/sh\nprintf ran > {fake_git_marker}\nexit 97\n", encoding="utf-8"
+    )
+    fake_git.chmod(0o755)
     inherited = {
         **env,
         "DEVKIT_STATE_ROOT": str(tmp_path / "foreign-state"),
@@ -212,6 +220,7 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
         "GIT_CONFIG_COUNT": "1",
         "GIT_CONFIG_KEY_0": "remote.origin.pushurl",
         "GIT_CONFIG_VALUE_0": str(tmp_path / "foreign-origin"),
+        "PATH": f"{fake_bin}{os.pathsep}{env['PATH']}",
     }
 
     result = _run_launcher(engine_dir, descriptor, prompt, inherited)
@@ -235,6 +244,7 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
     assert final["git_config_present"] is False
     assert final["push_url"] == descriptor["origin_push_url"]
     assert final["contract_first"] is True
+    assert not fake_git_marker.exists()
     assert receipt["terminal"]["final_message_sha256"]
 
 
@@ -645,7 +655,11 @@ def test_sigterm_ignoring_child_is_forcibly_stopped_within_the_configured_bound(
     while time.monotonic() < deadline:
         if receipt_path.is_file():
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-            if receipt.get("status") == "observed" and final_path.is_file():
+            if (
+                receipt.get("status") == "observed"
+                and final_path.is_file()
+                and final_path.stat().st_size > 0
+            ):
                 break
         time.sleep(0.05)
     else:
@@ -667,14 +681,43 @@ def test_sigterm_ignoring_child_is_forcibly_stopped_within_the_configured_bound(
 
 
 def test_descriptor_is_one_shot_after_a_successful_launch(tmp_path: Path) -> None:
+    launcher = _load_launcher()
     _repo, engine, _sessions, descriptor, prompt, env = _install_repo(tmp_path)
 
     first = _run_launcher(engine, descriptor, prompt, env)
-    second = _run_launcher(engine, descriptor, prompt, env)
+    mutated = copy.deepcopy(descriptor)
+    mutated["descriptor_id"] = "22222222-2222-4222-8222-222222222222"
+    for field in ("issued_at", "expires_at"):
+        value = dt.datetime.fromisoformat(mutated[field].replace("Z", "+00:00"))
+        mutated[field] = (value - dt.timedelta(seconds=1)).isoformat().replace(
+            "+00:00", "Z"
+        )
+    descriptor_path = Path(descriptor["descriptor_path"])
+    mutated_raw = launcher._canonical_json(mutated)
+    descriptor_path.write_bytes(mutated_raw)
+    authority_path = Path(descriptor["session_dir"]) / "launch-authority.json"
+    authority = json.loads(authority_path.read_text(encoding="utf-8"))
+    authority["descriptor_id"] = mutated["descriptor_id"]
+    authority["descriptor_sha256"] = hashlib.sha256(mutated_raw).hexdigest()
+    authority_path.chmod(0o600)
+    authority_path.write_bytes(launcher._canonical_json(authority))
+    second = _run_launcher(engine, mutated, prompt, env)
 
     assert first.returncode == 0, first.stderr
     assert second.returncode != 0
     assert "already has a launch attempt" in second.stderr
+
+
+def test_partial_descriptor_without_rewrite_seal_cannot_launch(tmp_path: Path) -> None:
+    _repo, engine, _sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    authority_path = Path(descriptor["session_dir"]) / "launch-authority.json"
+    authority_path.unlink()
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode != 0
+    assert "launch-authority.json" in result.stderr
+    assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
 
 
 def test_preexisting_final_message_path_blocks_launch(tmp_path: Path) -> None:

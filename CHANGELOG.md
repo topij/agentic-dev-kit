@@ -45,7 +45,7 @@ starts.
 ## #609 — 2026-08-26
 
 - **ADDED (engine CLI surface) — unattended Codex lanes now use a one-shot,
-  environment-capable launcher and durable descriptor-authority/session-attempt/
+  environment-capable launcher and durable descriptor-seal/session-attempt/
   observation/terminal receipt chain.** **Refresh `scripts/dev_session.sh`,
   `scripts/launch_codex_lane.py`, `config/dev-model.yaml`, and the shared parallel
   workflows `docs/agentic-dev-kit/workflows/parallel.md` and
@@ -53,8 +53,8 @@ starts.
   `./init.sh --no-clobber`; issue descriptors with
   `new --headless --runtime codex` (or `DEVKIT_RUNTIME=codex`); and invoke the wrapper
   rather than direct `codex exec` or runtime-native dispatch. Preserve the descriptor's
-  repository fetch/push identity, prompt contract, cross-bound environment, process
-  authority, and one-shot evidence fields when integrating the output. Do not invoke an
+  repository fetch/push identity, prompt contract, cross-bound environment, trusted
+  executable lookup, process authority, and one-shot evidence fields when integrating the output. Do not invoke an
   internal child mode; the supported observer is fork-only inside the public wrapper.**
 - **ADDED (config keys) — `parallel` now owns `codex_headless_command`,
   `descriptor_ttl_seconds`, `observation_timeout_seconds`, and

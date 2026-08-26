@@ -21,7 +21,7 @@ with the intended worktree and lane environment.
 | Desktop/app task creation | Runtime-selected checkout or app worktree | No complete per-task process environment map on the task surface | None | App-owned worktree isolation, not the descriptor environment contract | App task id, not a descriptor-bound local process | App task transcript | App/runtime | Unsupported for this local descriptor contract |
 | Interactive `codex -C <worktree>` | Stable CLI `-C`; operator shell remains the launch authority | Operator shell can assign values | Depends on the operator command | Valid for attended activation | Foreground CLI process | Interactive transcript; no one-shot launch receipt | Operator plus child session | Attended path only; a missing export is an operator-visible activation failure, not an unattended success |
 | Stable `codex exec -C <worktree>` invoked directly | Stable CLI `-C` | Inherits the caller environment | None supplied by Codex itself | Unsafe when an inherited explicit lane root outranks the marker | Foreground CLI process, not descriptor-bound | Optional JSONL/final-message output | Codex process self-report | Unsupported directly; it becomes supported only behind the selected kit-owned wrapper |
-| **Selected: kit-owned wrapper → stable `codex exec -C <worktree>`** | Wrapper sets the child `cwd`; a fork-only observer independently resolves `cwd` and Git top-level before `exec` | Start from permitted caller environment, remove lane/repository overrides, then assign every descriptor environment key unconditionally | Remove every inherited `DEVKIT_*`; remove `GH_REPO`, Git repository override variables including injected `GIT_CONFIG*`, `PWD`, and `OLDPWD`; set descriptor keys, seed `PWD` from the descriptor, then validate it against the resolved child cwd | Descriptor environment is cross-bound to its repository, state root, and refusal identity; the root must equal the independently read marker and session state directory | Session-scoped exclusive attempt plus an inherited pipe capability, forked child PID/parent/session ids, and OS process-start fingerprint when available, observed before `exec`; no public child mode exists and the launched process group must be absent at terminalization | Canonical descriptor, issuer-created descriptor-hash authority, session-scoped exclusive attempt, exclusively reserved empty final path, observed receipt, terminal receipt, and final-message digest | Fork-only child wrapper reads Git fetch/push origin identities, marker, persisted lane metadata, filesystem relationships, canonical prompt contract, and its own process identity; parent rechecks the durable receipt, child PID, inherited capability, and available live process fingerprint before accepting launch | Any authority/hash/environment mismatch, stale or rewritten descriptor, prior session attempt, occupied evidence path, missing observation, surviving process group, interrupted child, missing final message, or nonzero child exit is non-success and leaves terminal or partial evidence that blocks reuse |
+| **Selected: kit-owned wrapper → stable `codex exec -C <worktree>`** | Wrapper sets the child `cwd`; a fork-only observer independently resolves `cwd` and Git top-level before `exec` | Start from permitted caller environment, remove lane/repository overrides, replace executable lookup with the engine-owned trusted path, then assign every descriptor environment key unconditionally | Remove every inherited `DEVKIT_*`; remove `GH_REPO`, Git repository override variables including injected `GIT_CONFIG*`, caller `PATH`, `PWD`, and `OLDPWD`; use trusted absolute Git/Bash and resolve the config-owned runtime command only on the trusted path | Descriptor environment is cross-bound to its repository, state root, and refusal identity; the root must equal the independently read marker and session state directory | Session-scoped exclusive attempt plus an inherited pipe capability, forked child PID/parent/session ids, and OS process-start fingerprint when available, observed before `exec`; no public child mode exists and the launched process group must be absent at terminalization | Canonical descriptor plus descriptor-rewrite seal, session-scoped exclusive attempt, exclusively reserved empty final path, observed receipt, terminal receipt, and final-message digest | Fork-only child wrapper reads Git fetch/push origin identities, marker, persisted lane metadata, filesystem relationships, canonical prompt contract, and its own process identity through trusted executables; parent rechecks the durable receipt, child PID, inherited capability, and available live process fingerprint before accepting launch | Any seal/hash/environment mismatch, stale or rewritten descriptor, prior session attempt, occupied attempt or final-message path, missing observation, surviving process group, interrupted child, missing final message, or nonzero child exit is non-success and leaves terminal or partial evidence that blocks reuse |
 | Experimental app-server / protocol clients | Protocol can select a thread working directory | Host-process environment can be arranged outside the protocol | Requires a separate host wrapper | Possible but duplicates the selected wrapper and protocol lifecycle | Server plus thread/turn ids | Protocol event stream | Client and server | Not selected: experimental surface and a larger authority chain than this bounded slice needs |
 | Codex cloud task | Cloud environment and service checkout | Cloud environment configuration, not the local descriptor map | Not observable from the local lane engine | Does not bind the local worktree marker and state sandbox | Remote task id | Cloud task record | Remote service | Unsupported for a local `new --headless` descriptor |
 
@@ -45,11 +45,14 @@ The wrapper treats the environment in two classes:
   they can redirect repository or worktree observation. `PWD` is seeded from the
   descriptor and must equal the child's independently resolved physical cwd. Other
   permitted process variables remain available.
+- Caller `PATH` is replaced with the engine-owned trusted executable path. Git and Bash
+  observation use trusted absolute binaries; the config-owned runtime command is
+  resolved only on that path and its absolute argv is bound into request evidence.
 
 ## Independent observation and evidence chain
 
 `dev_session.sh` issues a canonical descriptor into the session directory, prints the
-same bytes, and exclusively creates a canonical authority object that binds the
+same bytes, and exclusively creates a canonical rewrite seal that binds the
 descriptor id and exact descriptor digest. The descriptor binds issue/expiry times, canonical
 worktree/session/state/repository roots, origin fetch and push identities, scope, branch, base,
 merge class, base commit, lane commit, prompt preamble, runtime, and descriptor
@@ -76,7 +79,7 @@ terminal receipt additionally binds the child's exit and final-message bytes.
 
 ## Fail-closed outcomes
 
-- The issuer-created authority rejects descriptor id, window, environment, or other
+- The separately persisted seal rejects descriptor-only id, window, environment, or other
   byte rewrites. The descriptor environment is also cross-bound to repository, state,
   and refusal identity rather than trusted as a self-consistent caller map.
 - Creating the session-scoped attempt record and reserving an empty final-message path
@@ -105,3 +108,11 @@ The descriptor issuer, Codex launcher, receipt validator, and behavioral tests a
 kit-owned engines or test surfaces. The launch and failure policy belongs in
 `parallel-headless.md` and the runtime-parity capability row. The Codex skill stays a
 thin binding that selects no environment, identity, retry, or evidence policy.
+
+The seal is corruption and descriptor-only rewrite evidence, not a privilege boundary
+against the repository operator or another process already controlling the same OS
+account. Such a process can replace the seal, lane metadata, worktree, engine, or receipt
+itself; protecting against same-account compromise requires an external signer or live
+broker and is outside this local launcher contract. Within the supported boundary, the
+caller supplies descriptor and prompt paths plus ambient environment, but does not
+rewrite kit-owned session evidence or engine bytes.

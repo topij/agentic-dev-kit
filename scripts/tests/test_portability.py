@@ -12744,8 +12744,8 @@ def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> N
 )
 def test_triage_config_and_adapter_migration_reaches_adopters() -> None:
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    first_entry = " ".join(
-        changelog.split("\n## ", 1)[1].split("\n---", 1)[0].split()
+    triage_entry = " ".join(
+        changelog.split("## #599", 1)[1].split("\n---", 1)[0].split()
     )
     upgrade = (
         REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md"
@@ -12769,11 +12769,11 @@ def test_triage_config_and_adapter_migration_reaches_adopters() -> None:
         "execution",
         "after proving owner termination and obtaining exact approval",
     ):
-        assert required in first_entry
+        assert required in triage_entry
     assert "adds only missing keys to a partial block" in upgrade
     assert "replace both adapters" in upgrade
     assert "do not create a separate friction-triage config" in adopt
-    for surface in (first_entry, upgrade, readme, installer):
+    for surface in (triage_entry, upgrade, readme, installer):
         assert "review.bots" in surface
         assert "systemize.operator_logins" in surface
         assert "flow sequences" in surface

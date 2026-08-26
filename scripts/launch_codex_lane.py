@@ -18,6 +18,7 @@ import json
 import os
 import secrets
 import select
+import shutil
 import signal
 import stat
 import subprocess
@@ -53,6 +54,11 @@ REPOSITORY_OVERRIDE_KEYS = frozenset(
         "OLDPWD",
     }
 )
+SAFE_EXECUTABLE_PATH = os.pathsep.join(
+    (*os.defpath.split(os.pathsep), "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin")
+)
+TRUSTED_GIT = shutil.which("git", path=os.defpath)
+TRUSTED_BASH = shutil.which("bash", path=os.defpath)
 
 
 def _is_repository_override_key(key: str) -> bool:
@@ -281,13 +287,29 @@ def _config_for_launcher() -> tuple[list[str], int, int, int, Path]:
         or termination_grace <= 0
     ):
         raise LaunchError("config parallel.termination_grace_seconds must be positive")
-    return list(command), timeout, lifetime, termination_grace, root.resolve()
+    executable = command[0]
+    resolved_executable = (
+        str(Path(executable).resolve())
+        if Path(executable).is_absolute()
+        else shutil.which(executable, path=SAFE_EXECUTABLE_PATH)
+    )
+    if not resolved_executable or not os.access(resolved_executable, os.X_OK):
+        raise LaunchError("configured Codex launcher is unavailable on the trusted path")
+    return (
+        [resolved_executable, *command[1:]],
+        timeout,
+        lifetime,
+        termination_grace,
+        root.resolve(),
+    )
 
 
 def _git(cwd: Path, *args: str) -> str:
+    if TRUSTED_GIT is None:
+        raise LaunchError("trusted system Git is unavailable")
     try:
         result = subprocess.run(
-            ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+            [TRUSTED_GIT, *args], cwd=cwd, check=True, capture_output=True, text=True
         )
     except (OSError, subprocess.CalledProcessError) as exc:
         raise LaunchError(f"git observation failed for {' '.join(args)}") from exc
@@ -295,12 +317,24 @@ def _git(cwd: Path, *args: str) -> str:
 
 
 def _validate_descriptor_contract(descriptor: dict[str, Any], config_root: Path) -> None:
+    if TRUSTED_BASH is None:
+        raise LaunchError("trusted system Bash is unavailable")
     issuer = SCRIPT_DIR / "dev_session.sh"
     _read_stable_regular_file(issuer)
     try:
         result = subprocess.run(
-            ["bash", str(issuer), "print-contract"],
+            [TRUSTED_BASH, str(issuer), "print-contract"],
             cwd=config_root,
+            env={
+                **{
+                    key: value
+                    for key, value in os.environ.items()
+                    if not key.startswith("DEVKIT_")
+                    and not _is_repository_override_key(key)
+                    and key != "PATH"
+                },
+                "PATH": SAFE_EXECUTABLE_PATH,
+            },
             check=True,
             capture_output=True,
             text=True,
@@ -576,6 +610,7 @@ def _scrubbed_environment(descriptor: dict[str, Any]) -> dict[str, str]:
         if not key.startswith("DEVKIT_") and not _is_repository_override_key(key)
     }
     environment.update(descriptor["env"])
+    environment["PATH"] = SAFE_EXECUTABLE_PATH
     environment["PWD"] = descriptor["worktree"]
     return environment
 
@@ -968,7 +1003,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         return 0
     except (LaunchError, OSError) as exc:
         returncode: int | None = process.poll() if process is not None else None
-        if process is not None and returncode is None:
+        if process is not None and _process_group_exists(process.pid):
             try:
                 returncode = _terminate_process_group(process, termination_grace)
             except LaunchError as termination_error:
@@ -976,13 +1011,13 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         _terminal_receipt(
             receipt_path,
             attempt,
-            status="failed",
+            status="interrupted" if caught else "failed",
             returncode=returncode,
             caught_signal=caught[0] if caught else None,
             final_message=final_message,
-            error=str(exc),
+            error="launcher interrupted" if caught else str(exc),
         )
-        return 70
+        return 128 + caught[0] if caught else 70
     finally:
         if process is not None:
             with contextlib.suppress(OSError):

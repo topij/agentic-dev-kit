@@ -39,7 +39,7 @@ block it:
    `prompt_preamble` is the canonical lane-contract text
    below — the launcher **MUST** prepend it verbatim to the lane's task prompt. `env`
    carries lane-specific `DEVKIT_STATE_ROOT`, `DEVKIT_ROOT`, and
-   `DEVKIT_REFUSE_UNSANDBOXED_STATE=1`. An issuer-created authority object binds the
+   `DEVKIT_REFUSE_UNSANDBOXED_STATE=1`. A separately persisted rewrite seal binds the
    exact descriptor digest and id, and the launcher cross-binds this environment map to
    the descriptor repository, state root, and refusal identity. The launcher **MUST replace inherited values
    with this map**: the resolver gives an explicit env root precedence over the marker,
@@ -51,7 +51,8 @@ block it:
 
    The supported wrapper removes every inherited `DEVKIT_*` key, plus `GH_REPO`, Git
    repository override variables (including injected `GIT_CONFIG` / `GIT_CONFIG_*`
-   entries), `PWD`, and `OLDPWD`; then it assigns every key from
+   entries), caller `PATH`, `PWD`, and `OLDPWD`; then it installs the engine-owned
+   trusted executable path and assigns every key from
    `env` unconditionally and seeds `PWD` from the descriptor worktree. The child then
    resolves its physical cwd independently and rejects disagreement with that seeded
    value. Do not use `setdefault`, skip a key because it is already present, or rely
@@ -96,7 +97,7 @@ adapter or fixture.
 
 The wrapper is the supported mechanism because it owns the guarantees a native agent
 dispatch or direct `codex exec` call does not: worktree `cwd`, inherited-identity
-removal, descriptor environment replacement, issuer-created descriptor authority,
+removal, trusted executable lookup, descriptor environment replacement and rewrite seal,
 session-scoped one-shot attempt and final-path authority, and a fork-only child observer
 with no public direct entry that reads Git fetch/push origin identity, the marker,
 persisted lane metadata, filesystem relationships, a freshly derived canonical prompt
@@ -105,17 +106,24 @@ directory, binds the exact descriptor/task/combined-prompt bytes, and returns su
 only after the Codex command exits successfully and a durable terminal receipt binds
 the final-message bytes by digest.
 
-The descriptor, issuer authority, and receipt fail closed on expiry, byte rewrite, or
-reuse; a moved descriptor; a descriptor environment that disagrees with its repository,
+The descriptor, rewrite seal, and receipt fail closed on expiry, descriptor-only byte
+rewrite, or reuse; a moved descriptor; a descriptor environment that disagrees with its repository,
 state root, or refusal identity; a substituted id or issue window; a
 foreign repository, worktree, origin fetch/push identity, scope, state root, branch,
-base, commit, prompt contract, or merge class; an occupied evidence path; a child
+base, commit, prompt contract, or merge class; an occupied attempt or final-message
+path; a child
 process that does not hold the current launch capability; a child leader that exits
 while its process group remains; interruption; missing observation; nonzero child exit;
 or missing final text. A parent killed before
 it can finalize leaves the exclusive attempt record, so retry cannot silently reuse
 the descriptor. Issue a fresh lane descriptor only after accounting for the partial
 lane and attempt.
+
+The rewrite seal detects corruption or replacement of the supplied descriptor while
+kit-owned session evidence remains intact. It is not a security boundary against a
+process already controlling the same OS account and able to replace the seal, metadata,
+engine, worktree, or receipt together; that stronger signer/broker problem is outside
+this local mechanism.
 
 Do not hand this descriptor to native in-session agent dispatch, a desktop task,
 Codex cloud, or direct `codex exec`: those surfaces do not apply this complete local
