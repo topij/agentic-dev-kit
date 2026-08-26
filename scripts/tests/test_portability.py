@@ -2535,6 +2535,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         "test-state-recovery": (
             "preserve-test-evidence-never-touch-live-or-external-state",
         ),
+        "test-gate-recovery": (
+            "publish-test-intent-before-gate-quarantine-never-touch-live",
+        ),
         "partial-engine-set": ("stop-never-mix-engine-and-llm-artifacts",),
         "unattended-without-notification": ("stop-before-new-approval-session",),
         "tracker-without-exact-payload-approval": (
@@ -2579,12 +2582,17 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert list(precedence) == [
         "required-or-safety-failure",
         "gate-only-recovery-held",
+        "test-gate-recovery-held",
         "approval-or-triggered-write-not-terminal",
         "optional-degradation-after-terminal-work",
         "all-triggered-contracts-terminal",
     ]
     assert precedence["gate-only-recovery-held"] == (
         "A valid gate-only-recovery-intent or gate-only-operator-held receipt exists.",
+        "operator-held",
+    )
+    assert precedence["test-gate-recovery-held"] == (
+        "A valid test-gate-recovery-intent exists and cannot be resumed interactively.",
         "operator-held",
     )
     inputs = _integration_table(workflow, "Semantic input matrix", 2)
@@ -2603,10 +2611,14 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Non-recover live invocation with a gate-only intent",
         "Any live invocation with a gate-only held receipt",
         "Scheduled or unattended recover",
-        "test, no test state",
+        "test, no test state, test gate, or test recovery receipt",
         "test, valid test state",
+        "test, test-recovered-safe-to-restart receipt",
+        "Interactive test, blocking test gate without test state or intent",
+        "Interactive test, test-gate-recovery-intent present",
         "Interactive test, invalid test state",
         "Scheduled or unattended test, invalid test state",
+        "Scheduled or unattended test, blocking test gate or test-gate intent",
         "Scheduled or unattended non-recovery invocation with active state",
         "Both configured engines present",
         "Both configured engines absent",
@@ -2657,7 +2669,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Scheduled or unattended recover"
     ][0]
     assert "never read, replace, or resume live state" in inputs[
-        "test, no test state"
+        "test, no test state, test gate, or test recovery receipt"
     ][0]
     assert "never read, replace, or resume live state" in inputs[
         "test, valid test state"
@@ -2665,8 +2677,20 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert "test-recovered-safe-to-restart" in inputs[
         "Interactive test, invalid test state"
     ][0]
+    assert "digest-check and replace only that receipt" in inputs[
+        "test, test-recovered-safe-to-restart receipt"
+    ][0]
+    assert "test-gate-recovery-intent" in inputs[
+        "Interactive test, blocking test gate without test state or intent"
+    ][0]
+    assert "Resume only the recorded test-gate transition" in inputs[
+        "Interactive test, test-gate-recovery-intent present"
+    ][0]
     assert "without changing test or live artifacts" in inputs[
         "Scheduled or unattended test, invalid test state"
+    ][0]
+    assert "without changing test or live artifacts" in inputs[
+        "Scheduled or unattended test, blocking test gate or test-gate intent"
     ][0]
     gate_only_inputs = _integration_table(workflow, "Gate-only input precedence", 4)
     assert gate_only_inputs == {
@@ -2776,7 +2800,10 @@ def _assert_triage_semantics(workflow: str) -> None:
         "never make `new` available by manual deletion",
         "The `test` entry resolves only the test state, test gate, and test artifacts",
         "write `test-recovered-safe-to-restart` under the same test gate",
+        "successfully parsing the current inbox under the test gate",
         "The transition never reads or writes live state",
+        "flush `test-gate-recovery-intent` while the old test gate still exists",
+        "Quarantine the old test gate only after the intent is durable",
         "body_without_marker",
         "hash it separately as `payload_digest`",
         "without attempting to hash a digest into itself",
@@ -2944,6 +2971,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
+            "publish-test-intent-before-gate-quarantine-never-touch-live",
+            "quarantine-test-gate-before-publishing-intent",
+            1,
+        ),
+        workflow.replace(
             "| No argument, valid active state | Resume the recorded phase and mode. |",
             "| No argument, valid active state | Start a new live draft and replace the active session. |",
             1,
@@ -2966,6 +2998,16 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "Start a test draft with test identity and test state; never read, replace, or resume live state.",
             "Use live identity and live state; replace or resume live state.",
+            1,
+        ),
+        workflow.replace(
+            "Under the test gate, verify the receipt and bundle, parse the current inbox, then digest-check and replace only that receipt with the reserved new test state.",
+            "Treat the test recovery receipt as invalid state and quarantine it again.",
+            1,
+        ),
+        workflow.replace(
+            "exclusively create\nand flush `test-gate-recovery-intent` while the old test gate still exists",
+            "quarantine the old test gate before creating test recovery intent",
             1,
         ),
         workflow.replace(

@@ -97,10 +97,14 @@ intent or held receipt.
 | Non-recover live invocation with a gate-only intent | Preserve the intent and bundle; report operator-held and never start, resume, or reconstruct a draft automatically. |
 | Any live invocation with a gate-only held receipt | Preserve the receipt, quarantined gate, and bundle; report operator-held and never start, resume, or reconstruct a draft automatically. |
 | Scheduled or unattended `recover` | Report operator-held without acquiring the single-writer gate, capturing state, or changing an artifact. |
-| `test`, no test state | Start a test draft with test identity and test state; never read, replace, or resume live state. |
+| `test`, no test state, test gate, or test recovery receipt | Start a test draft with test identity and test state; never read, replace, or resume live state. |
 | `test`, valid test state | Resume only that test state; never read, replace, or resume live state. |
+| `test`, `test-recovered-safe-to-restart` receipt | Under the test gate, verify the receipt and bundle, parse the current inbox, then digest-check and replace only that receipt with the reserved new test state. Preserve the receipt if parsing or replacement fails. |
+| Interactive `test`, blocking test gate without test state or intent | Capture the complete test gate, prove owner termination, require exact approval, and publish `test-gate-recovery-intent` before quarantining the unchanged gate. |
+| Interactive `test`, `test-gate-recovery-intent` present | Resume only the recorded test-gate transition and finish `test-recovered-safe-to-restart`; never select a live path. |
 | Interactive `test`, invalid test state | Under the test gate, capture and preserve the exact test-state evidence, require exact operator approval of its digest, revalidate before quarantine, and write `test-recovered-safe-to-restart`; prohibit live-state and external writes. |
 | Scheduled or unattended `test`, invalid test state | Report operator-held without changing test or live artifacts. |
+| Scheduled or unattended `test`, blocking test gate or test-gate intent | Report operator-held without changing test or live artifacts. |
 | Scheduled or unattended non-recovery invocation with active state | Resume or report operator-held; never start another draft. |
 | Both configured engines present | Select engine-backed mode and persist it. |
 | Both configured engines absent | Select LLM-only mode and label its work agent-executed. |
@@ -165,6 +169,7 @@ conditional capability ready before its trigger.
 | `protected-branch-advance` | `allow-fast-forward-preserve-draft-identity-hold-divergence` |
 | `gate-only-recovery` | `preserve-evidence-publish-intent-before-quarantine-remain-operator-held` |
 | `test-state-recovery` | `preserve-test-evidence-never-touch-live-or-external-state` |
+| `test-gate-recovery` | `publish-test-intent-before-gate-quarantine-never-touch-live` |
 | `partial-engine-set` | `stop-never-mix-engine-and-llm-artifacts` |
 | `unattended-without-notification` | `stop-before-new-approval-session` |
 | `tracker-without-exact-payload-approval` | `prohibit-create-update-comment` |
@@ -212,7 +217,8 @@ without state. After successful parsing, a new run claims the absent state path 
 exclusive creation of a minimal `reserved` record while still holding the gate; it never
 publishes its first state by replacement over an expected absence. The only non-absent
 new-run claim is a digest-checked replacement of an exact
-`recovered-safe-to-restart` receipt whose recovery bundle remains present. Every later
+`recovered-safe-to-restart` or `test-recovered-safe-to-restart` receipt whose recovery
+bundle remains present. Every later
 transition reads the current bytes under the gate and records their digest, then
 immediately before atomic replacement requires the same digest, run identity, and gate
 owner token. A mismatch stops operator-held without replacing either version.
@@ -246,6 +252,7 @@ Select the first matching row and report exactly one overall outcome.
 |---|---|---|
 | `required-or-safety-failure` | A required preflight/state/safety check failed before a disputed action, or shared/runtime policy conflicts. | `hard-stop` |
 | `gate-only-recovery-held` | A valid `gate-only-recovery-intent` or `gate-only-operator-held` receipt exists. | `operator-held` |
+| `test-gate-recovery-held` | A valid `test-gate-recovery-intent` exists and cannot be resumed interactively. | `operator-held` |
 | `approval-or-triggered-write-not-terminal` | Approval is pending or a triggered notification, tracker, repository, or review path lacks an authoritative terminal state. | `operator-held` |
 | `optional-degradation-after-terminal-work` | Required and triggered work is terminal, but an optional interactive notification or compute enhancement degraded. | `degraded-success` |
 | `all-triggered-contracts-terminal` | No prior row matches and every triggered capability is terminal. | `successful-completion` |
@@ -347,11 +354,19 @@ of the bundle digest, then immediately re-read and re-stat the test state and re
 the captured digest, device, inode, mode, and link count. Atomically quarantine only
 that unchanged test-state file and write `test-recovered-safe-to-restart` under the
 same test gate. A later `test` invocation may digest-check and replace only that receipt
-to start a new test draft. The transition never reads or writes live state, notification
+after successfully parsing the current inbox under the test gate; a parse or act-time
+digest failure preserves the receipt. The transition never reads or writes live state, notification
 approval, tracker, source documents, archive, branch, commit, push, PR, or merge.
 Unknown test-gate ownership remains operator-held under the same capture, owner-death,
-and exact-approval rule, confined to test paths. Scheduled or unattended `test` with
-invalid state preserves everything operator-held and performs no recovery mutation.
+and exact-approval rule, confined to test paths. When the owner is proven dead and test
+state is absent, capture that absence in the test recovery bundle, exclusively create
+and flush `test-gate-recovery-intent` while the old test gate still exists, then follow
+the Gate-only recovery transition ordering with test-confined paths. Quarantine the old
+test gate only after the intent is durable; finish by replacing the intent with
+`test-recovered-safe-to-restart` under the replacement test gate. A later interactive
+`test` resumes only that recorded intent. Scheduled or unattended `test` with invalid
+state, a blocking gate, or recovery intent preserves everything operator-held and
+performs no recovery mutation.
 
 Classify execution as interactive or scheduled/unattended from the actual invocation,
 not a branch name or worktree path. Non-interactive runs never wait for input. A
