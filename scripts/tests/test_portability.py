@@ -3318,6 +3318,90 @@ def _assert_triage_semantics(workflow: str) -> None:
             value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
         ).encode("utf-8")
 
+    gate_owner_fields = {
+        "token",
+        "run_identity",
+        "host",
+        "process_id",
+        "process_start_observation",
+        "creation_time",
+    }
+    gate_stat_fields = {
+        "path",
+        "device",
+        "inode",
+        "mode",
+        "link_count",
+        "size",
+        "modification_time_ns",
+    }
+
+    def complete_gate_capture_valid(capture: object) -> bool:
+        if not isinstance(capture, dict):
+            return False
+        gate_bytes = capture.get("bytes")
+        owner = capture.get("owner")
+        observations = capture.get("observations")
+        same_inode_names = capture.get("same_inode_names")
+        if (
+            not isinstance(gate_bytes, str)
+            or not isinstance(owner, dict)
+            or set(owner) != gate_owner_fields
+            or not isinstance(observations, dict)
+            or set(observations) != gate_stat_fields
+            or not isinstance(same_inode_names, list)
+        ):
+            return False
+        try:
+            decoded_owner = json.loads(gate_bytes)
+        except json.JSONDecodeError:
+            return False
+        if owner != decoded_owner or capture.get("digest") != hashlib.sha256(
+            gate_bytes.encode("utf-8")
+        ).hexdigest():
+            return False
+        if observations.get("link_count") != len(same_inode_names):
+            return False
+        paths: list[str] = []
+        invariant_fields = gate_stat_fields - {"path"}
+        for name in same_inode_names:
+            if not isinstance(name, dict) or set(name) != gate_stat_fields:
+                return False
+            path = name.get("path")
+            if not isinstance(path, str) or not path:
+                return False
+            paths.append(path)
+            if any(name.get(field) != observations.get(field) for field in invariant_fields):
+                return False
+        return len(paths) == len(set(paths)) and observations in same_inode_names
+
+    def quarantine_gate_capture(capture: dict[str, object]) -> dict[str, object]:
+        names = capture["same_inode_names"]
+        assert isinstance(names, list)
+        quarantined_names = [
+            {
+                **name,
+                "source_path": name["path"],
+                "path": f"state/quarantine/gates/{index}-{Path(name['path']).name}",
+            }
+            for index, name in enumerate(names)
+        ]
+        return {
+            "old_gate_digest": capture["digest"],
+            "old_gate_capture_digest": hashlib.sha256(
+                canonical_json_bytes(capture)
+            ).hexdigest(),
+            "quarantined_names": quarantined_names,
+        }
+
+    def gate_quarantine_valid(
+        evidence: object, capture: dict[str, object]
+    ) -> bool:
+        if not isinstance(evidence, dict):
+            return False
+        expected = quarantine_gate_capture(capture)
+        return evidence == expected
+
     triage_config = yaml.safe_load(
         (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
     )["triage"]
@@ -3381,6 +3465,22 @@ def _assert_triage_semantics(workflow: str) -> None:
     intended_intent_digest = hashlib.sha256(
         canonical_json_bytes(intended_intent)
     ).hexdigest()
+    intended_intent_bytes = canonical_json_bytes(intended_intent)
+    durable_intent_artifact = {
+        "path": "state/triage-test.json",
+        "bytes": intended_intent_bytes.decode("utf-8"),
+        "digest": hashlib.sha256(intended_intent_bytes).hexdigest(),
+        "observations": {
+            "path": "state/triage-test.json",
+            "device": 7,
+            "inode": 29,
+            "mode": 0o100600,
+            "link_count": 1,
+            "size": len(intended_intent_bytes),
+            "modification_time_ns": 765432,
+        },
+    }
+    old_gate_quarantine = quarantine_gate_capture(old_gate_capture)
     prepared_bundle = {
         "kind": "test-gate-only-prepared",
         "prepared_core": prepared_core,
@@ -3403,6 +3503,8 @@ def _assert_triage_semantics(workflow: str) -> None:
         observed_gate: dict[str, object] | None = old_gate_capture,
         observed_bundle_path: str = intent_fields["bundle_path"],
         durable_intent: dict[str, object] | None = None,
+        gate_quarantine: dict[str, object] | None = None,
+        replacement_gate: dict[str, object] | None = None,
     ) -> bool:
         core = bundle.get("prepared_core")
         approval = bundle.get("approval")
@@ -3419,41 +3521,30 @@ def _assert_triage_semantics(workflow: str) -> None:
             return False
         if observed_gate is not None and embedded_gate != observed_gate:
             return False
-        if observed_gate is None and durable_intent != intent:
+        if observed_gate is None:
+            if not isinstance(durable_intent, dict):
+                return False
+            durable_bytes = durable_intent.get("bytes")
+            durable_observations = durable_intent.get("observations")
+            if (
+                not isinstance(durable_bytes, str)
+                or durable_bytes.encode("utf-8") != canonical_json_bytes(intent)
+                or durable_intent.get("digest")
+                != hashlib.sha256(durable_bytes.encode("utf-8")).hexdigest()
+                or not isinstance(durable_observations, dict)
+                or durable_intent.get("path") != durable_observations.get("path")
+                or durable_observations.get("size") != len(durable_bytes.encode("utf-8"))
+                or not gate_quarantine_valid(gate_quarantine, embedded_gate)
+            ):
+                return False
+            if replacement_gate is not None and not complete_gate_capture_valid(
+                replacement_gate
+            ):
+                return False
+        if not complete_gate_capture_valid(embedded_gate):
             return False
         embedded_gate_bytes = embedded_gate.get("bytes")
         if not isinstance(embedded_gate_bytes, str):
-            return False
-        try:
-            decoded_owner = json.loads(embedded_gate_bytes)
-        except json.JSONDecodeError:
-            return False
-        owner = embedded_gate.get("owner")
-        gate_observations = embedded_gate.get("observations")
-        same_inode_names = embedded_gate.get("same_inode_names")
-        required_owner_fields = {
-            "token",
-            "run_identity",
-            "host",
-            "process_id",
-            "process_start_observation",
-            "creation_time",
-        }
-        if (
-            not isinstance(owner, dict)
-            or set(owner) != required_owner_fields
-            or owner != decoded_owner
-            or not isinstance(gate_observations, dict)
-            or not isinstance(same_inode_names, list)
-            or gate_observations not in same_inode_names
-            or gate_observations.get("link_count") != len(same_inode_names)
-            or any(
-                not isinstance(name, dict)
-                or name.get("device") != gate_observations.get("device")
-                or name.get("inode") != gate_observations.get("inode")
-                for name in same_inode_names
-            )
-        ):
             return False
         gate_digest = hashlib.sha256(embedded_gate_bytes.encode("utf-8")).hexdigest()
         mode = core_intent_fields.get("mode")
@@ -3497,7 +3588,33 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert gate_only_bundle_valid(
         prepared_bundle,
         observed_gate=None,
-        durable_intent=intended_intent,
+        durable_intent=durable_intent_artifact,
+        gate_quarantine=old_gate_quarantine,
+    )
+    semantic_equal_intent_bytes = json.dumps(
+        intended_intent, ensure_ascii=False, sort_keys=True
+    ).encode("utf-8")
+    semantic_equal_intent_artifact = {
+        **durable_intent_artifact,
+        "bytes": semantic_equal_intent_bytes.decode("utf-8"),
+        "digest": hashlib.sha256(semantic_equal_intent_bytes).hexdigest(),
+        "observations": {
+            **durable_intent_artifact["observations"],
+            "size": len(semantic_equal_intent_bytes),
+        },
+    }
+    assert json.loads(semantic_equal_intent_bytes) == intended_intent
+    assert not gate_only_bundle_valid(
+        prepared_bundle,
+        observed_gate=None,
+        durable_intent=semantic_equal_intent_artifact,
+        gate_quarantine=old_gate_quarantine,
+    )
+    assert not gate_only_bundle_valid(
+        prepared_bundle,
+        observed_gate=None,
+        durable_intent=durable_intent_artifact,
+        gate_quarantine=None,
     )
     assert prepared_bundle["prepared_core_digest"] == hashlib.sha256(
         canonical_json_bytes(prepared_bundle["prepared_core"])
@@ -3633,6 +3750,43 @@ def _assert_triage_semantics(workflow: str) -> None:
             missing_inode_name_capture, intent_fields["bundle_path"]
         )
     )
+    duplicate_inode_name_capture = {
+        **old_gate_capture,
+        "same_inode_names": [old_gate_observations, old_gate_observations],
+    }
+    assert not gate_only_bundle_valid(
+        rebuild_gate_only_bundle(
+            duplicate_inode_name_capture, intent_fields["bundle_path"]
+        )
+    )
+    incomplete_inode_name = {**old_gate_inode_names[1]}
+    incomplete_inode_name.pop("modification_time_ns")
+    incomplete_inode_name_capture = {
+        **old_gate_capture,
+        "same_inode_names": [old_gate_inode_names[0], incomplete_inode_name],
+    }
+    assert not gate_only_bundle_valid(
+        rebuild_gate_only_bundle(
+            incomplete_inode_name_capture, intent_fields["bundle_path"]
+        )
+    )
+    for changed_stat, changed_value in (
+        ("mode", 0o100644),
+        ("size", len(old_gate_bytes) + 1),
+        ("modification_time_ns", 654323),
+    ):
+        changed_name_capture = {
+            **old_gate_capture,
+            "same_inode_names": [
+                old_gate_inode_names[0],
+                {**old_gate_inode_names[1], changed_stat: changed_value},
+            ],
+        }
+        assert not gate_only_bundle_valid(
+            rebuild_gate_only_bundle(
+                changed_name_capture, intent_fields["bundle_path"]
+            )
+        )
     foreign_inode_name_capture = {
         **old_gate_capture,
         "same_inode_names": [
@@ -3678,7 +3832,75 @@ def _assert_triage_semantics(workflow: str) -> None:
             "Held receipt durable; release only the matching new recovery gate.",
         ),
     }
-    replacement_gate_digest = hashlib.sha256(b"replacement-gate-bytes").hexdigest()
+    replacement_gate_owner = {
+        **old_gate_owner,
+        "token": "replacement-owner",
+        "run_identity": "replacement-recovery-run",
+        "process_id": 31416,
+        "process_start_observation": "replacement-process-start-token",
+        "creation_time": "2026-08-26T00:01:00Z",
+    }
+    replacement_gate_bytes = canonical_json_bytes(replacement_gate_owner) + b"\n"
+    replacement_gate_digest = hashlib.sha256(replacement_gate_bytes).hexdigest()
+    replacement_gate_observations = {
+        **old_gate_observations,
+        "inode": 20,
+        "link_count": 1,
+        "size": len(replacement_gate_bytes),
+        "modification_time_ns": 654322,
+    }
+    replacement_gate_capture = {
+        "bytes": replacement_gate_bytes.decode("utf-8"),
+        "digest": replacement_gate_digest,
+        "owner": replacement_gate_owner,
+        "observations": replacement_gate_observations,
+        "same_inode_names": [replacement_gate_observations],
+    }
+    gate_only_held_payload = {
+        "kind": "gate-only-operator-held",
+        "prepared_core_digest": prepared_core_digest,
+        "old_gate_digest": old_gate_digest,
+        "bundle_path": intent_fields["bundle_path"],
+        "quarantine_paths": [
+            name["path"] for name in old_gate_quarantine["quarantined_names"]
+        ],
+        "new_gate_digest": replacement_gate_digest,
+        "new_gate_owner_token": replacement_gate_owner["token"],
+    }
+    gate_only_held_bytes = canonical_json_bytes(gate_only_held_payload)
+    gate_only_held_artifact = {
+        "path": durable_intent_artifact["path"],
+        "bytes": gate_only_held_bytes.decode("utf-8"),
+        "digest": hashlib.sha256(gate_only_held_bytes).hexdigest(),
+        "observations": {
+            **durable_intent_artifact["observations"],
+            "size": len(gate_only_held_bytes),
+            "modification_time_ns": 765433,
+        },
+    }
+
+    def gate_only_held_valid() -> bool:
+        held_bytes = gate_only_held_artifact["bytes"]
+        return (
+            isinstance(held_bytes, str)
+            and gate_only_bundle_valid(
+                prepared_bundle,
+                observed_gate=None,
+                durable_intent=durable_intent_artifact,
+                gate_quarantine=old_gate_quarantine,
+                replacement_gate=replacement_gate_capture,
+            )
+            and held_bytes.encode("utf-8")
+            == canonical_json_bytes(gate_only_held_payload)
+            and gate_only_held_artifact["digest"]
+            == hashlib.sha256(held_bytes.encode("utf-8")).hexdigest()
+            and gate_only_held_payload["quarantine_paths"]
+            == [name["path"] for name in old_gate_quarantine["quarantined_names"]]
+            and gate_only_held_payload["new_gate_owner_token"]
+            == replacement_gate_capture["owner"]["token"]
+            and gate_only_held_payload["new_gate_digest"]
+            == replacement_gate_capture["digest"]
+        )
     current_gate_digest: str | None = old_gate_digest
     bundle_gate_digest: str | None = None
     intent_bundle_gate_digest: str | None = None
@@ -3715,7 +3937,8 @@ def _assert_triage_semantics(workflow: str) -> None:
             assert gate_only_bundle_valid(
                 prepared_bundle,
                 observed_gate=None,
-                durable_intent=intended_intent,
+                durable_intent=durable_intent_artifact,
+                gate_quarantine=old_gate_quarantine,
             )
             assert matching_test_routes(
                 "interactive",
@@ -3732,7 +3955,9 @@ def _assert_triage_semantics(workflow: str) -> None:
             assert gate_only_bundle_valid(
                 prepared_bundle,
                 observed_gate=None,
-                durable_intent=intended_intent,
+                durable_intent=durable_intent_artifact,
+                gate_quarantine=old_gate_quarantine,
+                replacement_gate=replacement_gate_capture,
             )
             assert matching_test_routes(
                 "interactive",
@@ -3746,11 +3971,13 @@ def _assert_triage_semantics(workflow: str) -> None:
             assert current_gate_digest == replacement_gate_digest
             assert state_kind == "intent"
             assert intent_bundle_gate_digest == old_gate_digest
+            assert gate_only_held_valid()
             state_kind = "held"
             crash_routes.append("held-any-live-entry-with-replacement-gate")
         elif step == "release-recovery-gate":
             assert current_gate_digest == replacement_gate_digest
             assert state_kind == "held"
+            assert gate_only_held_valid()
             current_gate_digest = None
             crash_routes.append("held-any-live-entry-without-gate")
         if state_kind == "intent":
@@ -3804,7 +4031,25 @@ def _assert_triage_semantics(workflow: str) -> None:
         encoded = capture.get("state_bytes_base64")
         assert isinstance(encoded, str)
         raw_bytes = base64.b64decode(encoded, validate=True)
+        assert base64.b64encode(raw_bytes).decode("ascii") == encoded
         assert hashlib.sha256(raw_bytes).hexdigest() == capture.get("state_digest")
+        return raw_bytes
+
+    def validated_state_bytes(value: object) -> bytes | None:
+        if not isinstance(value, dict) or value.get("state_bytes_encoding") != "base64":
+            return None
+        encoded = value.get("state_bytes_base64")
+        if not isinstance(encoded, str):
+            return None
+        try:
+            raw_bytes = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError):
+            return None
+        if (
+            base64.b64encode(raw_bytes).decode("ascii") != encoded
+            or hashlib.sha256(raw_bytes).hexdigest() != value.get("state_digest")
+        ):
+            return None
         return raw_bytes
 
     state_gate_observations = {
@@ -3823,6 +4068,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "observations": state_gate_observations,
         "same_inode_names": state_gate_inode_names,
     }
+    state_old_gate_quarantine = quarantine_gate_capture(state_old_gate_capture)
     bundle_path = recovery_bundle_pattern.format(
         mode="live", gate_digest=old_gate_digest
     )
@@ -3890,6 +4136,14 @@ def _assert_triage_semantics(workflow: str) -> None:
         "repository_identity": "repo-id",
     }
     assert decoded_state_bytes(capture_core) == captured_state
+    noncanonical_state = {
+        "state_bytes_encoding": "base64",
+        "state_bytes_base64": "/x==",
+        "state_digest": hashlib.sha256(b"\xff").hexdigest(),
+    }
+    assert base64.b64decode("/x==", validate=True) == b"\xff"
+    assert base64.b64encode(b"\xff").decode("ascii") == "/w=="
+    assert validated_state_bytes(noncanonical_state) is None
     capture_core_digest = hashlib.sha256(
         canonical_json_bytes(capture_core)
     ).hexdigest()
@@ -3965,6 +4219,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         artifact: dict[str, object],
         observed_gate: dict[str, object] | None = state_old_gate_capture,
         observed_bundle_path: str = bundle_path,
+        quarantined_gate: dict[str, object] | None = None,
     ) -> str:
         kind = bundle.get("kind")
         if kind not in {"state-present-capture", "state-present-prepared"}:
@@ -3986,8 +4241,10 @@ def _assert_triage_semantics(workflow: str) -> None:
             embedded_state_bytes = base64.b64decode(encoded_state, validate=True)
         except (binascii.Error, ValueError):
             return "operator-held"
-        if hashlib.sha256(embedded_state_bytes).hexdigest() != embedded_capture.get(
-            "state_digest"
+        if (
+            base64.b64encode(embedded_state_bytes).decode("ascii") != encoded_state
+            or hashlib.sha256(embedded_state_bytes).hexdigest()
+            != embedded_capture.get("state_digest")
         ):
             return "operator-held"
         embedded_gate = embedded_capture.get("old_gate")
@@ -3997,39 +4254,14 @@ def _assert_triage_semantics(workflow: str) -> None:
             return "operator-held"
         if gate_status != "absent" and embedded_gate != observed_gate:
             return "operator-held"
+        if gate_status == "absent" and not gate_quarantine_valid(
+            quarantined_gate, embedded_gate
+        ):
+            return "operator-held"
+        if not complete_gate_capture_valid(embedded_gate):
+            return "operator-held"
         embedded_gate_bytes = embedded_gate.get("bytes")
         if not isinstance(embedded_gate_bytes, str):
-            return "operator-held"
-        try:
-            decoded_owner = json.loads(embedded_gate_bytes)
-        except json.JSONDecodeError:
-            return "operator-held"
-        owner = embedded_gate.get("owner")
-        gate_observations = embedded_gate.get("observations")
-        same_inode_names = embedded_gate.get("same_inode_names")
-        if (
-            not isinstance(owner, dict)
-            or set(owner)
-            != {
-                "token",
-                "run_identity",
-                "host",
-                "process_id",
-                "process_start_observation",
-                "creation_time",
-            }
-            or owner != decoded_owner
-            or not isinstance(gate_observations, dict)
-            or not isinstance(same_inode_names, list)
-            or gate_observations not in same_inode_names
-            or gate_observations.get("link_count") != len(same_inode_names)
-            or any(
-                not isinstance(name, dict)
-                or name.get("device") != gate_observations.get("device")
-                or name.get("inode") != gate_observations.get("inode")
-                for name in same_inode_names
-            )
-        ):
             return "operator-held"
         embedded_gate_digest = hashlib.sha256(
             embedded_gate_bytes.encode("utf-8")
@@ -4097,22 +4329,45 @@ def _assert_triage_semantics(workflow: str) -> None:
                 "proven-stale": "resume-valid-stale-gate-quarantine",
                 "absent": "ordinary-resume",
             }.get(gate_status, "operator-held")
-        if artifact == expected_current_artifact:
-            return "resume-state-quarantine"
-        if artifact == quarantine_artifact:
-            return "resume-receipt-publication"
-        if artifact == restart_receipt:
-            receipt_core = {
-                key: value
-                for key, value in artifact.items()
-                if key not in {"kind", "prepared_envelope_digest"}
+        expected_quarantine_artifact = action_core.get("quarantine_artifact")
+        expected_receipt_core = action_core.get("restart_receipt_core")
+        if (
+            not isinstance(expected_quarantine_artifact, dict)
+            or not isinstance(expected_receipt_core, dict)
+            or expected_receipt_core
+            != {
+                "mode": mode,
+                "old_gate_digest": embedded_gate_digest,
+                "bundle_path": expected_bundle_path,
+                "capture_core_digest": bundle.get("capture_core_digest"),
+                "quarantine_path": expected_quarantine_artifact.get("path"),
             }
-            if (
-                action_core.get("restart_receipt_core") != receipt_core
-                or artifact.get("prepared_envelope_digest")
-                != hashlib.sha256(canonical_json_bytes(bundle)).hexdigest()
-            ):
+            or validated_state_bytes(expected_quarantine_artifact)
+            != embedded_state_bytes
+        ):
+            return "operator-held"
+        if artifact == expected_current_artifact:
+            return (
+                "resume-state-quarantine"
+                if gate_status in {"owned", "proven-stale"}
+                else "operator-held"
+            )
+        if artifact == expected_quarantine_artifact:
+            if validated_state_bytes(artifact) != embedded_state_bytes:
                 return "operator-held"
+            return (
+                "resume-receipt-publication"
+                if gate_status in {"owned", "proven-stale"}
+                else "operator-held"
+            )
+        expected_receipt = {
+            "kind": "recovered-safe-to-restart",
+            **expected_receipt_core,
+            "prepared_envelope_digest": hashlib.sha256(
+                canonical_json_bytes(bundle)
+            ).hexdigest(),
+        }
+        if artifact == expected_receipt:
             return {
                 "owned": "release-owned-gate",
                 "proven-stale": "quarantine-proven-stale-gate",
@@ -4127,7 +4382,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         valid_prepared, "proven-stale", valid_artifact
     ) == "resume-valid-stale-gate-quarantine"
     assert state_present_route(
-        valid_prepared, "absent", valid_artifact, observed_gate=None
+        valid_prepared,
+        "absent",
+        valid_artifact,
+        observed_gate=None,
+        quarantined_gate=state_old_gate_quarantine,
     ) == "ordinary-resume"
     assert state_present_route(
         invalid_prepared, "owned", current_artifact
@@ -4142,8 +4401,33 @@ def _assert_triage_semantics(workflow: str) -> None:
         invalid_prepared, "proven-stale", restart_receipt
     ) == "quarantine-proven-stale-gate"
     assert state_present_route(
-        invalid_prepared, "absent", restart_receipt, observed_gate=None
+        invalid_prepared,
+        "absent",
+        restart_receipt,
+        observed_gate=None,
+        quarantined_gate=state_old_gate_quarantine,
     ) == "restart-receipt-ready"
+    assert state_present_route(
+        invalid_prepared,
+        "absent",
+        current_artifact,
+        observed_gate=None,
+        quarantined_gate=state_old_gate_quarantine,
+    ) == "operator-held"
+    assert state_present_route(
+        invalid_prepared,
+        "absent",
+        quarantine_artifact,
+        observed_gate=None,
+        quarantined_gate=state_old_gate_quarantine,
+    ) == "operator-held"
+    assert state_present_route(
+        invalid_prepared,
+        "absent",
+        restart_receipt,
+        observed_gate=None,
+        quarantined_gate=None,
+    ) == "operator-held"
     for kind_mutation in ("foreign", None):
         changed_kind = {**invalid_prepared}
         if kind_mutation is None:
@@ -4308,6 +4592,75 @@ def _assert_triage_semantics(workflow: str) -> None:
         ),
         "proven-stale",
         current_artifact,
+    ) == "operator-held"
+    foreign_quarantine_artifact = {
+        **quarantine_artifact,
+        "path": "state/quarantine/foreign-triage-live.json",
+        "state_observations": {
+            **quarantine_artifact["state_observations"],
+            "path": "state/quarantine/foreign-triage-live.json",
+        },
+    }
+    foreign_receipt_core = {
+        **restart_receipt_core,
+        "quarantine_path": foreign_quarantine_artifact["path"],
+    }
+    foreign_quarantine_action = {
+        **invalid_action_core,
+        "quarantine_artifact": foreign_quarantine_artifact,
+        "restart_receipt_core": foreign_receipt_core,
+    }
+    foreign_quarantine_action_digest = hashlib.sha256(
+        canonical_json_bytes(foreign_quarantine_action)
+    ).hexdigest()
+    foreign_quarantine_bundle = {
+        **invalid_prepared,
+        "action_core": foreign_quarantine_action,
+        "action_core_digest": foreign_quarantine_action_digest,
+        "approval": {
+            "source": "current-session",
+            "approver_identity": "operator",
+            "decision": f"abandon action-core {foreign_quarantine_action_digest}",
+            "action_core_digest": foreign_quarantine_action_digest,
+        },
+    }
+    assert state_present_route(
+        foreign_quarantine_bundle, "proven-stale", quarantine_artifact
+    ) == "operator-held"
+    changed_quarantine_bytes = b"changed-quarantine-bytes"
+    changed_quarantine_artifact = {
+        **quarantine_artifact,
+        **encoded_state_fields(changed_quarantine_bytes),
+        "state_observations": {
+            **quarantine_artifact["state_observations"],
+            "size": len(changed_quarantine_bytes),
+        },
+    }
+    changed_bytes_receipt_core = {
+        **restart_receipt_core,
+        "quarantine_path": changed_quarantine_artifact["path"],
+    }
+    changed_bytes_action = {
+        **invalid_action_core,
+        "quarantine_artifact": changed_quarantine_artifact,
+        "restart_receipt_core": changed_bytes_receipt_core,
+    }
+    changed_bytes_action_digest = hashlib.sha256(
+        canonical_json_bytes(changed_bytes_action)
+    ).hexdigest()
+    changed_bytes_bundle = {
+        **invalid_prepared,
+        "action_core": changed_bytes_action,
+        "action_core_digest": changed_bytes_action_digest,
+        "approval": {
+            "source": "current-session",
+            "approver_identity": "operator",
+            "decision": f"abandon action-core {changed_bytes_action_digest}",
+            "action_core_digest": changed_bytes_action_digest,
+        },
+    }
+    assert state_present_route(
+        changed_bytes_bundle, "proven-stale", changed_quarantine_artifact
     ) == "operator-held"
     unknown_action = {**invalid_action_core, "action": "unknown-action"}
     unknown_action_digest = hashlib.sha256(

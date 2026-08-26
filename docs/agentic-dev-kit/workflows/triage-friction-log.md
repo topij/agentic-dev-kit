@@ -403,9 +403,12 @@ match the mode, recompute the old-gate digest from the captured gate bytes, matc
 complete captured gate and filesystem observations to the externally observed blocking
 gate, and derive the exact configured bundle path from that digest. After quarantine,
 the old gate is necessarily unavailable at its blocking path: validate the same bundle
-through the byte-identical durable intent, its prepared-core binding, the retained gate
-capture and locator, quarantine evidence, and any replacement-gate authority instead of
-inventing a live old-gate observation. A self-consistent foreign envelope is evidence,
+through the byte-identical canonical intent bytes and digest, its prepared-core binding,
+the retained gate capture and locator, every exact gate-quarantine identity, and any
+complete replacement-gate owner/token authority instead of inventing a live old-gate
+observation. Finalization constructs and validates the canonical held receipt that adds
+those quarantine paths and the replacement owner token before releasing that gate. A
+self-consistent foreign envelope is evidence,
 not resume authority. Then claim the absent state path by exclusive creation of
 that exact `gate-only-recovery-intent`, which binds the prepared-core digest, old gate
 owner record, old gate digest, exact configured bundle path, approved capture, absence
@@ -443,6 +446,8 @@ exact configured bundle path, and the complete held-gate bytes, owner record, di
 and filesystem observations. It also contains the path's device, inode, mode, link
 count, size, and modification time observed around
 the read; changed observations abort the capture and leave the active file untouched.
+Canonical means decoding with strict validation and re-encoding must reproduce the
+stored base64 text byte-for-byte; alternate pad bits are not equivalent capture bytes.
 A process stop after publication is resumable only by interactive `recover`: rederive
 the exact bundle from the unchanged blocking gate, validate its capture digest, and
 continue from the captured bytes. Other entries and unattended execution preserve it
@@ -461,7 +466,8 @@ Before selecting either transition, require the exact `state-present-capture` or
 configured bundle path. While the old gate exists, match the embedded complete gate
 capture to that externally observed blocking gate. At a declared post-quarantine
 cutpoint, require old-gate absence and validate only through the retained immutable
-capture plus the exact quarantine or receipt evidence; never fabricate an observation
+capture plus every exact old-gate quarantine identity and the action-derived quarantine
+or receipt evidence; never fabricate an observation
 of an absent gate. Missing or foreign kinds and self-consistent cross-gate bundles stop
 operator-held.
 For each report or frozen-snapshot path obtained from validated captured
@@ -493,6 +499,12 @@ adding `prepared_envelope_digest` to the approved receipt core; neither the rece
 nor action core contains that later digest, so the graph remains non-circular.
 Immediately before quarantine, re-read and re-stat the active path and require its
 digest, device, inode, mode, and link count to equal the captured observations.
+Derive the only acceptable quarantine read-back and restart receipt from the approved
+action core; a closure-local, reconstructed, or semantically similar artifact is not
+authority. Quarantining the current state and publishing its receipt require an owned
+or unchanged proven-stale gate. Old-gate absence is accepted only for ordinary resume
+after a valid-state gate quarantine or for an exact durable restart receipt after gate
+release, and both require the complete gate-quarantine evidence.
 Atomically rename that exact source to the prepared quarantine path. Create the receipt
 only after re-reading and re-statting the quarantine target. Its exact path, digest,
 device, inode, mode, link count, size, and modification time must equal the prepared
