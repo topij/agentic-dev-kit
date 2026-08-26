@@ -2702,7 +2702,10 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert "precedence over ordinary test-state rows" in inputs[
         "Interactive test, state-present test-gate recovery bundle"
     ][0]
-    assert "whether the old gate, no gate, or replacement gate is present" in inputs[
+    assert "old, absent, or replacement gate" in inputs[
+        "Interactive test, state-present test-gate recovery bundle"
+    ][0]
+    assert "already-durable operation intent" in inputs[
         "Interactive test, state-present test-gate recovery bundle"
     ][0]
     assert "without changing test or live artifacts" in inputs[
@@ -2787,74 +2790,187 @@ def _assert_triage_semantics(workflow: str) -> None:
         "capture-test-artifact-and-gate": (
             "Old test gate and test state or safe-restart receipt present; persist their exact bytes and filesystem observations, the complete gate, owner-death proof, artifact kind, and exact gate-recovery approval in a separate durable bundle.",
         ),
-        "quarantine-old-test-gate": (
-            "Bundle durable; revalidate both captured artifacts and quarantine only the unchanged old test gate. The state or receipt remains byte-identical and blocking.",
+        "prepare-old-test-gate-quarantine": (
+            "Old gate and test artifact still match; persist the unique quarantine destination and exact source observations as quarantine intent before rename.",
         ),
-        "acquire-replacement-test-gate": (
-            "Bundle and unchanged test artifact present; atomically acquire a complete replacement test gate and bind its owner token into the bundle.",
+        "apply-old-test-gate-quarantine": (
+            "Quarantine intent durable; rename only the recorded unchanged old gate and leave the bundle in quarantine-intent phase.",
         ),
-        "dispatch-recorded-test-artifact": (
-            "Replacement gate held; revalidate the recorded artifact and execute only its matching valid-state, invalid-state, or safe-restart-receipt row, retaining that row's separate approval and digest requirements.",
+        "confirm-old-test-gate-quarantine": (
+            "Quarantine intent still durable; accept either the exact source or exact destination, never both or neither, then persist the verified quarantine result.",
         ),
-        "finalize-test-gate-bundle": (
-            "The dispatched row has durable resumable state or a durable held result; atomically mark the bundle resolved, then release only the matching replacement gate.",
+        "prepare-replacement-test-gate": (
+            "Quarantine verified and test artifact unchanged; generate the complete owner record and persist its owner token, bytes/digest, unique candidate path, and absent target as candidate intent before creating the candidate.",
+        ),
+        "materialize-replacement-test-gate-candidate": (
+            "Candidate intent durable; exclusively create and flush only the recorded complete private candidate and leave the bundle in candidate-intent phase.",
+        ),
+        "confirm-replacement-test-gate-candidate": (
+            "Candidate intent still durable; require the private file to match the pre-bound path, bytes/digest, and owner token, then persist candidate verified and publication intent.",
+        ),
+        "publish-replacement-test-gate": (
+            "Publication intent durable; hard-link only the verified recorded candidate to the absent gate target and leave the bundle in publication-intent phase.",
+        ),
+        "confirm-replacement-test-gate": (
+            "Publication intent still durable; require the target to match the pre-bound candidate inode, bytes/digest, and owner token, then persist target verified with candidate still present.",
+        ),
+        "prepare-replacement-candidate-cleanup": (
+            "Target verified and candidate unchanged; persist the exact candidate unlink intent.",
+        ),
+        "unlink-replacement-test-gate-candidate": (
+            "Candidate-cleanup intent durable; unlink only the matching private candidate and leave the bundle in cleanup-intent phase.",
+        ),
+        "confirm-replacement-candidate-cleanup": (
+            "Cleanup intent still durable; accept only the exact candidate or its authorized absence, finish any required unlink, then persist replacement gate verified.",
+        ),
+        "prepare-recorded-test-artifact-operation": (
+            "Replacement gate verified; persist the exact artifact-specific next primitive, source and destination observations, prepared destination bytes/digest and candidate path, and separately exact action approval when required. Materialize any needed private candidate as its own recorded primitive in this repeated cycle. Valid-state resume records a no-mutation dispatch.",
+        ),
+        "apply-recorded-test-artifact-operation": (
+            "Artifact-operation intent durable; apply at most one recorded rename, link, or atomic replacement and leave the bundle in that intent phase.",
+        ),
+        "confirm-recorded-test-artifact-operation": (
+            "Artifact-operation intent still durable; reconcile only its exact before or after object, persist the result, and repeat the prepare/apply/confirm cycle for any remaining primitive. Invalid-state recovery separately records quarantine rename then safe-restart receipt publication; safe-restart separately records receipt-to-reserved-state replacement.",
+        ),
+        "mark-test-gate-bundle-resolved-held": (
+            "The artifact route has durable resumable state or a durable held result; persist resolved-gate-held with the exact replacement owner token before unlink.",
+        ),
+        "release-replacement-test-gate": (
+            "Resolved-gate-held durable; unlink only the matching replacement gate and leave the bundle in resolved-gate-held phase.",
+        ),
+        "confirm-replacement-test-gate-release": (
+            "Resolved-gate-held still durable; accept only the matching gate or its authorized absence, finish any required unlink, then persist resolved.",
         ),
     }
-    test_gate_order = list(test_gate_steps)
 
-    def advance_test_gate(
-        step: str,
-        artifact_kind: str,
-        gate_present: bool,
-        artifact_present: bool,
-        bundle_phase: str | None,
-    ) -> tuple[bool, bool, str]:
-        if step == "capture-test-artifact-and-gate":
-            assert gate_present and artifact_present and bundle_phase is None
-            bundle_phase = f"captured-{artifact_kind}"
-        elif step == "quarantine-old-test-gate":
-            assert gate_present and artifact_present
-            assert bundle_phase == f"captured-{artifact_kind}"
-            gate_present = False
-            bundle_phase = f"old-gate-quarantined-{artifact_kind}"
-        elif step == "acquire-replacement-test-gate":
-            assert not gate_present and artifact_present
-            assert bundle_phase == f"old-gate-quarantined-{artifact_kind}"
-            gate_present = True
-            bundle_phase = f"replacement-gate-{artifact_kind}"
-        elif step == "dispatch-recorded-test-artifact":
-            assert gate_present and artifact_present
-            assert bundle_phase == f"replacement-gate-{artifact_kind}"
-            bundle_phase = f"dispatched-{artifact_kind}"
-        elif step == "finalize-test-gate-bundle":
-            assert gate_present and artifact_present
-            assert bundle_phase == f"dispatched-{artifact_kind}"
-            bundle_phase = "resolved"
-            gate_present = False
-        return gate_present, artifact_present, bundle_phase
+    artifact_operations = {
+        "valid-state": ("resume-without-mutation",),
+        "invalid-state": ("quarantine-invalid-state", "publish-safe-restart"),
+        "safe-restart-receipt": ("replace-receipt-with-reserved-state",),
+    }
+    prefix = (
+        "capture-test-artifact-and-gate",
+        "prepare-old-test-gate-quarantine",
+        "apply-old-test-gate-quarantine",
+        "confirm-old-test-gate-quarantine",
+        "prepare-replacement-test-gate",
+        "materialize-replacement-test-gate-candidate",
+        "confirm-replacement-test-gate-candidate",
+        "publish-replacement-test-gate",
+        "confirm-replacement-test-gate",
+        "prepare-replacement-candidate-cleanup",
+        "unlink-replacement-test-gate-candidate",
+        "confirm-replacement-candidate-cleanup",
+    )
+    suffix = (
+        "mark-test-gate-bundle-resolved-held",
+        "release-replacement-test-gate",
+        "confirm-replacement-test-gate-release",
+    )
 
-    for artifact_kind in ("valid-state", "invalid-state", "safe-restart-receipt"):
-        for cut_after in range(len(test_gate_order) + 1):
-            test_gate_present = True
-            artifact_present = True
-            bundle_phase: str | None = None
-            for step in test_gate_order[:cut_after]:
-                test_gate_present, artifact_present, bundle_phase = advance_test_gate(
-                    step,
-                    artifact_kind,
-                    test_gate_present,
-                    artifact_present,
-                    bundle_phase,
+    for artifact_kind, operations in artifact_operations.items():
+        events: list[tuple[str, str | None]] = [(step, None) for step in prefix]
+        for operation in operations:
+            events.extend(
+                (step, operation)
+                for step in (
+                    "prepare-recorded-test-artifact-operation",
+                    "apply-recorded-test-artifact-operation",
+                    "confirm-recorded-test-artifact-operation",
                 )
-                assert artifact_present
-                assert test_gate_present or bundle_phase is not None
+            )
+        events.extend((step, None) for step in suffix)
 
-            resumed = (test_gate_present, artifact_present, bundle_phase)
-            for step in test_gate_order[cut_after:]:
-                resumed = advance_test_gate(step, artifact_kind, *resumed)
-                assert resumed[1]
-                assert resumed[0] or resumed[2] is not None
-            assert resumed == (False, True, "resolved")
+        for cut_after in range(len(events) + 1):
+            gate = "old"
+            artifact = artifact_kind
+            bundle: str | None = None
+            bound_token = False
+            candidate = False
+
+            def advance(
+                event: tuple[str, str | None],
+                state: tuple[str, str, str | None, bool, bool],
+            ) -> tuple[str, str, str | None, bool, bool]:
+                gate, artifact, bundle, bound_token, candidate = state
+                step, operation = event
+                if step == "capture-test-artifact-and-gate":
+                    assert gate == "old" and bundle is None
+                    bundle = "captured"
+                elif step == "prepare-old-test-gate-quarantine":
+                    assert gate == "old" and bundle == "captured"
+                    bundle = "old-quarantine-intent"
+                elif step == "apply-old-test-gate-quarantine":
+                    assert gate == "old" and bundle == "old-quarantine-intent"
+                    gate = "absent"
+                elif step == "confirm-old-test-gate-quarantine":
+                    assert gate == "absent" and bundle == "old-quarantine-intent"
+                    bundle = "old-quarantine-verified"
+                elif step == "prepare-replacement-test-gate":
+                    assert gate == "absent" and bundle == "old-quarantine-verified"
+                    bound_token = True
+                    bundle = "replacement-candidate-intent"
+                elif step == "materialize-replacement-test-gate-candidate":
+                    assert gate == "absent" and bundle == "replacement-candidate-intent"
+                    assert bound_token and not candidate
+                    candidate = True
+                elif step == "confirm-replacement-test-gate-candidate":
+                    assert gate == "absent" and bundle == "replacement-candidate-intent"
+                    assert bound_token and candidate
+                    bundle = "replacement-publication-intent"
+                elif step == "publish-replacement-test-gate":
+                    assert gate == "absent" and bundle == "replacement-publication-intent"
+                    assert bound_token and candidate
+                    gate = "replacement"
+                elif step == "confirm-replacement-test-gate":
+                    assert gate == "replacement" and bound_token and candidate
+                    assert bundle == "replacement-publication-intent"
+                    bundle = "replacement-target-verified"
+                elif step == "prepare-replacement-candidate-cleanup":
+                    assert gate == "replacement" and candidate
+                    assert bundle == "replacement-target-verified"
+                    bundle = "candidate-cleanup-intent"
+                elif step == "unlink-replacement-test-gate-candidate":
+                    assert gate == "replacement" and candidate
+                    assert bundle == "candidate-cleanup-intent"
+                    candidate = False
+                elif step == "confirm-replacement-candidate-cleanup":
+                    assert gate == "replacement" and not candidate
+                    assert bundle == "candidate-cleanup-intent"
+                    bundle = "replacement-verified"
+                elif step == "prepare-recorded-test-artifact-operation":
+                    assert gate == "replacement" and bound_token
+                    assert bundle in {"replacement-verified", "artifact-confirmed"}
+                    bundle = f"artifact-intent:{operation}"
+                elif step == "apply-recorded-test-artifact-operation":
+                    assert gate == "replacement"
+                    assert bundle == f"artifact-intent:{operation}"
+                    artifact = operation or artifact
+                elif step == "confirm-recorded-test-artifact-operation":
+                    assert gate == "replacement"
+                    assert bundle == f"artifact-intent:{operation}"
+                    bundle = "artifact-confirmed"
+                elif step == "mark-test-gate-bundle-resolved-held":
+                    assert gate == "replacement" and bundle == "artifact-confirmed"
+                    bundle = "resolved-gate-held"
+                elif step == "release-replacement-test-gate":
+                    assert gate == "replacement" and bundle == "resolved-gate-held"
+                    gate = "absent"
+                elif step == "confirm-replacement-test-gate-release":
+                    assert gate == "absent" and bundle == "resolved-gate-held"
+                    bundle = "resolved"
+                assert gate != "replacement" or bound_token
+                assert gate != "absent" or bundle is not None
+                return gate, artifact, bundle, bound_token, candidate
+
+            state = (gate, artifact, bundle, bound_token, candidate)
+            for event in events[:cut_after]:
+                state = advance(event, state)
+            resumed = state
+            for event in events[cut_after:]:
+                resumed = advance(event, resumed)
+            assert resumed[0] == "absent"
+            assert resumed[2:] == ("resolved", True, False)
     for required_phrase in (
         "kitconfig.load_config()",
         "RFC 8785 JSON",
@@ -3070,8 +3186,8 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
-            "Bundle durable; revalidate both captured artifacts and quarantine only the unchanged old test gate.",
-            "Quarantine the old test gate before preserving the state or receipt.",
+            "Old gate and test artifact still match; persist the unique quarantine destination and exact source observations as quarantine intent before rename.",
+            "Rename the old test gate before recording a quarantine intent.",
             1,
         ),
         workflow.replace(
