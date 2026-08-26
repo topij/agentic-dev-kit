@@ -1711,6 +1711,7 @@ def _integration_table(
             "Precedence id",
             "Input or state",
             "Gate-only step",
+            "Test-gate step",
             "Case id",
             "",
         }:
@@ -2536,7 +2537,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "preserve-test-evidence-never-touch-live-or-external-state",
         ),
         "test-gate-recovery": (
-            "publish-test-intent-before-gate-quarantine-never-touch-live",
+            "preserve-test-artifact-or-publish-intent-before-gate-quarantine-never-touch-live",
         ),
         "partial-engine-set": ("stop-never-mix-engine-and-llm-artifacts",),
         "unattended-without-notification": ("stop-before-new-approval-session",),
@@ -2592,7 +2593,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "operator-held",
     )
     assert precedence["test-gate-recovery-held"] == (
-        "A valid test-gate-recovery-intent exists and cannot be resumed interactively.",
+        "A valid test-gate-recovery-intent or state-present test-gate recovery bundle exists and cannot be resumed interactively.",
         "operator-held",
     )
     inputs = _integration_table(workflow, "Semantic input matrix", 2)
@@ -2612,11 +2613,15 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Any live invocation with a gate-only held receipt",
         "Scheduled or unattended recover",
         "test, no test state, test gate, or test recovery receipt",
-        "test, valid test state",
-        "test, test-recovered-safe-to-restart receipt",
+        "test, valid test state and no blocking test gate",
+        "test, test-recovered-safe-to-restart receipt and no blocking test gate",
         "Interactive test, blocking test gate without test state or intent",
         "Interactive test, test-gate-recovery-intent present",
-        "Interactive test, invalid test state",
+        "Interactive test, blocking test gate with valid test state",
+        "Interactive test, blocking test gate with invalid test state",
+        "Interactive test, blocking test gate with test-recovered-safe-to-restart receipt",
+        "Interactive test, state-present test-gate recovery bundle",
+        "Interactive test, invalid test state and no blocking test gate",
         "Scheduled or unattended test, invalid test state",
         "Scheduled or unattended test, blocking test gate or test-gate intent",
         "Scheduled or unattended non-recovery invocation with active state",
@@ -2672,19 +2677,33 @@ def _assert_triage_semantics(workflow: str) -> None:
         "test, no test state, test gate, or test recovery receipt"
     ][0]
     assert "never read, replace, or resume live state" in inputs[
-        "test, valid test state"
+        "test, valid test state and no blocking test gate"
     ][0]
     assert "test-recovered-safe-to-restart" in inputs[
-        "Interactive test, invalid test state"
+        "Interactive test, invalid test state and no blocking test gate"
     ][0]
     assert "digest-check and replace only that receipt" in inputs[
-        "test, test-recovered-safe-to-restart receipt"
+        "test, test-recovered-safe-to-restart receipt and no blocking test gate"
     ][0]
     assert "test-gate-recovery-intent" in inputs[
         "Interactive test, blocking test gate without test state or intent"
     ][0]
     assert "Resume only the recorded test-gate transition" in inputs[
         "Interactive test, test-gate-recovery-intent present"
+    ][0]
+    for artifact in (
+        "valid test state",
+        "invalid test state",
+        "test-recovered-safe-to-restart receipt",
+    ):
+        result = inputs[f"Interactive test, blocking test gate with {artifact}"][0]
+        assert "state-present test-gate recovery bundle" in result
+        assert "replacement gate" in result
+    assert "precedence over ordinary test-state rows" in inputs[
+        "Interactive test, state-present test-gate recovery bundle"
+    ][0]
+    assert "whether the old gate, no gate, or replacement gate is present" in inputs[
+        "Interactive test, state-present test-gate recovery bundle"
     ][0]
     assert "without changing test or live artifacts" in inputs[
         "Scheduled or unattended test, invalid test state"
@@ -2761,6 +2780,81 @@ def _assert_triage_semantics(workflow: str) -> None:
             gate_present = False
         assert gate_present or state_kind in {"intent", "held"}
     assert not gate_present and state_kind == "held"
+    test_gate_steps = _integration_table(
+        workflow, "State-present test-gate recovery transition", 2
+    )
+    assert test_gate_steps == {
+        "capture-test-artifact-and-gate": (
+            "Old test gate and test state or safe-restart receipt present; persist their exact bytes and filesystem observations, the complete gate, owner-death proof, artifact kind, and exact gate-recovery approval in a separate durable bundle.",
+        ),
+        "quarantine-old-test-gate": (
+            "Bundle durable; revalidate both captured artifacts and quarantine only the unchanged old test gate. The state or receipt remains byte-identical and blocking.",
+        ),
+        "acquire-replacement-test-gate": (
+            "Bundle and unchanged test artifact present; atomically acquire a complete replacement test gate and bind its owner token into the bundle.",
+        ),
+        "dispatch-recorded-test-artifact": (
+            "Replacement gate held; revalidate the recorded artifact and execute only its matching valid-state, invalid-state, or safe-restart-receipt row, retaining that row's separate approval and digest requirements.",
+        ),
+        "finalize-test-gate-bundle": (
+            "The dispatched row has durable resumable state or a durable held result; atomically mark the bundle resolved, then release only the matching replacement gate.",
+        ),
+    }
+    test_gate_order = list(test_gate_steps)
+
+    def advance_test_gate(
+        step: str,
+        artifact_kind: str,
+        gate_present: bool,
+        artifact_present: bool,
+        bundle_phase: str | None,
+    ) -> tuple[bool, bool, str]:
+        if step == "capture-test-artifact-and-gate":
+            assert gate_present and artifact_present and bundle_phase is None
+            bundle_phase = f"captured-{artifact_kind}"
+        elif step == "quarantine-old-test-gate":
+            assert gate_present and artifact_present
+            assert bundle_phase == f"captured-{artifact_kind}"
+            gate_present = False
+            bundle_phase = f"old-gate-quarantined-{artifact_kind}"
+        elif step == "acquire-replacement-test-gate":
+            assert not gate_present and artifact_present
+            assert bundle_phase == f"old-gate-quarantined-{artifact_kind}"
+            gate_present = True
+            bundle_phase = f"replacement-gate-{artifact_kind}"
+        elif step == "dispatch-recorded-test-artifact":
+            assert gate_present and artifact_present
+            assert bundle_phase == f"replacement-gate-{artifact_kind}"
+            bundle_phase = f"dispatched-{artifact_kind}"
+        elif step == "finalize-test-gate-bundle":
+            assert gate_present and artifact_present
+            assert bundle_phase == f"dispatched-{artifact_kind}"
+            bundle_phase = "resolved"
+            gate_present = False
+        return gate_present, artifact_present, bundle_phase
+
+    for artifact_kind in ("valid-state", "invalid-state", "safe-restart-receipt"):
+        for cut_after in range(len(test_gate_order) + 1):
+            test_gate_present = True
+            artifact_present = True
+            bundle_phase: str | None = None
+            for step in test_gate_order[:cut_after]:
+                test_gate_present, artifact_present, bundle_phase = advance_test_gate(
+                    step,
+                    artifact_kind,
+                    test_gate_present,
+                    artifact_present,
+                    bundle_phase,
+                )
+                assert artifact_present
+                assert test_gate_present or bundle_phase is not None
+
+            resumed = (test_gate_present, artifact_present, bundle_phase)
+            for step in test_gate_order[cut_after:]:
+                resumed = advance_test_gate(step, artifact_kind, *resumed)
+                assert resumed[1]
+                assert resumed[0] or resumed[2] is not None
+            assert resumed == (False, True, "resolved")
     for required_phrase in (
         "kitconfig.load_config()",
         "RFC 8785 JSON",
@@ -2971,8 +3065,13 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
-            "publish-test-intent-before-gate-quarantine-never-touch-live",
-            "quarantine-test-gate-before-publishing-intent",
+            "preserve-test-artifact-or-publish-intent-before-gate-quarantine-never-touch-live",
+            "quarantine-test-gate-before-preserving-state-or-publishing-intent",
+            1,
+        ),
+        workflow.replace(
+            "Bundle durable; revalidate both captured artifacts and quarantine only the unchanged old test gate.",
+            "Quarantine the old test gate before preserving the state or receipt.",
             1,
         ),
         workflow.replace(
@@ -3006,7 +3105,7 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
-            "exclusively create\nand flush `test-gate-recovery-intent` while the old test gate still exists",
+            "exclusively create and flush\n`test-gate-recovery-intent` while the old test gate still exists",
             "quarantine the old test gate before creating test recovery intent",
             1,
         ),

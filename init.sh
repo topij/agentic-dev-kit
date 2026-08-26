@@ -195,13 +195,13 @@ get_field() {
     BEGIN { cursec = ""; cursub = "" }
     {
       line = $0
-      if (line ~ /^[A-Za-z_][A-Za-z0-9_]*:[ \t]*$/) {
+      if (line ~ /^[A-Za-z_][A-Za-z0-9_.-]*:[ \t]*$/) {
         cursec = line
         gsub(/^[ \t]+|[ \t]+$/, "", cursec)
         cursub = ""
         next
       }
-      if (line ~ /^  [A-Za-z_][A-Za-z0-9_]*:[ \t]*$/) {
+      if (line ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:[ \t]*$/) {
         cursub = line
         gsub(/^[ \t]+|[ \t]+$/, "", cursub)
         next
@@ -241,23 +241,23 @@ set_field() {
   newval="$4"
   tmpfile="${CONFIG_FILE}.tmp.$$"
   newval="$newval" awk -v wantsec="$wantsec" -v wantsub="$wantsub" -v keyre="$keyre" "$AWK_COMMENT_IDX"'
-    BEGIN { cursec = ""; cursub = ""; newval = ENVIRON["newval"] }
+    BEGIN { cursec = ""; cursub = ""; newval = ENVIRON["newval"]; changed = 0 }
     {
       line = $0
-      if (line ~ /^[A-Za-z_][A-Za-z0-9_]*:[ \t]*$/) {
+      if (line ~ /^[A-Za-z_][A-Za-z0-9_.-]*:[ \t]*$/) {
         cursec = line
         gsub(/^[ \t]+|[ \t]+$/, "", cursec)
         cursub = ""
         print line
         next
       }
-      if (line ~ /^  [A-Za-z_][A-Za-z0-9_]*:[ \t]*$/) {
+      if (line ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:[ \t]*$/) {
         cursub = line
         gsub(/^[ \t]+|[ \t]+$/, "", cursub)
         print line
         next
       }
-      if (cursec == wantsec && cursub == wantsub && line ~ keyre) {
+      if (!changed && cursec == wantsec && cursub == wantsub && line ~ keyre) {
         idx = index(line, ":")
         prefix = substr(line, 1, idx)
         rest = substr(line, idx + 1)
@@ -271,6 +271,7 @@ set_field() {
         } else {
           printf "%s %s\n", prefix, newval
         }
+        changed = 1
         next
       }
       print line

@@ -330,6 +330,30 @@ def test_installer_completes_triage_before_a_hyphenated_top_level_section(
     assert _config(repo) == first
 
 
+@pytest.mark.parametrize("section_name", ("custom-section", "custom.section"))
+def test_installer_preserves_prompted_key_beneath_extended_top_level_section(
+    tmp_path: Path,
+    section_name: str,
+) -> None:
+    config = shipped_config().replace(
+        "\nnotify:\n",
+        f"\n{section_name}:\n  backend: preserve-me\n\nnotify:\n",
+        1,
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+
+    first = _config(repo)
+    parsed = yaml.safe_load(first)
+    assert parsed["tracker"]["backend"] == "github-issues"
+    assert parsed[section_name] == {"backend": "preserve-me"}
+
+    _run_init(repo)
+
+    assert _config(repo) == first
+
+
 @pytest.mark.parametrize(
     "section_line",
     (
