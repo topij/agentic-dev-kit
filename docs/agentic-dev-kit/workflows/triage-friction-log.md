@@ -103,7 +103,10 @@ digest. The core contains the old-gate capture, configured bundle path, reposito
 identity, repeated absence observations, mode, and every intended-intent field except
 `prepared_core_digest`; it contains no approval, intent payload, intent digest, or full
 bundle digest. The intended intent adds only `prepared_core_digest` to those declared
-intent fields and never contains or binds the full bundle digest. Captured state must be
+intent fields and never contains or binds the full bundle digest. The approval record
+must carry the exact approving decision, approval source, and approver identity, all
+bound to `prepared_core_digest`; missing, refused, or altered approval is not authority.
+Captured state must be
 absent or byte-identical to that intended same-mode intent. Absence resumes at exclusive
 intent publication after revalidation; a matching intent resumes its recorded
 transition. A valid matching `state-present-capture` or `state-present-prepared` bundle
@@ -111,8 +114,10 @@ selects only the bounded state-present transition declared below; it never falls
 to an ordinary state parse. Every prepared or held state-present envelope carries the
 complete immutable `capture_core` byte-for-byte plus `capture_core_digest`; a prepared
 envelope also carries `action_core`, `action_core_digest`, and an exact approval record
-whose decision and approver identity bind that action-core digest. A missing, altered,
-or digest-mismatched core or approval stops operator-held. Any other state stops
+whose approving decision, source, and approver identity bind that action-core digest.
+The action core's capture-core digest and old-gate digest must equal the embedded
+capture core's verified values. A missing, refused, altered, cross-core, or
+digest-mismatched core or approval stops operator-held. Any other state stops
 operator-held. A valid ordinary non-held recovery
 bundle stops operator-held without an ordinary state parse because it is evidence, not
 resume authority. A malformed, foreign, or digest-mismatched candidate also stops
@@ -323,7 +328,11 @@ exclusive creation of a minimal `reserved` record while still holding the gate; 
 publishes its first state by replacement over an expected absence. The only non-absent
 new-run claim is a digest-checked replacement of an exact
 `recovered-safe-to-restart` or `test-recovered-safe-to-restart` receipt whose recovery
-bundle remains present. Every later
+bundle remains present. Every safe-restart receipt carries its mode, originating
+old-gate digest, exact configured bundle path, capture-core digest, quarantine path, and
+prepared-envelope digest. Resolve that exact recorded bundle path without a directory
+scan or a path derived from the newly acquired gate; verify the envelope digest and its
+embedded core before replacing the receipt. Every later
 transition reads the current bytes under the gate and records their digest, then
 immediately before atomic replacement requires the same digest, run identity, and gate
 owner token. A mismatch stops operator-held without replacing either version.
@@ -451,9 +460,14 @@ Classify invalid captured state conservatively. Only a readable state that prove
 never reached `attempting` and contains no verified tracker identifier or repository/PR
 evidence may offer `abandon <action-core-digest>` to the present interactive operator.
 The action core binds the capture-core digest, exact quarantine target, exact
-`recovered-safe-to-restart` receipt payload, old-gate capture, and repository identity.
-Persist exact approval by digest-checking and atomically replacing
+`recovered-safe-to-restart` receipt core, old-gate capture, and repository identity. The
+receipt core contains mode, old-gate digest, exact configured bundle path,
+capture-core digest, and quarantine path, but no action-core or prepared-envelope
+digest. Persist exact approval by digest-checking and atomically replacing
 `state-present-capture` with `state-present-prepared` before the first disputed rename.
+After that envelope is durable, hash its exact bytes and form the final receipt by
+adding `prepared_envelope_digest` to the approved receipt core; neither the receipt core
+nor action core contains that later digest, so the graph remains non-circular.
 Immediately before quarantine, re-read and re-stat the active path and require its
 digest, device, inode, mode, and link count to equal the captured observations.
 Atomically rename that exact source to the prepared quarantine path, exclusively create

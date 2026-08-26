@@ -2498,17 +2498,22 @@ def _assert_triage_semantics(workflow: str) -> None:
         "repeated absence observations, mode, and every intended-intent field except "
         "`prepared_core_digest`; it contains no approval, intent payload, intent digest, or "
         "full bundle digest. The intended intent adds only `prepared_core_digest` to those "
-        "declared intent fields and never contains or binds the full bundle digest. Captured "
-        "state must be absent or byte-identical to that intended same-mode intent. Absence "
+        "declared intent fields and never contains or binds the full bundle digest. The "
+        "approval record must carry the exact approving decision, approval source, and "
+        "approver identity, all bound to `prepared_core_digest`; missing, refused, or "
+        "altered approval is not authority. Captured state must be absent or byte-identical "
+        "to that intended same-mode intent. Absence "
         "resumes at exclusive intent publication after revalidation; a matching intent "
         "resumes its recorded transition. A valid matching `state-present-capture` or "
         "`state-present-prepared` bundle selects only the bounded state-present transition "
         "declared below; it never falls through to an ordinary state parse. Every prepared "
         "or held state-present envelope carries the complete immutable `capture_core` "
         "byte-for-byte plus `capture_core_digest`; a prepared envelope also carries "
-        "`action_core`, `action_core_digest`, and an exact approval record whose decision "
-        "and approver identity bind that action-core digest. A missing, altered, or "
-        "digest-mismatched core or approval stops operator-held. Any other state stops "
+        "`action_core`, `action_core_digest`, and an exact approval record whose approving "
+        "decision, source, and approver identity bind that action-core digest. The action core's capture-core "
+        "digest and old-gate digest must equal the embedded capture core's verified values. "
+        "A missing, refused, altered, cross-core, or digest-mismatched core or approval "
+        "stops operator-held. Any other state stops "
         "operator-held. A valid ordinary "
         "non-held recovery bundle stops operator-held without an ordinary state parse "
         "because it is evidence, not resume authority. A malformed, foreign, or "
@@ -3341,6 +3346,8 @@ def _assert_triage_semantics(workflow: str) -> None:
         "prepared_core_digest": prepared_core_digest,
         "approval": {
             "decision": f"approve prepared-core {prepared_core_digest}",
+            "source": "current-session",
+            "approver_identity": "operator",
             "prepared_core_digest": prepared_core_digest,
         },
         "intended_intent": intended_intent,
@@ -3349,6 +3356,28 @@ def _assert_triage_semantics(workflow: str) -> None:
     full_bundle_digest = hashlib.sha256(
         canonical_json_bytes(prepared_bundle)
     ).hexdigest()
+
+    def gate_only_bundle_valid(bundle: dict[str, object]) -> bool:
+        core = bundle.get("prepared_core")
+        approval = bundle.get("approval")
+        intent = bundle.get("intended_intent")
+        if not isinstance(core, dict) or not isinstance(approval, dict):
+            return False
+        if not isinstance(intent, dict):
+            return False
+        core_digest = hashlib.sha256(canonical_json_bytes(core)).hexdigest()
+        return (
+            bundle.get("prepared_core_digest") == core_digest
+            and approval.get("prepared_core_digest") == core_digest
+            and approval.get("decision") == f"approve prepared-core {core_digest}"
+            and approval.get("source") == "current-session"
+            and approval.get("approver_identity") == "operator"
+            and intent.get("prepared_core_digest") == core_digest
+            and bundle.get("intended_intent_digest")
+            == hashlib.sha256(canonical_json_bytes(intent)).hexdigest()
+        )
+
+    assert gate_only_bundle_valid(prepared_bundle)
     assert prepared_bundle["prepared_core_digest"] == hashlib.sha256(
         canonical_json_bytes(prepared_bundle["prepared_core"])
     ).hexdigest()
@@ -3365,6 +3394,14 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert hashlib.sha256(canonical_json_bytes(changed_intent)).hexdigest() != (
         intended_intent_digest
     )
+    for approval_mutation in (
+        {**prepared_bundle["approval"], "decision": "refuse"},
+        {**prepared_bundle["approval"], "source": ""},
+        {**prepared_bundle["approval"], "approver_identity": ""},
+    ):
+        assert not gate_only_bundle_valid(
+            {**prepared_bundle, "approval": approval_mutation}
+        )
 
     gate_only_steps = _integration_table(workflow, "Gate-only recovery transition", 2)
     assert gate_only_steps == {
@@ -3537,7 +3574,8 @@ def _assert_triage_semantics(workflow: str) -> None:
         "action_core": valid_action_core,
         "action_core_digest": valid_action_core_digest,
         "approval": {
-            "approver": "operator",
+            "source": "current-session",
+            "approver_identity": "operator",
             "decision": f"approve action-core {valid_action_core_digest}",
             "action_core_digest": valid_action_core_digest,
         },
@@ -3547,8 +3585,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         "state_bytes": captured_state.decode("utf-8"),
         "state_digest": captured_state_digest,
     }
-    restart_receipt = {
-        "kind": "recovered-safe-to-restart",
+    bundle_path = "state/triage-recovery-live-old-gate-digest.json"
+    restart_receipt_core = {
+        "mode": "live",
+        "old_gate_digest": old_gate_digest,
+        "bundle_path": bundle_path,
         "capture_core_digest": capture_core_digest,
         "quarantine_path": quarantine_artifact["path"],
     }
@@ -3557,7 +3598,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "action": "abandon-invalid-state",
         "old_gate_digest": old_gate_digest,
         "quarantine_artifact": quarantine_artifact,
-        "restart_receipt": restart_receipt,
+        "restart_receipt_core": restart_receipt_core,
     }
     invalid_action_core_digest = hashlib.sha256(
         canonical_json_bytes(invalid_action_core)
@@ -3569,10 +3610,19 @@ def _assert_triage_semantics(workflow: str) -> None:
         "action_core": invalid_action_core,
         "action_core_digest": invalid_action_core_digest,
         "approval": {
-            "approver": "operator",
+            "source": "current-session",
+            "approver_identity": "operator",
             "decision": f"abandon action-core {invalid_action_core_digest}",
             "action_core_digest": invalid_action_core_digest,
         },
+    }
+    invalid_prepared_digest = hashlib.sha256(
+        canonical_json_bytes(invalid_prepared)
+    ).hexdigest()
+    restart_receipt = {
+        "kind": "recovered-safe-to-restart",
+        **restart_receipt_core,
+        "prepared_envelope_digest": invalid_prepared_digest,
     }
     held_envelope = {
         "kind": "state-present-held",
@@ -3611,15 +3661,28 @@ def _assert_triage_semantics(workflow: str) -> None:
             canonical_json_bytes(action_core)
         ).hexdigest()
         approval = bundle.get("approval")
+        embedded_gate = embedded_capture.get("old_gate")
+        action = action_core.get("action")
+        expected_decision = {
+            "preserve-valid-state-and-quarantine-old-gate": (
+                f"approve action-core {action_core_digest}"
+            ),
+            "abandon-invalid-state": f"abandon action-core {action_core_digest}",
+        }.get(action)
         if (
             bundle.get("action_core_digest") != action_core_digest
             or not isinstance(approval, dict)
+            or not isinstance(embedded_gate, dict)
+            or action_core.get("capture_core_digest")
+            != bundle.get("capture_core_digest")
+            or action_core.get("old_gate_digest") != embedded_gate.get("digest")
             or approval.get("action_core_digest") != action_core_digest
-            or not isinstance(approval.get("approver"), str)
-            or not approval.get("approver")
+            or approval.get("decision") != expected_decision
+            or approval.get("source") != "current-session"
+            or approval.get("approver_identity") != "operator"
         ):
             return "operator-held"
-        if action_core["action"] == "preserve-valid-state-and-quarantine-old-gate":
+        if action == "preserve-valid-state-and-quarantine-old-gate":
             if artifact != current_artifact:
                 return "operator-held"
             return {
@@ -3631,6 +3694,17 @@ def _assert_triage_semantics(workflow: str) -> None:
         if artifact == quarantine_artifact:
             return "resume-receipt-publication"
         if artifact == restart_receipt:
+            receipt_core = {
+                key: value
+                for key, value in artifact.items()
+                if key not in {"kind", "prepared_envelope_digest"}
+            }
+            if (
+                action_core.get("restart_receipt_core") != receipt_core
+                or artifact.get("prepared_envelope_digest")
+                != hashlib.sha256(canonical_json_bytes(bundle)).hexdigest()
+            ):
+                return "operator-held"
             return {
                 "owned": "release-owned-gate",
                 "proven-stale": "quarantine-proven-stale-gate",
@@ -3662,6 +3736,13 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert state_present_route(
         invalid_prepared, "absent", restart_receipt
     ) == "restart-receipt-ready"
+    replacement_gate_digest = "replacement-gate-digest"
+    assert restart_receipt["old_gate_digest"] != replacement_gate_digest
+    stored_bundles = {bundle_path: invalid_prepared}
+    located_bundle = stored_bundles[restart_receipt["bundle_path"]]
+    assert hashlib.sha256(canonical_json_bytes(located_bundle)).hexdigest() == (
+        restart_receipt["prepared_envelope_digest"]
+    )
     assert held_envelope["capture_core"] == capture_core
     changed_observations = {
         **current_artifact,
@@ -3670,12 +3751,56 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert state_present_route(
         invalid_prepared, "proven-stale", changed_observations
     ) == "operator-held"
-    changed_approval = {
+    for approval_mutation in (
+        {**invalid_prepared["approval"], "decision": "refuse"},
+        {**invalid_prepared["approval"], "source": ""},
+        {**invalid_prepared["approval"], "approver_identity": ""},
+    ):
+        changed_approval = {**invalid_prepared, "approval": approval_mutation}
+        assert state_present_route(
+            changed_approval, "proven-stale", current_artifact
+        ) == "operator-held"
+    cross_core_action = {
+        **invalid_action_core,
+        "capture_core_digest": "different-capture-core",
+    }
+    cross_core_digest = hashlib.sha256(
+        canonical_json_bytes(cross_core_action)
+    ).hexdigest()
+    cross_core_bundle = {
         **invalid_prepared,
-        "approval": {**invalid_prepared["approval"], "approver": ""},
+        "action_core": cross_core_action,
+        "action_core_digest": cross_core_digest,
+        "approval": {
+            "source": "current-session",
+            "approver_identity": "operator",
+            "decision": f"abandon action-core {cross_core_digest}",
+            "action_core_digest": cross_core_digest,
+        },
     }
     assert state_present_route(
-        changed_approval, "proven-stale", current_artifact
+        cross_core_bundle, "proven-stale", current_artifact
+    ) == "operator-held"
+    cross_gate_action = {
+        **invalid_action_core,
+        "old_gate_digest": "different-old-gate",
+    }
+    cross_gate_digest = hashlib.sha256(
+        canonical_json_bytes(cross_gate_action)
+    ).hexdigest()
+    cross_gate_bundle = {
+        **invalid_prepared,
+        "action_core": cross_gate_action,
+        "action_core_digest": cross_gate_digest,
+        "approval": {
+            "source": "current-session",
+            "approver_identity": "operator",
+            "decision": f"abandon action-core {cross_gate_digest}",
+            "action_core_digest": cross_gate_digest,
+        },
+    }
+    assert state_present_route(
+        cross_gate_bundle, "proven-stale", current_artifact
     ) == "operator-held"
     for required_phrase in (
         "kitconfig.load_config()",
@@ -3700,6 +3825,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         "proven pre-reservation parse-failure path",
         "After successful parsing, a new run claims the absent state path with "
         "exclusive creation of a minimal `reserved` record",
+        "Every safe-restart receipt carries its mode, originating old-gate digest, "
+        "exact configured bundle path, capture-core digest, quarantine path, and "
+        "prepared-envelope digest",
+        "Resolve that exact recorded bundle path without a directory scan or a path "
+        "derived from the newly acquired gate",
         "immediately before atomic replacement requires the same digest, run identity, "
         "and gate owner token",
         "Hold the gate across an external create and its authoritative read-back",
@@ -3710,6 +3840,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         "Parse and validate only the captured bytes, never the still-live path",
         "A valid capture reached through a proven-stale gate may select only "
         "`preserve-valid-state-and-quarantine-old-gate`",
+        "receipt core contains mode, old-gate digest, exact configured bundle path, "
+        "capture-core digest, and quarantine path",
+        "adding `prepared_envelope_digest` to the approved receipt core",
         "Immediately before quarantine, re-read and re-stat the active path",
         "every mismatch is operator-held without another mutation",
         "Only a readable state that proves it never reached `attempting`",
@@ -3902,8 +4035,18 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
-            "record\nwhose decision and approver identity bind that action-core digest",
+            "record\nwhose approving decision, source, and approver identity bind that action-core digest",
             "approval and approver identity may be omitted",
+            1,
+        ),
+        workflow.replace(
+            "Resolve that exact recorded bundle path without a directory\nscan or a path derived from the newly acquired gate",
+            "Derive the recovery bundle path from the newly acquired gate",
+            1,
+        ),
+        workflow.replace(
+            "adding `prepared_envelope_digest` to the approved receipt core",
+            "publish the receipt without a prepared-envelope integrity binding",
             1,
         ),
         workflow.replace(

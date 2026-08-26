@@ -61,7 +61,7 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "3c4d22f158217818d29fe04236b49b36aaf749391fd73a9808747319446a5bb4"
+      "sha256": "b55027faf5cd64dc5c0b31faa1475bc3a2f77ba49153675f2e6c002f3923074d"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
@@ -247,7 +247,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "8cb50b3d2e235d0ac271ef455ffea50855e83e064925709c4ec0ea117fbf1bb0"
+      "sha256": "7e7c850607c1cf43b86be145b1c554d69bb6ba7519839d565a7c91246aa69cc0"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
