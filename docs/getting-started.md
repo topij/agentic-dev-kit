@@ -221,7 +221,7 @@ friction-routing step is being skipped — not that triage is overdue.
 > [#7](https://github.com/topij/agentic-dev-kit/issues/7)). Both recurring workflows
 > have explicit LLM-only paths when their configured engine sets are wholly absent;
 > a partial set fails closed. `triage-friction-log` reads its additive `triage` block
-> from merged `config/dev-model.yaml`; rerunning refreshed `init.sh --no-clobber`
+> from merged `config/dev-model.yaml`; rerunning refreshed `./init.sh --no-clobber`
 > installs missing keys without replacing adopter values. Configure exact trusted forge identities in
 > `systemize.operator_logins`; other human reviewers are excluded, while bot sources
 > come only from `review.bots` and its explicit aliases. The installer refuses YAML
