@@ -2487,10 +2487,19 @@ def _assert_triage_semantics(workflow: str) -> None:
         "state path and the one `triage.recovery_bundle_pattern` candidate for that mode "
         "and gate digest, with filesystem observations for both. Parse the captured "
         "bundle candidate first. A valid matching state-present test held bundle selects "
-        "`held-evidence`. A valid matching non-held recovery bundle, or a malformed, "
-        "foreign, or digest-mismatched candidate, stops operator-held without parsing the "
-        "state copy; preserve it, the gate, and state byte-identically, because a bundle "
-        "alone is not resume authority. Only when the current-gate bundle candidate is "
+        "`held-evidence`. A valid matching `gate-only-prepared` or "
+        "`test-gate-only-prepared` bundle permits only a bounded prepared-transition "
+        "check on the captured state copy. The bundle must carry exact approval, absence "
+        "observations, intended intent payload and digest, and the current old-gate "
+        "digest. Captured state must be absent or the complete same-mode intent that "
+        "binds that exact bundle path, digest, and old-gate digest. Absence resumes at "
+        "exclusive intent publication after revalidation; a matching intent resumes its "
+        "recorded transition. Any other state stops operator-held. A valid ordinary "
+        "non-held recovery bundle stops operator-held without an ordinary state parse "
+        "because it is evidence, not resume authority. A malformed, foreign, or "
+        "digest-mismatched candidate also stops operator-held without parsing state. "
+        "Every held result preserves bundle, gate, and state byte-identically. Only when "
+        "the current-gate bundle candidate is "
         "absent, parse the captured state copy to classify ordinary state, absence, or a "
         "mode-specific recovery intent or held receipt. A valid mode-specific intent "
         "derives the configured bundle candidate from its recorded old-gate digest and "
@@ -2625,6 +2634,10 @@ def _assert_triage_semantics(workflow: str) -> None:
         "optional-degradation-after-terminal-work",
         "all-triggered-contracts-terminal",
     ]
+    assert precedence["required-or-safety-failure"] == (
+        "A required preflight/state/safety check other than bounded recovery-evidence classification failed before a disputed action, or shared/runtime policy conflicts.",
+        "hard-stop",
+    )
     assert precedence["gate-only-recovery-held"] == (
         "A valid gate-only-recovery-intent or gate-only-operator-held receipt exists.",
         "operator-held",
@@ -2634,9 +2647,25 @@ def _assert_triage_semantics(workflow: str) -> None:
         "operator-held",
     )
     assert precedence["recovery-evidence-held"] == (
-        "A valid non-held, malformed, foreign, or digest-mismatched current-gate recovery bundle exists after owner termination is proven.",
+        "A valid ordinary non-held, malformed, foreign, digest-mismatched, or prepared-bundle/state-mismatched current-gate recovery bundle exists after owner termination is proven.",
         "operator-held",
     )
+    def recovery_outcome(bundle_kind: str, *, other_safety_failure: bool = False) -> str:
+        if other_safety_failure:
+            return precedence["required-or-safety-failure"][-1]
+        if bundle_kind in {
+            "ordinary",
+            "malformed",
+            "foreign",
+            "digest-mismatched",
+            "prepared-state-mismatched",
+        }:
+            return precedence["recovery-evidence-held"][-1]
+        raise AssertionError(bundle_kind)
+
+    assert recovery_outcome("malformed") == "operator-held"
+    assert recovery_outcome("digest-mismatched") == "operator-held"
+    assert recovery_outcome("ordinary", other_safety_failure=True) == "hard-stop"
     inputs = _integration_table(workflow, "Semantic input matrix", 2)
     assert set(inputs) == {
         "Unknown or combined entry keyword",
@@ -2648,7 +2677,8 @@ def _assert_triage_semantics(workflow: str) -> None:
         "new, active live state",
         "Interactive recover, active live state and no blocking gate",
         "Interactive recover, blocking gate without a gate-only receipt",
-        "Interactive recover, blocking gate with a valid non-held, malformed, foreign, or digest-mismatched current-gate recovery bundle",
+        "Interactive recover, blocking gate with a valid matching gate-only-prepared bundle and captured state absent",
+        "Interactive recover, blocking gate with a valid ordinary non-held, malformed, foreign, or digest-mismatched current-gate recovery bundle",
         "Interactive recover, gate-only-recovery-intent present",
         "Interactive recover, no active live state, gate, or gate-only receipt",
         "Non-recover live invocation with a gate-only intent",
@@ -2702,8 +2732,11 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert "never infer safe restart" in inputs[
         "Interactive recover, blocking gate without a gate-only receipt"
     ][0]
-    assert "without parsing state" in inputs[
-        "Interactive recover, blocking gate with a valid non-held, malformed, foreign, or digest-mismatched current-gate recovery bundle"
+    assert "publish the bundle's exact approved intent payload" in inputs[
+        "Interactive recover, blocking gate with a valid matching gate-only-prepared bundle and captured state absent"
+    ][0]
+    assert "without an ordinary state parse" in inputs[
+        "Interactive recover, blocking gate with a valid ordinary non-held, malformed, foreign, or digest-mismatched current-gate recovery bundle"
     ][0]
     assert "Resume only the recorded bundle" in inputs[
         "Interactive recover, gate-only-recovery-intent present"
@@ -2772,19 +2805,27 @@ def _assert_triage_semantics(workflow: str) -> None:
             "proven dead",
             "Preserve bundle, gate, and artifact; report operator-held with no mutation.",
         ),
+        "prepared-absent-interactive": (
+            "interactive",
+            "blocking",
+            "absent",
+            "test-gate-only-prepared",
+            "proven dead with exact approval recorded",
+            "Revalidate gate and absence, then publish only the prepared intent payload.",
+        ),
         "bundle-evidence-held": (
             "interactive",
             "blocking",
             "any",
             "valid-non-held, malformed, foreign, or digest-mismatched",
             "proven dead",
-            "Preserve bundle, gate, and artifact; report operator-held without parsing state or mutating an artifact.",
+            "Preserve bundle, gate, and artifact; report operator-held without an ordinary state parse or artifact mutation.",
         ),
         "intent-interactive": (
             "interactive",
             "any",
             "test-gate-recovery-intent",
-            "absent",
+            "absent or matching test-gate-only-prepared",
             "already recorded",
             "Resume only the recorded absent-state gate transition.",
         ),
@@ -2892,6 +2933,12 @@ def _assert_triage_semantics(workflow: str) -> None:
                 return ["gated-owner-unready-interactive"]
             if bundle_kind == "held-evidence":
                 return ["held-evidence"]
+            if bundle_kind == "prepared":
+                if artifact == "test-gate-recovery-intent":
+                    return ["intent-interactive"]
+                if artifact == "absent":
+                    return ["prepared-absent-interactive"]
+                return ["bundle-evidence-held"]
             if bundle_kind in {"valid-non-held", "invalid"}:
                 return ["bundle-evidence-held"]
             if artifact == "test-gate-recovery-intent":
@@ -2929,7 +2976,13 @@ def _assert_triage_semantics(workflow: str) -> None:
                 "test-gate-recovery-intent",
             ):
                 bundle_kinds = (
-                    ("absent", "held-evidence", "valid-non-held", "invalid")
+                    (
+                        "absent",
+                        "held-evidence",
+                        "prepared",
+                        "valid-non-held",
+                        "invalid",
+                    )
                     if gate == "blocking"
                     else ("absent",)
                 )
@@ -2952,7 +3005,7 @@ def _assert_triage_semantics(workflow: str) -> None:
                         if routes == ["held-evidence"]:
                             assert result.endswith("operator-held with no mutation.")
                         if routes == ["bundle-evidence-held"]:
-                            assert "without parsing state" in result
+                            assert "without an ordinary state parse" in result
                         if (
                             context == "interactive"
                             and gate == "blocking"
@@ -3011,8 +3064,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         "crash-released exclusive recovery primitive, "
         "neither engine-backed nor LLM-only execution may claim that separate gate, "
         "state, and bundle files form one atomic transition. When that same approved "
-        "interactive recovery proves test state absent, capture that absence in the "
-        "test recovery bundle, then exclusively create and flush "
+        "interactive recovery proves test state absent, create and flush a "
+        "`test-gate-only-prepared` bundle with the same exact approval and "
+        "intended-payload fields, then exclusively create and flush "
         "`test-gate-recovery-intent` while the old test gate still exists, then follow "
         "the Gate-only recovery transition ordering with test-confined paths. "
         "Quarantine the old test gate only after the intent is durable; finish by "
@@ -3035,6 +3089,16 @@ def _assert_triage_semantics(workflow: str) -> None:
             "interactive",
             "recover",
             "Resume only the exact recorded gate-only transition, whether the old or replacement gate is present.",
+        ),
+        "prepared-interactive-recover": (
+            "interactive",
+            "recover",
+            "Resume only the exact approved prepared transition from intent publication while the old gate and state absence still match.",
+        ),
+        "prepared-unattended-recover": (
+            "scheduled or unattended",
+            "recover",
+            "Preserve the prepared bundle and report operator-held without changing an artifact.",
         ),
         "intent-unattended-recover": (
             "scheduled or unattended",
@@ -3060,7 +3124,7 @@ def _assert_triage_semantics(workflow: str) -> None:
     gate_only_steps = _integration_table(workflow, "Gate-only recovery transition", 2)
     assert gate_only_steps == {
         "capture-old-gate": (
-            "Old gate present, active state absent; persist the immutable evidence bundle and exact approval.",
+            "Old gate present, active state absent; persist the immutable gate-only-prepared bundle, exact approval, and intended intent payload.",
         ),
         "publish-recovery-intent": (
             "Old gate still present; exclusively create and flush gate-only-recovery-intent.",
@@ -3084,35 +3148,78 @@ def _assert_triage_semantics(workflow: str) -> None:
     bundle_gate_digest: str | None = None
     intent_bundle_gate_digest: str | None = None
     state_kind: str | None = None
+    crash_routes: list[str] = []
     for step in gate_only_steps:
         if step == "capture-old-gate":
             assert current_gate_digest == old_gate_digest and state_kind is None
             bundle_gate_digest = old_gate_digest
+            assert matching_test_routes(
+                "interactive",
+                "blocking",
+                "absent",
+                "prepared",
+                "proven dead and exactly approved",
+            ) == ["prepared-absent-interactive"]
+            crash_routes.append("prepared-interactive-recover")
         elif step == "publish-recovery-intent":
             assert current_gate_digest == old_gate_digest and state_kind is None
             assert bundle_gate_digest == old_gate_digest
             state_kind = "intent"
             intent_bundle_gate_digest = old_gate_digest
+            assert matching_test_routes(
+                "interactive",
+                "blocking",
+                "test-gate-recovery-intent",
+                "prepared",
+                "proven dead and exactly approved",
+            ) == ["intent-interactive"]
+            crash_routes.append("intent-interactive-recover-old-gate")
         elif step == "quarantine-old-gate":
             assert current_gate_digest == old_gate_digest and state_kind == "intent"
             current_gate_digest = None
+            assert matching_test_routes(
+                "interactive",
+                "absent",
+                "test-gate-recovery-intent",
+                "absent",
+                "proven dead and exactly approved",
+            ) == ["intent-interactive"]
+            crash_routes.append("intent-interactive-recover-no-gate")
         elif step == "acquire-recovery-gate":
             assert current_gate_digest is None and state_kind == "intent"
             current_gate_digest = replacement_gate_digest
             assert current_gate_digest != intent_bundle_gate_digest
+            assert matching_test_routes(
+                "interactive",
+                "blocking",
+                "test-gate-recovery-intent",
+                "absent",
+                "proven dead and exactly approved",
+            ) == ["intent-interactive"]
+            crash_routes.append("intent-interactive-recover-replacement-gate")
         elif step == "finalize-held-receipt":
             assert current_gate_digest == replacement_gate_digest
             assert state_kind == "intent"
             assert intent_bundle_gate_digest == old_gate_digest
             state_kind = "held"
+            crash_routes.append("held-any-live-entry-with-replacement-gate")
         elif step == "release-recovery-gate":
             assert current_gate_digest == replacement_gate_digest
             assert state_kind == "held"
             current_gate_digest = None
+            crash_routes.append("held-any-live-entry-without-gate")
         if state_kind == "intent":
             assert intent_bundle_gate_digest == old_gate_digest
         assert current_gate_digest is not None or state_kind in {"intent", "held"}
     assert current_gate_digest is None and state_kind == "held"
+    assert crash_routes == [
+        "prepared-interactive-recover",
+        "intent-interactive-recover-old-gate",
+        "intent-interactive-recover-no-gate",
+        "intent-interactive-recover-replacement-gate",
+        "held-any-live-entry-with-replacement-gate",
+        "held-any-live-entry-without-gate",
+    ]
     for required_phrase in (
         "kitconfig.load_config()",
         "RFC 8785 JSON",
@@ -3449,13 +3556,18 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
-            "A valid matching\nnon-held recovery bundle",
-            "A valid matching non-held recovery bundle resumes automatically and",
+            "Absence resumes at exclusive\nintent publication after revalidation",
+            "Absence stops operator-held before publishing the prepared intent",
             1,
         ),
         workflow.replace(
             "from its recorded old-gate\ndigest and mode, not from a replacement gate",
             "from the current replacement gate and ignores the recorded old-gate digest",
+            1,
+        ),
+        workflow.replace(
+            "other than bounded recovery-evidence classification",
+            "including bounded recovery-evidence classification",
             1,
         ),
         workflow.replace(
