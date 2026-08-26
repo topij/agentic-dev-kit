@@ -3316,18 +3316,26 @@ def _assert_triage_semantics(workflow: str) -> None:
             value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
         ).encode("utf-8")
 
+    triage_config = yaml.safe_load(
+        (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
+    )["triage"]
+    recovery_bundle_pattern = triage_config["recovery_bundle_pattern"]
+    old_gate_bytes = b"old-gate-bytes"
+    old_gate_digest = hashlib.sha256(old_gate_bytes).hexdigest()
     intent_fields = {
         "kind": "test-gate-recovery-intent",
         "mode": "test",
-        "old_gate_digest": "old-gate-digest",
+        "old_gate_digest": old_gate_digest,
         "old_gate_owner": {"token": "old-owner"},
-        "bundle_path": "state/triage-recovery-test-old-gate-digest.json",
+        "bundle_path": recovery_bundle_pattern.format(
+            mode="test", gate_digest=old_gate_digest
+        ),
         "repository_identity": "repo-id",
         "absence_observations": [{"exists": False, "sequence": "before"}],
         "approved_capture": "capture-digest",
     }
     prepared_core = {
-        "old_gate_bytes": "old-gate-bytes",
+        "old_gate_bytes": old_gate_bytes.decode("utf-8"),
         "intent_fields": intent_fields,
     }
     prepared_core_digest = hashlib.sha256(
@@ -3365,14 +3373,21 @@ def _assert_triage_semantics(workflow: str) -> None:
             return False
         if not isinstance(intent, dict):
             return False
+        core_intent_fields = core.get("intent_fields")
+        if not isinstance(core_intent_fields, dict):
+            return False
         core_digest = hashlib.sha256(canonical_json_bytes(core)).hexdigest()
+        expected_intent = {
+            **core_intent_fields,
+            "prepared_core_digest": core_digest,
+        }
         return (
             bundle.get("prepared_core_digest") == core_digest
             and approval.get("prepared_core_digest") == core_digest
             and approval.get("decision") == f"approve prepared-core {core_digest}"
             and approval.get("source") == "current-session"
             and approval.get("approver_identity") == "operator"
-            and intent.get("prepared_core_digest") == core_digest
+            and intent == expected_intent
             and bundle.get("intended_intent_digest")
             == hashlib.sha256(canonical_json_bytes(intent)).hexdigest()
         )
@@ -3393,6 +3408,15 @@ def _assert_triage_semantics(workflow: str) -> None:
     changed_intent = {**intended_intent, "old_gate_digest": "changed"}
     assert hashlib.sha256(canonical_json_bytes(changed_intent)).hexdigest() != (
         intended_intent_digest
+    )
+    assert not gate_only_bundle_valid(
+        {
+            **prepared_bundle,
+            "intended_intent": changed_intent,
+            "intended_intent_digest": hashlib.sha256(
+                canonical_json_bytes(changed_intent)
+            ).hexdigest(),
+        }
     )
     for approval_mutation in (
         {**prepared_bundle["approval"], "decision": "refuse"},
@@ -3424,8 +3448,7 @@ def _assert_triage_semantics(workflow: str) -> None:
             "Held receipt durable; release only the matching new recovery gate.",
         ),
     }
-    old_gate_digest = "old-gate-digest"
-    replacement_gate_digest = "replacement-gate-digest"
+    replacement_gate_digest = hashlib.sha256(b"replacement-gate-bytes").hexdigest()
     current_gate_digest: str | None = old_gate_digest
     bundle_gate_digest: str | None = None
     intent_bundle_gate_digest: str | None = None
@@ -3584,8 +3607,14 @@ def _assert_triage_semantics(workflow: str) -> None:
         "path": "state/quarantine/triage-live.json",
         "state_bytes": captured_state.decode("utf-8"),
         "state_digest": captured_state_digest,
+        "state_observations": {
+            **captured_observations,
+            "path": "state/quarantine/triage-live.json",
+        },
     }
-    bundle_path = "state/triage-recovery-live-old-gate-digest.json"
+    bundle_path = recovery_bundle_pattern.format(
+        mode="live", gate_digest=old_gate_digest
+    )
     restart_receipt_core = {
         "mode": "live",
         "old_gate_digest": old_gate_digest,
@@ -3670,7 +3699,8 @@ def _assert_triage_semantics(workflow: str) -> None:
             "abandon-invalid-state": f"abandon action-core {action_core_digest}",
         }.get(action)
         if (
-            bundle.get("action_core_digest") != action_core_digest
+            expected_decision is None
+            or bundle.get("action_core_digest") != action_core_digest
             or not isinstance(approval, dict)
             or not isinstance(embedded_gate, dict)
             or action_core.get("capture_core_digest")
@@ -3736,13 +3766,13 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert state_present_route(
         invalid_prepared, "absent", restart_receipt
     ) == "restart-receipt-ready"
-    replacement_gate_digest = "replacement-gate-digest"
     assert restart_receipt["old_gate_digest"] != replacement_gate_digest
-    stored_bundles = {bundle_path: invalid_prepared}
-    located_bundle = stored_bundles[restart_receipt["bundle_path"]]
-    assert hashlib.sha256(canonical_json_bytes(located_bundle)).hexdigest() == (
+    stored_bundle_bytes = {bundle_path: canonical_json_bytes(invalid_prepared)}
+    located_bundle_bytes = stored_bundle_bytes[restart_receipt["bundle_path"]]
+    assert hashlib.sha256(located_bundle_bytes).hexdigest() == (
         restart_receipt["prepared_envelope_digest"]
     )
+    assert json.loads(located_bundle_bytes) == invalid_prepared
     assert held_envelope["capture_core"] == capture_core
     changed_observations = {
         **current_artifact,
@@ -3751,6 +3781,17 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert state_present_route(
         invalid_prepared, "proven-stale", changed_observations
     ) == "operator-held"
+    for changed_field, changed_value in (("inode", 12), ("link_count", 2)):
+        changed_quarantine = {
+            **quarantine_artifact,
+            "state_observations": {
+                **quarantine_artifact["state_observations"],
+                changed_field: changed_value,
+            },
+        }
+        assert state_present_route(
+            invalid_prepared, "proven-stale", changed_quarantine
+        ) == "operator-held"
     for approval_mutation in (
         {**invalid_prepared["approval"], "decision": "refuse"},
         {**invalid_prepared["approval"], "source": ""},
@@ -3801,6 +3842,24 @@ def _assert_triage_semantics(workflow: str) -> None:
     }
     assert state_present_route(
         cross_gate_bundle, "proven-stale", current_artifact
+    ) == "operator-held"
+    unknown_action = {**invalid_action_core, "action": "unknown-action"}
+    unknown_action_digest = hashlib.sha256(
+        canonical_json_bytes(unknown_action)
+    ).hexdigest()
+    unknown_action_bundle = {
+        **invalid_prepared,
+        "action_core": unknown_action,
+        "action_core_digest": unknown_action_digest,
+        "approval": {
+            "source": "current-session",
+            "approver_identity": "operator",
+            "decision": None,
+            "action_core_digest": unknown_action_digest,
+        },
+    }
+    assert state_present_route(
+        unknown_action_bundle, "proven-stale", current_artifact
     ) == "operator-held"
     for required_phrase in (
         "kitconfig.load_config()",

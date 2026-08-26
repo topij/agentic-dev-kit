@@ -441,6 +441,9 @@ Parse and validate only the captured bytes, never the still-live path. Record th
 result and current and recorded identities in a candidate `action_core`. The prepared
 envelope embeds the complete immutable capture core and digest, the action core and
 digest, and the exact decision plus approver identity bound to `action_core_digest`.
+Only the two declared actions are valid: `preserve-valid-state-and-quarantine-old-gate`
+and `abandon-invalid-state`. An absent, empty, or unknown action or approving decision is
+not recovery authority and stops operator-held.
 For each report or frozen-snapshot path obtained from validated captured
 fields, apply the same path, alias, and atomic-read checks before recording exact paths,
 bytes/digests, and filesystem observations. Never follow an unvalidated path from
@@ -470,8 +473,12 @@ adding `prepared_envelope_digest` to the approved receipt core; neither the rece
 nor action core contains that later digest, so the graph remains non-circular.
 Immediately before quarantine, re-read and re-stat the active path and require its
 digest, device, inode, mode, and link count to equal the captured observations.
-Atomically rename that exact source to the prepared quarantine path, exclusively create
-and flush the exact prepared receipt at the now-absent state path, then revalidate and
+Atomically rename that exact source to the prepared quarantine path. Create the receipt
+only after re-reading and re-statting the quarantine target. Its exact path, digest,
+device, inode, mode, link count, size, and modification time must equal the prepared
+target and immutable capture observations; a same-byte replacement or changed
+filesystem identity stops operator-held. Then exclusively create and flush the exact
+prepared receipt at the now-absent state path, revalidate, and
 release the matching currently owned gate by normal teardown, or quarantine every
 unchanged name only when that owner is proven stale. A crash with the prepared bundle plus the
 unchanged state, the exact quarantine target with state absent, or the exact receipt is
