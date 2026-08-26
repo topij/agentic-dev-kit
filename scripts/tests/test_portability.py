@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+import base64
+import binascii
 import contextlib
 import hashlib
 import importlib.util
@@ -3320,28 +3322,44 @@ def _assert_triage_semantics(workflow: str) -> None:
         (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
     )["triage"]
     recovery_bundle_pattern = triage_config["recovery_bundle_pattern"]
-    old_gate_bytes = b"old-gate-bytes"
+    old_gate_owner = {
+        "token": "old-owner",
+        "run_identity": "triage-run-identity",
+        "host": "review-host",
+        "process_id": 31415,
+        "process_start_observation": "process-start-token",
+        "creation_time": "2026-08-26T00:00:00Z",
+    }
+    old_gate_bytes = canonical_json_bytes(old_gate_owner) + b"\n"
     old_gate_digest = hashlib.sha256(old_gate_bytes).hexdigest()
     old_gate_observations = {
         "path": "state/gates/triage-test.gate",
         "device": 7,
         "inode": 19,
         "mode": 0o100600,
-        "link_count": 1,
+        "link_count": 2,
         "size": len(old_gate_bytes),
         "modification_time_ns": 654321,
     }
+    old_gate_inode_names = [
+        old_gate_observations,
+        {
+            **old_gate_observations,
+            "path": "state/gates/.triage-test.gate.old-owner.tmp",
+        },
+    ]
     old_gate_capture = {
         "bytes": old_gate_bytes.decode("utf-8"),
         "digest": old_gate_digest,
-        "owner": {"token": "old-owner"},
+        "owner": old_gate_owner,
         "observations": old_gate_observations,
+        "same_inode_names": old_gate_inode_names,
     }
     intent_fields = {
         "kind": "test-gate-recovery-intent",
         "mode": "test",
         "old_gate_digest": old_gate_digest,
-        "old_gate_owner": {"token": "old-owner"},
+        "old_gate_owner": old_gate_owner,
         "bundle_path": recovery_bundle_pattern.format(
             mode="test", gate_digest=old_gate_digest
         ),
@@ -3382,8 +3400,9 @@ def _assert_triage_semantics(workflow: str) -> None:
 
     def gate_only_bundle_valid(
         bundle: dict[str, object],
-        observed_gate: dict[str, object] = old_gate_capture,
+        observed_gate: dict[str, object] | None = old_gate_capture,
         observed_bundle_path: str = intent_fields["bundle_path"],
+        durable_intent: dict[str, object] | None = None,
     ) -> bool:
         core = bundle.get("prepared_core")
         approval = bundle.get("approval")
@@ -3396,16 +3415,55 @@ def _assert_triage_semantics(workflow: str) -> None:
         if not isinstance(core_intent_fields, dict):
             return False
         embedded_gate = core.get("old_gate_capture")
-        if not isinstance(embedded_gate, dict) or embedded_gate != observed_gate:
+        if not isinstance(embedded_gate, dict):
+            return False
+        if observed_gate is not None and embedded_gate != observed_gate:
+            return False
+        if observed_gate is None and durable_intent != intent:
             return False
         embedded_gate_bytes = embedded_gate.get("bytes")
         if not isinstance(embedded_gate_bytes, str):
+            return False
+        try:
+            decoded_owner = json.loads(embedded_gate_bytes)
+        except json.JSONDecodeError:
+            return False
+        owner = embedded_gate.get("owner")
+        gate_observations = embedded_gate.get("observations")
+        same_inode_names = embedded_gate.get("same_inode_names")
+        required_owner_fields = {
+            "token",
+            "run_identity",
+            "host",
+            "process_id",
+            "process_start_observation",
+            "creation_time",
+        }
+        if (
+            not isinstance(owner, dict)
+            or set(owner) != required_owner_fields
+            or owner != decoded_owner
+            or not isinstance(gate_observations, dict)
+            or not isinstance(same_inode_names, list)
+            or gate_observations not in same_inode_names
+            or gate_observations.get("link_count") != len(same_inode_names)
+            or any(
+                not isinstance(name, dict)
+                or name.get("device") != gate_observations.get("device")
+                or name.get("inode") != gate_observations.get("inode")
+                for name in same_inode_names
+            )
+        ):
             return False
         gate_digest = hashlib.sha256(embedded_gate_bytes.encode("utf-8")).hexdigest()
         mode = core_intent_fields.get("mode")
         expected_kind = {
             "live": "gate-only-prepared",
             "test": "test-gate-only-prepared",
+        }.get(mode)
+        expected_intent_kind = {
+            "live": "gate-only-recovery-intent",
+            "test": "test-gate-recovery-intent",
         }.get(mode)
         expected_bundle_path = recovery_bundle_pattern.format(
             mode=mode, gate_digest=gate_digest
@@ -3417,7 +3475,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         }
         return (
             expected_kind is not None
+            and expected_intent_kind is not None
             and bundle.get("kind") == expected_kind
+            and core_intent_fields.get("kind") == expected_intent_kind
             and embedded_gate.get("digest") == gate_digest
             and core_intent_fields.get("old_gate_digest") == gate_digest
             and core_intent_fields.get("old_gate_owner") == embedded_gate.get("owner")
@@ -3434,6 +3494,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         )
 
     assert gate_only_bundle_valid(prepared_bundle)
+    assert gate_only_bundle_valid(
+        prepared_bundle,
+        observed_gate=None,
+        durable_intent=intended_intent,
+    )
     assert prepared_bundle["prepared_core_digest"] == hashlib.sha256(
         canonical_json_bytes(prepared_bundle["prepared_core"])
     ).hexdigest()
@@ -3468,13 +3533,16 @@ def _assert_triage_semantics(workflow: str) -> None:
         assert not gate_only_bundle_valid(changed_kind)
 
     def rebuild_gate_only_bundle(
-        gate_capture: dict[str, object], candidate_path: str
+        gate_capture: dict[str, object],
+        candidate_path: str,
+        nested_intent_kind: object = intent_fields["kind"],
     ) -> dict[str, object]:
         gate_bytes = gate_capture["bytes"]
         assert isinstance(gate_bytes, str)
         gate_digest = hashlib.sha256(gate_bytes.encode("utf-8")).hexdigest()
         rebuilt_fields = {
             **intent_fields,
+            "kind": nested_intent_kind,
             "old_gate_digest": gate_digest,
             "old_gate_owner": gate_capture["owner"],
             "bundle_path": candidate_path,
@@ -3514,7 +3582,7 @@ def _assert_triage_semantics(workflow: str) -> None:
     assert not gate_only_bundle_valid(
         rebuild_gate_only_bundle(changed_gate_bytes, changed_gate_path)
     )
-    for changed_field, changed_value in (("inode", 20), ("link_count", 2)):
+    for changed_field, changed_value in (("inode", 20), ("link_count", 3)):
         changed_gate_identity = {
             **old_gate_capture,
             "observations": {
@@ -3529,6 +3597,56 @@ def _assert_triage_semantics(workflow: str) -> None:
         )
     assert not gate_only_bundle_valid(
         rebuild_gate_only_bundle(old_gate_capture, "state/foreign-bundle.json")
+    )
+    for nested_intent_kind in ("foreign-intent", None):
+        assert not gate_only_bundle_valid(
+            rebuild_gate_only_bundle(
+                old_gate_capture,
+                intent_fields["bundle_path"],
+                nested_intent_kind,
+            )
+        )
+    missing_owner_field = {**old_gate_owner}
+    missing_owner_field.pop("host")
+    missing_owner_capture = {
+        **old_gate_capture,
+        "bytes": (canonical_json_bytes(missing_owner_field) + b"\n").decode("utf-8"),
+        "owner": missing_owner_field,
+    }
+    assert not gate_only_bundle_valid(
+        rebuild_gate_only_bundle(
+            missing_owner_capture,
+            recovery_bundle_pattern.format(
+                mode="test",
+                gate_digest=hashlib.sha256(
+                    missing_owner_capture["bytes"].encode("utf-8")
+                ).hexdigest(),
+            ),
+        )
+    )
+    missing_inode_name_capture = {
+        **old_gate_capture,
+        "same_inode_names": old_gate_inode_names[:1],
+    }
+    assert not gate_only_bundle_valid(
+        rebuild_gate_only_bundle(
+            missing_inode_name_capture, intent_fields["bundle_path"]
+        )
+    )
+    foreign_inode_name_capture = {
+        **old_gate_capture,
+        "same_inode_names": [
+            *old_gate_inode_names,
+            {
+                **old_gate_observations,
+                "path": "state/gates/foreign-name",
+            },
+        ],
+    }
+    assert not gate_only_bundle_valid(
+        rebuild_gate_only_bundle(
+            foreign_inode_name_capture, intent_fields["bundle_path"]
+        )
     )
     for approval_mutation in (
         {**prepared_bundle["approval"], "decision": "refuse"},
@@ -3594,6 +3712,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         elif step == "quarantine-old-gate":
             assert current_gate_digest == old_gate_digest and state_kind == "intent"
             current_gate_digest = None
+            assert gate_only_bundle_valid(
+                prepared_bundle,
+                observed_gate=None,
+                durable_intent=intended_intent,
+            )
             assert matching_test_routes(
                 "interactive",
                 "absent",
@@ -3606,6 +3729,11 @@ def _assert_triage_semantics(workflow: str) -> None:
             assert current_gate_digest is None and state_kind == "intent"
             current_gate_digest = replacement_gate_digest
             assert current_gate_digest != intent_bundle_gate_digest
+            assert gate_only_bundle_valid(
+                prepared_bundle,
+                observed_gate=None,
+                durable_intent=intended_intent,
+            )
             assert matching_test_routes(
                 "interactive",
                 "blocking",
@@ -3664,58 +3792,74 @@ def _assert_triage_semantics(workflow: str) -> None:
         ),
     }
 
-    captured_state = b'{"phase":"propose"}\n'
-    captured_state_digest = hashlib.sha256(captured_state).hexdigest()
-    captured_observations = {
+    def encoded_state_fields(raw_bytes: bytes) -> dict[str, str]:
+        return {
+            "state_bytes_encoding": "base64",
+            "state_bytes_base64": base64.b64encode(raw_bytes).decode("ascii"),
+            "state_digest": hashlib.sha256(raw_bytes).hexdigest(),
+        }
+
+    def decoded_state_bytes(capture: dict[str, object]) -> bytes:
+        assert capture.get("state_bytes_encoding") == "base64"
+        encoded = capture.get("state_bytes_base64")
+        assert isinstance(encoded, str)
+        raw_bytes = base64.b64decode(encoded, validate=True)
+        assert hashlib.sha256(raw_bytes).hexdigest() == capture.get("state_digest")
+        return raw_bytes
+
+    state_gate_observations = {
+        **old_gate_observations,
+        "path": "state/gates/triage-live.gate",
+    }
+    state_gate_inode_names = [
+        state_gate_observations,
+        {
+            **state_gate_observations,
+            "path": "state/gates/.triage-live.gate.old-owner.tmp",
+        },
+    ]
+    state_old_gate_capture = {
+        **old_gate_capture,
+        "observations": state_gate_observations,
+        "same_inode_names": state_gate_inode_names,
+    }
+    bundle_path = recovery_bundle_pattern.format(
+        mode="live", gate_digest=old_gate_digest
+    )
+    valid_state = b'{"phase":"propose"}\n'
+    valid_observations = {
         "path": "state/triage-live.json",
         "device": 7,
         "inode": 11,
         "mode": 0o100600,
         "link_count": 1,
-        "size": len(captured_state),
+        "size": len(valid_state),
         "modification_time_ns": 123456,
     }
-    state_gate_observations = {
-        **old_gate_observations,
-        "path": "state/gates/triage-live.gate",
-    }
-    state_old_gate_capture = {
-        **old_gate_capture,
-        "observations": state_gate_observations,
-    }
-    bundle_path = recovery_bundle_pattern.format(
-        mode="live", gate_digest=old_gate_digest
-    )
-    capture_core = {
+    valid_capture_core = {
         "mode": "live",
         "bundle_path": bundle_path,
         "old_gate": state_old_gate_capture,
-        "state_digest": captured_state_digest,
-        "state_bytes": captured_state.decode("utf-8"),
-        "state_observations": captured_observations,
+        **encoded_state_fields(valid_state),
+        "state_observations": valid_observations,
         "repository_identity": "repo-id",
     }
-    capture_core_digest = hashlib.sha256(
-        canonical_json_bytes(capture_core)
+    valid_capture_core_digest = hashlib.sha256(
+        canonical_json_bytes(valid_capture_core)
     ).hexdigest()
-    capture_bundle = {
-        "kind": "state-present-capture",
-        "capture_core": capture_core,
-        "capture_core_digest": capture_core_digest,
-    }
     valid_action_core = {
-        "capture_core_digest": capture_core_digest,
+        "capture_core_digest": valid_capture_core_digest,
         "action": "preserve-valid-state-and-quarantine-old-gate",
         "old_gate_digest": old_gate_digest,
-        "state_digest": captured_state_digest,
+        "state_digest": hashlib.sha256(valid_state).hexdigest(),
     }
     valid_action_core_digest = hashlib.sha256(
         canonical_json_bytes(valid_action_core)
     ).hexdigest()
     valid_prepared = {
         "kind": "state-present-prepared",
-        "capture_core": capture_core,
-        "capture_core_digest": capture_core_digest,
+        "capture_core": valid_capture_core,
+        "capture_core_digest": valid_capture_core_digest,
         "action_core": valid_action_core,
         "action_core_digest": valid_action_core_digest,
         "approval": {
@@ -3725,10 +3869,38 @@ def _assert_triage_semantics(workflow: str) -> None:
             "action_core_digest": valid_action_core_digest,
         },
     }
+    valid_artifact = {
+        "path": valid_observations["path"],
+        **encoded_state_fields(valid_state),
+        "state_observations": valid_observations,
+    }
+
+    captured_state = b'\xff{"phase":"propose"}\n'
+    captured_observations = {
+        **valid_observations,
+        "size": len(captured_state),
+        "modification_time_ns": 123457,
+    }
+    capture_core = {
+        "mode": "live",
+        "bundle_path": bundle_path,
+        "old_gate": state_old_gate_capture,
+        **encoded_state_fields(captured_state),
+        "state_observations": captured_observations,
+        "repository_identity": "repo-id",
+    }
+    assert decoded_state_bytes(capture_core) == captured_state
+    capture_core_digest = hashlib.sha256(
+        canonical_json_bytes(capture_core)
+    ).hexdigest()
+    capture_bundle = {
+        "kind": "state-present-capture",
+        "capture_core": capture_core,
+        "capture_core_digest": capture_core_digest,
+    }
     quarantine_artifact = {
         "path": "state/quarantine/triage-live.json",
-        "state_bytes": captured_state.decode("utf-8"),
-        "state_digest": captured_state_digest,
+        **encoded_state_fields(captured_state),
         "state_observations": {
             **captured_observations,
             "path": "state/quarantine/triage-live.json",
@@ -3781,16 +3953,17 @@ def _assert_triage_semantics(workflow: str) -> None:
 
     current_artifact = {
         "path": captured_observations["path"],
-        "state_bytes": captured_state.decode("utf-8"),
-        "state_digest": captured_state_digest,
+        **encoded_state_fields(captured_state),
         "state_observations": captured_observations,
     }
+    assert decoded_state_bytes(current_artifact) == captured_state
+    assert decoded_state_bytes(quarantine_artifact) == captured_state
 
     def state_present_route(
         bundle: dict[str, object],
         gate_status: str,
         artifact: dict[str, object],
-        observed_gate: dict[str, object] = state_old_gate_capture,
+        observed_gate: dict[str, object] | None = state_old_gate_capture,
         observed_bundle_path: str = bundle_path,
     ) -> str:
         kind = bundle.get("kind")
@@ -3803,11 +3976,60 @@ def _assert_triage_semantics(workflow: str) -> None:
             canonical_json_bytes(embedded_capture)
         ).hexdigest():
             return "operator-held"
+        encoded_state = embedded_capture.get("state_bytes_base64")
+        if (
+            embedded_capture.get("state_bytes_encoding") != "base64"
+            or not isinstance(encoded_state, str)
+        ):
+            return "operator-held"
+        try:
+            embedded_state_bytes = base64.b64decode(encoded_state, validate=True)
+        except (binascii.Error, ValueError):
+            return "operator-held"
+        if hashlib.sha256(embedded_state_bytes).hexdigest() != embedded_capture.get(
+            "state_digest"
+        ):
+            return "operator-held"
         embedded_gate = embedded_capture.get("old_gate")
-        if not isinstance(embedded_gate, dict) or embedded_gate != observed_gate:
+        if not isinstance(embedded_gate, dict):
+            return "operator-held"
+        if gate_status == "absent" and observed_gate is not None:
+            return "operator-held"
+        if gate_status != "absent" and embedded_gate != observed_gate:
             return "operator-held"
         embedded_gate_bytes = embedded_gate.get("bytes")
         if not isinstance(embedded_gate_bytes, str):
+            return "operator-held"
+        try:
+            decoded_owner = json.loads(embedded_gate_bytes)
+        except json.JSONDecodeError:
+            return "operator-held"
+        owner = embedded_gate.get("owner")
+        gate_observations = embedded_gate.get("observations")
+        same_inode_names = embedded_gate.get("same_inode_names")
+        if (
+            not isinstance(owner, dict)
+            or set(owner)
+            != {
+                "token",
+                "run_identity",
+                "host",
+                "process_id",
+                "process_start_observation",
+                "creation_time",
+            }
+            or owner != decoded_owner
+            or not isinstance(gate_observations, dict)
+            or not isinstance(same_inode_names, list)
+            or gate_observations not in same_inode_names
+            or gate_observations.get("link_count") != len(same_inode_names)
+            or any(
+                not isinstance(name, dict)
+                or name.get("device") != gate_observations.get("device")
+                or name.get("inode") != gate_observations.get("inode")
+                for name in same_inode_names
+            )
+        ):
             return "operator-held"
         embedded_gate_digest = hashlib.sha256(
             embedded_gate_bytes.encode("utf-8")
@@ -3823,10 +4045,21 @@ def _assert_triage_semantics(workflow: str) -> None:
             or observed_bundle_path != expected_bundle_path
         ):
             return "operator-held"
+        embedded_state_observations = embedded_capture.get("state_observations")
+        if not isinstance(embedded_state_observations, dict):
+            return "operator-held"
+        expected_current_artifact = {
+            "path": embedded_state_observations.get("path"),
+            "state_bytes_encoding": "base64",
+            "state_bytes_base64": encoded_state,
+            "state_digest": embedded_capture.get("state_digest"),
+            "state_observations": embedded_state_observations,
+        }
         if kind == "state-present-capture":
             return (
                 "await-action-approval"
-                if artifact == current_artifact and gate_status == "proven-stale"
+                if artifact == expected_current_artifact
+                and gate_status == "proven-stale"
                 else "operator-held"
             )
         action_core = bundle.get("action_core")
@@ -3858,13 +4091,13 @@ def _assert_triage_semantics(workflow: str) -> None:
         ):
             return "operator-held"
         if action == "preserve-valid-state-and-quarantine-old-gate":
-            if artifact != current_artifact:
+            if artifact != expected_current_artifact:
                 return "operator-held"
             return {
                 "proven-stale": "resume-valid-stale-gate-quarantine",
                 "absent": "ordinary-resume",
             }.get(gate_status, "operator-held")
-        if artifact == current_artifact:
+        if artifact == expected_current_artifact:
             return "resume-state-quarantine"
         if artifact == quarantine_artifact:
             return "resume-receipt-publication"
@@ -3891,10 +4124,10 @@ def _assert_triage_semantics(workflow: str) -> None:
         capture_bundle, "proven-stale", current_artifact
     ) == "await-action-approval"
     assert state_present_route(
-        valid_prepared, "proven-stale", current_artifact
+        valid_prepared, "proven-stale", valid_artifact
     ) == "resume-valid-stale-gate-quarantine"
     assert state_present_route(
-        valid_prepared, "absent", current_artifact
+        valid_prepared, "absent", valid_artifact, observed_gate=None
     ) == "ordinary-resume"
     assert state_present_route(
         invalid_prepared, "owned", current_artifact
@@ -3909,7 +4142,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         invalid_prepared, "proven-stale", restart_receipt
     ) == "quarantine-proven-stale-gate"
     assert state_present_route(
-        invalid_prepared, "absent", restart_receipt
+        invalid_prepared, "absent", restart_receipt, observed_gate=None
     ) == "restart-receipt-ready"
     for kind_mutation in ("foreign", None):
         changed_kind = {**invalid_prepared}
@@ -4056,7 +4289,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "proven-stale",
         current_artifact,
     ) == "operator-held"
-    for changed_field, changed_value in (("inode", 20), ("link_count", 2)):
+    for changed_field, changed_value in (("inode", 20), ("link_count", 3)):
         changed_state_gate_identity = {
             **state_old_gate_capture,
             "observations": {
@@ -4511,11 +4744,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             "Any state that might not have reached",
             1,
         ),
-        workflow.replace(
-            "Parse and validate only the captured bytes, never the still-live path",
-            "Parse and validate the still-live path before capturing its bytes",
-            1,
-        ),
+            workflow.replace(
+                "Parse and\nvalidate only the captured bytes, never the still-live path",
+                "Parse and validate the still-live path before capturing its bytes",
+                1,
+            ),
         workflow.replace(
             "capture raw bytes and filesystem observations before parsing",
             "parse live state before capture",

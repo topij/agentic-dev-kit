@@ -398,11 +398,15 @@ of the canonical `prepared_core` digest, atomically and exclusively create and f
 the semantic classifier: derive the one intent payload by adding the core digest, hash
 that payload, and include both plus the core-bound approval in the envelope. Hashing the
 full envelope is permitted for artifact read-back, but that digest is never an input to
-its core or intended intent. On every read, require the envelope kind to match the mode,
-recompute the old-gate digest from the captured gate bytes, match the complete captured
-gate and filesystem observations to the externally observed blocking gate, and derive
-the exact configured bundle path from that digest. A self-consistent foreign envelope
-is evidence, not resume authority. Then claim the absent state path by exclusive creation of
+its core or intended intent. Before old-gate quarantine, require the envelope kind to
+match the mode, recompute the old-gate digest from the captured gate bytes, match the
+complete captured gate and filesystem observations to the externally observed blocking
+gate, and derive the exact configured bundle path from that digest. After quarantine,
+the old gate is necessarily unavailable at its blocking path: validate the same bundle
+through the byte-identical durable intent, its prepared-core binding, the retained gate
+capture and locator, quarantine evidence, and any replacement-gate authority instead of
+inventing a live old-gate observation. A self-consistent foreign envelope is evidence,
+not resume authority. Then claim the absent state path by exclusive creation of
 that exact `gate-only-recovery-intent`, which binds the prepared-core digest, old gate
 owner record, old gate digest, exact configured bundle path, approved capture, absence
 observations, and repository identity. Flush that intent and
@@ -433,7 +437,8 @@ its content. Reject a symlink, non-regular file, or link count other than one. B
 validity classification, rename, or repair, atomically and exclusively create a
 `state-present-capture` bundle at `triage.recovery_bundle_pattern` expanded with the mode
 and digest of the exact complete held gate. Its immutable capture core contains the
-exact raw state bytes, their SHA-256 digest, the active path, repository identity, the
+exact raw state bytes as canonical base64 with an explicit `base64` encoding label,
+their SHA-256 digest computed over the decoded bytes, the active path, repository identity, the
 exact configured bundle path, and the complete held-gate bytes, owner record, digest,
 and filesystem observations. It also contains the path's device, inode, mode, link
 count, size, and modification time observed around
@@ -443,7 +448,8 @@ the exact bundle from the unchanged blocking gate, validate its capture digest, 
 continue from the captured bytes. Other entries and unattended execution preserve it
 operator-held.
 
-Parse and validate only the captured bytes, never the still-live path. Record the parse
+Decode the lossless capture and require its raw-byte digest before parsing. Parse and
+validate only the captured bytes, never the still-live path. Record the parse
 result and current and recorded identities in a candidate `action_core`. The prepared
 envelope embeds the complete immutable capture core and digest, the action core and
 digest, and the exact decision plus approver identity bound to `action_core_digest`.
@@ -451,10 +457,13 @@ Only the two declared actions are valid: `preserve-valid-state-and-quarantine-ol
 and `abandon-invalid-state`. An absent, empty, or unknown action or approving decision is
 not recovery authority and stops operator-held.
 Before selecting either transition, require the exact `state-present-capture` or
-`state-present-prepared` kind, recompute the embedded old-gate digest, rederive the
-configured bundle path, and match the embedded complete gate capture to the externally
-observed blocking gate. Missing or foreign kinds and self-consistent cross-gate bundles
-stop operator-held.
+`state-present-prepared` kind, recompute the embedded old-gate digest, and rederive the
+configured bundle path. While the old gate exists, match the embedded complete gate
+capture to that externally observed blocking gate. At a declared post-quarantine
+cutpoint, require old-gate absence and validate only through the retained immutable
+capture plus the exact quarantine or receipt evidence; never fabricate an observation
+of an absent gate. Missing or foreign kinds and self-consistent cross-gate bundles stop
+operator-held.
 For each report or frozen-snapshot path obtained from validated captured
 fields, apply the same path, alias, and atomic-read checks before recording exact paths,
 bytes/digests, and filesystem observations. Never follow an unvalidated path from
