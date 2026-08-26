@@ -94,12 +94,15 @@ observations, prove its owner terminated, compute `gate_digest` from those exact
 bytes, then non-creatingly resolve and capture the exact mode-specific state path and
 the one `triage.recovery_bundle_pattern` candidate for that mode and gate digest,
 with filesystem observations for both. Parse the captured bundle candidate first. A
-valid matching state-present test held bundle selects `held-evidence`; a malformed,
-foreign, or digest-mismatched candidate stops operator-held without parsing the state
-copy. Only when the bundle candidate is absent, parse the captured state copy to
-classify ordinary state, absence, or a mode-specific recovery intent or held receipt. A
-valid mode-specific intent may resolve only the same deterministic bundle candidate and
-must digest-check it. Test classification stays inside the test state root and never
+valid matching state-present test held bundle selects `held-evidence`. A valid matching
+non-held recovery bundle, or a malformed, foreign, or digest-mismatched candidate,
+stops operator-held without parsing the state copy; preserve it, the gate, and state
+byte-identically, because a bundle alone is not resume authority. Only when the
+current-gate bundle candidate is absent, parse the captured state copy to classify ordinary
+state, absence, or a mode-specific recovery intent or held receipt. A valid
+mode-specific intent derives the configured bundle candidate from its recorded old-gate
+digest and mode, not from a replacement gate; resolve only that exact candidate and
+digest-check it against the intent. Test classification stays inside the test state root and never
 reads a live state, receipt, intent, or bundle. An active or uncertain owner stops
 operator-held before the state-path capture; the classifier never changes an artifact or
 resolves unrelated capabilities. The
@@ -122,6 +125,7 @@ intent or held receipt.
 | `new`, active live state | Refuse; never overwrite an approval-bound session. |
 | Interactive `recover`, active live state and no blocking gate | Under the single-writer gate, capture raw bytes and filesystem observations before parsing the captured copy; valid state then refuses and directs to `resume`, while invalid state enters recovery. Recovery never authorizes a tracker, source, or forge write. |
 | Interactive `recover`, blocking gate without a gate-only receipt | Capture the complete published gate and its filesystem observations; prove owner termination and require exact operator approval before quarantining the unchanged gate, whether or not active state exists. When state is absent, publish a blocking `gate-only-recovery-intent` before gate quarantine; never infer safe restart. |
+| Interactive `recover`, blocking gate with a valid non-held, malformed, foreign, or digest-mismatched current-gate recovery bundle | After proving owner termination, preserve bundle, gate, and state byte-identically; report operator-held without parsing state or treating the bundle as resume authority. |
 | Interactive `recover`, `gate-only-recovery-intent` present | Resume only the recorded bundle and digest-checked gate-only transition; never restart or reconstruct the draft. |
 | Interactive `recover`, no active live state, gate, or gate-only receipt | Hard-stop without creating a recovery bundle or performing an external write. |
 | Non-recover live invocation with a gate-only intent | Preserve the intent and bundle; report operator-held and never start, resume, or reconstruct a draft automatically. |
@@ -166,14 +170,16 @@ context, entry, and recovery-artifact kind.
 
 ### Test input precedence
 
-Apply this table before the ordinary test-state rows. `held bundle` is evaluated first;
-the remaining cases require it to be absent. Artifact kinds are exclusive parser
+Apply this table before the ordinary test-state rows. After owner termination is proven,
+the current-gate bundle is evaluated before state. Artifact kinds are exclusive parser
 results: `absent`, `valid-state`, `invalid-state`, `safe-restart-receipt`, or
-`test-gate-recovery-intent`.
+`test-gate-recovery-intent`. `valid-non-held` means an ordinary recovery bundle that
+matches the current gate but does not carry the state-present held-evidence kind.
 
-| Test case id | Context | Gate | Artifact | Held bundle | Owner/capture authority | Required result |
+| Test case id | Context | Gate | Artifact | Current-gate bundle | Owner/capture authority | Required result |
 |---|---|---|---|---|---|---|
-| `held-evidence` | any | any | any | present | any | Preserve bundle, gate, and artifact; report operator-held with no mutation. |
+| `held-evidence` | interactive | blocking | any | `held-evidence` | proven dead | Preserve bundle, gate, and artifact; report operator-held with no mutation. |
+| `bundle-evidence-held` | interactive | blocking | any | `valid-non-held`, malformed, foreign, or digest-mismatched | proven dead | Preserve bundle, gate, and artifact; report operator-held without parsing state or mutating an artifact. |
 | `intent-interactive` | interactive | any | `test-gate-recovery-intent` | absent | already recorded | Resume only the recorded absent-state gate transition. |
 | `intent-unattended` | scheduled or unattended | any | `test-gate-recovery-intent` | absent | any | Preserve everything and report operator-held. |
 | `gated-owner-unready-interactive` | interactive | blocking | `absent`, `valid-state`, `invalid-state`, or `safe-restart-receipt` | absent | active or uncertain | Preserve gate and artifact; report operator-held without writing a bundle or intent. |
@@ -326,6 +332,7 @@ Select the first matching row and report exactly one overall outcome.
 | `required-or-safety-failure` | A required preflight/state/safety check failed before a disputed action, or shared/runtime policy conflicts. | `hard-stop` |
 | `gate-only-recovery-held` | A valid `gate-only-recovery-intent` or `gate-only-operator-held` receipt exists. | `operator-held` |
 | `test-gate-recovery-held` | A valid `test-gate-recovery-intent` cannot be resumed interactively, or a state-present test-gate held bundle exists. | `operator-held` |
+| `recovery-evidence-held` | A valid non-held, malformed, foreign, or digest-mismatched current-gate recovery bundle exists after owner termination is proven. | `operator-held` |
 | `approval-or-triggered-write-not-terminal` | Approval is pending or a triggered notification, tracker, repository, or review path lacks an authoritative terminal state. | `operator-held` |
 | `optional-degradation-after-terminal-work` | Required and triggered work is terminal, but an optional interactive notification or compute enhancement degraded. | `degraded-success` |
 | `all-triggered-contracts-terminal` | No prior row matches and every triggered capability is terminal. | `successful-completion` |
@@ -353,7 +360,8 @@ filesystem observations proving that absence. After obtaining exact operator app
 of the bundle digest,
 atomically claim the absent state path by exclusive creation of a
 `gate-only-recovery-intent` that binds the bundle digest, old gate owner record,
-approved capture, absence observations, and repository identity. Flush that intent and
+old gate digest, exact configured bundle path, approved capture, absence observations,
+and repository identity. Flush that intent and
 its directory before revalidating and quarantining every unchanged name for the old
 gate. The durable intent is the blocking state if the process stops or another
 invocation arrives after quarantine. Acquire a new recovery gate, re-prove state

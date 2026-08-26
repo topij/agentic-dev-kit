@@ -2504,6 +2504,8 @@ def test_installer_refuses_duplicate_tracker_authority_before_writing(
 
     assert result.returncode == 1, result.stdout
     assert "ambiguous child key" in result.stderr, result.stderr
+    assert "require complete same-line flow sequences" in result.stderr
+    assert "every other prompted field requires a same-line scalar" in result.stderr
     assert _config(repo) == config
     assert not (repo / ".gitignore").exists()
 
@@ -2649,6 +2651,8 @@ def test_installer_refuses_block_children_under_a_prompt_owned_value(
 
     assert result.returncode == 1, result.stdout
     assert "ambiguous child key" in result.stderr, result.stderr
+    assert "require complete same-line flow sequences" in result.stderr
+    assert "every other prompted field requires a same-line scalar" in result.stderr
     assert _config(repo) == config
     after = {
         path.relative_to(repo): path.read_bytes()
@@ -2767,9 +2771,17 @@ def test_installer_refuses_wrong_node_types_for_line_owned_fields_before_writing
     config = shipped_config().replace(old_line, replacement, 1)
     assert config != shipped_config()
     repo = _fixture(tmp_path, config=config, git=True, templates=True)
-    outside = tmp_path / "outside" / "handoff.md"
-    outside.parent.mkdir()
-    outside.write_text("operator-owned\n", encoding="utf-8")
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    operator_file = outside_dir / "operator.md"
+    operator_file.write_text("operator-owned\n", encoding="utf-8")
+    escaped_flow_target = outside_dir / "handoff.md]"
+    assert not escaped_flow_target.exists()
+    outside_before = {
+        path.relative_to(outside_dir): path.read_bytes()
+        for path in outside_dir.rglob("*")
+        if path.is_file()
+    }
     existing = {
         path.relative_to(repo): path.read_bytes()
         for path in repo.rglob("*")
@@ -2780,6 +2792,8 @@ def test_installer_refuses_wrong_node_types_for_line_owned_fields_before_writing
 
     assert result.returncode == 1, result.stdout
     assert "ambiguous child key" in result.stderr, result.stderr
+    assert "require complete same-line flow sequences" in result.stderr
+    assert "every other prompted field requires a same-line scalar" in result.stderr
     assert _config(repo) == config
     after = {
         path.relative_to(repo): path.read_bytes()
@@ -2787,7 +2801,13 @@ def test_installer_refuses_wrong_node_types_for_line_owned_fields_before_writing
         if path.is_file() and ".git" not in path.parts
     }
     assert after == existing
-    assert outside.read_text(encoding="utf-8") == "operator-owned\n"
+    outside_after = {
+        path.relative_to(outside_dir): path.read_bytes()
+        for path in outside_dir.rglob("*")
+        if path.is_file()
+    }
+    assert outside_after == outside_before
+    assert not escaped_flow_target.exists()
     assert not (repo / ".gitignore").exists()
     assert not (repo / ".git" / "hooks" / "pre-push").exists()
 

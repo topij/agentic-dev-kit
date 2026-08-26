@@ -52,7 +52,8 @@ starts.
   keys without replacing adopter values. Before retrying a preflight refusal, normalize
   prompted init-owned sections to bare mappings with the shipped two-space child
   indentation; keep a partial `triage` flat map at one consistent indentation. Rewrite
-  prompted and partial-`triage` values as ordinary same-line scalars or collections;
+  `review.bots` and `systemize.operator_logins` as complete same-line flow sequences,
+  and every other prompted or partial-`triage` value as a same-line scalar;
   the shell-only migrator rejects YAML tags, anchors, aliases, block scalars, and block
   children beneath prompted values, plus flow or quote continuations. Block YAML on
   other fields can still be refused; normalize any refused value to an ordinary

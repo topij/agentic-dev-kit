@@ -882,7 +882,9 @@ preflight_migration_config() {
     echo "error: an init-owned config section contains an ambiguous child key." >&2
     echo "  Use unique bare mapping keys at the shipped indentation and keep" >&2
     echo "  prompted values on their key line without tags, anchors, aliases, or block scalars;" >&2
-    echo "  flow collections and quoted scalars must also finish on that line;" >&2
+    echo "  review.bots and systemize.operator_logins require complete same-line flow sequences;" >&2
+    echo "  every other prompted field requires a same-line scalar, and flow mappings are unsupported;" >&2
+    echo "  quoted scalars must also finish on their key line;" >&2
     echo "  tracker.linear must be a plain nested map." >&2
     echo "  No migration was applied." >&2
     exit 1
