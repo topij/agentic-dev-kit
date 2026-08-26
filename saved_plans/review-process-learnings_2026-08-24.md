@@ -1,8 +1,9 @@
 # Review-process learnings — 2026-08-24
 
-Status: evidence record from the Codex–Claude parity work in PR `#595` and PR `#596`.
-This is not shared gate doctrine. Promote a lesson to `docs/agentic-dev-kit/` only after
-a later change defines and tests the reusable contract.
+Status: evidence record from the Codex–Claude parity work in PR `#595`, PR `#596`, and
+PR `#599`. This is not shared gate doctrine. Promote a lesson to
+`docs/agentic-dev-kit/` only after a later change defines and tests the reusable
+contract.
 
 ## What paid off
 
@@ -83,3 +84,41 @@ For work using the fallback panel:
 - Treat review-cycle cost as evidence too: when accepted findings cluster around the
   mitigation rather than the goal, improve the test/declaration shape instead of adding
   more prose guards.
+
+## Lifecycle-design additions from PR `#599`
+
+- Build an external-action matrix before implementation: action × crash cutpoint ×
+  durable evidence × authoritative observer.
+- Self-consistent digests and schemas are not authority; compare them with independently
+  observed source or external state.
+- Pre-action intent must not contain identifiers produced by the pending action.
+- Chain every action's consumed identifiers to the preceding verified read-back.
+- Derive semantic-test paths and other declaration-owned values from configuration
+  instead of plausible hardcoded fixtures.
+- Ensure duplicated persisted evidence structures are independent objects and prove the
+  boundary using one-sided mutation.
+- Use one batch-level report binding for an ordered proposal set rather than
+  independently invented candidate bindings.
+- Review the complete lifecycle and external-side-effect matrix early instead of
+  discovering one missing transition per review round.
+- Treat late repeated review cycles as evidence that the design artifact was incomplete;
+  pause for a fresh-session handoff when another substantive lifecycle gap appears after
+  the agreed decision review.
+
+## Faster fix-round execution
+
+- Freeze the lifecycle matrix before expanding prose, then give every action row an
+  executable positive cutpoint and an authority oracle. A reviewer can challenge the
+  table directly instead of inferring the design from scattered paragraphs.
+- Require an accepted finding to add both a positive construction and a locally
+  recomputed hostile mutation. The pair turns a review discovery into a standing
+  boundary and prevents the next panel from rediscovering its adjacent transition.
+- End the design pass with a contradiction sweep across normative tables, recovery
+  prose, terminal precedence, and the semantic oracle. Treat disagreement between those
+  surfaces as a design defect before launching another panel.
+- Keep the reviewed tree fixed during infrastructure recovery. Bind fallback evidence
+  to the exact content, refresh only the exact-head delta after a content-free forge
+  recovery commit, and never turn an unavailable required check into synthetic success.
+- Run the configured reviewer after the local semantic and mutation matrices, and reserve
+  the authoritative full suite for the exact candidate head. Any later content change
+  invalidates that candidate and starts the exact-head verification boundary again.

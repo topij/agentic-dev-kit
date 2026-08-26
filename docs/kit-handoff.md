@@ -14,10 +14,52 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-25 — the triage integration slice closes the structural Phase 3
-exit; the environment-capable Codex launcher is the next sprint boundary.
+Last updated: 2026-08-26 — PR `#599` merged and closed the structural Phase 3 exit; the
+session preserved the environment-capable Codex launcher as the next sprint boundary.
 
-## Latest session — 2026-08-25 (triage integration preflights complete the shared phase)
+## Latest session — 2026-08-26 (triage forge provenance closes Phase 3)
+
+**Theme —** PR `#599` changed the friction-triage forge path so its lifecycle operations
+consume identifiers from preceding independently verified read-backs. The change
+targeted locally self-consistent records that exchanged repository, commit,
+pull-request, review, archive, or merge identities.
+
+- **The PR added an enumerated provenance spine.** It connected commit read-back's
+  observed commit and tree to push; verified remote-head read-back to pull-request
+  creation; pull-request read-back's PR and head to `pr-watch`; the reviewed PR,
+  observed head, reviewed head, and receipt to archive-sweep evidence; and that reviewed
+  identity to merge intent and read-back. It also added pre-write rejection routes for
+  foreign and future identifiers.
+
+- **The review retained independent authority boundaries.** PR `#599` kept proposal
+  content bound to its frozen authoritative source, derived semantic paths from merged
+  configuration, kept tracker attempts as separate persisted objects, constructed
+  duplicated evidence structures independently, and bound the ordered proposal set to
+  a batch report. It did not permit pre-action records to contain identifiers produced
+  by the pending action.
+
+- **The fix-round evidence exercised transitions rather than isolated records.** Its
+  positive cutpoints constructed action chains from durable predecessors. Its hostile
+  mutations recomputed locally valid records while changing lifecycle identities. PR
+  `#599` added semantic-oracle assertions for those mutations and added no workflow
+  policy to a runtime adapter.
+
+- **The merge satisfied the declared structural Phase 3 exit.** The delivered set was
+  shared workflow definitions, thin runtime bindings, config-owned policy, explicit
+  capability preflights, durable resume evidence, and cross-operation authority for
+  `post-merge-systemize`, `session-start`, `wrap-up`, and `triage-friction-log`. The PR
+  did not add a launcher, model/effort calibration, lane reconciliation, or downstream
+  cs-toolkit adaptation.
+
+▶ Next: create `feat/codex-environment-capable-launcher` from current `origin/main`.
+Inventory supported Codex launch surfaces against the absolute descriptor/environment-
+replacement contract, select an environment-capable mechanism, and obtain live lane-
+isolation evidence before changing shared launcher guidance. Keep model/effort
+calibration and downstream adapter reconciliation in later slices.
+
+______________________________________________________________________
+
+## Session — 2026-08-25 (triage integration preflights complete the shared phase)
 
 **Theme —** The friction-triage pipeline now has config-owned, runtime-neutral input,
 authority, artifact, resume, and outcome contracts, while the optional deterministic
@@ -265,97 +307,6 @@ slice without declaring the remaining client-dependent behavior aligned.
 live-validate Codex SessionStart and PostToolUse matcher, trust, timeout, and output behavior,
 then use the evidence to close lifecycle gaps and design the enforceable shared
 safety-doctrine binding.
-
-______________________________________________________________________
-
-## Session — 2026-08-22 · evening (the review process assessed, and a session that kept reproducing the defect class it was assessing)
-
-**Theme —** A planning session on why PR review costs what it does. The assessment found a
-gap nothing on the tracker held and filed it. Then, writing up the finding, this session
-produced the same defect three times — a claim generalised from one observation — and each
-was refuted by something cheap that no panel had to run.
-
-- **The proportionality machinery all governs re-runs; the opening pass has none.**
-  Blast-radius classes, the executed/record discriminator, the delta pass, logged
-  dispositions — every one is scoped to what a *fix round* owes.
-  `fallback-review-panel.md` then closes the other door explicitly: a PR's initial review
-  takes the full panel, never a delta pass. So a wrap-up PR of pure record prose opens with
-  the pass a merge-gate change opens with. Filed as `#585`, with the three holes it has to
-  survive named rather than waved at. Distinct from `#209` (within a PR's re-run chain) and
-  `#420` (across sibling PRs), both of which are about a pass after the first.
-
-- **The reviewer selection is not a choice anyone is making badly.** The bot reviews when it
-  can, the panel runs when it cannot, and `fallback_commands` is degraded mode for a runtime
-  that cannot isolate a lens — which Claude Code can, so it never runs here. Combined with
-  `#372`'s quota shape, the session's *second* PR reliably gets the panel, and a session's
-  second PR is reliably its wrap-up. The most expensive review a normal session buys is the
-  one on the content with the least to break.
-
-- **Doctrine carries to adopters; the economics do not.** `fallback-review-panel.md`,
-  `safety-critical-changes.md`, `pr-watch.md` and `wrap-up.md` are byte-identical between
-  this repo and cs-toolkit's install, so a fix to `#585` arrives there on its next
-  `/upgrade` with no separate assessment. Whether the gap *costs* anything there is a
-  per-repo fact and is unmeasured.
-
-- **A paid reviewer tier is still metered, and past the allowance the behaviour is a
-  console setting.** `#372` now carries the readings: a stated allowance per hour, and an
-  over-limit path that bills, pauses, or stops depending on the usage-based add-on's mode,
-  with any mode refusing once the spending cap is reached. That narrows what option 3 *is*
-  without choosing it — paying makes the refusal a setting rather than removing it.
-
-- **`#491` showed up live three times in one session**, in three different contexts: a
-  configured incremental skip reported identically to an outage on a PR that had just
-  configured the skip; the same on a later head; and once alongside *valid* coverage, where
-  it was harmless. Followed literally the first time, it prescribes a two-lens panel over a
-  YAML config file. Recorded there — the failure is not fail-open, it is fail-expensive.
-
-- **Executed prose has no deterministic checker at all.** `make lint` is `ruff` and nothing
-  else; there is no prose tool anywhere in the tree. So the surface where findings actually
-  concentrate is checked only by a stochastic reviewer. Filed as `#586`, scoped to executed
-  prose and explicitly *not* to record accuracy — `#120`'s territory, which no lint can
-  reach, because those are truth defects rather than clarity ones.
-
-- **In cs-toolkit:** `#2076` merged (`c5a6897f`) adding that repo's first
-  `.coderabbit.yaml`; `#2078` carries its handoff update. Following `wrap-up.md` there hit
-  `#505`'s mechanism with a second file pair — the workflow names `check_doc_budget.py`
-  unconditionally, that adopter declines it deliberately and says so, and a *downstream*
-  instruction depending on its output was silently skipped while the wrap-up reported
-  success. Recorded there, with a third direction that issue lacked: the workflow could
-  consult the `remedy:` field it already reads.
-
-- **Filed this session:** `#585`, `#586`. Occurrence comments on `#491` and `#505`, and on
-  `#372` — where an earlier comment of this session's was corrected in place rather than
-  answered with a second one.
-
-- **Verified:** no kit code changed this session, so nothing here rests on the suite —
-  though `make test` in `/Users/topi/Coding/agentic-dev-kit` on this branch at `0a06365`
-  printed `1362 passed`, which says the tree was green at handoff and nothing more. The
-  claims above were established by reading rather than by running. The byte-identity of the
-  four doctrine files was checked with `shasum -a 256` over both trees from
-  `/Users/topi/Coding/agentic-dev-kit`; the absence of a prose linter by reading the `lint:`
-  target and grepping the Makefile, `.github/workflows/` and `scripts/` at `fabf554`; the
-  engine defaults behind three "absent" adopter config keys by reading `pr_watch.py`'s
-  module constants, which is what retracted them as findings.
-
-**Learned**
-
-- **Three claims this session were generalisations from one observation, and each was
-  refuted by something cheaper than a review round.** No refusals in a PR sweep read as
-  "there is no quota" — refuted by an allowance line already in the reviewer's own output.
-  One `Charged:` receipt read as "it bills rather than refusing" — refuted by a vendor docs
-  page. And an adopter's absent config keys read as gaps — retracted by the engine's own
-  defaults. Each reading was accurate; the error each time was treating one reading of a
-  *configurable* system as a property of it.
-
-- **What caught them is the argument for `#585` and `#586` both.** An allowance line, a
-  docs page, and a module constant — none of them a panel. The expensive reviewer is not
-  the only thing capable of finding this class, and the cheap things that found it were
-  already present and unread.
-
-▶ Next: `#372` — take the posture decision. It gates how much `#585` and `#586` are worth:
-if the reviewer covers every head, the opening-pass gap is latent rather than live. It now
-carries the metered-tier readings, the over-limit mode table, and the adopter comparison it
-was missing, and a further occurrence has nothing left to teach it.
 
 ______________________________________________________________________
 
