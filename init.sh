@@ -614,7 +614,12 @@ preflight_migration_config() {
     }
     !owned[cursec] { next }
     /^  [^ ]/ {
-      if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_.-]*:/) { unsafe = 1; next }
+      if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_.-]*:/) {
+        # Indentless block-sequence items and multi-line flow closers are
+        # continuation lines, not sibling mapping keys.
+        if ($0 ~ /:/ && $0 !~ /^  -/) unsafe = 1
+        next
+      }
       key = $0
       sub(/^  /, "", key)
       sub(/:.*/, "", key)
@@ -625,7 +630,10 @@ preflight_migration_config() {
       next
     }
     cursec == "tracker" && cursub == "linear" && /^    [^ ]/ {
-      if ($0 !~ /^    [A-Za-z_][A-Za-z0-9_.-]*:/) { unsafe = 1; next }
+      if ($0 !~ /^    [A-Za-z_][A-Za-z0-9_.-]*:/) {
+        if ($0 ~ /:/ && $0 !~ /^    -/) unsafe = 1
+        next
+      }
       key = $0
       sub(/^    /, "", key)
       sub(/:.*/, "", key)
