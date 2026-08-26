@@ -7,7 +7,7 @@ safety guarantees, review evidence, lane isolation, and upgrade behavior as Clau
 Code. Runtime-specific files may differ in shape; their observable contract should
 not.
 
-## Sprint status — 2026-08-26
+## Sprint status — 2026-08-27
 
 The machine-readable inventory and current capability judgments live in
 [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
@@ -32,13 +32,22 @@ their delivery order and exit conditions.
   `wrap-up`. PR `#599` merged the config-owned draft/approve/finalize matrix and the
   independently observed forge-provenance chain for `triage-friction-log`, closing the
   remaining structural exit.
-- [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivers
-  the kit-owned engine boundary for absolute descriptor roots, the environment
-  replacement contract, exact lane/forge
-  identity, fail-closed reconciliation, operator-held evidence, and adopter upgrade
-  ownership. The environment-capable launcher slice now selects the kit-owned stable
-  `codex exec` wrapper and carries synthetic live runtime-isolation evidence. Codex
-  model and effort calibration remains planned.
+- [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivered
+  the kit-owned engine boundary; PR `#609` delivered the Codex wrapper, its live record,
+  and the declared Claude gap. Remaining, in delivery order, one slice each with a
+  design matrix before prose:
+  1. Generalise the wrapper to Claude (`claude -p`) with a Claude-produced live record
+     (`#466`). Run from a Claude Code session.
+  2. Add config-owned approval/sandbox policy per runtime and a writing-lane live record
+     on each runtime — a lane that performs a scoped write and lands a PR through
+     `dev_session.sh pr-watch` (`#601`).
+  3. Calibrate tiers for both runtimes and declare mechanical-versus-advisory per key
+     per runtime (`#605`, `#255`); retire the "no per-agent effort" sentences.
+  4. Run the first real headless task on the generalised launcher: `#602`.
+     Adopt now, mechanise later: the final verification stamp is a PR comment at the
+     merged head, and a panel that ran leaves a disposition comment (`#603`, `#604`).
+     Phase 5 owns `#606`, `#236`, and the `#243` narrowing (adapter generation); Phase 6
+     takes `#607` as the adopter pilot and `#608`.
 - [ ] **Phase 5 — Align permissions, installation, and upgrades.** Codex project
   policy, adopter-owned merge surfaces, and adapter refresh behavior remain planned.
 - [ ] **Phase 6 — Gate parity and roll it out.** Adoption fixtures, trusted smoke
@@ -276,9 +285,6 @@ degraded, held, resume, authority, and completion paths under shared definitions
 
 ### Phase 4 — Make delegation and parallel lanes equivalent
 
-- Calibrate Codex `{model, effort}` mappings for the neutral capability tiers.
-- Pass configured Codex model and reasoning effort mechanically to fallback-review
-  lenses.
 - [x] Select a Codex lane launcher that sets worktree and complete lane environment,
   removes inherited identity, and binds child-observed identity plus final text to a
   one-shot receipt. The bounded launcher does not calibrate model, reasoning effort,
@@ -288,8 +294,14 @@ degraded, held, resume, authority, and completion paths under shared definitions
   use the selected wrapper or remain attended.
 - [x] Add a synthetic live check for lane worktree, repository, branch/base, state root,
   process, inherited-variable removal, and final-text binding at the stamped client.
-- Calibrate model and reasoning effort separately, then extend live checks to reviewer
-  isolation and reviewed-revision handoff without weakening launcher identity.
+- Generalise the same wrapper contract to Claude through `claude -p`, with the
+  runtime-under-test producing the live record (`#466`).
+- Add config-owned approval/sandbox policy and writing-lane live records before model or
+  effort calibration (`#601`).
+- Calibrate both runtimes' neutral tiers and mechanically pass supported model/effort
+  keys to fallback-review lenses (`#605`, `#255`).
+- Use the generalised launcher for the first real headless task only after those slices
+  land (`#602`).
 
 Done when a Codex parallel batch preserves the same state isolation, review evidence,
 and merge authority as Claude usage.

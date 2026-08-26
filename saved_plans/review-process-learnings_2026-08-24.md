@@ -1,7 +1,7 @@
 # Review-process learnings — 2026-08-24
 
-Status: evidence record from the Codex–Claude parity work in PR `#595`, PR `#596`, and
-PR `#599`. This is not shared gate doctrine. Promote a lesson to
+Status: evidence record from the Codex–Claude parity work in PR `#595`, PR `#596`, PR
+`#599`, and PR `#609`. This is not shared gate doctrine. Promote a lesson to
 `docs/agentic-dev-kit/` only after a later change defines and tests the reusable
 contract.
 
@@ -122,3 +122,30 @@ For work using the fallback panel:
 - Run the configured reviewer after the local semantic and mutation matrices, and reserve
   the authoritative full suite for the exact candidate head. Any later content change
   invalidates that candidate and starts the exact-head verification boundary again.
+
+## Launcher additions from PR `#609`
+
+`gh pr view 609 --json comments --jq '[.comments[].body | scan("### Review round:")] |
+length'` at `5843440c88342bd1abf75feb9831b37dec1aca01` on 2026-08-27 printed `5`.
+The enumerated panel-disposition comment is the baseline for comparing later launcher
+slices; the count is not reconstructed from memory or from fix commits.
+
+- Treat every inherited `GIT_*` key and executable lookup through caller `PATH` as
+  repository authority. Replacement means constructing the child's allowed environment,
+  not deleting a familiar subset from the caller's environment.
+- Close descriptors that are independently enumerated as live. A range derived from a
+  mutable soft limit can leave a hostile descriptor open above that limit; inability to
+  enumerate the descriptor table is a fail-closed launch outcome.
+- Process-group ownership is insufficient when a child can detach. Bind a private launch
+  nonce into the child environment and audit nonce-bearing lineage across session changes.
+- A start fingerprint sampled earlier does not make a later signal safe. Immediately
+  before every signal, re-observe the nonce-bearing process and fingerprint so PID reuse
+  becomes a no-signal outcome.
+- Keep the local descriptor seal's trust boundary explicit: it detects corruption and
+  descriptor-only rewriting, but it is not a privilege boundary against compromise of the
+  same operating-system account.
+- Test newest-first changelog selection and adopter migration text from the same contract
+  that registers a new kit-owned safety-critical engine.
+- Preserve the accepted-finding rule: add both a positive construction and a locally
+  recomputed hostile mutation. A copied hostile evidence object can share aliases with the
+  positive object and silently stop proving an independent boundary.
