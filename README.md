@@ -377,7 +377,9 @@ section at the shipped two-space indentation. Rewrite tagged, quoted, anchored,
 explicit, duplicated, alternate-indented, or inline-commented section-key forms before
 retrying. Operator-login items must be simple plain login tokens or simple quoted
 strings; tags, anchors, aliases, typed scalars, escapes, and ambiguous flow syntax are
-refused before migration writes.
+refused before migration writes. Other init-owned sections must remain mappings, and
+multi-line flow collections within them must be rewritten as single-line flow or block
+YAML before running the shell-only migrator.
 
 [Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
 behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)

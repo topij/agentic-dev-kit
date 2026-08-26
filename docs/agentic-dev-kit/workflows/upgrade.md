@@ -399,7 +399,10 @@ fi
 The refreshed migrator owns the additive `triage:` block. It inserts the complete flat
 block when absent and adds only missing keys to a partial block, preserving existing
 values, indentation, and trailing comments. Ambiguous top-level or child-key YAML stops
-before any migration write. Do not retain or create a separate
+before any migration write. The shell-only parser also stops on multi-line flow
+collections inside init-owned sections and on a sequence where an owned mapping is
+required; rewrite those values as single-line flow or block YAML before retrying. Do
+not retain or create a separate
 `config/friction-triage.yaml`: `paths`, `tracker`, `notify`, `state`, `vcs`, and
 `models` remain the authoritative shared sections. After this step, verify that
 `triage.state_path` separates live/test mode and that the frozen-inbox and report

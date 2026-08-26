@@ -4425,13 +4425,13 @@ review:
 }
 
 
-def _run_init(tmp_path: Path, name: str, config_text: str):
+def _run_init(tmp_path: Path, name: str, config_text: str, *, check: bool = True):
     repo = tmp_path / name
     (repo / "config").mkdir(parents=True)
     shutil.copy2(REPO_ROOT / "init.sh", repo / "init.sh")
     (repo / "config" / "dev-model.yaml").write_text(config_text, encoding="utf-8")
     proc = subprocess.run(
-        ["sh", "init.sh"], cwd=repo, check=True, capture_output=True, text=True
+        ["sh", "init.sh"], cwd=repo, check=check, capture_output=True, text=True
     )
     return repo / "config" / "dev-model.yaml", proc
 
@@ -4556,12 +4556,6 @@ def test_migration_adds_every_review_key_exactly_once(tmp_path: Path) -> None:
             "cannot parse that",
             '- "review rate limited"',
         ),
-        (
-            "flow_multi_line",
-            'review:\n  unavailable_markers: [\n    "mine",\n    "other"\n  ]\n',
-            "cannot parse that",
-            "add the string inside the brackets",
-        ),
         # A marker containing a `#` must not be cut short by comment-stripping —
         # doing so asks for a marker the adopter already has.
         (
@@ -4587,6 +4581,22 @@ def test_the_instruction_matches_the_list_style(
     assert "ACTION NEEDED" in proc.stderr
     assert wanted in proc.stderr
     assert unwanted not in proc.stderr
+
+
+@pytest.mark.kit_repo_only("init.sh")
+def test_installer_refuses_multiline_flow_before_migration(tmp_path: Path) -> None:
+    config = 'review:\n  unavailable_markers: [\n    "mine",\n    "other"\n  ]\n'
+    path, proc = _run_init(
+        tmp_path,
+        "refuses_multiline_flow",
+        config,
+        check=False,
+    )
+
+    assert yaml.safe_load(config)["review"]["unavailable_markers"] == ["mine", "other"]
+    assert proc.returncode == 1
+    assert "ambiguous child key" in proc.stderr
+    assert path.read_text(encoding="utf-8") == config
 
 
 @pytest.mark.parametrize(

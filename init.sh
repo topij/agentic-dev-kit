@@ -599,7 +599,18 @@ preflight_migration_config() {
   # Every field get_field/set_field can reach lives beneath an init-owned
   # mapping. Refuse ambiguous child keys before migration writes: the helpers
   # read the first match, while YAML consumers may resolve a later duplicate.
+  # Multi-line flow collections are also outside this line parser's grammar.
+  # Their continuation indentation is not structural YAML indentation, so a
+  # nested flow key can otherwise look exactly like a sibling field here.
   if awk '
+    function opens_unclosed_flow(text,   value) {
+      value = text
+      sub(/^[[:space:]]+/, "", value)
+      if (value ~ /^-+[[:space:]]*/) sub(/^-+[[:space:]]*/, "", value)
+      if (value ~ /^([!&][^[:space:]]+[[:space:]]+)*\[/ && value !~ /\]/) return 1
+      if (value ~ /^([!&][^[:space:]]+[[:space:]]+)*\{/ && value !~ /\}/) return 1
+      return 0
+    }
     BEGIN {
       owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
       owned["vcs"] = owned["triage"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
@@ -610,14 +621,21 @@ preflight_migration_config() {
       cursec = $0
       sub(/:.*/, "", cursec)
       cursub = ""
+      allow_indentless_sequence = 0
       next
     }
     !owned[cursec] { next }
     /^  [^ ]/ {
       if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_.-]*:/) {
-        # Indentless block-sequence items and multi-line flow closers are
-        # continuation lines, not sibling mapping keys.
-        if ($0 ~ /:/ && $0 !~ /^  -/) unsafe = 1
+        # YAML permits a block sequence at the same indentation as its key,
+        # but only after a sibling key with an empty value introduced it. A
+        # direct sequence means the owned section is not the mapping the
+        # installer reads and writes.
+        if ($0 ~ /^  -/ && allow_indentless_sequence) {
+          if (opens_unclosed_flow(substr($0, 3))) unsafe = 1
+          next
+        }
+        unsafe = 1
         next
       }
       key = $0
@@ -625,24 +643,38 @@ preflight_migration_config() {
       sub(/:.*/, "", key)
       if (seen_child[cursec, key]++) unsafe = 1
       cursub = ""
-      if ($0 ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:[[:space:]]*$/) cursub = key
+      allow_indentless_sequence = 0
+      value = $0
+      sub(/^  [A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
+      if (opens_unclosed_flow(value)) unsafe = 1
+      if ($0 ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:[[:space:]]*$/) {
+        cursub = key
+        allow_indentless_sequence = 1
+      }
       if (cursec == "tracker" && key == "linear" && cursub != "linear") unsafe = 1
+      if (cursec == "tracker" && key == "linear") allow_indentless_sequence = 0
       next
     }
     cursec == "tracker" && cursub == "linear" && /^    [^ ]/ {
       if ($0 !~ /^    [A-Za-z_][A-Za-z0-9_.-]*:/) {
-        if ($0 ~ /:/ && $0 !~ /^    -/) unsafe = 1
+        unsafe = 1
         next
       }
       key = $0
       sub(/^    /, "", key)
       sub(/:.*/, "", key)
       if (seen_linear[key]++) unsafe = 1
+      value = $0
+      sub(/^    [A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
+      if (opens_unclosed_flow(value)) unsafe = 1
+      next
     }
+    opens_unclosed_flow($0) { unsafe = 1 }
     END { exit(unsafe ? 0 : 1) }
   ' "$CONFIG_FILE"; then
     echo "error: an init-owned config section contains an ambiguous child key." >&2
-    echo "  Use unique bare mapping keys; tracker.linear must be a plain nested map." >&2
+    echo "  Use unique bare mapping keys and single-line flow collections;" >&2
+    echo "  tracker.linear must be a plain nested map." >&2
     echo "  No migration was applied." >&2
     exit 1
   fi

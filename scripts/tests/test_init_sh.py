@@ -2492,6 +2492,58 @@ def test_installer_refuses_duplicate_tracker_authority_before_writing(
     assert not (repo / ".gitignore").exists()
 
 
+def test_installer_refuses_nested_flow_path_decoy_before_outside_write(
+    tmp_path: Path,
+) -> None:
+    outside_handoff = tmp_path / "outside" / "handoff.md"
+    original_handoff = next(
+        line for line in shipped_config().splitlines() if line.startswith("  handoff:")
+    )
+    config = shipped_config().replace(
+        f"{original_handoff}\n",
+        "  metadata: {\n"
+        f'  handoff: "{outside_handoff}"\n'
+        "  }\n",
+        1,
+    )
+    parsed = yaml.safe_load(config)
+    assert "handoff" not in parsed["paths"]
+    assert parsed["paths"]["metadata"]["handoff"] == str(outside_handoff)
+    repo = _fixture(tmp_path, config=config, git=True)
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert "ambiguous child key" in result.stderr, result.stderr
+    assert _config(repo) == config
+    assert not outside_handoff.exists()
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".git" / "hooks" / "pre-push").exists()
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        "models:\n  - default: sonnet\n",
+        'tracker:\n  - project_name: "topij/agentic-dev-kit"\n',
+        "tracker:\n  linear:\n    - team_id: team-id\n",
+    ],
+)
+def test_installer_refuses_sequence_shaped_owned_mapping_before_writing(
+    tmp_path: Path, config: str
+) -> None:
+    assert isinstance(yaml.safe_load(config), dict)
+    repo = _fixture(tmp_path, config=config, git=True)
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert "ambiguous child key" in result.stderr, result.stderr
+    assert _config(repo) == config
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".git" / "hooks" / "pre-push").exists()
+
+
 def test_non_interactive_run_is_unaffected_without_an_origin_remote(tmp_path: Path) -> None:
     """The guard must not fire for the kit's own repo or a fresh copy-in — both
     reach init.sh before any remote exists. Pins the guard's narrowness, which is
