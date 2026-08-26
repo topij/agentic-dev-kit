@@ -649,6 +649,24 @@ preflight_migration_config() {
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
       return value == "" || substr(value, 1, 1) == "#"
     }
+    function valid_triage_string(text,   value, lower, sqc) {
+      value = text
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      if (starts_quoted(value)) {
+        sqc = sprintf("%c", 39)
+        if ((substr(flow_text(value), 1, 1) == "\"" && value ~ /\\/) ||
+            !complete_quoted(value) ||
+            value ~ /^""([[:space:]]+#.*)?$/ ||
+            value ~ "^" sqc sqc "([[:space:]]+#.*)?$") return 0
+        return 1
+      }
+      sub(/[[:space:]]+#.*/, "", value)
+      gsub(/[[:space:]]+$/, "", value)
+      if (value !~ /^[A-Za-z_.\/][-A-Za-z0-9_.\/{}+]*$/) return 0
+      lower = tolower(value)
+      if (lower ~ /^(true|false|null|yes|no|on|off|~|[-+]?[0-9]+([.][0-9]+)?|[-+]?[.](inf|nan))$/) return 0
+      return 1
+    }
     function complete_quoted(text,   value, n, i, c, nextc, quote, sqc, closed, spaced) {
       value = flow_text(text)
       if (!starts_quoted(value)) return 1
@@ -734,6 +752,12 @@ preflight_migration_config() {
       sequence_owned["systemize", "operator_logins"] = 1
       sequence_owned["review", "bots"] = 1
       linear_owned["team_id"] = linear_owned["project_id"] = 1
+      triage_string["analysis_tier"] = triage_string["state_path"] = 1
+      triage_string["gate_path"] = triage_string["recovery_bundle_pattern"] = 1
+      triage_string["frozen_inbox_pattern"] = triage_string["report_root"] = 1
+      triage_string["report_pattern"] = triage_string["draft_engine"] = 1
+      triage_string["finalize_engine"] = triage_string["commit_subject"] = 1
+      triage_bool["pr_draft"] = 1
     }
     /^[[:space:]]*($|#)/ { next }
     /^[^[:space:]]/ {
@@ -756,10 +780,14 @@ preflight_migration_config() {
       content = substr($0, RLENGTH + 1)
       value = content
       if (value ~ /^[A-Za-z_][A-Za-z0-9_.-]*:([[:space:]]|$)/) {
+        key = value
+        sub(/:.*/, "", key)
         sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
       }
-      if ((starts_flow(value) && !complete_flow(value)) ||
-          (starts_quoted(value) && !complete_quoted(value))) unsafe = 1
+      if ((!triage_string[key] && !triage_bool[key]) ||
+          has_unsupported_line_owned_syntax(value) || starts_flow(value) ||
+          (triage_string[key] && !valid_triage_string(value)) ||
+          (triage_bool[key] && flow_text(value) !~ /^(true|false)([[:space:]]+#.*)?$/)) unsafe = 1
       next
     }
     {

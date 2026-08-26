@@ -386,9 +386,12 @@ refused before migration writes. Prompted init-owned sections must remain mappin
 the shipped two-space child indentation; a partial `triage` flat map may use another
 consistent indentation. Keep every prompted value, and every value in a partial
 `triage` flat map, complete on the same line as its key. YAML tags, anchors, aliases,
-block scalars, and block children are unsupported on prompted values. Keep `review.bots`
+block scalars, and block children are unsupported on prompted values. Partial-`triage`
+string fields also reject double-quoted backslash escapes. Keep `review.bots`
 and `systemize.operator_logins` as complete same-line flow sequences; every other
-prompted value must be a same-line scalar, and flow mappings are unsupported. Block YAML
+prompted value must be a same-line scalar, and flow mappings are unsupported. Quote a
+string whose plain spelling YAML could resolve as a non-string; string fields must be
+non-empty, and `triage.pr_draft` must be the plain boolean `true` or `false`. Block YAML
 on other fields can still be refused when its continuation resembles migrator-owned
 structure; normalize any refused value to an ordinary same-line form before retrying.
 

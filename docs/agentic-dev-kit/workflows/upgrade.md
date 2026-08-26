@@ -404,9 +404,12 @@ collections inside init-owned sections and on a sequence where an owned mapping 
 required; normalize prompted-section child keys to the shipped two-space indentation,
 keep a partial `triage` flat map at one consistent indentation, and keep flow or quoted
 values complete on the same line as their keys. Prompted values also reject YAML tags,
-anchors, aliases, block scalars, and block children. Normalize `review.bots` and
+anchors, aliases, block scalars, and block children. Partial-`triage` string fields also
+reject double-quoted backslash escapes. Normalize `review.bots` and
 `systemize.operator_logins` to complete same-line flow sequences; normalize every other
-prompted value to a same-line scalar, never a flow mapping. Block YAML on other fields can still be refused
+prompted value to a same-line scalar, never a flow mapping. Quote a string whose plain
+spelling YAML could resolve as a non-string; string fields must be non-empty, and
+`triage.pr_draft` must be the plain boolean `true` or `false`. Block YAML on other fields can still be refused
 when its continuation resembles migrator-owned structure; normalize any refused value
 to an ordinary same-line form. Do not retain or create a separate
 `config/friction-triage.yaml`: `paths`, `tracker`, `notify`, `state`, `vcs`, and

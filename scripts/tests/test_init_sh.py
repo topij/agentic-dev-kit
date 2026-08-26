@@ -409,6 +409,43 @@ def test_installer_rejects_unsafe_triage_children_before_migration(
     assert _config(repo) == config
 
 
+@pytest.mark.parametrize(
+    "triage_block",
+    (
+        "triage:\n  analysis_tier: !!str default\n",
+        "triage:\n  analysis_tier: &tier default\n",
+        "triage:\n  analysis_tier: *tier\n",
+        "triage:\n  state_path: [state/custom.json]\n",
+        "triage:\n  state_path: {path: state/custom.json}\n",
+        "triage:\n  state_path: |\n    state/custom.json\n",
+        "triage:\n  analysis_tier: null\n",
+        "triage:\n  state_path: false\n",
+        "triage:\n  analysis_tier: 2026-08-26\n",
+        "triage:\n  state_path: 0x10\n",
+        "triage:\n  analysis_tier: 1_000\n",
+        "triage:\n  pr_draft: default\n",
+        'triage:\n  pr_draft: "false"\n',
+        'triage:\n  draft_engine: ""  # adopter comment\n',
+        "triage:\n  draft_engine: ''  # adopter comment\n",
+        'triage:\n  draft_engine: "\\q"\n',
+    ),
+)
+def test_installer_rejects_unsafe_partial_triage_values_before_migration(
+    tmp_path: Path,
+    triage_block: str,
+) -> None:
+    config = _without_triage(shipped_config()).replace(
+        "systemize:\n", triage_block + "systemize:\n", 1
+    )
+    repo = _fixture(tmp_path, config=config)
+
+    result = _run_init(repo, check=False)
+
+    assert result.returncode != 0
+    assert "no migration was applied" in result.stderr.lower()
+    assert _config(repo) == config
+
+
 def test_installer_adds_the_shared_systemize_config_to_an_existing_schema(
     tmp_path: Path,
 ) -> None:

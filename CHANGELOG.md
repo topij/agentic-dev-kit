@@ -56,7 +56,10 @@ starts.
   `review.bots` and `systemize.operator_logins` as complete same-line flow sequences,
   and every other prompted or partial-`triage` value as a same-line scalar;
   the shell-only migrator rejects YAML tags, anchors, aliases, block scalars, and block
-  children beneath prompted values, plus flow or quote continuations. Block YAML on
+  children beneath prompted values, plus flow or quote continuations. Partial-`triage`
+  string fields also reject double-quoted backslash escapes. Quote strings
+  whose plain spelling YAML could resolve as a non-string; string fields must be
+  non-empty, and `triage.pr_draft` must be the plain boolean `true` or `false`. Block YAML on
   other fields can still be refused; normalize any refused value to an ordinary
   same-line form. Remove any separate
   `config/friction-triage.yaml`; keep source/archive, engine directory, tracker,

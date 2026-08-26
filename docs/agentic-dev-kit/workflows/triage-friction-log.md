@@ -477,8 +477,11 @@ Canonical means decoding with strict validation and re-encoding must reproduce t
 stored base64 text byte-for-byte; alternate pad bits are not equivalent capture bytes.
 A process stop after publication is resumable only by interactive `recover`: rederive
 the exact bundle from the unchanged blocking gate, validate its capture digest, and
-continue from the captured bytes. Other entries and unattended execution preserve it
-operator-held.
+continue from the captured bytes. This route accepts the exact gate still owned by the
+current recovery invocation, or that same owner only after exact termination proof
+changes its status to owned-now-proven-stale, as well as an independently proven-stale
+foreign or prior owner. Missing or mismatched current ownership or termination evidence
+stops operator-held. Other entries and unattended execution preserve it operator-held.
 
 Decode the lossless capture and require its raw-byte digest before parsing. Parse and
 validate only the captured bytes, never the still-live path. Record the parse

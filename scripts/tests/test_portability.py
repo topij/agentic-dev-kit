@@ -5523,7 +5523,8 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             return (
                 "await-action-approval"
                 if artifact == expected_current_artifact
-                and gate_status == "foreign-proven-stale"
+                and gate_status
+                in {"owned", "owned-now-proven-stale", "foreign-proven-stale"}
                 else "operator-held"
             )
         action_core = bundle.get("action_core")
@@ -5746,6 +5747,25 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     assert state_present_route(
         capture_bundle, "foreign-proven-stale", current_artifact
     ) == "await-action-approval"
+    assert state_present_route(
+        capture_bundle,
+        "owned",
+        current_artifact,
+        current_owner_token=state_old_gate_capture["owner"]["token"],
+        current_run_identity=state_old_gate_capture["owner"]["run_identity"],
+    ) == "await-action-approval"
+    assert stale_owned_route(
+        capture_bundle, current_artifact
+    ) == "await-action-approval"
+    assert state_present_route(
+        capture_bundle,
+        "owned-now-proven-stale",
+        current_artifact,
+        termination_proof={
+            **owned_termination_proof,
+            "run_identity": "foreign-run",
+        },
+    ) == "operator-held"
     malformed_capture_observations: list[dict[str, object]] = []
     missing_capture_field = {**captured_observations}
     missing_capture_field.pop("modification_time_ns")
