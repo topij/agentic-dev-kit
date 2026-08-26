@@ -61,7 +61,7 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "c1817ac59ee45847b2a2cf1707bce94c94a087ad63e01e41a8276fd957bae135"
+      "sha256": "e4cdd06fb060923b129aa0cfe28e7fc7fbb15891eb9f4f77556fbc6deb1fc75e"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
@@ -97,7 +97,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "da9aa0a9115599a798627b44b6b246f9214bfdc99a51cb7baa1c23b33f49515f"
+      "sha256": "c1d96c670d147fd655b60adbf1e7bd42e166af0f74d72b1e4c8815ef29178673"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -223,7 +223,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "fe30b3d1b7b63475a13c759de7c78ee9f90bed1825f014b96526bbacc39c01fd"
+      "sha256": "590d4b40a9e33ffce268878e09d72d6846395732d71779209710cdb803219f34"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -247,7 +247,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "1ea9f9aa05b3d5700a27a519cc90ead82b397df8cde1f5df0b3211036c8798ea"
+      "sha256": "c61cef2ccb8cf88fa6abc3937198b81832843af223d7fed51c7a38db1671a212"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

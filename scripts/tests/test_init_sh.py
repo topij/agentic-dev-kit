@@ -2460,6 +2460,38 @@ def test_foreign_tracker_refusal_survives_a_custom_child_mapping(
     assert tracker["project_name"] == "topij/agentic-dev-kit"
 
 
+def test_installer_refuses_duplicate_tracker_authority_before_writing(
+    tmp_path: Path,
+) -> None:
+    config = shipped_config().replace(
+        '  project_name: "topij/agentic-dev-kit"\n',
+        '  project_name: "topij/agentic-dev-kit"\n'
+        '  project_name: "acme/foreign"\n',
+        1,
+    )
+    repo = _fixture(tmp_path, config=config, git=True)
+    subprocess.run(
+        [
+            "git",
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/topij/agentic-dev-kit.git",
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        env=_env(tmp_path),
+    )
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert "ambiguous child key" in result.stderr, result.stderr
+    assert _config(repo) == config
+    assert not (repo / ".gitignore").exists()
+
+
 def test_non_interactive_run_is_unaffected_without_an_origin_remote(tmp_path: Path) -> None:
     """The guard must not fire for the kit's own repo or a fresh copy-in — both
     reach init.sh before any remote exists. Pins the guard's narrowness, which is

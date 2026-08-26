@@ -595,6 +595,49 @@ preflight_migration_config() {
     echo "  No migration was applied." >&2
     exit 1
   fi
+
+  # Every field get_field/set_field can reach lives beneath an init-owned
+  # mapping. Refuse ambiguous child keys before migration writes: the helpers
+  # read the first match, while YAML consumers may resolve a later duplicate.
+  if awk '
+    BEGIN {
+      owned["kit"] = owned["project"] = owned["paths"] = owned["runtime"] = 1
+      owned["vcs"] = owned["triage"] = owned["systemize"] = owned["tracker"] = owned["review"] = 1
+      owned["notify"] = owned["models"] = 1
+    }
+    /^[[:space:]]*($|#)/ { next }
+    /^[^[:space:]]/ {
+      cursec = $0
+      sub(/:.*/, "", cursec)
+      cursub = ""
+      next
+    }
+    !owned[cursec] { next }
+    /^  [^ ]/ {
+      if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_.-]*:/) { unsafe = 1; next }
+      key = $0
+      sub(/^  /, "", key)
+      sub(/:.*/, "", key)
+      if (seen_child[cursec, key]++) unsafe = 1
+      cursub = ""
+      if ($0 ~ /^  [A-Za-z_][A-Za-z0-9_.-]*:[[:space:]]*$/) cursub = key
+      if (cursec == "tracker" && key == "linear" && cursub != "linear") unsafe = 1
+      next
+    }
+    cursec == "tracker" && cursub == "linear" && /^    [^ ]/ {
+      if ($0 !~ /^    [A-Za-z_][A-Za-z0-9_.-]*:/) { unsafe = 1; next }
+      key = $0
+      sub(/^    /, "", key)
+      sub(/:.*/, "", key)
+      if (seen_linear[key]++) unsafe = 1
+    }
+    END { exit(unsafe ? 0 : 1) }
+  ' "$CONFIG_FILE"; then
+    echo "error: an init-owned config section contains an ambiguous child key." >&2
+    echo "  Use unique bare mapping keys; tracker.linear must be a plain nested map." >&2
+    echo "  No migration was applied." >&2
+    exit 1
+  fi
 }
 
 # Guards are SECTION-scoped, not whole-file `grep '^  key:'`. That form is a bug

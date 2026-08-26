@@ -2617,6 +2617,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         "test, valid test state and no blocking test gate",
         "test, test-recovered-safe-to-restart receipt and no blocking test gate",
         "Interactive test, blocking test gate, no held bundle, and owner active or uncertain",
+        "Interactive test, blocking test gate, no held bundle, proven-dead owner, and exact capture approval pending, refused, or unavailable",
         "Interactive test, blocking test gate with no test state, safe-restart receipt, intent, or held bundle, plus proven-dead owner and exact capture approval",
         "Interactive test, test-gate-recovery-intent present and no held bundle",
         "Interactive test, blocking test gate with valid test state, no held bundle, proven-dead owner, and exact capture approval",
@@ -2695,6 +2696,11 @@ def _assert_triage_semantics(workflow: str) -> None:
     ][0]
     assert "Preserve the gate" in owner_unready
     assert "without writing a bundle or intent" in owner_unready
+    owner_unapproved = inputs[
+        "Interactive test, blocking test gate, no held bundle, proven-dead owner, and exact capture approval pending, refused, or unavailable"
+    ][0]
+    assert "Preserve the gate" in owner_unapproved
+    assert "without writing a bundle or intent" in owner_unapproved
     assert "Resume only the recorded test-gate transition" in inputs[
         "Interactive test, test-gate-recovery-intent present and no held bundle"
     ][0]
@@ -2744,6 +2750,14 @@ def _assert_triage_semantics(workflow: str) -> None:
             "absent, valid-state, invalid-state, or safe-restart-receipt",
             "absent",
             "active or uncertain",
+            "Preserve gate and artifact; report operator-held without writing a bundle or intent.",
+        ),
+        "gated-owner-unapproved-interactive": (
+            "interactive",
+            "blocking",
+            "absent, valid-state, invalid-state, or safe-restart-receipt",
+            "absent",
+            "proven dead but approval pending, refused, or unavailable",
             "Preserve gate and artifact; report operator-held without writing a bundle or intent.",
         ),
         "gated-artifact-approved": (
@@ -2832,6 +2846,8 @@ def _assert_triage_semantics(workflow: str) -> None:
                 return ["gated-unattended"]
             if owner_authority == "active or uncertain":
                 return ["gated-owner-unready-interactive"]
+            if owner_authority == "proven dead but approval pending, refused, or unavailable":
+                return ["gated-owner-unapproved-interactive"]
             if artifact == "absent":
                 return ["gated-absent-approved"]
             return ["gated-artifact-approved"]
@@ -2859,6 +2875,7 @@ def _assert_triage_semantics(workflow: str) -> None:
                 for held_bundle in (False, True):
                     for owner_authority in (
                         "active or uncertain",
+                        "proven dead but approval pending, refused, or unavailable",
                         "proven dead and exactly approved",
                     ):
                         routes = matching_test_routes(
@@ -2878,9 +2895,12 @@ def _assert_triage_semantics(workflow: str) -> None:
                             and gate == "blocking"
                             and not held_bundle
                             and artifact != "test-gate-recovery-intent"
-                            and owner_authority == "active or uncertain"
+                            and owner_authority != "proven dead and exactly approved"
                         ):
-                            assert routes == ["gated-owner-unready-interactive"]
+                            assert routes in (
+                                ["gated-owner-unready-interactive"],
+                                ["gated-owner-unapproved-interactive"],
+                            )
                             assert result.endswith(
                                 "without writing a bundle or intent."
                             )
@@ -3236,6 +3256,11 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "active or uncertain | Preserve gate and artifact; report operator-held without writing a bundle or intent.",
             "active or uncertain | Capture a held bundle and publish restart intent.",
+            1,
+        ),
+        workflow.replace(
+            "proven dead but approval pending, refused, or unavailable | Preserve gate and artifact; report operator-held without writing a bundle or intent.",
+            "proven dead but approval pending, refused, or unavailable | Quarantine the gate and restart without approval.",
             1,
         ),
         workflow.replace(
