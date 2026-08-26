@@ -3867,40 +3867,61 @@ def _assert_triage_semantics(workflow: str) -> None:
         "new_gate_digest": replacement_gate_digest,
         "new_gate_owner_token": replacement_gate_owner["token"],
     }
-    gate_only_held_bytes = canonical_json_bytes(gate_only_held_payload)
-    gate_only_held_artifact = {
-        "path": durable_intent_artifact["path"],
-        "bytes": gate_only_held_bytes.decode("utf-8"),
-        "digest": hashlib.sha256(gate_only_held_bytes).hexdigest(),
-        "observations": {
-            **durable_intent_artifact["observations"],
-            "size": len(gate_only_held_bytes),
-            "modification_time_ns": 765433,
-        },
-    }
+    def held_artifact_for(payload: dict[str, object]) -> dict[str, object]:
+        held_bytes = canonical_json_bytes(payload)
+        return {
+            "path": durable_intent_artifact["path"],
+            "bytes": held_bytes.decode("utf-8"),
+            "digest": hashlib.sha256(held_bytes).hexdigest(),
+            "observations": {
+                **durable_intent_artifact["observations"],
+                "size": len(held_bytes),
+                "modification_time_ns": 765433,
+            },
+        }
 
-    def gate_only_held_valid() -> bool:
-        held_bytes = gate_only_held_artifact["bytes"]
+    gate_only_held_artifact = held_artifact_for(gate_only_held_payload)
+
+    def gate_only_held_valid(
+        held_payload: dict[str, object] = gate_only_held_payload,
+        held_artifact: dict[str, object] = gate_only_held_artifact,
+        gate_quarantine: dict[str, object] = old_gate_quarantine,
+        replacement_gate: dict[str, object] = replacement_gate_capture,
+    ) -> bool:
+        held_bytes = held_artifact["bytes"]
         return (
             isinstance(held_bytes, str)
             and gate_only_bundle_valid(
                 prepared_bundle,
                 observed_gate=None,
                 durable_intent=durable_intent_artifact,
-                gate_quarantine=old_gate_quarantine,
-                replacement_gate=replacement_gate_capture,
+                gate_quarantine=gate_quarantine,
+                replacement_gate=replacement_gate,
             )
             and held_bytes.encode("utf-8")
-            == canonical_json_bytes(gate_only_held_payload)
-            and gate_only_held_artifact["digest"]
+            == canonical_json_bytes(held_payload)
+            and held_artifact["digest"]
             == hashlib.sha256(held_bytes.encode("utf-8")).hexdigest()
-            and gate_only_held_payload["quarantine_paths"]
-            == [name["path"] for name in old_gate_quarantine["quarantined_names"]]
-            and gate_only_held_payload["new_gate_owner_token"]
-            == replacement_gate_capture["owner"]["token"]
-            and gate_only_held_payload["new_gate_digest"]
-            == replacement_gate_capture["digest"]
+            and held_payload["quarantine_paths"]
+            == [name["path"] for name in gate_quarantine["quarantined_names"]]
+            and held_payload["new_gate_owner_token"]
+            == replacement_gate["owner"]["token"]
+            and held_payload["new_gate_digest"] == replacement_gate["digest"]
         )
+    changed_held_owner = {
+        **gate_only_held_payload,
+        "new_gate_owner_token": "foreign-owner",
+    }
+    assert not gate_only_held_valid(
+        changed_held_owner, held_artifact_for(changed_held_owner)
+    )
+    changed_held_paths = {
+        **gate_only_held_payload,
+        "quarantine_paths": ["state/quarantine/gates/foreign"],
+    }
+    assert not gate_only_held_valid(
+        changed_held_paths, held_artifact_for(changed_held_paths)
+    )
     current_gate_digest: str | None = old_gate_digest
     bundle_gate_digest: str | None = None
     intent_bundle_gate_digest: str | None = None
