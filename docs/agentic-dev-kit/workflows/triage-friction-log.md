@@ -20,9 +20,10 @@ per leaf. Do not fall back to the tracked file alone. In this workflow:
 - `<tracker>`, `<notify>`, and `<state-dir>` mean the configured `tracker`, `notify`,
   and `state.dirname` sections.
 - `<triage>` means the complete `triage` section: `triage.analysis_tier`,
-  `triage.state_path`, `triage.frozen_inbox_pattern`, `triage.report_root`,
-  `triage.report_pattern`, `triage.draft_engine`, `triage.finalize_engine`,
-  `triage.commit_subject`, and `triage.pr_draft`.
+  `triage.state_path`, `triage.recovery_bundle_pattern`,
+  `triage.frozen_inbox_pattern`, `triage.report_root`, `triage.report_pattern`,
+  `triage.draft_engine`, `triage.finalize_engine`, `triage.commit_subject`, and
+  `triage.pr_draft`.
 - A workflow invocation means `/triage-friction-log` in Claude Code or
   `$triage-friction-log` in Codex.
 
@@ -39,10 +40,13 @@ component. Resolve it beneath the canonical `<engine-dir>` and require any exist
 target to remain canonically contained there, including through symlinks, and to be a
 regular file. An absolute, traversing, escaping, or non-regular engine target hard-stops
 before engine-mode selection. Artifact patterns are non-empty repository-relative paths.
-`triage.state_path` contains `{mode}`; the frozen-inbox and report patterns contain
-`{mode}`, `{date}`, and `{session}`. Live and test state must resolve to different
-paths. The state and frozen snapshot are logical `state.dirname` paths; the report is a
-child of `triage.report_root`, which is neither empty nor the repository root.
+`triage.state_path` contains `{mode}`; `triage.recovery_bundle_pattern` contains
+`{mode}` and `{gate_digest}`; the frozen-inbox and report patterns contain
+`{mode}`, `{date}`, and `{session}`. `gate_digest` is the lowercase SHA-256 digest of
+the exact complete gate bytes. Live and test state and recovery bundles must resolve to
+different paths. The state, recovery bundle, and frozen snapshot are logical
+`state.dirname` paths; the report is a child of `triage.report_root`, which is neither
+empty nor the repository root.
 
 Resolve state reads and writes through `<engine-dir>/lib/state_paths`. State and frozen
 snapshots are own-session evidence, not the shared cache surface: resolve every read
@@ -52,8 +56,9 @@ either artifact; its newer-of sandbox/production cascade can import another sess
 approval authority. Require
 `state.dirname` to match that resolver's declared `STATE_DIRNAME`; a mismatch hard-stops
 because the resolver does not take the directory from config. Require the matching
-lexical prefix on `triage.state_path` and `triage.frozen_inbox_pattern`, remove it, then
-pass only the remaining fragment to the resolver. Honor `DEVKIT_STATE_ROOT` and
+lexical prefix on `triage.state_path`, `triage.recovery_bundle_pattern`, and
+`triage.frozen_inbox_pattern`, remove it, then pass only the remaining fragment to the
+resolver. Honor `DEVKIT_STATE_ROOT` and
 `.devkit_state_root`; never write logical state paths directly beneath the worktree.
 Preflight with non-creating resolution. Reject absolute fragments,
 `..` traversal, path collisions, tracked artifact targets, control-input targets,
@@ -85,11 +90,16 @@ presence, reading either artifact, or resolving any state-bearing predicate in t
 matrix. A successful acquisition keeps every such observation under that gate. Only an
 interactive `recover` or `test` whose acquisition fails on a complete blocking gate may
 use the bounded stale-gate classifier: capture the complete gate and its filesystem
-observations, prove its owner terminated, then non-creatingly resolve and capture the
-exact mode-specific state path and its filesystem observations. Parse only the captured
-copy to classify an ordinary state, absence, or a mode-specific recovery intent or held
-receipt. A valid mode-specific intent may additionally resolve and digest-check only its
-bound immutable bundle. Test classification stays inside the test state root and never
+observations, prove its owner terminated, compute `gate_digest` from those exact gate
+bytes, then non-creatingly resolve and capture the exact mode-specific state path and
+the one `triage.recovery_bundle_pattern` candidate for that mode and gate digest,
+with filesystem observations for both. Parse the captured bundle candidate first. A
+valid matching state-present test held bundle selects `held-evidence`; a malformed,
+foreign, or digest-mismatched candidate stops operator-held without parsing the state
+copy. Only when the bundle candidate is absent, parse the captured state copy to
+classify ordinary state, absence, or a mode-specific recovery intent or held receipt. A
+valid mode-specific intent may resolve only the same deterministic bundle candidate and
+must digest-check it. Test classification stays inside the test state root and never
 reads a live state, receipt, intent, or bundle. An active or uncertain owner stops
 operator-held before the state-path capture; the classifier never changes an artifact or
 resolves unrelated capabilities. The
@@ -179,9 +189,14 @@ results: `absent`, `valid-state`, `invalid-state`, `safe-restart-receipt`, or
 
 ### State-present held-evidence procedure
 
-Only `gated-artifact-approved` may atomically create and flush one unique held bundle;
-once it is durable, routing immediately becomes `held-evidence`. A `held-evidence`
-invocation performs no pre-selection or post-selection write. Every step is report-only:
+Only `gated-artifact-approved` may exclusively create and flush the held bundle at
+`triage.recovery_bundle_pattern` expanded with test mode and the SHA-256 digest of the
+exact complete test gate. The bundle binds that gate digest,
+repository identity, test mode, exact artifact bytes and observations, and exact
+approval. Once it is durable, a fresh invocation derives the same path from the
+still-blocking gate and routing immediately becomes `held-evidence`; no directory scan or
+state pointer is required. A `held-evidence` invocation performs no pre-selection or
+post-selection write. Every step is report-only:
 preserve the bundle, gate, and artifact byte-identically. No later prose may authorize
 quarantine, acquire, replace, resume, restart, reconstruct, delete, rename, link, unlink,
 create, publish, write, edit, comment, push, or merge for this route.
@@ -363,8 +378,9 @@ route does not enter the raw-state capture path below.
 Otherwise, locate active state in its own sandbox with
 `resolve_write_path(fragment, mkdir=False)` and inspect the path itself without parsing
 its content. Reject a symlink, non-regular file, or link count other than one. Before
-validity classification, rename, or repair, atomically create a unique initial recovery
-bundle under that same resolved state root. Its immutable capture contains the exact raw
+validity classification, rename, or repair, atomically and exclusively create the
+initial recovery bundle at `triage.recovery_bundle_pattern` expanded with the mode and
+digest of the exact complete held gate. Its immutable capture contains the exact raw
 state bytes, their SHA-256 digest, the active path, repository identity, and the path's
 device, inode, mode, link count, size, and modification time observed around the read;
 changed observations abort the capture and leave the active file untouched.
@@ -420,7 +436,8 @@ or merge.
 Unknown test-gate ownership remains operator-held under the same capture, owner-death,
 and exact-approval rule, confined to test paths. Only an interactive `test` that proves
 the owner dead and obtains exact approval of the capture may preserve the unchanged gate
-and state or safe-restart receipt in a unique state-present test-gate held bundle, then
+and state or safe-restart receipt in a unique state-present test-gate held bundle at the
+deterministic recovery-bundle path, then
 stop operator-held. Without a crash-released exclusive recovery primitive, neither
 engine-backed nor LLM-only execution may claim
 that separate gate, state, and bundle files form one atomic transition. When that same

@@ -259,7 +259,8 @@ friction-routing step is being skipped — not that triage is overdue.
 > when an earlier optional integration degraded.
 > Their thin adapters select runtime-native mechanisms but cannot change those outcomes.
 > No new config key or installer step is needed for the bookend contract. Triage adds
-> the `triage` config block and the same shared outcome discipline: frozen state is
+> the `triage` config block and the same shared outcome discipline: frozen state and
+> gate-digest-addressed recovery evidence are
 > required, scheduled approval requires notification send/thread read, interactive
 > approval may fall back to the current session, tracker writes require exact-payload
 > approval plus read-back, and only accounted byte-identical blocks may be swept. Test

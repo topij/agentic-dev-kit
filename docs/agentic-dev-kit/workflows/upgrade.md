@@ -410,8 +410,9 @@ when its continuation resembles migrator-owned structure; normalize any refused 
 to an ordinary same-line form. Do not retain or create a separate
 `config/friction-triage.yaml`: `paths`, `tracker`, `notify`, `state`, `vcs`, and
 `models` remain the authoritative shared sections. After this step, verify that
-`triage.state_path` separates live/test mode and that the frozen-inbox and report
-patterns carry mode, date, and session placeholders.
+`triage.state_path` separates live/test mode, the recovery-bundle pattern carries mode
+and gate-digest placeholders, and the frozen-inbox and report patterns carry mode,
+date, and session placeholders.
 
 The older Claude and Codex triage adapters carried approval and notification policy
 outside the shared workflow. When the selected changelog entry names this migration,

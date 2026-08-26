@@ -2482,11 +2482,16 @@ def _assert_triage_semantics(workflow: str) -> None:
         "keeps every such observation under that gate. Only an interactive `recover` "
         "or `test` whose acquisition fails on a complete blocking gate may use the "
         "bounded stale-gate classifier: capture the complete gate and its filesystem "
-        "observations, prove its owner terminated, then non-creatingly resolve and "
-        "capture the exact mode-specific state path and its filesystem observations. "
-        "Parse only the captured copy to classify an ordinary state, absence, or a "
-        "mode-specific recovery intent or held receipt. A valid mode-specific intent "
-        "may additionally resolve and digest-check only its bound immutable bundle. "
+        "observations, prove its owner terminated, compute `gate_digest` from those "
+        "exact gate bytes, then non-creatingly resolve and capture the exact mode-specific "
+        "state path and the one `triage.recovery_bundle_pattern` candidate for that mode "
+        "and gate digest, with filesystem observations for both. Parse the captured "
+        "bundle candidate first. A valid matching state-present test held bundle selects "
+        "`held-evidence`; a malformed, foreign, or digest-mismatched candidate stops "
+        "operator-held without parsing the state copy. Only when the bundle candidate is "
+        "absent, parse the captured state copy to classify ordinary state, absence, or a "
+        "mode-specific recovery intent or held receipt. A valid mode-specific intent may "
+        "resolve only the same deterministic bundle candidate and must digest-check it. "
         "Test classification stays inside the test state root and never reads a live "
         "state, receipt, intent, or bundle. An active or uncertain owner stops "
         "operator-held before the state-path capture; the classifier never changes an "
@@ -2934,13 +2939,18 @@ def _assert_triage_semantics(workflow: str) -> None:
         "### State-present held-evidence procedure\n", 1
     )[1].split("\n## ", 1)[0]
     assert " ".join(held_section.split()) == (
-        "Only `gated-artifact-approved` may atomically create and flush one unique "
-        "held bundle; once it is durable, routing immediately becomes "
-        "`held-evidence`. A `held-evidence` invocation performs no pre-selection or "
-        "post-selection write. Every step is report-only: preserve the bundle, gate, "
-        "and artifact byte-identically. No later prose may authorize quarantine, "
-        "acquire, replace, resume, restart, reconstruct, delete, rename, link, unlink, "
-        "create, publish, write, edit, comment, push, or merge for this route."
+        "Only `gated-artifact-approved` may exclusively create and flush the held "
+        "bundle at `triage.recovery_bundle_pattern` expanded with test mode and the "
+        "SHA-256 digest of the exact complete test gate. The bundle binds that gate "
+        "digest, repository identity, test mode, exact artifact bytes and "
+        "observations, and exact approval. Once it is durable, a fresh invocation "
+        "derives the same path from the still-blocking gate and routing immediately "
+        "becomes `held-evidence`; no directory scan or state pointer is required. A "
+        "`held-evidence` invocation performs no pre-selection or post-selection write. "
+        "Every step is report-only: preserve the bundle, gate, and artifact "
+        "byte-identically. No later prose may authorize quarantine, acquire, replace, "
+        "resume, restart, reconstruct, delete, rename, link, unlink, create, publish, "
+        "write, edit, comment, push, or merge for this route."
     )
     isolated_test_recovery = workflow.split(
         "### Isolated test-state recovery\n", 1
@@ -2964,8 +2974,9 @@ def _assert_triage_semantics(workflow: str) -> None:
         "under the same capture, owner-death, and exact-approval rule, confined to test "
         "paths. Only an interactive `test` that proves the owner dead and obtains exact "
         "approval of the capture may preserve the unchanged gate and state or "
-        "safe-restart receipt in a unique state-present test-gate held bundle, then "
-        "stop operator-held. Without a crash-released exclusive recovery primitive, "
+        "safe-restart receipt in a unique state-present test-gate held bundle at the "
+        "deterministic recovery-bundle path, then stop operator-held. Without a "
+        "crash-released exclusive recovery primitive, "
         "neither engine-backed nor LLM-only execution may claim that separate gate, "
         "state, and bundle files form one atomic transition. When that same approved "
         "interactive recovery proves test state absent, capture that absence in the "
@@ -3081,8 +3092,10 @@ def _assert_triage_semantics(workflow: str) -> None:
         "immediately before atomic replacement requires the same digest, run identity, "
         "and gate owner token",
         "Hold the gate across an external create and its authoritative read-back",
-        "Before validity classification, rename, or repair, atomically create a "
-        "unique initial recovery bundle",
+        "Before validity classification, rename, or repair, atomically and "
+        "exclusively create the initial recovery bundle",
+        "a fresh invocation derives the same path from the still-blocking gate",
+        "no directory scan or state pointer is required",
         "Parse and validate only the captured bytes, never the still-live path",
         "If the captured state is valid, record that result, leave the active state "
         "byte-identical",
@@ -3160,6 +3173,7 @@ def test_triage_integration_is_config_owned_shared_and_thin() -> None:
     assert set(triage) == {
         "analysis_tier",
         "state_path",
+        "recovery_bundle_pattern",
         "frozen_inbox_pattern",
         "report_root",
         "report_pattern",
@@ -3170,17 +3184,25 @@ def test_triage_integration_is_config_owned_shared_and_thin() -> None:
     }
     assert triage["analysis_tier"] in config["models"]["tiers"]
     assert type(triage["pr_draft"]) is bool
-    for key in ("state_path", "frozen_inbox_pattern", "report_pattern"):
+    for key in (
+        "state_path",
+        "recovery_bundle_pattern",
+        "frozen_inbox_pattern",
+        "report_pattern",
+    ):
         path = Path(triage[key])
         assert not path.is_absolute()
         assert ".." not in path.parts
-    for key in ("state_path", "frozen_inbox_pattern"):
+    for key in ("state_path", "recovery_bundle_pattern", "frozen_inbox_pattern"):
         assert Path(triage[key]).parts[0] == config["state"]["dirname"]
     for key in ("draft_engine", "finalize_engine"):
         engine_path = Path(triage[key])
         assert not engine_path.is_absolute()
         assert ".." not in engine_path.parts
     assert "{mode}" in triage["state_path"]
+    for placeholder in ("{mode}", "{gate_digest}"):
+        assert placeholder in triage["recovery_bundle_pattern"]
+    assert "{date}" not in triage["recovery_bundle_pattern"]
     for placeholder in ("{mode}", "{date}", "{session}"):
         assert placeholder in triage["frozen_inbox_pattern"]
         assert placeholder in triage["report_pattern"]
@@ -3220,7 +3242,7 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         ),
         workflow.replace("never whole-sweep", "whole-sweep", 1),
         workflow.replace(
-            "pass only the remaining fragment to the resolver",
+            "pass only the remaining fragment to the\nresolver",
             "pass the complete logical path to the resolver",
             1,
         ),
@@ -3360,8 +3382,8 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
-            "prove its owner terminated, then non-creatingly resolve and",
-            "while its owner remains active, non-creatingly resolve and",
+            "prove its owner terminated, compute `gate_digest` from those exact gate\nbytes, then non-creatingly resolve",
+            "while its owner remains active, resolve state and bundles",
             1,
         ),
         workflow.replace(
@@ -3375,8 +3397,8 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
             1,
         ),
         workflow.replace(
-            "Parse only the captured\ncopy to classify",
-            "Parse the live path before capture to classify",
+            "Parse the captured bundle candidate first",
+            "Parse live state before capturing the bundle candidate",
             1,
         ),
         workflow.replace(
@@ -3505,6 +3527,7 @@ def test_triage_config_and_adapter_migration_reaches_adopters() -> None:
 
     for required in (
         "triage.state_path",
+        "triage.recovery_bundle_pattern",
         "./init.sh --no-clobber",
         ".claude/commands/triage-friction-log.md",
         ".agents/skills/triage-friction-log/SKILL.md",

@@ -45,8 +45,9 @@ starts.
 ## #599 — 2026-08-25
 
 - **ADDED (config keys) — `triage` now owns the friction-triage analysis tier,
-  `triage.state_path`, frozen-inbox and report patterns, optional draft/finalize engine
-  names, commit subject, and PR draft policy.** **Refresh `init.sh`, then run
+  `triage.state_path`, the gate-digest-addressed `triage.recovery_bundle_pattern`, frozen-inbox
+  and report patterns, optional draft/finalize engine names, commit subject, and PR
+  draft policy.** **Refresh `init.sh`, then run
   `./init.sh --no-clobber`. The additive migration installs the block or missing flat
   keys without replacing adopter values. Before retrying a preflight refusal, normalize
   prompted init-owned sections to bare mappings with the shipped two-space child

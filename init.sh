@@ -731,6 +731,8 @@ preflight_migration_config() {
       line_owned["models", "cheap"] = 1
       line_owned["models", "default"] = 1
       line_owned["models", "expensive"] = 1
+      sequence_owned["systemize", "operator_logins"] = 1
+      sequence_owned["review", "bots"] = 1
       linear_owned["team_id"] = linear_owned["project_id"] = 1
     }
     /^[[:space:]]*($|#)/ { next }
@@ -799,6 +801,14 @@ preflight_migration_config() {
         sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
         if (line_owned[cursec, key] &&
             has_unsupported_line_owned_syntax(value)) unsafe = 1
+        if (line_owned[cursec, key]) {
+          if (sequence_owned[cursec, key]) {
+            if (!is_semantically_empty(value) &&
+                (!starts_flow(value) || substr(flow_text(value), 1, 1) != "[")) unsafe = 1
+          } else if (starts_flow(value)) {
+            unsafe = 1
+          }
+        }
         if (starts_flow(value) && !complete_flow(value)) unsafe = 1
         if (starts_quoted(value) && !complete_quoted(value)) unsafe = 1
         cursub = ""
@@ -857,6 +867,7 @@ preflight_migration_config() {
           sub(/^[A-Za-z_][A-Za-z0-9_.-]*:/, "", value)
           if (linear_owned[key] &&
               has_unsupported_line_owned_syntax(value)) unsafe = 1
+          if (linear_owned[key] && starts_flow(value)) unsafe = 1
           if (starts_flow(value) && !complete_flow(value)) unsafe = 1
           if (starts_quoted(value) && !complete_quoted(value)) unsafe = 1
           if (linear_owned[key] && is_semantically_empty(value)) {
@@ -957,6 +968,7 @@ migrate_kit_schema() {
   # invocation and available mechanisms only; policy stays in the shared workflow.
   analysis_tier: default
   state_path: "state/triage/triage-pipeline-state_{mode}.json"
+  recovery_bundle_pattern: "state/triage/recovery-bundle_{mode}_{gate_digest}.json"
   frozen_inbox_pattern: "state/triage/frozen-inbox_{mode}_{date}_{session}.json"
   report_root: reports
   report_pattern: "reports/triage_{mode}_{date}_{session}.md"
@@ -971,6 +983,7 @@ migrate_kit_schema() {
 
   ensure_triage_key analysis_tier '  analysis_tier: default'
   ensure_triage_key state_path '  state_path: "state/triage/triage-pipeline-state_{mode}.json"'
+  ensure_triage_key recovery_bundle_pattern '  recovery_bundle_pattern: "state/triage/recovery-bundle_{mode}_{gate_digest}.json"'
   ensure_triage_key frozen_inbox_pattern '  frozen_inbox_pattern: "state/triage/frozen-inbox_{mode}_{date}_{session}.json"'
   ensure_triage_key report_root '  report_root: reports'
   ensure_triage_key report_pattern '  report_pattern: "reports/triage_{mode}_{date}_{session}.md"'

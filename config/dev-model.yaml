@@ -98,6 +98,10 @@ triage:
   # also carry a generated session id so a later same-day run cannot replace the
   # evidence an earlier approval bound.
   state_path: "state/triage/triage-pipeline-state_{mode}.json"
+  # Deterministic recovery evidence locator. gate_digest is SHA-256 over the
+  # exact complete gate bytes, so a crash-resuming invocation never scans for
+  # a matching bundle or confuses it with another gate's evidence.
+  recovery_bundle_pattern: "state/triage/recovery-bundle_{mode}_{gate_digest}.json"
   frozen_inbox_pattern: "state/triage/frozen-inbox_{mode}_{date}_{session}.json"
   report_root: reports
   report_pattern: "reports/triage_{mode}_{date}_{session}.md"

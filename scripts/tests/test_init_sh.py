@@ -295,6 +295,7 @@ def test_installer_completes_a_partial_triage_section_without_replacing_policy(
     assert triage == expected
     assert "    analysis_tier: expensive  # adopter choice" in first
     assert '    state_path: "state/custom_{mode}.json"  # retained' in first
+    assert "\n    recovery_bundle_pattern:" in first
     assert "\n    frozen_inbox_pattern:" in first
 
     _run_init(repo)
@@ -2749,6 +2750,48 @@ def test_installer_refuses_unsupported_yaml_syntax_on_a_line_owned_path(
     assert not (repo / ".git" / "hooks" / "pre-push").exists()
 
 
+@pytest.mark.parametrize(
+    ("old_line", "replacement"),
+    [
+        ("  handoff: docs/kit-handoff.md", "  handoff: [../../../outside/handoff.md]"),
+        ("  bots: [coderabbit]", "  bots: coderabbit"),
+        (
+            '  project_name: "topij/agentic-dev-kit"',
+            "  project_name: {value: topij/agentic-dev-kit}",
+        ),
+    ],
+)
+def test_installer_refuses_wrong_node_types_for_line_owned_fields_before_writing(
+    tmp_path: Path, old_line: str, replacement: str
+) -> None:
+    config = shipped_config().replace(old_line, replacement, 1)
+    assert config != shipped_config()
+    repo = _fixture(tmp_path, config=config, git=True, templates=True)
+    outside = tmp_path / "outside" / "handoff.md"
+    outside.parent.mkdir()
+    outside.write_text("operator-owned\n", encoding="utf-8")
+    existing = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert "ambiguous child key" in result.stderr, result.stderr
+    assert _config(repo) == config
+    after = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+    assert after == existing
+    assert outside.read_text(encoding="utf-8") == "operator-owned\n"
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".git" / "hooks" / "pre-push").exists()
+
+
 def test_line_owned_preflight_declarations_cover_every_static_field_helper() -> None:
     installer = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
     calls = {
@@ -2774,9 +2817,21 @@ def test_line_owned_preflight_declarations_cover_every_static_field_helper() -> 
     declared_nested = set(
         re.findall(r'linear_owned\["([^"]+)"\]', installer)
     )
+    declared_sequences = set(
+        re.findall(r'sequence_owned\["([^"]+)", "([^"]+)"\] = 1', installer)
+    )
+    config = yaml.safe_load(shipped_config())
+    expected_sequences = {
+        (section, key)
+        for section, key in flat_calls
+        if section in config
+        and key in config[section]
+        and isinstance(config[section][key], list)
+    }
 
     assert declared_flat == flat_calls
     assert declared_nested == nested_calls
+    assert declared_sequences == expected_sequences
 
 
 def test_installer_refuses_an_alias_on_tracker_authority_before_writing(
@@ -2867,6 +2922,37 @@ def test_installer_refuses_owned_keys_without_a_yaml_value_separator(
     assert not (repo / ".gitignore").exists()
     assert not (repo / ".git" / "hooks" / "pre-push").exists()
     assert not (repo / "docs").exists()
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        "review:\n  fallback_command: /code-review\n  bots:[coderabbit]\n",
+        "tracker:\n  linear:\n    team_id: team-id\n    project_id:value\n",
+    ],
+)
+def test_installer_refuses_later_owned_siblings_without_a_yaml_value_separator(
+    tmp_path: Path, config: str
+) -> None:
+    repo = _fixture(tmp_path, config=config, git=True, templates=True)
+    existing = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+
+    result = _run_init(repo, "--no-clobber", check=False)
+
+    assert result.returncode == 1, result.stdout
+    assert _config(repo) == config
+    after = {
+        path.relative_to(repo): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+    assert after == existing
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".git" / "hooks" / "pre-push").exists()
 
 
 def test_non_interactive_run_is_unaffected_without_an_origin_remote(tmp_path: Path) -> None:
