@@ -21,9 +21,9 @@ import pytest
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 
 
-def _load_launcher() -> ModuleType:
+def _load_launcher(engine_dir: Path = ENGINE_DIR) -> ModuleType:
     spec = importlib.util.spec_from_file_location(
-        "launch_codex_lane", ENGINE_DIR / "launch_codex_lane.py"
+        "launch_codex_lane", engine_dir / "launch_codex_lane.py"
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -210,6 +210,12 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
         f"#!/bin/sh\nprintf ran > {fake_git_marker}\nexit 97\n", encoding="utf-8"
     )
     fake_git.chmod(0o755)
+    fake_bash_marker = tmp_path / "fake-bash-ran"
+    fake_bash = fake_bin / "bash"
+    fake_bash.write_text(
+        f"#!/bin/sh\nprintf ran > {fake_bash_marker}\nexit 98\n", encoding="utf-8"
+    )
+    fake_bash.chmod(0o755)
     inherited = {
         **env,
         "DEVKIT_STATE_ROOT": str(tmp_path / "foreign-state"),
@@ -245,7 +251,61 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
     assert final["push_url"] == descriptor["origin_push_url"]
     assert final["contract_first"] is True
     assert not fake_git_marker.exists()
+    assert not fake_bash_marker.exists()
     assert receipt["terminal"]["final_message_sha256"]
+
+
+def test_relative_runtime_command_uses_only_the_trusted_executable_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    trusted_bin = tmp_path / "trusted-bin"
+    hostile_bin = tmp_path / "hostile-bin"
+    trusted_bin.mkdir()
+    hostile_bin.mkdir()
+    trusted_runtime = trusted_bin / "lane-runtime"
+    shutil.copy2(tmp_path / "fake-codex", trusted_runtime)
+    hostile_marker = tmp_path / "hostile-runtime-ran"
+    hostile_runtime = hostile_bin / "lane-runtime"
+    hostile_runtime.write_text(
+        f"#!/bin/sh\nprintf ran > {hostile_marker}\nexit 99\n", encoding="utf-8"
+    )
+    hostile_runtime.chmod(0o755)
+    config_path = Path(descriptor["repo_root"]) / "config" / "dev-model.yaml"
+    config = config_path.read_text(encoding="utf-8")
+    config_path.write_text(
+        config.replace(
+            f"codex_headless_command: [{json.dumps(str(tmp_path / 'fake-codex'))}]",
+            'codex_headless_command: ["lane-runtime"]',
+        ),
+        encoding="utf-8",
+    )
+    launcher = _load_launcher(engine_dir)
+    launcher.SAFE_EXECUTABLE_PATH = os.pathsep.join(
+        (str(trusted_bin), launcher.SAFE_EXECUTABLE_PATH)
+    )
+    monkeypatch.setenv("PATH", f"{hostile_bin}{os.pathsep}{env['PATH']}")
+
+    result = launcher.main(
+        [
+            "--descriptor",
+            str(descriptor["descriptor_path"]),
+            "--prompt-file",
+            str(prompt),
+        ]
+    )
+
+    assert result == 0
+    receipt = json.loads(
+        (
+            sessions
+            / "probe"
+            / f"launch-receipt-{descriptor['descriptor_id']}.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert receipt["request"]["configured_command"] == [str(trusted_runtime)]
+    assert receipt["status"] == "completed"
+    assert not hostile_marker.exists()
 
 
 @pytest.mark.parametrize(
@@ -778,6 +838,54 @@ def test_descendant_cannot_outlive_a_successful_child_leader(tmp_path: Path) -> 
         )
         assert receipt["status"] == "failed"
         assert "process group remained active" in receipt["terminal"]["error"]
+        with pytest.raises(ProcessLookupError):
+            os.kill(descendant_pid, 0)
+    finally:
+        if descendant_pid is not None:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(descendant_pid, signal.SIGKILL)
+
+
+def test_exception_after_reaped_leader_still_cleans_up_descendant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(
+        tmp_path, spawn_descendant=True
+    )
+    launcher = _load_launcher(engine)
+    original_group_exists = launcher._process_group_exists
+    calls = 0
+
+    def fail_first_group_check(process_group: int) -> bool:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("injected parent-side group observation failure")
+        return original_group_exists(process_group)
+
+    monkeypatch.setattr(launcher, "_process_group_exists", fail_first_group_check)
+    pid_path = sessions / "probe" / "descendant.pid"
+    descendant_pid: int | None = None
+    try:
+        result = launcher.main(
+            [
+                "--descriptor",
+                str(descriptor["descriptor_path"]),
+                "--prompt-file",
+                str(prompt),
+            ]
+        )
+        assert result != 0
+        descendant_pid = int(pid_path.read_text(encoding="utf-8"))
+        receipt = json.loads(
+            (
+                sessions
+                / "probe"
+                / f"launch-receipt-{descriptor['descriptor_id']}.json"
+            ).read_text(encoding="utf-8")
+        )
+        assert receipt["status"] == "failed"
+        assert "injected parent-side group observation failure" in receipt["terminal"]["error"]
         with pytest.raises(ProcessLookupError):
             os.kill(descendant_pid, 0)
     finally:

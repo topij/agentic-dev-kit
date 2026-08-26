@@ -228,7 +228,7 @@
     },
     "scripts/tests/test_codex_lane_launcher.py": {
       "role": "test",
-      "sha256": "a7e2d69a3065205b2bc4bf8568601f86567c4709fdb59e9da969345ea6f3a449"
+      "sha256": "ea14e96bb94390937e518650d8875ccb781b9916b098cea42ea7253d87e4e549"
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
