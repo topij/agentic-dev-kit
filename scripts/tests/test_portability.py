@@ -1713,6 +1713,7 @@ def _integration_table(
             "Gate-only step",
             "Test-gate step",
             "Case id",
+            "Test case id",
             "",
         }:
             continue
@@ -2466,8 +2467,8 @@ def _assert_triage_adapter(adapter: str, runtime: str) -> None:
 def _assert_triage_semantics(workflow: str) -> None:
     flattened = " ".join(workflow.split())
     assert (
-        "The capability, authority, artifact, input, gate-only input precedence, "
-        "recovery-transition, and completion rows in this "
+        "The capability, authority, artifact, input, gate-only input precedence, test "
+        "input precedence, recovery-transition, and completion rows in this "
         "document are normative. They take precedence over later explanatory prose "
         "and runtime adapters."
     ) in flattened
@@ -2615,11 +2616,11 @@ def _assert_triage_semantics(workflow: str) -> None:
         "test, no test state, test gate, or test recovery receipt",
         "test, valid test state and no blocking test gate",
         "test, test-recovered-safe-to-restart receipt and no blocking test gate",
-        "Interactive test, blocking test gate without test state or intent",
-        "Interactive test, test-gate-recovery-intent present",
-        "Interactive test, blocking test gate with valid test state",
-        "Interactive test, blocking test gate with invalid test state",
-        "Interactive test, blocking test gate with test-recovered-safe-to-restart receipt",
+        "Interactive test, blocking test gate with no test state, safe-restart receipt, intent, or held bundle",
+        "Interactive test, test-gate-recovery-intent present and no held bundle",
+        "Interactive test, blocking test gate with valid test state and no held bundle",
+        "Interactive test, blocking test gate with invalid test state and no held bundle",
+        "Interactive test, blocking test gate with test-recovered-safe-to-restart receipt and no held bundle",
         "Any test with a state-present test-gate held bundle",
         "Interactive test, invalid test state and no blocking test gate",
         "Scheduled or unattended test, invalid test state",
@@ -2686,23 +2687,164 @@ def _assert_triage_semantics(workflow: str) -> None:
         "test, test-recovered-safe-to-restart receipt and no blocking test gate"
     ][0]
     assert "test-gate-recovery-intent" in inputs[
-        "Interactive test, blocking test gate without test state or intent"
+        "Interactive test, blocking test gate with no test state, safe-restart receipt, intent, or held bundle"
     ][0]
     assert "Resume only the recorded test-gate transition" in inputs[
-        "Interactive test, test-gate-recovery-intent present"
+        "Interactive test, test-gate-recovery-intent present and no held bundle"
     ][0]
     for artifact in (
         "valid test state",
         "invalid test state",
         "test-recovered-safe-to-restart receipt",
     ):
-        result = inputs[f"Interactive test, blocking test gate with {artifact}"][0]
+        result = inputs[
+            f"Interactive test, blocking test gate with {artifact} and no held bundle"
+        ][0]
         assert "held bundle" in result.replace("-", " ")
         assert "operator-held" in result
         assert "Never quarantine" in result
     held_result = inputs["Any test with a state-present test-gate held bundle"][0]
     assert "byte-identically" in held_result
     assert "terminal evidence, not resumable mutation authority" in held_result
+    test_precedence = _integration_table(workflow, "Test input precedence", 6)
+    assert test_precedence == {
+        "held-evidence": (
+            "any",
+            "any",
+            "any",
+            "present",
+            "Preserve bundle, gate, and artifact; report operator-held with no mutation.",
+        ),
+        "intent-interactive": (
+            "interactive",
+            "any",
+            "test-gate-recovery-intent",
+            "absent",
+            "Resume only the recorded absent-state gate transition.",
+        ),
+        "intent-unattended": (
+            "scheduled or unattended",
+            "any",
+            "test-gate-recovery-intent",
+            "absent",
+            "Preserve everything and report operator-held.",
+        ),
+        "gated-artifact-interactive": (
+            "interactive",
+            "blocking",
+            "valid-state, invalid-state, or safe-restart-receipt",
+            "absent",
+            "Capture one state-present held bundle; report operator-held without gate or artifact mutation.",
+        ),
+        "gated-absent-interactive": (
+            "interactive",
+            "blocking",
+            "absent",
+            "absent",
+            "Publish the absent-state intent before any gate quarantine.",
+        ),
+        "gated-unattended": (
+            "scheduled or unattended",
+            "blocking",
+            "absent, valid-state, invalid-state, or safe-restart-receipt",
+            "absent",
+            "Preserve everything and report operator-held.",
+        ),
+        "ungated-valid": (
+            "any",
+            "absent",
+            "valid-state",
+            "absent",
+            "Resume only the valid test state.",
+        ),
+        "ungated-safe-restart": (
+            "any",
+            "absent",
+            "safe-restart-receipt",
+            "absent",
+            "Execute only the receipt-to-reserved-state route.",
+        ),
+        "ungated-invalid-interactive": (
+            "interactive",
+            "absent",
+            "invalid-state",
+            "absent",
+            "Execute only isolated invalid test-state recovery.",
+        ),
+        "ungated-invalid-unattended": (
+            "scheduled or unattended",
+            "absent",
+            "invalid-state",
+            "absent",
+            "Preserve everything and report operator-held.",
+        ),
+        "ungated-absent": (
+            "any",
+            "absent",
+            "absent",
+            "absent",
+            "Start a new isolated test draft.",
+        ),
+    }
+
+    def matching_test_routes(
+        context: str, gate: str, artifact: str, held_bundle: bool
+    ) -> list[str]:
+        if held_bundle:
+            return ["held-evidence"]
+        if artifact == "test-gate-recovery-intent":
+            return [
+                "intent-interactive"
+                if context == "interactive"
+                else "intent-unattended"
+            ]
+        if gate == "blocking":
+            if context == "scheduled or unattended":
+                return ["gated-unattended"]
+            if artifact == "absent":
+                return ["gated-absent-interactive"]
+            return ["gated-artifact-interactive"]
+        if artifact == "valid-state":
+            return ["ungated-valid"]
+        if artifact == "safe-restart-receipt":
+            return ["ungated-safe-restart"]
+        if artifact == "invalid-state":
+            return [
+                "ungated-invalid-interactive"
+                if context == "interactive"
+                else "ungated-invalid-unattended"
+            ]
+        return ["ungated-absent"]
+
+    for context in ("interactive", "scheduled or unattended"):
+        for gate in ("absent", "blocking"):
+            for artifact in (
+                "absent",
+                "valid-state",
+                "invalid-state",
+                "safe-restart-receipt",
+                "test-gate-recovery-intent",
+            ):
+                for held_bundle in (False, True):
+                    routes = matching_test_routes(
+                        context, gate, artifact, held_bundle
+                    )
+                    assert len(routes) == 1
+                    assert routes[0] in test_precedence
+                    if held_bundle:
+                        assert test_precedence[routes[0]][-1].endswith(
+                            "operator-held with no mutation."
+                        )
+    assert (
+        "after `held-evidence` is selected, every later step is report-only"
+        in flattened
+    )
+    assert (
+        "the workflow forbids quarantine, acquire, replace, resume, restart, "
+        "reconstruct, delete, rename, link, unlink, create, publish, write, edit, "
+        "comment, push, or merge"
+        in flattened
+    )
     assert "without changing test or live artifacts" in inputs[
         "Scheduled or unattended test, invalid test state"
     ][0]
@@ -2995,6 +3137,16 @@ def test_triage_semantic_and_adapter_mutations_are_rejected() -> None:
         workflow.replace(
             "The bundle is terminal evidence, not resumable mutation authority",
             "The bundle authorizes gate quarantine and automatic restart",
+            1,
+        ),
+        workflow.replace(
+            "blocking test gate with no test state, safe-restart receipt, intent, or held bundle",
+            "blocking test gate without test state or intent",
+            1,
+        ),
+        workflow.replace(
+            "after `held-evidence` is selected, every later step\nis report-only",
+            "after `held-evidence` is selected, quarantine the gate and restart",
             1,
         ),
         workflow.replace(
