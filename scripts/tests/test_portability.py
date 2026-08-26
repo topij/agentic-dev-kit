@@ -3754,6 +3754,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         **old_gate_capture,
         "same_inode_names": [old_gate_observations, old_gate_observations],
     }
+    assert not complete_gate_capture_valid(duplicate_inode_name_capture)
     assert not gate_only_bundle_valid(
         rebuild_gate_only_bundle(
             duplicate_inode_name_capture, intent_fields["bundle_path"]
@@ -3765,6 +3766,7 @@ def _assert_triage_semantics(workflow: str) -> None:
         **old_gate_capture,
         "same_inode_names": [old_gate_inode_names[0], incomplete_inode_name],
     }
+    assert not complete_gate_capture_valid(incomplete_inode_name_capture)
     assert not gate_only_bundle_valid(
         rebuild_gate_only_bundle(
             incomplete_inode_name_capture, intent_fields["bundle_path"]
@@ -3782,6 +3784,7 @@ def _assert_triage_semantics(workflow: str) -> None:
                 {**old_gate_inode_names[1], changed_stat: changed_value},
             ],
         }
+        assert not complete_gate_capture_valid(changed_name_capture)
         assert not gate_only_bundle_valid(
             rebuild_gate_only_bundle(
                 changed_name_capture, intent_fields["bundle_path"]
