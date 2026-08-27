@@ -1,6 +1,7 @@
 {
   "adopter_owned": [
     "config/dev-model.yaml",
+    "config/claude-lane-settings.json",
     "docs/handoff.md",
     "docs/handoff-history.md",
     "docs/friction-log.md",
@@ -29,7 +30,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "d52b2ca6d6b666ed6436ca253030d9f967fde7f01ab5e937f99cd95c75a98590"
+      "sha256": "d58eeb39229db383be2bc5054040c513c710c5e5a59e1d559c4eadb1f5a47284"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -41,7 +42,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "f8855d8c4dbb9654b9c49627c642e6a804b961f84066c94a68f5456a960a5da1"
+      "sha256": "6f3ebc38d96401ba5146dc89985d31144a06cc1a127d04f9f5a776edff1e678d"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -65,7 +66,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "8f1aaec0cfcd843600d0593ea6b9b3ba196b7bcc58a4df105bddc3a82a2f59ac"
+      "sha256": "e31d3781fd1e38cfcfceb8450b4126a3f24b5301a9d8a16baa9fbf2e385780ea"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -97,7 +98,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "93e6da62db8c30c382037b749d7dcbd5bcb7813217084c27fa8f0922fc8b1705"
+      "sha256": "013c930a4a4784de9c555315773abac156cdee298951efa70c58b29d707761d4"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -129,11 +130,11 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "e0a1d302fa0a57ea0f22ec67d0037b0558db73082d23465509bb3e702902dadf"
+      "sha256": "9779933a39a224588082cdbf8bd37057036b5542b136e5c35f143dfded211244"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "23afab475f51a9e827c810949bb78bd2d0589f3bed06041d92ba890ebca0501b"
+      "sha256": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
@@ -244,7 +245,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "8463df43292b6cbe3ad0ee7bd9b84e8cf881921eb6d6fb1686a62616c636d728"
+      "sha256": "a380f72910ea5de56de1dc1ed3cc2b2b492f54272bf00ef0806ba0ed73bf4e0f"
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",
@@ -256,7 +257,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "c9fbbfa75a05ccc92cd590f06b0daa3a8739cc6d1f8e1795b4a791035351596a"
+      "sha256": "a369c42788a00d2167434336d3c28b9821e16bbb4c1c410e3ad8138d576b89fa"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

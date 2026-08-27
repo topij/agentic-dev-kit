@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(**)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git remote get-url:*)",
+      "Bash(git fetch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push -u origin:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr ready:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh repo view:*)",
+      "Bash(uv run scripts/pr_watch.py:*)",
+      "Bash(uv run scripts/devkit/pr_watch.py:*)"
+    ],
+    "deny": [
+      "Bash(gh pr merge:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)"
+    ]
+  }
+}

@@ -77,6 +77,34 @@ parallel:
   claude_worktree_transport: process-cwd
   claude_prompt_transport: stdin
   claude_final_text_transport: json-stdout
+  # Approval/sandbox policy per runtime — a DECLARATION from the wrapper's
+  # vocabulary, passed mechanically as argv. Codex: `read-only` | `workspace-write`
+  # (`--sandbox <value>`; the argv is validated and passed, its behaviour is not
+  # claimed until the Codex writing-lane record exists). Claude: `dont-ask` |
+  # `accept-edits` (`--permission-mode dontAsk|acceptEdits`). Under `dont-ask`
+  # the profile's allow list bounds every call the runtime does not accept on its
+  # own: at 2.1.247 the runtime still auto-accepts a read-only Bash class (pwd,
+  # whoami, cat, grep, find, bare `git remote -v` were observed live) with no
+  # entry in `permission_denials`, and denies every other unlisted call. The
+  # profile grants file editing through `Edit(**)`, which the runtime keeps inside
+  # the worktree. `accept-edits` is declarable but NOT the default: the runtime
+  # then also auto-accepts its own file-system class inside the worktree (rm, mv,
+  # redirection writes were observed live) whatever the allow list says. Every
+  # unrestricted spelling (bypassPermissions, danger-full-access, the
+  # dangerously-* flags) is a non-member the wrapper refuses.
+  codex_approval_policy: read-only
+  claude_approval_policy: dont-ask
+  # The Claude trust route. A freshly issued lane worktree is an untrusted
+  # workspace, so the checked-out branch's `.claude/settings.json` never supplies
+  # policy (its allow list is ignored there and its hooks would otherwise still
+  # run) and the operator's user settings must not either. The wrapper passes
+  # `--setting-sources ""` plus this cockpit-owned profile through `--settings`;
+  # it is the ONE settings source a lane loads. Path relative to the repo root or
+  # absolute; seeded by init.sh when absent and adopter-owned afterwards. The
+  # wrapper refuses a profile whose `permissions` object carries any key other
+  # than `allow`, `deny`, `ask` (`defaultMode`, `additionalDirectories`, an
+  # unrecognised key) or a whole-tool Bash allowance.
+  claude_settings_profile: config/claude-lane-settings.json
   # A descriptor is a one-shot launch authority, not standing permission. The
   # issuer stamps this lifetime into the descriptor and the wrapper rejects an
   # expired value before starting a child.

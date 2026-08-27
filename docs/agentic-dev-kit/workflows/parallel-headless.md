@@ -102,7 +102,34 @@ prompt on stdin behind a `-` argument, final text through `--output-last-message
 Claude declares `process-cwd` / `stdin` / `json-stdout` — the working directory is the
 child process's own, the prompt arrives on stdin with no argument, and the final text
 is the `result` of the one JSON object `--output-format json` prints on stdout, which
-the wrapper redirects onto the reserved final-message file before `exec`. Shared
+the wrapper redirects onto the reserved final-message file before `exec`.
+`parallel.<runtime>_approval_policy` declares the approval/sandbox policy from the
+same kind of engine-owned vocabulary and is passed as argv in the fixed slot after the
+command prefix: Codex `read-only` / `workspace-write` (`--sandbox <value>`), Claude
+`dont-ask` / `accept-edits` (`--permission-mode dontAsk|acceptEdits`). The shipped
+Claude default is `dont-ask`, under which the profile's allow list bounds every call
+the runtime does not accept on its own: the profile grants file editing through
+`Edit(**)`, the one rule that governs every file-editing tool at 2.1.247, which the
+runtime resolves relative to the worktree root and never outside it (a bare `Edit`
+edits anywhere — observed live — and the wrapper refuses it; a `Write(...)` entry is
+inert on that client, so scope editing with `Edit(<pattern>)` and nothing else), and
+a Bash call outside the declared prefixes is a denial — except for the read-only
+class the runtime accepts regardless at 2.1.247 (`pwd`, `whoami`, `cat`, `grep`,
+`find`, bare `git remote -v` ran with nothing in `permission_denials`, while `touch`,
+`curl`, `env` and `git remote show` were denied). So a lane can read whatever its
+process can read, the receipt cannot show a read the runtime never asked about, and
+the allow list bounds what a lane can *do* — write, commit, push, open a PR — not
+what it can see.
+`accept-edits` is declarable and is not the default because the runtime then also
+auto-accepts its own class of file-system Bash commands inside the worktree — `rm`,
+`mv`, and redirection writes were observed accepted live at 2.1.247 with none of
+them in the allow list (`cat` ran too, and belongs to the read-only class above that
+either value accepts) — so under that value the allow list bounds only what the
+runtime's own classifier does not already accept. Every
+unrestricted spelling — `bypassPermissions`, `auto`, `manual`, `plan`,
+`danger-full-access`, the `--dangerously-*` flags — is a non-member the wrapper
+refuses before any attempt record exists, and a missing key refuses the same way; no
+config value widens a lane to unrestricted. Shared
 across runtimes, `parallel.descriptor_ttl_seconds` supplies descriptor lifetime,
 `parallel.observation_timeout_seconds` bounds the child observation handshake, and
 `parallel.termination_grace_seconds` bounds graceful cleanup before forced process-
@@ -150,17 +177,79 @@ desktop task, Codex cloud, a Claude remote session, or direct `codex exec` /
 `claude -p`: those surfaces do not apply this complete local
 worktree/environment/receipt contract. App-server is experimental and is not selected
 for this bounded mechanism. Keep the lane attended when the wrapper is unavailable.
-Model and reasoning-effort calibration, and the approval or permission policy a
-writing lane needs, remain separate from launcher identity: the wrapper passes no
-permission flag on either runtime. Do not read the checked-out project's rules as
-standing in for one. `claude -p` loads `CLAUDE.md` and project settings from its cwd,
-but a freshly issued lane worktree is an untrusted workspace, and the Claude live
-record observed the project's committed `permissions.allow` entries ignored there.
-Until `#601` lands, no permission policy reaches an unattended Claude lane; whatever
-the checked-out branch carries under `.claude/` is loaded with no operator watching,
-and whether its hooks execute in an untrusted workspace was not observed. Use the path
-only for a task whose branch content you trust and whose worktree writes you would
-accept unreviewed.
+Model and reasoning-effort calibration remain separate from launcher identity. The
+approval policy is not: it is the declared `parallel.<runtime>_approval_policy` above,
+and the wrapper reads its outcome back. Do not read the checked-out project's rules as
+standing in for it. A freshly issued lane worktree is an untrusted workspace to Claude:
+the branch's committed `permissions.allow` entries are ignored there while its hooks
+still execute, and the operator's own user settings (their default mode and allow
+list) reach the lane by default. So the Claude trust route is the one the wrapper
+builds and no other: `--setting-sources ""` loads neither the user's nor the branch's
+settings, and the cockpit-owned profile named by `parallel.claude_settings_profile`
+(shipped `config/claude-lane-settings.json`, seeded by `init.sh` when absent and
+adopter-owned afterwards) is passed with `--settings` as the one settings source the
+lane loads — its permission rules and its hooks apply, the branch's do not. The
+wrapper refuses a profile that is missing, symlinked, not one JSON object, without a
+`permissions` object, carrying any `permissions` key other than the three rule lists
+`allow`, `deny`, `ask` — `defaultMode` (the mode is declared once, in config),
+`additionalDirectories` (the settings form of `--add-dir`, tool access beyond the
+worktree with no rule in any list), or a key the wrapper does not recognise, refused
+rather than passed through because an entry this client ignores may be honoured by
+another — or carrying a `Bash` allow entry with no literal command prefix — `Bash`,
+`Bash(*)`, `Bash(**)`, `Bash(:*)`, `Bash(/*)`, anything whose pattern head (the
+pattern read literally, up to the first wildcard, `:`, or space) holds no letter or
+digit — decided by that structure, not by a list of spellings — or granting an edit
+tool without a path pattern relative to the worktree root (`Write`, `Write(//…)`,
+`Edit(../**)`). The guard judges the
+shape of a prefix and never the command it names: `Bash(sh:*)` is a prefix an
+adopter declared. The
+profile is read and digested by the parent and again by the child, and the two
+digests must agree; the bytes the runtime itself loads from the path at `exec` are
+not re-read, so a writer on the same OS account who replaces the file inside the
+child's observe-to-exec window is outside this check, the same boundary the
+descriptor seal declares. Pre-trusting the worktree
+path in the operator's Claude configuration is not a supported route: that trust is
+keyed by a path `sessions/<scope>/wt` reuses, outlives the lane, and makes branch
+content authoritative; neither is `--bare`, which never reads OAuth credentials and
+drops the project contract. Do not edit the lane worktree's `.claude/` to change lane
+policy — it is not read.
+
+The approval transition is read, not assumed. Claude reports a refused tool call as a
+`success` envelope whose only trace is a non-empty `permission_denials` list, so a
+lane whose write was denied (or whose action would have prompted, which an unattended
+`-p` session cannot do) terminalizes `failed` with the list preserved in
+`terminal.permission_denials` and the declared policy named in the error; a result
+with no list-valued `permission_denials` is refused rather than read as nothing
+denied; `completed` carries `[]`. Through `last-message-file` the outcome is not
+observable and the receipt carries `null`, never `[]`. The receipt also binds the
+declared policy, its argv, and the profile path and digest in `request.approval_policy`,
+and the exact argv the observer exec'd in `observed.argv`; the parent refuses an
+observation whose argv omits the policy or the trust step. The Codex value is
+validated and passed the same way, and its behaviour is not claimed until a Codex
+writing-lane record exists; the shipped Codex default is `read-only` for that reason.
+The shipped profile's allow-list is the minimum a writing lane needs to edit inside
+its worktree (`Edit(**)`), commit, push its own branch, open and ready a PR, and poll
+it; `git remote` is granted as `get-url` only, because a broad `git remote:*` let a
+lane retarget `origin` and push elsewhere through the already-granted push form
+(panel round 11, live against a throwaway remote), and `git remote -v:*` admitted
+`git remote -v set-url` the same way, `-v` being a modifier (round 12, live) —
+`get-url` is the subcommand token itself, and git accepts nothing after it but its
+own `--push`/`--all` flags and a remote name. The
+push allow is `Bash(git push -u origin:*)`, the form the lane contract names
+and the narrowest a rule can express: the runtime matches Bash rules on token
+boundaries, so a branch-prefix allow (`git push -u origin lane/:*`) matched nothing
+live — not even the lane's own push. The narrowed allow bounds only the verb and the remote name: it refuses the
+flag-first and no-`-u` spellings the panel reproduced passing a broad
+`Bash(git push:*)` (`git push origin :x`, `git push -uf …`, `git push --force …`,
+`git push origin +HEAD:main`), and it bounds **nothing after `origin`** — a flag
+(`git push -u origin --force x`, `git push -u origin -f x`), a deletion (`git push -u
+origin :x`), and a forced refspec (`git push -u origin +HEAD:x`) all match it, every
+one observed live against a throwaway remote. The deny entries for the flag
+spellings catch only the flag-first placement. So the profile does not protect a
+remote branch's history; that remains the forge's branch protection and the lane
+contract's own-branch rule, and a deterministic lane-side push gate is follow-up
+work, not a claim this contract makes. What else belongs in that profile as repository policy is `#606`, not this
+contract.
 
 Every supported launcher must still prepend `prompt_preamble` verbatim and must not
 open a second worktree on top of `new --headless`. The wrapper does both by consuming

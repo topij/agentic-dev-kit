@@ -16596,3 +16596,135 @@ def test_no_test_module_rebuilds_the_engine_dir_from_repo_root():
         "is only correct while `paths.engines` is `scripts`. Use ENGINE_DIR. "
         f"Offenders: {offenders}"
     )
+
+
+@pytest.mark.kit_repo_only("init.sh", "config/claude-lane-settings.json")
+def test_init_seeds_the_claude_lane_profile_once_and_migrates_the_policy_keys(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "project"
+    (repo / "config").mkdir(parents=True)
+    shutil.copy2(REPO_ROOT / "init.sh", repo / "init.sh")
+    config_path = repo / "config" / "dev-model.yaml"
+    config_path.write_text(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    # An adopter on the #611 schema: launcher keys present, policy keys absent.
+    stripped = "".join(
+        line
+        for line in config_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if not line.startswith(
+            ("  codex_approval_policy:", "  claude_approval_policy:", "  claude_settings_profile:")
+        )
+    )
+    assert stripped != config_path.read_text(encoding="utf-8")
+    config_path.write_text(stripped, encoding="utf-8")
+    profile = repo / "config" / "claude-lane-settings.json"
+    assert not profile.exists()
+
+    first = subprocess.run(
+        ["sh", "init.sh", "--no-clobber"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    migrated = yaml.safe_load(config_path.read_text(encoding="utf-8"))["parallel"]
+    shipped = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )["parallel"]
+    assert migrated["codex_approval_policy"] == shipped["codex_approval_policy"] == "read-only"
+    assert migrated["claude_approval_policy"] == shipped["claude_approval_policy"] == "dont-ask"
+    assert (
+        migrated["claude_settings_profile"]
+        == shipped["claude_settings_profile"]
+        == "config/claude-lane-settings.json"
+    )
+    assert "seeded config/claude-lane-settings.json" in first.stdout
+    # The seeded profile is byte-identical to the one the kit ships and validates
+    # under the launcher's own trust-step rules.
+    assert profile.read_bytes() == (REPO_ROOT / "config" / "claude-lane-settings.json").read_bytes()
+    launcher = _load_module("launch_lane_profile_seed", ENGINE_DIR / "launch_lane.py")
+    launcher._validate_settings_profile(profile.read_bytes(), profile)
+
+    # Adopter-owned afterwards: a second run leaves an edited profile alone.
+    profile.write_text('{"permissions": {"allow": ["Bash(make test:*)"]}}\n', encoding="utf-8")
+    second = subprocess.run(
+        ["sh", "init.sh", "--no-clobber"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "seeded config/claude-lane-settings.json" not in second.stdout
+    assert profile.read_text(encoding="utf-8") == '{"permissions": {"allow": ["Bash(make test:*)"]}}\n'
+
+    # A relocated profile key seeds at the configured path, not the default one.
+    relocated = re.sub(
+        r"(?m)^  claude_settings_profile:.*$",
+        "  claude_settings_profile: config/lanes/claude.json",
+        config_path.read_text(encoding="utf-8"),
+        count=1,
+    )
+    config_path.write_text(relocated, encoding="utf-8")
+    third = subprocess.run(
+        ["sh", "init.sh", "--no-clobber"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "seeded config/lanes/claude.json" in third.stdout
+    assert (repo / "config" / "lanes" / "claude.json").read_bytes() == (
+        REPO_ROOT / "config" / "claude-lane-settings.json"
+    ).read_bytes()
+
+
+@pytest.mark.kit_repo_only(
+    ".claude/commands/parallel.md",
+    ".agents/skills/parallel/SKILL.md",
+    "docs/agentic-dev-kit/workflows/parallel-headless.md",
+)
+def test_parallel_adapters_carry_no_approval_policy_and_the_shared_workflow_does() -> None:
+    # A runtime adapter contradicting shared policy is the hostile mutation this
+    # guards: the flags, modes, and profile are engine- and config-owned, named in
+    # the shared workflow, and absent from both thin bindings.
+    policy_markers = (
+        "--permission-mode",
+        "--sandbox",
+        "--settings",
+        "--setting-sources",
+        "--dangerously",
+        "bypassPermissions",
+        "danger-full-access",
+        "approval_policy",
+        "settings_profile",
+        "acceptEdits",
+        "dontAsk",
+    )
+    for adapter in (
+        REPO_ROOT / ".claude" / "commands" / "parallel.md",
+        REPO_ROOT / ".agents" / "skills" / "parallel" / "SKILL.md",
+    ):
+        text = adapter.read_text(encoding="utf-8")
+        for marker in policy_markers:
+            assert marker not in text, f"{adapter.name} restates {marker}"
+    shared = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "parallel-headless.md"
+    ).read_text(encoding="utf-8")
+    for required in (
+        "`parallel.<runtime>_approval_policy`",
+        "`parallel.claude_settings_profile`",
+        "`--setting-sources \"\"`",
+        "`permission_denials`",
+        "read-only",
+        "workspace-write",
+        "dont-ask",
+        "accept-edits",
+    ):
+        assert required in shared, required
+    # The shared workflow names the unrestricted flag only by the `--dangerously-*`
+    # family; a spelled-out flag is a directive it must not carry (a mutation that
+    # injects one fails this — panel rounds 6, 8, 11).
+    assert "--dangerously-skip-permissions" not in shared

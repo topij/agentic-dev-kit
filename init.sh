@@ -1033,6 +1033,9 @@ migrate_parallel_schema() {
   claude_worktree_transport: process-cwd
   claude_prompt_transport: stdin
   claude_final_text_transport: json-stdout
+  codex_approval_policy: read-only
+  claude_approval_policy: dont-ask
+  claude_settings_profile: config/claude-lane-settings.json
   descriptor_ttl_seconds: 900
   observation_timeout_seconds: 30
   termination_grace_seconds: 5
@@ -1047,9 +1050,83 @@ migrate_parallel_schema() {
   ensure_parallel_key claude_worktree_transport '  claude_worktree_transport: process-cwd'
   ensure_parallel_key claude_prompt_transport '  claude_prompt_transport: stdin'
   ensure_parallel_key claude_final_text_transport '  claude_final_text_transport: json-stdout'
+  ensure_parallel_key codex_approval_policy '  codex_approval_policy: read-only'
+  ensure_parallel_key claude_approval_policy '  claude_approval_policy: dont-ask'
+  ensure_parallel_key claude_settings_profile '  claude_settings_profile: config/claude-lane-settings.json'
   ensure_parallel_key descriptor_ttl_seconds '  descriptor_ttl_seconds: 900'
   ensure_parallel_key observation_timeout_seconds '  observation_timeout_seconds: 30'
   ensure_parallel_key termination_grace_seconds '  termination_grace_seconds: 5'
+}
+
+# The Claude lane settings profile — the ONE settings source an unattended Claude
+# lane loads (scripts/launch_lane.py passes it with `--settings` beside
+# `--setting-sources ""`). Adopter-owned policy like config/dev-model.yaml: seeded
+# only when absent, never rewritten, and deliberately outside the kit manifest so
+# an upgrade cannot replace an adopter's lane allow-list. The shipped allow-list is
+# the minimum a writing lane needs to edit inside its worktree (`Edit(**)` — the
+# one rule that governs every file-editing tool at Claude Code 2.1.247, resolved
+# relative to the worktree root and never outside it; a `Write(...)` entry is
+# inert there, and a bare `Edit` edits anywhere), commit, push with the form the
+# lane contract names (`git push -u origin <branch>`), open and ready a PR, and
+# poll it. `git remote` is granted as `get-url` only: a broad `git remote:*` let a
+# lane retarget `origin` and push elsewhere through the already-granted push form
+# (panel round 11, live), and `git remote -v:*` admitted `git remote -v set-url`
+# the same way, `-v` being a modifier (round 12, live); `get-url` is the
+# subcommand token itself and git accepts nothing after it but its own
+# `--push`/`--all` flags and a remote name.
+# The runtime matches a Bash rule on token boundaries, so the push allow
+# cannot name a branch prefix (`lane/:*` matched nothing live); `git push -u
+# origin:*` is the narrowest expressible form. It refuses the flag-first and
+# no-`-u` spellings (`git push origin :x`, `git push -uf …`, `git push --force
+# …`) and bounds nothing after `origin` — a flag, `:x`, or `+HEAD:x` placed there
+# all match — so the profile does not protect branch history; that stays with
+# the forge and the lane contract, and the deny entries catch only the
+# flag-first spellings.
+seed_claude_lane_profile() {
+  _profile="$(sed -n 's/^  claude_settings_profile:[[:space:]]*//p' "$CONFIG_FILE" | head -n 1)"
+  _profile="${_profile%%#*}"
+  _profile="$(printf '%s' "$_profile" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//')"
+  [ -n "$_profile" ] || _profile="config/claude-lane-settings.json"
+  if [ -e "$_profile" ] || [ -L "$_profile" ]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$_profile")"
+  cat > "$_profile" <<'PROFILE'
+{
+  "permissions": {
+    "allow": [
+      "Edit(**)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git remote get-url:*)",
+      "Bash(git fetch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push -u origin:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr ready:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh repo view:*)",
+      "Bash(uv run scripts/pr_watch.py:*)",
+      "Bash(uv run scripts/devkit/pr_watch.py:*)"
+    ],
+    "deny": [
+      "Bash(gh pr merge:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)"
+    ]
+  }
+}
+PROFILE
+  echo "seeded $_profile"
 }
 
 # Schema additions introduced after the v2 template release. Same idempotent
@@ -1956,6 +2033,7 @@ fi
 preflight_migration_config
 migrate_runtime_schema
 migrate_parallel_schema
+seed_claude_lane_profile
 migrate_kit_schema
 
 # ── prompts ──────────────────────────────────────────────────────────────

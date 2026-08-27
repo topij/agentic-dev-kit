@@ -478,6 +478,9 @@ UPGRADE_WORKFLOW_REL = next(
 # an installer can consume the same list to decide what not to copy.
 ADOPTER_OWNED: tuple[str, ...] = (
     "config/dev-model.yaml",
+    # The Claude lane settings profile shares dev-model.yaml's contract: seeded
+    # once by init.sh, never rewritten, never reported as drift (#614).
+    "config/claude-lane-settings.json",
     "docs/handoff.md",
     "docs/handoff-history.md",
     "docs/friction-log.md",

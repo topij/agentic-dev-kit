@@ -42,6 +42,64 @@ starts.
 
 ---
 
+## #614 — 2026-08-27
+
+- **ADDED (config keys) — `parallel` now owns, per runtime, `<runtime>_approval_policy`
+  (Codex `read-only` | `workspace-write`, shipped `read-only`; Claude `dont-ask` |
+  `accept-edits`, shipped `dont-ask`) and, for Claude, `claude_settings_profile`
+  (shipped `config/claude-lane-settings.json`, which grants file editing through
+  the worktree-relative `Edit(**)` — the rule that governs every file-editing tool at
+  Claude Code 2.1.247 — bounded `git`/`gh pr` prefixes with `git remote` read-only,
+  and `Bash(git push -u origin:*)`, the push form the lane contract names). That rule bounds nothing after
+  `origin`: a `--force`/`-f` placed there, `:x`, and `+HEAD:x` all still match it, so
+  the profile does not protect branch history — keep your protected branches
+  protected on the forge; a lane-side push gate is follow-up work.** **Under `dont-ask` the allow list bounds every call the runtime does not accept on
+  its own — at Claude Code 2.1.247 a read-only Bash class (`pwd`, `cat`, `grep`,
+  `find`, …) runs regardless and never appears in `permission_denials`; declare
+  `accept-edits` only knowing that the runtime then also auto-accepts its own
+  file-system class (`rm`, `mv`, redirection writes) inside the worktree.**
+  **Refresh `init.sh` and run `./init.sh --no-clobber`: the additive migration installs
+  the three keys without replacing adopter values and seeds
+  `config/claude-lane-settings.json` only when no file is there. The profile is
+  adopter-owned lane policy outside the manifest — an upgrade never rewrites it; diff
+  it against the kit's copy yourself. Keep each policy inside the wrapper's vocabulary:
+  an unrestricted spelling (`bypassPermissions`, `danger-full-access`, any
+  `dangerously-*`) or a missing key refuses at launch, as does a profile carrying
+  any `permissions` key other than `allow`, `deny`, `ask` (`defaultMode`,
+  `additionalDirectories`, or one the wrapper does not recognise — refused, not
+  passed through), a `Bash` allow entry whose pattern has no literal
+  command prefix (`Bash`, `Bash(*)`, `Bash(**)`, `Bash(:*)`, `Bash(/*)` — the head
+  before the first wildcard, separator, or space must hold a letter or digit), or an
+  edit-tool allow with no worktree-relative path pattern (`Write`, `Write(//…)`,
+  `Edit(../**)`).**
+- **CHANGED (engine CLI surface) — `scripts/launch_lane.py` now passes the declared
+  policy in the argv slot after the command prefix, and on Claude also
+  `--setting-sources ""` and `--settings <profile>`.** **Refresh `scripts/launch_lane.py`,
+  `scripts/tests/test_lane_launcher.py`, `config/dev-model.yaml`, `init.sh`, and
+  `docs/agentic-dev-kit/workflows/parallel-headless.md` together. A Codex lane that
+  relied on the operator's host defaults now runs under `--sandbox read-only` unless
+  you declare `workspace-write`; a Claude lane no longer loads the operator's user
+  settings, the branch's project settings, or the branch's `CLAUDE.md` — put lane
+  permission rules and lane hooks in the profile, and rely on the lane contract preamble
+  for project-level instructions. The wrapper's own CLI (`--descriptor`, `--prompt-file`)
+  and exit codes are unchanged.**
+- **CHANGED (gate semantics) — a Claude lane whose runtime reports a non-empty
+  `permission_denials` list terminalizes `failed`, never `completed`, even though the
+  runtime's envelope is `subtype=success`; a result without a list-valued
+  `permission_denials` is also `failed`.** **Treat a `failed` receipt as the policy
+  verdict, not as proof the lane wrote nothing — reconcile the worktree and forge as
+  before. Read `terminal.permission_denials` for the refused calls.**
+- **CHANGED (report shape) — the launch attempt and receipt `request` object gains
+  `approval_policy` (`declared`, `argv`, `settings_profile_path`,
+  `settings_profile_sha256`); the observed receipt gains `observed.argv`; the receipt
+  `terminal` object gains `permission_denials` — the runtime's own list on a
+  `json-stdout` receipt whose result was extracted (empty on `completed`, non-empty
+  on a denial-`failed`), and `null` both for `last-message-file` and for any receipt
+  whose result could not be extracted.** **A consumer that compares `request` objects
+  must include the new key; `null` means unobservable, not "none denied".**
+
+---
+
 ## #611 — 2026-08-27
 
 - **BREAKING (engine CLI surface) — the unattended lane launcher is
