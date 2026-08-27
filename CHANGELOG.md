@@ -50,10 +50,10 @@ starts.
   (shipped `config/claude-lane-settings.json`, which grants file editing through
   the worktree-relative `Edit(**)` — the rule that governs every file-editing tool at
   Claude Code 2.1.247 — bounded `git`/`gh pr` prefixes, and `Bash(git push -u
-  origin:*)`, the push form the lane contract names). That rule cannot bound the
-  refspec: `git push -u origin :x` or `+HEAD:x` still matches it, so keep your
-  protected branches protected on the forge; a lane-side push gate is follow-up
-  work.** **Declare `accept-edits` only knowing that the runtime
+  origin:*)`, the push form the lane contract names). That rule bounds nothing after
+  `origin`: a `--force`/`-f` placed there, `:x`, and `+HEAD:x` all still match it, so
+  the profile does not protect branch history — keep your protected branches
+  protected on the forge; a lane-side push gate is follow-up work.** **Declare `accept-edits` only knowing that the runtime
   then also auto-accepts its own class of file-system Bash commands inside the
   worktree regardless of the allow list.**
   **Refresh `init.sh` and run `./init.sh --no-clobber`: the additive migration installs

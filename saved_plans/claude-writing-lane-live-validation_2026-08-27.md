@@ -525,9 +525,10 @@ longer listed `lane/victim`) and `dash_u_plus_refspec_push=ran` (`git push -u or
 +HEAD:lane/victim2`, a forced update). `terminal.permission_denials` held exactly
 the three denied `Bash` calls; receipt `failed`, final-message digest
 `5b0ee6f8534260c468614532c7c923a9dc7d5776eab6d30547565c16e7f92790`. **A token-boundary
-rule bounds the spelling of a push, not its refspec**; that is why the shared
-workflow keeps branch-history protection with the forge and the lane contract and
-names the lane-side push gate as follow-up.
+rule bounds the spelling of a push up to `origin` and nothing after it** — a flag
+placed there passes as the refspec forms do (panel round 9, live); that is why the
+shared workflow keeps branch-history protection with the forge and the lane contract
+and names the lane-side push gate as follow-up.
 
 #### Cockpit review and merge of PR #6
 
@@ -594,8 +595,11 @@ denial read-back, and the receipt.
   the panel reproduced `git push origin +HEAD:main`, an unflagged `git push origin
   :x` ref deletion, and a bundled `git push -uf …` passing against a throwaway
   remote, and a branch-prefix allow matched nothing live (the `write5` lane below).
-  The narrowed allow refuses the flag-first and no-`-u` spellings and not a hostile
-  refspec after `origin` (both observed below). Branch-history protection is the
-  forge's and the lane contract's; this record claims nothing more.
+  The narrowed allow refuses the flag-first and no-`-u` spellings and bounds
+  nothing after `origin`: the `-u origin :x` and `-u origin +HEAD:x` forms are
+  observed below, and panel round 9 observed `git push -u origin --force x` and
+  `-u origin -f x` forcing throwaway branches the same way. Branch-history
+  protection is the forge's and the lane contract's; this record claims nothing
+  more.
 - **Model and effort calibration** (`#605`) remain outside this slice; the envelopes
   named the models the client selected without any lane-side choice.

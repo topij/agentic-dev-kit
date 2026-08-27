@@ -1072,9 +1072,10 @@ migrate_parallel_schema() {
 # cannot name a branch prefix (`lane/:*` matched nothing live); `git push -u
 # origin:*` is the narrowest expressible form. It refuses the flag-first and
 # no-`-u` spellings (`git push origin :x`, `git push -uf …`, `git push --force
-# …`) but not a hostile refspec after `origin`, which is why `gh pr merge` and
-# the flag spellings of a force push are also denied and why branch-history
-# protection stays with the forge and the lane contract.
+# …`) and bounds nothing after `origin` — a flag, `:x`, or `+HEAD:x` placed there
+# all match — so the profile does not protect branch history; that stays with
+# the forge and the lane contract, and the deny entries catch only the
+# flag-first spellings.
 seed_claude_lane_profile() {
   _profile="$(sed -n 's/^  claude_settings_profile:[[:space:]]*//p' "$CONFIG_FILE" | head -n 1)"
   _profile="${_profile%%#*}"

@@ -221,15 +221,17 @@ its worktree (`Edit(**)`), commit, push its own branch, open and ready a PR, and
 it. The push allow is `Bash(git push -u origin:*)`, the form the lane contract names
 and the narrowest a rule can express: the runtime matches Bash rules on token
 boundaries, so a branch-prefix allow (`git push -u origin lane/:*`) matched nothing
-live — not even the lane's own push. The narrowed allow refuses the flag-first and
-no-`-u` spellings the panel reproduced passing a broad `Bash(git push:*)` (`git push
-origin :x`, `git push -uf …`, `git push --force …`, `git push origin +HEAD:main`), and
-it cannot refuse a hostile refspec after `origin` — `git push -u origin :x` deletes a
-ref and `git push -u origin +HEAD:x` forces one, both observed live. So `gh pr merge`
-and the flag spellings of a force push are denied as well, protection of a remote
-branch's history remains the forge's branch protection and the lane contract's
-own-branch rule, and a deterministic lane-side push gate is follow-up work, not a
-claim this contract makes. What else belongs in that profile as repository policy is `#606`, not this
+live — not even the lane's own push. The narrowed allow bounds only the verb and the remote name: it refuses the
+flag-first and no-`-u` spellings the panel reproduced passing a broad
+`Bash(git push:*)` (`git push origin :x`, `git push -uf …`, `git push --force …`,
+`git push origin +HEAD:main`), and it bounds **nothing after `origin`** — a flag
+(`git push -u origin --force x`, `git push -u origin -f x`), a deletion (`git push -u
+origin :x`), and a forced refspec (`git push -u origin +HEAD:x`) all match it, every
+one observed live against a throwaway remote. The deny entries for the flag
+spellings catch only the flag-first placement. So the profile does not protect a
+remote branch's history; that remains the forge's branch protection and the lane
+contract's own-branch rule, and a deterministic lane-side push gate is follow-up
+work, not a claim this contract makes. What else belongs in that profile as repository policy is `#606`, not this
 contract.
 
 Every supported launcher must still prepend `prompt_preamble` verbatim and must not

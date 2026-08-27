@@ -1,6 +1,7 @@
 {
   "adopter_owned": [
     "config/dev-model.yaml",
+    "config/claude-lane-settings.json",
     "docs/handoff.md",
     "docs/handoff-history.md",
     "docs/friction-log.md",
@@ -41,7 +42,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "7f34b1ffc8e5a50f85eb69ec94c5a98172b89d07fe116254eb463248487e3c12"
+      "sha256": "2bcebb91807ac899ba03682315e32e90a31204353da5ec9160e565a4cd2c9cfe"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -97,7 +98,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "1d6ce8ec83327a3d38c0832212672258f1bc362307851647e1a9851a7a6fd89b"
+      "sha256": "154b55c162d65889308544921ff0dc51dad001c0e2e47a08b7eb06b95f32c310"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -129,7 +130,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "e0a1d302fa0a57ea0f22ec67d0037b0558db73082d23465509bb3e702902dadf"
+      "sha256": "9779933a39a224588082cdbf8bd37057036b5542b136e5c35f143dfded211244"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
