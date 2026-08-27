@@ -136,9 +136,14 @@ record exists, in the same shape as the transports:
   seeded by `init.sh` when absent and adopter-owned afterwards. The engine refuses a
   profile that is missing, a symlink, not a regular file, not one JSON object, without
   a `permissions` object, with `permissions.defaultMode` (the mode is config-declared,
-  one authority), or whose `permissions.allow` widens a whole tool (`Bash`,
-  `Bash(*)`, `Bash(*:*)`, `Bash(:*)`, compared with every whitespace character
-  removed). Codex has no profile key in this slice.
+  one authority), or whose `permissions.allow` carries a `Bash` entry with no literal command
+  prefix — the pattern, with every whitespace character removed, does not start with
+  a letter, digit, or path character (`Bash`, `Bash(*)`, `Bash(**)`, `Bash(?*)`,
+  `Bash(:*)`). The rule is structural because the panel's round 2 found `Bash(**)`
+  unrestricted live at 2.1.247 while an enumerated blocklist missed it, and found
+  `Bash(:*)` *not* unrestricted (it matches commands starting with `:`), so an
+  enumeration built from assumption was wrong in both directions. Codex has no
+  profile key in this slice.
 
 The argv is assembled in one fixed order — command prefix, **approval contribution**,
 worktree arguments, final-text arguments, prompt arguments:
@@ -248,3 +253,9 @@ the declared values and the profile are adopter-owned config seeded by `init.sh`
 launch and failure policy lives in `parallel-headless.md` and the runtime-parity
 capability row; both runtime adapters stay thin. The seal remains corruption and
 descriptor-only rewrite evidence, not a privilege boundary against the same OS account.
+The settings profile shares that boundary: parent and child each read and digest it
+and must agree, but the runtime loads the path itself at `exec`, so a same-account
+writer replacing the file inside the child's observe-to-exec window is not caught
+(panel round 2, adversarial lens, reported as structural and not reproduced).
+Passing the validated bytes inline instead of the path would close it and is a
+separate change.

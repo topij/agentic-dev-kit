@@ -172,7 +172,14 @@ adopter-owned afterwards) is passed with `--settings` as the one settings source
 lane loads — its permission rules and its hooks apply, the branch's do not. The
 wrapper refuses a profile that is missing, symlinked, not one JSON object, without a
 `permissions` object, carrying `permissions.defaultMode` (the mode is declared once,
-in config), or allowing a whole tool (`Bash`, `Bash(*)`). Pre-trusting the worktree
+in config), or carrying a `Bash` allow entry with no literal command prefix — `Bash`,
+`Bash(*)`, `Bash(**)`, `Bash(:*)`, anything whose pattern does not start with a
+command character — decided by that structure, not by a list of spellings. The
+profile is read and digested by the parent and again by the child, and the two
+digests must agree; the bytes the runtime itself loads from the path at `exec` are
+not re-read, so a writer on the same OS account who replaces the file inside the
+child's observe-to-exec window is outside this check, the same boundary the
+descriptor seal declares. Pre-trusting the worktree
 path in the operator's Claude configuration is not a supported route: that trust is
 keyed by a path `sessions/<scope>/wt` reuses, outlives the lane, and makes branch
 content authoritative; neither is `--bare`, which never reads OAuth credentials and

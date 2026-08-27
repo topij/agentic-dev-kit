@@ -1815,6 +1815,36 @@ def test_no_declaration_can_make_the_engine_emit_an_unrestricted_flag() -> None:
 
 
 @pytest.mark.parametrize(
+    ("entry", "widens"),
+    (
+        ("Bash", True),
+        ("Bash()", True),
+        ("Bash(*)", True),
+        ("Bash(**)", True),
+        ("Bash(?*)", True),
+        ("Bash(:*)", True),
+        ("Bash(*:*)", True),
+        ("Bash( ** )", True),
+        ("Bash(*git:*)", True),
+        ("Bash(git:*)", False),
+        ("Bash(git status:*)", False),
+        ("Bash(/usr/bin/git:*)", False),
+        ("Bash(./run.sh:*)", False),
+        ("Bash(~/bin/tool:*)", False),
+        ("Bash(g*)", False),
+        ("Bashful", False),
+        ("Read", False),
+        ("WebFetch(domain:*)", False),
+    ),
+)
+def test_whole_tool_bash_is_decided_by_structure_not_by_spelling(
+    entry: str, widens: bool
+) -> None:
+    launcher = _load_launcher()
+    assert launcher._bash_allow_has_no_literal_prefix(entry) is widens
+
+
+@pytest.mark.parametrize(
     ("profile", "fragment"),
     (
         (b"{not json", "not valid JSON"),
@@ -1834,6 +1864,16 @@ def test_no_declaration_can_make_the_engine_emit_an_unrestricted_flag() -> None:
         ({"permissions": {"allow": ["Bash (*)"]}}, "widens Bash"),
         ({"permissions": {"allow": ["Bash(:*)"]}}, "widens Bash"),
         ({"permissions": {"allow": ["Bash( : * )"]}}, "widens Bash"),
+        # Any pattern with no literal command prefix, not a list of spellings:
+        # `Bash(**)` was unrestricted live at 2.1.247 while an enumeration missed
+        # it (panel round 2, adversarial lens).
+        ({"permissions": {"allow": ["Bash(**)"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash(***)"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash( ** )"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash(?*)"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash(*git:*)"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash(-c:*)"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash(git status:*)", "Bash(**)"]}}, "widens Bash"),
         ({"permissions": {"allow": "Bash(git:*)"}}, "list of strings"),
         ({"permissions": {"allow": [1]}}, "list of strings"),
     ),
@@ -1859,6 +1899,10 @@ def test_widening_or_malformed_settings_profile_is_a_refused_trust_step(
         {"permissions": {"allow": [], "deny": ["Bash"]}},
         {"permissions": {"allow": [], "ask": ["Bash", "Bash(*)"]}},
         {"permissions": {"allow": ["Bash(git status:*)", "Bash(gh pr view:*)"]}},
+        # A literal prefix may be an absolute or relative command path, and a
+        # non-Bash rule is outside this guard's claim.
+        {"permissions": {"allow": ["Bash(/opt/homebrew/bin/gh pr view:*)", "Bash(./scripts/run.sh:*)"]}},
+        {"permissions": {"allow": ["Bash(git*)", "Read", "WebFetch(domain:example.com)"]}},
     ),
 )
 def test_bounded_or_narrowing_settings_profile_is_accepted(

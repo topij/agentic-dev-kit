@@ -98,11 +98,29 @@ RUNTIME_APPROVAL_POLICIES: dict[str, dict[str, tuple[str, ...]]] = {
 # and the operator's user settings must not either. `--setting-sources ""` loads
 # neither; the cockpit-owned profile passed with `--settings` is the one source.
 CLAUDE_SETTING_SOURCES_ARGS = ("--setting-sources", "")
-# Whole-tool Bash allowances widen a lane to unrestricted shell without a
-# declaration; the profile validator refuses them after stripping every
-# whitespace character, so `Bash( * )` is the same spelling as `Bash(*)`. An
-# empty prefix (`Bash(:*)`) matches every command and is the same allowance.
-WHOLE_TOOL_BASH_ALLOWS = frozenset({"Bash", "Bash()", "Bash(*)", "Bash(*:*)", "Bash(:*)"})
+# A `Bash` allow entry is bounded only by the literal command prefix its pattern
+# starts with. An entry whose pattern starts with anything else — a wildcard
+# (`Bash(*)`, `Bash(**)`, `Bash(?*)`), a separator (`Bash(:*)`), or nothing
+# (`Bash`, `Bash()`) — has no such prefix, so the validator refuses it by that
+# structure rather than by enumerating spellings: an enumeration is a blocklist,
+# and the panel found `Bash(**)` unrestricted live at Claude Code 2.1.247 while
+# the enumeration missed it. Whitespace is stripped first, so `Bash( * )` reads as
+# `Bash(*)`. A literal prefix begins with a letter, a digit, or a path character.
+LITERAL_COMMAND_LEAD = frozenset("/._~")
+
+
+def _bash_allow_has_no_literal_prefix(entry: str) -> bool:
+    """True when a `permissions.allow` entry grants Bash without a command prefix."""
+    spelling = "".join(entry.split())
+    if not spelling.startswith("Bash"):
+        return False
+    rest = spelling[len("Bash") :]
+    if rest == "":
+        return True
+    if not (rest.startswith("(") and rest.endswith(")")):
+        return False
+    lead = rest[1:-1][:1]
+    return not (lead.isalnum() or lead in LITERAL_COMMAND_LEAD)
 SAFE_EXECUTABLE_PATH = os.pathsep.join(
     (*os.defpath.split(os.pathsep), "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin")
 )
@@ -407,11 +425,13 @@ def _validate_settings_profile(raw: bytes, path: Path) -> None:
 
     The mode is config-declared and passed as `--permission-mode`, so a profile
     carrying `permissions.defaultMode` would be a second authority for the same
-    decision; a whole-tool Bash entry in `permissions.allow` would widen the lane
-    to unrestricted shell without any declaration. Both refuse before an attempt
-    record exists. Only `allow` is inspected for widening: a `deny` entry narrows,
-    and an `ask` entry cannot widen an unattended `-p` lane, where a call that
-    would prompt is a denial the wrapper reads back from `permission_denials`.
+    decision; a `Bash` entry in `permissions.allow` with no literal command prefix
+    would widen the lane to unrestricted shell without any declaration. Both refuse
+    before an attempt record exists. Only `allow` is inspected for widening: a
+    `deny` entry narrows, and an `ask` entry cannot widen an unattended `-p` lane,
+    where a call that would prompt is a denial the wrapper reads back from
+    `permission_denials`. The check is structural (see
+    `_bash_allow_has_no_literal_prefix`), not a list of known-bad spellings.
     """
     try:
         profile = json.loads(raw)
@@ -432,10 +452,10 @@ def _validate_settings_profile(raw: bytes, path: Path) -> None:
         if not isinstance(entries, list) or not all(isinstance(item, str) for item in entries):
             raise LaunchError(f"lane settings profile {path} permissions.{key} must be a list of strings")
     for entry in permissions.get("allow", []):
-        if "".join(entry.split()) in WHOLE_TOOL_BASH_ALLOWS:
+        if _bash_allow_has_no_literal_prefix(entry):
             raise LaunchError(
-                f"lane settings profile {path} widens Bash to unrestricted ({entry!r}); "
-                "declare each command prefix instead"
+                f"lane settings profile {path} widens Bash to unrestricted ({entry!r}: "
+                "no literal command prefix); declare each command prefix instead"
             )
 
 

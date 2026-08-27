@@ -54,7 +54,8 @@ starts.
   it against the kit's copy yourself. Keep each policy inside the wrapper's vocabulary:
   an unrestricted spelling (`bypassPermissions`, `danger-full-access`, any
   `dangerously-*`) or a missing key refuses at launch, as does a profile carrying
-  `permissions.defaultMode` or a whole-tool `Bash` allow.**
+  `permissions.defaultMode` or a `Bash` allow entry whose pattern has no literal
+  command prefix (`Bash`, `Bash(*)`, `Bash(**)`, `Bash(:*)`).**
 - **CHANGED (engine CLI surface) — `scripts/launch_lane.py` now passes the declared
   policy in the argv slot after the command prefix, and on Claude also
   `--setting-sources ""` and `--settings <profile>`.** **Refresh `scripts/launch_lane.py`,
