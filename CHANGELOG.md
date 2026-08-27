@@ -55,7 +55,8 @@ starts.
   an unrestricted spelling (`bypassPermissions`, `danger-full-access`, any
   `dangerously-*`) or a missing key refuses at launch, as does a profile carrying
   `permissions.defaultMode` or a `Bash` allow entry whose pattern has no literal
-  command prefix (`Bash`, `Bash(*)`, `Bash(**)`, `Bash(:*)`).**
+  command prefix (`Bash`, `Bash(*)`, `Bash(**)`, `Bash(:*)`, `Bash(/*)` — the head
+  before the first wildcard, separator, or space must hold a letter or digit).**
 - **CHANGED (engine CLI surface) — `scripts/launch_lane.py` now passes the declared
   policy in the argv slot after the command prefix, and on Claude also
   `--setting-sources ""` and `--settings <profile>`.** **Refresh `scripts/launch_lane.py`,

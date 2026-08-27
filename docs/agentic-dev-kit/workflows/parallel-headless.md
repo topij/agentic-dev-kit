@@ -173,8 +173,10 @@ lane loads — its permission rules and its hooks apply, the branch's do not. Th
 wrapper refuses a profile that is missing, symlinked, not one JSON object, without a
 `permissions` object, carrying `permissions.defaultMode` (the mode is declared once,
 in config), or carrying a `Bash` allow entry with no literal command prefix — `Bash`,
-`Bash(*)`, `Bash(**)`, `Bash(:*)`, anything whose pattern does not start with a
-command character — decided by that structure, not by a list of spellings. The
+`Bash(*)`, `Bash(**)`, `Bash(:*)`, `Bash(/*)`, anything whose pattern head (up to the
+first wildcard, separator, or space) holds no letter or digit — decided by that
+structure, not by a list of spellings. The guard judges the shape of a prefix and
+never the command it names: `Bash(sh:*)` is a prefix an adopter declared. The
 profile is read and digested by the parent and again by the child, and the two
 digests must agree; the bytes the runtime itself loads from the path at `exec` are
 not re-read, so a writer on the same OS account who replaces the file inside the

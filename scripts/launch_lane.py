@@ -99,14 +99,21 @@ RUNTIME_APPROVAL_POLICIES: dict[str, dict[str, tuple[str, ...]]] = {
 # neither; the cockpit-owned profile passed with `--settings` is the one source.
 CLAUDE_SETTING_SOURCES_ARGS = ("--setting-sources", "")
 # A `Bash` allow entry is bounded only by the literal command prefix its pattern
-# starts with. An entry whose pattern starts with anything else — a wildcard
-# (`Bash(*)`, `Bash(**)`, `Bash(?*)`), a separator (`Bash(:*)`), or nothing
-# (`Bash`, `Bash()`) — has no such prefix, so the validator refuses it by that
-# structure rather than by enumerating spellings: an enumeration is a blocklist,
-# and the panel found `Bash(**)` unrestricted live at Claude Code 2.1.247 while
-# the enumeration missed it. Whitespace is stripped first, so `Bash( * )` reads as
-# `Bash(*)`. A literal prefix begins with a letter, a digit, or a path character.
+# starts with. The validator refuses an entry with no such prefix by structure
+# rather than by enumerating spellings — an enumeration is a blocklist, and the
+# panel found `Bash(**)` unrestricted live at Claude Code 2.1.247 while an
+# enumeration missed it. The head of the pattern is everything before the first
+# wildcard, argument separator, or space; it must begin with a letter, a digit,
+# or a path character AND contain a letter or digit, so a lone path character in
+# front of a wildcard (`Bash(/*)`, which matches every absolute-path command,
+# `Bash(.*)`, `Bash(~*)`) is refused along with `Bash`, `Bash()`, `Bash(*)`,
+# `Bash(**)`, `Bash(?*)`, and `Bash(:*)`. Whitespace is stripped first, so
+# `Bash( * )` reads as `Bash(*)`. What the guard does NOT judge is the command
+# the prefix names: `Bash(sh:*)` or `Bash(python3 -c:*)` is a literal prefix an
+# adopter declared, and declaring it is their policy decision, not a widening
+# this check claims to catch.
 LITERAL_COMMAND_LEAD = frozenset("/._~")
+PATTERN_HEAD_TERMINATORS = frozenset("*?: ")
 
 
 def _bash_allow_has_no_literal_prefix(entry: str) -> bool:
@@ -119,8 +126,16 @@ def _bash_allow_has_no_literal_prefix(entry: str) -> bool:
         return True
     if not (rest.startswith("(") and rest.endswith(")")):
         return False
-    lead = rest[1:-1][:1]
-    return not (lead.isalnum() or lead in LITERAL_COMMAND_LEAD)
+    pattern = rest[1:-1]
+    lead = pattern[:1]
+    if not (lead.isalnum() or lead in LITERAL_COMMAND_LEAD):
+        return True
+    head = ""
+    for character in pattern:
+        if character in PATTERN_HEAD_TERMINATORS:
+            break
+        head += character
+    return not any(character.isalnum() for character in head)
 SAFE_EXECUTABLE_PATH = os.pathsep.join(
     (*os.defpath.split(os.pathsep), "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin")
 )
@@ -421,7 +436,7 @@ def _config_for_launcher(runtime: str) -> tuple[RuntimeProfile, int, int, int, P
 
 
 def _validate_settings_profile(raw: bytes, path: Path) -> None:
-    """Refuse a lane settings profile that is not one bounded permissions object.
+    """Refuse a lane settings profile whose `permissions` object is not bounded.
 
     The mode is config-declared and passed as `--permission-mode`, so a profile
     carrying `permissions.defaultMode` would be a second authority for the same
@@ -431,7 +446,10 @@ def _validate_settings_profile(raw: bytes, path: Path) -> None:
     `deny` entry narrows, and an `ask` entry cannot widen an unattended `-p` lane,
     where a call that would prompt is a denial the wrapper reads back from
     `permission_denials`. The check is structural (see
-    `_bash_allow_has_no_literal_prefix`), not a list of known-bad spellings.
+    `_bash_allow_has_no_literal_prefix`), not a list of known-bad spellings, and
+    it judges the shape of a prefix, never the command it names. Other top-level
+    keys (`hooks`, `env`, …) are the profile owner's and pass through: the profile
+    is cockpit-owned by design, and its hooks are meant to run in the lane.
     """
     try:
         profile = json.loads(raw)

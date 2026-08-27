@@ -137,13 +137,18 @@ record exists, in the same shape as the transports:
   profile that is missing, a symlink, not a regular file, not one JSON object, without
   a `permissions` object, with `permissions.defaultMode` (the mode is config-declared,
   one authority), or whose `permissions.allow` carries a `Bash` entry with no literal command
-  prefix — the pattern, with every whitespace character removed, does not start with
-  a letter, digit, or path character (`Bash`, `Bash(*)`, `Bash(**)`, `Bash(?*)`,
-  `Bash(:*)`). The rule is structural because the panel's round 2 found `Bash(**)`
-  unrestricted live at 2.1.247 while an enumerated blocklist missed it, and found
-  `Bash(:*)` *not* unrestricted (it matches commands starting with `:`), so an
-  enumeration built from assumption was wrong in both directions. Codex has no
-  profile key in this slice.
+  prefix — the pattern, with every whitespace character removed, must start with a
+  letter, digit, or path character and its head (everything before the first
+  wildcard, `:`, or space) must hold a letter or digit; `Bash`, `Bash(*)`,
+  `Bash(**)`, `Bash(?*)`, `Bash(:*)`, and `Bash(/*)` all fail that. The rule is
+  structural because the panel's round 2 found `Bash(**)` unrestricted live at
+  2.1.247 while an enumerated blocklist missed it, and found `Bash(:*)` *not*
+  unrestricted (it matches commands starting with `:`), so an enumeration built
+  from assumption was wrong in both directions; round 3 then found a lone path
+  character before a wildcard (`Bash(/*)`, every absolute-path command) passing a
+  first-character rule, which is why the head token is inspected. The guard judges
+  the shape of a prefix, never the command it names — `Bash(sh:*)` is an adopter's
+  declaration. Codex has no profile key in this slice.
 
 The argv is assembled in one fixed order — command prefix, **approval contribution**,
 worktree arguments, final-text arguments, prompt arguments:
