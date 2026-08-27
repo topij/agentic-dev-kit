@@ -137,7 +137,8 @@ record exists, in the same shape as the transports:
   profile that is missing, a symlink, not a regular file, not one JSON object, without
   a `permissions` object, with `permissions.defaultMode` (the mode is config-declared,
   one authority), or whose `permissions.allow` widens a whole tool (`Bash`,
-  `Bash(*)`, `Bash(*:*)`). Codex has no profile key in this slice.
+  `Bash(*)`, `Bash(*:*)`, `Bash(:*)`, compared with every whitespace character
+  removed). Codex has no profile key in this slice.
 
 The argv is assembled in one fixed order — command prefix, **approval contribution**,
 worktree arguments, final-text arguments, prompt arguments:

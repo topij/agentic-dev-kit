@@ -99,8 +99,10 @@ RUNTIME_APPROVAL_POLICIES: dict[str, dict[str, tuple[str, ...]]] = {
 # neither; the cockpit-owned profile passed with `--settings` is the one source.
 CLAUDE_SETTING_SOURCES_ARGS = ("--setting-sources", "")
 # Whole-tool Bash allowances widen a lane to unrestricted shell without a
-# declaration; the profile validator refuses them by exact spelling.
-WHOLE_TOOL_BASH_ALLOWS = frozenset({"Bash", "Bash()", "Bash(*)", "Bash(*:*)"})
+# declaration; the profile validator refuses them after stripping every
+# whitespace character, so `Bash( * )` is the same spelling as `Bash(*)`. An
+# empty prefix (`Bash(:*)`) matches every command and is the same allowance.
+WHOLE_TOOL_BASH_ALLOWS = frozenset({"Bash", "Bash()", "Bash(*)", "Bash(*:*)", "Bash(:*)"})
 SAFE_EXECUTABLE_PATH = os.pathsep.join(
     (*os.defpath.split(os.pathsep), "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin")
 )
@@ -405,8 +407,11 @@ def _validate_settings_profile(raw: bytes, path: Path) -> None:
 
     The mode is config-declared and passed as `--permission-mode`, so a profile
     carrying `permissions.defaultMode` would be a second authority for the same
-    decision; a whole-tool Bash allowance would widen the lane to unrestricted
-    shell without any declaration. Both refuse before an attempt record exists.
+    decision; a whole-tool Bash entry in `permissions.allow` would widen the lane
+    to unrestricted shell without any declaration. Both refuse before an attempt
+    record exists. Only `allow` is inspected for widening: a `deny` entry narrows,
+    and an `ask` entry cannot widen an unattended `-p` lane, where a call that
+    would prompt is a denial the wrapper reads back from `permission_denials`.
     """
     try:
         profile = json.loads(raw)
@@ -427,7 +432,7 @@ def _validate_settings_profile(raw: bytes, path: Path) -> None:
         if not isinstance(entries, list) or not all(isinstance(item, str) for item in entries):
             raise LaunchError(f"lane settings profile {path} permissions.{key} must be a list of strings")
     for entry in permissions.get("allow", []):
-        if entry.strip() in WHOLE_TOOL_BASH_ALLOWS:
+        if "".join(entry.split()) in WHOLE_TOOL_BASH_ALLOWS:
             raise LaunchError(
                 f"lane settings profile {path} widens Bash to unrestricted ({entry!r}); "
                 "declare each command prefix instead"

@@ -1827,6 +1827,13 @@ def test_no_declaration_can_make_the_engine_emit_an_unrestricted_flag() -> None:
         ({"permissions": {"allow": ["Bash(*)"]}}, "widens Bash"),
         ({"permissions": {"allow": ["Bash(*:*)"]}}, "widens Bash"),
         ({"permissions": {"allow": [" Bash "]}}, "widens Bash"),
+        # Whitespace inside the spelling and the empty-prefix form are the same
+        # allowance (panel round 1, adversarial lens).
+        ({"permissions": {"allow": ["Bash( * )"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash(*: *)"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash (*)"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash(:*)"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash( : * )"]}}, "widens Bash"),
         ({"permissions": {"allow": "Bash(git:*)"}}, "list of strings"),
         ({"permissions": {"allow": [1]}}, "list of strings"),
     ),
@@ -1841,6 +1848,28 @@ def test_widening_or_malformed_settings_profile_is_a_refused_trust_step(
     assert result.returncode == 64, result.stderr
     assert "lane settings profile" in result.stderr and fragment in result.stderr
     assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
+
+
+@pytest.mark.parametrize(
+    "profile",
+    (
+        # Only `allow` can widen: a whole-tool entry under `deny` narrows and one
+        # under `ask` is a denial in an unattended `-p` lane, so both are accepted
+        # (panel round 1, correctness lens). A prefixed allow is bounded.
+        {"permissions": {"allow": [], "deny": ["Bash"]}},
+        {"permissions": {"allow": [], "ask": ["Bash", "Bash(*)"]}},
+        {"permissions": {"allow": ["Bash(git status:*)", "Bash(gh pr view:*)"]}},
+    ),
+)
+def test_bounded_or_narrowing_settings_profile_is_accepted(
+    tmp_path: Path, profile: dict[str, object]
+) -> None:
+    _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", profile=profile
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 0, result.stderr
+    assert _receipt(sessions, descriptor)["status"] == "completed"
 
 
 def test_missing_symlinked_or_undeclared_settings_profile_is_refused(tmp_path: Path) -> None:
