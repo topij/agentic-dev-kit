@@ -24,11 +24,13 @@ gap `test_mutation_gate.py` records for itself.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+import yaml
 from conftest import require_kit_paths
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -875,3 +877,216 @@ def test_an_object_that_exists_but_is_not_a_commit_is_named_as_such(repo):
     tree = _git(repo, "rev-parse", "HEAD^{tree}")
     with pytest.raises(pp.PromptError, match="exists but is not a commit"):
         pp._require_base_object(repo, tree, "main", True)
+
+
+# --- calibration (#605, #255): the agent definition is the Claude carrier -----------
+
+
+def _agent_definition(root: Path, *args: str) -> subprocess.CompletedProcess:
+    return _run(root, "--agent-definition", *args)
+
+
+def _frontmatter(text: str) -> dict[str, str]:
+    """The frontmatter as the runtime would read it: parsed as YAML, not split on
+    `: ` — a split would pass a `model: a: b` line that YAML refuses, which is the
+    break the adversarial lens found."""
+    assert text.startswith("---\n"), text[:40]
+    block = text.split("---\n", 2)[1]
+    parsed = yaml.safe_load(block)
+    assert isinstance(parsed, dict), parsed
+    return parsed
+
+
+def test_agent_definition_carries_the_configured_model_and_effort(repo):
+    """The frontmatter is the mechanical carrier: at Claude Code 2.1.247 the runtime
+    applies `model` and `effort` from `.claude/agents/<name>.md` when the agent named
+    there is launched (probed live 2026-08-27, calibration record). The delegation
+    tool has no effort parameter, so this file is the only route by which
+    `lens_compute.claude.effort` becomes a control rather than prompt text.
+    """
+    out = _agent_definition(repo, "--lens", "adversarial")
+    assert out.returncode == 0, out.stderr
+    front = _frontmatter(out.stdout)
+    assert front["name"] == "adversarial"
+    assert front["model"] == "sonnet"
+    assert front["effort"] == "high"
+    # The focus reaches the description, quoted so a `: ` inside it cannot break
+    # the frontmatter, and the body names the regenerating command.
+    assert "prove it wrong" in front["description"]
+    assert 'description: "' in out.stdout, "the focus is rendered as a quoted YAML string"
+    assert "--lens adversarial --agent-definition" in out.stdout
+    assert "You did NOT write the change" in out.stdout
+
+
+def test_agent_definition_omits_an_absent_key_and_says_so(repo, tmp_path):
+    """Absent means inherit — legitimately. The body says which, so a reader does
+    not mistake a definition with no pin for one whose pin was dropped."""
+    cfg = repo / "config" / "dev-model.yaml"
+    cfg.write_text(cfg.read_text().replace("        effort: high\n", ""))
+    out = _agent_definition(repo, "--lens", "adversarial")
+    assert out.returncode == 0, out.stderr
+    front = _frontmatter(out.stdout)
+    assert front["model"] == "sonnet"
+    assert "effort" not in front
+
+    cfg.write_text(cfg.read_text().replace("        model: sonnet\n", ""))
+    out = _agent_definition(repo, "--lens", "adversarial")
+    assert out.returncode == 0, out.stderr
+    front = _frontmatter(out.stdout)
+    assert "model" not in front and "effort" not in front
+    assert "carries neither" in out.stdout
+
+
+@pytest.mark.parametrize("bad", ["bogus", "HIGH", "maximum", "xhigh "])
+def test_agent_definition_refuses_an_effort_the_runtime_would_silently_drop(repo, bad):
+    """Kills: dropping the `CLAUDE_EFFORT_LEVELS` check, or rendering the value
+    through. Probed live: a definition carrying `effort: bogus` ran at the parent's
+    effort and logged the rejection only under `--debug`, so the generator is the
+    only place the mistake is loud."""
+    cfg = repo / "config" / "dev-model.yaml"
+    cfg.write_text(cfg.read_text().replace("        effort: high\n", f"        effort: {bad}\n"))
+    out = _agent_definition(repo, "--lens", "adversarial")
+    if bad.strip() in ("xhigh",):
+        # A trailing blank is whitespace, which the config reader strips; the
+        # value is then a valid level and renders. This row pins that the check
+        # is on the STRIPPED value, not a reason to refuse a real level.
+        assert out.returncode == 0, out.stderr
+        assert _frontmatter(out.stdout)["effort"] == "xhigh"
+        return
+    assert out.returncode == 2, out.stdout[:200]
+    assert "effort" in out.stderr and repr(bad) in out.stderr
+    assert "low, medium, high, xhigh, max" in out.stderr
+
+
+@pytest.mark.parametrize("bad", ["|", "''", '""'])
+def test_agent_definition_refuses_a_present_but_unusable_value(repo, bad):
+    """The hook's rule is to go SILENT on an unusable value (#301) because its
+    output is a reminder clause. A definition is applied by the runtime, so an
+    unusable pin must refuse rather than quietly inherit."""
+    cfg = repo / "config" / "dev-model.yaml"
+    cfg.write_text(cfg.read_text().replace("        model: sonnet\n", f"        model: {bad}\n"))
+    out = _agent_definition(repo, "--lens", "adversarial")
+    assert out.returncode == 2, out.stdout[:200]
+    assert "lens_compute.claude.model" in out.stderr
+
+
+@pytest.mark.parametrize(
+    "model",
+    ["sonnet: injected", "a #b", "'q'", "anthropic.claude-3-5-sonnet-20241022-v2:0"],
+)
+def test_agent_definition_renders_the_model_as_a_quoted_yaml_string(repo, model):
+    """The adversarial lens's HIGH on #623: `model: sonnet: injected` rendered bare
+    at exit 0 and the frontmatter then failed to parse; bare `a #b` is silently cut
+    to `a`. The value is now rendered as a quoted YAML string, which the runtime
+    applies (calibration record, C11). The first three rows break or truncate bare
+    and so kill dropping the `json.dumps` on the `model` line; the Bedrock-shaped
+    last row parses bare too (its `:` has no space after it — the correctness lens
+    corrected the earlier claim that it broke) and pins only that quoting
+    round-trips a real id unchanged."""
+    cfg = repo / "config" / "dev-model.yaml"
+    cfg.write_text(cfg.read_text().replace("        model: sonnet\n", f"        model: {json.dumps(model)}\n"))
+    out = _agent_definition(repo, "--lens", "adversarial")
+    assert out.returncode == 0, out.stderr
+    assert _frontmatter(out.stdout)["model"] == model
+
+
+@pytest.mark.parametrize("name", ["a: b", "a b", "../x", "a/b", "-lead", ""])
+def test_agent_definition_refuses_a_lens_name_that_is_not_a_slug(repo, name):
+    """The name is a file name, a frontmatter key value, and a subagent type at
+    once; a slug is the one shape all three take unescaped. Kills: dropping the
+    `_LENS_NAME` check."""
+    cfg = repo / "config" / "dev-model.yaml"
+    cfg.write_text(cfg.read_text().replace("      - name: adversarial\n", f"      - name: {json.dumps(name)}\n"))
+    # `--lens=<name>`, so a name opening with `-` reaches the check instead of
+    # being read by argparse as an option.
+    out = _agent_definition(repo, f"--lens={name}")
+    assert out.returncode == 2, out.stdout[:200]
+    if name == "":
+        assert "--lens" in out.stderr
+    else:
+        assert "cannot be an agent definition" in out.stderr, out.stderr
+
+
+def test_agent_definition_refuses_a_lens_outside_the_roster(repo):
+    out = _agent_definition(repo, "--lens", "minted")
+    assert out.returncode == 2
+    assert "not in review.fallback_panel.lenses" in out.stderr
+
+
+def test_agent_definition_is_a_claude_surface_and_refuses_codex(repo):
+    """Codex carries lens compute on the `codex exec` argv (`-c
+    model_reasoning_effort=`), observed in the rollout's `turn_context`; there is no
+    per-lens definition file to render for it, and rendering a Claude one under a
+    Codex flag would be a file nothing loads."""
+    out = _agent_definition(repo, "--lens", "adversarial", "--runtime", "codex")
+    assert out.returncode == 2
+    assert "codex" in out.stderr and "argv" in out.stderr
+
+
+@pytest.mark.parametrize(
+    "flag, value",
+    [("--head", "deadbeef"), ("--pr", "7"), ("--carry-forward", "x"), ("--delta-draws", "y"),
+     ("--base", "abc"), ("--branch", "b"), ("--scratch", "/tmp/x"), ("--verify-command", "make test"),
+     ("--base-branch", "main")],
+)
+def test_agent_definition_refuses_prompt_only_flags(repo, flag, value):
+    """A caller who typed a prompt flag wanted a prompt; handing them a definition
+    at exit 0 is the wrong file with a green exit."""
+    out = _agent_definition(repo, "--lens", "adversarial", flag, value)
+    assert out.returncode == 2, out.stdout[:200]
+    assert flag in out.stderr
+
+
+def test_a_prompt_still_requires_head(repo):
+    """`--head` stopped being argparse-required so `--agent-definition` can omit it;
+    the prompt path must not have silently lost the requirement."""
+    out = _run(repo, "--lens", "adversarial", "--branch", "b")
+    assert out.returncode == 2
+    assert "--head is required" in out.stderr
+
+
+def test_the_run_at_line_names_its_carrier_instead_of_implying_enforcement(repo):
+    """Before the calibration record this was a bare `Run at: …`, true for `model`
+    on Claude and false for `effort`. Each runtime's line now says what actually
+    carries the value; an unknown runtime with compute configured says it has no
+    kit-known carrier rather than borrowing one."""
+    base, head = _revs(repo)
+    claude = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
+    assert claude.returncode == 0, claude.stderr
+    assert "Run at: effort high, model sonnet." in claude.stdout
+    assert "enforces nothing" in claude.stdout
+    assert ".claude/agents/adversarial.md" in claude.stdout
+
+    cfg = repo / "config" / "dev-model.yaml"
+    cfg.write_text(cfg.read_text() + "      codex:\n        effort: high\n      other:\n        effort: low\n")
+    codex = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+                 "--runtime", "codex")
+    assert codex.returncode == 0, codex.stderr
+    assert "Run at: effort high." in codex.stdout
+    assert "model_reasoning_effort" in codex.stdout
+    assert ".claude/agents" not in codex.stdout, "a Claude carrier must never leak into Codex's line"
+
+    other = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+                 "--runtime", "other")
+    assert other.returncode == 0, other.stderr
+    assert "no kit-known carrier" in other.stdout
+
+
+@pytest.mark.kit_repo_only(".claude/agents")
+def test_the_committed_lens_definitions_are_what_the_generator_renders():
+    """The kit's own `.claude/agents/<lens>.md` files are generated, and this is the
+    check that keeps them generated: an edit to `lens_compute.claude` or to a lens's
+    focus that does not regenerate them leaves a definition the runtime WILL apply
+    carrying the old compute — the silent-inherit shape one layer up. Kills: any
+    hand edit to either file, and a config change without regeneration."""
+    pp = _load()
+    root = ENGINE.parent.parent
+    config = pp.load_config(root / "config" / "dev-model.yaml")
+    lenses = [entry["name"] for entry in pp.get(config, "review.fallback_panel.lenses", [])]
+    assert lenses, "the shipped roster is empty"
+    for lens in lenses:
+        committed = (root / ".claude" / "agents" / f"{lens}.md").read_text(encoding="utf-8")
+        assert committed == pp.agent_definition(root, lens, "claude"), (
+            f".claude/agents/{lens}.md differs from `panel_prompt.py --lens {lens} "
+            "--agent-definition`; regenerate it rather than editing it"
+        )

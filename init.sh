@@ -1004,7 +1004,11 @@ migrate_runtime_schema() {
     old_expensive=$(get_field "models:" "" "^  expensive:")
     [ -n "$old_cheap" ] || old_cheap="haiku"
     [ -n "$old_default" ] || old_default="sonnet"
-    [ -n "$old_expensive" ] || old_expensive="opus"
+    # `fable` and `xhigh`: the top of what each client exposed when calibrated
+    # (Claude Code 2.1.247, codex-cli 0.149.1, 2026-08-27 — the reference config's
+    # `models` comment carries the record). An adopter whose account lacks
+    # `fable` sets `opus`; the migration never rewrites an existing value.
+    [ -n "$old_expensive" ] || old_expensive="fable"
     append_to_section "models:" "  tiers:
     cheap: mechanical
     default: standard
@@ -1017,7 +1021,7 @@ migrate_runtime_schema() {
     codex:
       cheap: low
       default: medium
-      expensive: high"
+      expensive: xhigh"
     echo "added runtime model mappings to config/dev-model.yaml"
   fi
 }
@@ -1127,6 +1131,108 @@ seed_claude_lane_profile() {
 }
 PROFILE
   echo "seeded $_profile"
+}
+
+# The Claude Code agent definition per shipped lens. This is the mechanical
+# carrier for `review.fallback_panel.lens_compute.claude`: the runtime applies a
+# definition'"'"'s frontmatter `model` and `effort` when the cockpit launches the
+# agent named after the lens, and the delegation tool itself has no effort
+# parameter (observed at Claude Code 2.1.247, 2026-08-27). Seeded only when
+# absent, adopter-owned afterwards, like the lane profile above. The bytes
+# below are what `scripts/panel_prompt.py --lens <name> --agent-definition`
+# renders for the reference config, and a kit test holds the two together; an
+# adopter who changes the roster or `lens_compute.claude` regenerates the files
+# with that command. Claude Code lists `.claude/agents/` at session start and
+# only from a trusted project (`--setting-sources ""` skips it); a definition
+# written mid-session was not launchable in the turn it was written and showed
+# up in the roster later, so count on a freshly seeded one from the next session.
+# A definition is seeded only for a lens the config's roster names: the file is
+# meaningless for a lens the adopter renamed or dropped, and a stray one would
+# be an agent nothing launches carrying compute nothing configured.
+lens_in_roster() {
+  section_lines review: "$CONFIG_FILE" | grep -qE "^[[:space:]]+- name:[[:space:]]*\"?$1\"?[[:space:]]*(#.*)?$"
+}
+
+seed_claude_lens_agents() {
+  # The regenerating command names the adopter's engine directory, read the same
+  # way the migration reads it, so a `scripts/devkit/` install is not seeded a
+  # definition pointing at a path it does not have. `@@ENGINES@@` is the one
+  # token substituted into the otherwise literal heredocs below.
+  _engines="$(get_field "paths:" "" "^  engines:")"
+  [ -n "$_engines" ] || _engines="scripts"
+  # A backslash or a double quote in the path is a YAML escape inside the
+  # heredoc's quoted `description:` line, where the generator JSON-escapes the
+  # value and a sed substitution cannot; the seed would then differ from the
+  # generator's bytes, which is the one thing it must never do. Decline, name
+  # the generator, and let the adopter render the files from config.
+  case "$_engines" in
+    *\\*|*\"*)
+      echo "note: paths.engines ($_engines) holds a backslash or a quote — not seeding .claude/agents/; render each lens with: $_engines/panel_prompt.py --lens <name> --agent-definition" >&2
+      return 0
+      ;;
+  esac
+  # Escaped for sed's replacement position: `&` there means "the match", `\`
+  # starts an escape, and `|` is the delimiter chosen below — an unescaped value
+  # leaked the placeholder into the file at exit 0 (`&`) or aborted the
+  # installer mid-migration (`|`). The generator interpolates the same value
+  # directly, so this is what keeps the two byte-identical for any path.
+  _engines_sed="$(printf '%s' "$_engines" | sed 's/[\\&|]/\\&/g')"
+  if lens_in_roster adversarial && [ ! -e ".claude/agents/adversarial.md" ] && [ ! -L ".claude/agents/adversarial.md" ]; then
+    mkdir -p .claude/agents
+    sed "s|@@ENGINES@@|$_engines_sed|g" > .claude/agents/adversarial.md <<'LENS'
+---
+name: adversarial
+description: "Fallback review panel lens adversarial: assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards. Launch it only with a prompt assembled by @@ENGINES@@/panel_prompt.py; it is not a general-purpose agent."
+model: "sonnet"
+effort: high
+---
+
+Generated from `config/dev-model.yaml` (`review.fallback_panel.lenses` and
+`review.fallback_panel.lens_compute.claude`) by
+`@@ENGINES@@/panel_prompt.py --lens adversarial --agent-definition`. Regenerate it after
+changing either key; do not edit it by hand.
+
+The frontmatter is what makes the configured compute mechanical: Claude Code
+applies its `model` and `effort` when the cockpit launches the agent named
+`adversarial`. It lists this file at session start; a file written mid-session was
+not launchable in the turn it was written and appeared in the roster later, so
+count on it from the next session and treat an earlier listing as a bonus.
+
+You are the **adversarial** lens of the fallback review panel
+(`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
+review. Your launch prompt carries the contract, the revision, the diff, and your
+focus; follow it exactly, and report what you reviewed before any finding.
+LENS
+    echo "seeded .claude/agents/adversarial.md"
+  fi
+  if lens_in_roster correctness && [ ! -e ".claude/agents/correctness.md" ] && [ ! -L ".claude/agents/correctness.md" ]; then
+    mkdir -p .claude/agents
+    sed "s|@@ENGINES@@|$_engines_sed|g" > .claude/agents/correctness.md <<'LENS'
+---
+name: correctness
+description: "Fallback review panel lens correctness: assume it works and ask what it says — stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check. Launch it only with a prompt assembled by @@ENGINES@@/panel_prompt.py; it is not a general-purpose agent."
+model: "sonnet"
+effort: high
+---
+
+Generated from `config/dev-model.yaml` (`review.fallback_panel.lenses` and
+`review.fallback_panel.lens_compute.claude`) by
+`@@ENGINES@@/panel_prompt.py --lens correctness --agent-definition`. Regenerate it after
+changing either key; do not edit it by hand.
+
+The frontmatter is what makes the configured compute mechanical: Claude Code
+applies its `model` and `effort` when the cockpit launches the agent named
+`correctness`. It lists this file at session start; a file written mid-session was
+not launchable in the turn it was written and appeared in the roster later, so
+count on it from the next session and treat an earlier listing as a bonus.
+
+You are the **correctness** lens of the fallback review panel
+(`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
+review. Your launch prompt carries the contract, the revision, the diff, and your
+focus; follow it exactly, and report what you reviewed before any finding.
+LENS
+    echo "seeded .claude/agents/correctness.md"
+  fi
 }
 
 # Schema additions introduced after the v2 template release. Same idempotent
@@ -1245,11 +1351,14 @@ migrate_kit_schema() {
     # the cockpit session'"'"'s compute, which is the behaviour before this key
     # existed. Read by scripts/hooks/pr_followup_hook.py and scripts/panel_prompt.py.
     #
-    # HOW FAR EACH KEY REACHES depends on the runtime, and on Claude Code today
-    # they differ. Its delegation tool takes a `model` parameter, so `model` is a
-    # real control. It takes NO per-agent effort parameter, so `effort` reaches
-    # the lens only as an instruction in its prompt — honest intent, not a
-    # guarantee, and mechanical the moment a runtime exposes it. See
+    # HOW FAR EACH KEY REACHES is declared per runtime (Claude Code 2.1.247 and
+    # codex-cli 0.149.1, probed live 2026-08-27): claude.model is MECHANICAL
+    # through the delegation tool'"'"'s `model` parameter or the agent definition
+    # `.claude/agents/<lens>.md`; claude.effort is MECHANICAL through that agent
+    # definition only (the tool has no effort parameter — a lens launched as a
+    # plain subagent inherits the cockpit'"'"'s effort); codex.effort is
+    # MECHANICAL as `-c model_reasoning_effort=<level>` on the `codex exec` argv.
+    # The `Run at:` line in a prompt enforces nothing. See
     # docs/agentic-dev-kit/fallback-review-panel.md.
     lens_compute:
       claude:
@@ -2034,6 +2143,7 @@ preflight_migration_config
 migrate_runtime_schema
 migrate_parallel_schema
 seed_claude_lane_profile
+seed_claude_lens_agents
 migrate_kit_schema
 
 # ── prompts ──────────────────────────────────────────────────────────────

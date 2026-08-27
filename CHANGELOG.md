@@ -42,6 +42,38 @@ starts.
 
 ---
 
+## #623 — 2026-08-27
+
+- **CHANGED (config keys) — `models.runtime_mappings` defaults are recalibrated for a
+  fresh install: `claude.expensive` is `fable` (was `opus`) and `codex.expensive` is
+  `xhigh` (was `high`).** The `init.sh` migration writes these only when `models.tiers`
+  is absent; an existing value is never rewritten, so an installed config keeps what
+  it has. If your Claude account cannot resolve `fable` (`claude -p --model fable`
+  exits 1 naming it), set `claude.expensive: opus`. Both maps remain advisory — no
+  engine reads them; the config comment now says so per runtime, with the controls
+  each value names.
+- **ADDED (engine CLI surface) — `scripts/panel_prompt.py --agent-definition` renders
+  the Claude Code agent definition for `--lens` from
+  `review.fallback_panel.lens_compute.claude`; `--head` is now required only when
+  assembling a prompt, and every prompt-only flag is refused beside
+  `--agent-definition` (exit 2).** It refuses an `effort` outside `low`, `medium`,
+  `high`, `xhigh`, `max`, a present-but-unusable `model`/`effort` value, and a lens
+  name that is not a slug (exit 2) rather than rendering a definition the runtime
+  would silently run at the parent's effort; `model` is rendered as a quoted YAML
+  string, so a value holding `: ` or ` #` — which bare would fail to parse or be
+  silently truncated — round-trips (a Bedrock id's `:0` already parsed bare). The prompt's `Run at:` line now names its carrier per runtime and states it
+  enforces nothing; a runtime with compute configured and no kit-known carrier is told
+  so. **Refresh `init.sh` and run `./init.sh --no-clobber`**: it seeds
+  `.claude/agents/<lens>.md` for each shipped lens the roster names when no file is
+  there, rendering `paths.engines` into the regenerating command; the files are
+  adopter-owned afterwards (listed in `ADOPTER_OWNED`, never reported as drift) and are
+  regenerated with the flag above after any change to the roster or
+  `lens_compute.claude`. On Claude, launch each panel lens as the agent named after it
+  — that frontmatter is what applies `model` and `effort`; the delegation tool itself
+  has no effort parameter, so a plain subagent inherits the cockpit's effort. A
+  definition added after a session starts was not launchable in the turn it was
+  written and appeared in the roster later; count on it from the next session.
+
 ## #614 — 2026-08-27
 
 - **ADDED (config keys) — `parallel` now owns, per runtime, `<runtime>_approval_policy`

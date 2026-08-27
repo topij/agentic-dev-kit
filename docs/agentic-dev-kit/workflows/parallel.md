@@ -213,7 +213,7 @@ its risk:
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | -------------------------------------------- |
 | **Mechanical**          | doc/comment-only edits, rename, copy tweak, config-value bump, dead-code delete, a `_latest`-rename sweep                                                                                        | `low`                               | inherited (`cheap` is fine)          |
 | **Standard** (default)  | a normal feature/bugfix scoped to one package, test additions, a self-contained script                                                                                                          | `medium`                            | inherited (`default`)                |
-| **High-stakes**         | schema / data-shape change, a shared primitive (a state-sandbox library, a pipeline-state helper), a guard / gate / verifier, security, anything touching production cron/CI or shared `state/`, the merge-rules / scoring core | `high` (→ `max` for the gnarliest) | `expensive`                          |
+| **High-stakes**         | schema / data-shape change, a shared primitive (a state-sandbox library, a pipeline-state helper), a guard / gate / verifier, security, anything touching production cron/CI or shared `state/`, the merge-rules / scoring core | `xhigh` (→ `max` for the gnarliest) | `expensive`                          |
 
 When unsure, round **up** — under-resourcing a risky lane costs a bad merge;
 over-resourcing a cheap one costs only tokens.
@@ -248,13 +248,21 @@ merge to the reviewed head commit. It refuses any lane whose persisted class is 
 those directly after the required review and sign-off.
 
 **How the tier reaches the lane.** Interactive `new` lanes keep the tier as a kickoff
-suggestion and the operator selects available runtime controls. The supported headless
-wrapper deliberately inherits the configured client compute on both runtimes: the
-launcher establishes worktree, environment, identity, and receipt authority only.
-Native agent dispatch cannot become a headless-lane shortcut merely because it exposes
-model or effort controls; without the complete descriptor environment and
-observer/receipt chain it remains unsupported for state-writing lanes on either
-runtime. Model and effort calibration for both runtimes is a separate parity slice.
+suggestion and the operator applies it through the runtime's own controls — on Claude
+`--model <alias>` and `--effort <level>` at launch, on Codex `-m <model>` and
+`-c model_reasoning_effort=<level>`; the aliases and levels `models.runtime_mappings`
+names are the ones each client accepted when calibrated (the `models` comment in
+`config/dev-model.yaml` carries the stamp). `models.runtime_mappings` itself is
+advisory on both runtimes: no engine reads it. The supported headless wrapper
+deliberately inherits the client's compute on both runtimes and carries neither control:
+the launcher establishes worktree, environment, identity, and receipt authority only.
+What "inherit" resolves to differs by trust route — a Claude lane under the wrapper's
+`--setting-sources ""` runs the product default model and effort, not the operator's
+user settings, while a Codex lane runs the user's `config.toml` model and effort
+(observed in the calibration and `#620` records respectively). Native agent dispatch
+cannot become a headless-lane shortcut merely because it exposes model or effort
+controls; without the complete descriptor environment and observer/receipt chain it
+remains unsupported for state-writing lanes on either runtime.
 
 **Default-safe.** A lane with no assigned tier inherits the cockpit's current
 effort/model — i.e. unspecified ⇒ today's behavior, no regression. The tier is an
