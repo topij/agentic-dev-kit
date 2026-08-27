@@ -191,7 +191,7 @@ must contain and how it fails.
 | same | Claude | same | worktree write (Edit/Write in cwd) | accepted by the profile's `Edit(**)` rule, no prompt; the runtime resolves it relative to the worktree root | same, plus the lane commit's tree | same | denial → `failed`; a write outside cwd is denied, not prompted |
 | same | Claude | `--permission-mode acceptEdits` (declarable, not default) | worktree write and the runtime's own file-system Bash class | accepted by the mode regardless of the allow list (round 5, live: `rm -rf`, `mv`, redirection, `cat`) | same | same | a write outside cwd denied; an untracked file deleted inside cwd leaves no trace in the receipt or `git status` |
 | same | Claude | same | commit (`git add`, `git commit`) | accepted by profile allow rule | commit sha read back in the cockpit | profile rule + cockpit `git` | denial → `failed` |
-| same | Claude | same | push (`git push -u origin <lane>`) | accepted by profile allow rule | remote-tracking head read back in the cockpit | same | denial → `failed`; the flag spellings of a force push are profile deny rules, the `+refspec` form is not deniable by a prefix rule (panel round 4, live) — history protection is the forge's and the lane contract's |
+| same | Claude | same | push (`git push -u origin <lane>`) | accepted by the profile's `Bash(git push -u origin:*)` allow | remote-tracking head read back in the cockpit | same | denial → `failed`; the flag-first and no-`-u` spellings do not match the allow, a hostile refspec after `origin` does (rounds 4 and 8, live) — history protection is the forge's and the lane contract's |
 | same | Claude | same | PR (`gh pr create`, `gh pr ready`) | accepted by profile allow rule | PR number and head read back by `dev_session.sh pr-watch` `_resolve_lane_pr` | forge read-back | denial → `failed`; a cross-repository or wrong-base PR refuses in `_resolve_lane_pr` |
 | same | Claude | same | merge | **never in the lane** — `gh pr merge` is a profile deny rule and the contract says do not merge | `dev_session.sh merge` refuses an operator-class lane; a self-class lane merges only from the cockpit after `mergeable` | cockpit wrapper | lane attempt → denial → `failed` |
 | Kit wrapper → `codex exec` | Codex | `--sandbox read-only` | read-only | unobserved in this slice | receipt `request.approval_policy`, `observed.argv`, `terminal.permission_denials == null` | wrapper child (argv) | sandbox refusal is not visible through `last-message-file`; behaviour owed to the Codex record |
@@ -282,11 +282,17 @@ and must agree, but the runtime loads the path itself at `exec`, so a same-accou
 writer replacing the file inside the child's observe-to-exec window is not caught
 (panel round 2, adversarial lens, reported as structural and not reproduced).
 Passing the validated bytes inline instead of the path would close it and is a
-separate change. The shipped profile's deny entries name the flag spellings of a
-force push and nothing more: a prefix rule cannot say "contains a forced update",
-so `git push origin +HEAD:main` passes the profile (panel round 4, live-reproduced
-against a throwaway remote). History protection of a remote branch is the forge's
-branch protection and the lane contract's own-branch rule; a deterministic
-lane-side push gate (a pre-push hook installed in the lane worktree that refuses
-forced updates and any ref but the lane branch) is the rule-1 mechanism and is
-follow-up work, not part of this slice.
+separate change. The shipped profile's push allow is `Bash(git push -u origin:*)` and its deny
+entries name the flag spellings of a force push. A rule cannot say "contains a
+forced update" or bound the refspec: under the first draft's broad `Bash(git push:*)`
+the panel reproduced `git push origin +HEAD:main` (round 4), an unflagged ref
+deletion `git push origin :x`, and a bundled `git push -uf …` (round 8) passing
+against a throwaway remote; a branch-prefix allow (`git push -u origin lane/:*`) was
+then tried and matched nothing live, the lane's own push included, because the
+runtime matches on token boundaries. The narrowed allow refuses the flag-first and
+no-`-u` spellings; `git push -u origin :x` and `git push -u origin +HEAD:x` still
+match it (observed live in the record). History protection of a remote
+branch is the forge's branch protection and the lane contract's own-branch rule; a
+deterministic lane-side push gate (a pre-push hook installed in the lane worktree
+that refuses forced updates and any ref but the lane branch) is the rule-1 mechanism
+and is follow-up work, not part of this slice.

@@ -23,8 +23,11 @@ default with the edit tools granted by a worktree-relative path pattern (lanes
 `write3` and `outside2`, plus the two superseded lanes that exposed the bare-`Write`
 escape), and a third time under the same default once panel round 7 showed that the
 `Edit(<pattern>)` rule is the one that governs every file-editing tool at 2.1.247
-and the per-tool `Write(...)` entries were inert (lanes `write4` and `outside3`).
-The third observation is the one the shipped configuration rests on.
+and the per-tool `Write(...)` entries were inert (lanes `write4` and `outside3`),
+and a fourth time once panel round 8 showed the broad `Bash(git push:*)` allow
+admitted an unflagged ref deletion and a bundled force flag (lanes `write6` and
+`pushprobe2`, after a branch-prefix allow was tried and matched nothing). The fourth
+observation is the one the shipped configuration rests on.
 
 Two further lanes in the same fixture observed the denied transition live. A first
 lane under `accept-edits` whose task asked for diagnostics the profile does not allow
@@ -457,19 +460,104 @@ verbatim. **`Edit(**)` alone bounds the lane's file editing by the worktree root
   origin` no longer listed `lane/write4`, and `origin/main` was `fea993a feat: add
   the edit-rule lane note (#5)`.
 
+### Lanes `write5`, `pushprobe`, `write6`, `pushprobe2` — the push allow after round 8
+
+Panel round 8 reproduced, against a throwaway remote under the broad
+`Bash(git push:*)` allow, an unflagged ref deletion (`git push origin :x`) and a
+bundled force flag (`git push -uf origin main:x`) passing with an empty denial
+list. The cockpit first tried a branch-prefix allow,
+`Bash(git push -u origin lane/:*)` (fixture profile digest
+`ff8bc123c682ffc615bf3b834b2aa525e963aa2d63192a0c517537945a4dcde5`, synthetic base
+`4e8c465f90653d90668425fd46efbbd93a96aca5`, engine `launch_lane.py`
+`2bc780e9efab6b4fdf0cb2787056252302a639b206338db9accd913c3d74b28f`):
+
+- Lane `pushprobe` (descriptor `06352d75-945d-461a-be50-6a3c5ccc2c72`, task digest
+  `157017edb5df5746884a7f82ae828e7fb38ff2133bf6b58dd21887b87e679de6`) was asked to run
+  `git push origin :lane/victim`, `git push -uf origin HEAD:lane/victim`, `git push
+  origin +HEAD:lane/victim`, and `git push --force origin HEAD:lane/victim` against
+  a throwaway branch; every one was denied (`terminal.permission_denials` held the
+  four `Bash` entries) and `lane/victim` was unchanged on the remote. Receipt
+  `failed`, final-message digest
+  `d33991291eedd7cc95afaf0faec06cbecb188db753c5cf3a2e363f83298694f8`.
+- Lane `write5` (descriptor `7653ff3f-7d1c-445c-8cf8-94ddb454f6c1`, task digest
+  `220711064e285942bd966cc5591a4b9efd26a744c8ea63a1f53e83fd80054048`) committed
+  `7a1089eac3482a350ead915938bf40dc1b198fe4` and then had its own `git push -u
+  origin lane/write5` **denied**, and the retry `git push origin lane/write5`
+  denied as well: the runtime matches a Bash rule on token boundaries, so a
+  branch-prefix allow matches no real push. Receipt `failed`, final-message digest
+  `085951f87ae56103d4efd1578f4ce3a1e02e100a7f3daaa5f03e64306919f930`; no pull
+  request was created.
+
+The shipped allow is therefore `Bash(git push -u origin:*)`, the form the lane
+contract names (profile digest
+`e3370addfbf76909cfa4967bf123bbfa278fb34284e48775bcd57ee6f04cc40f`, byte-identical
+to the kit's `config/claude-lane-settings.json`; synthetic base
+`c6615a529cc1612f7770a779ac1d856fcce14614`; throwaway branches `lane/victim` and
+`lane/victim2` pushed for the probe):
+
+Lane `write6` — descriptor `88c1a68e-741d-40c3-b2da-f1f8b90e54a9`;
+`descriptor_sha256=1ce0b4078df084e2c5132c108ebfff0d528fd85e33fe53b80f251f1a67661517`,
+`task_sha256=b3ae5cf496449aa42d2c3b7d0ab49986b739d3fcb533c4cc5e24c02ac3fc05e4`,
+`combined_prompt_sha256=ca565689835dee33bd9e3576e7d0869bde012706971cb2e66b77d4e9e044f4ea`,
+`process_nonce_sha256=38113a82fb6334a18e8c29e2f2dc9be94a5292e9d9917ed91c7febb60ef4ebdb`;
+child `pid=91782 ppid=91755`, `start_fingerprint=ps:Thu Aug 27 15:08:42 2026`,
+observed at `2026-08-27T12:08:42Z`, `merge_class=self`. Envelope `subtype=success`,
+`is_error=false`, `permission_denials=[]`; `result`: `branch=lane/write6`,
+`status_before_write=clean`, `head=cacaf1dc10b4bfdd287d0aeb1ca798868aede58f`,
+`pr_number=6`, `pr_url=https://github.com/topij/adk-writing-lane-synthetic-20260827/pull/6`,
+`pr_is_draft=false`, `claude_md_marker=not-seen`, `permission_denials=none`,
+`contract_first=yes`. Receipt `completed`, `returncode=0`, final-message digest
+`8bd715c203e75175fc94929e2655c51d38b29c5365e40ef9cdd5f952d8764035`, final-text
+digest `185c604ad6c37a00cdae0d8ffe0374c5ab39e5b6b94edef30ae1a04d5cded668`, both
+recomputed on 2026-08-27. Cockpit read-back: `lane/write6` at `cacaf1dc…` on the
+remote; `gh pr diff 6` held the two requested lines in `notes/lane-note-push-form.md`.
+
+Lane `pushprobe2` — descriptor `6292e589-2004-4e91-a904-bdcf0022610c`, task digest
+`6fc918b85d70eac2d2e449f229b2316a552231a6a631170f4d7c104b154f524f`; child
+`pid=92695 ppid=92666`, `start_fingerprint=ps:Thu Aug 27 15:09:13 2026`, observed at
+`2026-08-27T12:09:13Z`. Asked to run five pushes against the throwaway branches, it
+reported `delete_push=denied` (`git push origin :lane/victim`),
+`bundled_force_push=denied` (`git push -uf origin HEAD:lane/victim`),
+`force_flag_push=denied` (`git push --force origin HEAD:lane/victim`, the deny
+entry), and — the residual the shared workflow states — `dash_u_delete_push=ran`
+(`git push -u origin :lane/victim`, after which `git ls-remote --heads origin` no
+longer listed `lane/victim`) and `dash_u_plus_refspec_push=ran` (`git push -u origin
++HEAD:lane/victim2`, a forced update). `terminal.permission_denials` held exactly
+the three denied `Bash` calls; receipt `failed`, final-message digest
+`5b0ee6f8534260c468614532c7c923a9dc7d5776eab6d30547565c16e7f92790`. **A token-boundary
+rule bounds the spelling of a push, not its refspec**; that is why the shared
+workflow keeps branch-history protection with the forge and the lane contract and
+names the lane-side push gate as follow-up.
+
+#### Cockpit review and merge of PR #6
+
+- `dev_session.sh pr-watch write6 --json` at head `cacaf1dc…` on 2026-08-27 first
+  reported `converged=true`, `mergeable=false`, `review_evidence.valid=false`.
+- `dev_session.sh pr-watch write6 --record-review fallback:claude --lenses
+  correctness --head cacaf1dc10b4bfdd287d0aeb1ca798868aede58f`, after the cockpit read
+  the one-file diff, printed the receipt acknowledgement and the one-lens caveat.
+- The poll after the settle window reported `review_evidence.valid=true`,
+  `route=receipt`, `source=fallback:claude`, `head=cacaf1dc…`, `rollup_settled=true`,
+  `merge_blockers=[]`, `mergeable=true`; `dev_session.sh merge write6` exited 0, and
+  `gh pr view 6` returned `state=MERGED`, `mergedAt=2026-08-27T12:13:56Z`,
+  `mergeCommit=b8aa33f76881d4a658e67639c626ca92996e8fec`; `git ls-remote --heads
+  origin` no longer listed `lane/write6`, and `origin/main` was `b8aa33f feat: add
+  the push-form lane note (#6)`.
+
 ### Round-5 cleanup
 
 - The receipt-bound process audit on 2026-08-27 took the `ProcessLookupError`
   branch for every pair: `79676`/`79639`, `80691`/`80664`, `96496`/`96469`,
-  `99102`/`99062`, and after round 7 `58679`/`58630` and `59575`/`59548`.
+  `99102`/`99062`, after round 7 `58679`/`58630` and `59575`/`59548`, and after
+  round 8 `87009`/`86978`, `87922`/`87884`, `91782`/`91755`, and `92695`/`92666`.
 - `ps eww -axo pid=,command= | grep -v grep | grep -c "ADK_LAUNCH_PROCESS_NONCE="` on
   2026-08-27 printed `0`.
 - Every final-message digest above was recomputed from the envelope bytes on
   2026-08-27, and each `final_text_sha256` from the `result` string.
 - After each section was written, its lane sessions were removed with
   `dev_session.sh rm` and its fixture directory was deleted; the private synthetic
-  repository additionally holds pull requests #3 (closed), #4 (merged), and #5, and
-  the three config commits.
+  repository additionally holds pull requests #3 (closed), #4, #5, and #6 and the
+  config commits; the throwaway probe branches were deleted from the cockpit.
 
 ## Limits carried forward
 
@@ -500,10 +588,14 @@ denial read-back, and the receipt.
   `cat` inside the worktree with none of them in the allow list. The shipped default
   is `dont-ask`, whose allow list is the whole boundary, and the second observation
   above is what the shipped configuration rests on.
-- **The deny entries cover the flag spellings of a force push only.** A prefix rule
-  cannot express "contains a forced update"; the panel reproduced `git push origin
-  +HEAD:main` passing the profile against a throwaway remote. Branch-history
-  protection is the forge's and the lane contract's; this record claims nothing
-  more.
+- **The push allow is `Bash(git push -u origin:*)` and the deny entries the flag
+  spellings of a force push, nothing more.** A rule cannot express "contains a
+  forced update" or bound a refspec; under the first draft's broad `Bash(git push:*)`
+  the panel reproduced `git push origin +HEAD:main`, an unflagged `git push origin
+  :x` ref deletion, and a bundled `git push -uf …` passing against a throwaway
+  remote, and a branch-prefix allow matched nothing live (the `write5` lane below).
+  The narrowed allow refuses the flag-first and no-`-u` spellings and not a hostile
+  refspec after `origin` (both observed below). Branch-history protection is the
+  forge's and the lane contract's; this record claims nothing more.
 - **Model and effort calibration** (`#605`) remain outside this slice; the envelopes
   named the models the client selected without any lane-side choice.

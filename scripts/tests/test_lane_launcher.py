@@ -2243,6 +2243,11 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     # (panel round 4, live-reproduced); history protection is the forge's branch
     # protection and the lane contract, and this test claims no more.
     assert "Bash(gh pr merge:*)" in shipped["permissions"]["deny"]
+    # The push allow is the form the lane contract names and the narrowest a
+    # token-boundary rule can express (panel round 8): the flag-first and no-`-u`
+    # spellings do not match it; a hostile refspec after `origin` still does.
+    assert "Bash(git push -u origin:*)" in shipped["permissions"]["allow"]
+    assert "Bash(git push:*)" not in shipped["permissions"]["allow"]
     assert "Bash(git push --force:*)" in shipped["permissions"]["deny"]
     assert "Bash(git push -f:*)" in shipped["permissions"]["deny"]
     assert "Bash(gh pr merge:*)" not in shipped["permissions"]["allow"]

@@ -217,15 +217,20 @@ observation whose argv omits the policy or the trust step. The Codex value is
 validated and passed the same way, and its behaviour is not claimed until a Codex
 writing-lane record exists; the shipped Codex default is `read-only` for that reason.
 The shipped profile's allow-list is the minimum a writing lane needs to edit inside
-its worktree (`Edit(**)`), commit, push, open and ready a PR, and poll it; `gh pr merge` and the flag spellings of a force
-push (`--force`, `-f`, `--force-with-lease`) are denied because landing is the
-cockpit's. That denial is a prefix rule and cannot express "contains a forced
-update": `git push origin +HEAD:main`, or a `--force` placed after the remote,
-starts with `git push` and passes — the panel reproduced the `+refspec` form live.
-Protection of a remote branch's history is therefore the forge's branch protection
-and the lane contract's own-branch rule, not this profile; a deterministic lane-side
-push gate is follow-up work, not a claim this contract makes. What else belongs in
-that profile as repository policy is `#606`, not this contract.
+its worktree (`Edit(**)`), commit, push its own branch, open and ready a PR, and poll
+it. The push allow is `Bash(git push -u origin:*)`, the form the lane contract names
+and the narrowest a rule can express: the runtime matches Bash rules on token
+boundaries, so a branch-prefix allow (`git push -u origin lane/:*`) matched nothing
+live — not even the lane's own push. The narrowed allow refuses the flag-first and
+no-`-u` spellings the panel reproduced passing a broad `Bash(git push:*)` (`git push
+origin :x`, `git push -uf …`, `git push --force …`, `git push origin +HEAD:main`), and
+it cannot refuse a hostile refspec after `origin` — `git push -u origin :x` deletes a
+ref and `git push -u origin +HEAD:x` forces one, both observed live. So `gh pr merge`
+and the flag spellings of a force push are denied as well, protection of a remote
+branch's history remains the forge's branch protection and the lane contract's
+own-branch rule, and a deterministic lane-side push gate is follow-up work, not a
+claim this contract makes. What else belongs in that profile as repository policy is `#606`, not this
+contract.
 
 Every supported launcher must still prepend `prompt_preamble` verbatim and must not
 open a second worktree on top of `new --headless`. The wrapper does both by consuming

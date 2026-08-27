@@ -1066,10 +1066,15 @@ migrate_parallel_schema() {
 # the minimum a writing lane needs to edit inside its worktree (`Edit(**)` — the
 # one rule that governs every file-editing tool at Claude Code 2.1.247, resolved
 # relative to the worktree root and never outside it; a `Write(...)` entry is
-# inert there, and a bare `Edit` edits anywhere), commit, push, open and
-# ready a PR, and poll it; `gh pr merge` and the flag spellings of a force push are denied because
-# landing is the cockpit's — a prefix rule cannot deny the `+refspec` form, so
-# branch-history protection stays with the forge and the lane contract.
+# inert there, and a bare `Edit` edits anywhere), commit, push with the form the
+# lane contract names (`git push -u origin <branch>`), open and ready a PR, and
+# poll it. The runtime matches a Bash rule on token boundaries, so the push allow
+# cannot name a branch prefix (`lane/:*` matched nothing live); `git push -u
+# origin:*` is the narrowest expressible form. It refuses the flag-first and
+# no-`-u` spellings (`git push origin :x`, `git push -uf …`, `git push --force
+# …`) but not a hostile refspec after `origin`, which is why `gh pr merge` and
+# the flag spellings of a force push are also denied and why branch-history
+# protection stays with the forge and the lane contract.
 seed_claude_lane_profile() {
   _profile="$(sed -n 's/^  claude_settings_profile:[[:space:]]*//p' "$CONFIG_FILE" | head -n 1)"
   _profile="${_profile%%#*}"
@@ -1094,7 +1099,7 @@ seed_claude_lane_profile() {
       "Bash(git fetch:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)",
+      "Bash(git push -u origin:*)",
       "Bash(gh pr create:*)",
       "Bash(gh pr view:*)",
       "Bash(gh pr list:*)",
