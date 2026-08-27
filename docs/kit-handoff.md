@@ -61,7 +61,8 @@ preceded the code.
 - **Merged under the doctrine's class.** The launcher is in the safety-critical path
   binding, so the PR was held mergeable at `d2e1090` and merged on the operator's
   explicit authorization in this session. Filed this session, each on exact-payload
-  approval: `#615`, `#616`, `#617`, `#618`, and an occurrence on `#574`.
+  approval: `#615`, `#616`, `#617`, `#618`, an occurrence on `#467`, and occurrences on
+  `#574` (from `#614` round 15 and from the wrap-up PR's own round 1).
 
 - **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at `d2e1090` on
   2026-08-27 printed `1960 passed, 3 warnings in 397.20s`; the merged squash is

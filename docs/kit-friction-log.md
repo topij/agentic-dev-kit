@@ -35,14 +35,12 @@
   recur on demand; parked for accumulation. If it recurs, keep the raw stdout bytes
   and the stderr beside them before re-running.
 - **`make test`'s `#428` state guard tripped on the cockpit's own concurrent
-  `pr_watch.py 614 --json` poll**, which wrote `state/pr-watch/614.json` while the
-  suite ran; the run exited 2 with the regression banner printed above a summary line
-  that still read `passed` (the guard fails the run without fabricating a test
-  failure, as `scripts/conftest.py` says), and a re-run with no poll passed. The guard was right and the cause was the cockpit
-  polling during its own verification. **L** — reproduction and mechanism are clear,
-  the fix is a habit (no `pr-watch` poll while `make test` runs), and the shape is
-  worth a rule only if it recurs; parked for accumulation. `#467` is the false-positive
-  case and this was not one.
+  `pr_watch.py 614 --json` poll**, which persisted `state/pr-watch/614.json` while the
+  suite ran; `make` exited 2 (pytest's own status inside it is 1) with the regression
+  banner printed above a summary line that still read `passed`, and a re-run with no
+  poll passed. This is `#467`'s shape — a snapshotted descendant changed by a
+  concurrent poll, with `--no-persist` as its documented avoidance — so the occurrence
+  is recorded on `#467`, and nothing is parked here. **L**.
 - **`panel_prompt.py` produced an empty prompt file and hung until the tool timeout,
   then rendered in about a second on an identical re-run.** In a shell `for` loop that
   created a detached lens worktree and immediately rendered the lens prompt into it
