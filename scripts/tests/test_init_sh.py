@@ -3171,6 +3171,45 @@ def test_init_sh_seeds_the_adopters_engine_path_into_the_definition(tmp_path: Pa
     assert seeded == _generated_definition("adversarial", repo)
 
 
+@pytest.mark.parametrize("engines", ["scr&ipts", "scr|ipts", "a/b&c|d"])
+def test_init_sh_seeds_an_engine_path_sed_would_otherwise_mangle(
+    tmp_path: Path, engines: str
+) -> None:
+    """The panel's adversarial lens (round 3 on #623): the seed interpolates
+    `paths.engines` through `sed`'s replacement text, where `&` means "the match"
+    (the placeholder leaked into the file at exit 0) and `|` is the delimiter
+    (`sed: bad flag`, the installer aborted mid-migration). The value is now
+    escaped for that position. Kills: dropping the escape."""
+    # A plain scalar: the kit's YAML reader hands a double-quoted value through
+    # without unescaping, so a quoted backslash would test the fixture, not the seed.
+    config = shipped_config().replace("  engines: scripts\n", f"  engines: {engines}\n")
+    assert f"engines: {engines}\n" in config
+    repo = _fixture(tmp_path, config=config, git=True)
+    out = _run_init(repo)
+    seeded = (repo / ".claude" / "agents" / "adversarial.md").read_text(encoding="utf-8")
+    assert "@@ENGINES@@" not in seeded
+    assert f"{engines}/panel_prompt.py --lens adversarial --agent-definition" in seeded
+    assert seeded == _generated_definition("adversarial", repo), out.stderr
+
+
+@pytest.mark.parametrize("engines", ["scr\\ipts", 'scr"ipts'])
+def test_init_sh_declines_to_seed_a_path_the_quoted_description_cannot_carry(
+    tmp_path: Path, engines: str
+) -> None:
+    """A backslash or quote is a YAML escape inside the heredoc's quoted
+    `description:`; the generator JSON-escapes it and `sed` cannot, so the seed
+    would diverge from the generator's bytes. init.sh declines, says so, and names
+    the generator. Kills: dropping the `case` guard (the seeded file then differs
+    from the generator, or is not valid YAML)."""
+    config = shipped_config().replace("  engines: scripts\n", f"  engines: {engines}\n")
+    repo = _fixture(tmp_path, config=config, git=True)
+    out = _run_init(repo)
+    assert out.returncode == 0
+    assert not (repo / ".claude" / "agents").exists()
+    assert "not seeding .claude/agents/" in out.stderr
+    assert "--agent-definition" in out.stderr
+
+
 def test_init_sh_never_rewrites_an_existing_lens_agent_definition(tmp_path: Path) -> None:
     """Adopter-owned after the seed, like the lane profile: an adopter who
     regenerated the file after changing `lens_compute.claude` must not have it

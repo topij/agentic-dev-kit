@@ -1160,9 +1160,26 @@ seed_claude_lens_agents() {
   # token substituted into the otherwise literal heredocs below.
   _engines="$(get_field "paths:" "" "^  engines:")"
   [ -n "$_engines" ] || _engines="scripts"
+  # A backslash or a double quote in the path is a YAML escape inside the
+  # heredoc's quoted `description:` line, where the generator JSON-escapes the
+  # value and a sed substitution cannot; the seed would then differ from the
+  # generator's bytes, which is the one thing it must never do. Decline, name
+  # the generator, and let the adopter render the files from config.
+  case "$_engines" in
+    *\\*|*\"*)
+      echo "note: paths.engines ($_engines) holds a backslash or a quote — not seeding .claude/agents/; render each lens with: $_engines/panel_prompt.py --lens <name> --agent-definition" >&2
+      return 0
+      ;;
+  esac
+  # Escaped for sed's replacement position: `&` there means "the match", `\`
+  # starts an escape, and `|` is the delimiter chosen below — an unescaped value
+  # leaked the placeholder into the file at exit 0 (`&`) or aborted the
+  # installer mid-migration (`|`). The generator interpolates the same value
+  # directly, so this is what keeps the two byte-identical for any path.
+  _engines_sed="$(printf '%s' "$_engines" | sed 's/[\\&|]/\\&/g')"
   if lens_in_roster adversarial && [ ! -e ".claude/agents/adversarial.md" ] && [ ! -L ".claude/agents/adversarial.md" ]; then
     mkdir -p .claude/agents
-    sed "s|@@ENGINES@@|$_engines|g" > .claude/agents/adversarial.md <<'LENS'
+    sed "s|@@ENGINES@@|$_engines_sed|g" > .claude/agents/adversarial.md <<'LENS'
 ---
 name: adversarial
 description: "Fallback review panel lens adversarial: assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards. Launch it only with a prompt assembled by @@ENGINES@@/panel_prompt.py; it is not a general-purpose agent."
@@ -1190,7 +1207,7 @@ LENS
   fi
   if lens_in_roster correctness && [ ! -e ".claude/agents/correctness.md" ] && [ ! -L ".claude/agents/correctness.md" ]; then
     mkdir -p .claude/agents
-    sed "s|@@ENGINES@@|$_engines|g" > .claude/agents/correctness.md <<'LENS'
+    sed "s|@@ENGINES@@|$_engines_sed|g" > .claude/agents/correctness.md <<'LENS'
 ---
 name: correctness
 description: "Fallback review panel lens correctness: assume it works and ask what it says — stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check. Launch it only with a prompt assembled by @@ENGINES@@/panel_prompt.py; it is not a general-purpose agent."
