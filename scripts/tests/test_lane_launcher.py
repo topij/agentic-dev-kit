@@ -1454,7 +1454,6 @@ def test_request_binding_carries_runtime_and_transports() -> None:
 @pytest.mark.parametrize(
     ("transport", "payload", "fragment"),
     (
-        ("last-message-file", b"", "final-message evidence"),
         ("json-stdout", b"", "no JSON result"),
         ("json-stdout", b"\xff\xfe", "not UTF-8"),
         ("json-stdout", b'{"type": "result"', "not one complete JSON object"),
@@ -1462,6 +1461,12 @@ def test_request_binding_carries_runtime_and_transports() -> None:
         ("json-stdout", b'[{"type":"result"}]', "not an object"),
         ("json-stdout", b'{"type":"assistant","result":"a"}', "not a result object"),
         ("json-stdout", b'{"type":"result","subtype":"success","is_error":true,"result":"a"}', "unsuccessful"),
+        # `is_error` must be the literal false: absent, null, 0, or "" is not a
+        # success assertion, and a truthiness check would accept all four.
+        ("json-stdout", b'{"type":"result","subtype":"success","result":"a"}', "unsuccessful"),
+        ("json-stdout", b'{"type":"result","subtype":"success","is_error":null,"result":"a"}', "unsuccessful"),
+        ("json-stdout", b'{"type":"result","subtype":"success","is_error":0,"result":"a"}', "unsuccessful"),
+        ("json-stdout", b'{"type":"result","subtype":"success","is_error":"","result":"a"}', "unsuccessful"),
         ("json-stdout", b'{"type":"result","subtype":"error_max_turns","is_error":false,"result":"a"}', "unsuccessful"),
         ("json-stdout", b'{"type":"result","subtype":"success","is_error":false,"result":""}', "missing or empty"),
         ("json-stdout", b'{"type":"result","subtype":"success","is_error":false,"result":7}', "missing or empty"),
@@ -1474,6 +1479,15 @@ def test_final_text_extraction_refuses_every_non_result_shape(
     launcher = _load_launcher()
     with pytest.raises(launcher.LaunchError, match=fragment):
         launcher._extract_final_text(transport, payload)
+
+
+def test_last_message_file_without_bytes_is_missing_evidence() -> None:
+    # The Codex route does no shape validation: any bytes are the final text, and
+    # only their absence is refused.
+    launcher = _load_launcher()
+    with pytest.raises(launcher.LaunchError, match="final-message evidence"):
+        launcher._extract_final_text("last-message-file", b"")
+    assert launcher._extract_final_text("last-message-file", b"{not json") == b"{not json"
 
 
 def test_final_text_extraction_accepts_one_result_object() -> None:
@@ -1492,8 +1506,14 @@ def test_json_stdout_redirect_requires_the_reserved_empty_file(tmp_path: Path) -
     link = tmp_path / "link.txt"
     link.symlink_to(link_target)
     missing = tmp_path / "missing.txt"
+    # A reserved file that another path also names is not the parent's exclusive
+    # reservation any more, even while it is still empty.
+    hardlinked = tmp_path / "hardlinked.txt"
+    hardlinked.touch()
+    os.link(hardlinked, tmp_path / "hardlink-alias.txt")
     for path, fragment in (
         (occupied, "not an empty regular file"),
+        (hardlinked, "not an empty regular file"),
         (link, "cannot open"),
         (missing, "cannot open"),
     ):

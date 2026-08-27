@@ -244,7 +244,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "b90fbf22e5d54347f20c103811a37663dfb8c39419862f290998544484fad259"
+      "sha256": "8463df43292b6cbe3ad0ee7bd9b84e8cf881921eb6d6fb1686a62616c636d728"
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",
