@@ -298,8 +298,8 @@ degraded, held, resume, authority, and completion paths under shared definitions
   use the selected wrapper or remain attended.
 - [x] Add a synthetic live check for lane worktree, repository, branch/base, state root,
   process, inherited-variable removal, and final-text binding at the stamped client.
-- Generalise the same wrapper contract to Claude through `claude -p`, with the
-  runtime-under-test producing the live record (`#466`).
+- [x] Generalise the same wrapper contract to Claude through `claude -p`, with the
+  runtime-under-test producing the live record (`#466`; PR `#611`).
 - Add config-owned approval/sandbox policy and writing-lane live records before model or
   effort calibration (`#601`).
 - Calibrate both runtimes' neutral tiers and mechanically pass supported model/effort
