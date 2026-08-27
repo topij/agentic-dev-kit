@@ -120,7 +120,17 @@ record exists, in the same shape as the transports:
 
 - `parallel.<runtime>_approval_policy` — a declaration from an engine-owned vocabulary:
   - Claude: `dont-ask` → `--permission-mode dontAsk`; `accept-edits` →
-    `--permission-mode acceptEdits`. Shipped default `accept-edits`.
+    `--permission-mode acceptEdits`. Shipped default `dont-ask`, with the profile
+    granting `Edit(**)`, `Write(**)`, `MultiEdit(**)`, and `NotebookEdit(**)` — a
+    path pattern the runtime resolves relative to the worktree root and never
+    outside it; a bare `Write` under `dont-ask` wrote `../outside-probe.txt` live,
+    so the validator refuses a bare or root-escaping edit-tool allow: under this
+    default the allow list is the whole boundary.
+    The first draft shipped `accept-edits`; panel round 5 observed live that the
+    runtime then auto-accepts its own class of file-system Bash commands inside the
+    worktree (`rm -rf`, `mv`, redirection writes, `cat`) with none of them in the
+    allow list and an empty denial list, while a write outside the worktree was
+    still denied. `accept-edits` stays declarable with that behaviour stated.
   - Codex: `read-only` → `--sandbox read-only`; `workspace-write` →
     `--sandbox workspace-write`. Shipped default `read-only`, the conservative pin
     until the Codex record observes the alternative.
@@ -142,7 +152,9 @@ record exists, in the same shape as the transports:
   reads it), must start with a letter, digit, or path character and its head
   (everything before the first wildcard, `:`, or space) must hold a letter or
   digit; `Bash`, `Bash(*)`,
-  `Bash(**)`, `Bash(?*)`, `Bash(:*)`, and `Bash(/*)` all fail that. The rule is
+  `Bash(**)`, `Bash(?*)`, `Bash(:*)`, and `Bash(/*)` all fail that — or grants an edit tool (`Edit`, `Write`, `MultiEdit`,
+  `NotebookEdit`) without a path pattern relative to the worktree root, or with one
+  rooted outside it (`//`, `~`, `..`). The rule is
   structural because the panel's round 2 found `Bash(**)` unrestricted live at
   2.1.247 while an enumerated blocklist missed it, and found `Bash(:*)` *not*
   unrestricted (it matches commands starting with `:`), so an enumeration built
@@ -171,8 +183,9 @@ must contain and how it fails.
 
 | Launch surface | Runtime | Approval establishment | Write class | Approval transition expected | Durable evidence | Authoritative observer | Failure outcome |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Kit wrapper → `claude -p` | Claude | `--setting-sources ""` + `--permission-mode acceptEdits` + `--settings <profile>` | read-only | none | receipt `request.approval_policy`, `observed.argv`, `terminal.permission_denials == []` | wrapper child (argv) + parent (denials from the envelope) | a denial → `failed` |
-| same | Claude | same | worktree write (Edit/Write in cwd) | accepted by mode, no prompt | same, plus the lane commit's tree | same | denial → `failed`; a write outside cwd is denied, not prompted |
+| Kit wrapper → `claude -p` | Claude | `--setting-sources ""` + `--permission-mode dontAsk` + `--settings <profile>` | read-only | none | receipt `request.approval_policy`, `observed.argv`, `terminal.permission_denials == []` | wrapper child (argv) + parent (denials from the envelope) | a denial → `failed` |
+| same | Claude | same | worktree write (Edit/Write in cwd) | accepted by the profile's edit-tool allow, no prompt; the runtime keeps the tools inside the worktree | same, plus the lane commit's tree | same | denial → `failed`; a write outside cwd is denied, not prompted |
+| same | Claude | `--permission-mode acceptEdits` (declarable, not default) | worktree write and the runtime's own file-system Bash class | accepted by the mode regardless of the allow list (round 5, live: `rm -rf`, `mv`, redirection, `cat`) | same | same | a write outside cwd denied; an untracked file deleted inside cwd leaves no trace in the receipt or `git status` |
 | same | Claude | same | commit (`git add`, `git commit`) | accepted by profile allow rule | commit sha read back in the cockpit | profile rule + cockpit `git` | denial → `failed` |
 | same | Claude | same | push (`git push -u origin <lane>`) | accepted by profile allow rule | remote-tracking head read back in the cockpit | same | denial → `failed`; the flag spellings of a force push are profile deny rules, the `+refspec` form is not deniable by a prefix rule (panel round 4, live) — history protection is the forge's and the lane contract's |
 | same | Claude | same | PR (`gh pr create`, `gh pr ready`) | accepted by profile allow rule | PR number and head read back by `dev_session.sh pr-watch` `_resolve_lane_pr` | forge read-back | denial → `failed`; a cross-repository or wrong-base PR refuses in `_resolve_lane_pr` |

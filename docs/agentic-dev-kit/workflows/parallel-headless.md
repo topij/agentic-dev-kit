@@ -106,7 +106,17 @@ the wrapper redirects onto the reserved final-message file before `exec`.
 `parallel.<runtime>_approval_policy` declares the approval/sandbox policy from the
 same kind of engine-owned vocabulary and is passed as argv in the fixed slot after the
 command prefix: Codex `read-only` / `workspace-write` (`--sandbox <value>`), Claude
-`dont-ask` / `accept-edits` (`--permission-mode dontAsk|acceptEdits`). Every
+`dont-ask` / `accept-edits` (`--permission-mode dontAsk|acceptEdits`). The shipped
+Claude default is `dont-ask`, under which the profile's allow list is the whole
+boundary: the profile grants the edit tools by the `(**)` path pattern, which the
+runtime resolves relative to the worktree root and never outside it (a bare `Write`
+writes anywhere — observed live — and the wrapper refuses it), and every Bash call
+outside the declared prefixes is a denial.
+`accept-edits` is declarable and is not the default because the runtime then also
+auto-accepts its own class of file-system Bash commands inside the worktree — `rm`,
+`mv`, redirection writes, and `cat` were observed accepted live at 2.1.247 with none
+of them in the allow list — so under that value the allow list bounds only what the
+runtime's own classifier does not already accept. Every
 unrestricted spelling — `bypassPermissions`, `auto`, `manual`, `plan`,
 `danger-full-access`, the `--dangerously-*` flags — is a non-member the wrapper
 refuses before any attempt record exists, and a missing key refuses the same way; no
@@ -175,7 +185,9 @@ wrapper refuses a profile that is missing, symlinked, not one JSON object, witho
 in config), or carrying a `Bash` allow entry with no literal command prefix — `Bash`,
 `Bash(*)`, `Bash(**)`, `Bash(:*)`, `Bash(/*)`, anything whose pattern head (the
 pattern read literally, up to the first wildcard, `:`, or space) holds no letter or
-digit — decided by that structure, not by a list of spellings. The guard judges the
+digit — decided by that structure, not by a list of spellings — or granting an edit
+tool without a path pattern relative to the worktree root (`Write`, `Write(//…)`,
+`Edit(../**)`). The guard judges the
 shape of a prefix and never the command it names: `Bash(sh:*)` is a prefix an
 adopter declared. The
 profile is read and digested by the parent and again by the child, and the two
@@ -202,8 +214,8 @@ and the exact argv the observer exec'd in `observed.argv`; the parent refuses an
 observation whose argv omits the policy or the trust step. The Codex value is
 validated and passed the same way, and its behaviour is not claimed until a Codex
 writing-lane record exists; the shipped Codex default is `read-only` for that reason.
-The shipped profile's allow-list is the minimum a writing lane needs to commit, push,
-open and ready a PR, and poll it; `gh pr merge` and the flag spellings of a force
+The shipped profile's allow-list is the minimum a writing lane needs to edit inside
+its worktree, commit, push, open and ready a PR, and poll it; `gh pr merge` and the flag spellings of a force
 push (`--force`, `-f`, `--force-with-lease`) are denied because landing is the
 cockpit's. That denial is a prefix rule and cannot express "contains a forced
 update": `git push origin +HEAD:main`, or a `--force` placed after the remote,

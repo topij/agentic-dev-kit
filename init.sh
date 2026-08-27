@@ -1034,7 +1034,7 @@ migrate_parallel_schema() {
   claude_prompt_transport: stdin
   claude_final_text_transport: json-stdout
   codex_approval_policy: read-only
-  claude_approval_policy: accept-edits
+  claude_approval_policy: dont-ask
   claude_settings_profile: config/claude-lane-settings.json
   descriptor_ttl_seconds: 900
   observation_timeout_seconds: 30
@@ -1051,7 +1051,7 @@ migrate_parallel_schema() {
   ensure_parallel_key claude_prompt_transport '  claude_prompt_transport: stdin'
   ensure_parallel_key claude_final_text_transport '  claude_final_text_transport: json-stdout'
   ensure_parallel_key codex_approval_policy '  codex_approval_policy: read-only'
-  ensure_parallel_key claude_approval_policy '  claude_approval_policy: accept-edits'
+  ensure_parallel_key claude_approval_policy '  claude_approval_policy: dont-ask'
   ensure_parallel_key claude_settings_profile '  claude_settings_profile: config/claude-lane-settings.json'
   ensure_parallel_key descriptor_ttl_seconds '  descriptor_ttl_seconds: 900'
   ensure_parallel_key observation_timeout_seconds '  observation_timeout_seconds: 30'
@@ -1063,8 +1063,11 @@ migrate_parallel_schema() {
 # `--setting-sources ""`). Adopter-owned policy like config/dev-model.yaml: seeded
 # only when absent, never rewritten, and deliberately outside the kit manifest so
 # an upgrade cannot replace an adopter's lane allow-list. The shipped allow-list is
-# the minimum a writing lane needs to commit, push, open and ready a PR, and poll
-# it; `gh pr merge` and the flag spellings of a force push are denied because
+# the minimum a writing lane needs to edit inside its worktree (the edit tools
+# granted by the `(**)` pattern, which the runtime resolves relative to the
+# worktree root and never outside it — a bare `Write` writes anywhere), commit,
+# push, open and
+# ready a PR, and poll it; `gh pr merge` and the flag spellings of a force push are denied because
 # landing is the cockpit's — a prefix rule cannot deny the `+refspec` form, so
 # branch-history protection stays with the forge and the lane contract.
 seed_claude_lane_profile() {
@@ -1080,6 +1083,10 @@ seed_claude_lane_profile() {
 {
   "permissions": {
     "allow": [
+      "Edit(**)",
+      "Write(**)",
+      "MultiEdit(**)",
+      "NotebookEdit(**)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",

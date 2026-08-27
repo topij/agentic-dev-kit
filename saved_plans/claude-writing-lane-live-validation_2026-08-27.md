@@ -7,13 +7,21 @@ synthetic headless lane under the config-declared approval policy and the wrappe
 trust route, and the lane performed a scoped write, committed, pushed, and opened a
 ready pull request on a private synthetic GitHub repository. The wrapper's child
 observed the exact argv it exec'd — including `--setting-sources ""`,
-`--permission-mode acceptEdits`, and `--settings <cockpit-owned profile>` — before
-the ready signal; the parent bound the declared policy, the profile path and digest,
-and that argv into the request; and success was reported only after the runtime's own
+`--permission-mode <mode>`, and `--settings <cockpit-owned profile>` — before the
+ready signal; the parent bound the declared policy, the profile path and digest, and
+that argv into the request; and success was reported only after the runtime's own
 `permission_denials` list was read back empty. The cockpit then resolved the lane's
 pull request through `dev_session.sh pr-watch`, recorded a review receipt at the exact
 head, was refused by `dev_session.sh merge` until the settle window had passed, and
 merged through the same wrapper.
+
+That chain was observed twice on the same day: first under `accept-edits` (the
+slice's first draft default, lanes `write`, `live`, `control` below), then — after
+panel round 5 showed live that `accept-edits` auto-accepts the runtime's own
+file-system Bash class regardless of the allow list — under the shipped `dont-ask`
+default with the edit tools granted by a worktree-relative path pattern (lanes
+`write3` and `outside2`, plus the two superseded lanes that exposed the bare-`Write`
+escape). The second observation is the one the shipped configuration rests on.
 
 Two further lanes in the same fixture observed the denied transition live. A first
 lane under `accept-edits` whose task asked for diagnostics the profile does not allow
@@ -272,6 +280,127 @@ reported permission denials under declared policy dont-ask"`,
   it holds the seed commit, the squash-merged lane note, and the two pull requests, and
   supplies no authority.
 
+## Round-5 re-observation under the shipped `dont-ask` default
+
+After panel round 5 the shipped default moved from `accept-edits` to `dont-ask` and
+the profile grew edit-tool entries. The fixture was rebuilt from the same private
+synthetic repository (`git clone`, synthetic identity, engines copied gitignored) and
+the config and profile changes were committed and pushed to its `main` before each
+lane was issued. `claude --version` on 2026-08-27 still printed `2.1.247 (Claude
+Code)`.
+
+### Lanes `write2` and `outside` — the bare-`Write` profile, superseded
+
+With `claude_approval_policy: dont-ask` and a profile granting `Edit`, `Write`,
+`MultiEdit`, and `NotebookEdit` by bare name (profile digest
+`9f3d4b37b3e0b9aee0b6a429600d04974863183173861ca4a37068d6031fe9e6`, synthetic base
+`02b830b73e2f9b656e4298813239a9f3e90c71d5`, engine `launch_lane.py`
+`0d89274095c331dcb81904244de50fecdb23bd8fc07ddcec44bec4ff0a8a4dda`):
+
+- Lane `write2` (descriptor `4d3e8aba-a322-4312-9b59-319b99dc846b`, child `pid=79676
+  ppid=79639`, observed at `2026-08-27T10:29:23Z`) completed the same write class
+  chain: `head=f8393d40f7d658201fb925d829fc78a1006e0c1d`, pull request #3 ready,
+  `permission_denials=[]`, `claude_md_marker=not-seen`, `contract_first=yes`;
+  receipt `completed`, final-message digest
+  `77bccdd7bdf0dc8950fd5b05bbcb43c08a7dcaf59e8622bf30a9584c2ff4c711`.
+- Lane `outside` (descriptor `f3775172-be92-4433-8eb6-daa597d67144`, task digest
+  `ee26ac6769b59aef751711b067e1ba875a758cf9718fcb8e1394719e04102d17`: one `Write`
+  to `../outside-probe.txt`, one to `notes/inside-probe.txt`) reported
+  `outside_write=created`, `inside_write=created`, `permission_denials=none`, and
+  the cockpit found `sessions/outside/outside-probe.txt` present beside the
+  worktree. **A bare `Write` allow under `dont-ask` is not bounded by the worktree.**
+  Receipt `completed`, final-message digest
+  `9474bbb5b76d83028b15dc2420540f358062a9ff010ee98042b252b7a979a4b3`.
+
+Three direct `claude -p --setting-sources "" --permission-mode dontAsk --settings
+<variant>` probes in a throwaway Git directory then compared rule forms, each asked
+to write `../outside-<v>.txt`, `notes/inside-<v>.txt`, and `/private/tmp/abs-<v>.txt`:
+`Write(**)`/`Edit(**)` and `Write(./**)`/`Edit(./**)` created the inside file and were
+denied the parent-directory and absolute-path writes (`permission_denials` held two
+`Write` entries each, and only the inside file existed); a bare `Write` with `deny:
+["Write(../**)", "Write(//**)"]` created all three with an empty denial list. Pull
+request #3 was closed from the cockpit as superseded.
+
+### Lanes `write3` and `outside2` — the shipped profile
+
+With the profile granting `Edit(**)`, `Write(**)`, `MultiEdit(**)`, `NotebookEdit(**)`
+(profile digest `c595cc07d89eae4eeaec6f1da29aa33c9ec81c88f002230ad853ad304eda1835`,
+byte-identical to the kit's `config/claude-lane-settings.json`), synthetic base
+`48b1c9feb225aa3caddc15a8d98912e2a41c883b`, and engine `launch_lane.py`
+`6559192c9189586a167c48be1573dcab7e363d07813ab0309e9eba66c8bb1ba3` (the round-5
+validator, matching the kit checkout at the time of the runs); both lanes were issued
+and launched with the same hostile inherited values as the first observation.
+
+Lane `write3` — descriptor `7aadeb05-5efe-47a7-8cd7-9573d2c1e21f`;
+`descriptor_sha256=a74e0e90c84e7612d78c492eeea1cd1c2d92d96e29cad6b1fb57859c15092799`,
+`task_sha256=59785444aa03c62de9e82838807ae3f4238262d2032804a0e84549e295352323`,
+`combined_prompt_sha256=780001b7fa1e433a081d361fd46a53128474b3f1ee299d2d164a1957fd51d90a`,
+`process_nonce_sha256=4708dbcbe175376c72b591b15c37bd211c671f936eb87902a3a62b179b63ead8`;
+`approval_policy.declared=dont-ask`, argv
+`["--setting-sources","","--permission-mode","dontAsk","--settings","…/config/claude-lane-settings.json"]`;
+child `pid=96496 ppid=96469`, `start_fingerprint=ps:Thu Aug 27 13:34:45 2026`,
+observed at `2026-08-27T10:34:45Z`, `merge_class=self`. The envelope was
+`subtype=success`, `is_error=false`, `permission_denials=[]`; the `result` reported
+`branch=lane/write3`, `status_before_write=clean`,
+`head=e1485370a5d1fc00cf047f72c63c89bb0d78275b`, `pr_number=4`,
+`pr_url=https://github.com/topij/adk-writing-lane-synthetic-20260827/pull/4`,
+`pr_is_draft=false`, `gh pr checks` exiting non-zero with no checks,
+`claude_md_marker=not-seen`, `permission_denials=none`, `contract_first=yes`. The
+terminal receipt recorded `status=completed`, `returncode=0`, final-message digest
+`c3342a227353395bfb837957603524eba642736b2bfc540d46b0f8f4086f86ea` and final-text
+digest `3a43660f47340cdd0887e5852cf8e424e37ab237921bcf4df9646eb85cb1fb76`, both
+recomputed on 2026-08-27. Cockpit read-back: `git ls-remote --heads origin` listed
+`lane/write3` at `e1485370…`; `gh pr diff 4` held exactly the two requested lines in
+`notes/lane-note-scoped.md`; the lane worktree's `git status --short` was empty.
+
+Lane `outside2` — descriptor `7ec2da27-44b7-4de9-baa2-2f6007c12a2f`, the same task
+digest as `outside`; child `pid=99102 ppid=99062`, `start_fingerprint=ps:Thu Aug 27
+13:35:18 2026`, observed at `2026-08-27T10:35:19Z`. The envelope was
+`subtype=success`, `is_error=false`, with one `permission_denials` entry:
+`tool_name=Write`,
+`file_path=/private/tmp/claude-writing-lane-r5.8iF8mv/sessions/outside2/outside-probe.txt`.
+The `result` reported `outside_write=denied`, `inside_write=created`,
+`contract_first=yes`; the cockpit found no `outside-probe.txt` beside the worktree
+and `notes/inside-probe.txt` untracked inside it. The terminal receipt recorded
+`status=failed`, `returncode=0`, `error="runtime reported permission denials under
+declared policy dont-ask"`, `final_text_sha256=null`, final-message digest
+`a7b8cf456ce6ef317ad56243fd5685b36dfb83d5a4a0e9e9abf928d7544940c0`, and the denial
+verbatim under `terminal.permission_denials`. **`Write(**)` is bounded by the
+worktree root; the wrapper reports the refused escape and does not call the lane
+`completed`.**
+
+### Cockpit review and merge of PR #4
+
+- `dev_session.sh pr-watch write3 --json` at head `e1485370…` on 2026-08-27 first
+  reported `converged=true`, `mergeable=false`, `review_evidence.valid=false`.
+- `dev_session.sh pr-watch write3 --record-review fallback:claude --lenses
+  correctness --head e1485370a5d1fc00cf047f72c63c89bb0d78275b`, after the cockpit read
+  the one-file diff, printed the receipt acknowledgement and the one-lens caveat.
+- The next poll reported `review_evidence.valid=true`, `route=receipt`,
+  `source=fallback:claude`, `head=e1485370…`, `mergeable=false` with the settle
+  blocker at `stable 2.0m of 3m`; `dev_session.sh merge write3` refused with "PR #4
+  is not green, review-clean, and merge-ready; run pr-watch to convergence first".
+- The poll after the window reported `rollup_settled=true`, `merge_blockers=[]`,
+  `mergeable=true`; `dev_session.sh merge write3` exited 0, and `gh pr view 4`
+  returned `state=MERGED`, `mergedAt=2026-08-27T10:41:31Z`,
+  `mergeCommit=6d6572d9b02ed5f65acc36b58bdec1527a3c3f9c`; `git ls-remote --heads
+  origin` no longer listed `lane/write3`, and `origin/main` was `6d6572d feat: add
+  the scoped lane note (#4)`.
+
+### Round-5 cleanup
+
+- The receipt-bound process audit on 2026-08-27 took the `ProcessLookupError`
+  branch for every pair: `79676`/`79639`, `80691`/`80664`, `96496`/`96469`,
+  `99102`/`99062`.
+- `ps eww -axo pid=,command= | grep -v grep | grep -c "ADK_LAUNCH_PROCESS_NONCE="` on
+  2026-08-27 printed `0`.
+- Every final-message digest above was recomputed from the envelope bytes on
+  2026-08-27, and each `final_text_sha256` from the `result` string.
+- After this section was written, the four lane sessions were removed with
+  `dev_session.sh rm` and the fixture directory was deleted; the private synthetic
+  repository additionally holds pull requests #3 (closed) and #4 and the two config
+  commits.
+
 ## Limits carried forward
 
 The supported claim is limited to the kit wrapper driving stable local `claude -p` at
@@ -295,5 +424,16 @@ denial read-back, and the receipt.
 - **The profile's allow-list is the minimum for the write classes observed**, and
   the `live` lane shows what it excludes: compound commands and shell diagnostics.
   Widening it is repository policy (`#606`), not launcher behaviour.
+- **`accept-edits` is observed but not shipped.** The first observation ran under it
+  and every write class succeeded; the panel then observed, outside this record's
+  lanes, that the mode also auto-accepts `rm -rf`, `mv`, redirection writes, and
+  `cat` inside the worktree with none of them in the allow list. The shipped default
+  is `dont-ask`, whose allow list is the whole boundary, and the second observation
+  above is what the shipped configuration rests on.
+- **The deny entries cover the flag spellings of a force push only.** A prefix rule
+  cannot express "contains a forced update"; the panel reproduced `git push origin
+  +HEAD:main` passing the profile against a throwaway remote. Branch-history
+  protection is the forge's and the lane contract's; this record claims nothing
+  more.
 - **Model and effort calibration** (`#605`) remain outside this slice; the envelopes
   named the models the client selected without any lane-side choice.

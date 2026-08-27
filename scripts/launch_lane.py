@@ -110,14 +110,36 @@ CLAUDE_SETTING_SOURCES_ARGS = ("--setting-sources", "")
 # so a lone path character in front of a wildcard (`Bash(/*)`, which matches every
 # absolute-path command, `Bash(.*)`, `Bash(~*)`, `Bash(. rm*)`) is refused along
 # with `Bash`, `Bash()`, `Bash(*)`, `Bash(**)`, `Bash(?*)`, `Bash(:*)`, and
-# `Bash( * )`. A `Bash` entry that is not `Bash` or `Bash(...)` — `Bash (*)`,
-# `Bash:` — is not a rule the runtime recognises and is refused as malformed
-# rather than read as harmless. What the guard does NOT judge is the command the
+# `Bash( * )`. After `Bash`, only a letter or digit (another tool's name, such as
+# `BashOutput`) or a well-formed `(...)` is a rule shape this guard can read;
+# anything else — `Bash (*)`, `Bash:*`, `Bash*`, `Bash{` — is refused as
+# malformed rather than read as harmless. What the guard does NOT judge is the command the
 # prefix names: `Bash(sh:*)` or `Bash(python3 -c:*)` is a literal prefix an
 # adopter declared, and declaring it is their policy decision, not a widening
 # this check claims to catch.
 LITERAL_COMMAND_LEAD = frozenset("/._~")
 PATTERN_HEAD_TERMINATORS = frozenset("*?:")
+# The edit tools are bounded only by a path pattern the runtime resolves relative
+# to the worktree root: `Write(**)` cannot reach `../x` or `/abs/x` (observed live
+# at 2.1.247), while a bare `Write` writes anywhere and a pattern rooted outside
+# the worktree (`//…` absolute, `~…` home, `..…` parent) is a declared escape.
+EDIT_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
+OUTSIDE_WORKTREE_PATTERN_LEADS = ("//", "~", "..")
+
+
+def _edit_allow_escapes_the_worktree(entry: str) -> bool:
+    """True when a `permissions.allow` entry grants an edit tool beyond the worktree."""
+    spelling = entry.strip()
+    if spelling in EDIT_TOOLS:
+        return True
+    for tool in EDIT_TOOLS:
+        if spelling.startswith(tool) and not spelling[len(tool) :][:1].isalnum():
+            rest = spelling[len(tool) :]
+            if not (rest.startswith("(") and rest.endswith(")")):
+                return True
+            pattern = rest[1:-1].strip()
+            return pattern == "" or pattern.startswith(OUTSIDE_WORKTREE_PATTERN_LEADS)
+    return False
 
 
 def _bash_allow_has_no_literal_prefix(entry: str) -> bool:
@@ -129,9 +151,10 @@ def _bash_allow_has_no_literal_prefix(entry: str) -> bool:
         return False
     rest = spelling[len("Bash") :]
     if not (rest.startswith("(") and rest.endswith(")")):
-        # `Bash (*)`, `Bash:*`, `Bash{`: a Bash rule the runtime would not parse.
-        # `Bashful` is another tool's name and outside this guard's claim.
-        return rest[:1].isspace() or rest[:1] in "(:"
+        # `BashOutput` is another tool's name and outside this guard's claim;
+        # `Bash (*)`, `Bash:*`, `Bash*`, `Bash{`, `Bash(` are Bash rule shapes the
+        # runtime would not parse, refused rather than read as harmless.
+        return not rest[:1].isalnum()
     pattern = rest[1:-1]
     lead = pattern[:1]
     if not (lead.isalnum() or lead in LITERAL_COMMAND_LEAD):
@@ -451,9 +474,13 @@ def _validate_settings_profile(raw: bytes, path: Path) -> None:
     before an attempt record exists. Only `allow` is inspected for widening: a
     `deny` entry narrows, and an `ask` entry cannot widen an unattended `-p` lane,
     where a call that would prompt is a denial the wrapper reads back from
-    `permission_denials`. The check is structural (see
-    `_bash_allow_has_no_literal_prefix`), not a list of known-bad spellings, and
-    it judges the shape of a prefix, never the command it names. Other top-level
+    `permission_denials`. An edit-tool entry (`Edit`, `Write`, `MultiEdit`,
+    `NotebookEdit`) must carry a path pattern relative to the worktree root; a
+    bare tool name writes anywhere and a pattern rooted outside the worktree is a
+    declared escape, both refused. The checks are structural (see
+    `_bash_allow_has_no_literal_prefix` and `_edit_allow_escapes_the_worktree`),
+    not lists of known-bad spellings, and they judge the shape of a prefix or
+    pattern, never the command it names. Other top-level
     keys (`hooks`, `env`, …) are the profile owner's and pass through: the profile
     is cockpit-owned by design, and its hooks are meant to run in the lane.
     """
@@ -480,6 +507,12 @@ def _validate_settings_profile(raw: bytes, path: Path) -> None:
             raise LaunchError(
                 f"lane settings profile {path} widens Bash to unrestricted ({entry!r}: "
                 "no literal command prefix); declare each command prefix instead"
+            )
+        if _edit_allow_escapes_the_worktree(entry):
+            raise LaunchError(
+                f"lane settings profile {path} grants an edit tool beyond the worktree "
+                f"({entry!r}); scope it with a pattern relative to the worktree root, "
+                "such as Write(**)"
             )
 
 

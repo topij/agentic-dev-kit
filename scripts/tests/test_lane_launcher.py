@@ -1838,6 +1838,10 @@ def test_no_declaration_can_make_the_engine_emit_an_unrestricted_flag() -> None:
         ("Bash( git:*)", True),
         ("Bash (git:*)", True),
         ("Bash:*", True),
+        ("Bash*", True),
+        ("Bash!", True),
+        ("Bash{git:*}", True),
+        ("Bash(git:*", True),
         ("  Bash(*)  ", True),
         ("Bash(git:*)", False),
         ("Bash(git status:*)", False),
@@ -1850,6 +1854,7 @@ def test_no_declaration_can_make_the_engine_emit_an_unrestricted_flag() -> None:
         ("Bash(sh:*)", False),
         ("Bash(/bin/sh -c:*)", False),
         ("Bashful", False),
+        ("BashOutput", False),
         ("Read", False),
         ("WebFetch(domain:*)", False),
     ),
@@ -1859,6 +1864,37 @@ def test_whole_tool_bash_is_decided_by_structure_not_by_spelling(
 ) -> None:
     launcher = _load_launcher()
     assert launcher._bash_allow_has_no_literal_prefix(entry) is widens
+
+
+@pytest.mark.parametrize(
+    ("entry", "escapes"),
+    (
+        ("Write", True),
+        ("Edit", True),
+        ("MultiEdit", True),
+        ("NotebookEdit", True),
+        ("  Write  ", True),
+        ("Write()", True),
+        ("Write( )", True),
+        ("Write:*", True),
+        ("Write (**)", True),
+        ("Write(//private/tmp/**)", True),
+        ("Write(~/**)", True),
+        ("Edit(../**)", True),
+        ("Edit(..)", True),
+        ("Write(**)", False),
+        ("Edit(./**)", False),
+        ("MultiEdit(notes/**)", False),
+        ("NotebookEdit(**)", False),
+        ("Write(.env)", False),
+        ("WriteFile", False),
+        ("Read", False),
+        ("Bash(git status:*)", False),
+    ),
+)
+def test_edit_tool_allow_must_be_scoped_inside_the_worktree(entry: str, escapes: bool) -> None:
+    launcher = _load_launcher()
+    assert launcher._edit_allow_escapes_the_worktree(entry) is escapes
 
 
 @pytest.mark.parametrize(
@@ -1904,6 +1940,17 @@ def test_whole_tool_bash_is_decided_by_structure_not_by_spelling(
         # word after it does not lend the head a letter (panel round 4).
         ({"permissions": {"allow": ["Bash(. rm*)"]}}, "widens Bash"),
         ({"permissions": {"allow": ["Bash(/ rm:*)"]}}, "widens Bash"),
+        # An edit tool is bounded only by a path pattern relative to the worktree
+        # root: a bare tool name wrote `../outside-probe.txt` live at 2.1.247.
+        ({"permissions": {"allow": ["Write"]}}, "beyond the worktree"),
+        ({"permissions": {"allow": ["Edit"]}}, "beyond the worktree"),
+        ({"permissions": {"allow": ["MultiEdit"]}}, "beyond the worktree"),
+        ({"permissions": {"allow": ["NotebookEdit"]}}, "beyond the worktree"),
+        ({"permissions": {"allow": ["Write()"]}}, "beyond the worktree"),
+        ({"permissions": {"allow": ["Write(//private/tmp/**)"]}}, "beyond the worktree"),
+        ({"permissions": {"allow": ["Write(~/**)"]}}, "beyond the worktree"),
+        ({"permissions": {"allow": ["Edit(../**)"]}}, "beyond the worktree"),
+        ({"permissions": {"allow": ["Write:*"]}}, "beyond the worktree"),
         ({"permissions": {"allow": "Bash(git:*)"}}, "list of strings"),
         ({"permissions": {"allow": [1]}}, "list of strings"),
     ),
@@ -1933,6 +1980,8 @@ def test_widening_or_malformed_settings_profile_is_a_refused_trust_step(
         # non-Bash rule is outside this guard's claim.
         {"permissions": {"allow": ["Bash(/opt/homebrew/bin/gh pr view:*)", "Bash(./scripts/run.sh:*)"]}},
         {"permissions": {"allow": ["Bash(git*)", "Read", "WebFetch(domain:example.com)"]}},
+        # Path-scoped edit tools are bounded by the worktree root.
+        {"permissions": {"allow": ["Write(**)", "Edit(**)", "MultiEdit(notes/**)", "NotebookEdit(**)"]}},
     ),
 )
 def test_bounded_or_narrowing_settings_profile_is_accepted(
@@ -2164,14 +2213,14 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
         "settings_profile_sha256": None,
     }
     profile = root / "config" / "claude-lane-settings.json"
-    assert claude["declared"] == "accept-edits"
+    assert claude["declared"] == "dont-ask"
     assert claude["settings_profile_path"] == str(profile.resolve())
     assert claude["settings_profile_sha256"] == hashlib.sha256(profile.read_bytes()).hexdigest()
     assert claude["argv"] == [
         "--setting-sources",
         "",
         "--permission-mode",
-        "acceptEdits",
+        "dontAsk",
         "--settings",
         str(profile.resolve()),
     ]
@@ -2187,4 +2236,13 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     assert "Bash(git push --force:*)" in shipped["permissions"]["deny"]
     assert "Bash(git push -f:*)" in shipped["permissions"]["deny"]
     assert "Bash(gh pr merge:*)" not in shipped["permissions"]["allow"]
-    assert all(entry.startswith("Bash(") and entry.endswith(":*)") for entry in shipped["permissions"]["allow"])
+    # Under the shipped `dont-ask` the allow list is the whole boundary: the edit
+    # tools are granted by name (the runtime keeps them inside the worktree) and
+    # every Bash entry is a bounded command prefix.
+    edit_tools = {"Edit(**)", "Write(**)", "MultiEdit(**)", "NotebookEdit(**)"}
+    assert edit_tools <= set(shipped["permissions"]["allow"])
+    assert all(
+        entry in edit_tools or (entry.startswith("Bash(") and entry.endswith(":*)"))
+        for entry in shipped["permissions"]["allow"]
+    )
+    assert not any(entry in {"Edit", "Write", "MultiEdit", "NotebookEdit"} for entry in shipped["permissions"]["allow"])

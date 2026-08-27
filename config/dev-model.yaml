@@ -81,11 +81,16 @@ parallel:
   # vocabulary, passed mechanically as argv. Codex: `read-only` | `workspace-write`
   # (`--sandbox <value>`; the argv is validated and passed, its behaviour is not
   # claimed until the Codex writing-lane record exists). Claude: `dont-ask` |
-  # `accept-edits` (`--permission-mode dontAsk|acceptEdits`). Every unrestricted
-  # spelling (bypassPermissions, danger-full-access, the dangerously-* flags) is a
-  # non-member the wrapper refuses; no value here widens a lane to unrestricted.
+  # `accept-edits` (`--permission-mode dontAsk|acceptEdits`). Under `dont-ask`
+  # the profile's allow list is the whole boundary and the profile grants the edit
+  # tools, which the runtime keeps inside the worktree. `accept-edits` is
+  # declarable but NOT the default: the runtime then also auto-accepts its own
+  # class of file-system Bash commands inside the worktree (rm, mv, redirection
+  # writes, cat were observed live at 2.1.247) whatever the allow list says. Every
+  # unrestricted spelling (bypassPermissions, danger-full-access, the
+  # dangerously-* flags) is a non-member the wrapper refuses.
   codex_approval_policy: read-only
-  claude_approval_policy: accept-edits
+  claude_approval_policy: dont-ask
   # The Claude trust route. A freshly issued lane worktree is an untrusted
   # workspace, so the checked-out branch's `.claude/settings.json` never supplies
   # policy (its allow list is ignored there and its hooks would otherwise still

@@ -45,8 +45,12 @@ starts.
 ## #614 — 2026-08-27
 
 - **ADDED (config keys) — `parallel` now owns, per runtime, `<runtime>_approval_policy`
-  (Codex `read-only` | `workspace-write`, Claude `dont-ask` | `accept-edits`) and, for
-  Claude, `claude_settings_profile` (shipped `config/claude-lane-settings.json`).**
+  (Codex `read-only` | `workspace-write`, shipped `read-only`; Claude `dont-ask` |
+  `accept-edits`, shipped `dont-ask`) and, for Claude, `claude_settings_profile`
+  (shipped `config/claude-lane-settings.json`, which grants the edit tools by the
+  worktree-relative `(**)` pattern and bounded `git`/`gh pr` prefixes).** **Declare `accept-edits` only knowing that the runtime
+  then also auto-accepts its own class of file-system Bash commands inside the
+  worktree regardless of the allow list.**
   **Refresh `init.sh` and run `./init.sh --no-clobber`: the additive migration installs
   the three keys without replacing adopter values and seeds
   `config/claude-lane-settings.json` only when no file is there. The profile is
@@ -54,9 +58,11 @@ starts.
   it against the kit's copy yourself. Keep each policy inside the wrapper's vocabulary:
   an unrestricted spelling (`bypassPermissions`, `danger-full-access`, any
   `dangerously-*`) or a missing key refuses at launch, as does a profile carrying
-  `permissions.defaultMode` or a `Bash` allow entry whose pattern has no literal
+  `permissions.defaultMode`, a `Bash` allow entry whose pattern has no literal
   command prefix (`Bash`, `Bash(*)`, `Bash(**)`, `Bash(:*)`, `Bash(/*)` — the head
-  before the first wildcard, separator, or space must hold a letter or digit).**
+  before the first wildcard, separator, or space must hold a letter or digit), or an
+  edit-tool allow with no worktree-relative path pattern (`Write`, `Write(//…)`,
+  `Edit(../**)`).**
 - **CHANGED (engine CLI surface) — `scripts/launch_lane.py` now passes the declared
   policy in the argv slot after the command prefix, and on Claude also
   `--setting-sources ""` and `--settings <profile>`.** **Refresh `scripts/launch_lane.py`,

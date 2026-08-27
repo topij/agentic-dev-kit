@@ -16635,7 +16635,7 @@ def test_init_seeds_the_claude_lane_profile_once_and_migrates_the_policy_keys(
         (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
     )["parallel"]
     assert migrated["codex_approval_policy"] == shipped["codex_approval_policy"] == "read-only"
-    assert migrated["claude_approval_policy"] == shipped["claude_approval_policy"] == "accept-edits"
+    assert migrated["claude_approval_policy"] == shipped["claude_approval_policy"] == "dont-ask"
     assert (
         migrated["claude_settings_profile"]
         == shipped["claude_settings_profile"]
