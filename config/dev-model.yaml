@@ -323,14 +323,36 @@ review:
     # inherit the cockpit session's own compute, which is the pre-existing
     # behaviour and stays the default for anyone who does not set this.
     #
-    # HOW FAR EACH KEY ACTUALLY REACHES depends on the runtime, and on Claude
-    # Code today they differ. Its delegation tool takes a `model` parameter, so
-    # `model` is a real control. It takes NO per-agent effort parameter, so
-    # `effort` reaches the lens only as an instruction in its prompt — the lens
-    # is told to work at that level and may or may not. Under a runtime that
-    # does expose effort per delegated task, it maps directly. Set `effort`
-    # anyway: it is honest intent either way, and it becomes mechanical the
-    # moment the runtime supports it. Just do not read it as a guarantee.
+    # HOW FAR EACH KEY REACHES is declared per runtime, from live probes of the
+    # pinned clients (Claude Code 2.1.247 and codex-cli 0.149.1 on 2026-08-27;
+    # saved_plans/capability-tier-calibration-live-validation_2026-08-27.md is
+    # the record, with the commands and the observer fields):
+    #
+    #   claude.model   MECHANICAL — the cockpit passes it as the delegation
+    #                  tool's `model` parameter, or the kit-owned agent
+    #                  definition `.claude/agents/<lens>.md` carries it; the
+    #                  runtime applies it and the session transcript reads the
+    #                  resolved model id back. The tool's parameter overrides the
+    #                  definition's value.
+    #   claude.effort  MECHANICAL through the agent definition only. The
+    #                  delegation tool has no effort parameter, so a lens launched
+    #                  as a plain subagent inherits the cockpit's effort and this
+    #                  key is ADVISORY there (prompt text). Launch the agent named
+    #                  after the lens; `scripts/panel_prompt.py --agent-definition`
+    #                  renders it from this block and refuses a level the runtime
+    #                  would silently drop (an invalid frontmatter effort is logged
+    #                  only under --debug and runs at the parent's effort).
+    #   codex.effort   MECHANICAL — passed as `-c model_reasoning_effort=<level>`
+    #                  on the `codex exec` argv and read back from the rollout's
+    #                  `turn_context`. A misspelled `-c` KEY is accepted silently
+    #                  at the config default (exit 0), so copy the key exactly; an
+    #                  invalid LEVEL is refused by the API (exit 1).
+    #   codex.model    MECHANICAL when set (`-m <model>`); absent here on purpose,
+    #                  so a lens runs the model in the user's Codex config, which
+    #                  is the one their account is known to have.
+    #
+    # The `Run at:` line panel_prompt.py renders into a prompt restates these and
+    # enforces nothing on either runtime; it names the carrier beside the value.
     #
     # Why sonnet rather than the `expensive` tier: measured 2026-08-01 over two
     # real panels on this repo — a docs PR (~196k output tokens) and a code PR
@@ -507,16 +529,45 @@ models:
     cheap: mechanical
     default: standard
     expensive: judgment
+  # STATUS, per runtime: ADVISORY on both. No engine reads this map
+  # (`grep -rn runtime_mappings scripts/ init.sh` at 16b07d6 finds only the
+  # init.sh migration write), so a workflow's tier reaches a session only when the
+  # cockpit or the operator applies the value by hand — the delegation tool's
+  # `model` parameter, `claude -p --model/--effort`, `codex -m` and
+  # `-c model_reasoning_effort=`. The VALUES below name controls each client was
+  # observed to accept (Claude Code 2.1.247, codex-cli 0.149.1, 2026-08-27;
+  # saved_plans/capability-tier-calibration-live-validation_2026-08-27.md):
+  #
+  #   claude — model aliases the client resolved and reported back in the
+  #            result's `modelUsage`: haiku, sonnet, opus, fable. A model the
+  #            account lacks fails at exit 1 naming it, so an account without
+  #            `fable` sets `expensive: opus` here. Effort is inherited unless a
+  #            `.claude/agents/*.md` definition or `--effort` sets it; `--effort`
+  #            with an unknown level WARNS on stderr and runs at the default.
+  #   codex  — reasoning-effort levels `-c model_reasoning_effort=<level>` applied
+  #            and read back from the rollout: low, medium, high, xhigh, max, and
+  #            none; `minimal` was refused by the API for the probed model. The
+  #            model is inherited from the user's Codex config unless `-m` is
+  #            passed; a model the account lacks fails at exit 1.
+  #
+  # `expensive` points at the top of what each client exposed on that date:
+  # `fable` resolved to the runtime's latest top model, and `xhigh` is the
+  # highest Codex level short of `max`. Claude's judgment tier moves the MODEL
+  # and inherits effort; Codex's moves EFFORT on the user's model. Parity is the
+  # tier outcome, not the same knob.
+  #
   # A tier's value may be EITHER a scalar or a `{model, effort}` map.
   #
   # The scalar form is the original and stays valid — it means "the one compute
-  # control this runtime exposes", which is why the two runtimes below currently
+  # control this runtime exposes", which is why the two runtimes below
   # read as different things: `claude` names models, `codex` names effort levels.
   # That ambiguity is the reason the map form exists. Prefer it when a runtime
-  # exposes both controls and you want to pin them independently:
+  # exposes both controls and you want to pin them independently — both clients
+  # accept the same effort spellings low, medium, high, xhigh, max, so a map's
+  # `effort` reads the same under either:
   #
   #   claude:
-  #     expensive: { model: opus, effort: high }
+  #     expensive: { model: fable, effort: high }
   #     cheap:     { effort: low }          # model inherited
   #
   # Either key may be omitted; an omitted key inherits the session's own value.
@@ -526,11 +577,11 @@ models:
     claude:
       cheap: haiku
       default: sonnet
-      expensive: opus
+      expensive: fable
     codex:
       cheap: low
       default: medium
-      expensive: high
+      expensive: xhigh
 
 state:
   # The per-lane state sandbox (Principle #3) is driven by FIXED, project-neutral env

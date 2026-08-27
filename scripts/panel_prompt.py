@@ -37,8 +37,16 @@ Four properties, each earned by a real failure:
 This assembles the prompt. It does not launch lenses, build worktrees, or read reports:
 ``--lenses`` staying self-reported is #32, and this is what a real check would build on.
 
+It also renders, with ``--agent-definition``, the Claude Code agent definition that
+makes ``review.fallback_panel.lens_compute.claude`` mechanical (see
+:data:`COMPUTE_CARRIER`): the ``Run at:`` line in a prompt restates the configured
+compute and enforces nothing, while the frontmatter of ``.claude/agents/<lens>.md`` is
+applied by the runtime when the cockpit launches the agent named after the lens.
+
 Usage:
     uv run scripts/panel_prompt.py --lens adversarial --head <sha>
+    uv run <engine-dir>/panel_prompt.py --lens adversarial --agent-definition \\
+        > .claude/agents/adversarial.md
     uv run scripts/panel_prompt.py --lens correctness --head <sha> \\
         --scratch /tmp/panel --pr 218 --carry-forward "Rounds 1-3 found everything in
         the author's claims and nothing in the changed content. Invert that."
@@ -55,6 +63,7 @@ Exits 2 on any condition that would produce a misleading prompt.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -79,6 +88,38 @@ _ITEM = re.compile(r"^(\d+)\.\s+\*\*(.+?)\.?\*\*", re.MULTILINE)
 _HEADING = re.compile(rf"^{re.escape(CONTRACT_HEADING)}\s*$", re.MULTILINE)
 # Any level-two heading, to bound the section without matching `###` sub-headings.
 _NEXT_H2 = re.compile(r"^## ", re.MULTILINE)
+
+# How each runtime's `lens_compute.<runtime>` value actually reaches a lens, observed
+# live at Claude Code 2.1.247 and codex-cli 0.149.1 on 2026-08-27
+# (saved_plans/capability-tier-calibration-live-validation_2026-08-27.md). The
+# prompt's `Run at:` line is a restatement for the lens's benefit and enforces
+# nothing on either runtime; these are the carriers that do. A runtime absent here
+# has no kit-known carrier, and the render says so rather than implying one.
+COMPUTE_CARRIER: dict[str, str] = {
+    "claude": (
+        "carried by the kit-owned agent definition `.claude/agents/{lens}.md` — its "
+        "frontmatter `model` and `effort` are applied by the runtime when the cockpit "
+        "launches the agent named after this lens"
+    ),
+    "codex": (
+        "carried on the `codex exec` argv — `-m <model>` and "
+        "`-c model_reasoning_effort=<effort>` — and read back from the runtime's own "
+        "rollout `turn_context`"
+    ),
+}
+
+# The runtime whose agent definitions `--agent-definition` renders. Codex carries
+# lens compute on its launch argv and has no per-lens definition file to render.
+AGENT_DEFINITION_RUNTIME = "claude"
+
+# `claude --help` at 2.1.247: "--effort <level>  Effort level for the current session
+# (low, medium, high, xhigh, max)". Validated HERE because the runtime does not
+# refuse a bad frontmatter level where anyone would see it: probed live, an agent
+# definition carrying `effort: bogus` logged "has invalid effort" only under
+# `--debug` and ran at the parent's effort — the silent-inherit shape a generator
+# must not hand on. Quoted from the client's own help, so a new level the client
+# grows is a one-line change here, never a guess.
+CLAUDE_EFFORT_LEVELS: tuple[str, ...] = ("low", "medium", "high", "xhigh", "max")
 
 
 class PromptError(Exception):
@@ -342,11 +383,23 @@ def render(
     # (the doctrine says so), but a TYPO looks identical. Saying which runtime was
     # asked for makes the two distinguishable at the point a reader can act on it.
     parts = [f"{k} {v}" for k, v in sorted(compute.items()) if v] if compute else []
-    compute_line = (
-        f"\nRun at: {', '.join(parts)}.\n"
-        if parts
-        else f"\nNo compute configured for runtime {runtime!r}; inherit the cockpit's.\n"
-    )
+    # The line names its carrier so a lens (or a reader of the receipt) cannot take
+    # the restatement for the control. Before the calibration record this read as a
+    # bare `Run at:`, which on Claude was true for `model` and false for `effort`.
+    carrier = COMPUTE_CARRIER.get(runtime)
+    if parts and carrier is not None:
+        compute_line = (
+            f"\nRun at: {', '.join(parts)}. This line restates the configured compute and "
+            f"enforces nothing; the value is {carrier.format(lens=lens)}.\n"
+        )
+    elif parts:
+        compute_line = (
+            f"\nRun at: {', '.join(parts)}. This line restates the configured compute and "
+            f"enforces nothing; runtime {runtime!r} has no kit-known carrier, so treat it "
+            "as instruction only.\n"
+        )
+    else:
+        compute_line = f"\nNo compute configured for runtime {runtime!r}; inherit the cockpit's.\n"
 
     tree = (
         f"- **A detached worktree at that sha has been built for you at:**\n  `{scratch}`\n"
@@ -486,6 +539,110 @@ readable as a result rather than as an unexecuted pass.
 """
 
 
+def _lens_roster(config: dict, lens: str) -> dict[str, str]:
+    lenses = get(config, "review.fallback_panel.lenses", [])
+    roster = {entry["name"]: entry.get("focus", "") for entry in lenses if "name" in entry}
+    if lens not in roster:
+        raise PromptError(
+            f"lens {lens!r} is not in review.fallback_panel.lenses "
+            f"({', '.join(sorted(roster)) or 'roster is empty'}). The doctrine requires "
+            "lenses be drawn from the configured roster, not minted for the occasion."
+        )
+    return roster
+
+
+def _compute_value(compute: dict, key: str, runtime: str) -> str | None:
+    """One `lens_compute.<runtime>.<key>` value, or None when the key is absent.
+
+    Absent means "inherit", which is legitimate. Present-but-unusable is refused
+    rather than silently dropped: dropping it renders a definition that inherits
+    where the config asked for a pin, and the hook's silence rule (`#301`) exists for
+    a reminder clause, not for a file the runtime will apply.
+    """
+    if key not in compute:
+        return None
+    value = compute.get(key)
+    if not isinstance(value, str) or not value.strip() or not any(
+        ch.isalnum() for ch in value
+    ):
+        raise PromptError(
+            f"review.fallback_panel.lens_compute.{runtime}.{key} is {value!r}, which is "
+            "not a usable value; omit the key to inherit, or set a real one"
+        )
+    return value.strip()
+
+
+def agent_definition(root: Path, lens: str, runtime: str) -> str:
+    """Render `.claude/agents/<lens>.md` from config so its frontmatter cannot drift.
+
+    The frontmatter is the mechanical carrier for `lens_compute.claude` (see
+    :data:`COMPUTE_CARRIER`); the body is fixed. The file carries the command that
+    regenerates it, and the kit's own tests refuse a committed definition that this
+    function would render differently.
+    """
+    if runtime != AGENT_DEFINITION_RUNTIME:
+        raise PromptError(
+            f"--agent-definition renders a {AGENT_DEFINITION_RUNTIME!r} agent definition; "
+            f"runtime {runtime!r} carries lens compute on its launch argv, not in a "
+            "definition file (see the doctrine's compute section)"
+        )
+    config = load_config(root / "config" / "dev-model.yaml")
+    focus = _lens_roster(config, lens)[lens]
+    # The regenerating command is rendered from `paths.engines`, never a literal
+    # `scripts/`: an adopter who vendored under `scripts/devkit/` would otherwise
+    # ship a definition naming a path that does not exist in their tree.
+    engines = get(config, "paths.engines", "scripts") or "scripts"
+    compute = get(config, f"review.fallback_panel.lens_compute.{runtime}", {}) or {}
+    if not isinstance(compute, dict):
+        raise PromptError(
+            f"review.fallback_panel.lens_compute.{runtime} is {compute!r}, not a map"
+        )
+    model = _compute_value(compute, "model", runtime)
+    effort = _compute_value(compute, "effort", runtime)
+    if effort is not None and effort not in CLAUDE_EFFORT_LEVELS:
+        raise PromptError(
+            f"review.fallback_panel.lens_compute.{runtime}.effort is {effort!r}; Claude Code "
+            f"accepts {', '.join(CLAUDE_EFFORT_LEVELS)} and would run this lens at the "
+            "cockpit's effort while logging the rejection only under --debug"
+        )
+    # JSON string syntax is valid YAML double-quoted syntax, which is what keeps a
+    # focus containing `: ` or `#` from breaking the frontmatter.
+    description = json.dumps(
+        f"Fallback review panel lens {lens}: {focus}. Launch it only with a prompt "
+        f"assembled by {engines}/panel_prompt.py; it is not a general-purpose agent.",
+        ensure_ascii=False,
+    )
+    front = ["---", f"name: {lens}", f"description: {description}"]
+    if model is not None:
+        front.append(f"model: {model}")
+    if effort is not None:
+        front.append(f"effort: {effort}")
+    front.append("---")
+    pinned = (
+        "The frontmatter is what makes the configured compute mechanical: Claude Code\n"
+        "applies its `model` and `effort` when the cockpit launches the agent named\n"
+        f"`{lens}`, and loads this file only at session start."
+        if model is not None or effort is not None
+        else "No `model` or `effort` is pinned here because\n"
+        f"`review.fallback_panel.lens_compute.{runtime}` carries neither; the lens\n"
+        "inherits the cockpit session's compute."
+    )
+    body = f"""
+Generated from `config/dev-model.yaml` (`review.fallback_panel.lenses` and
+`review.fallback_panel.lens_compute.{runtime}`) by
+`{engines}/panel_prompt.py --lens {lens} --agent-definition`. Regenerate it after
+changing either key; do not edit it by hand.
+
+{pinned}
+
+You are the **{lens}** lens of the fallback review panel
+(`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
+review. Your launch prompt carries the contract, the revision, the diff, and your
+focus; follow it exactly, and report what you reviewed before any finding.
+"""
+    return "\n".join(front) + "\n" + body
+
+
 def build(args: argparse.Namespace) -> str:
     # The repo under review is a parameter, not a module constant, so the engine can
     # be pointed at a checkout other than its own — and so its own tests can build a
@@ -505,20 +662,17 @@ def build(args: argparse.Namespace) -> str:
     o_draws = _override("--delta-draws", args.delta_draws)
     o_verify = _override("--verify-command", args.verify_command)
     o_runtime = _override("--runtime", args.runtime) or "claude"
-    # --head and --lens are required=True, so argparse guarantees presence but not
-    # content; an empty value otherwise reaches git as a blank revision.
+    # --lens is required=True, so argparse guarantees presence but not content; an
+    # empty value otherwise reaches git as a blank revision. --head is required for a
+    # prompt and not for an agent definition, so its presence is checked here.
+    if args.head is None:
+        raise PromptError("--head is required to assemble a prompt (omit it only with "
+                          "--agent-definition)")
     _override("--head", args.head)
     _override("--lens", args.lens)
     config = load_config(root / "config" / "dev-model.yaml")
 
-    lenses = get(config, "review.fallback_panel.lenses", [])
-    roster = {entry["name"]: entry.get("focus", "") for entry in lenses if "name" in entry}
-    if args.lens not in roster:
-        raise PromptError(
-            f"lens {args.lens!r} is not in review.fallback_panel.lenses "
-            f"({', '.join(sorted(roster)) or 'roster is empty'}). The doctrine requires "
-            "lenses be drawn from the configured roster, not minted for the occasion."
-        )
+    roster = _lens_roster(config, args.lens)
 
     head = _require_commit(root, args.head)
     branch = resolve_branch(root, o_branch, head)
@@ -571,7 +725,15 @@ def main(argv: list[str] | None = None) -> int:
     # The string is validated first, then converted.
     parser.add_argument("--root", default=None, help="repo under review (default: this one)")
     parser.add_argument("--lens", required=True, help="lens name; must be in the configured roster")
-    parser.add_argument("--head", required=True, help="head sha under review")
+    parser.add_argument(
+        "--head", default=None, help="head sha under review (required for a prompt)"
+    )
+    parser.add_argument(
+        "--agent-definition",
+        action="store_true",
+        help="render the Claude Code agent definition for --lens instead of a prompt "
+        "(from lens_compute.claude); every prompt-only flag is refused with it",
+    )
     parser.add_argument("--base", default=None, help="override the remote-resolved base (discouraged)")
     parser.add_argument("--base-branch", default=None, help="branch to resolve the base from")
     parser.add_argument("--branch", default=None, help="branch under review (default: current)")
@@ -600,7 +762,35 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        sys.stdout.write(build(args))
+        if args.agent_definition:
+            # A prompt-only flag beside --agent-definition is a caller who wanted a
+            # prompt; silently rendering a definition would hand them the wrong file
+            # at exit 0.
+            stray = [
+                flag
+                for flag, value in (
+                    ("--head", args.head),
+                    ("--base", args.base),
+                    ("--base-branch", args.base_branch),
+                    ("--branch", args.branch),
+                    ("--scratch", args.scratch),
+                    ("--pr", args.pr),
+                    ("--carry-forward", args.carry_forward),
+                    ("--delta-draws", args.delta_draws),
+                    ("--verify-command", args.verify_command),
+                )
+                if value is not None
+            ]
+            if stray:
+                raise PromptError(
+                    f"--agent-definition takes no prompt flags; drop {', '.join(stray)}"
+                )
+            o_root = _override("--root", args.root)
+            root = (Path(o_root) if o_root else REPO_ROOT).resolve()
+            runtime = _override("--runtime", args.runtime) or AGENT_DEFINITION_RUNTIME
+            sys.stdout.write(agent_definition(root, _override("--lens", args.lens), runtime))
+        else:
+            sys.stdout.write(build(args))
     except PromptError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

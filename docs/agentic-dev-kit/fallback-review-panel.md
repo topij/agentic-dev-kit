@@ -128,11 +128,13 @@ invoked it — `.claude/settings.json` or `.codex/hooks.json`. It reads *only* t
 key for that runtime: an absent key yields no clause, and a value written for the
 other runtime never leaks into this one's instruction.
 
-**`scripts/panel_prompt.py` reads it too**, and is the consumer that matters most:
-it takes its own `--runtime` and renders the compute into the launch prompt a lens
-actually receives, so it is the mechanical path rather than an instruction someone
-follows. `.agents/skills/pr-watch/SKILL.md` step 5 names `lens_compute.codex` as
-well, and `kit_doctor.py` tracks the hook partly because of this key. Anything
+**`scripts/panel_prompt.py` reads it too**, twice over: it takes its own
+`--runtime` and renders the compute into the launch prompt a lens actually receives
+as a `Run at:` line, and with `--agent-definition` it renders the Claude Code agent
+definition `.claude/agents/<lens>.md` whose frontmatter is what applies the compute
+on that runtime. `.agents/skills/pr-watch/SKILL.md` step 5 names `lens_compute.codex`
+as well, `.claude/commands/pr-watch.md` names the agent definitions, `init.sh` seeds
+them, and `kit_doctor.py` tracks the hook partly because of this key. Anything
 changing the key's meaning has to move all of them together.
 
 Two corrections are recorded here rather than made silently, because the second is
@@ -153,13 +155,38 @@ never count them.** A number beside a list is the thing that goes stale, and a
 correction asserting a new number is how a stale claim gets replaced by a fresh
 wrong one.
 
-**The two keys do not reach equally far, and the difference is per-runtime.** On
-Claude Code today the delegation tool takes a `model` parameter but no per-agent
-effort parameter — so `model` is a real control, and `effort` arrives as an
-instruction in the lens's prompt, which the lens may or may not act on. Under a
-runtime that exposes effort per delegated task it maps directly. Set it either
-way; it is honest intent, and it becomes mechanical when the runtime catches up.
-Do not record a receipt that implies an effort level was enforced.
+**Which of that is a control and which is a suggestion is declared per key, per
+runtime** (`#255`), from live probes of the pinned clients — Claude Code 2.1.247 and
+codex-cli 0.149.1 on 2026-08-27, recorded with their commands and observer fields in
+`saved_plans/capability-tier-calibration-live-validation_2026-08-27.md`. The `Run
+at:` line in the prompt is a **restatement on both runtimes**: it names the value and
+its carrier and enforces nothing. The carriers are:
+
+- **Claude, `model`** — mechanical. The delegation tool's `model` parameter applies
+  it, and so does the frontmatter of `.claude/agents/<lens>.md`; the parameter
+  overrides the definition when both are given. The runtime's session transcript
+  reads the resolved model id back.
+- **Claude, `effort`** — mechanical **through the agent definition only**. The
+  delegation tool has no effort parameter, so a lens launched as a plain subagent
+  inherits the cockpit's effort and the key is advisory there. Launch the agent
+  named after the lens; `panel_prompt.py --lens <lens> --agent-definition` renders it
+  from config and refuses a level the runtime would silently drop — probed, a
+  definition carrying an invalid level ran at the parent's effort and logged the
+  rejection only under `--debug`. The runtime loads `.claude/agents/` at session
+  start and not from an untrusted worktree (`--setting-sources ""`), so a definition
+  seeded mid-session reaches the next session.
+- **Codex, `effort`** — mechanical on the `codex exec` argv as
+  `-c model_reasoning_effort=<level>`, read back from the runtime's rollout
+  `turn_context`. A misspelled `-c` *key* is accepted silently at exit 0 and the lens
+  runs at the config default, so copy the key exactly; an invalid *level* is refused
+  by the API at exit 1.
+- **Codex, `model`** — mechanical when set (`-m <model>`); absent in the shipped
+  config, so a lens runs the user's configured model.
+
+**A receipt records what ran, never what was requested.** A lens launched as a plain
+Claude subagent ran at the cockpit's effort whatever the prompt said; a Codex lens
+launched without the `-c` argv ran at the user's config. Do not record a receipt that
+implies a level was enforced by the line that only restated it.
 
 **Upgrading an existing install does not add this key.** `init.sh` writes the
 whole `fallback_panel` block only when the block is absent, so a repo that

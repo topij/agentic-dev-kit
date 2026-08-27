@@ -2,6 +2,8 @@
   "adopter_owned": [
     "config/dev-model.yaml",
     "config/claude-lane-settings.json",
+    ".claude/agents/adversarial.md",
+    ".claude/agents/correctness.md",
     "docs/handoff.md",
     "docs/handoff-history.md",
     "docs/friction-log.md",
@@ -26,11 +28,11 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "b3ea8ad7b4d643ea1afbb6cd819ac8998a6e39966c483b1f0fabeb0a4feca6fb"
+      "sha256": "bd4fd9ed68e5b5d5cdb06ae3f1bdbf587fa19a9069191e6be9aa10f935ea2d65"
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "f44ce4bd1edd69075142876d6ff33e9428b305e514fccf7665534e12acf665ea"
+      "sha256": "5cb7bc11ff89b58c00bbe6566a3770676446cad2de928422505b5aba0c8ff59c"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -42,11 +44,11 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "6f3ebc38d96401ba5146dc89985d31144a06cc1a127d04f9f5a776edff1e678d"
+      "sha256": "3522783256c531a0fc630fa2a61d5f24fc311fb41e1073775773c27902af3bf8"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "94c566d2a97f176c855c6d36a13f993f89212b99a27fc58a805c005001514dc2"
+      "sha256": "b0220c3d3180ab1f64657003ff7d94a188d2bc1ad5fd45e43a48cd9b5f830af7"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
@@ -98,7 +100,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "013c930a4a4784de9c555315773abac156cdee298951efa70c58b29d707761d4"
+      "sha256": "918edbddf40acc6d3f6ad9739aede9d4c6a78299a532ade0a922bbc189796948"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -130,7 +132,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "9779933a39a224588082cdbf8bd37057036b5542b136e5c35f143dfded211244"
+      "sha256": "91ca2eced5c2085ebdb7ea7a08ea09fce07abdbc6cb8eae8bc9e77f135fff0a0"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -201,7 +203,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "2a22b1179281993e0a5d371ce47c239596cee7670e3e09362d781a1bba61bba5"
+      "sha256": "5c97f2ca908853d35e31b1cbec37c647c8bb043b8909775ec79c8be5112d8543"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -229,7 +231,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "f123fb52d02216a87397963132cd8e4db22d4e0d2cedbfe976b5e2a9263c44d0"
+      "sha256": "bade7569f1bd22f4329cd936bd508453d9ad09fedb40acc272763fd30f2f6b4b"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -253,7 +255,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "dbceba10f68911021c12fffc54445ab076c73dcb2ec727d6a2cb58865a455e44"
+      "sha256": "0b83cd2b317500476a7fece5ba59de577bcbd1b31851cc92f6269828e99f68ce"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",

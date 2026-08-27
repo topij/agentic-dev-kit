@@ -177,8 +177,9 @@ desktop task, Codex cloud, a Claude remote session, or direct `codex exec` /
 `claude -p`: those surfaces do not apply this complete local
 worktree/environment/receipt contract. App-server is experimental and is not selected
 for this bounded mechanism. Keep the lane attended when the wrapper is unavailable.
-Model and reasoning-effort calibration remain separate from launcher identity. The
-approval policy is not: it is the declared `parallel.<runtime>_approval_policy` above,
+Model and reasoning-effort remain separate from launcher identity: the wrapper carries
+neither, and a lane inherits what its trust route resolves to (`parallel.md`, *How the
+tier reaches the lane*). The approval policy is not: it is the declared `parallel.<runtime>_approval_policy` above,
 and the wrapper reads its outcome back. Do not read the checked-out project's rules as
 standing in for it. A freshly issued lane worktree is an untrusted workspace to Claude:
 the branch's committed `permissions.allow` entries are ignored there while its hooks

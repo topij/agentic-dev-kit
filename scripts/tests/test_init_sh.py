@@ -3066,8 +3066,8 @@ def test_init_sh_ships_the_same_lens_compute_values_as_the_reference_config():
     assert init_comment != "" and cfg_comment != ""
 
 
-def test_both_lens_compute_comments_state_that_effort_is_not_enforced():
-    """The honesty caveat must reach BOTH install paths, not just the reference.
+def test_both_lens_compute_comments_declare_the_carrier_per_key_per_runtime():
+    """The status declaration must reach BOTH install paths, not just the reference.
 
     Regression pin for a real miss: the commit that retracted the "effort is a
     real control" overclaim fixed `config/dev-model.yaml` and the doctrine doc
@@ -3075,19 +3075,132 @@ def test_both_lens_compute_comments_state_that_effort_is_not_enforced():
     would have installed the version its author had already judged wrong. Caught
     by a review lens that ran `init.sh` over a fixture and read the output.
 
-    This is #149's rule ("when a claim is corrected, enumerate every surface it
-    was published to") applied to the one surface a manifest cannot watch.
+    The claim this pinned then was "NO per-agent effort parameter". The
+    calibration record (2026-08-27, Claude Code 2.1.247) refuted it for the agent
+    definition surface and confirmed it for the delegation tool, so the pin now
+    holds both comments to the per-key, per-runtime declaration (#255): each names
+    the agent definition as Claude's carrier, the `-c model_reasoning_effort` argv
+    as Codex's, and says the `Run at:` line enforces nothing. #149's rule ("when a
+    claim is corrected, enumerate every surface it was published to") applied to
+    the one surface a manifest cannot watch.
     """
-    caveat = "NO per-agent effort parameter"
     init_comment, _ = _lens_compute_block(
         (REPO_ROOT / "init.sh").read_text(encoding="utf-8"), unescape=True
     )
     cfg_comment, _ = _lens_compute_block(
         (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
     )
+    for surface, comment in (("init.sh", init_comment), ("config/dev-model.yaml", cfg_comment)):
+        assert "MECHANICAL" in comment, f"{surface} must declare a status per key"
+        assert ".claude/agents/<lens>.md" in comment, f"{surface} must name Claude's carrier"
+        assert "model_reasoning_effort" in comment, f"{surface} must name Codex's carrier"
+        assert "no effort parameter" in comment, (
+            f"{surface} must keep the true half of the retired claim: the delegation "
+            "tool itself has no effort parameter"
+        )
+        assert "enforces nothing" in comment, f"{surface} must say the prompt line is not the control"
+        assert "NO per-agent effort parameter" not in comment, (
+            f"{surface} still carries the retired blanket claim"
+        )
 
-    assert caveat in init_comment, "init.sh must not promise an effort guarantee"
-    assert caveat in cfg_comment, "the reference config must not either"
+
+def _runtime_mappings_block(text: str) -> str:
+    start = text.index("  runtime_mappings:")
+    return text[start : text.index("\n\n", start)] if "\n\n" in text[start:] else text[start:]
+
+
+def test_init_sh_stamps_the_same_tier_mapping_defaults_as_the_reference_config(
+    tmp_path: Path,
+) -> None:
+    """A fresh install must get the calibrated tiers, not the pre-calibration ones.
+
+    `runtime_mappings` is written by init.sh's migration only when `models.tiers`
+    is absent, with defaults spelled inline in the shell — a second copy of the
+    values the reference config carries, which is the drift `lens_compute`'s
+    sibling test above already guards. Kills: an edit to either copy alone.
+    """
+    # V1_CONFIG's scalar values are adopter values the migration must PRESERVE
+    # (test_portability pins that); the defaults fire only when none exist.
+    config = V1_CONFIG.replace("  cheap: haiku\n  default: sonnet\n  expensive: opus\n", "")
+    repo = _fixture(tmp_path, config=config, git=True)
+    _run_init(repo)
+    migrated = yaml.safe_load(_config(repo))["models"]["runtime_mappings"]
+    shipped = yaml.safe_load(shipped_config())["models"]["runtime_mappings"]
+    assert migrated == shipped, (
+        "init.sh's inline runtime_mappings defaults differ from config/dev-model.yaml"
+    )
+
+
+def _generated_definition(lens: str, root: Path = REPO_ROOT) -> str:
+    sys.path.insert(0, str(ENGINE_DIR))
+    import panel_prompt
+
+    return panel_prompt.agent_definition(root, lens, "claude")
+
+
+def test_init_sh_seeds_a_lens_agent_definition_per_shipped_lens(tmp_path: Path) -> None:
+    """The definition is the mechanical carrier for `lens_compute.claude` (Claude
+    Code applies its frontmatter `model`/`effort`; the delegation tool has no
+    effort parameter — probed 2026-08-27 at 2.1.247). A fresh adopter must get
+    it, and it must be byte-for-byte what the generator renders for the shipped
+    config, or a new install runs its lenses at compute the kit stopped
+    prescribing. Kills: editing init.sh's heredoc alone, editing the generator's
+    body alone, or dropping the seed call.
+    """
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
+    out = _run_init(repo)
+    for lens in ("adversarial", "correctness"):
+        seeded = repo / ".claude" / "agents" / f"{lens}.md"
+        assert seeded.is_file(), out.stdout
+        assert seeded.read_text(encoding="utf-8") == _generated_definition(lens)
+        assert f"seeded .claude/agents/{lens}.md" in out.stdout
+
+
+def test_init_sh_seeds_the_adopters_engine_path_into_the_definition(tmp_path: Path) -> None:
+    """A `scripts/devkit/` install must not be seeded a definition whose
+    regenerating command names `scripts/panel_prompt.py`, which that tree does not
+    have. Kills: a literal `scripts/` in init.sh's heredoc, or the generator
+    reading `paths.engines` while init.sh does not."""
+    config = shipped_config().replace("  engines: scripts\n", "  engines: scripts/devkit\n")
+    assert "engines: scripts/devkit" in config
+    repo = _fixture(tmp_path, config=config, git=True)
+    _run_init(repo)
+    seeded = (repo / ".claude" / "agents" / "adversarial.md").read_text(encoding="utf-8")
+    assert "scripts/devkit/panel_prompt.py --lens adversarial --agent-definition" in seeded
+    assert "scripts/panel_prompt.py" not in seeded
+    assert seeded == _generated_definition("adversarial", repo)
+
+
+def test_init_sh_never_rewrites_an_existing_lens_agent_definition(tmp_path: Path) -> None:
+    """Adopter-owned after the seed, like the lane profile: an adopter who
+    regenerated the file after changing `lens_compute.claude` must not have it
+    reverted by a re-run."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
+    target = repo / ".claude" / "agents" / "adversarial.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("---\nname: adversarial\neffort: low\n---\nmine\n", encoding="utf-8")
+    link = repo / ".claude" / "agents" / "correctness.md"
+    link.symlink_to(tmp_path / "elsewhere.md")
+    out = _run_init(repo)
+    assert target.read_text(encoding="utf-8") == "---\nname: adversarial\neffort: low\n---\nmine\n"
+    assert link.is_symlink() and not (tmp_path / "elsewhere.md").exists(), (
+        "a dangling symlink at the seed path must not be written through"
+    )
+    assert "seeded .claude/agents/" not in out.stdout
+
+
+def test_init_sh_seeds_only_lenses_the_roster_names(tmp_path: Path) -> None:
+    """A renamed roster gets no stray definition: a file for a lens nothing
+    configures would be an agent nothing launches, carrying compute nothing set."""
+    config = shipped_config().replace("      - name: correctness\n", "      - name: what-it-says\n")
+    repo = _fixture(tmp_path, config=config, git=True)
+    _run_init(repo)
+    assert (repo / ".claude" / "agents" / "adversarial.md").is_file()
+    assert not (repo / ".claude" / "agents" / "correctness.md").exists()
+    assert not (repo / ".claude" / "agents" / "what-it-says.md").exists(), (
+        "init.sh knows the shipped lenses' bytes only; a renamed lens is regenerated "
+        "by the adopter with panel_prompt.py --agent-definition"
+    )
 
 
 # ── register_pr_hook (#301, #303) ────────────────────────────────────────────
