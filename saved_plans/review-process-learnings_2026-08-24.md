@@ -1,7 +1,7 @@
 # Review-process learnings — 2026-08-24
 
 Status: evidence record from the Codex–Claude parity work in PR `#595`, PR `#596`, PR
-`#599`, and PR `#609`. This is not shared gate doctrine. Promote a lesson to
+`#599`, PR `#609`, PR `#611`, and PR `#614`. This is not shared gate doctrine. Promote a lesson to
 `docs/agentic-dev-kit/` only after a later change defines and tests the reusable
 contract.
 
@@ -176,3 +176,36 @@ not as fix rounds; neither is reconstructed from memory.
   stderr, not from the wrapper's tests. Produce each runtime's record from that runtime.
 - A lens interrupted by the host sleeping reports nothing and must be re-run from
   scratch; its worktree survives untouched, so the cost is the round, not the evidence.
+
+## Writing-lane policy additions from PR `#614`
+
+`gh pr view 614 --json comments --jq '[.comments[].body | scan("## Fallback panel — round")] |
+length'` at `d2e1090865769685a46307d7e6a99b15b6f49eb5` on 2026-08-27 printed `15`. Same
+heading as `#611`'s reading, so the two compare as dispositions posted; neither is
+reconstructed from memory.
+
+- **A claim about what the runtime does is verified live before it is written, or it
+  is not written.** The rounds' Critical and HIGH findings were sentences asserted by
+  inspection — a `-v` flag called read-only, an allow list called the whole boundary —
+  and a Low had the same shape (`cat` attributed to one policy's class); each was
+  refuted by one probe against the pinned client. The record now states what the runtime accepts on its own beside what the
+  profile grants, because the runtime's own classifier is part of the boundary.
+- **Least privilege answered every widening finding; a blocklist answered none.** A
+  remote grant narrowed to `get-url`, an edit grant narrowed to `Edit(**)`, a
+  permissions object closed to its three rule lists. The one enumeration the panel found
+  (`Bash(**)` missed by a spelling list) was replaced by a structural rule, and the
+  closed set is the same move one level up.
+- **"A fix round addresses only what the review found" held across the rounds.** No
+  mechanism was added; the ones a finding prompted — a lane-side push gate, inline
+  validated profile bytes, a post-exit origin re-read — were kept out of the fix and
+  filed as their own items (`#615`, `#617`, `#618`).
+  The doctrine's warning that a MED-prompted mechanism becomes the next HIGH was the
+  reason, and the rounds stayed one finding wide.
+- **A live probe from the cockpit reproduces a lens's finding before the fix is
+  written.** Each accepted runtime-behaviour finding was reproduced with the same
+  client before the disposition named it fixed, and the reproduction is what the record
+  cites — a lens report is testimony, the cockpit's probe is the observation.
+- **An interrupted host pauses the round, not the evidence.** With the operator away,
+  the panel was not launched: a lens killed by sleep reports nothing, and a fix commit
+  that lands while nobody can authorize the next round only moves the head. The pause
+  cost nothing the worktrees did not keep.
