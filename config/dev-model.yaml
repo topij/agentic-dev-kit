@@ -529,11 +529,13 @@ models:
     cheap: mechanical
     default: standard
     expensive: judgment
-  # STATUS, per runtime: ADVISORY on both. No engine reads this map
-  # (`grep -rn runtime_mappings scripts/ init.sh` at 16b07d6 finds the init.sh
-  # migration write and the test_portability.py pins on it, and no engine — the
-  # panel's correctness lens counted this line's earlier "only the init.sh write"
-  # and found it short), so a workflow's tier reaches a session only when the
+  # STATUS, per runtime: ADVISORY on both. No engine reads this map:
+  # `grep -rn runtime_mappings scripts/ init.sh` finds init.sh's migration write
+  # and test pins, never an engine (read at 16b07d6 and re-read at e128cdc, where
+  # this PR's own tests had joined the pins — the panel's correctness lens caught
+  # two earlier versions of this parenthetical enumerating too few files, which
+  # is why it now names the kinds and not the files). So a workflow's tier
+  # reaches a session only when the
   # cockpit or the operator applies the value by hand — the delegation tool's
   # `model` parameter, `claude -p --model/--effort`, `codex -m` and
   # `-c model_reasoning_effort=`. The VALUES below name controls each client was

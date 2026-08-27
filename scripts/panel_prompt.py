@@ -626,12 +626,16 @@ def agent_definition(root: Path, lens: str, runtime: str) -> str:
     )
     front = ["---", f"name: {lens}", f"description: {description}"]
     if model is not None:
-        # Quoted for the same reason `description` is: a real model id can carry a
-        # `:` (a Bedrock id ends in `:0`), which bare would end the YAML mapping
-        # and hand the runtime an unparseable file at exit 0 — the panel's
-        # adversarial lens demonstrated exactly that on the unquoted form. The
-        # runtime applies a quoted frontmatter value (probed live, C11 in the
-        # calibration record). `effort` stays bare: it is held to a bare-word enum.
+        # Quoted for the same reason `description` is. Bare, a value holding `: `
+        # (colon then space) ends the YAML mapping and the runtime gets an
+        # unparseable file at exit 0 — the panel's adversarial lens showed that
+        # with `sonnet: injected` — and a value holding ` #` is silently cut at
+        # the `#`. A colon with no space after it, the shape of a Bedrock id's
+        # `:0`, parses bare; the panel's correctness lens corrected an earlier
+        # version of this comment that claimed otherwise. Quoting covers every
+        # shape at once, and the runtime applies a quoted frontmatter value
+        # (probed live, C11 in the calibration record). `effort` stays bare: it
+        # is held to a bare-word enum.
         front.append(f"model: {json.dumps(model, ensure_ascii=False)}")
     if effort is not None:
         front.append(f"effort: {effort}")

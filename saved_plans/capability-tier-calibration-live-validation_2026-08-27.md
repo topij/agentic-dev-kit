@@ -265,6 +265,24 @@ same controls, applied in the review subagent's thread.
 and no rollout for the thread id. The observer is unavailable; an ephemeral lens
 cannot have its compute read back.
 
+### The panel's own lenses, read back
+
+The fallback panel that reviewed this PR is the mechanism in use. Round 1 at
+`4a574d4` launched both lenses as plain `general-purpose` subagents with `model:
+sonnet` on the delegation tool, before this session's roster listed the shipped
+definitions; round 2 at `e128cdc` launched them as the kit-owned `adversarial` and
+`correctness` agents. The cockpit session's subagent transcripts (`(model, effort)`
+per assistant entry, read on 2026-08-27):
+
+| round | launch | adversarial | correctness |
+| --- | --- | --- | --- |
+| 1 | `general-purpose`, tool `model: sonnet` | `('claude-sonnet-5', 'xhigh')` | `('claude-sonnet-5', 'xhigh')` |
+| 2 | kit-owned agent named after the lens | `('claude-sonnet-5', 'high')` | `('claude-sonnet-5', 'high')` |
+
+Round 1 inherited the cockpit's `xhigh`; round 2 ran at the frontmatter's `high`.
+That is `lens_compute.claude.effort` advisory on the tool surface and mechanical
+through the definition, observed in a real panel rather than a fixture.
+
 ## Matrix results
 
 Vocabulary from the design: `applied`, `substituted`, `accepted-unobserved`,

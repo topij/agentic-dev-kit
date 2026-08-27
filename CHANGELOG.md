@@ -60,7 +60,8 @@ starts.
   `high`, `xhigh`, `max`, a present-but-unusable `model`/`effort` value, and a lens
   name that is not a slug (exit 2) rather than rendering a definition the runtime
   would silently run at the parent's effort; `model` is rendered as a quoted YAML
-  string so an id carrying `:` (a Bedrock id) parses. The prompt's `Run at:` line now names its carrier per runtime and states it
+  string, so a value holding `: ` or ` #` — which bare would fail to parse or be
+  silently truncated — round-trips (a Bedrock id's `:0` already parsed bare). The prompt's `Run at:` line now names its carrier per runtime and states it
   enforces nothing; a runtime with compute configured and no kit-known carrier is told
   so. **Refresh `init.sh` and run `./init.sh --no-clobber`**: it seeds
   `.claude/agents/<lens>.md` for each shipped lens the roster names when no file is

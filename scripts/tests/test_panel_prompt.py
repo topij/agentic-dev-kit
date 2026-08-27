@@ -972,14 +972,17 @@ def test_agent_definition_refuses_a_present_but_unusable_value(repo, bad):
 
 @pytest.mark.parametrize(
     "model",
-    ["anthropic.claude-3-5-sonnet-20241022-v2:0", "sonnet: injected", "a #b", "'q'"],
+    ["sonnet: injected", "a #b", "'q'", "anthropic.claude-3-5-sonnet-20241022-v2:0"],
 )
-def test_agent_definition_quotes_a_model_the_bare_form_would_break_on(repo, model):
+def test_agent_definition_renders_the_model_as_a_quoted_yaml_string(repo, model):
     """The adversarial lens's HIGH on #623: `model: sonnet: injected` rendered bare
-    at exit 0 and the frontmatter then failed to parse — and a Bedrock id ends in
-    `:0`, so the shape is an operator's, not an attacker's. The value is now
-    rendered as a quoted YAML string, which the runtime applies (calibration
-    record, C11). Kills: dropping the `json.dumps` on the `model` line."""
+    at exit 0 and the frontmatter then failed to parse; bare `a #b` is silently cut
+    to `a`. The value is now rendered as a quoted YAML string, which the runtime
+    applies (calibration record, C11). The first three rows break or truncate bare
+    and so kill dropping the `json.dumps` on the `model` line; the Bedrock-shaped
+    last row parses bare too (its `:` has no space after it — the correctness lens
+    corrected the earlier claim that it broke) and pins only that quoting
+    round-trips a real id unchanged."""
     cfg = repo / "config" / "dev-model.yaml"
     cfg.write_text(cfg.read_text().replace("        model: sonnet\n", f"        model: {json.dumps(model)}\n"))
     out = _agent_definition(repo, "--lens", "adversarial")
