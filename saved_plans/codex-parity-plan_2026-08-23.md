@@ -34,13 +34,17 @@ their delivery order and exit conditions.
   remaining structural exit.
 - [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivered
   the kit-owned engine boundary; PR `#609` delivered the Codex wrapper, its live record,
-  and the declared Claude gap. Remaining, in delivery order, one slice each with a
+  and the declared Claude gap; PR `#611` generalised the wrapper to Claude
+  (`claude -p`) with a Claude-produced live record and moved the parity row's Claude
+  cell to the observed mechanism. Remaining, in delivery order, one slice each with a
   design matrix before prose:
-  1. Generalise the wrapper to Claude (`claude -p`) with a Claude-produced live record
-     (`#466`). Run from a Claude Code session.
-  2. Add config-owned approval/sandbox policy per runtime and a writing-lane live record
-     on each runtime — a lane that performs a scoped write and lands a PR through
-     `dev_session.sh pr-watch` (`#601`).
+  1. Done in PR `#611` (Claude through `claude -p`, config-declared transports, Codex
+     pinned unchanged). The record observed no write or approval transition and found
+     that a fresh lane worktree is an untrusted workspace to Claude — the shape of the
+     next item.
+  2. Add config-owned approval/sandbox policy per runtime, the Claude trust-establishment
+     step, and a writing-lane live record on each runtime — a lane that performs a
+     scoped write and lands a PR through `dev_session.sh pr-watch` (`#601`).
   3. Calibrate tiers for both runtimes and declare mechanical-versus-advisory per key
      per runtime (`#605`, `#255`); retire the "no per-agent effort" sentences.
   4. Run the first real headless task on the generalised launcher: `#602`.
@@ -294,8 +298,8 @@ degraded, held, resume, authority, and completion paths under shared definitions
   use the selected wrapper or remain attended.
 - [x] Add a synthetic live check for lane worktree, repository, branch/base, state root,
   process, inherited-variable removal, and final-text binding at the stamped client.
-- Generalise the same wrapper contract to Claude through `claude -p`, with the
-  runtime-under-test producing the live record (`#466`).
+- [x] Generalise the same wrapper contract to Claude through `claude -p`, with the
+  runtime-under-test producing the live record (`#466`; PR `#611`).
 - Add config-owned approval/sandbox policy and writing-lane live records before model or
   effort calibration (`#601`).
 - Calibrate both runtimes' neutral tiers and mechanically pass supported model/effort

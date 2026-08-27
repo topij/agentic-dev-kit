@@ -14,10 +14,71 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-27 — PR `#609` merged the environment-capable Codex launcher,
-preserved attended Claude lanes, and declared the unattended Claude launcher gap.
+Last updated: 2026-08-27 — PR `#611` merged the per-runtime lane launcher with a
+Claude-produced live record; the headless parity row's Claude cell is now an observed
+mechanism, and the next slice is the writing-lane approval policy.
 
-## Latest session — 2026-08-27 (Codex environment-capable launcher merged)
+## Latest session — 2026-08-27 (per-runtime launcher: Claude through `claude -p`)
+
+**Theme —** PR `#611` generalised the Codex wrapper into one kit-owned per-runtime
+launcher, `scripts/launch_lane.py`, run from a Claude Code session so the runtime under
+test produced its own live record. Codex's argv and evidence route are unchanged and
+pinned; Claude runs `claude -p --output-format json` with cwd from the process, the
+prompt on stdin, and its single JSON result bound by digest.
+
+- **Transports are declarations the engine checks.** Config owns, per runtime,
+  `parallel.<runtime>_headless_command` and its `*_transport` keys; the engine owns
+  the vocabulary each runtime implements and refuses any other declaration before an
+  attempt record exists. The attempt and receipt request bind the runtime and its
+  transports, so parent and child cannot resolve different templates. Everything
+  `#609` established — descriptor seal, environment replacement, trusted lookup,
+  child observation, nonce lineage, one-shot attempts, terminal receipts — is
+  byte-for-byte the same path.
+
+- **The live record moved the parity cell, and found the next slice's shape.** The
+  Claude-produced record in
+  [`claude-environment-capable-launcher-live-validation_2026-08-27.md`](../saved_plans/claude-environment-capable-launcher-live-validation_2026-08-27.md)
+  observed the client, as the exec'd observer, report the descriptor's worktree,
+  repository, branch, head, marker, and environment from inside the lane under hostile
+  inherited identity. It observed no write or approval transition, and it recorded
+  that a freshly issued lane worktree is an untrusted workspace to Claude, whose
+  committed `permissions.allow` entries it ignored. `parallel-headless.md` states that
+  limitation; the occurrence is on `#601`.
+
+- **Design before code held, and the panel record shows it.** The design matrix in
+  [`claude-environment-capable-launcher-design_2026-08-27.md`](../saved_plans/claude-environment-capable-launcher-design_2026-08-27.md)
+  preceded the engine change. The panel found no defect in engine behaviour: round 1
+  corrected an overstated sentence and filed the permission trust boundary, round 2
+  found coverage gaps (`is_error` absent, the hardlink clause) and a test-name
+  imprecision (answered by test code only, mutants recomputed and killed), round 3 was
+  a dual-lens delta pass with zero findings. The stamped round reading is in the learnings document beside `#609`'s.
+
+- **Merged under the doctrine's class.** The launcher is in the safety-critical path
+  binding, so the PR was held mergeable at `f7c0111` and merged on the operator's
+  explicit authorization in this session. Filed this session, each on exact-payload
+  approval: occurrences on `#601` and `#149`; earlier in the same session, `#601`–`#608`
+  and occurrences on `#466`, `#243`, `#255`, `#346`, `#236`, with `#341` and `#550`
+  closed as resolved.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at `f7c0111` on
+  2026-08-27 printed `1799 passed, 3 warnings in 318.71s`; the merged squash is
+  `e0ef081`.
+
+▶ Next: create `feat/writing-lane-approval-policy` from current `origin/main` and take
+`#601`: add a config-owned approval/sandbox policy per runtime beside
+`parallel.<runtime>_headless_command`, pass it mechanically in `scripts/launch_lane.py`,
+and on Claude add the trust-establishment step the live record exposed (pre-trust the
+lane worktree, a trusted settings profile, or `--bare` with the contract re-injected).
+Write the design matrix first — action × approval state × durable evidence ×
+authoritative observer — then obtain a writing-lane live record on each runtime: a
+lane that performs a scoped write and lands a PR through `dev_session.sh pr-watch`.
+Keep calibration (`#605`, `#255`) and the first real headless task (`#602`) in the
+slices after. Stamp the final `make test` as a PR comment at the merged head and
+record the round reading with the same `gh` command the learnings document uses.
+
+______________________________________________________________________
+
+## Session — 2026-08-27 (Codex environment-capable launcher merged)
 
 **Theme —** PR `#609` delivered the bounded Codex launcher slice: a kit-owned wrapper
 now applies an absolute worktree and replacement lane environment, independently
@@ -302,59 +363,6 @@ the configured object either matches the installer-emitted canonical form or it 
 `saved_plans/codex-parity-plan_2026-08-23.md` — live-validate that Codex work affecting
 the merge-authority engines loads the shared safety-critical doctrine, and preserve the
 repository-structural versus trusted-client boundary in the resulting record.
-
-______________________________________________________________________
-
-## Session — 2026-08-23 (the Codex parity baseline and its implementation roadmap shipped)
-
-**Theme —** Codex support moved from scattered compatibility surfaces to an explicit,
-tested parity contract. PR `#588` merged the assessed roadmap and its recommended starting
-slice without declaring the remaining client-dependent behavior aligned.
-
-- **The live contract is now the authoritative inventory.**
-  [`runtime-parity.md`](agentic-dev-kit/runtime-parity.md) declares shared workflow paths,
-  Claude and Codex adapters, intentional gaps, and companion ownership. Repository tests
-  derive coverage from that declaration, preserve adopter-recorded omissions, and require a
-  companion's declared owner to reference it.
-
-- **The clearest incorrect Codex lifecycle behavior is gone.** Codex no longer invokes the
-  Claude-specific `MEMORY.md` budget checker. The portable document-budget hook remains,
-  and installer guidance pins its match-all shape, `/hooks` review-and-trust step, and the
-  silent-skip diagnostic. The matrix leaves live trusted-session validation as a gap.
-
-- **The roadmap is durable.**
-  [`saved_plans/codex-parity-plan_2026-08-23.md`](../saved_plans/codex-parity-plan_2026-08-23.md)
-  records the pre-implementation assessment and delivery plan. README,
-  upgrade notes, `kit_doctor` ownership, and the release manifest carry the new contract to
-  adopters.
-
-- **Fallback review changed the shipped guards.** The panel's accepted findings led to
-  adapter validation for incomplete declarations, exact path uniqueness, trusted decline
-  handling, a non-empty gap rule, Codex-only gap coverage, explicit companion ownership,
-  and retention of the silent trust-skip diagnostic. The final receipt is bound to
-  `d03bcf3d84abce3a623ac7408d4cc04423f740fb` on PR `#588`.
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `d03bcf3d84abce3a623ac7408d4cc04423f740fb` on 2026-08-23 printed
-  `1367 passed, 3 warnings in 166.51s`; the warnings were pytest temporary-directory
-  cleanup warnings. GitHub Actions run `32607084576` for that PR head completed
-  successfully on 2026-08-23, observed with `gh run watch 32607084576 --exit-status`.
-
-**Learned**
-
-- **A parity label needs an independent relationship when it promises one.** A shared-only
-  path could satisfy either `gap` or `companion`; declaring `loaded_by` and checking the
-  owner's reference made the companion claim enforceable without duplicating the inventory.
-
-- **Pending live validation belongs in the matrix, not in optimistic wording.** Repository
-  structure establishes what ships, while trusted-client behavior remains a separate exit
-  condition. Keeping that boundary explicit prevented the Codex SessionStart row from
-  overstating the evidence.
-
-▶ Next: implement the next slice in `saved_plans/codex-parity-plan_2026-08-23.md` —
-live-validate Codex SessionStart and PostToolUse matcher, trust, timeout, and output behavior,
-then use the evidence to close lifecycle gaps and design the enforceable shared
-safety-doctrine binding.
 
 ______________________________________________________________________
 
