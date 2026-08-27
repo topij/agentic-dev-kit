@@ -36,18 +36,24 @@ their delivery order and exit conditions.
   the kit-owned engine boundary; PR `#609` delivered the Codex wrapper, its live record,
   and the declared Claude gap; PR `#611` generalised the wrapper to Claude
   (`claude -p`) with a Claude-produced live record and moved the parity row's Claude
-  cell to the observed mechanism. Remaining, in delivery order, one slice each with a
-  design matrix before prose:
+  cell to the observed mechanism; PR `#614` added the config-owned approval policy per
+  runtime and the Claude trust route with a Claude-produced writing-lane record.
+  Remaining, in delivery order, one slice each with a design matrix before prose:
   1. Done in PR `#611` (Claude through `claude -p`, config-declared transports, Codex
      pinned unchanged). The record observed no write or approval transition and found
      that a fresh lane worktree is an untrusted workspace to Claude — the shape of the
      next item.
-  2. Add config-owned approval/sandbox policy per runtime, the Claude trust-establishment
-     step, and a writing-lane live record on each runtime — a lane that performs a
-     scoped write and lands a PR through `dev_session.sh pr-watch` (`#601`).
-  3. Calibrate tiers for both runtimes and declare mechanical-versus-advisory per key
+  2. Done in PR `#614` for Claude: `parallel.<runtime>_approval_policy` and
+     `parallel.claude_settings_profile`, the trust route (`--setting-sources ""` plus
+     the cockpit-owned profile), the structural profile validator, denial read-back,
+     and a writing-lane record — a lane that performed a scoped write and landed a PR
+     through its own `pr-watch`. The Codex value is validated and unobserved.
+  3. Produce the Codex writing-lane record in a Codex session and move the Codex cell
+     from it: what `--sandbox` denies, how a denial reaches the receipt, and whether a
+     lane lands a PR through `dev_session.sh pr-watch` (`#601` stays open for it).
+  4. Calibrate tiers for both runtimes and declare mechanical-versus-advisory per key
      per runtime (`#605`, `#255`); retire the "no per-agent effort" sentences.
-  4. Run the first real headless task on the generalised launcher: `#602`.
+  5. Run the first real headless task on the generalised launcher: `#602`.
      Adopt now, mechanise later: the final verification stamp is a PR comment at the
      merged head, and a panel that ran leaves a disposition comment (`#603`, `#604`).
      Phase 5 owns `#606`, `#236`, and the `#243` narrowing (adapter generation); Phase 6
@@ -300,7 +306,9 @@ degraded, held, resume, authority, and completion paths under shared definitions
   process, inherited-variable removal, and final-text binding at the stamped client.
 - [x] Generalise the same wrapper contract to Claude through `claude -p`, with the
   runtime-under-test producing the live record (`#466`; PR `#611`).
-- Add config-owned approval/sandbox policy and writing-lane live records before model or
+- [x] Add config-owned approval/sandbox policy per runtime and the Claude trust route,
+  with a Claude writing-lane live record (`#601`; PR `#614`).
+- Produce the Codex writing-lane live record from a Codex session before model or
   effort calibration (`#601`).
 - Calibrate both runtimes' neutral tiers and mechanically pass supported model/effort
   keys to fallback-review lenses (`#605`, `#255`).

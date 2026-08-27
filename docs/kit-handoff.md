@@ -14,11 +14,74 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-27 — PR `#611` merged the per-runtime lane launcher with a
-Claude-produced live record; the headless parity row's Claude cell is now an observed
-mechanism, and the next slice is the writing-lane approval policy.
+Last updated: 2026-08-27 — PR `#614` merged the config-owned lane approval policy per
+runtime and the Claude trust route, with a Claude-produced writing-lane record; the
+Codex writing-lane record is the next slice, then calibration.
 
-## Latest session — 2026-08-27 (per-runtime launcher: Claude through `claude -p`)
+## Latest session — 2026-08-27 (writing-lane approval policy and the Claude trust route)
+
+**Theme —** PR `#614` (squash `d6b39c9`) added `parallel.codex_approval_policy`,
+`parallel.claude_approval_policy`, and `parallel.claude_settings_profile` beside the
+headless commands, and `scripts/launch_lane.py` now passes the declared policy in a
+fixed argv slot per runtime, validated like the transports. On Claude the trust route
+is `--setting-sources ""` plus the cockpit-owned profile through `--settings`: the
+untrusted lane worktree's own settings, hooks, `.mcp.json`, agents, and `CLAUDE.md`
+are not loaded, and the profile is the one settings source. The design matrix in
+[`claude-writing-lane-approval-policy-design_2026-08-27.md`](../saved_plans/claude-writing-lane-approval-policy-design_2026-08-27.md)
+preceded the code.
+
+- **The policy is a declaration the engine validates, and the profile is one too.**
+  An unrestricted or missing spelling refuses before an attempt record exists. The
+  profile validator is structural: the `permissions` object is closed to its three
+  rule lists, a `Bash` allow needs a literal command prefix, an edit tool needs a
+  worktree-relative pattern. The child re-reads the profile under the parent's digest,
+  and a `permission_denials` entry in the runtime's result terminalizes the lane
+  `failed` — a denied write is never a success. `test_lane_launcher.py` names each of
+  these with a recomputed mutant behind it.
+
+- **The Claude writing-lane record exists; the Codex one does not.** The record in
+  [`claude-writing-lane-live-validation_2026-08-27.md`](../saved_plans/claude-writing-lane-live-validation_2026-08-27.md)
+  observed a lane on a synthetic repository perform a scoped write, commit, push, open
+  a PR, and see it reviewed through the lane's own `pr-watch`, with denials read back
+  from the runtime. It also states what the runtime does on its own at 2.1.247 — a
+  read-only Bash class accepted under `dont-ask`, a file-system class under
+  `accept-edits`, project hooks not executed under the trust route, and a push rule
+  that bounds nothing after `origin` — so the allow list is the boundary on what a
+  lane can do, not on what it can see. The Codex value is validated and unobserved;
+  `runtime-parity.md` says so and the Codex cell did not move.
+
+- **What the panel's dispositions were made of.** The panel's findings were
+  claims asserted by inspection that a live probe refuted — a `-v` flag called
+  read-only, an allow list called the whole boundary, a runtime class attributed to
+  the wrong policy — and one structural gap (`additionalDirectories` passed through).
+  Each fix was least privilege or precise disclosure; no mechanism was added across
+  the rounds; the ones a finding prompted were filed as their own items. The stamped
+  round reading is in the learnings document beside `#609`'s and `#611`'s.
+
+- **Merged under the doctrine's class.** The launcher is in the safety-critical path
+  binding, so the PR was held mergeable at `d2e1090` and merged on the operator's
+  explicit authorization in this session. Filed this session, each on exact-payload
+  approval: `#615`, `#616`, `#617`, `#618`, and an occurrence on `#574`.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at `d2e1090` on
+  2026-08-27 printed `1960 passed, 3 warnings in 397.20s`; the merged squash is
+  `d6b39c9`.
+
+- **Operator housekeeping:** the synthetic repository
+  `topij/adk-writing-lane-synthetic-20260827` (private) still exists; the session's
+  token lacks the scope to delete it.
+
+▶ Next: in a Codex session, produce the Codex writing-lane record on the generalised
+launcher: declare `parallel.codex_approval_policy: workspace-write` for the lane only,
+run a lane that performs a scoped write and lands a PR through
+`dev_session.sh pr-watch`, observe the sandbox and approval transitions Codex reports
+(what `--sandbox` denies and how a denial reaches the receipt), and move the Codex
+cell in `runtime-parity.md` only from that record. Then take `#605` (calibration,
+`#255`). `#602` stays after both.
+
+______________________________________________________________________
+
+## Session — 2026-08-27 (per-runtime launcher: Claude through `claude -p`)
 
 **Theme —** PR `#611` generalised the Codex wrapper into one kit-owned per-runtime
 launcher, `scripts/launch_lane.py`, run from a Claude Code session so the runtime under
@@ -299,70 +362,6 @@ extract the bounded shared workflow and add the thin Codex binding. If a future
 review-routing PR starts instead, its first deliverable must be a deterministic artifact
 that proves record-only semantics without inferring them from filenames or prose;
 otherwise keep the current full-review fallback and do not change `pr_watch.py`.
-
-______________________________________________________________________
-
-## Session — 2026-08-24 (Codex lifecycle enforcement bounded by exact strings)
-
-**Theme —** PR `#590` merged the trusted-client lifecycle evidence and installer wiring,
-while `kit_doctor` now makes only the deterministic claim the repository can support:
-the configured object either matches the installer-emitted canonical form or it does not.
-
-- **The architecture was narrowed in place.** The earlier shell-equivalence parser remains
-  visible in branch history, but the live checker no longer approximates general shell
-  semantics. Exact repository-owned command strings receive structural lifecycle checks;
-  altered strings retain only the generic path-resolution result. Unsupported keys around
-  an exact command report `unverifiable`.
-
-- **The evidence boundary stayed explicit.** The controlled record preserves trusted
-  `SessionStart` and `PostToolUse` execution, additive project-source behavior, definition
-  trust behavior, and the observed output channels. Repository inspection does not claim
-  project trust, current-definition trust, live execution, or interactive-TUI
-  `systemMessage` visibility.
-
-- **The hostile probes became durable behavioral tests.** The corpus rejects the
-  accumulated command mutations without specifying a shell grammar. The fresh fallback
-  panel then exposed alias-precedence, inert-comment, accepted-matcher, and exit-contract
-  regressions; the fix rounds validate each present feature alias, remove noncanonical
-  shell recognition, distinguish supported match-all structures from the printed form,
-  and align the exit documentation.
-
-- **The exact-string panel tightened the remaining surfaces.** Its findings scoped feature
-  validation to repositories with an exactly identified lifecycle command, corrected the
-  README's stale fail-closed claim for altered shell text, and aligned the exit-gate
-  rationale with unsupported lifecycle object keys. The follow-up correctness lens then
-  exposed the bare-Python TOML import and contradictory feature-alias precedence; the fix
-  reports an unavailable TOML parser explicitly and mirrors canonical-key precedence. The
-  next adversarial pass corrected the changelog's breaking-change axis and the README's
-  unconditional bare-Python claim.
-
-- **The runtime contract remains shared.** Installer guidance, `CHANGELOG.md`, and the
-  live evidence record preserve the lifecycle boundary. The parity matrix now distinguishes
-  structural safety-doctrine routing from the pending trusted Codex load evidence. The
-  doctrine remains one runtime-neutral document, and its merge class makes this PR
-  operator-merge.
-
-- **The sprint plan now reflects the delivery boundary.** The parity declaration is
-  delivered, while the safety and lifecycle phase remains active. Hook execution has
-  trusted-client evidence; the shared safety-doctrine routing has structural coverage but
-  no trusted Codex load evidence yet. `post-merge-systemize` remains queued behind that
-  exit condition.
-
-**Learned**
-
-- **A positive result needs a syntax the repository owns.** Exact canonical objects have a
-  stable mutation surface; purportedly equivalent shell spellings do not. Unverifiable is
-  reserved for unsupported structure around an exact command; declining to classify an
-  altered command is the honest shell-semantics boundary.
-
-- **Alias type validation and value precedence are separate.** Every present spelling must
-  be boolean, while canonical `hooks` wins when it appears beside deprecated
-  `codex_hooks`; only the effective value establishes whether lifecycle hooks are disabled.
-
-▶ Next: close the Phase 2 evidence gap in
-`saved_plans/codex-parity-plan_2026-08-23.md` — live-validate that Codex work affecting
-the merge-authority engines loads the shared safety-critical doctrine, and preserve the
-repository-structural versus trusted-client boundary in the resulting record.
 
 ______________________________________________________________________
 

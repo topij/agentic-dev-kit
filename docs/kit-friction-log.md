@@ -26,6 +26,22 @@
 
 ## 2026-08-27
 
+- **`claude -p --output-format json` printed more than one JSON value on stdout in
+  three of five cockpit probe invocations at 2.1.247, and one value on a repeat of the
+  same invocation.** The wrapper terminalizes that shape `failed` (a single result is
+  what the digest binds), so the outcome was fail-closed each time; the record in
+  `saved_plans/claude-writing-lane-live-validation_2026-08-27.md` carries the
+  occurrences. **L** — no mechanism identified, and the cockpit could not make it
+  recur on demand; parked for accumulation. If it recurs, keep the raw stdout bytes
+  and the stderr beside them before re-running.
+- **`make test`'s `#428` state guard tripped on the cockpit's own concurrent
+  `pr_watch.py 614 --json` poll**, which wrote `state/pr-watch/614.json` while the
+  suite ran; the run exited 2 with the regression banner and no summary line, and a
+  re-run with no poll passed. The guard was right and the cause was the cockpit
+  polling during its own verification. **L** — reproduction and mechanism are clear,
+  the fix is a habit (no `pr-watch` poll while `make test` runs), and the shape is
+  worth a rule only if it recurs; parked for accumulation. `#467` is the false-positive
+  case and this was not one.
 - **`panel_prompt.py` produced an empty prompt file and hung until the tool timeout,
   then rendered in about a second on an identical re-run.** In a shell `for` loop that
   created a detached lens worktree and immediately rendered the lens prompt into it
