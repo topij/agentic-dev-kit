@@ -230,8 +230,10 @@ effects are reconciled from the worktree and the forge as they always were.
   computed identically by parent and child.
 - `observed.argv`: the exact argv the child observer `exec`s, recorded before the
   ready signal and compared by the parent against its own expectation.
-- `terminal.permission_denials`: list (Claude `json-stdout`) or `null`
-  (`last-message-file`).
+- `terminal.permission_denials`: the runtime's own list when a `json-stdout`
+  result was extracted (`[]` on `completed`, non-empty on a denial-`failed`), and
+  `null` for `last-message-file` and for any receipt whose result could not be
+  extracted — an unobservable outcome, never spelled `[]`.
 
 ## Semantic rows and hostile mutations
 

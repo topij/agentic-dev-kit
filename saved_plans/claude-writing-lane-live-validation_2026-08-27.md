@@ -594,10 +594,10 @@ denial read-back, and the receipt.
   forced update" or bound a refspec; under the first draft's broad `Bash(git push:*)`
   the panel reproduced `git push origin +HEAD:main`, an unflagged `git push origin
   :x` ref deletion, and a bundled `git push -uf …` passing against a throwaway
-  remote, and a branch-prefix allow matched nothing live (the `write5` lane below).
+  remote, and a branch-prefix allow matched nothing live (the `write5` lane above).
   The narrowed allow refuses the flag-first and no-`-u` spellings and bounds
   nothing after `origin`: the `-u origin :x` and `-u origin +HEAD:x` forms are
-  observed below, and panel round 9 observed `git push -u origin --force x` and
+  observed above (`pushprobe2`), and panel round 9 observed `git push -u origin --force x` and
   `-u origin -f x` forcing throwaway branches the same way. Branch-history
   protection is the forge's and the lane contract's; this record claims nothing
   more.

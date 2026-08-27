@@ -151,6 +151,11 @@ def _edit_allow_escapes_the_worktree(entry: str) -> bool:
             pattern = rest[1:-1].strip()
             if pattern == "" or pattern.startswith(OUTSIDE_WORKTREE_PATTERN_LEADS):
                 return True
+            # A drive-letter lead (`C:/…`, `C:\…`) is absolute on the one platform
+            # that spells it so; this kit is POSIX-only, and the shape is refused
+            # rather than left to a claim the comment never scoped (panel round 10).
+            if pattern[:1].isalpha() and pattern[1:2] == ":" and pattern[2:3] in "/\\":
+                return True
             return any(segment == ".." for segment in pattern.replace("\\", "/").split("/"))
     return False
 

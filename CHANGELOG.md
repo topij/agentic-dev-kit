@@ -88,9 +88,11 @@ starts.
 - **CHANGED (report shape) — the launch attempt and receipt `request` object gains
   `approval_policy` (`declared`, `argv`, `settings_profile_path`,
   `settings_profile_sha256`); the observed receipt gains `observed.argv`; the receipt
-  `terminal` object gains `permission_denials` (a list for `json-stdout`, `null` for
-  `last-message-file`).** **A consumer that compares `request` objects must include the
-  new key; `null` means unobservable, not "none denied".**
+  `terminal` object gains `permission_denials` — the runtime's own list on a
+  `json-stdout` receipt whose result was extracted (empty on `completed`, non-empty
+  on a denial-`failed`), and `null` both for `last-message-file` and for any receipt
+  whose result could not be extracted.** **A consumer that compares `request` objects
+  must include the new key; `null` means unobservable, not "none denied".**
 
 ---
 

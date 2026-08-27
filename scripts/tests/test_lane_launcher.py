@@ -1886,6 +1886,10 @@ def test_whole_tool_bash_is_decided_by_structure_not_by_spelling(
         # leading `/` anchors at the worktree root and is inside.
         ("Write(sub/../../outside.txt)", True),
         ("Write(notes/**/../../x)", True),
+        ("Edit(C:/Users/x/**)", True),
+        ("Edit(C:\\Users\\x\\**)", True),
+        ("Edit(c:/**)", True),
+        ("Edit(notes/C:/**)", False),
         ("Write(/notes/**)", False),
         ("Write(notes/..hidden/**)", False),
         ("Write(**)", False),
