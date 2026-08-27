@@ -108,10 +108,12 @@ same kind of engine-owned vocabulary and is passed as argv in the fixed slot aft
 command prefix: Codex `read-only` / `workspace-write` (`--sandbox <value>`), Claude
 `dont-ask` / `accept-edits` (`--permission-mode dontAsk|acceptEdits`). The shipped
 Claude default is `dont-ask`, under which the profile's allow list is the whole
-boundary: the profile grants the edit tools by the `(**)` path pattern, which the
-runtime resolves relative to the worktree root and never outside it (a bare `Write`
-writes anywhere — observed live — and the wrapper refuses it), and every Bash call
-outside the declared prefixes is a denial.
+boundary: the profile grants file editing through `Edit(**)`, the one rule that
+governs every file-editing tool at 2.1.247, which the runtime resolves relative to the
+worktree root and never outside it (a bare `Edit` edits anywhere — observed live —
+and the wrapper refuses it; a `Write(...)` entry is inert on that client, so scope
+editing with `Edit(<pattern>)` and nothing else), and every Bash call outside the
+declared prefixes is a denial.
 `accept-edits` is declarable and is not the default because the runtime then also
 auto-accepts its own class of file-system Bash commands inside the worktree — `rm`,
 `mv`, redirection writes, and `cat` were observed accepted live at 2.1.247 with none
@@ -215,7 +217,7 @@ observation whose argv omits the policy or the trust step. The Codex value is
 validated and passed the same way, and its behaviour is not claimed until a Codex
 writing-lane record exists; the shipped Codex default is `read-only` for that reason.
 The shipped profile's allow-list is the minimum a writing lane needs to edit inside
-its worktree, commit, push, open and ready a PR, and poll it; `gh pr merge` and the flag spellings of a force
+its worktree (`Edit(**)`), commit, push, open and ready a PR, and poll it; `gh pr merge` and the flag spellings of a force
 push (`--force`, `-f`, `--force-with-lease`) are denied because landing is the
 cockpit's. That denial is a prefix rule and cannot express "contains a forced
 update": `git push origin +HEAD:main`, or a `--force` placed after the remote,

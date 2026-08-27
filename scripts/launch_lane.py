@@ -119,15 +119,21 @@ CLAUDE_SETTING_SOURCES_ARGS = ("--setting-sources", "")
 # this check claims to catch.
 LITERAL_COMMAND_LEAD = frozenset("/._~")
 PATTERN_HEAD_TERMINATORS = frozenset("*?:")
-# The edit tools are bounded only by a path pattern the runtime resolves relative
-# to the worktree root: `Write(**)` cannot reach `../x` or `/abs/x` (observed live
-# at 2.1.247), while a bare `Write` writes anywhere. A pattern rooted outside the
-# worktree by its lead (`//…` filesystem-absolute, `~…` home) or carrying a `..`
-# segment anywhere is a declared escape and is refused by that structure. A single
-# leading `/` anchors a pattern at the worktree root (`Write(/notes/**)`) and is
-# accepted; what a pattern's text does not show — a symlink inside the worktree
-# pointing out, say — is the runtime's own path resolution, which the panel
-# observed refusing such writes live.
+# File editing is bounded only by a path pattern the runtime resolves relative to
+# the worktree root, and at Claude Code 2.1.247 the `Edit(<pattern>)` rule is the
+# one that governs every file-editing tool: `Edit(**)` alone let a Write land
+# inside the worktree and refused `../x` and `/abs/x`, `Edit(notes/**)` confined
+# it to `notes/`, and `Write(**)` alone granted nothing (all observed live by the
+# panel). A bare `Edit` edits anywhere. So a bare entry for any of the four names,
+# a pattern rooted outside the worktree by its lead (`//…` filesystem-absolute,
+# `~…` home), or a `..` segment anywhere is a declared escape refused by that
+# structure — for `Write`/`MultiEdit`/`NotebookEdit` as well, because an entry the
+# client ignores today may be honoured by another. A single leading `/` anchors a
+# pattern at the worktree root (`Edit(/notes/**)`) and is accepted; what a
+# pattern's text does not show — a symlink inside the worktree pointing out, say —
+# is the runtime's own path resolution, which the panel observed refusing such
+# writes live. Today this guard is a backstop behind that resolution, not the only
+# boundary.
 EDIT_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
 OUTSIDE_WORKTREE_PATTERN_LEADS = ("//", "~")
 

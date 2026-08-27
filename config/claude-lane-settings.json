@@ -2,9 +2,6 @@
   "permissions": {
     "allow": [
       "Edit(**)",
-      "Write(**)",
-      "MultiEdit(**)",
-      "NotebookEdit(**)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",

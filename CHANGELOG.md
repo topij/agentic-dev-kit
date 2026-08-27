@@ -47,8 +47,9 @@ starts.
 - **ADDED (config keys) — `parallel` now owns, per runtime, `<runtime>_approval_policy`
   (Codex `read-only` | `workspace-write`, shipped `read-only`; Claude `dont-ask` |
   `accept-edits`, shipped `dont-ask`) and, for Claude, `claude_settings_profile`
-  (shipped `config/claude-lane-settings.json`, which grants the edit tools by the
-  worktree-relative `(**)` pattern and bounded `git`/`gh pr` prefixes).** **Declare `accept-edits` only knowing that the runtime
+  (shipped `config/claude-lane-settings.json`, which grants file editing through
+  the worktree-relative `Edit(**)` — the rule that governs every file-editing tool at
+  Claude Code 2.1.247 — and bounded `git`/`gh pr` prefixes).** **Declare `accept-edits` only knowing that the runtime
   then also auto-accepts its own class of file-system Bash commands inside the
   worktree regardless of the allow list.**
   **Refresh `init.sh` and run `./init.sh --no-clobber`: the additive migration installs

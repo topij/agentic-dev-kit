@@ -1063,10 +1063,10 @@ migrate_parallel_schema() {
 # `--setting-sources ""`). Adopter-owned policy like config/dev-model.yaml: seeded
 # only when absent, never rewritten, and deliberately outside the kit manifest so
 # an upgrade cannot replace an adopter's lane allow-list. The shipped allow-list is
-# the minimum a writing lane needs to edit inside its worktree (the edit tools
-# granted by the `(**)` pattern, which the runtime resolves relative to the
-# worktree root and never outside it — a bare `Write` writes anywhere), commit,
-# push, open and
+# the minimum a writing lane needs to edit inside its worktree (`Edit(**)` — the
+# one rule that governs every file-editing tool at Claude Code 2.1.247, resolved
+# relative to the worktree root and never outside it; a `Write(...)` entry is
+# inert there, and a bare `Edit` edits anywhere), commit, push, open and
 # ready a PR, and poll it; `gh pr merge` and the flag spellings of a force push are denied because
 # landing is the cockpit's — a prefix rule cannot deny the `+refspec` form, so
 # branch-history protection stays with the forge and the lane contract.
@@ -1084,9 +1084,6 @@ seed_claude_lane_profile() {
   "permissions": {
     "allow": [
       "Edit(**)",
-      "Write(**)",
-      "MultiEdit(**)",
-      "NotebookEdit(**)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",

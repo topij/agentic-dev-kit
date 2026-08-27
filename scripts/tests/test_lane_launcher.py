@@ -2249,10 +2249,10 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     # Under the shipped `dont-ask` the allow list is the whole boundary: the edit
     # tools are granted by name (the runtime keeps them inside the worktree) and
     # every Bash entry is a bounded command prefix.
-    edit_tools = {"Edit(**)", "Write(**)", "MultiEdit(**)", "NotebookEdit(**)"}
-    assert edit_tools <= set(shipped["permissions"]["allow"])
+    # `Edit(**)` is the one rule that governs every file-editing tool at 2.1.247;
+    # a `Write(...)` entry is inert there and is not shipped (panel round 7).
+    assert "Edit(**)" in shipped["permissions"]["allow"]
     assert all(
-        entry in edit_tools or (entry.startswith("Bash(") and entry.endswith(":*)"))
+        entry == "Edit(**)" or (entry.startswith("Bash(") and entry.endswith(":*)"))
         for entry in shipped["permissions"]["allow"]
     )
-    assert not any(entry in {"Edit", "Write", "MultiEdit", "NotebookEdit"} for entry in shipped["permissions"]["allow"])

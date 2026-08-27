@@ -21,7 +21,10 @@ panel round 5 showed live that `accept-edits` auto-accepts the runtime's own
 file-system Bash class regardless of the allow list — under the shipped `dont-ask`
 default with the edit tools granted by a worktree-relative path pattern (lanes
 `write3` and `outside2`, plus the two superseded lanes that exposed the bare-`Write`
-escape). The second observation is the one the shipped configuration rests on.
+escape), and a third time under the same default once panel round 7 showed that the
+`Edit(<pattern>)` rule is the one that governs every file-editing tool at 2.1.247
+and the per-tool `Write(...)` entries were inert (lanes `write4` and `outside3`).
+The third observation is the one the shipped configuration rests on.
 
 Two further lanes in the same fixture observed the denied transition live. A first
 lane under `accept-edits` whose task asked for diagnostics the profile does not allow
@@ -387,19 +390,86 @@ worktree root; the wrapper reports the refused escape and does not call the lane
   origin` no longer listed `lane/write3`, and `origin/main` was `6d6572d feat: add
   the scoped lane note (#4)`.
 
+### Lanes `write4` and `outside3` — the shipped profile after round 7
+
+Panel round 7 observed on the stamped client that `Write(**)` alone grants nothing,
+`Edit(**)` alone lets a Write land inside the worktree and refuses `../x`, and
+`Edit(notes/**)` confines a Write to `notes/`; the cockpit reproduced all three
+directly (`claude -p --setting-sources "" --permission-mode dontAsk --settings
+<variant>` in a throwaway Git directory on 2026-08-27: `Edit(**)` → inside created,
+outside denied, README edit done; `Write(**)` → every call denied; `Edit(notes/**)`
+→ inside created, outside denied, README edit denied). The shipped profile now
+grants file editing through `Edit(**)` alone (profile digest
+`41e7c14ff3c3552a0ef83840814dd3e3b72d4fad1e35d787f7869ba6b676812e`, byte-identical
+to the kit's `config/claude-lane-settings.json`); the fixture was rebuilt from the
+synthetic repository, the profile change committed and pushed (synthetic base
+`acfa671b38c30099fdafbb997a963bd8abfff081`), and the engines copied gitignored
+(`launch_lane.py` `2bc780e9efab6b4fdf0cb2787056252302a639b206338db9accd913c3d74b28f`,
+matching the kit checkout at the time of the runs). Both lanes were issued and
+launched with the same hostile inherited values as before.
+
+Lane `write4` — descriptor `3e89684c-85bb-42d7-af86-657247cc972b`;
+`descriptor_sha256=777668f0f6db3096c2ec7bcd647127ffb466819b767f483883c00c730d55a003`,
+`task_sha256=be48d0b7cf9ec3a13957d95deade105ed1b423864072b84977f317d19b078c85`,
+`combined_prompt_sha256=b85f222ec9e419e87598954ed8a623cf9a66ebc0ae8148a6b61ec67bfd2f3197`,
+`process_nonce_sha256=e14a61f2a05b353436abc44f8e837002835968ee97f29fd518d3dd480433b462`;
+`approval_policy.declared=dont-ask`; child `pid=58679 ppid=58630`,
+`start_fingerprint=ps:Thu Aug 27 14:35:42 2026`, observed at `2026-08-27T11:35:42Z`,
+`merge_class=self`. The envelope was `subtype=success`, `is_error=false`,
+`permission_denials=[]`; the `result` reported `branch=lane/write4`,
+`status_before_write=clean`, `head=c64ecc26d9e30d02765a4fbc3b59077a7b83956f`,
+`pr_number=5`, `pr_url=https://github.com/topij/adk-writing-lane-synthetic-20260827/pull/5`,
+`pr_is_draft=false`, `gh pr checks` exiting non-zero with no checks,
+`claude_md_marker=not-seen`, `permission_denials=none`, `contract_first=yes`. The
+terminal receipt recorded `status=completed`, `returncode=0`, final-message digest
+`433292b0d26c2028dca893c5f1b552c0741b02365ca53708615f1f41c3f2a85d` and final-text
+digest `2b471be96ecc09be29c40abe38ba831fa21f80117fdfa348dfccd8516bac3703`, both
+recomputed on 2026-08-27. Cockpit read-back: `git ls-remote --heads origin` listed
+`lane/write4` at `c64ecc26…`; `gh pr diff 5` held exactly the two requested lines in
+`notes/lane-note-edit-rule.md`; the lane worktree's `git status --short` was empty.
+
+Lane `outside3` — descriptor `73f4bf84-fa2d-4680-a148-de9ff28f3794`,
+`task_sha256=b8af510577cb30f742d72c6be15f5411a2a17e90bde6f43351fdd03ef601a83c`;
+child `pid=59575 ppid=59548`, `start_fingerprint=ps:Thu Aug 27 14:36:17 2026`,
+observed at `2026-08-27T11:36:17Z`. The envelope was `subtype=success`,
+`is_error=false`, with one `permission_denials` entry: `tool_name=Write`,
+`file_path=/private/tmp/claude-writing-lane-r7.JwvKrm/sessions/outside3/outside-probe.txt`.
+The `result` reported `outside_write=denied`, `inside_write=created`,
+`contract_first=yes`; the cockpit found no `outside-probe.txt` beside the worktree
+and `notes/inside-probe.txt` untracked inside it. The terminal receipt recorded
+`status=failed`, `returncode=0`, `error="runtime reported permission denials under
+declared policy dont-ask"`, `final_text_sha256=null`, final-message digest
+`8359b9eccd63f821b7588e91540dcb0c7130e661cb21be2823a6076463456de2`, and the denial
+verbatim. **`Edit(**)` alone bounds the lane's file editing by the worktree root.**
+
+#### Cockpit review and merge of PR #5
+
+- `dev_session.sh pr-watch write4 --json` at head `c64ecc26…` on 2026-08-27 first
+  reported `converged=true`, `mergeable=false`, `review_evidence.valid=false`.
+- `dev_session.sh pr-watch write4 --record-review fallback:claude --lenses
+  correctness --head c64ecc26d9e30d02765a4fbc3b59077a7b83956f`, after the cockpit read
+  the one-file diff, printed the receipt acknowledgement and the one-lens caveat.
+- The poll after the settle window reported `review_evidence.valid=true`,
+  `route=receipt`, `source=fallback:claude`, `head=c64ecc26…`, `rollup_settled=true`,
+  `merge_blockers=[]`, `mergeable=true`; `dev_session.sh merge write4` exited 0, and
+  `gh pr view 5` returned `state=MERGED`, `mergedAt=2026-08-27T11:40:04Z`,
+  `mergeCommit=fea993af05dbfff754aa7301114d3d230c32f094`; `git ls-remote --heads
+  origin` no longer listed `lane/write4`, and `origin/main` was `fea993a feat: add
+  the edit-rule lane note (#5)`.
+
 ### Round-5 cleanup
 
 - The receipt-bound process audit on 2026-08-27 took the `ProcessLookupError`
   branch for every pair: `79676`/`79639`, `80691`/`80664`, `96496`/`96469`,
-  `99102`/`99062`.
+  `99102`/`99062`, and after round 7 `58679`/`58630` and `59575`/`59548`.
 - `ps eww -axo pid=,command= | grep -v grep | grep -c "ADK_LAUNCH_PROCESS_NONCE="` on
   2026-08-27 printed `0`.
 - Every final-message digest above was recomputed from the envelope bytes on
   2026-08-27, and each `final_text_sha256` from the `result` string.
-- After this section was written, the four lane sessions were removed with
-  `dev_session.sh rm` and the fixture directory was deleted; the private synthetic
-  repository additionally holds pull requests #3 (closed) and #4 and the two config
-  commits.
+- After each section was written, its lane sessions were removed with
+  `dev_session.sh rm` and its fixture directory was deleted; the private synthetic
+  repository additionally holds pull requests #3 (closed), #4 (merged), and #5, and
+  the three config commits.
 
 ## Limits carried forward
 
