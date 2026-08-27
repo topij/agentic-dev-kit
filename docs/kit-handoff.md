@@ -14,11 +14,54 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-27 — PR `#614` merged the config-owned lane approval policy per
-runtime and the Claude trust route, with a Claude-produced writing-lane record; the
-Codex writing-lane record is the next slice, then calibration.
+Last updated: 2026-08-27 — PR `#620` merged the Codex-authored writing-lane record;
+the observation remains unpromoted because its raw fixture evidence was removed at
+the cleanup boundary. Calibration is next.
 
-## Latest session — 2026-08-27 (writing-lane approval policy and the Claude trust route)
+## Latest session — 2026-08-27 (Codex writing-lane record)
+
+**Theme —** PR `#620` (squash `58c5d7e`) recorded a Codex lane launched through
+`scripts/launch_lane.py` with a fixture-only `workspace-write` declaration. The lane
+performed the scoped write, committed after exact per-command approvals, pushed,
+opened a ready pull request, and received a cockpit `dev_session.sh pr-watch` review
+receipt. No launcher or shipped configuration changed; the shipped Codex approval
+policy remains `read-only`.
+
+- **The denial transport is not parity evidence.** The control lane observed an
+  outside-worktree write denial, protected Git-metadata denials, and a network-blocked
+  push, but Codex returned success and the `last-message-file` receipt terminalized
+  `completed` with `terminal.permission_denials: null`. The record also observed that
+  the exact state root was writable only when user config named it, user Codex config
+  reached both untrusted lanes, and project Codex config did not.
+
+- **The matrix moved only as far as durable evidence permits.** Cleanup removed the
+  fixture receipts, rollouts, and raw captures named by the record's digests. The
+  panel therefore required the capability promotion to be retracted. The record is a
+  bounded historical account, not durable proof of Codex writing-lane parity.
+
+- **Review disposition stayed scoped.** The retracted promotion received a full
+  adversarial/correctness rerun. A later Low record-prose imprecision was logged as an
+  occurrence on `#120`, without changing the reviewed head. The learnings document
+  carries the stamped disposition reading. Filed this session on exact-payload
+  approval: `#621` owns the missing durable-evidence handoff.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `37ad8eab0286c45aaf1ab1098e42e1da04561549` on 2026-08-27 printed `1960 passed, 3
+  warnings in 365.20s`; the merged squash is `58c5d7e`.
+
+- **Housekeeping done:** the operator deleted
+  `topij/adk-writing-lane-synthetic-codex-20260827` from the GitHub UI after the
+  session token proved to lack `delete_repo`; `gh repo view` no longer resolves it.
+
+▶ Next: take calibration (`#605`, `#255`): calibrate both runtimes' neutral tiers,
+declare mechanical versus advisory model/effort controls per runtime, and retire the
+unsupported "no per-agent effort" claims. Keep the first real headless task on the
+generalised launcher in the following slice; it has no tracker item, and `#602` is the
+`post-merge-systemize` binding bug.
+
+______________________________________________________________________
+
+## Session — 2026-08-27 (writing-lane approval policy and the Claude trust route)
 
 **Theme —** PR `#614` (squash `d6b39c9`) added `parallel.codex_approval_policy`,
 `parallel.claude_approval_policy`, and `parallel.claude_settings_profile` beside the
@@ -315,57 +358,6 @@ the preserved starter in
 [`codex-parity-plan_2026-08-23.md`](../saved_plans/codex-parity-plan_2026-08-23.md).
 Build the config-owned semantic input matrix and init/upgrade migration before changing
 the shared triage workflow; keep both runtime adapters thin.
-
-______________________________________________________________________
-
-## Session — 2026-08-24 (Codex doctrine validation and composed review evidence merged)
-
-**Theme —** Phase 2 closed on trusted-client evidence rather than inference, then the
-separate review-evidence workstream replaced the single-current-head receipt limitation
-without forking review semantics between Claude and Codex.
-
-- **PR `#592` merged the bounded live validation.** The controlled fixture separated
-  client-supplied instructions, repository search, prompt guessing, nested precedence,
-  and project trust. The conclusion stays scoped to its stamped client and revisions;
-  interactive-TUI `systemMessage` visibility remains unsupported evidence.
-
-- **PR `#593` merged composed review receipts.** A standing full-panel parent can now be
-  extended by an exact-head `fallback:delta` pass. The shared engine binds ancestry,
-  parent and final heads, changed paths, recorded lenses, and per-pass review caveats;
-  malformed coverage fails closed while legacy receipts retain their prior behavior.
-
-- **The review cycle produced material returns, then stopped.** The terminal panel found
-  that Git rename detection could omit a safety-relevant source path and that composition
-  could erase earlier override, unreadable-bot, or behind-head caveats. The bounded fix
-  records rename source and destination and preserves, validates, and renders per-pass
-  caveats.
-
-- **The routing inventory did not justify another classifier.** The shared fallback
-  doctrine and `panel_prompt.py` already carry full re-review for behavior, executed prose,
-  record-prose delta passes, safety-critical lens floors, dispute escalation, exact-head
-  invalidation, finding labels, and behavioral-evidence expectations. Runtime adapters do
-  not own any of those semantics.
-
-- **The remaining gap is precise.** Git can establish the parent, head, ancestry, and path
-  set, but it cannot establish that arbitrary prose is non-operative or that posted draw
-  verdicts are honest. A generic filename or path allowlist cannot distinguish record prose
-  from executed prose when one Markdown surface can contain either. Issue `#32` remains the
-  provenance umbrella; no tracker write was made and no proposed CS-Toolkit policy was copied
-  into the engine.
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `a23147f44ab9c405c24dced125becbb34bee2b95` on 2026-08-24 printed
-  `1525 passed, 3 warnings in 202.06s`. `make test` in the same directory at
-  `77577274792ac2652a7c618362a7be5bb17df83a` on 2026-08-24 printed
-  `1539 passed, 3 warnings in 191.34s`. The warnings in these runs were pytest
-  temporary-directory cleanup warnings.
-
-▶ Next: run
-`git fetch origin && git switch -c feat/post-merge-systemize-shared origin/main`, then
-extract the bounded shared workflow and add the thin Codex binding. If a future
-review-routing PR starts instead, its first deliverable must be a deterministic artifact
-that proves record-only semantics without inferring them from filenames or prose;
-otherwise keep the current full-review fallback and do not change `pr_watch.py`.
 
 ______________________________________________________________________
 
