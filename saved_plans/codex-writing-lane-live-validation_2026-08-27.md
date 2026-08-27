@@ -2,12 +2,14 @@
 
 ## Conclusion
 
-The existing generalized launcher carried a Codex-authored writing lane through the
-requested worktree edit, commit, remote push, ready pull request, and cockpit review
-receipt without a launcher change. This is a bounded observation of `codex-cli
-0.149.1` through the launcher bytes at kit revision
+This session recorded a Codex-authored writing lane reaching the requested worktree
+edit, commit, remote push, ready pull request, and cockpit review receipt without a
+launcher change. This is a bounded historical observation of `codex-cli 0.149.1`
+through the launcher bytes at kit revision
 `da5d31ec18875464bf0622e755d4988920209316` on 2026-08-27. It is not a claim that
-Codex writing lanes have the same denial evidence or config isolation as Claude.
+Codex writing lanes have the same denial evidence or config isolation as Claude, and
+the parity matrix does not promote the observation after its temporary raw evidence
+is removed.
 
 The material asymmetry is the denial transport. The control lane observed a denied
 outside-worktree write, protected-Git-metadata denials, and a network-blocked push.
@@ -23,11 +25,12 @@ The cockpit created the synthetic repository
 `topij/adk-writing-lane-synthetic-codex-20260827`. `gh repo view
 topij/adk-writing-lane-synthetic-codex-20260827 --json nameWithOwner,url,visibility`
 at kit revision `da5d31ec18875464bf0622e755d4988920209316` on 2026-08-27 returned
-`visibility: PRIVATE`. The repository contained fixture material only. No agentic-dev-kit source,
-operator note, user configuration, rollout, receipt, or credential was committed or
-pushed. The controlled Codex home used a local `auth.json` symlink to the operator's
-existing authentication file; the target bytes were not printed, copied, prompted,
-or tracked.
+`visibility: PRIVATE`. The synthetic base tracked `.gitignore`, `README.md`, the
+fixture's `.codex/config.toml` and marker, and a copy of `config/dev-model.yaml`; the
+writing branch added only the requested note. No operator note, user Codex
+configuration, rollout, receipt, or credential was committed or pushed. The
+controlled Codex home used a local `auth.json` symlink to the operator's existing
+authentication file; the target bytes were not printed, copied, prompted, or tracked.
 
 The copied engines matched the cockpit bytes. `shasum -a 256` at kit revision
 `da5d31ec18875464bf0622e755d4988920209316` on 2026-08-27 printed these equal source
@@ -283,5 +286,24 @@ final-text transport does not carry structured denial evidence. Building the fil
 evidence/config mechanisms inside this slice would broaden the change, so the launcher
 remains unchanged.
 
-This record narrows the Codex writing-lane gap to the behavior above. It does not move
-Codex to full Claude writing-lane parity.
+The panel's adversarial lens correctly found that these digests name temporary bytes,
+not a preserved evidence bundle. The fixture cleanup contract removes those bytes, so
+the runtime-parity matrix retains the Codex writing behavior as unpromoted rather than
+treating this narrative as durable capability evidence. Preserving a redacted bundle
+or adding an immutable artifact mechanism is a separate change, not a fix smuggled
+into this record.
+
+## Cleanup and containment
+
+Before cleanup, the host audit found the receipt-bound child/parent process pairs
+stopped, the writing worktree clean, the control note untracked, the descriptor state
+probes at their exact state roots, and the sibling and project-widening targets absent.
+The raw capture and receipt digests above were computed before removal.
+
+After that audit, `rm -rf /private/tmp/codex-writing-lane.UoOsyB` ran from
+`/Users/topi/Coding/agentic-dev-kit` at candidate
+`603f2a7c809c7031c303fb657b2b4977dcb10c1d` on 2026-08-27. The immediately following
+`test ! -e /private/tmp/codex-writing-lane.UoOsyB` exited zero. The local auth symlink,
+controlled Codex home, receipts, captures, state roots, and lane worktrees were thereby
+removed. The private GitHub repository remains intentionally present until the task PR
+merges, as the user required.

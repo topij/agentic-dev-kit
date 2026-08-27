@@ -107,10 +107,10 @@ to a structured denial list.
 
 ## Executable positive constructions and hostile mutations
 
-Each mutation is recomputed from its independently constructed positive. If this
-record remains prose-only, the live probes and cockpit read-backs execute these pairs;
-if launcher code changes, each pair becomes a behavioral assertion before the change
-is accepted.
+Each row names an independently constructible positive and hostile mutation. The live
+record executes the positive probes. If launcher code changes, each hostile mutation
+must be recomputed locally and killed by a behavioral assertion before the change is
+accepted; this prose-only slice does not claim those mutations ran.
 
 | Row | Executable positive | Locally recomputed hostile mutation | Kill condition |
 | --- | --- | --- | --- |
@@ -149,9 +149,11 @@ argv bindings.
 
 ## Exit boundary
 
-The runtime-parity Codex cell moves only to the behavior the live record and
-independent read-backs establish. It must name structured denial read-back as absent
-under `last-message-file`; it must not claim that `workspace-write` alone grants
+The runtime-parity Codex cell moves only if the evidence supporting that behavior
+survives the fixture cleanup boundary. It must name structured denial read-back as
+absent under `last-message-file`; it must not claim that `workspace-write` alone grants
 network, that project/user configuration is isolated, that every denied action is
-visible to the wrapper, or that a future client behaves the same way. A prose-only
-record creates no adopter-observable change and therefore no `CHANGELOG.md` entry.
+visible to the wrapper, or that a future client behaves the same way. A historical
+record whose raw evidence was temporary remains a record rather than a durable
+capability promotion. A prose-only record creates no adopter-observable change and
+therefore no `CHANGELOG.md` entry.
