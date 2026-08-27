@@ -102,37 +102,43 @@ CLAUDE_SETTING_SOURCES_ARGS = ("--setting-sources", "")
 # starts with. The validator refuses an entry with no such prefix by structure
 # rather than by enumerating spellings — an enumeration is a blocklist, and the
 # panel found `Bash(**)` unrestricted live at Claude Code 2.1.247 while an
-# enumeration missed it. The head of the pattern is everything before the first
-# wildcard, argument separator, or space; it must begin with a letter, a digit,
-# or a path character AND contain a letter or digit, so a lone path character in
-# front of a wildcard (`Bash(/*)`, which matches every absolute-path command,
-# `Bash(.*)`, `Bash(~*)`) is refused along with `Bash`, `Bash()`, `Bash(*)`,
-# `Bash(**)`, `Bash(?*)`, and `Bash(:*)`. Whitespace is stripped first, so
-# `Bash( * )` reads as `Bash(*)`. What the guard does NOT judge is the command
-# the prefix names: `Bash(sh:*)` or `Bash(python3 -c:*)` is a literal prefix an
+# enumeration missed it. The pattern is read literally, as the runtime's own
+# matcher reads it: only the entry's leading and trailing whitespace is ignored,
+# and inside the parentheses a space is a character like any other. The head of
+# the pattern is everything before the first wildcard, `:`, or whitespace; it must
+# begin with a letter, a digit, or a path character AND contain a letter or digit,
+# so a lone path character in front of a wildcard (`Bash(/*)`, which matches every
+# absolute-path command, `Bash(.*)`, `Bash(~*)`, `Bash(. rm*)`) is refused along
+# with `Bash`, `Bash()`, `Bash(*)`, `Bash(**)`, `Bash(?*)`, `Bash(:*)`, and
+# `Bash( * )`. A `Bash` entry that is not `Bash` or `Bash(...)` — `Bash (*)`,
+# `Bash:` — is not a rule the runtime recognises and is refused as malformed
+# rather than read as harmless. What the guard does NOT judge is the command the
+# prefix names: `Bash(sh:*)` or `Bash(python3 -c:*)` is a literal prefix an
 # adopter declared, and declaring it is their policy decision, not a widening
 # this check claims to catch.
 LITERAL_COMMAND_LEAD = frozenset("/._~")
-PATTERN_HEAD_TERMINATORS = frozenset("*?: ")
+PATTERN_HEAD_TERMINATORS = frozenset("*?:")
 
 
 def _bash_allow_has_no_literal_prefix(entry: str) -> bool:
     """True when a `permissions.allow` entry grants Bash without a command prefix."""
-    spelling = "".join(entry.split())
+    spelling = entry.strip()
+    if spelling == "Bash":
+        return True
     if not spelling.startswith("Bash"):
         return False
     rest = spelling[len("Bash") :]
-    if rest == "":
-        return True
     if not (rest.startswith("(") and rest.endswith(")")):
-        return False
+        # `Bash (*)`, `Bash:*`, `Bash{`: a Bash rule the runtime would not parse.
+        # `Bashful` is another tool's name and outside this guard's claim.
+        return rest[:1].isspace() or rest[:1] in "(:"
     pattern = rest[1:-1]
     lead = pattern[:1]
     if not (lead.isalnum() or lead in LITERAL_COMMAND_LEAD):
         return True
     head = ""
     for character in pattern:
-        if character in PATTERN_HEAD_TERMINATORS:
+        if character in PATTERN_HEAD_TERMINATORS or character.isspace():
             break
         head += character
     return not any(character.isalnum() for character in head)

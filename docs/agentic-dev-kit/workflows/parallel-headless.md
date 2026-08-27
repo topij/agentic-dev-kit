@@ -173,10 +173,11 @@ lane loads — its permission rules and its hooks apply, the branch's do not. Th
 wrapper refuses a profile that is missing, symlinked, not one JSON object, without a
 `permissions` object, carrying `permissions.defaultMode` (the mode is declared once,
 in config), or carrying a `Bash` allow entry with no literal command prefix — `Bash`,
-`Bash(*)`, `Bash(**)`, `Bash(:*)`, `Bash(/*)`, anything whose pattern head (up to the
-first wildcard, separator, or space) holds no letter or digit — decided by that
-structure, not by a list of spellings. The guard judges the shape of a prefix and
-never the command it names: `Bash(sh:*)` is a prefix an adopter declared. The
+`Bash(*)`, `Bash(**)`, `Bash(:*)`, `Bash(/*)`, anything whose pattern head (the
+pattern read literally, up to the first wildcard, `:`, or space) holds no letter or
+digit — decided by that structure, not by a list of spellings. The guard judges the
+shape of a prefix and never the command it names: `Bash(sh:*)` is a prefix an
+adopter declared. The
 profile is read and digested by the parent and again by the child, and the two
 digests must agree; the bytes the runtime itself loads from the path at `exec` are
 not re-read, so a writer on the same OS account who replaces the file inside the
@@ -202,9 +203,15 @@ observation whose argv omits the policy or the trust step. The Codex value is
 validated and passed the same way, and its behaviour is not claimed until a Codex
 writing-lane record exists; the shipped Codex default is `read-only` for that reason.
 The shipped profile's allow-list is the minimum a writing lane needs to commit, push,
-open and ready a PR, and poll it; `gh pr merge` and force pushes are denied because
-landing is the cockpit's. What else belongs in that profile as repository policy is
-`#606`, not this contract.
+open and ready a PR, and poll it; `gh pr merge` and the flag spellings of a force
+push (`--force`, `-f`, `--force-with-lease`) are denied because landing is the
+cockpit's. That denial is a prefix rule and cannot express "contains a forced
+update": `git push origin +HEAD:main`, or a `--force` placed after the remote,
+starts with `git push` and passes — the panel reproduced the `+refspec` form live.
+Protection of a remote branch's history is therefore the forge's branch protection
+and the lane contract's own-branch rule, not this profile; a deterministic lane-side
+push gate is follow-up work, not a claim this contract makes. What else belongs in
+that profile as repository policy is `#606`, not this contract.
 
 Every supported launcher must still prepend `prompt_preamble` verbatim and must not
 open a second worktree on top of `new --headless`. The wrapper does both by consuming

@@ -1064,7 +1064,9 @@ migrate_parallel_schema() {
 # only when absent, never rewritten, and deliberately outside the kit manifest so
 # an upgrade cannot replace an adopter's lane allow-list. The shipped allow-list is
 # the minimum a writing lane needs to commit, push, open and ready a PR, and poll
-# it; `gh pr merge` and force pushes are denied because landing is the cockpit's.
+# it; `gh pr merge` and the flag spellings of a force push are denied because
+# landing is the cockpit's — a prefix rule cannot deny the `+refspec` form, so
+# branch-history protection stays with the forge and the lane contract.
 seed_claude_lane_profile() {
   _profile="$(sed -n 's/^  claude_settings_profile:[[:space:]]*//p' "$CONFIG_FILE" | head -n 1)"
   _profile="${_profile%%#*}"

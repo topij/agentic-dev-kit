@@ -1833,6 +1833,12 @@ def test_no_declaration_can_make_the_engine_emit_an_unrestricted_flag() -> None:
         ("Bash(../*)", True),
         ("Bash(~/*)", True),
         ("Bash(/)", True),
+        ("Bash(. rm*)", True),
+        ("Bash(~ rm:*)", True),
+        ("Bash( git:*)", True),
+        ("Bash (git:*)", True),
+        ("Bash:*", True),
+        ("  Bash(*)  ", True),
         ("Bash(git:*)", False),
         ("Bash(git status:*)", False),
         ("Bash(/usr/bin/git:*)", False),
@@ -1894,6 +1900,10 @@ def test_whole_tool_bash_is_decided_by_structure_not_by_spelling(
         ({"permissions": {"allow": ["Bash(../*)"]}}, "widens Bash"),
         ({"permissions": {"allow": ["Bash(/ *)"]}}, "widens Bash"),
         ({"permissions": {"allow": ["Bash(/:*)"]}}, "widens Bash"),
+        # Inside the parentheses a space is literal and ends the head, so a
+        # word after it does not lend the head a letter (panel round 4).
+        ({"permissions": {"allow": ["Bash(. rm*)"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash(/ rm:*)"]}}, "widens Bash"),
         ({"permissions": {"allow": "Bash(git:*)"}}, "list of strings"),
         ({"permissions": {"allow": [1]}}, "list of strings"),
     ),
@@ -2168,7 +2178,11 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     shipped = json.loads(profile.read_text(encoding="utf-8"))
     assert set(shipped) == {"permissions"}
     assert set(shipped["permissions"]) == {"allow", "deny"}
-    # Landing is the cockpit's: the lane cannot merge or rewrite history.
+    # Landing is the cockpit's: the merge command and the flag spellings of a
+    # force push are denied. A prefix rule cannot express "contains a forced
+    # update", so `git push origin +HEAD:main` is NOT denied by this profile
+    # (panel round 4, live-reproduced); history protection is the forge's branch
+    # protection and the lane contract, and this test claims no more.
     assert "Bash(gh pr merge:*)" in shipped["permissions"]["deny"]
     assert "Bash(git push --force:*)" in shipped["permissions"]["deny"]
     assert "Bash(git push -f:*)" in shipped["permissions"]["deny"]

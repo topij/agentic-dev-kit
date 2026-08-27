@@ -137,9 +137,11 @@ record exists, in the same shape as the transports:
   profile that is missing, a symlink, not a regular file, not one JSON object, without
   a `permissions` object, with `permissions.defaultMode` (the mode is config-declared,
   one authority), or whose `permissions.allow` carries a `Bash` entry with no literal command
-  prefix — the pattern, with every whitespace character removed, must start with a
-  letter, digit, or path character and its head (everything before the first
-  wildcard, `:`, or space) must hold a letter or digit; `Bash`, `Bash(*)`,
+  prefix — the pattern, read literally (only the entry's outer whitespace is
+  ignored; inside the parentheses a space is a character, as the runtime's matcher
+  reads it), must start with a letter, digit, or path character and its head
+  (everything before the first wildcard, `:`, or space) must hold a letter or
+  digit; `Bash`, `Bash(*)`,
   `Bash(**)`, `Bash(?*)`, `Bash(:*)`, and `Bash(/*)` all fail that. The rule is
   structural because the panel's round 2 found `Bash(**)` unrestricted live at
   2.1.247 while an enumerated blocklist missed it, and found `Bash(:*)` *not*
@@ -172,7 +174,7 @@ must contain and how it fails.
 | Kit wrapper → `claude -p` | Claude | `--setting-sources ""` + `--permission-mode acceptEdits` + `--settings <profile>` | read-only | none | receipt `request.approval_policy`, `observed.argv`, `terminal.permission_denials == []` | wrapper child (argv) + parent (denials from the envelope) | a denial → `failed` |
 | same | Claude | same | worktree write (Edit/Write in cwd) | accepted by mode, no prompt | same, plus the lane commit's tree | same | denial → `failed`; a write outside cwd is denied, not prompted |
 | same | Claude | same | commit (`git add`, `git commit`) | accepted by profile allow rule | commit sha read back in the cockpit | profile rule + cockpit `git` | denial → `failed` |
-| same | Claude | same | push (`git push -u origin <lane>`) | accepted by profile allow rule | remote-tracking head read back in the cockpit | same | denial → `failed`; a force push is a profile deny rule |
+| same | Claude | same | push (`git push -u origin <lane>`) | accepted by profile allow rule | remote-tracking head read back in the cockpit | same | denial → `failed`; the flag spellings of a force push are profile deny rules, the `+refspec` form is not deniable by a prefix rule (panel round 4, live) — history protection is the forge's and the lane contract's |
 | same | Claude | same | PR (`gh pr create`, `gh pr ready`) | accepted by profile allow rule | PR number and head read back by `dev_session.sh pr-watch` `_resolve_lane_pr` | forge read-back | denial → `failed`; a cross-repository or wrong-base PR refuses in `_resolve_lane_pr` |
 | same | Claude | same | merge | **never in the lane** — `gh pr merge` is a profile deny rule and the contract says do not merge | `dev_session.sh merge` refuses an operator-class lane; a self-class lane merges only from the cockpit after `mergeable` | cockpit wrapper | lane attempt → denial → `failed` |
 | Kit wrapper → `codex exec` | Codex | `--sandbox read-only` | read-only | unobserved in this slice | receipt `request.approval_policy`, `observed.argv`, `terminal.permission_denials == null` | wrapper child (argv) | sandbox refusal is not visible through `last-message-file`; behaviour owed to the Codex record |
@@ -263,4 +265,11 @@ and must agree, but the runtime loads the path itself at `exec`, so a same-accou
 writer replacing the file inside the child's observe-to-exec window is not caught
 (panel round 2, adversarial lens, reported as structural and not reproduced).
 Passing the validated bytes inline instead of the path would close it and is a
-separate change.
+separate change. The shipped profile's deny entries name the flag spellings of a
+force push and nothing more: a prefix rule cannot say "contains a forced update",
+so `git push origin +HEAD:main` passes the profile (panel round 4, live-reproduced
+against a throwaway remote). History protection of a remote branch is the forge's
+branch protection and the lane contract's own-branch rule; a deterministic
+lane-side push gate (a pre-push hook installed in the lane worktree that refuses
+forced updates and any ref but the lane branch) is the rule-1 mechanism and is
+follow-up work, not part of this slice.
