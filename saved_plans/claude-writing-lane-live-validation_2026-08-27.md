@@ -606,9 +606,16 @@ denial read-back, and the receipt.
 - **The profile shipped at merge differs from the last observed profile
   (`e3370add…`) by one narrowing**: panel round 11 observed, against a throwaway
   remote, that the broad `Bash(git remote:*)` entry let a lane run
-  `git remote set-url origin <elsewhere>` and push there through the push allow, so
-  the shipped entry is read-only (`git remote get-url`, `git remote -v`). No lane in
-  this record ran a `git remote` command, so the observations above stand for the
-  narrowed profile as they do for the observed one; the digest of the shipped file is
-  the one `test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_validates`
-  validates at each revision.
+  `git remote set-url origin <elsewhere>` and push there through the push allow;
+  round 12 then observed that the first narrowing, `Bash(git remote -v:*)`,
+  admitted `git remote -v set-url` the same way. The shipped entry is
+  `Bash(git remote get-url:*)` alone. The cockpit verified that shape directly on
+  2026-08-27 in a throwaway repository with a throwaway bare origin: raw
+  `git remote get-url origin set-url` and `git remote get-url set-url origin x` both
+  exit 129 with the `get-url` usage text; under `claude -p --setting-sources ""
+  --permission-mode dontAsk --settings <profile with only that remote entry>`,
+  `git remote set-url origin …` and `git remote -v set-url origin …` were denied
+  (each named in `permission_denials`) and `git remote get-url origin` ran, with
+  `origin` unchanged afterwards. No lane in this record ran a `git remote` command,
+  so the lane observations above stand for the narrowed profile as they do for the
+  observed one.

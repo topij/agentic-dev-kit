@@ -218,9 +218,12 @@ validated and passed the same way, and its behaviour is not claimed until a Code
 writing-lane record exists; the shipped Codex default is `read-only` for that reason.
 The shipped profile's allow-list is the minimum a writing lane needs to edit inside
 its worktree (`Edit(**)`), commit, push its own branch, open and ready a PR, and poll
-it; `git remote` is granted read-only (`get-url`, `-v`), because a broad
-`git remote:*` let a lane retarget `origin` and push elsewhere through the
-already-granted push form (panel round 11, live against a throwaway remote). The
+it; `git remote` is granted as `get-url` only, because a broad `git remote:*` let a
+lane retarget `origin` and push elsewhere through the already-granted push form
+(panel round 11, live against a throwaway remote), and `git remote -v:*` admitted
+`git remote -v set-url` the same way, `-v` being a modifier (round 12, live) —
+`get-url` is the subcommand token itself, and git rejects anything but a remote
+name after it. The
 push allow is `Bash(git push -u origin:*)`, the form the lane contract names
 and the narrowest a rule can express: the runtime matches Bash rules on token
 boundaries, so a branch-prefix allow (`git push -u origin lane/:*`) matched nothing

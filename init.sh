@@ -1068,9 +1068,11 @@ migrate_parallel_schema() {
 # relative to the worktree root and never outside it; a `Write(...)` entry is
 # inert there, and a bare `Edit` edits anywhere), commit, push with the form the
 # lane contract names (`git push -u origin <branch>`), open and ready a PR, and
-# poll it. `git remote` is granted read-only (`get-url`, `-v`): a broad
-# `git remote:*` let a lane retarget `origin` and push elsewhere through the
-# already-granted push form (panel round 11, live against a throwaway remote).
+# poll it. `git remote` is granted as `get-url` only: a broad `git remote:*` let a
+# lane retarget `origin` and push elsewhere through the already-granted push form
+# (panel round 11, live), and `git remote -v:*` admitted `git remote -v set-url`
+# the same way, `-v` being a modifier (round 12, live); `get-url` is the
+# subcommand token itself and git rejects anything but a remote name after it.
 # The runtime matches a Bash rule on token boundaries, so the push allow
 # cannot name a branch prefix (`lane/:*` matched nothing live); `git push -u
 # origin:*` is the narrowest expressible form. It refuses the flag-first and
@@ -1100,7 +1102,6 @@ seed_claude_lane_profile() {
       "Bash(git branch:*)",
       "Bash(git rev-parse:*)",
       "Bash(git remote get-url:*)",
-      "Bash(git remote -v:*)",
       "Bash(git fetch:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",

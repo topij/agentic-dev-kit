@@ -2254,11 +2254,14 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     # spellings do not match it; a hostile refspec after `origin` still does.
     assert "Bash(git push -u origin:*)" in shipped["permissions"]["allow"]
     assert "Bash(git push:*)" not in shipped["permissions"]["allow"]
-    # `git remote` is read-only: a broad `git remote:*` let a lane retarget
-    # `origin` and push elsewhere (panel round 11, live).
+    # `git remote` is granted as `get-url` only: a broad `git remote:*` let a lane
+    # retarget `origin` and push elsewhere (panel round 11, live), and
+    # `git remote -v:*` admitted `-v set-url` the same way (round 12, live).
     assert "Bash(git remote get-url:*)" in shipped["permissions"]["allow"]
-    assert "Bash(git remote -v:*)" in shipped["permissions"]["allow"]
-    assert "Bash(git remote:*)" not in shipped["permissions"]["allow"]
+    assert not any(
+        entry.startswith("Bash(git remote") and entry != "Bash(git remote get-url:*)"
+        for entry in shipped["permissions"]["allow"]
+    )
     assert "Bash(git push --force:*)" in shipped["permissions"]["deny"]
     assert "Bash(git push -f:*)" in shipped["permissions"]["deny"]
     assert "Bash(gh pr merge:*)" not in shipped["permissions"]["allow"]
