@@ -82,11 +82,14 @@ parallel:
   # (`--sandbox <value>`; the argv is validated and passed, its behaviour is not
   # claimed until the Codex writing-lane record exists). Claude: `dont-ask` |
   # `accept-edits` (`--permission-mode dontAsk|acceptEdits`). Under `dont-ask`
-  # the profile's allow list is the whole boundary and the profile grants the edit
-  # tools, which the runtime keeps inside the worktree. `accept-edits` is
-  # declarable but NOT the default: the runtime then also auto-accepts its own
-  # class of file-system Bash commands inside the worktree (rm, mv, redirection
-  # writes, cat were observed live at 2.1.247) whatever the allow list says. Every
+  # the profile's allow list bounds every call the runtime does not accept on its
+  # own: at 2.1.247 the runtime still auto-accepts a read-only Bash class (pwd,
+  # whoami, cat, grep, find, bare `git remote -v` were observed live) with no
+  # entry in `permission_denials`, and denies every other unlisted call. The
+  # profile grants file editing through `Edit(**)`, which the runtime keeps inside
+  # the worktree. `accept-edits` is declarable but NOT the default: the runtime
+  # then also auto-accepts its own file-system class inside the worktree (rm, mv,
+  # redirection writes were observed live) whatever the allow list says. Every
   # unrestricted spelling (bypassPermissions, danger-full-access, the
   # dangerously-* flags) is a non-member the wrapper refuses.
   codex_approval_policy: read-only

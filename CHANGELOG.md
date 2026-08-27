@@ -53,9 +53,11 @@ starts.
   and `Bash(git push -u origin:*)`, the push form the lane contract names). That rule bounds nothing after
   `origin`: a `--force`/`-f` placed there, `:x`, and `+HEAD:x` all still match it, so
   the profile does not protect branch history — keep your protected branches
-  protected on the forge; a lane-side push gate is follow-up work.** **Declare `accept-edits` only knowing that the runtime
-  then also auto-accepts its own class of file-system Bash commands inside the
-  worktree regardless of the allow list.**
+  protected on the forge; a lane-side push gate is follow-up work.** **Under `dont-ask` the allow list bounds every call the runtime does not accept on
+  its own — at Claude Code 2.1.247 a read-only Bash class (`pwd`, `cat`, `grep`,
+  `find`, …) runs regardless and never appears in `permission_denials`; declare
+  `accept-edits` only knowing that the runtime then also auto-accepts its own
+  file-system class (`rm`, `mv`, redirection writes) inside the worktree.**
   **Refresh `init.sh` and run `./init.sh --no-clobber`: the additive migration installs
   the three keys without replacing adopter values and seeds
   `config/claude-lane-settings.json` only when no file is there. The profile is

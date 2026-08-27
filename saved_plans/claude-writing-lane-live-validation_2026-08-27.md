@@ -603,6 +603,17 @@ denial read-back, and the receipt.
   more.
 - **Model and effort calibration** (`#605`) remain outside this slice; the envelopes
   named the models the client selected without any lane-side choice.
+- **The runtime accepts a read-only Bash class on its own under `dont-ask`.**
+  Panel round 13 and the cockpit's probe on 2026-08-27 (a throwaway Git directory,
+  the shipped profile, `claude -p --setting-sources "" --permission-mode dontAsk
+  --settings <profile>`) saw `pwd`, `cat <file>`, and `grep -r <word> .` run with an
+  empty `permission_denials` list while `touch <file>` and `curl` were denied by
+  name. A lane can therefore read whatever its process can read, and the receipt
+  cannot show a read the runtime never asked about; the allow list bounds what the
+  lane can do with it. In three of the cockpit's five probe invocations the client's
+  stdout held more than one JSON value, a shape the wrapper terminalizes as
+  `failed`; a repeat of the `pwd` probe printed one value, so the shape is recorded
+  and not explained.
 - **The profile shipped at merge differs from the last observed profile
   (`e3370add…`) by one narrowing**: panel round 11 observed, against a throwaway
   remote, that the broad `Bash(git remote:*)` entry let a lane run

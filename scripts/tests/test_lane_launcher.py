@@ -2265,9 +2265,10 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     assert "Bash(git push --force:*)" in shipped["permissions"]["deny"]
     assert "Bash(git push -f:*)" in shipped["permissions"]["deny"]
     assert "Bash(gh pr merge:*)" not in shipped["permissions"]["allow"]
-    # Under the shipped `dont-ask` the allow list is the whole boundary: the edit
-    # tools are granted by name (the runtime keeps them inside the worktree) and
-    # every Bash entry is a bounded command prefix.
+    # Under the shipped `dont-ask` the allow list bounds every call the runtime
+    # does not accept on its own (a read-only Bash class is accepted regardless at
+    # 2.1.247): the edit rule is `Edit(**)` and every Bash entry is a bounded
+    # command prefix.
     # `Edit(**)` is the one rule that governs every file-editing tool at 2.1.247;
     # a `Write(...)` entry is inert there and is not shipped (panel round 7).
     assert "Edit(**)" in shipped["permissions"]["allow"]

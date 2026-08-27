@@ -107,13 +107,19 @@ the wrapper redirects onto the reserved final-message file before `exec`.
 same kind of engine-owned vocabulary and is passed as argv in the fixed slot after the
 command prefix: Codex `read-only` / `workspace-write` (`--sandbox <value>`), Claude
 `dont-ask` / `accept-edits` (`--permission-mode dontAsk|acceptEdits`). The shipped
-Claude default is `dont-ask`, under which the profile's allow list is the whole
-boundary: the profile grants file editing through `Edit(**)`, the one rule that
-governs every file-editing tool at 2.1.247, which the runtime resolves relative to the
-worktree root and never outside it (a bare `Edit` edits anywhere — observed live —
-and the wrapper refuses it; a `Write(...)` entry is inert on that client, so scope
-editing with `Edit(<pattern>)` and nothing else), and every Bash call outside the
-declared prefixes is a denial.
+Claude default is `dont-ask`, under which the profile's allow list bounds every call
+the runtime does not accept on its own: the profile grants file editing through
+`Edit(**)`, the one rule that governs every file-editing tool at 2.1.247, which the
+runtime resolves relative to the worktree root and never outside it (a bare `Edit`
+edits anywhere — observed live — and the wrapper refuses it; a `Write(...)` entry is
+inert on that client, so scope editing with `Edit(<pattern>)` and nothing else), and
+a Bash call outside the declared prefixes is a denial — except for the read-only
+class the runtime accepts regardless at 2.1.247 (`pwd`, `whoami`, `cat`, `grep`,
+`find`, bare `git remote -v` ran with nothing in `permission_denials`, while `touch`,
+`curl`, `env` and `git remote show` were denied). So a lane can read whatever its
+process can read, the receipt cannot show a read the runtime never asked about, and
+the allow list bounds what a lane can *do* — write, commit, push, open a PR — not
+what it can see.
 `accept-edits` is declarable and is not the default because the runtime then also
 auto-accepts its own class of file-system Bash commands inside the worktree — `rm`,
 `mv`, redirection writes, and `cat` were observed accepted live at 2.1.247 with none
@@ -222,8 +228,8 @@ it; `git remote` is granted as `get-url` only, because a broad `git remote:*` le
 lane retarget `origin` and push elsewhere through the already-granted push form
 (panel round 11, live against a throwaway remote), and `git remote -v:*` admitted
 `git remote -v set-url` the same way, `-v` being a modifier (round 12, live) —
-`get-url` is the subcommand token itself, and git rejects anything but a remote
-name after it. The
+`get-url` is the subcommand token itself, and git accepts nothing after it but its
+own `--push`/`--all` flags and a remote name. The
 push allow is `Bash(git push -u origin:*)`, the form the lane contract names
 and the narrowest a rule can express: the runtime matches Bash rules on token
 boundaries, so a branch-prefix allow (`git push -u origin lane/:*`) matched nothing

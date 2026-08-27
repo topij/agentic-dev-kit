@@ -1072,7 +1072,8 @@ migrate_parallel_schema() {
 # lane retarget `origin` and push elsewhere through the already-granted push form
 # (panel round 11, live), and `git remote -v:*` admitted `git remote -v set-url`
 # the same way, `-v` being a modifier (round 12, live); `get-url` is the
-# subcommand token itself and git rejects anything but a remote name after it.
+# subcommand token itself and git accepts nothing after it but its own
+# `--push`/`--all` flags and a remote name.
 # The runtime matches a Bash rule on token boundaries, so the push allow
 # cannot name a branch prefix (`lane/:*` matched nothing live); `git push -u
 # origin:*` is the narrowest expressible form. It refuses the flag-first and

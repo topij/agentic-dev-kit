@@ -128,7 +128,14 @@ record exists, in the same shape as the transports:
     A bare `Edit` under `dont-ask` edits anywhere (the `outside` lane wrote
     `../outside-probe.txt` under a profile of bare names), so the validator refuses
     a bare or root-escaping entry for any of the four edit-tool names: under this
-    default the allow list is the whole boundary.
+    default the allow list bounds every call the runtime does not accept on its
+    own. What the runtime accepts on its own at 2.1.247 under `dont-ask` is a
+    read-only Bash class — `pwd`, `whoami`, `cat`, `grep`, `find`, bare
+    `git remote -v` ran with no entry in `permission_denials` while `touch`,
+    `curl`, `env`, and `git remote show` were denied (panel round 13, and the
+    cockpit's own probe, live) — so `permission_denials` cannot show a read the
+    runtime never asked about, and a lane can read whatever its process can read;
+    what it can *do* with a read is still bounded by the allow list.
     The first draft shipped `accept-edits`; panel round 5 observed live that the
     runtime then auto-accepts its own class of file-system Bash commands inside the
     worktree (`rm -rf`, `mv`, redirection writes, `cat`) with none of them in the
