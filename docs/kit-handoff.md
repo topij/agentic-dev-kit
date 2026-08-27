@@ -14,11 +14,64 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-27 — PR `#620` merged the Codex-authored writing-lane record;
-the observation remains unpromoted because its raw fixture evidence was removed at
-the cleanup boundary. Calibration is next.
+Last updated: 2026-08-28 — PR `#623` merged the capability-tier calibration: tiers
+calibrated per runtime from live probes, mechanical-versus-advisory declared beside
+every compute key, and the "no per-agent effort" claim retired on the surface it was
+false on. The first real headless task on the generalised launcher is next.
 
-## Latest session — 2026-08-27 (Codex writing-lane record)
+## Latest session — 2026-08-27 (capability-tier calibration)
+
+**Theme —** PR `#623` (squash `92a3c15`) calibrated `models.runtime_mappings` and
+`review.fallback_panel.lens_compute` for Claude Code and Codex from live probes of the
+pinned clients (Claude Code 2.1.247, codex-cli 0.149.1) and declared, per key per
+runtime, whether each is mechanical or advisory. The design matrix in
+[`capability-tier-calibration-design_2026-08-27.md`](../saved_plans/capability-tier-calibration-design_2026-08-27.md)
+preceded the code; the record in
+[`capability-tier-calibration-live-validation_2026-08-27.md`](../saved_plans/capability-tier-calibration-live-validation_2026-08-27.md)
+carries every probe command and the observer field it read.
+
+- **The retired claim was half right, and the half that was right stayed.** "Claude's
+  delegation tool takes NO per-agent effort parameter" is true of the tool (it has
+  `model`, no `effort`; a plain subagent inherits the cockpit's effort) and false of
+  the runtime: the frontmatter `model` and `effort` of `.claude/agents/<name>.md` are
+  applied and read back from the runtime's own subagent transcript, as is `--agents`
+  JSON under the lane trust route. The kit now ships one definition per configured
+  lens, rendered from `lens_compute.claude` by `panel_prompt.py --agent-definition`,
+  seeded by `init.sh`, listed `ADOPTER_OWNED`, and pinned by tests to the generator's
+  bytes. The generator refuses an effort level the runtime would drop with only a
+  debug-mode log, quotes `model` (a `: ` or ` #` breaks or truncates bare YAML), and
+  holds the lens name to a slug.
+
+- **Codex's controls are on the argv and read back from the rollout.** `-m` and
+  `-c model_reasoning_effort=<level>` reach `turn_context`; a misspelled `-c` key is
+  accepted at exit 0 at the config default, an invalid level or model is refused by
+  the API at exit 1, `--ephemeral` leaves no observer. `runtime_mappings` is advisory
+  on both runtimes (no engine reads it) and its values now name what each client
+  accepted: `claude.expensive: fable`, `codex.expensive: xhigh`.
+
+- **The panel ran under the mechanism it reviewed.** Round 1's plain subagents ran at
+  the cockpit's inherited `xhigh`; rounds 2–4, launched as the kit-owned lens agents,
+  ran at the frontmatter's `high` — read from this session's subagent transcripts and
+  recorded. Round 1 found a HIGH in the new generator (bare `model` broke the
+  frontmatter), round 2 corrected the rationale for that fix and a consumer
+  enumeration, round 3 found the seed's `sed` interpolation mangling `&` and `|`,
+  round 4 found nothing by execution. Filed on their owning issues: `#574` (lenses
+  fetching in the handed tree, one occurrence comment per round that showed it), `#255` (no adopter-side check for a
+  stale lens definition — the doctor check that issue proposes).
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `d85e1bf35fdda9f71f14e787133e2ca2f0b90c20` on 2026-08-27 printed `2006 passed, 3
+  warnings in 367.24s`; the merged squash is `92a3c15`.
+
+▶ Next: run the first real headless task on the generalised launcher (no tracker item;
+`#602` is the `post-merge-systemize` binding bug, not this). A Claude lane under the
+trust route runs the product default model and effort unless the descriptor's argv
+says otherwise — the wrapper still carries neither control, by design. Then Phase 5
+(`#606`, `#236`, the `#243` narrowing).
+
+______________________________________________________________________
+
+## Session — 2026-08-27 (Codex writing-lane record)
 
 **Theme —** PR `#620` (squash `58c5d7e`) recorded a Codex lane launched through
 `scripts/launch_lane.py` with a fixture-only `workspace-write` declaration. The lane
@@ -320,48 +373,8 @@ calibration and downstream adapter reconciliation in later slices.
 
 ______________________________________________________________________
 
-## Session — 2026-08-25 (parallel lane ownership returns to the kit)
-
-**Theme —** Reusable lane identity, forge safety, and resume behavior now live in the
-kit-owned engines and shared workflows, while runtime adapters remain thin and
-cs-toolkit's repo-owned translation remains downstream work.
-
-- **PR `#598` is the bounded shared-engine slice.** The read-only inventory compared
-  cs-toolkit commit `4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) with its
-  parent and classified reusable engine behavior separately from cs-toolkit policy and
-  translation and unrelated application code. The downstream checkout was not edited.
-
-- **The identity chain is durable and exact.** Headless activation, markers, and
-  descriptors use canonical absolute roots; the shared launcher contract requires
-  descriptor environment keys to replace inherited lane roots. Scope review and self-merge use the persisted branch/base/class
-  and exact repository, PR, base, head, owner, and fork identity. A head change refuses
-  before the forge write. Reconciliation stops on failed or malformed forge reads,
-  requires the exact act-time report before classifying an operator lane as held, and
-  checks local, cached remote-tracking, and live origin tips before terminalizing a lane.
-  Non-force cleanup repeats its dirty guard in the Git removal itself, and relative
-  session containers are anchored before any worktree write.
-
-- **The upgrade boundary is explicit.** The engines, shared workflow definitions, and
-  regression surfaces are individually kit-owned entries in `kit-manifest.json`; the
-  `#598` changelog entry names the coordinated refresh set explicitly.
-  Existing config already owns the protected branch, lane prefix, and per-lane merge
-  class, so no config or installer migration is needed. cs-toolkit's operator-only merge
-  policy and `CS_TOOLKIT_*` namespace did not move; its repo-owned engines require a
-  later explicit downstream reconciliation PR.
-
-- **The Phase 4 boundary remains honest.** This establishes the shared engine primitive,
-  not an environment-capable Codex launcher or live runtime-isolation proof. Model and
-  effort calibration and launcher mechanics remain planned.
-
-▶ Next: create `feat/triage-integration-preflights` from current `origin/main` and use
-the preserved starter in
-[`codex-parity-plan_2026-08-23.md`](../saved_plans/codex-parity-plan_2026-08-23.md).
-Build the config-owned semantic input matrix and init/upgrade migration before changing
-the shared triage workflow; keep both runtime adapters thin.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Active open items from them are folded into the "Open for next session" lists above.
 
 ______________________________________________________________________
+

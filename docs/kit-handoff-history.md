@@ -5,6 +5,45 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-08-25 (parallel lane ownership returns to the kit)
+
+**Theme —** Reusable lane identity, forge safety, and resume behavior now live in the
+kit-owned engines and shared workflows, while runtime adapters remain thin and
+cs-toolkit's repo-owned translation remains downstream work.
+
+- **PR `#598` is the bounded shared-engine slice.** The read-only inventory compared
+  cs-toolkit commit `4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) with its
+  parent and classified reusable engine behavior separately from cs-toolkit policy and
+  translation and unrelated application code. The downstream checkout was not edited.
+
+- **The identity chain is durable and exact.** Headless activation, markers, and
+  descriptors use canonical absolute roots; the shared launcher contract requires
+  descriptor environment keys to replace inherited lane roots. Scope review and self-merge use the persisted branch/base/class
+  and exact repository, PR, base, head, owner, and fork identity. A head change refuses
+  before the forge write. Reconciliation stops on failed or malformed forge reads,
+  requires the exact act-time report before classifying an operator lane as held, and
+  checks local, cached remote-tracking, and live origin tips before terminalizing a lane.
+  Non-force cleanup repeats its dirty guard in the Git removal itself, and relative
+  session containers are anchored before any worktree write.
+
+- **The upgrade boundary is explicit.** The engines, shared workflow definitions, and
+  regression surfaces are individually kit-owned entries in `kit-manifest.json`; the
+  `#598` changelog entry names the coordinated refresh set explicitly.
+  Existing config already owns the protected branch, lane prefix, and per-lane merge
+  class, so no config or installer migration is needed. cs-toolkit's operator-only merge
+  policy and `CS_TOOLKIT_*` namespace did not move; its repo-owned engines require a
+  later explicit downstream reconciliation PR.
+
+- **The Phase 4 boundary remains honest.** This establishes the shared engine primitive,
+  not an environment-capable Codex launcher or live runtime-isolation proof. Model and
+  effort calibration and launcher mechanics remain planned.
+
+▶ Next: create `feat/triage-integration-preflights` from current `origin/main` and use
+the preserved starter in
+[`codex-parity-plan_2026-08-23.md`](../saved_plans/codex-parity-plan_2026-08-23.md).
+Build the config-owned semantic input matrix and init/upgrade migration before changing
+the shared triage workflow; keep both runtime adapters thin.
+
 ## Session — 2026-08-24 (Codex doctrine validation and composed review evidence merged)
 
 **Theme —** Phase 2 closed on trusted-client evidence rather than inference, then the
