@@ -234,3 +234,66 @@ length'` at `37ad8eab0286c45aaf1ab1098e42e1da04561549` on 2026-08-27 printed `2`
 - **The record-prose carve-out preserved the reviewed head.** The terminal correctness
   lens found a Low design-versus-record imprecision, not a regression. It was logged as
   an occurrence on `#120`, and no corrective commit invalidated the exact-head receipt.
+
+## Capability-tier calibration additions from PR `#623`
+
+`gh pr view 623 --json comments --jq '[.comments[].body | scan("## Fallback panel — round")] |
+length'` at `92a3c15d13be50ae0a02ba0c40ac78e80a1e56e0` on 2026-08-27 printed `4`.
+
+- **A blanket capability claim is refuted one surface at a time, and the true half
+  stays.** "The delegation tool takes NO per-agent effort parameter" was true of the
+  tool's parameters and false of the runtime: the agent definition's frontmatter is
+  applied, and so is `--agents` JSON under the trust route. The retirement kept the
+  sentence that survived (the tool has no effort parameter; a plain subagent inherits)
+  beside the surface where the claim was wrong, and the test that had pinned the
+  blanket claim now pins the per-surface declaration.
+- **The runtime's own artifact is the observer, never the argv or the child's prose.**
+  Claude's session and subagent transcripts carry `model` and `effort`; Codex's rollout
+  carries `turn_context`. Each was validated against a known input before it was
+  trusted, and each caught a false success the exit code did not: `--effort bogus`
+  warned and ran at exit 0; a misspelled `-c model_reasoning_effrot` ran at the config
+  default at exit 0; an invalid frontmatter effort ran at the parent's level with a
+  debug-only log. The generator validates the level because the runtime does not
+  where anyone looks.
+- **Mechanical, advisory, and unavailable are per key, per runtime, per surface** —
+  the same key was mechanical on one surface (frontmatter) and advisory on another
+  (the tool call) of the same runtime. A declaration that names the surface is the one
+  that survives the next probe.
+- **A claim verified in the same session was still overturned by the session.** "The
+  roster is fixed at session start" came from one probe in the turn that wrote the
+  file; the shipped definitions then appeared in the roster some turns later. The
+  correction landed in the fix round on every surface the claim had reached, and the
+  record now says what was observed and what was not pinned (the refresh timing).
+- **The panel's HIGH was in the new code's own guarantee, found by the lens executing
+  the generator against a realistic input** (a Bedrock-shaped model id with `:`) — the
+  fix was the escaping the sibling field already had, plus a live probe that the
+  runtime applies a quoted value before the fix was written.
+- **A verification stamp needs a quiet tree.** Two `make test` runs at the first
+  candidate were invalidated by the cockpit itself — a concurrent `pr_watch.py` poll
+  tripped the `#428` state guard, and uncommitted correction edits tripped the drift
+  check. The stamp that counts was taken at the fix-round head with nothing else
+  writing.
+- **Rounds 2 through 4 ran under the mechanism the PR adds.** Once this session's
+  roster listed the kit-owned `adversarial` and `correctness` agents, the lenses were
+  launched as them, and the cockpit's subagent transcripts read `('claude-sonnet-5',
+  'high')` for every lens in those rounds against `('claude-sonnet-5', 'xhigh')` for
+  round 1's plain subagents — the frontmatter carried the compute, the prompt only
+  restated it. The reading went into the live record, which the round-3 adversarial
+  lens then correctly marked as something a lens cannot verify from its seat.
+- **What each round found, and what it says about where defects live.** Round 1's
+  HIGH and round 3's Medium were both in *new* code's own guarantee (an unquoted
+  frontmatter value; a `sed` replacement with an unescaped path), each found by a lens
+  executing the new path against an input the author's tests had not tried. Round 2's
+  findings were the author's *rationale* for a correct fix being wrong (YAML breaks on
+  colon-space, not on a colon), and an enumeration that went short again as the PR's
+  own tests joined it — the same imprecision class the earlier round had flagged. The
+  remedy that held for the enumeration was to name kinds, not files.
+- **A mutant claimed killed before its recomputation ran is a claim, and it was
+  caught.** The round-3 disposition asserted both new guards' mutants killed; the
+  script for the second had aborted on a heredoc-terminator slip before applying the
+  mutation. The recomputation was run and stamped on the PR before the next round, and
+  the disposition's comment says which reading backs it.
+- **The `#574` shape recurred lens by lens under the same contract text:** across the
+  four rounds, some lenses fetched in the handed tree and disclosed it while others
+  used `ls-remote`. The occurrences went to that issue; no wording change was made in
+  the PR.

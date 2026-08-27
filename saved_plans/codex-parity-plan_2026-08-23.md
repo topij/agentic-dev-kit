@@ -38,8 +38,10 @@ their delivery order and exit conditions.
   (`claude -p`) with a Claude-produced live record and moved the parity row's Claude
   cell to the observed mechanism; PR `#614` added the config-owned approval policy per
   runtime and the Claude trust route with a Claude-produced writing-lane record; PR
-  `#620` added the Codex-authored writing-lane record without changing the launcher.
-  Delivery order and current disposition:
+  `#620` added the Codex-authored writing-lane record without changing the launcher;
+  PR `#623` calibrated the capability tiers per runtime from live probes and declared
+  every compute key mechanical or advisory per runtime. Delivery order and current
+  disposition:
   1. Done in PR `#611` (Claude through `claude -p`, config-declared transports, Codex
      pinned unchanged). The record observed no write or approval transition and found
      that a fresh lane worktree is an untrusted workspace to Claude — the shape of the
@@ -58,11 +60,24 @@ their delivery order and exit conditions.
      rollouts, and captures were removed with the fixture, so the parity cell records
      the historical observation without promoting it as durable capability evidence;
      `#621` owns the durable evidence-bundle follow-up.
-  4. Calibrate tiers for both runtimes and declare mechanical-versus-advisory per key
-     per runtime (`#605`, `#255`); retire the "no per-agent effort" sentences.
-  5. Run the first real headless task on the generalised launcher (no tracker item
-     yet; earlier revisions cited `#602`, which is the `post-merge-systemize` binding
-     bug, not this task).
+  4. Done in PR `#623` (squash `92a3c15`): tiers calibrated from live probes of the
+     pinned clients (Claude Code 2.1.247, codex-cli 0.149.1, 2026-08-27) —
+     `runtime_mappings` advisory on both runtimes with values each client accepted
+     (`claude.expensive: fable`, `codex.expensive: xhigh`); `lens_compute.claude`
+     mechanical through the kit-owned `.claude/agents/<lens>.md` rendered by
+     `panel_prompt.py --agent-definition` (the delegation tool itself has no effort
+     parameter, so a plain subagent stays at the cockpit's effort); `lens_compute.codex`
+     mechanical on the `codex exec` argv and read back from the rollout. The blanket
+     "no per-agent effort" sentence is retired on the surface it was false on and kept
+     on the one it was true on. Design and record:
+     [`capability-tier-calibration-design_2026-08-27.md`](capability-tier-calibration-design_2026-08-27.md),
+     [`capability-tier-calibration-live-validation_2026-08-27.md`](capability-tier-calibration-live-validation_2026-08-27.md).
+     Not built: the adopter-side `kit_doctor` check for a stale lens definition
+     (`#255` carries the occurrence); the wrapper still carries no model or effort
+     control, and a Claude lane under the trust route runs the product default.
+  5. Next: run the first real headless task on the generalised launcher (no tracker
+     item yet; earlier revisions cited `#602`, which is the `post-merge-systemize`
+     binding bug, not this task).
      Adopt now, mechanise later: the final verification stamp is a PR comment at the
      merged head, and a panel that ran leaves a disposition comment (`#603`, `#604`).
      Phase 5 owns `#606`, `#236`, and the `#243` narrowing (adapter generation); Phase 6
