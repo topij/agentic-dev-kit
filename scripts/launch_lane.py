@@ -121,10 +121,15 @@ LITERAL_COMMAND_LEAD = frozenset("/._~")
 PATTERN_HEAD_TERMINATORS = frozenset("*?:")
 # The edit tools are bounded only by a path pattern the runtime resolves relative
 # to the worktree root: `Write(**)` cannot reach `../x` or `/abs/x` (observed live
-# at 2.1.247), while a bare `Write` writes anywhere and a pattern rooted outside
-# the worktree (`//…` absolute, `~…` home, `..…` parent) is a declared escape.
+# at 2.1.247), while a bare `Write` writes anywhere. A pattern rooted outside the
+# worktree by its lead (`//…` filesystem-absolute, `~…` home) or carrying a `..`
+# segment anywhere is a declared escape and is refused by that structure. A single
+# leading `/` anchors a pattern at the worktree root (`Write(/notes/**)`) and is
+# accepted; what a pattern's text does not show — a symlink inside the worktree
+# pointing out, say — is the runtime's own path resolution, which the panel
+# observed refusing such writes live.
 EDIT_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
-OUTSIDE_WORKTREE_PATTERN_LEADS = ("//", "~", "..")
+OUTSIDE_WORKTREE_PATTERN_LEADS = ("//", "~")
 
 
 def _edit_allow_escapes_the_worktree(entry: str) -> bool:
@@ -138,7 +143,9 @@ def _edit_allow_escapes_the_worktree(entry: str) -> bool:
             if not (rest.startswith("(") and rest.endswith(")")):
                 return True
             pattern = rest[1:-1].strip()
-            return pattern == "" or pattern.startswith(OUTSIDE_WORKTREE_PATTERN_LEADS)
+            if pattern == "" or pattern.startswith(OUTSIDE_WORKTREE_PATTERN_LEADS):
+                return True
+            return any(segment == ".." for segment in pattern.replace("\\", "/").split("/"))
     return False
 
 

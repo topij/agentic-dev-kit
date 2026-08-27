@@ -133,7 +133,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "6559192c9189586a167c48be1573dcab7e363d07813ab0309e9eba66c8bb1ba3"
+      "sha256": "8ae381339458008d1ec94256f6557f70e291b6b2e4accea4eba9ae3415234686"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
@@ -244,7 +244,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "6a86adb6226963c7651709046ca8e152c6621e7762cdb9e56507eaecbd072869"
+      "sha256": "e6dfbafbde70d195c015c7a10909fec4befcc6f7bc3aab06e294f875a10df26c"
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",

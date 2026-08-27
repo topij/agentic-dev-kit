@@ -1882,6 +1882,12 @@ def test_whole_tool_bash_is_decided_by_structure_not_by_spelling(
         ("Write(~/**)", True),
         ("Edit(../**)", True),
         ("Edit(..)", True),
+        # A `..` segment anywhere is a declared escape (panel round 6); a single
+        # leading `/` anchors at the worktree root and is inside.
+        ("Write(sub/../../outside.txt)", True),
+        ("Write(notes/**/../../x)", True),
+        ("Write(/notes/**)", False),
+        ("Write(notes/..hidden/**)", False),
         ("Write(**)", False),
         ("Edit(./**)", False),
         ("MultiEdit(notes/**)", False),
@@ -1950,6 +1956,7 @@ def test_edit_tool_allow_must_be_scoped_inside_the_worktree(entry: str, escapes:
         ({"permissions": {"allow": ["Write(//private/tmp/**)"]}}, "beyond the worktree"),
         ({"permissions": {"allow": ["Write(~/**)"]}}, "beyond the worktree"),
         ({"permissions": {"allow": ["Edit(../**)"]}}, "beyond the worktree"),
+        ({"permissions": {"allow": ["Write(sub/../../outside.txt)"]}}, "beyond the worktree"),
         ({"permissions": {"allow": ["Write:*"]}}, "beyond the worktree"),
         ({"permissions": {"allow": "Bash(git:*)"}}, "list of strings"),
         ({"permissions": {"allow": [1]}}, "list of strings"),
@@ -2213,6 +2220,9 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
         "settings_profile_sha256": None,
     }
     profile = root / "config" / "claude-lane-settings.json"
+    # The shipped bytes pass the validator directly, not only through the
+    # resolution above (panel round 6, correctness lens).
+    launcher._validate_settings_profile(profile.read_bytes(), profile)
     assert claude["declared"] == "dont-ask"
     assert claude["settings_profile_path"] == str(profile.resolve())
     assert claude["settings_profile_sha256"] == hashlib.sha256(profile.read_bytes()).hexdigest()

@@ -154,7 +154,8 @@ record exists, in the same shape as the transports:
   digit; `Bash`, `Bash(*)`,
   `Bash(**)`, `Bash(?*)`, `Bash(:*)`, and `Bash(/*)` all fail that — or grants an edit tool (`Edit`, `Write`, `MultiEdit`,
   `NotebookEdit`) without a path pattern relative to the worktree root, or with one
-  rooted outside it (`//`, `~`, `..`). The rule is
+  rooted outside it (`//`, `~`) or carrying a `..` segment anywhere; a single leading
+  `/` anchors at the worktree root and is inside. The rule is
   structural because the panel's round 2 found `Bash(**)` unrestricted live at
   2.1.247 while an enumerated blocklist missed it, and found `Bash(:*)` *not*
   unrestricted (it matches commands starting with `:`), so an enumeration built
