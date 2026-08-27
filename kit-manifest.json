@@ -41,7 +41,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "6fab4ee3d039ac63a7371ffb67f14d606c2169446b330701319ec4e4521a4575"
+      "sha256": "f8855d8c4dbb9654b9c49627c642e6a804b961f84066c94a68f5456a960a5da1"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",

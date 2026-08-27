@@ -151,9 +151,16 @@ desktop task, Codex cloud, a Claude remote session, or direct `codex exec` /
 worktree/environment/receipt contract. App-server is experimental and is not selected
 for this bounded mechanism. Keep the lane attended when the wrapper is unavailable.
 Model and reasoning-effort calibration, and the approval or permission policy a
-writing lane needs, remain separate from launcher identity; a lane runs under the
-checked-out project's own hooks and permission rules, which `claude -p` loads from its
-cwd.
+writing lane needs, remain separate from launcher identity: the wrapper passes no
+permission flag on either runtime. Do not read the checked-out project's rules as
+standing in for one. `claude -p` loads `CLAUDE.md` and project settings from its cwd,
+but a freshly issued lane worktree is an untrusted workspace, and the Claude live
+record observed the project's committed `permissions.allow` entries ignored there.
+Until `#601` lands, no permission policy reaches an unattended Claude lane; whatever
+the checked-out branch carries under `.claude/` is loaded with no operator watching,
+and whether its hooks execute in an untrusted workspace was not observed. Use the path
+only for a task whose branch content you trust and whose worktree writes you would
+accept unreviewed.
 
 Every supported launcher must still prepend `prompt_preamble` verbatim and must not
 open a second worktree on top of `new --headless`. The wrapper does both by consuming

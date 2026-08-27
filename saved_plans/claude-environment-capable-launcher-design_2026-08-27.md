@@ -83,10 +83,11 @@ also writes its own session transcript under the user's Claude configuration
 directory, keyed by the worktree path — runtime-owned state outside the lane sandbox,
 the same class as Codex's session store.
 
-`claude -p` loads the project's `CLAUDE.md`, `.claude/settings.json`, and commands from
-its cwd, so a lane runs under the checked-out project's hooks and permission rules.
-This slice passes no permission flag: what a read-only task may execute comes from the
-fixture's own committed project settings, and what a writing lane needs is `#601`.
+This slice passes no permission flag. `claude -p` loads `CLAUDE.md` and project
+settings from its cwd, but the live record then found that a freshly issued lane
+worktree is an untrusted workspace whose committed `permissions.allow` entries Claude
+ignores, so no project permission rule reached the lane. What a writing lane needs is
+`#601`.
 
 ## Independent observation and evidence chain
 
