@@ -1,9 +1,9 @@
 # Review-process learnings — 2026-08-24
 
 Status: evidence record from the Codex–Claude parity work in PR `#595`, PR `#596`, PR
-`#599`, PR `#609`, PR `#611`, and PR `#614`. This is not shared gate doctrine. Promote a lesson to
-`docs/agentic-dev-kit/` only after a later change defines and tests the reusable
-contract.
+`#599`, PR `#609`, PR `#611`, PR `#614`, and PR `#620`. This is not shared gate
+doctrine. Promote a lesson to `docs/agentic-dev-kit/` only after a later change defines
+and tests the reusable contract.
 
 ## What paid off
 
@@ -209,3 +209,28 @@ reconstructed from memory.
   the panel was not launched: a lens killed by sleep reports nothing, and a fix commit
   that lands while nobody can authorize the next round only moves the head. The pause
   cost nothing the worktrees did not keep.
+
+## Codex writing-lane record additions from PR `#620`
+
+`gh pr view 620 --json comments --jq '[.comments[].body | scan("## Fallback panel — round")] |
+length'` at `37ad8eab0286c45aaf1ab1098e42e1da04561549` on 2026-08-27 printed `2`.
+
+- **A digest is not durable evidence when the named bytes are deliberately removed.**
+  The first adversarial panel found that fixture cleanup would delete the receipts,
+  rollouts, and raw captures while the record retained their hashes. The fix retracted
+  the capability promotion; it did not add an evidence-retention mechanism inside a
+  record-only slice.
+- **Runtime narration and wrapper evidence are different authorities.** Codex reported
+  denied operations in final prose and returned success, while the bound
+  `last-message-file` receipt carried `terminal.permission_denials: null`. The record
+  treats that mismatch as the matrix result instead of reconstructing a denial object
+  from prose.
+- **Live config reach is part of the boundary.** The controlled user marker and values
+  reached both untrusted lanes; the conflicting project marker and values did not. A
+  launcher argv that selects `--sandbox` does not by itself isolate native user config.
+- **Cleanup is a reviewed completion condition.** The correctness panel found that the
+  fixture, including its auth symlink, still existed. The fix removed the exact fixture
+  and verified its absence before the record could describe cleanup as complete.
+- **The record-prose carve-out preserved the reviewed head.** The terminal correctness
+  lens found a Low design-versus-record imprecision, not a regression. It was logged as
+  an occurrence on `#120`, and no corrective commit invalidated the exact-head receipt.

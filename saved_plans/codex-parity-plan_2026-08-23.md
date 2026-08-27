@@ -37,8 +37,9 @@ their delivery order and exit conditions.
   and the declared Claude gap; PR `#611` generalised the wrapper to Claude
   (`claude -p`) with a Claude-produced live record and moved the parity row's Claude
   cell to the observed mechanism; PR `#614` added the config-owned approval policy per
-  runtime and the Claude trust route with a Claude-produced writing-lane record.
-  Remaining, in delivery order, one slice each with a design matrix before prose:
+  runtime and the Claude trust route with a Claude-produced writing-lane record; PR
+  `#620` added the Codex-authored writing-lane record without changing the launcher.
+  Delivery order and current disposition:
   1. Done in PR `#611` (Claude through `claude -p`, config-declared transports, Codex
      pinned unchanged). The record observed no write or approval transition and found
      that a fresh lane worktree is an untrusted workspace to Claude — the shape of the
@@ -47,10 +48,16 @@ their delivery order and exit conditions.
      `parallel.claude_settings_profile`, the trust route (`--setting-sources ""` plus
      the cockpit-owned profile), the structural profile validator, denial read-back,
      and a writing-lane record — a lane that performed a scoped write and landed a PR
-     through its own `pr-watch`. The Codex value is validated and unobserved.
-  3. Produce the Codex writing-lane record in a Codex session and move the Codex cell
-     from it: what `--sandbox` denies, how a denial reaches the receipt, and whether a
-     lane lands a PR through `dev_session.sh pr-watch` (`#601` stays open for it).
+     through its own `pr-watch`. That slice did not observe the Codex value.
+  3. Done in PR `#620`: the Codex-authored record observed the scoped write, exact
+     per-command approval transitions, network-disabled and network-enabled outcomes,
+     ready pull request, and cockpit `dev_session.sh pr-watch` receipt. It also found
+     that action denials described in final prose do not reach
+     `terminal.permission_denials` through `last-message-file`, and that user config
+     reached the untrusted lanes while project config did not. The raw receipts,
+     rollouts, and captures were removed with the fixture, so the parity cell records
+     the historical observation without promoting it as durable capability evidence;
+     `#621` owns the durable evidence-bundle follow-up.
   4. Calibrate tiers for both runtimes and declare mechanical-versus-advisory per key
      per runtime (`#605`, `#255`); retire the "no per-agent effort" sentences.
   5. Run the first real headless task on the generalised launcher (no tracker item
@@ -310,8 +317,9 @@ degraded, held, resume, authority, and completion paths under shared definitions
   runtime-under-test producing the live record (`#466`; PR `#611`).
 - [x] Add config-owned approval/sandbox policy per runtime and the Claude trust route,
   with a Claude writing-lane live record (`#601`; PR `#614`).
-- Produce the Codex writing-lane live record from a Codex session before model or
-  effort calibration (`#601`).
+- [x] Produce the Codex writing-lane live record from a Codex session before model or
+  effort calibration (`#601`; PR `#620`). The record remains unpromoted because its
+  raw fixture evidence was removed at cleanup; `#621` owns the durable-evidence gap.
 - Calibrate both runtimes' neutral tiers and mechanically pass supported model/effort
   keys to fallback-review lenses (`#605`, `#255`).
 - Use the generalised launcher for the first real headless task only after those slices
