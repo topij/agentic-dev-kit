@@ -149,3 +149,30 @@ slices; the count is not reconstructed from memory or from fix commits.
 - Preserve the accepted-finding rule: add both a positive construction and a locally
   recomputed hostile mutation. A copied hostile evidence object can share aliases with the
   positive object and silently stop proving an independent boundary.
+
+## Per-runtime launcher additions from PR `#611`
+
+`gh pr view 611 --json comments --jq '[.comments[].body | scan("## Fallback panel — round")] |
+length'` at `e0ef08157fa091b3d022bec2787603dd4298547f` on 2026-08-27 printed `3`; the
+`#609` baseline command re-read the same day printed `5`. Each reading uses its own
+PR's disposition heading, so compare them as the number of dispositions posted,
+not as fix rounds; neither is reconstructed from memory.
+
+- The design matrix preceded the code, and no round found a defect in engine behaviour.
+  What the rounds found instead was an overstated sentence of executed prose, the
+  coverage gaps a mutant exposed (`is_error` absent, the hardlink clause), and a
+  test-name imprecision — the shape the
+  stopping rule predicts when the mitigation is designed before the panel rather than
+  inside it.
+- A test-only fix round can take the dual-lens delta pass with the author's draws
+  stated (`--delta-draws`): the delta is test code, the branch is under the doctrine
+  by path, the mutants were recomputed. Both lenses rebuilt the mutants independently
+  and confirmed the draws; the pass cost one round and no engine change.
+- "Logged, not fixed" for a record-prose imprecision works as written when the tracker
+  artifact is asked for in the same breath as the disposition: the occurrence landed on
+  the issue owning the class, the PR reply pointed at it, and the receipt stood.
+- A live record produced by the runtime under test surfaces facts a fake cannot: the
+  untrusted-workspace behaviour that decides the next slice came from Claude's own
+  stderr, not from the wrapper's tests. Produce each runtime's record from that runtime.
+- A lens interrupted by the host sleeping reports nothing and must be re-run from
+  scratch; its worktree survives untouched, so the cost is the round, not the evidence.

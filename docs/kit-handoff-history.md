@@ -5,6 +5,57 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-08-23 (the Codex parity baseline and its implementation roadmap shipped)
+
+**Theme —** Codex support moved from scattered compatibility surfaces to an explicit,
+tested parity contract. PR `#588` merged the assessed roadmap and its recommended starting
+slice without declaring the remaining client-dependent behavior aligned.
+
+- **The live contract is now the authoritative inventory.**
+  [`runtime-parity.md`](agentic-dev-kit/runtime-parity.md) declares shared workflow paths,
+  Claude and Codex adapters, intentional gaps, and companion ownership. Repository tests
+  derive coverage from that declaration, preserve adopter-recorded omissions, and require a
+  companion's declared owner to reference it.
+
+- **The clearest incorrect Codex lifecycle behavior is gone.** Codex no longer invokes the
+  Claude-specific `MEMORY.md` budget checker. The portable document-budget hook remains,
+  and installer guidance pins its match-all shape, `/hooks` review-and-trust step, and the
+  silent-skip diagnostic. The matrix leaves live trusted-session validation as a gap.
+
+- **The roadmap is durable.**
+  [`saved_plans/codex-parity-plan_2026-08-23.md`](../saved_plans/codex-parity-plan_2026-08-23.md)
+  records the pre-implementation assessment and delivery plan. README,
+  upgrade notes, `kit_doctor` ownership, and the release manifest carry the new contract to
+  adopters.
+
+- **Fallback review changed the shipped guards.** The panel's accepted findings led to
+  adapter validation for incomplete declarations, exact path uniqueness, trusted decline
+  handling, a non-empty gap rule, Codex-only gap coverage, explicit companion ownership,
+  and retention of the silent trust-skip diagnostic. The final receipt is bound to
+  `d03bcf3d84abce3a623ac7408d4cc04423f740fb` on PR `#588`.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `d03bcf3d84abce3a623ac7408d4cc04423f740fb` on 2026-08-23 printed
+  `1367 passed, 3 warnings in 166.51s`; the warnings were pytest temporary-directory
+  cleanup warnings. GitHub Actions run `32607084576` for that PR head completed
+  successfully on 2026-08-23, observed with `gh run watch 32607084576 --exit-status`.
+
+**Learned**
+
+- **A parity label needs an independent relationship when it promises one.** A shared-only
+  path could satisfy either `gap` or `companion`; declaring `loaded_by` and checking the
+  owner's reference made the companion claim enforceable without duplicating the inventory.
+
+- **Pending live validation belongs in the matrix, not in optimistic wording.** Repository
+  structure establishes what ships, while trusted-client behavior remains a separate exit
+  condition. Keeping that boundary explicit prevented the Codex SessionStart row from
+  overstating the evidence.
+
+▶ Next: implement the next slice in `saved_plans/codex-parity-plan_2026-08-23.md` —
+live-validate Codex SessionStart and PostToolUse matcher, trust, timeout, and output behavior,
+then use the evidence to close lifecycle gaps and design the enforceable shared
+safety-doctrine binding.
+
 ## Session — 2026-08-22 · evening (the review process assessed, and a session that kept reproducing the defect class it was assessing)
 
 **Theme —** A planning session on why PR review costs what it does. The assessment found a

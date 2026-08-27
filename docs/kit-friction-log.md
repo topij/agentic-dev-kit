@@ -24,6 +24,20 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-27
+
+- **`panel_prompt.py` produced an empty prompt file and hung until the tool timeout,
+  then rendered in about a second on an identical re-run.** In a shell `for` loop that
+  created a detached lens worktree and immediately rendered the lens prompt into it
+  (`git worktree add --detach … && uv run scripts/panel_prompt.py --lens … > prompt.md`),
+  the first render wrote nothing and did not return within the tool's timeout; the
+  same invocation re-run alone with a bounded subprocess timeout returned in about one
+  second with a complete prompt. A full `make test` was running in the background at
+  the time. **L** — no mechanism identified (contention on the shared `.git` from the
+  concurrent suite and the fresh worktree is a guess, not an observation), single
+  instance; parked for accumulation. If it recurs, capture `panel_prompt.py`'s stderr
+  and the worktree lock state before re-running.
+
 ## 2026-08-22 — Backlog migrated to GitHub Issues (#566–#571)
 
 Swept in LLM-only mode
