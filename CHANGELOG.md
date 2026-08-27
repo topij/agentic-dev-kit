@@ -57,9 +57,10 @@ starts.
   `review.fallback_panel.lens_compute.claude`; `--head` is now required only when
   assembling a prompt, and every prompt-only flag is refused beside
   `--agent-definition` (exit 2).** It refuses an `effort` outside `low`, `medium`,
-  `high`, `xhigh`, `max` and a present-but-unusable `model`/`effort` value (exit 2)
-  rather than rendering a definition the runtime would silently run at the parent's
-  effort. The prompt's `Run at:` line now names its carrier per runtime and states it
+  `high`, `xhigh`, `max`, a present-but-unusable `model`/`effort` value, and a lens
+  name that is not a slug (exit 2) rather than rendering a definition the runtime
+  would silently run at the parent's effort; `model` is rendered as a quoted YAML
+  string so an id carrying `:` (a Bedrock id) parses. The prompt's `Run at:` line now names its carrier per runtime and states it
   enforces nothing; a runtime with compute configured and no kit-known carrier is told
   so. **Refresh `init.sh` and run `./init.sh --no-clobber`**: it seeds
   `.claude/agents/<lens>.md` for each shipped lens the roster names when no file is
@@ -69,8 +70,8 @@ starts.
   `lens_compute.claude`. On Claude, launch each panel lens as the agent named after it
   — that frontmatter is what applies `model` and `effort`; the delegation tool itself
   has no effort parameter, so a plain subagent inherits the cockpit's effort. A
-  definition added after a session starts is loaded by the next session, not the
-  running one.
+  definition added after a session starts was not launchable in the turn it was
+  written and appeared in the roster later; count on it from the next session.
 
 ## #614 — 2026-08-27
 

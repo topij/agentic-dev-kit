@@ -24,11 +24,13 @@ gap `test_mutation_gate.py` records for itself.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+import yaml
 from conftest import require_kit_paths
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -885,9 +887,14 @@ def _agent_definition(root: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def _frontmatter(text: str) -> dict[str, str]:
+    """The frontmatter as the runtime would read it: parsed as YAML, not split on
+    `: ` — a split would pass a `model: a: b` line that YAML refuses, which is the
+    break the adversarial lens found."""
     assert text.startswith("---\n"), text[:40]
     block = text.split("---\n", 2)[1]
-    return dict(line.split(": ", 1) for line in block.strip().splitlines())
+    parsed = yaml.safe_load(block)
+    assert isinstance(parsed, dict), parsed
+    return parsed
 
 
 def test_agent_definition_carries_the_configured_model_and_effort(repo):
@@ -906,7 +913,7 @@ def test_agent_definition_carries_the_configured_model_and_effort(repo):
     # The focus reaches the description, quoted so a `: ` inside it cannot break
     # the frontmatter, and the body names the regenerating command.
     assert "prove it wrong" in front["description"]
-    assert front["description"].startswith('"') and front["description"].endswith('"')
+    assert 'description: "' in out.stdout, "the focus is rendered as a quoted YAML string"
     assert "--lens adversarial --agent-definition" in out.stdout
     assert "You did NOT write the change" in out.stdout
 
@@ -961,6 +968,40 @@ def test_agent_definition_refuses_a_present_but_unusable_value(repo, bad):
     out = _agent_definition(repo, "--lens", "adversarial")
     assert out.returncode == 2, out.stdout[:200]
     assert "lens_compute.claude.model" in out.stderr
+
+
+@pytest.mark.parametrize(
+    "model",
+    ["anthropic.claude-3-5-sonnet-20241022-v2:0", "sonnet: injected", "a #b", "'q'"],
+)
+def test_agent_definition_quotes_a_model_the_bare_form_would_break_on(repo, model):
+    """The adversarial lens's HIGH on #623: `model: sonnet: injected` rendered bare
+    at exit 0 and the frontmatter then failed to parse — and a Bedrock id ends in
+    `:0`, so the shape is an operator's, not an attacker's. The value is now
+    rendered as a quoted YAML string, which the runtime applies (calibration
+    record, C11). Kills: dropping the `json.dumps` on the `model` line."""
+    cfg = repo / "config" / "dev-model.yaml"
+    cfg.write_text(cfg.read_text().replace("        model: sonnet\n", f"        model: {json.dumps(model)}\n"))
+    out = _agent_definition(repo, "--lens", "adversarial")
+    assert out.returncode == 0, out.stderr
+    assert _frontmatter(out.stdout)["model"] == model
+
+
+@pytest.mark.parametrize("name", ["a: b", "a b", "../x", "a/b", "-lead", ""])
+def test_agent_definition_refuses_a_lens_name_that_is_not_a_slug(repo, name):
+    """The name is a file name, a frontmatter key value, and a subagent type at
+    once; a slug is the one shape all three take unescaped. Kills: dropping the
+    `_LENS_NAME` check."""
+    cfg = repo / "config" / "dev-model.yaml"
+    cfg.write_text(cfg.read_text().replace("      - name: adversarial\n", f"      - name: {json.dumps(name)}\n"))
+    # `--lens=<name>`, so a name opening with `-` reaches the check instead of
+    # being read by argparse as an option.
+    out = _agent_definition(repo, f"--lens={name}")
+    assert out.returncode == 2, out.stdout[:200]
+    if name == "":
+        assert "--lens" in out.stderr
+    else:
+        assert "cannot be an agent definition" in out.stderr, out.stderr
 
 
 def test_agent_definition_refuses_a_lens_outside_the_roster(repo):

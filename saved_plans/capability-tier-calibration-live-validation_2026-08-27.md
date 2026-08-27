@@ -134,6 +134,21 @@ effort is silently inherited** unless someone reads a debug log.
 request line named `source=agent:custom:<name>`, which is how a subagent transcript
 was matched to its definition.
 
+### C11 — quoted frontmatter values
+
+Run after the panel's adversarial lens showed that a `model` value carrying `:`
+rendered bare breaks the frontmatter. Two definitions with JSON-quoted values,
+`model: "haiku"` / `effort: "low"` and `model: "sonnet"` / `effort: "low"`, launched
+from a parent at `--model sonnet --effort medium`:
+
+| agent | subagent transcript |
+| --- | --- |
+| `probe-quoted` | `('claude-haiku-4-5-20251001', None)` |
+| `probe-quoted-sonnet` | `('claude-sonnet-5', 'low')` |
+
+The runtime applies a quoted frontmatter value, so the generator renders `model` as
+a quoted YAML string.
+
 ### C6 — the delegation tool's `model` parameter
 
 Parent `--model sonnet --effort medium`, project sources loaded, prompt asking for
@@ -183,8 +198,17 @@ returned `Agent type 'tier-hotreload-probe' not found. Available agents: claude,
 claude-code-guide, Explore, general-purpose, Plan, statusline-setup`. The debug log
 of the headless runs says the runtime is "Watching for changes in skill/command
 directories: … .claude/agents", but a definition added after session start was not
-launchable in this session. **The roster is fixed at session start.** The file was
-removed afterwards.
+launchable in the turn that wrote it. The file was removed afterwards.
+
+The same session then refined that: after the shipped `.claude/agents/adversarial.md`
+and `correctness.md` were committed at `55a843e`, the cockpit was told, some turns
+later, that both agent types were now available, and a fresh headless session in the
+repository at `4a574d4` listed `['adversarial', 'claude', 'correctness', 'Explore',
+'general-purpose', 'Plan', 'statusline-setup']` in its init event. **The roster is
+listed at session start and refreshed at some later point in a running session; the
+refresh was not launchable in the turn that wrote the file, and this record does not
+pin when it happens.** Count on a definition from the next session; treat an earlier
+listing as a bonus.
 
 ## Codex probes
 
@@ -254,7 +278,7 @@ Vocabulary from the design: `applied`, `substituted`, `accepted-unobserved`,
 | `lens_compute.claude.effort` | Claude | `.claude/agents/<lens>.md` frontmatter | `applied` (C3b); an invalid level is `ignored` with a debug-only log (C9) | mechanical-observed; the generator validates the level |
 | `lens_compute.claude.{model,effort}` | Claude | `--agents` JSON at launch | `applied`, also under `--setting-sources ""` (C7) | mechanical-observed |
 | `lens_compute.claude.{model,effort}` | Claude | `claude -p --model/--effort` | `applied` (C1, C2, C5); an invalid `--effort` is `ignored` with a stderr warning at exit 0 (C2a); a bogus `--model` is `refused` at exit 1 (C10) | mechanical-observed |
-| `lens_compute.claude.*` | Claude | a definition added after session start | `unavailable` for the running session | — |
+| `lens_compute.claude.*` | Claude | a definition added after session start | `unavailable` in the turn that wrote it; listed later in the same session, timing unpinned | count on it from the next session |
 | `lens_compute.codex.effort` | Codex | `codex exec -c model_reasoning_effort=` | `applied` for low, medium, high, xhigh, max, none (X1); `refused` by the API for minimal on this model and for `bogus` (X1, X3); a misspelled key is `ignored` at exit 0 (X2) | mechanical-observed |
 | `lens_compute.codex.model` | Codex | `codex exec -m` | `applied` (X1); a bogus model `refused` at exit 1 (X5); absent → `inherited` from the user config (X0) | mechanical-observed when set |
 | `lens_compute.codex.*` | Codex | `codex exec review` | `applied` in the review subagent thread (X4) | mechanical-observed |

@@ -12,5 +12,6 @@ When the fallback review panel runs here, launch each lens as the agent named af
 it (`.claude/agents/<lens>.md`, rendered from `review.fallback_panel.lens_compute.claude`
 by `<engine-dir>/panel_prompt.py --lens <lens> --agent-definition`): its frontmatter is what
 applies the configured `model` and `effort`, since the delegation tool itself has no
-effort parameter. A definition added after this session started is not loaded until
-the next session.
+effort parameter. A definition added after this session started was not launchable in
+the turn it was written and appeared in the roster later; count on it from the next
+session.

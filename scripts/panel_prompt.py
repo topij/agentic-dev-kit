@@ -112,6 +112,12 @@ COMPUTE_CARRIER: dict[str, str] = {
 # lens compute on its launch argv and has no per-lens definition file to render.
 AGENT_DEFINITION_RUNTIME = "claude"
 
+# A lens name is a filename, a frontmatter `name:`, and the `subagent_type` the
+# cockpit types, so it is held to a slug: anything else would need escaping on
+# three surfaces that each escape differently, and a `:` in it is the same YAML
+# break the `model` line guards against below.
+_LENS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
 # `claude --help` at 2.1.247: "--effort <level>  Effort level for the current session
 # (low, medium, high, xhigh, max)". Validated HERE because the runtime does not
 # refuse a bad frontmatter level where anyone would see it: probed live, an agent
@@ -588,6 +594,12 @@ def agent_definition(root: Path, lens: str, runtime: str) -> str:
         )
     config = load_config(root / "config" / "dev-model.yaml")
     focus = _lens_roster(config, lens)[lens]
+    if not _LENS_NAME.match(lens):
+        raise PromptError(
+            f"lens name {lens!r} cannot be an agent definition: it becomes the file name, "
+            "the frontmatter `name:`, and the subagent type, so it must match "
+            f"{_LENS_NAME.pattern}"
+        )
     # The regenerating command is rendered from `paths.engines`, never a literal
     # `scripts/`: an adopter who vendored under `scripts/devkit/` would otherwise
     # ship a definition naming a path that does not exist in their tree.
@@ -614,14 +626,22 @@ def agent_definition(root: Path, lens: str, runtime: str) -> str:
     )
     front = ["---", f"name: {lens}", f"description: {description}"]
     if model is not None:
-        front.append(f"model: {model}")
+        # Quoted for the same reason `description` is: a real model id can carry a
+        # `:` (a Bedrock id ends in `:0`), which bare would end the YAML mapping
+        # and hand the runtime an unparseable file at exit 0 — the panel's
+        # adversarial lens demonstrated exactly that on the unquoted form. The
+        # runtime applies a quoted frontmatter value (probed live, C11 in the
+        # calibration record). `effort` stays bare: it is held to a bare-word enum.
+        front.append(f"model: {json.dumps(model, ensure_ascii=False)}")
     if effort is not None:
         front.append(f"effort: {effort}")
     front.append("---")
     pinned = (
         "The frontmatter is what makes the configured compute mechanical: Claude Code\n"
         "applies its `model` and `effort` when the cockpit launches the agent named\n"
-        f"`{lens}`, and loads this file only at session start."
+        f"`{lens}`. It lists this file at session start; a file written mid-session was\n"
+        "not launchable in the turn it was written and appeared in the roster later, so\n"
+        "count on it from the next session and treat an earlier listing as a bonus."
         if model is not None or effort is not None
         else "No `model` or `effort` is pinned here because\n"
         f"`review.fallback_panel.lens_compute.{runtime}` carries neither; the lens\n"

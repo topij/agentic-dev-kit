@@ -530,8 +530,10 @@ models:
     default: standard
     expensive: judgment
   # STATUS, per runtime: ADVISORY on both. No engine reads this map
-  # (`grep -rn runtime_mappings scripts/ init.sh` at 16b07d6 finds only the
-  # init.sh migration write), so a workflow's tier reaches a session only when the
+  # (`grep -rn runtime_mappings scripts/ init.sh` at 16b07d6 finds the init.sh
+  # migration write and the test_portability.py pins on it, and no engine — the
+  # panel's correctness lens counted this line's earlier "only the init.sh write"
+  # and found it short), so a workflow's tier reaches a session only when the
   # cockpit or the operator applies the value by hand — the delegation tool's
   # `model` parameter, `claude -p --model/--effort`, `codex -m` and
   # `-c model_reasoning_effort=`. The VALUES below name controls each client was

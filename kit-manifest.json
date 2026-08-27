@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "bd4fd9ed68e5b5d5cdb06ae3f1bdbf587fa19a9069191e6be9aa10f935ea2d65"
+      "sha256": "dae81c349468e6eef6e42e44251e6df39a95176a3f0b2203dd20b75443ce83d0"
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
@@ -100,7 +100,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "918edbddf40acc6d3f6ad9739aede9d4c6a78299a532ade0a922bbc189796948"
+      "sha256": "7a185a77c56fb7b3cbab222b737a7a2ea76783c09617c5ded2e8678336f42aaf"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -203,7 +203,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "5c97f2ca908853d35e31b1cbec37c647c8bb043b8909775ec79c8be5112d8543"
+      "sha256": "bfc6568ff61156e57e6c38a92848f953f5ca620d5b3ee6c55e0fa4457446f570"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -255,7 +255,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "0b83cd2b317500476a7fece5ba59de577bcbd1b31851cc92f6269828e99f68ce"
+      "sha256": "16f7af9b70bd27a4f5e2936c891b7ef91118463b7d6198347058c1f5d9859a54"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",

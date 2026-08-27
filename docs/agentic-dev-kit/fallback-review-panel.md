@@ -172,9 +172,10 @@ its carrier and enforces nothing. The carriers are:
   named after the lens; `panel_prompt.py --lens <lens> --agent-definition` renders it
   from config and refuses a level the runtime would silently drop — probed, a
   definition carrying an invalid level ran at the parent's effort and logged the
-  rejection only under `--debug`. The runtime loads `.claude/agents/` at session
-  start and not from an untrusted worktree (`--setting-sources ""`), so a definition
-  seeded mid-session reaches the next session.
+  rejection only under `--debug`. The runtime lists `.claude/agents/` at session
+  start and not from an untrusted worktree (`--setting-sources ""`); a definition
+  written mid-session was not launchable in the turn it was written and appeared in
+  the roster later, so count on a seeded one from the next session.
 - **Codex, `effort`** — mechanical on the `codex exec` argv as
   `-c model_reasoning_effort=<level>`, read back from the runtime's rollout
   `turn_context`. A misspelled `-c` *key* is accepted silently at exit 0 and the lens

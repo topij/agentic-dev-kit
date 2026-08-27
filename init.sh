@@ -1142,9 +1142,10 @@ PROFILE
 # below are what `scripts/panel_prompt.py --lens <name> --agent-definition`
 # renders for the reference config, and a kit test holds the two together; an
 # adopter who changes the roster or `lens_compute.claude` regenerates the files
-# with that command. Claude Code loads `.claude/agents/` only at session start
-# and only from a trusted project (`--setting-sources ""` skips it), so a
-# freshly seeded definition reaches the next session, not the running one.
+# with that command. Claude Code lists `.claude/agents/` at session start and
+# only from a trusted project (`--setting-sources ""` skips it); a definition
+# written mid-session was not launchable in the turn it was written and showed
+# up in the roster later, so count on a freshly seeded one from the next session.
 # A definition is seeded only for a lens the config's roster names: the file is
 # meaningless for a lens the adopter renamed or dropped, and a stray one would
 # be an agent nothing launches carrying compute nothing configured.
@@ -1165,7 +1166,7 @@ seed_claude_lens_agents() {
 ---
 name: adversarial
 description: "Fallback review panel lens adversarial: assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards. Launch it only with a prompt assembled by @@ENGINES@@/panel_prompt.py; it is not a general-purpose agent."
-model: sonnet
+model: "sonnet"
 effort: high
 ---
 
@@ -1176,7 +1177,9 @@ changing either key; do not edit it by hand.
 
 The frontmatter is what makes the configured compute mechanical: Claude Code
 applies its `model` and `effort` when the cockpit launches the agent named
-`adversarial`, and loads this file only at session start.
+`adversarial`. It lists this file at session start; a file written mid-session was
+not launchable in the turn it was written and appeared in the roster later, so
+count on it from the next session and treat an earlier listing as a bonus.
 
 You are the **adversarial** lens of the fallback review panel
 (`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
@@ -1191,7 +1194,7 @@ LENS
 ---
 name: correctness
 description: "Fallback review panel lens correctness: assume it works and ask what it says — stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check. Launch it only with a prompt assembled by @@ENGINES@@/panel_prompt.py; it is not a general-purpose agent."
-model: sonnet
+model: "sonnet"
 effort: high
 ---
 
@@ -1202,7 +1205,9 @@ changing either key; do not edit it by hand.
 
 The frontmatter is what makes the configured compute mechanical: Claude Code
 applies its `model` and `effort` when the cockpit launches the agent named
-`correctness`, and loads this file only at session start.
+`correctness`. It lists this file at session start; a file written mid-session was
+not launchable in the turn it was written and appeared in the roster later, so
+count on it from the next session and treat an earlier listing as a bonus.
 
 You are the **correctness** lens of the fallback review panel
 (`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
