@@ -53,7 +53,9 @@ their delivery order and exit conditions.
      lane lands a PR through `dev_session.sh pr-watch` (`#601` stays open for it).
   4. Calibrate tiers for both runtimes and declare mechanical-versus-advisory per key
      per runtime (`#605`, `#255`); retire the "no per-agent effort" sentences.
-  5. Run the first real headless task on the generalised launcher: `#602`.
+  5. Run the first real headless task on the generalised launcher (no tracker item
+     yet; earlier revisions cited `#602`, which is the `post-merge-systemize` binding
+     bug, not this task).
      Adopt now, mechanise later: the final verification stamp is a PR comment at the
      merged head, and a panel that ran leaves a disposition comment (`#603`, `#604`).
      Phase 5 owns `#606`, `#236`, and the `#243` narrowing (adapter generation); Phase 6
@@ -313,7 +315,7 @@ degraded, held, resume, authority, and completion paths under shared definitions
 - Calibrate both runtimes' neutral tiers and mechanically pass supported model/effort
   keys to fallback-review lenses (`#605`, `#255`).
 - Use the generalised launcher for the first real headless task only after those slices
-  land (`#602`).
+  land (untracked; not `#602`).
 
 Done when a Codex parallel batch preserves the same state isolation, review evidence,
 and merge authority as Claude usage.

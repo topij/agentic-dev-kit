@@ -36,8 +36,9 @@
   and the stderr beside them before re-running.
 - **`make test`'s `#428` state guard tripped on the cockpit's own concurrent
   `pr_watch.py 614 --json` poll**, which wrote `state/pr-watch/614.json` while the
-  suite ran; the run exited 2 with the regression banner and no summary line, and a
-  re-run with no poll passed. The guard was right and the cause was the cockpit
+  suite ran; the run exited 2 with the regression banner printed above a summary line
+  that still read `passed` (the guard fails the run without fabricating a test
+  failure, as `scripts/conftest.py` says), and a re-run with no poll passed. The guard was right and the cause was the cockpit
   polling during its own verification. **L** — reproduction and mechanism are clear,
   the fix is a habit (no `pr-watch` poll while `make test` runs), and the shape is
   worth a rule only if it recurs; parked for accumulation. `#467` is the false-positive

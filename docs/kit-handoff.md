@@ -67,9 +67,10 @@ preceded the code.
   2026-08-27 printed `1960 passed, 3 warnings in 397.20s`; the merged squash is
   `d6b39c9`.
 
-- **Operator housekeeping:** the synthetic repository
-  `topij/adk-writing-lane-synthetic-20260827` (private) still exists; the session's
-  token lacks the scope to delete it.
+- **Housekeeping done:** the synthetic repository
+  `topij/adk-writing-lane-synthetic-20260827` was deleted by the operator from the
+  GitHub UI on 2026-08-27, after the session's token proved to lack `delete_repo`;
+  `gh repo view` no longer resolves it.
 
 ▶ Next: in a Codex session, produce the Codex writing-lane record on the generalised
 launcher: declare `parallel.codex_approval_policy: workspace-write` for the lane only,
@@ -77,7 +78,9 @@ run a lane that performs a scoped write and lands a PR through
 `dev_session.sh pr-watch`, observe the sandbox and approval transitions Codex reports
 (what `--sandbox` denies and how a denial reaches the receipt), and move the Codex
 cell in `runtime-parity.md` only from that record. Then take `#605` (calibration,
-`#255`). `#602` stays after both.
+`#255`). The first real headless task on the launcher stays after both — it has no
+tracker item; the plan's earlier `#602` citation for it was a mis-reference (`#602` is
+the `post-merge-systemize` binding bug).
 
 ______________________________________________________________________
 
